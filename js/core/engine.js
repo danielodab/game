@@ -586,6 +586,9 @@ var JOGO = (typeof window !== 'undefined')
   function getDungeon(dungeonId) {
     var ds = DATA().dungeons || [];
     for (var i = 0; i < ds.length; i++) if (ds[i].id === dungeonId) return ds[i];
+    // 14/09: os mapas de luta entre jogadores que não são calabouço (js/core/data/arenas.js — a praça)
+    var ar = DATA().arenas || [];
+    for (var j = 0; j < ar.length; j++) if (ar[j] && ar[j].id === dungeonId) return ar[j];
     return null;
   }
 
@@ -1301,6 +1304,11 @@ var JOGO = (typeof window !== 'undefined')
     };
     var cyc = weatherCycle(state);
     state.weather = cyc[Math.floor(nextRand(state) * cyc.length)] || 'calmo';
+    // 14/09: os mapas de luta que não são calabouço (a praça, o salão da Sede) têm o clima deles — sem chuva
+    // sorteada dentro do salão. O sorteio acima fica (mesma sequência de números nos dois lados e no juiz)
+    if (dungeon.id && JOGO.DATA && JOGO.DATA.arena && JOGO.DATA.arena(dungeon.id)) {
+      state.weather = room.weather || dungeon.defaultWeather || 'calmo';
+    }
     state._weatherIdx = Math.max(0, cyc.indexOf(state.weather));
 
     var usadas = {};
@@ -1309,7 +1317,8 @@ var JOGO = (typeof window !== 'undefined')
              tiles[c.y][c.x].type === 'floor' && !usadas[c.x + ',' + c.y];
     }
     function toma(c) { usadas[c.x + ',' + c.y] = true; return { x: c.x, y: c.y }; }
-    var nA = Math.min(2, duplaA.length), nB = Math.min(2, duplaB.length);
+    // 14/09: até 4 por lado — a guerra de guilda 2×2 leva a dupla de cada jogador (o duelo de sempre segue com 1 ou 2)
+    var nA = Math.min(4, duplaA.length), nB = Math.min(4, duplaB.length);
     var casasA = [];
     for (i = 0; i < ps.length && casasA.length < nA; i++) if (livre(ps[i])) casasA.push(toma(ps[i]));
     var cand = [];
@@ -1349,7 +1358,7 @@ var JOGO = (typeof window !== 'undefined')
      * {heroId: PV} de cada lado; herói fora do mapa entra cheio. Entra ANTES do primeiro
      * turno, para o jogo e o juiz (servidor/juiz/sala.js) nascerem com o mesmo hash. */
     function poe(dupla, side, casas, vida) {
-      for (var q = 0; q < dupla.length && q < 2 && q < casas.length; q++) {
+      for (var q = 0; q < dupla.length && q < 4 && q < casas.length; q++) {
         var pd = dupla[q];
         var cls = (DATA().classes && DATA().classes[pd.classId]) || null;
         if (!cls) throw new Error('Engine.createDuelSala: classe desconhecida: ' + pd.classId);

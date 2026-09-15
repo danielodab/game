@@ -426,10 +426,20 @@ var JOGO = (typeof window !== 'undefined')
   function emLuta() {
     try { return !!(JOGO.Game && JOGO.Game.screen === 'battle'); } catch (e) { return false; }
   }
+  /* 14/09, A ZONA (o Campo de PvP): a praça e o Campo são a mesma sala do relé, mas cada um só vê os
+   * fantasmas da sua zona (o hub3d filtra por `zona`). Quem diz é o Hub (Hub.naCampo); sem ele, 'praca'.
+   * No Campo a aparência (`classe`) que a HUD põe é a do 1º herói da dupla — o 2º não viaja em nada. */
+  function zonaAtual() {
+    try { return (JOGO.Hub && typeof JOGO.Hub.naCampo === 'function' && JOGO.Hub.naCampo()) ? 'campo' : 'praca'; }
+    catch (e) { return 'praca'; }
+  }
+  function zonaDe(v) { return v === 'campo' ? 'campo' : 'praca'; }
+  R.zona = zonaAtual;
   function cartao(para) {
+    if (eu) eu.zona = zonaAtual();
     var c = { v: R.VERSAO, nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
               resumo: eu.resumo, aura: eu.aura, x: eu.x, z: eu.z, sala: eu.sala, nuvem: eu.nuvem,
-              luta: emLuta() };
+              luta: emLuta(), zona: eu.zona };
     if (para) c.para = para;
     return c;
   }
@@ -658,6 +668,7 @@ var JOGO = (typeof window !== 'undefined')
     // calado): o anúncio de entrada espera a mensagem que traz o nome
     var novo = !atual || !atual.nome;
     var salaAntes = atual ? (atual.sala || null) : null;
+    var zonaAntes = atual ? zonaDe(atual.zona) : 'praca';
     var mestre = m.mestre === true && confiaMestre();
     var vit = vitrine(m, mestre);             // 10/09: o nome reservado de quem não é Mestre sai trocado
     pares[m.de] = { nome: vit.nome || '?', titulo: vit.titulo || '',
@@ -667,18 +678,20 @@ var JOGO = (typeof window !== 'undefined')
                     nuvem: m.nuvem || null,           // a conta no cartório (10/09)
                     aura: m.aura === true,
                     sala: m.sala || null,       // 03/09: a antessala em que ele está (null = praça)
+                    zona: zonaDe(m.zona),       // 14/09: 'praca' | 'campo' (o Campo de PvP)
+                    luta: m.luta === true,      // 14/09: numa batalha (o Campo não ataca quem já luta)
                     x: m.x || 0, z: m.z || 0, visto: agora() };
     if (novo) {
       avisa({ tipo: 'entrou', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
               resumo: pares[m.de].resumo, aura: pares[m.de].aura,
-              sala: pares[m.de].sala, mestre: pares[m.de].mestre,
+              sala: pares[m.de].sala, mestre: pares[m.de].mestre, zona: pares[m.de].zona,
               x: pares[m.de].x, z: pares[m.de].z });
-    } else if (salaAntes !== pares[m.de].sala) {
-      // trocou de sala (desceu, subiu, saiu): quem escuta some ou mostra o corpo
+    } else if (salaAntes !== pares[m.de].sala || zonaAntes !== pares[m.de].zona) {
+      // trocou de sala (desceu, subiu, saiu) ou de zona (entrou no Campo): quem escuta some ou mostra o corpo
       avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
-              resumo: pares[m.de].resumo, aura: pares[m.de].aura,
+              resumo: pares[m.de].resumo, aura: pares[m.de].aura, zona: pares[m.de].zona,
               sala: pares[m.de].sala, x: pares[m.de].x, z: pares[m.de].z });
     }
     return novo;
@@ -716,16 +729,21 @@ var JOGO = (typeof window !== 'undefined')
         }
         pares[m.de].visto = agora();
         pares[m.de].x = m.x; pares[m.de].z = m.z;
+        pares[m.de].luta = m.luta === true;                // 14/09
         var salaP = m.sala || null;
-        if (pares[m.de].nome && (pares[m.de].sala || null) !== salaP) {
+        // 14/09: o pulso sem `zona` (a página de antes) não muda a zona que o oi disse
+        var zonaP = (m.zona === undefined) ? zonaDe(pares[m.de].zona) : zonaDe(m.zona);
+        if (pares[m.de].nome && ((pares[m.de].sala || null) !== salaP || zonaDe(pares[m.de].zona) !== zonaP)) {
           pares[m.de].sala = salaP;
+          pares[m.de].zona = zonaP;
           avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
                   titulo: pares[m.de].titulo, classe: pares[m.de].classe,
-                  resumo: pares[m.de].resumo, aura: pares[m.de].aura,
+                  resumo: pares[m.de].resumo, aura: pares[m.de].aura, zona: zonaP,
                   sala: salaP, x: m.x, z: m.z });
         }
       }
-      avisa({ tipo: 'pulso', id: m.de, x: m.x, z: m.z, sala: m.sala || null });
+      avisa({ tipo: 'pulso', id: m.de, x: m.x, z: m.z, sala: m.sala || null,
+              zona: pares[m.de] ? zonaDe(pares[m.de].zona) : 'praca' });
     } else if (m.t === 'chat') {
       if (pares[m.de]) pares[m.de].visto = agora();
       var nomeChat = m.nome || (pares[m.de] || {}).nome || '?';
@@ -825,9 +843,14 @@ var JOGO = (typeof window !== 'undefined')
     var sala = eu.sala || null;
     var luta = emLuta();           // 13/09: os amigos veem "em batalha" (o relé guarda o último)
     var saiu = false;
+    var zona = zonaAtual();        // 14/09: entrou ou saiu do Campo — o oi leva a zona à sala inteira
+    if (zona !== eu.zona) {
+      apresenta();
+      saiu = true;
+    }
     if (!u || u.x !== eu.x || u.z !== eu.z || u.sala !== sala || u.luta !== luta ||
         t - u.t >= R.VIDA_MS - R.PULSO_MS / 2) {
-      manda('pulso', { x: eu.x, z: eu.z, sala: eu.sala, luta: luta });
+      manda('pulso', { x: eu.x, z: eu.z, sala: eu.sala, luta: luta, zona: eu.zona });
       ultPulso = { x: eu.x, z: eu.z, sala: sala, luta: luta, t: t };
       saiu = true;
     }
@@ -1295,6 +1318,7 @@ var JOGO = (typeof window !== 'undefined')
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
                   resumo: p.resumo || null, aura: p.aura === true, nuvem: p.nuvem || null,
                   mestre: p.mestre === true,
+                  zona: zonaDe(p.zona), luta: p.luta === true,     // 14/09: o Campo de PvP
                   sala: p.sala || null, x: p.x, z: p.z });
     });
     return fora;

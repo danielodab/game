@@ -16,6 +16,10 @@ var JOGO = (typeof window !== 'undefined')
  *                   compromisso (SHA-256 com sal) e depois a revelação —, e a
  *                   arena sai da semente dos dois
  *   JOGO.Sussurros  a mensagem particular (o envelope `sussurro`)
+ *   JOGO.Arena      (14/09) a fila da Arena ranqueada — o cliente de servidor/arena.py
+ *
+ * 14/09: o duelo tem três MODOS (desafio amistoso na praça, a Arena da fila e o Campo de PvP, onde tocar
+ * é atacar) — ver Duelo.MAPA_DESAFIO e os acessórios de "a Arena e o Campo de PvP".
  *
  * A batalha em dupla é do JOGO.Coop (coop.js). Daqui só saem as chamadas do
  * contrato: Coop.configura, Coop.parceiroSumiu/parceiroVoltou, Coop.iniciaDuelo
@@ -41,6 +45,17 @@ var JOGO = (typeof window !== 'undefined')
   Duelo.PRAZO_MS = 30000;          // o desafio vale 30 s; a revelação também
   Duelo.ESCOLHA_MS = 90000;        // o tempo de escolher a dupla
   Duelo.INICIO_MS = 60000;         // da revelação até a arena abrir (a carga dos modelos cabe)
+  /* 14/09, AS TRÊS FORMAS DE DUELO (o dono: "tem duas formas de desafio: um normal, ou um pvp, ou a
+   * inscrição na arena e espera um adversário"; "o duelo deve ocorrer no mapa da praça. Mapas aleatórios é
+   * para pvp de inscrição na arena ou pvp comum no mapa pvp"). O `modo` viaja no desafio/ataque, na ata, no
+   * Coop e no fechar do servidor:
+   *   desafio  tocar no jogador na praça: amistoso, no mapa FIXO da praça (js/core/data/arenas.js)
+   *   arena    a fila da Arena (JOGO.Arena, abaixo): os dois já casados pelo servidor, mapa sorteado
+   *   campo    o Campo de PvP: tocar é atacar, o atacado entra sozinho, cada um com a dupla do Campo */
+  Duelo.MAPA_DESAFIO = 'praca';
+  Duelo.ATAQUE_MS = 15000;         // o ataque no Campo espera a resposta automática do outro lado
+  Duelo.PARIDADE_CAMPO = 10;       // o dono: no Campo, até 10 níveis entre os heróis mais fortes
+  Duelo.ARENA_REENVIO_MS = 3000;   // o lado A da Arena repete o chamado até o B responder
   Sussurros.TEXTO_MAX = 240;
   Sussurros.LISTA_MAX = 30;
 
@@ -334,7 +349,13 @@ var JOGO = (typeof window !== 'undefined')
     'sem-conexao': 'Sem conexão com a Rede agora.',
     'sumido': '{n} não está mais conectado(a).',
     'trapaca': 'O duelo foi cancelado: a dupla revelada não bate com a escolhida.',
-    'desistiu': '{n} desistiu do duelo.'
+    'desistiu': '{n} desistiu do duelo.',
+    // 14/09: o Campo de PvP e a Arena
+    'fora-do-campo': '{n} não está mais no Campo de PvP.',
+    'alvo-fora': '{n} não está no Campo de PvP.',
+    'alvo-luta': '{n} já está numa luta.',
+    'vida-zero-alvo': '{n} está sem vida agora — espere recuperar.',
+    'paridade': 'A diferença de nível entre vocês passa de 10: no Campo não dá.'
   };
   var SOBRE_MIM = {
     'ocupado': 'Termine o que está fazendo antes.',
@@ -350,6 +371,11 @@ var JOGO = (typeof window !== 'undefined')
     'privado': 'Mensagem particular precisa do servidor da Rede.',
     'vazio': 'Escreva alguma coisa.',
     'n': 'Escolha um ou dois heróis.',
+    // 14/09 (o dono): "pede para ele selecionar os dois que ele quer ir para a batalha"
+    'dois': 'Escolha os dois heróis que vão lutar.',
+    'fora-do-campo': 'Isso é só dentro do Campo de PvP.',
+    'paridade': 'A diferença de nível passa de 10: no Campo não dá.',
+    'arena': 'A Arena não aceitou agora.',
     // 14/09: a vida única — herói a 0 PV não entra em duelo até recuperar (ou beber uma poção)
     'vida-zero': 'Esse herói está sem vida: espere ele recuperar ou beba uma poção.',
     'servidor': 'O servidor não respondeu — tente de novo em instantes.'
@@ -962,6 +988,7 @@ var JOGO = (typeof window !== 'undefined')
       if (tl === 'hub' || tl === 'menu' || tl === 'heroSelect') { descidaG = null; muda(); }
     }
     tiqueDuelo(agoraD());
+    tiqueArena();                                             // 14/09: a fila da Arena
   };
 
   Grupo._reset = function () {
@@ -986,7 +1013,11 @@ var JOGO = (typeof window !== 'undefined')
             minha: null,     // { str, sal, h, n, ids }
             dele: null,      // { h, n, str, sal, dupla }
             revelei: false, ata: null, inicio: 0, viuBatalha: false, fimDele: null,
-            abrindo: false };  // 14/09: o duelo_abrir no servidor (a vida de cada herói) ainda não respondeu
+            abrindo: false,    // 14/09: o duelo_abrir no servidor (a vida de cada herói) ainda não respondeu
+            modo: null,        // 14/09: 'desafio' | 'arena' | 'campo'
+            arena: null,       // 14/09: a partida da fila { conta, nome, herois, reenvio } (antes do aceite)
+            dupla: null,       // 14/09: a dupla do Campo — a escolha às cegas sai sozinha com ela
+            kb: null };        // 14/09: a minha metade da chave no aceite automático (a resposta perdida se repete)
   }
   zeraDuelo();
   ultimoOp = null;
@@ -1011,6 +1042,7 @@ var JOGO = (typeof window !== 'undefined')
       oponente: dst.op ? { id: dst.op.id, cx: dst.op.cx, nome: dst.op.nome } : null,
       escolhi: !!dst.minha, minhaDupla: dst.minha ? dst.minha.ids.slice() : null,
       eleEscolheu: !!(dst.dele && dst.dele.h), n: dst.minha ? dst.minha.n : 0, abrindo: !!dst.abrindo,
+      modo: dst.modo, heroisArena: (dst.arena && dst.arena.herois) ? dst.arena.herois.slice() : null,
       arena: dst.ata ? { dungeonId: dst.ata.dungeonId, roomIndex: dst.ata.roomIndex,
                          nome: nomeArena(dst.ata) } : null
     };
@@ -1025,10 +1057,11 @@ var JOGO = (typeof window !== 'undefined')
     if (tela() !== 'hub' || minhaSala() || descidaG) return { ok: false, motivo: 'em-batalha' };
     if (!heroisDeDuelo().length) return { ok: false, motivo: 'sem-heroi' };
     var did = eu() + '-' + aleat(6), chave = aleat(8);
-    if (!manda('duelo', id, 'desafio', { did: did, versao: versao(), chave: chave })) {
+    // 14/09: o desafio é sempre o AMISTOSO da praça (o modo vai junto; a versão já barra quem não o conhece)
+    if (!manda('duelo', id, 'desafio', { did: did, versao: versao(), chave: chave, modo: 'desafio' })) {
       return { ok: false, motivo: ultimaRecusa };
     }
-    dst.fase = 'desafiei'; dst.did = did; dst.eu = 'A'; dst.chave = chave;
+    dst.fase = 'desafiei'; dst.did = did; dst.eu = 'A'; dst.chave = chave; dst.modo = 'desafio';
     dst.op = { id: id, cx: null, nome: nomeDe(id) };
     dst.prazo = agoraD() + Duelo.PRAZO_MS;
     mudaD();
@@ -1060,6 +1093,156 @@ var JOGO = (typeof window !== 'undefined')
     dst.fase = 'escolhendo';
     dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
     vigia(op.id, op.cx);
+    mudaD();
+    return { ok: true };
+  };
+
+  // ------------------------------------------------ 14/09: a Arena e o Campo de PvP
+  function parDe(id) {
+    var achado = null;
+    safe(function () { R().pares().forEach(function (p) { if (!achado && p && p.id === id) achado = p; }); return true; }, false);
+    return achado;
+  }
+  function parPorConta(conta) {
+    if (typeof conta !== 'number') return null;
+    var achado = null;
+    safe(function () { R().pares().forEach(function (p) { if (!achado && p && p.nuvem === conta) achado = p; }); return true; }, false);
+    return achado;
+  }
+  function naCampo() {
+    return !!safe(function () { return JOGO.Hub && typeof JOGO.Hub.naCampo === 'function' && JOGO.Hub.naCampo(); }, false);
+  }
+  /* A DUPLA DO CAMPO (14/09, o dono: "pede para ele selecionar os dois que ele quer ir para a batalha"): a HUD
+   * pede os dois na entrada do Campo e guarda aqui; sem ela, os escolhidos da praça */
+  var duplaCampo = [];
+  function limpaIds(ids) {
+    var out = [];
+    (Object.prototype.toString.call(ids) === '[object Array]' ? ids : []).forEach(function (h) {
+      if (typeof h === 'string' && h && out.indexOf(h) < 0 && out.length < MAX_HEROIS && temHeroi(h) && !ehMestre(h)) out.push(h);
+    });
+    return out;
+  }
+  function duplaDoCampo() { return limpaIds(duplaCampo.length ? duplaCampo : meusHerois); }
+  Duelo.defineDuplaCampo = function (ids) { duplaCampo = limpaIds(ids); return duplaCampo.slice(); };
+  Duelo.duplaCampo = function () { return duplaDoCampo(); };
+  function forteDe(ids) {
+    var m = 1;
+    (ids || []).forEach(function (h) { var lv = safe(function () { return JOGO.Progress.hero(h).level; }, 1) || 1; if (lv > m) m = lv; });
+    return m;
+  }
+  Duelo.forteDe = forteDe;
+  /* o nível do mais forte de quem está do outro lado: o `forte` do resumo da presença (a HUD põe) */
+  function forteDoPar(p) {
+    var f = p && p.resumo ? p.resumo.forte : null;
+    return (typeof f === 'number' && f >= 1 && f <= 99) ? Math.floor(f) : null;
+  }
+  function zeradoNa(ids) {
+    return safe(function () { return (JOGO.Vida && JOGO.Vida.zerado) ? JOGO.Vida.zerado(ids) : null; }, null);
+  }
+  function motivoCampo(de, d) {
+    if (!naCampo()) return 'fora-do-campo';
+    var m = motivoOcupado(false);
+    if (m) return m;
+    var dupla = duplaDoCampo();
+    if (!dupla.length) return 'sem-heroi';
+    if (zeradoNa(dupla)) return 'vida-zero-alvo';
+    var dele = forteDoPar(parDe(de));
+    if (dele === null) { var nf = Math.floor(Number(d && d.forte)); if (nf >= 1 && nf <= 99) dele = nf; }
+    if (dele !== null && Math.abs(forteDe(dupla) - dele) > Duelo.PARIDADE_CAMPO) return 'paridade';
+    return null;
+  }
+  /* o que decide o atacante antes de sair o ataque: (a) o outro no Campo e fora de luta, (b) a paridade
+   * pelo nível que viaja na presença (o servidor confere de novo), (c) a MINHA vida — a do alvo o cliente
+   * dele confere e recusa com o motivo */
+  Duelo.podeAtacar = function (id) {
+    if (!id || id === eu()) return { ok: false, motivo: 'ocupado' };
+    if (!naCampo()) return { ok: false, motivo: 'fora-do-campo' };
+    if (dst.fase !== 'livre' || st.fase === 'convidei' || st.fase === 'convidado') return { ok: false, motivo: 'ocupado' };
+    if (trocaAberta()) return { ok: false, motivo: 'troca' };
+    if (tela() !== 'hub' || minhaSala() || descidaG) return { ok: false, motivo: 'em-batalha' };
+    var p = parDe(id);
+    if (!p || p.sala || (p.zona || 'praca') !== 'campo') return { ok: false, motivo: 'alvo-fora', nome: p ? p.nome : null };
+    if (p.luta === true) return { ok: false, motivo: 'alvo-luta', nome: p.nome };
+    var dupla = duplaDoCampo();
+    if (!dupla.length) return { ok: false, motivo: 'sem-heroi' };
+    if (dupla.length < 2 && heroisDeDuelo().length >= 2) return { ok: false, motivo: 'dois' };
+    var z = zeradoNa(dupla);
+    if (z) return { ok: false, motivo: 'vida-zero', esperaS: z.esperaS };
+    var meu = forteDe(dupla), dele = forteDoPar(p);
+    if (dele !== null && Math.abs(meu - dele) > Duelo.PARIDADE_CAMPO) return { ok: false, motivo: 'paridade', meu: meu, dele: dele };
+    return { ok: true, dupla: dupla, forte: meu, nome: p.nome };
+  };
+  Duelo.atacar = function (id) {
+    var pode = Duelo.podeAtacar(id);
+    if (!pode.ok) return pode;
+    var did = eu() + '-' + aleat(6), chave = aleat(8);
+    if (!manda('duelo', id, 'ataque', { did: did, versao: versao(), chave: chave, modo: 'campo', forte: pode.forte })) {
+      return { ok: false, motivo: ultimaRecusa };
+    }
+    dst.fase = 'desafiei'; dst.modo = 'campo'; dst.did = did; dst.eu = 'A'; dst.chave = chave; dst.dupla = pode.dupla;
+    dst.op = { id: id, cx: null, nome: nomeDe(id) };
+    dst.prazo = agoraD() + Duelo.ATAQUE_MS;
+    mudaD();
+    return { ok: true };
+  };
+  /* a escolha às cegas SOZINHA (o Campo): se não sai, a luta cai e o outro lado sabe o porquê */
+  function autoEscolhe() {
+    if (dst.fase !== 'escolhendo' || !dst.dupla) return;
+    var r = Duelo.escolher(dst.dupla.slice());
+    if (!r || !r.ok) {
+      aviso(Grupo.textoMotivo(r ? r.motivo : 'ocupado', null));
+      cancelaCalado(r && r.motivo === 'vida-zero' ? 'vida-zero-alvo' : 'desistiu');
+    }
+  }
+  function cancelaCalado(motivoOutro) {
+    if (dst.op) manda('duelo', dst.op.id, 'cancela', { did: dst.did, motivo: motivoOutro || 'desistiu' }, dst.op.cx);
+    zeraDuelo();
+    mudaD();
+  }
+  function mesmaDupla(dupla, ids) {
+    var a = (dupla || []).map(function (p) { return String((p && (p.heroId || p.classId)) || ''); }).sort();
+    var b = (ids || []).map(String).sort();
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  /* A PARTIDA DO QUADRO DA ARENA (14/09): o JOGO.Arena entrega a partida pronta do servidor. Os dois já
+   * confirmaram e as DUPLAS SÃO PÚBLICAS (as do quadro): o lado A (o inscrito) chama o B pela Rede (achado
+   * pela CONTA), o B aceita sozinho, e a escolha sai sozinha com essas duplas — o compromisso e a revelação
+   * seguem por baixo, e a revelação que não bate com o quadro é trapaça. */
+  function mandaArena(t) {
+    var a = dst.arena;
+    a.reenvio = (t || agoraD()) + Duelo.ARENA_REENVIO_MS;
+    if (!dst.op || !dst.op.id) {
+      var p = parPorConta(a.conta);
+      if (!p) return false;                                    // ainda não apareceu na Rede: o tique tenta de novo
+      dst.op = { id: p.id, cx: null, nome: nomeDe(p.id, a.nome) };
+    }
+    return manda('duelo', dst.op.id, 'arena', { did: dst.did, versao: versao(), chave: dst.chave, modo: 'arena' });
+  }
+  var arenaPendente = null, arenaBatalhou = {};
+  Duelo.iniciaArena = function (p) {
+    p = p || {};
+    if (!p.did || (p.lado !== 'A' && p.lado !== 'B') || typeof p.conta !== 'number') return { ok: false, motivo: 'versao' };
+    if (dst.fase !== 'livre') return { ok: false, motivo: 'ocupado' };
+    if (trocaAberta()) return { ok: false, motivo: 'troca' };
+    if (tela() !== 'hub' || minhaSala() || descidaG) return { ok: false, motivo: 'em-batalha' };
+    dst.modo = 'arena'; dst.did = String(p.did).slice(0, 64); dst.eu = p.lado;
+    dst.arena = { conta: p.conta, nome: String(p.nome || '').slice(0, 24),
+                  herois: limpaIds(p.herois), reenvio: 0,
+                  heroisDele: (Object.prototype.toString.call(p.heroisDele) === '[object Array]' ? p.heroisDele : [])
+                    .slice(0, MAX_HEROIS).map(function (h) { return String(h).slice(0, 64); }) };
+    if (!dst.arena.herois.length) { zeraDuelo(); return { ok: false, motivo: 'sem-heroi' }; }
+    dst.dupla = dst.arena.herois.slice();
+    dst.prazo = agoraD() + Duelo.PRAZO_MS;
+    if (p.lado === 'A') {
+      dst.fase = 'desafiei';
+      dst.chave = aleat(8);
+      mandaArena(agoraD());
+    } else {
+      dst.fase = 'desafiado';
+      var pend = arenaPendente;
+      arenaPendente = null;
+      if (pend && pend.did === dst.did && agoraD() - pend.t < Duelo.PRAZO_MS) { aoDuelo(pend.ev); return { ok: true }; }
+    }
     mudaD();
     return { ok: true };
   };
@@ -1112,6 +1295,8 @@ var JOGO = (typeof window !== 'undefined')
             aviso(A.textoVidaZero ? A.textoVidaZero(r) : Grupo.textoMotivo('vida-zero', null));
             safe(function () { return Vd.sincroniza(); }, null);
           } else aviso('O servidor não abriu o duelo: ' + ((r && r.erro) || 'sem resposta') + '.');
+          // 14/09: no Campo e na Arena não há ficha de escolha para tentar de novo — a luta cai na hora
+          if (dst.modo === 'campo' || dst.modo === 'arena') { cancelaCalado(r && r.motivo === 'vida-zero' ? 'vida-zero-alvo' : 'desistiu'); return; }
           mudaD();
           return;
         }
@@ -1122,6 +1307,7 @@ var JOGO = (typeof window !== 'undefined')
         if (dst !== eraDst) return;
         dst.abrindo = false;
         aviso(Grupo.textoMotivo('servidor', null));
+        if (dst.modo === 'campo' || dst.modo === 'arena') { cancelaCalado('desistiu'); return; }
         mudaD();
       });
       mudaD();
@@ -1206,10 +1392,33 @@ var JOGO = (typeof window !== 'undefined')
     }
     return null;
   }
+  /* 14/09: os mapas de luta que não são calabouço (a praça) moram em DATA.arenas */
+  function acharMapaDeLuta(id) {
+    var a = safe(function () { return D().arena ? D().arena(id) : null; }, null);
+    if (a) return a;
+    var lista = D().arenas || [];
+    for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].id === id) return lista[i];
+    return null;
+  }
   function nomeArena(ar) {
+    var m = ar ? acharMapaDeLuta(ar.dungeonId) : null;
+    if (m) return m.name || 'A Praça';                 // a praça tem um mapa só: sem "sala 1"
     var d = ar ? acharDungeon(ar.dungeonId) : null;
     return ((d && d.name) || (ar && ar.dungeonId) || 'Arena') + ' — sala ' + ((ar && ar.roomIndex || 0) + 1);
   }
+  /* O MAPA DE CADA MODO (14/09): o desafio amistoso é SEMPRE a praça, sala 0; a arena e o campo sorteiam
+   * pela semente dos dois entre os calabouços abertos (o Coop, ou o gêmeo daqui) */
+  function mapaDoDesafio() {
+    var m = acharMapaDeLuta(Duelo.MAPA_DESAFIO);
+    return (m && m.rooms && m.rooms.length) ? { dungeonId: m.id, roomIndex: 0 } : null;
+  }
+  function arenaDoModo(modo, s) {
+    if (modo === 'desafio') return mapaDoDesafio();
+    var c = C();
+    var ar = (c && typeof c.sorteiaArena === 'function') ? safe(function () { return c.sorteiaArena(s); }, null) : null;
+    return ar || sorteiaArenaLocal(s);
+  }
+  Duelo._mapaDoModo = arenaDoModo;       // provas
   /* O mesmo sorteio do Coop (seção 3.11), para quando ele não estiver na
    * página: os calabouços abertos, em ordem alfabética. */
   function sorteiaArenaLocal(s) {
@@ -1233,11 +1442,11 @@ var JOGO = (typeof window !== 'undefined')
     var salB = dst.eu === 'A' ? dst.dele.sal : dst.minha.sal;
     var s = Duelo._semente(dst.did, salA, salB);
     var c = C();
-    var arena = (c && typeof c.sorteiaArena === 'function') ? safe(function () { return c.sorteiaArena(s); }, null) : null;
-    if (!arena) arena = sorteiaArenaLocal(s);
+    var arena = arenaDoModo(dst.modo, s);      // 14/09: a praça no desafio; o sorteio na arena e no campo
     if (!arena) { cancelaD('versao', true); return; }
+    if (dst.modo === 'arena') arenaBatalhou[dst.did] = true;
     var minha = JSON.parse(dst.minha.str);
-    var ata = { did: dst.did, semente: s, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex,
+    var ata = { did: dst.did, semente: s, modo: dst.modo, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex,
                 duplaA: dst.eu === 'A' ? minha : dst.dele.dupla,
                 duplaB: dst.eu === 'A' ? dst.dele.dupla : minha,
                 eu: dst.eu, oponente: { id: dst.op.id, cx: dst.op.cx, nome: dst.op.nome } };
@@ -1246,7 +1455,8 @@ var JOGO = (typeof window !== 'undefined')
     dst.prazo = 0;
     dst.inicio = agoraD();
     dst.viuBatalha = false;
-    aviso('Arena sorteada: ' + nomeArena(ata) + '.', 'good');
+    aviso(dst.modo === 'desafio' ? 'Desafio amistoso na Praça — a coroa não muda.'
+                                 : 'Arena sorteada: ' + nomeArena(ata) + '.', 'good');
     var ok = !!(c && typeof c.iniciaDuelo === 'function') && safe(function () { return c.iniciaDuelo(ata); }, false);
     if (!ok) { cancelaD('rele-antigo', true); return; }
     mudaD();
@@ -1258,12 +1468,13 @@ var JOGO = (typeof window !== 'undefined')
     var de = ev.de, a = ev.acao;
     if (a === 'desafio') {
       if (!d.did || dst.did === d.did) return;
+      if (d.modo !== undefined && d.modo !== 'desafio') return;     // 14/09: pelo desafio só vem o amistoso
       var mot = mutado(de) ? 'ocupado' : (String(d.versao || '') !== versao() ? 'versao' : motivoOcupado(false));
       if (mot) {
         manda('duelo', de, 'resposta', { did: String(d.did).slice(0, 48), ok: false, motivo: mot }, ev.cx);
         return;
       }
-      dst.fase = 'desafiado'; dst.did = String(d.did).slice(0, 48); dst.eu = 'B';
+      dst.fase = 'desafiado'; dst.did = String(d.did).slice(0, 48); dst.eu = 'B'; dst.modo = 'desafio';
       dst.chave = String(d.chave || '').slice(0, 24);
       dst.op = { id: de, cx: ev.cx || null, nome: nomeDe(de) };
       dst.prazo = agoraD() + Duelo.PRAZO_MS;
@@ -1271,6 +1482,59 @@ var JOGO = (typeof window !== 'undefined')
         try { Duelo.aoDesafio({ id: de, nome: dst.op.nome, expira: dst.prazo, did: dst.did }); } catch (e) {}
       }
       mudaD();
+    } else if (a === 'arena') {
+      /* 14/09, A PARTIDA DA FILA: o lado A chama; o B aceita SOZINHO se a partida pronta que o servidor
+       * deu a ele tem esse did e o outro lado é a conta dela (o `nuvem` da presença, carimbado pelo relé) */
+      var didA = String(d.did || '').slice(0, 64);
+      if (!didA) return;
+      if (String(d.versao || '') !== versao()) { manda('duelo', de, 'resposta', { did: didA, ok: false, motivo: 'versao' }, ev.cx); return; }
+      if (dst.modo === 'arena' && dst.did === didA && dst.arena && dst.eu === 'B') {
+        var pA = parDe(de);
+        if (!pA || pA.nuvem !== dst.arena.conta) return;
+        if (dst.fase === 'desafiado') {
+          if (emBatalhaOuDescida() || trocaAberta()) {
+            manda('duelo', de, 'resposta', { did: didA, ok: false, motivo: trocaAberta() ? 'troca' : 'em-batalha' }, ev.cx);
+            zeraDuelo(); mudaD();
+            return;
+          }
+          dst.op = { id: de, cx: ev.cx || null, nome: nomeDe(de, dst.arena.nome) };
+          dst.kb = aleat(8);
+          dst.chave = String(d.chave || '').slice(0, 24) + ':' + dst.kb;
+          if (!manda('duelo', de, 'resposta', { did: didA, ok: true, kb: dst.kb, modo: 'arena' }, ev.cx)) { dst.op = null; return; }
+          dst.fase = 'escolhendo';
+          dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
+          vigia(de, dst.op.cx);
+          aviso(dst.op.nome + ' chegou à Arena — a luta começa!', 'good');
+          mudaD();
+          autoEscolhe();                                        // as duplas são as do quadro: sem escolha
+        } else if ((dst.fase === 'escolhendo' || dst.fase === 'comprometido' || dst.fase === 'revelado') &&
+                   dst.op && dst.op.id === de && dst.kb) {
+          manda('duelo', de, 'resposta', { did: didA, ok: true, kb: dst.kb, modo: 'arena' }, ev.cx);   // a resposta se perdeu
+        }
+        return;
+      }
+      // a minha fila ainda não soube da partida pronta: guarda o chamado e pergunta ao servidor
+      arenaPendente = { did: didA, ev: ev, t: agoraD() };
+      safe(function () { return Arena.consulta(); }, null);
+    } else if (a === 'ataque') {
+      /* 14/09, O CAMPO DE PVP (o dono: "lá ao clicar em cima o jogador pode atacar sem aviso prévio"):
+       * o atacado NÃO confirma — confere que está no Campo, livre, de pé e na paridade, e entra com a
+       * dupla do Campo. O compromisso e a revelação continuam por baixo (o hash é a prova) */
+      var didC = String(d.did || '').slice(0, 48);
+      if (!didC || dst.did === didC) return;
+      var motC = String(d.versao || '') !== versao() ? 'versao' : motivoCampo(de, d);
+      if (motC) { manda('duelo', de, 'resposta', { did: didC, ok: false, motivo: motC, modo: 'campo' }, ev.cx); return; }
+      var duplaC = duplaDoCampo();
+      dst.fase = 'escolhendo'; dst.modo = 'campo'; dst.did = didC; dst.eu = 'B'; dst.dupla = duplaC;
+      dst.op = { id: de, cx: ev.cx || null, nome: nomeDe(de) };
+      dst.kb = aleat(8);
+      dst.chave = String(d.chave || '').slice(0, 24) + ':' + dst.kb;
+      dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
+      if (!manda('duelo', de, 'resposta', { did: didC, ok: true, kb: dst.kb, modo: 'campo' }, ev.cx)) { zeraDuelo(); mudaD(); return; }
+      vigia(de, dst.op.cx);
+      aviso(dst.op.nome + ' te atacou no Campo de PvP — a luta começa!', 'bad');
+      mudaD();
+      autoEscolhe();
     } else if (a === 'resposta') {
       if (dst.fase !== 'desafiei' || d.did !== dst.did || !dst.op || de !== dst.op.id) return;
       if (d.ok !== true) {
@@ -1285,6 +1549,13 @@ var JOGO = (typeof window !== 'undefined')
       dst.fase = 'escolhendo';
       dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
       vigia(de, dst.op.cx);
+      if (dst.modo === 'campo' || dst.modo === 'arena') {
+        aviso(dst.modo === 'campo' ? 'Você atacou ' + dst.op.nome + ' — a luta começa!'
+                                   : dst.op.nome + ' chegou à Arena — a luta começa!', 'good');
+        mudaD();
+        autoEscolhe();                                          // 14/09: a dupla do Campo ou a do quadro, sem ficha
+        return;
+      }
       aviso(dst.op.nome + ' aceitou o duelo! Escolha a sua dupla.', 'good');
       mudaD();
     } else if (a === 'compromisso') {
@@ -1308,6 +1579,10 @@ var JOGO = (typeof window !== 'undefined')
       var dupla = null;
       try { dupla = JSON.parse(str); } catch (e) { dupla = null; }
       var mot3 = validaDupla(dupla, dst.dele.n);
+      // 14/09: na Arena a dupla revelada é a que o quadro mostrou (o servidor confere de novo no fechar)
+      if (!mot3 && dst.modo === 'arena' && dst.arena && dst.arena.heroisDele.length && !mesmaDupla(dupla, dst.arena.heroisDele)) {
+        mot3 = 'trapaca';
+      }
       if (mot3) { cancelaD(mot3, true); return; }
       dst.dele.str = str; dst.dele.sal = sal; dst.dele.dupla = dupla;
       confereFim();
@@ -1321,6 +1596,7 @@ var JOGO = (typeof window !== 'undefined')
           : m4 === 'trapaca' ? 'O duelo foi cancelado pelo outro lado: as duplas não bateram.'
           : m4 === 'versao' ? Grupo.textoMotivo('versao', nome)
           : m4 === 'retirou' ? 'O desafio de ' + nome + ' foi retirado.'
+          : (m4 !== 'desistiu' && SOBRE_OUTRO.hasOwnProperty(m4)) ? Grupo.textoMotivo(m4, nome)   // 14/09: vida, paridade…
           : nome + ' desistiu do duelo.');
       mudaD();
     } else if (a === 'fim') {
@@ -1351,12 +1627,16 @@ var JOGO = (typeof window !== 'undefined')
   function tiqueDuelo(t) {
     var f = dst.fase;
     if (f === 'desafiei' || f === 'desafiado') {
+      // 14/09: o lado A da Arena repete o chamado (e acha o outro na Rede pela conta) até a resposta
+      if (f === 'desafiei' && dst.modo === 'arena' && dst.arena && t <= dst.prazo && t >= dst.arena.reenvio) mandaArena(t);
       if (t > dst.prazo) {
         var n = dst.op ? dst.op.nome : '';
-        var meu = f === 'desafiei';
+        var meu = f === 'desafiei', modoT = dst.modo;
         if (!meu && dst.op) manda('duelo', dst.op.id, 'resposta', { did: dst.did, ok: false, motivo: 'expirou' }, dst.op.cx);
         zeraDuelo();
-        aviso(meu ? 'O desafio expirou.' : 'O desafio de ' + n + ' expirou.');
+        aviso(modoT === 'arena' ? 'O adversário da Arena não apareceu — a partida caiu.'
+            : modoT === 'campo' ? 'O ataque não teve resposta.'
+            : (meu ? 'O desafio expirou.' : 'O desafio de ' + n + ' expirou.'));
         mudaD();
       }
     } else if (f === 'escolhendo' || f === 'comprometido' || f === 'revelado') {
@@ -1434,8 +1714,230 @@ var JOGO = (typeof window !== 'undefined')
   }
   Duelo._sha256 = sha256;
   Duelo._semente = function (did, salA, salB) { return fnv(String(did) + '|' + String(salA) + '|' + String(salB)); };
-  Duelo._reset = function () { zeraDuelo(); ultimoOp = null; };
+  Duelo._reset = function () { zeraDuelo(); ultimoOp = null; duplaCampo = []; arenaPendente = null; arenaBatalhou = {}; };
   Duelo._st = function () { return dst; };
+
+  // ==========================================================================
+  // O QUADRO DA ARENA (14/09) — o cliente de servidor/arena.py
+  // ==========================================================================
+  /* O pedido do dono: "na inscrição de pvp onde ele se inscreve na arena para esperar que alguém aceite o
+   * desafio... esse ele pré-seleciona as duas classes já e quem vai desafiar consegue ver.. essa inscrição dá
+   * ranking na coroa também". Quem se inscreve deixa a dupla PÚBLICA no quadro; quem desafia escolhe um
+   * inscrito (a paridade de 5 níveis e a vida conferidas pelo servidor) e mostra a dele; os dois confirmam em
+   * 30 s. Daqui sai o pedido, a consulta do estado a cada CONSULTA_MS SÓ enquanto inscrito ou casado, e a
+   * entrega da partida pronta ao Duelo (Duelo.iniciaArena: sem escolha às cegas — as duplas do quadro). Quem
+   * entra em batalha, sala ou grupo sai. Sem o jogo servido, sem a conta do site ou sem o relé novo, fica
+   * desligada e Arena.disponivel() diz o porquê. */
+  var Arena = {};
+  JOGO.Arena = Arena;
+  Arena.CONSULTA_MS = 2500;
+  Arena.PARIDADE = 5;
+  Arena._agora = function () { return Date.now(); };
+  var ast = null;
+  function zeraArena() {
+    ast = { fase: 'livre', dados: null, ultima: 0, pedindo: false, offset: 0, entregue: null, entregueEm: 0, erro: null };
+  }
+  zeraArena();
+  function mudaA() { if (Arena.aoMudar) { try { Arena.aoMudar(Arena.estado()); } catch (e) {} } }
+
+  Arena.disponivel = function () {
+    var proto = safe(function () { return window.location.protocol; }, '');
+    if (proto === 'file:') {
+      return { ok: false, motivo: 'arquivo', texto: 'A Arena ranqueada precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.' };
+    }
+    var s = JOGO.Sessao;
+    if (!s || typeof s.api !== 'function' || !safe(function () { return s.ativa(); }, false)) {
+      return { ok: false, motivo: 'sem-sessao', texto: 'A Arena ranqueada precisa da sua conta do site: entre para jogar.' };
+    }
+    var A = JOGO.Autoridade;
+    if (A && typeof A.ligada === 'function' && !safe(function () { return A.ligada(); }, false)) {
+      return { ok: false, motivo: 'servidor', texto: 'O servidor da Arena não está ligado agora.' };
+    }
+    if (!safe(function () { return R().privado(); }, false)) {
+      return { ok: false, motivo: 'rede', texto: 'A Arena precisa do servidor da Rede (o duelo sai por ele).' };
+    }
+    return { ok: true };
+  };
+  Arena.inscrita = function () {
+    return ast.fase === 'inscrito' || ast.fase === 'casada' || (ast.fase === 'pronta' && !ast.entregue);
+  };
+  function copiaLista(v) { return Array.isArray(v) ? JSON.parse(JSON.stringify(v)) : null; }
+  Arena.estado = function () {
+    var d = ast.dados || {}, disp = Arena.disponivel();
+    var e = { fase: ast.fase, pedindo: !!ast.pedindo, erro: ast.erro, desligada: disp.ok ? null : disp.texto,
+              herois: copiaLista(d.herois), classes: copiaLista(d.classes), nivel: d.nivel || null };
+    if (ast.fase === 'inscrito') e.desdeMs = d.desdeMs - ast.offset;
+    if (ast.fase === 'casada') { e.prazoMs = d.prazoMs - ast.offset; e.confirmei = !!d.confirmei; e.eleConfirmou = !!d.eleConfirmou; }
+    if (ast.fase === 'casada' || ast.fase === 'pronta') {
+      var ad = d.adversario || {};
+      e.lado = d.lado;
+      e.papel = d.papel;
+      e.adversario = { conta: ad.conta, nome: String(ad.nome || '?'), nivel: ad.nivel, brasa: ad.brasa,
+                       herois: copiaLista(ad.herois) || [], classes: copiaLista(ad.classes) || [] };
+    }
+    if (ast.fase === 'pronta') e.did = d.did;
+    return e;
+  };
+  function pedeArena(rota, metodo, corpo) {
+    var s = JOGO.Sessao;
+    if (!s || typeof s.api !== 'function') return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
+    var op = { method: metodo };
+    if (corpo !== undefined) op.body = corpo;
+    try {
+      return Promise.resolve(s.api(rota, op)).then(function (r) { return r || { ok: false, status: 0 }; },
+                                                   function () { return { ok: false, status: 0, erro: 'o servidor não respondeu' }; });
+    } catch (e) { return Promise.resolve({ ok: false, status: 0, erro: 'o servidor não respondeu' }); }
+  }
+  function adota(r, era) {
+    if (era && ast !== era) return;                     // saiu no meio: a resposta velha não reinscreve
+    if (!r || !r.ok || typeof r.fase !== 'string') return;
+    var antes = ast.fase;
+    ast.offset = (typeof r.agoraMs === 'number') ? r.agoraMs - Arena._agora() : 0;
+    ast.dados = r;
+    ast.erro = null;
+    ast.fase = r.fase;
+    if (r.fase === 'casada' && antes !== 'casada' && Arena.aoCasou) { try { Arena.aoCasou(Arena.estado()); } catch (e) {} }
+    if (r.fase === 'pronta' && ast.entregue !== r.did) {
+      ast.entregue = r.did;
+      ast.entregueEm = Arena._agora();
+      var ad = r.adversario || {};
+      var res = Duelo.iniciaArena({ did: r.did, lado: r.lado, conta: ad.conta, nome: ad.nome,
+                                    herois: r.herois, heroisDele: ad.herois });
+      if (!res || !res.ok) {
+        aviso('A partida da Arena caiu: ' + Grupo.textoMotivo(res ? res.motivo : 'ocupado', null).toLowerCase());
+        Arena.sair();
+        return;
+      }
+    }
+    mudaA();
+  }
+  function falhaArena(r) {
+    return { ok: false, motivo: (r && r.motivo) || (r && r.status === 0 ? 'servidor' : 'arena'),
+             erro: (r && r.erro) || null, esperaS: r ? r.esperaS : undefined };
+  }
+  /* a dupla de quem se inscreve ou desafia: os DOIS, em ordem (um só se a conta só tem um), de pé, e quem
+   * pede fora de luta, de sala, de grupo e de outro duelo */
+  function motivoDaDupla(lista) {
+    if (!lista.length) return 'n';
+    for (var i = 0; i < lista.length; i++) {
+      if (ehMestre(lista[i])) return 'mestre';
+      if (!temHeroi(lista[i])) return 'sem-heroi';
+    }
+    if (lista.length < 2 && heroisDeDuelo().length >= 2) return 'dois';
+    if (Grupo.emGrupo()) return 'em-grupo';
+    if (emBatalhaOuDescida() || minhaSala() || descidaG) return 'em-batalha';
+    if (dst.fase !== 'livre') return 'ocupado';
+    return null;
+  }
+  function listaDe(ids) {
+    var lista = [];
+    (Object.prototype.toString.call(ids) === '[object Array]' ? ids : []).forEach(function (h) {
+      if (typeof h === 'string' && h && lista.indexOf(h) < 0 && lista.length < MAX_HEROIS) lista.push(h);
+    });
+    return lista;
+  }
+  function pedeComDupla(rota, corpo, lista) {
+    var disp = Arena.disponivel();
+    if (!disp.ok) return Promise.resolve({ ok: false, motivo: disp.motivo, erro: disp.texto });
+    var mot = motivoDaDupla(lista);
+    if (mot) return Promise.resolve({ ok: false, motivo: mot });
+    var z = zeradoNa(lista);
+    if (z) return Promise.resolve({ ok: false, motivo: 'vida-zero', esperaS: z.esperaS });
+    var era = ast;
+    ast.pedindo = true;
+    mudaA();
+    return pedeArena(rota, 'POST', corpo).then(function (r) {
+      if (ast !== era) return { ok: false, motivo: 'ocupado' };
+      ast.pedindo = false;
+      ast.ultima = Arena._agora();
+      if (r.ok) { adota(r, era); return { ok: true }; }
+      ast.erro = r.erro || null;
+      mudaA();
+      return falhaArena(r);
+    });
+  }
+  Arena.inscrever = function (ids) {
+    var lista = listaDe(ids);
+    return pedeComDupla('/api/arena/inscrever', { herois: lista }, lista);
+  };
+  Arena.desafiar = function (conta, ids) {
+    var lista = listaDe(ids);
+    if (typeof conta !== 'number') return Promise.resolve({ ok: false, motivo: 'sem-inscricao' });
+    if (ast.fase !== 'livre') return Promise.resolve({ ok: false, motivo: ast.fase === 'inscrito' ? 'inscrito' : 'ocupado' });
+    return pedeComDupla('/api/arena/desafiar', { alvo: conta, herois: lista }, lista);
+  };
+  /* O QUADRO (a lista pública dos inscritos): só a leitura — a HUD pede enquanto o painel está aberto */
+  Arena.quadro = function () {
+    var disp = Arena.disponivel();
+    if (!disp.ok) return Promise.resolve({ ok: false, motivo: disp.motivo, erro: disp.texto, inscritos: [] });
+    return pedeArena('/api/arena/quadro', 'GET').then(function (r) {
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor não respondeu', inscritos: [] };
+      var off = (typeof r.agoraMs === 'number') ? r.agoraMs - Arena._agora() : 0;
+      var lista = (Array.isArray(r.inscritos) ? r.inscritos : []).map(function (x) {
+        return { conta: x.conta, nome: String(x.nome || '?'), nivel: x.nivel, brasa: x.brasa, eu: !!x.eu,
+                 classes: Array.isArray(x.classes) ? x.classes : [], desdeMs: x.desdeMs - off };
+      });
+      return { ok: true, paridade: r.paridade || Arena.PARIDADE, inscritos: lista };
+    });
+  };
+  function pedeSimples(rota) {
+    var era = ast;
+    ast.pedindo = true;
+    mudaA();
+    return pedeArena(rota, 'POST', {}).then(function (r) {
+      if (ast !== era) return { ok: false, motivo: 'ocupado' };
+      ast.pedindo = false;
+      if (r.ok) { adota(r, era); return { ok: true }; }
+      mudaA();
+      if (r.motivo === 'sem-partida') Arena.consulta();
+      return falhaArena(r);
+    });
+  }
+  Arena.confirmar = function () {
+    if (ast.fase !== 'casada') return Promise.resolve({ ok: false, motivo: 'sem-partida' });
+    return pedeSimples('/api/arena/confirmar');
+  };
+  Arena.recusar = function () {
+    if (ast.fase !== 'casada') return Promise.resolve({ ok: false, motivo: 'sem-partida' });
+    return pedeSimples('/api/arena/recusar');
+  };
+  Arena.sair = function () {
+    var era = ast.fase;
+    zeraArena();
+    mudaA();
+    if (era === 'livre') return Promise.resolve({ ok: true });
+    return pedeArena('/api/arena/sair', 'POST', {}).then(function (r) { return { ok: !!(r && r.ok) }; });
+  };
+  Arena.consulta = function () {
+    var era = ast;
+    ast.ultima = Arena._agora();
+    return pedeArena('/api/arena/estado', 'GET').then(function (r) {
+      if (r && r.ok) adota(r, era);
+      return r;
+    });
+  };
+  function tiqueArena() {
+    var t = Arena._agora();
+    if (ast.fase === 'pronta' && ast.entregue) {
+      // a partida foi entregue ao Duelo: acabou (ou caiu antes da arena) — aqui volta a livre
+      if (dst.fase === 'livre' && t - ast.entregueEm > 3000) {
+        if (!arenaBatalhou[ast.entregue]) pedeArena('/api/arena/sair', 'POST', {});
+        zeraArena();
+        mudaA();
+      }
+      return;
+    }
+    if (!Arena.inscrita()) return;
+    if (emBatalhaOuDescida() || minhaSala() || descidaG || Grupo.emGrupo()) {
+      aviso('Você saiu da Arena.');
+      Arena.sair();
+      return;
+    }
+    if (t - ast.ultima >= Arena.CONSULTA_MS) Arena.consulta();
+  }
+  Arena._tique = tiqueArena;
+  Arena._reset = function () { zeraArena(); };
+  Arena._st = function () { return ast; };
 
   // ==========================================================================
   // A MENSAGEM PARTICULAR

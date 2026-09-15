@@ -75,10 +75,18 @@
         [].filter.call(d.querySelectorAll('button'), function (b) { return /Confirmar/.test(b.textContent); })[0].click();
         // as construções vestem o GLB uns segundos depois de a praça abrir —
         // é de lá que sai a medida da parede
-        return espera(w, function () {
+        /* 15/09: espera as SETE vestirem (a cobrança é "toda construção tem parede"). Com
+         * `some`, a prova media no instante em que a primeira obra abria — no jogo servido
+         * a Arena e o Poço chegam uns segundos depois e saíam com parede 0. Estourando o
+         * prazo, mede o que houver e a cobrança acusa. */
+        var PREDIOS = ['banco', 'mercado', 'arena', 'sede', 'forja', 'loteria', 'poco'];
+        function lugaresVestidos() {
           var L = w.JOGO.Hub._lugares ? w.JOGO.Hub._lugares() : [];
-          return L.length && L.some(function (l) { return l.solido > 0; }) ? L : false;
-        }, 90000, 700);
+          var vest = L.filter(function (l) { return PREDIOS.indexOf(l.tipo) >= 0 && l.solido > 0; });
+          return vest.length === PREDIOS.length ? L : false;
+        }
+        return espera(w, lugaresVestidos, 90000, 700)
+          .catch(function () { return w.JOGO.Hub._lugares(); });
       })
       .then(function (L) {
         var predios = L.filter(function (l) {
@@ -115,6 +123,42 @@
         var longe = w.JOGO.Hub._empurra(0, 0);
         check('o miolo da praça (a Árvore) não é lugar e não empurra aqui',
               longe.x === 0 && longe.z === 0);
+
+        /* 14/09: A ENTRADA DO CAMPO DE PVP ("um portal de pedra com brilho vermelho perto da
+         * Arena") não encosta em nada: nem na caixa de uma obra ou portal, nem no raio de
+         * conversa de outro lugar (o painel errado abriria), nem numa calçada que não é a
+         * dela, nem no disco da Árvore. A luz vermelha pintada no chão não conta. */
+        var H = w.JOGO.Hub;
+        var campo = L.filter(function (l) { return l.tipo === 'campo'; })[0];
+        check('a praça tem a entrada do Campo de PvP, sem parede', !!campo && !campo.solido);
+        if (campo) {
+          var cxC = H._caixaDoLugar('campo');
+          var rB = Math.max(cxC.x1 - cxC.x0, cxC.z1 - cxC.z0) / 2;
+          var encosta = [];
+          predios.concat(portais).forEach(function (l) {
+            var cx = H._caixaDoLugar(l.id);
+            if (!cx) return;
+            var vao = Math.max(cx.x0 - cxC.x1, cxC.x0 - cx.x1, cx.z0 - cxC.z1, cxC.z0 - cx.z1);
+            if (vao < 1.0) encosta.push(l.id + ' ' + vao.toFixed(2));
+          });
+          check('a caixa da entrada do Campo fica a 1 m ou mais de toda obra e portal', encosta.length === 0, encosta.join(' · '));
+          var sobrepoe = L.filter(function (l) {
+            return l.id !== 'campo' && Math.hypot(l.x - campo.x, l.z - campo.z) < l.raio + campo.raio;
+          }).map(function (l) { return l.id; });
+          check('o raio de conversa da entrada não cruza o de nenhum lugar', sobrepoe.length === 0, sobrepoe.join(','));
+          var cam = H._caminhos(), rC = Math.hypot(campo.x, campo.z), angC = Math.atan2(campo.x, -campo.z);
+          var folgas = [['disco da Árvore', rC - cam.miolo - rB], ['anel', Math.abs(rC - cam.anel) - cam.meia - rB]];
+          cam.vias.forEach(function (v) {
+            if (Math.abs(v.ang - angC) < 0.01) return;               // o ramal dela mesma
+            var ux = Math.sin(v.ang), uz = -Math.cos(v.ang);
+            var t = Math.max(v.de, Math.min(v.ate, campo.x * ux + campo.z * uz));
+            folgas.push(['via ' + v.ang.toFixed(2), Math.hypot(campo.x - ux * t, campo.z - uz * t) - cam.meia - rB]);
+          });
+          var ruins = folgas.filter(function (f2) { return f2[1] < 0.3; });
+          check('a base da entrada não pisa em calçada alheia nem no disco da Árvore (folga ≥ 0,3 m)', ruins.length === 0,
+                (ruins.length ? ruins : folgas.slice().sort(function (a, b2) { return a[1] - b2[1]; }).slice(0, 2))
+                  .map(function (f2) { return f2[0] + ' ' + f2[1].toFixed(2); }).join(' · '));
+        }
         fecha();
       })
       .catch(function (e) {

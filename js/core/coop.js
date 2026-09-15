@@ -1777,10 +1777,21 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------------------ o duelo
+  /* 14/09, O MAPA DO DESAFIO (o dono: "o duelo deve ocorrer no mapa da praça. Mapas aleatórios é para pvp de
+   * inscrição na arena ou pvp comum no mapa pvp"): o amistoso é sempre a praça (js/core/data/arenas.js), sala 0 */
+  Coop.MODOS_DUELO = ['desafio', 'arena', 'campo'];
+  Coop.arenaDoDesafio = function () {
+    var lista = D().arenas || [], m = null;
+    for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].id === 'praca') m = lista[i];
+    if (!m || !m.rooms || !m.rooms.length) return null;
+    return { dungeonId: 'praca', roomIndex: 0, nome: m.name || 'A Praça' };
+  };
   Coop.iniciaDuelo = function (d) {
     if (!d || !d.did || !d.oponente || !d.oponente.id) return false;
     var s = (+d.semente) >>> 0;
-    var ar = Coop.sorteiaArena(s);
+    // 14/09: o modo decide o mapa — a praça no desafio, o sorteio na arena e no campo (sem modo: o sorteio de antes)
+    var modo = Coop.MODOS_DUELO.indexOf(d.modo) >= 0 ? d.modo : null;
+    var ar = modo === 'desafio' ? Coop.arenaDoDesafio() : Coop.sorteiaArena(s);
     if (!ar) return false;
     var dg = d.dungeonId || ar.dungeonId;
     var ri = (typeof d.roomIndex === 'number') ? d.roomIndex : ar.roomIndex;
@@ -1799,7 +1810,7 @@ var JOGO = (typeof window !== 'undefined')
     S.bid = String(d.did);
     S.fase = 'batalha';
     S.duelo = { did: String(d.did), eu: lado, meuId: me, semente: s, dungeonId: dg, roomIndex: ri, nome: ar.nome,
-                duplaA: A, duplaB: B };
+                duplaA: A, duplaB: B, modo: modo };
     S.parceiro = { id: String(d.oponente.id), cx: d.oponente.cx || null,
                    nome: d.oponente.nome || nomeDe(d.oponente.id) };
     // os 15 s do `dentro` do outro contam só depois que a MINHA arena abriu (a
@@ -1813,7 +1824,7 @@ var JOGO = (typeof window !== 'undefined')
     // resumo da presença na Rede, o meu do DB (assíncrono: chega antes do fim)
     S.duelo.ptsDele = null; S.duelo.ptsMeus = null;
     // 13/09: o que o servidor precisa para refazer a arena e ranquear
-    S.duelo.arenaSrv = { dungeonId: dg, roomIndex: ri, semente: s, duplaA: clone(A), duplaB: clone(B), eu: lado };
+    S.duelo.arenaSrv = { dungeonId: dg, roomIndex: ri, semente: s, duplaA: clone(A), duplaB: clone(B), eu: lado, modo: modo };
     try {
       var r0 = R(), ps = (r0 && r0.pares) ? r0.pares() : [];
       for (var q = 0; q < ps.length; q++) {
@@ -1841,7 +1852,7 @@ var JOGO = (typeof window !== 'undefined')
       muda();
     }));
     if (!ok) { S = nova(null); S.n = n0; muda(); return false; }
-    avisa('Arena sorteada: ' + ar.nome + '.', 'info');
+    avisa(modo === 'desafio' ? 'Desafio amistoso: ' + ar.nome + '.' : 'Arena sorteada: ' + ar.nome + '.', 'info');
     muda();
     return true;
   };
@@ -1879,7 +1890,9 @@ var JOGO = (typeof window !== 'undefined')
                    herois: ids(souA ? arena.duplaA : arena.duplaB) };
         var ele = { conta: nuvemDe(S.parceiro.id), dono: S.parceiro.id, herois: ids(souA ? arena.duplaB : arena.duplaA) };
         if (eu.conta && ele.conta) {
-          Aut.fechaDuelo({ did: S.duelo.did, dungeonId: arena.dungeonId, roomIndex: arena.roomIndex, semente: arena.semente,
+          // 14/09: o `modo` vai junto — o servidor nunca ranqueia o desafio, e confere a arena e a paridade
+          Aut.fechaDuelo({ did: S.duelo.did, modo: arena.modo || undefined, dungeonId: arena.dungeonId,
+                           roomIndex: arena.roomIndex, semente: arena.semente,
                            A: souA ? eu : ele, B: souA ? ele : eu, lances: (S.logSrv || []).slice(),
                            hashFinal: f.h, fotografada: !!S.fotografada }).then(function (r) {
             // 14/09: o servidor refez o duelo com a vida que ELE guardou no abrir e gravou a do fim
@@ -1888,6 +1901,10 @@ var JOGO = (typeof window !== 'undefined')
               avisa('Duelo ranqueado: ' + (r.delta >= 0 ? '+' : '') + r.delta + ' pontos de Brasa.', r.delta >= 0 ? 'ok' : 'info');
             } else if (r && r.ok && r.motivo === 'teto') {
               avisa('Este duelo não contou para o ranking (o teto de duelos ranqueados de hoje).', 'info');
+            } else if (r && r.ok && r.motivo === 'paridade') {
+              avisa('Este duelo não valeu coroa: a diferença de nível passou do limite.', 'info');
+            } else if (r && r.ok && (r.motivo === 'sem-partida' || r.motivo === 'dupla' || r.motivo === 'mapa')) {
+              avisa('Este duelo não valeu coroa: o servidor não reconheceu a partida.', 'info');
             }
           });
           vidaNoFechar = true;
@@ -1957,7 +1974,7 @@ var JOGO = (typeof window !== 'undefined')
                contestado: S.fimMotivo === 'contestado',
                oponente: S.parceiro ? (S.parceiro.nome || nomeDe(S.parceiro.id)) : '',
                arena: { dungeonId: S.duelo.dungeonId, roomIndex: S.duelo.roomIndex, nome: S.duelo.nome },
-               ptsMeus: S.duelo.ptsMeus, ptsDele: S.duelo.ptsDele };
+               ptsMeus: S.duelo.ptsMeus, ptsDele: S.duelo.ptsDele, modo: S.duelo.modo || null };
     }
     S.descidaAcabou = !!(S.descidaAcabou || S.parceiroSaiu || (S.parceiroIA && S.sumidoDesde));
     var info = { lider: souLider(), parceiroVoltou: !S.sumidoDesde && !S.parceiroSaiu,

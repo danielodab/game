@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a vida na praça (o cartão do canto)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1280px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1280px;top:0;width:420px;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A VIDA NA PRAÇA (14/09). O dono: "de alguma forma deve aparecer essa vida na praça também, pro
+     jogador saber quando está cheia ou não. Pode ser um coração com o total e % pequeno abaixo,
+     localizado no canto superior esquerdo, com a foto do personagem. No caso, se ele desceu com 2
+     personagens deve aparecer a foto e vida dos dois, e ele pode selecionar para quem quer carregar a
+     vida com pote".
+     O index.html de verdade num quadro, com o save na memória (?sandbox=1) e o relógio da Vida parado
+     (JOGO.Vida._relogio). Cobra, em 1280×720 e depois a 400×800:
+       - o cartão aparece com 1 e com 2 heróis, sempre (cheio = 100%), com a foto e o coração;
+       - o total e o % mudam com a Vida ferida, sem refazer o DOM; abaixo de 35% o coração muda de cor;
+       - a 0 PV mostra os segundos até 1 PV;
+       - tocar num cartão passa o anel dourado (para quem vai a poção);
+       - sem poção, a dica da banca; com poção, os botões curam o SELECIONADO e não o outro; cheio recusa;
+       - em grupo só os MEUS heróis (o do parceiro não vira cartão);
+       - não tapa o nome/moedas, o Menu/Mestre, a faixa dos eventos, o painel do grupo, o cais nem o chat.
+     Roda por HTTP (o quadro precisa da mesma origem). -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('   ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    linhas.push(s.textContent);
+    pinta();
+    window.__fail = falhas;
+    window.__pronto = true;
+    try {
+      var xf = new XMLHttpRequest();
+      xf.open('POST', '/__fim', false);
+      xf.send(linhas.join(NL));
+    } catch (e) {}
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
+  // espera por TENTATIVAS (o relógio do headless corre em saltos)
+  function ate(cond, ms) {
+    var tentativas = Math.max(40, Math.ceil((ms || 20000) / 80));
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (--tentativas <= 0) return r(false);
+        setTimeout(volta, 80);
+      })();
+    });
+  }
+
+  var quadro = document.getElementById('tela');
+  function tamanho(l, a) {
+    quadro.style.width = l + 'px'; quadro.style.height = a + 'px';
+    document.getElementById('saida').style.left = l + 'px';
+  }
+  quadro.src = '../index.html?sandbox=1&snap=1&vida-praca';
+  var w, doc, J, G, U, P, V;
+  var PEQ = 'pocao-pequena', MED = 'pocao-media';
+  var herois, h0, h1, mx0, mx1, relogio = 0;
+
+  function relogioParado(ms) { relogio = ms; V._relogio = function () { return relogio; }; }
+  function caixa() { return doc.querySelector('.screen-hub.is-on .vida-praca'); }
+  function cartao(hid) { var c = caixa(); return c ? c.querySelector('.vp-heroi[data-heroi="' + hid + '"]') : null; }
+  function txt(hid, cls) { var k = cartao(hid), n = k && k.querySelector(cls); return n ? n.textContent : ''; }
+  function num(hid) { return txt(hid, '.vp-num'); }
+  function pct(hid) { return txt(hid, '.vp-pct'); }
+  function tem(hid, cls) { var k = cartao(hid); return !!(k && k.classList.contains(cls)); }
+  function pocao(id) { var c = caixa(); return c ? c.querySelector('.vp-pocao[data-pocao="' + id + '"]') : null; }
+  function toastTxt() { var t = doc.querySelector('.ui-toast'); return (t && t.classList.contains('is-on')) ? t.textContent : ''; }
+  function obj(k, v) { var o = {}; o[k] = v; return o; }
+  function pctDe(hp, mx) { return hp >= mx ? 100 : (hp < 1 ? 0 : Math.max(1, Math.min(99, Math.round(100 * hp / mx)))); }
+  function cruza(a, b) { return !!b && b.width > 0 && b.height > 0 && !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top); }
+  function rs(r) { return r ? [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)].join(',') : '-'; }
+
+  quadro.onload = function () {
+    w = quadro.contentWindow; doc = w.document;
+    ate(function () {
+      J = w.JOGO;
+      return J && J.UI && J.UI.selection && J.Game && J.Game.vidaNaEspera && J.Progress && J.DB && J.DATA && J.Vida &&
+             J.DATA.consumiveis && doc.querySelector('.ui-toast');
+    }, 110000).then(function (ok) {
+      if (!ok) return fim('o jogo não abriu no quadro (com o JOGO.Vida)');
+      G = J.Game; U = J.UI; P = J.Progress; V = J.Vida;
+      diz('o jogo abriu em ' + Math.round((Date.now() - T0) / 1000) + ' s');
+      try {
+        var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+        w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+      } catch (e) {}
+      return umHeroi().then(doisHerois).then(ferido).then(zero).then(selecao).then(pocoes).then(grupo)
+        .then(function () { return layout('1280×720'); })
+        .then(celular)
+        .then(function () { V._relogio = null; fim(); });
+    }).catch(function (e) { fim('a prova estourou: ' + (e && (e.stack || e.message) || e)); });
+  };
+
+  // ====================================================== um herói
+  function umHeroi() {
+    herois = P.heroIds().filter(function (h) { return h !== 'gm'; }).slice(0, 2);
+    if (herois.length < 2) throw new Error('o save da prova precisa de 2 heróis (tem ' + herois.length + ')');
+    h0 = herois[0]; h1 = herois[1];
+    mx0 = P.battleParty([h0])[0].stats.hp; mx1 = P.battleParty([h1])[0].stats.hp;
+    relogioParado(10000000);
+    V._zera();
+    [PEQ, MED, 'pocao-grande'].forEach(function (id) { var n = P.consumivelVer(id); if (n) P.gastaConsumivel(id, n); });
+    U.selection([h0]);
+    return J.DB.batizar('Provador').then(function () {
+      U.showScreen('hub');
+      return ate(function () { return U.telaAtual() === 'hub' && !!cartao(h0) && num(h0) !== ''; }, 60000);
+    }).then(function (ok) {
+      var c = caixa(), k = cartao(h0);
+      check('com 1 herói: um cartão só, à vista mesmo com a vida cheia', ok && !c.hidden && c.querySelectorAll('.vp-heroi').length === 1 &&
+            c.offsetParent !== null);
+      if (!ok) throw new Error('o cartão da praça não montou');
+      check('o cartão tem a FOTO do herói (o retrato desenhado num canvas)', !!k.querySelector('.vp-foto canvas'));
+      check('o coração com o total e o % pequeno embaixo: "' + mx0 + '/' + mx0 + '" e "100%"',
+            !!k.querySelector('.vp-cor svg') && num(h0) === mx0 + '/' + mx0 && pct(h0) === '100%' && tem(h0, 'is-cheio'),
+            num(h0) + ' · ' + pct(h0));
+      check('o PV cheio é o da batalha (Progress.battleParty)', G.vidaNaEspera([h0])[0].max === mx0);
+      var sem = c.querySelector('.vp-sem');
+      check('sem poção: a dica curta da banca do mercador no Mercadinho', !!sem && /banca do mercador.*Mercadinho/.test(sem.textContent),
+            sem && sem.textContent);
+      check('o quadro antigo da praça saiu (nenhum .vida-bloco na praça)', !doc.querySelector('.screen-hub.is-on .vida-bloco'));
+    });
+  }
+
+  // ====================================================== dois heróis
+  function doisHerois() {
+    U.selection(herois.slice());
+    return ate(function () { return caixa().querySelectorAll('.vp-heroi').length === 2 && num(h1) !== ''; }, 5000).then(function (ok) {
+      var ks = caixa().querySelectorAll('.vp-heroi');
+      check('com 2 heróis: dois cartões, cada um com a foto e o coração', ok &&
+            [].every.call(ks, function (k) { return !!k.querySelector('.vp-foto canvas') && !!k.querySelector('.vp-cor svg'); }) &&
+            num(h1) === mx1 + '/' + mx1 && pct(h1) === '100%');
+      check('na ordem da escolha', ok && ks[0].getAttribute('data-heroi') === h0 && ks[1].getAttribute('data-heroi') === h1);
+      check('o primeiro nasce com o anel dourado (para quem vai a poção)', tem(h0, 'is-alvo') && !tem(h1, 'is-alvo'));
+    });
+  }
+
+  // ====================================================== ferido
+  var guarda, guardaCaixa, guardaPct;
+  /* a praça inteira pode ser remontada por fora (um showScreen('hub') atrasado do batismo); a
+   * prova do "não refaz" só vale com a MESMA caixa: guarda o cartão, anda 2 s (+1 PV) e confere —
+   * se a caixa trocou no meio, tenta de novo */
+  function mesmoDom(vezes) {
+    guarda = cartao(h0); guardaCaixa = caixa(); guardaPct = guarda && guarda.querySelector('.vp-pct');
+    var antes = num(h0), hp = parseInt(antes, 10);
+    relogio += 2000;
+    return ate(function () { return parseInt(num(h0), 10) === hp + 1; }, 4000).then(function (subiu) {
+      if (caixa() !== guardaCaixa && vezes > 1) return mesmoDom(vezes - 1);
+      return { ok: subiu && caixa() === guardaCaixa && cartao(h0) === guarda && guarda.querySelector('.vp-pct') === guardaPct,
+               info: antes + ' → ' + num(h0) + ' · mesma caixa=' + (caixa() === guardaCaixa) + ' · mesmo cartão=' + (cartao(h0) === guarda) };
+    });
+  }
+  function ferido() {
+    V.fim(obj(h0, mx0 - 40), obj(h0, mx0));
+    return ate(function () { return num(h0) === (mx0 - 40) + '/' + mx0; }, 4000).then(function (ok) {
+      var esp = pctDe(mx0 - 40, mx0);
+      check('Vida ferida: o total cai e o % acompanha', ok && pct(h0) === esp + '%' && !tem(h0, 'is-cheio'), num(h0) + ' · ' + pct(h0));
+      var alt = cartao(h0).querySelector('.vp-cor-enche').style.height;
+      check('o coração enche até o %', alt === esp + '%', alt);
+      check('o outro herói segue cheio (100%)', pct(h1) === '100%' && tem(h1, 'is-cheio'));
+      // a partir daqui os tiques só trocam números: o mesmo cartão, o mesmo texto do %
+      guarda = cartao(h0); guardaCaixa = caixa(); guardaPct = guarda.querySelector('.vp-pct');
+      relogio += 10000;
+      return ate(function () { return num(h0) === (mx0 - 35) + '/' + mx0; }, 4000);
+    }).then(function (ok) {
+      check('10 s depois: +5 PV no cartão, AO VIVO', ok, num(h0));
+      return mesmoDom(3);
+    }).then(function (res) {
+      check('os tiques só trocam números: o mesmo cartão e o mesmo % entre um PV e outro (o DOM não se refaz)', res.ok, res.info);
+      V.fim(obj(h0, Math.floor(mx0 * 0.2)), obj(h0, mx0));
+      return ate(function () { return tem(h0, 'is-baixo'); }, 4000);
+    }).then(function (ok) {
+      var cor = function (hid) { return w.getComputedStyle(cartao(hid).querySelector('.vp-cor-enche svg')).fill; };
+      check('abaixo de 35% o coração muda de cor', ok && cor(h0) !== cor(h1), cor(h0) + ' vs ' + cor(h1));
+    });
+  }
+
+  // ====================================================== a zero
+  function zero() {
+    V.fim(obj(h1, 0), obj(h1, mx1));
+    return ate(function () { return tem(h1, 'is-zero'); }, 4000).then(function (ok) {
+      check('a 0 PV: "0/' + mx1 + '" e os segundos até 1 PV no lugar do %', ok && num(h1) === '0/' + mx1 && pct(h1) === '1 PV em 2 s',
+            num(h1) + ' · ' + pct(h1));
+      relogio += 1000;
+      return ate(function () { return pct(h1) === '1 PV em 1 s'; }, 4000);
+    }).then(function (ok) {
+      check('a espera desce com o relógio', ok, pct(h1));
+    });
+  }
+
+  // ====================================================== tocar seleciona
+  function selecao() {
+    cartao(h1).click();
+    return ate(function () { return tem(h1, 'is-alvo'); }, 4000).then(function (ok) {
+      check('tocar no segundo cartão passa o anel dourado para ele (e tira do primeiro)', ok && !tem(h0, 'is-alvo') &&
+            cartao(h1).getAttribute('aria-pressed') === 'true');
+      var bw = w.getComputedStyle(cartao(h1)).borderTopColor;
+      check('o anel é dourado', /255, 196, 77/.test(bw), bw);
+    });
+  }
+
+  // ====================================================== as poções
+  function pocoes() {
+    P.poeConsumivel(PEQ, 3); P.poeConsumivel(MED, 2);
+    var hp0;
+    return ate(function () { return !!pocao(PEQ) && !!pocao(MED); }, 5000).then(function (ok) {
+      var bp = pocao(PEQ), bm = pocao(MED);
+      check('as poções da conta aparecem com o ícone, a cura e a quantidade', ok && /\+30/.test(bp.textContent) && /×3/.test(bp.textContent) &&
+            /\+70/.test(bm.textContent) && /×2/.test(bm.textContent) && !!bp.querySelector('canvas') && !caixa().querySelector('.vp-sem'),
+            ok ? bp.textContent + ' | ' + bm.textContent : '');
+      var para = caixa().querySelector('.vp-para');
+      check('com 2 heróis diz para quem vai ("Poção para <o do anel>")', !!para &&
+            para.textContent.indexOf(G.vidaNaEspera([h1])[0].nome) >= 0, para && para.textContent);
+      hp0 = V.agora(h0).hp;
+      pocao(PEQ).click();
+      return ate(function () { return P.consumivelVer(PEQ) === 2 && num(h1) === '30/' + mx1; }, 6000);
+    }).then(function (ok) {
+      check('a Pequena cura o SELECIONADO (o segundo, de 0 para 30) e gasta uma', ok && V.agora(h1).hp === 30, num(h1));
+      check('... e não mexe no outro', V.agora(h0).hp === hp0, V.agora(h0).hp + ' vs ' + hp0);
+      return ate(function () { return /×2/.test(pocao(PEQ).textContent); }, 4000);
+    }).then(function (ok) {
+      check('o botão conta 2', ok);
+      cartao(h0).click();
+      return ate(function () { return tem(h0, 'is-alvo'); }, 4000);
+    }).then(function (ok) {
+      V.fim(obj(h0, mx0 - 50), obj(h0, mx0));
+      return ate(function () { return ok && num(h0) === (mx0 - 50) + '/' + mx0; }, 4000);
+    }).then(function (ok) {
+      if (ok) pocao(MED).click();
+      return ate(function () { return P.consumivelVer(MED) === 1 && tem(h0, 'is-cheio'); }, 6000);
+    }).then(function (ok) {
+      check('tocar no primeiro e beber a Média: ELE enche (100%) e o segundo fica em 30', ok && pct(h0) === '100%' &&
+            V.agora(h0) === null && V.agora(h1).hp === 30, pct(h0) + ' · ' + num(h1));
+      return ate(function () { return pocao(PEQ) && pocao(PEQ).classList.contains('is-dim'); }, 4000);
+    }).then(function (ok) {
+      check('com o selecionado cheio o botão fica apagado', ok);
+      pocao(PEQ).click();
+      return ate(function () { return /já está cheia/.test(toastTxt()); }, 5000);
+    }).then(function (ok) {
+      check('... e tocar recusa com o motivo, sem gastar e sem curar o outro', ok && P.consumivelVer(PEQ) === 2 && V.agora(h1).hp === 30,
+            toastTxt());
+    });
+  }
+
+  // ====================================================== em grupo, só os meus
+  function grupo() {
+    var orig = G.vidaNaEspera;
+    G.vidaNaEspera = function (ids) {
+      var l = orig.call(G, ids);
+      return l.concat([{ chave: 'parceiro:sumo', heroId: 'sumo', nome: 'Parceiro', meu: false, hp: 10, max: 100,
+                         cheioEmS: 180, ate1S: 0, conferindo: false }]);
+    };
+    return passo(900).then(function () {
+      var ks = caixa().querySelectorAll('.vp-heroi');
+      check('em grupo só os MEUS heróis viram cartão (o do parceiro fica no painel do grupo)', ks.length === 2 &&
+            !caixa().querySelector('[data-chave="parceiro:sumo"]'));
+      G.vidaNaEspera = orig;
+    });
+  }
+
+  // ====================================================== não tapa a praça
+  function layout(nome) {
+    var tela = doc.querySelector('.screen-hub.is-on');
+    var faixa = tela.querySelector('.hub-evento');
+    var gl = doc.querySelector('.grupo-lado'), glTinha = gl && gl.classList.contains('is-on'), glEnche = null;
+    // o painel do grupo e a faixa dos eventos só aparecem em grupo / com evento: aqui eles vêm à vista para a medida
+    if (gl && !glTinha) {
+      gl.classList.add('is-on');
+      glEnche = doc.createElement('div');
+      glEnche.style.height = '112px';
+      gl.appendChild(glEnche);
+    }
+    var faixaTinha = faixa && !faixa.classList.contains('is-off'), faixaHtml = faixa ? faixa.innerHTML : '';
+    if (faixa && !faixaTinha) {
+      faixa.classList.remove('is-off');
+      faixa.innerHTML = '<span>Evento da prova: <b>XP ×2</b> para todos até as 22 h de domingo</span>';
+    }
+    return passo(900).then(function () {
+      var rb = caixa().getBoundingClientRect();
+      var W = w.innerWidth, H = w.innerHeight;
+      check(nome + ': o cartão fica no canto de cima à esquerda, dentro da tela', rb.left >= 0 && rb.left < 40 && rb.top < H / 3 &&
+            rb.right <= W && rb.bottom < H / 2, rs(rb) + ' em ' + W + '×' + H);
+      var alvos = [
+        ['nome e moedas', '.hub-top .hub-quem', tela], ['Menu / Mestre', '.hub-top .hub-acts', tela],
+        ['faixa dos eventos', '.hub-evento', tela], ['painel do grupo', '.grupo-lado.is-on', doc],
+        ['cais', '.hub-dock', tela], ['chat', '.hub-chat', doc], ['tela cheia', '.tc-botao', doc]
+      ];
+      alvos.forEach(function (a) {
+        var e = a[2].querySelector(a[1]);
+        var r = (e && e.offsetParent !== null) ? e.getBoundingClientRect() : null;
+        [].forEach.call(caixa().querySelectorAll('.vp-heroi, .vp-pocoes'), function () {});
+        check(nome + ': não tapa ' + a[0], !cruza(rb, r), 'cartão ' + rs(rb) + ' · ' + a[0] + ' ' + (r ? rs(r) : 'fora da tela'));
+      });
+    }).then(function () {
+      if (glEnche) { glEnche.remove(); gl.classList.remove('is-on'); }
+      if (faixa && !faixaTinha) { faixa.classList.add('is-off'); faixa.innerHTML = faixaHtml; }
+      return passo(700);
+    });
+  }
+
+  // ====================================================== celular
+  function celular() {
+    tamanho(400, 800);
+    return ate(function () { return w.innerWidth === 400; }, 8000).then(function () { return passo(1500); }).then(function () {
+      var ks = caixa().querySelectorAll('.vp-heroi'), rb = caixa().getBoundingClientRect();
+      var larg = [].map.call(ks, function (k) { return Math.round(k.getBoundingClientRect().width); });
+      check('400 px: os dois cartões compactos (≤ 150 px cada) e a caixa deixa a coluna do grupo livre',
+            ks.length === 2 && larg.every(function (x) { return x <= 150; }) && rb.right <= 400 - 62, larg.join(',') + ' · ' + rs(rb));
+      var bs = caixa().querySelectorAll('.vp-pocao, .vp-heroi');
+      var baixos = [].filter.call(bs, function (b) { return b.getBoundingClientRect().height < 34; });
+      check('400 px: cartões e poções tocáveis (≥ 34 px de altura)', !baixos.length, baixos.length + ' baixos');
+      return layout('400×800');
+    });
+  }
+})();
+</script>
+</body>
+</html>

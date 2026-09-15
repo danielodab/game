@@ -47,6 +47,17 @@ DUELO_JANELA = 24 * 3600
 # guardar a vida é barato, mas não é porta para encher o banco
 DUELO_ABERTURAS_POR_HORA = 60
 TETO = {'fase': 'teto', 'venc': None, 'ranqueado': False, 'motivo': 'teto'}
+# 14/09, AS TRÊS FORMAS DE DUELO (o dono: "tem duas formas de desafio: um normal, ou um pvp, ou a inscrição na
+# arena e espera um adversário"; e "o duelo deve ocorrer no mapa da praça. Mapas aleatórios é para pvp de inscrição
+# na arena ou pvp comum no mapa pvp"). O `modo` viaja no corpo do fechar:
+#   desafio  o amistoso da praça, no mapa FIXO 'praca' (js/core/data/arenas.js): nunca ranqueia, nem conta nos tetos
+#   arena    a fila da Arena (servidor/arena.py): ranqueia só com a partida pronta desse did entre essas duas contas
+#   campo    o Campo de PvP: ranqueia com a paridade larga
+# A PARIDADE é a diferença de nível entre o herói MAIS FORTE de cada lado, lida nos estados do SERVIDOR (o dono: até
+# 5 na Arena, 10 no Campo). Sem `modo` (a página de antes do deploy) o duelo vale como amistoso.
+MODOS_DUELO = ('desafio', 'arena', 'campo')
+MAPA_DESAFIO = 'praca'
+PARIDADE = {'arena': 5, 'campo': 10}
 RE_DONO = re.compile(r'^[\x21-\x7e]{1,64}$')
 RE_DID = re.compile(r'^[A-Za-z0-9_:-]{8,64}$')
 NAO_CONFERIDA = 'a sala em grupo teve uma sincronização por foto e não pôde ser conferida'
@@ -112,6 +123,19 @@ def _herois(v, campo):
             or len(set(v)) != len(v)):
         raise Recusa(400, '%s precisa ser uma lista de 1 ou 2 heróis diferentes' % campo)
     return list(v)
+
+
+def _nivel_forte(progress, herois):
+    """14/09: o nível do herói MAIS FORTE da lista, no estado do servidor (a régua da paridade). Sem ficha, 1."""
+    fichas = progress.get('heroes') if isinstance(progress, dict) else None
+    fichas = fichas if isinstance(fichas, dict) else {}
+    melhor = 1
+    for h in herois or ():
+        f = fichas.get(h) if isinstance(h, str) else None
+        lv = f.get('level') if isinstance(f, dict) else None
+        if _inteiro_puro(lv) and lv > melhor:
+            melhor = lv
+    return melhor
 
 
 def _dono(v, campo):
@@ -433,6 +457,8 @@ class GrupoMixin:
                     'delta': delta}
         if res.get('motivo'):
             resposta['motivo'] = res['motivo']
+        if res.get('modo'):
+            resposta['modo'] = res['modo']
         resposta.update(pub)
         # 14/09, a vida única: a vida de AGORA dos heróis de quem pede ({heroId: PV}; sem linha = cheio, fora)
         herois = (res.get('herois') or {}).get(str(cid)) if isinstance(res.get('herois'), dict) else None
@@ -457,9 +483,31 @@ class GrupoMixin:
         {conta: [heroId]} vai junto no resultado (14/09: a resposta devolve a vida deles)."""
         if herois:
             resultado = dict(resultado, herois=herois)
+        # 14/09: a coluna `venc` é o que os TETOS contam — só o ranqueado a preenche. O amistoso (o desafio da praça, o
+        # campo sem paridade) guarda o vencedor no resultado, e não gasta a cota de ninguém
         self.con.execute("INSERT INTO duelos(did, a_id, b_id, fase, venc, criado_em, resultado) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                         (did, a_id, b_id, resultado['fase'], resultado.get('venc'), t,
-                          json.dumps(resultado, ensure_ascii=False)))
+                         (did, a_id, b_id, resultado['fase'], resultado.get('venc') if resultado.get('ranqueado') else None,
+                          t, json.dumps(resultado, ensure_ascii=False)))
+
+    def _duelo_amistoso(self, did, modo, dungeon, lados):
+        """Dentro da tranca (14/09): o motivo de o duelo valer como AMISTOSO antes de olhar os estados, ou None.
+        'modo' (sem modo: a página de antes), 'amistoso' (o desafio da praça), 'mapa' (arena ou campo no mapa do
+        desafio), 'sem-partida' (a arena sem a partida pronta desse did entre essas duas contas) e 'dupla' (os
+        heróis que lutaram não são os que o quadro da Arena mostrou)."""
+        if modo is None:
+            return 'modo'
+        if modo == 'desafio':
+            return 'amistoso'
+        if dungeon == MAPA_DESAFIO:
+            return 'mapa'
+        if modo == 'arena':
+            achar = getattr(self, '_arena_partida', None)
+            partida = achar(did, lados['A']['conta'], lados['B']['conta']) if achar is not None else None
+            if partida is None:
+                return 'sem-partida'
+            if any(sorted(partida.get(lados[k]['conta']) or []) != sorted(lados[k]['herois']) for k in lados):
+                return 'dupla'
+        return None
 
     def _duelo_teto(self, a_id, b_id, t):
         """Dentro da tranca: o motivo de NÃO ranquear (os tetos de 24 h), ou None."""
@@ -483,8 +531,9 @@ class GrupoMixin:
             self._evento(quem, 'duelo-teto', {'did': did, 'a': a_id, 'b': b_id})
 
     def duelo_fechar(self, conta, corpo):
-        """Corpo {did, dungeonId, roomIndex, semente, A:{conta, dono, herois}, B:{…}, lances, hashFinal,
-        fotografada}. Ranqueado = o juiz viu um fim (venc não nulo); só esse conta nos tetos.
+        """Corpo {did, modo, dungeonId, roomIndex, semente, A:{conta, dono, herois}, B:{…}, lances, hashFinal,
+        fotografada}. Ranqueado = o juiz viu um fim (venc não nulo) E o modo deixa (14/09: _duelo_amistoso e a
+        PARIDADE); só esse conta nos tetos. O amistoso também vai ao juiz: a vida grava, a Brasa não muda.
         14/09, a vida única: o juiz refaz com a vida que cada lado guardou no duelo/abrir e devolve a vida do
         fim; a API grava os DOIS lados sempre que o juiz refez — ranqueado, empate, desistência/W.O. e também
         acima do teto (o teto passou a chamar o juiz, sem mudar a Brasa). Fotografado não refaz e não grava;
@@ -516,6 +565,10 @@ class GrupoMixin:
         if cid not in (a_id, b_id):
             raise Recusa(403, 'só quem duelou fecha o duelo')
         lances, hash_final = _lances(corpo)
+        # 14/09: desafio | arena | campo (ver MODOS_DUELO); o resto é 400, e sem modo o duelo é amistoso
+        modo = corpo.get('modo')
+        if modo is not None and modo not in MODOS_DUELO:
+            raise Recusa(400, 'modo precisa ser desafio, arena ou campo')
         herois_de = {str(lados[k]['conta']): lados[k]['herois'] for k in lados}
         for _ in range(TENTATIVAS):
             t = agora()
@@ -530,10 +583,12 @@ class GrupoMixin:
                     if corpo.get('fotografada') is True:
                         # sincronizado por foto: o registro não refaz o duelo; vale como amistoso (e a vida não muda)
                         self._duelo_guarda(did, a_id, b_id, {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False,
-                                                             'motivo': 'fotografada'}, t, herois_de)
+                                                             'motivo': 'fotografada', 'modo': modo}, t, herois_de)
                         acao = 'guardado'
                     else:
-                        teto = self._duelo_teto(a_id, b_id, t)
+                        # 14/09: o amistoso (desafio, mapa trocado, arena sem partida) nem olha os tetos
+                        amistoso = self._duelo_amistoso(did, modo, dungeon, lados)
+                        teto = None if amistoso else self._duelo_teto(a_id, b_id, t)
                         estados = {k: self._estado_ler(lados[k]['conta']) for k in lados}
                         faltando = [k for k in lados if estados[k] is None]
                         if faltando and teto:
@@ -544,6 +599,11 @@ class GrupoMixin:
                             raise Recusa(409, SEM_ESTADO if lados[faltando[0]]['conta'] == cid
                                          else 'a outra conta ainda não tem o estado no servidor')
                         else:
+                            # 14/09, a PARIDADE: o herói mais forte de cada lado, nos estados do servidor
+                            if not amistoso and modo in PARIDADE:
+                                niveis = [_nivel_forte(estados[k]['progress'], lados[k]['herois']) for k in ('A', 'B')]
+                                if abs(niveis[0] - niveis[1]) > PARIDADE[modo]:
+                                    amistoso, teto = 'paridade', None
                             vidas = {k: self._duelo_vida_guardada(did, lados[k]) for k in lados}
                             acao = 'juiz'
             if acao == 'guardado':
@@ -576,8 +636,15 @@ class GrupoMixin:
             if not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str):
                 raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
             venc = saida.get('venc') if saida.get('venc') in ('A', 'B', 'empate') else None
-            ranqueado = bool(saida.get('ranqueado')) and venc is not None and not teto
-            resultado = dict(TETO) if teto else {'fase': saida['fase'], 'venc': venc, 'ranqueado': ranqueado, 'delta': {}}
+            ranqueado = bool(saida.get('ranqueado')) and venc is not None and not teto and not amistoso
+            if teto:
+                resultado = dict(TETO)
+            elif amistoso:
+                # 14/09: refeito pelo juiz (a vida grava), mas a Brasa não muda — e o porquê fica guardado
+                resultado = {'fase': saida['fase'], 'venc': venc, 'ranqueado': False, 'motivo': amistoso}
+            else:
+                resultado = {'fase': saida['fase'], 'venc': venc, 'ranqueado': ranqueado, 'delta': {}}
+            resultado['modo'] = modo
             fins, lado_saida = {}, {}
             for k in lados:
                 s = saida.get(k)
@@ -595,8 +662,10 @@ class GrupoMixin:
                     if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
                         raise EstadoMudou()                 # o outro lado fechou junto: a volta seguinte lê o guardado
                     if ranqueado and self._duelo_teto(a_id, b_id, t):
-                        resultado = dict(TETO)
+                        resultado = dict(TETO, modo=modo)
                     elif ranqueado:
+                        if modo == 'arena' and getattr(self, '_arena_jogada', None):
+                            self._arena_jogada(did)          # 14/09: a partida da fila foi jogada
                         for k in lados:
                             nova, _ = self._estado_grava(contas[k], estados[k], lado_saida[k], t)
                             self._evento(lados[k]['conta'], 'duelo-ranqueado', {

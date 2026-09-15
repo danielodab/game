@@ -1161,8 +1161,9 @@ PAGINA = r"""<!DOCTYPE html>
             (fa.empate === true && fb.empate === true) || (!fa.empate && !fb.empate && !!fa.venci !== !!fb.venci),
             curto([fa.venci, fa.empate, fb.venci, fb.empate]));
       var ar1 = fa.arena || {}, ar2 = fb.arena || {};
-      check(rot + 'a arena é a mesma nos dois e é de um calabouço aberto', ar1.dungeonId && ar1.dungeonId === ar2.dungeonId &&
-            ar1.roomIndex === ar2.roomIndex && idsAb.indexOf(ar1.dungeonId) >= 0, curto([ar1, ar2]));
+      // 14/09 (o dono): "o duelo deve ocorrer no mapa da praça" — o desafio amistoso não sorteia
+      check(rot + 'o mapa é o mesmo nos dois e é a PRAÇA (o desafio amistoso)', ar1.dungeonId === 'praca' && ar1.dungeonId === ar2.dungeonId &&
+            ar1.roomIndex === 0 && ar2.roomIndex === 0 && fa.modo === 'desafio' && fb.modo === 'desafio', curto([ar1, ar2, fa.modo]));
       check(rot + 'cada um vê o outro como oponente', String(fa.oponente).indexOf('Bia') >= 0 && String(fb.oponente).indexOf('Ana') >= 0,
             curto([fa.oponente, fb.oponente]));
       var hA = hashDe(A), hB = hashDe(B);

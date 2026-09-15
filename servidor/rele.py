@@ -560,7 +560,7 @@ def _dirigido(par, m, t, agora):
     if t == 'sussurro':
         if not par.balde_chat.tira(agora):
             return None
-    elif (t == 'grupo' and acao == 'convite') or (t == 'duelo' and acao == 'desafio'):
+    elif (t == 'grupo' and acao == 'convite') or (t == 'duelo' and acao in ('desafio', 'ataque')):   # 14/09: o ataque do Campo
         if not par.balde_convite.tira(agora):
             return None
     if not par.balde.tira(agora):
@@ -703,7 +703,7 @@ def _classe_entrada(t, acao):
     """O que chega sem ser pedido paga a caixa de entrada de quem recebe."""
     if t == 'sussurro':
         return 'sussurro'
-    if (acao == 'convite' and t in ('grupo', 'troca', 'guilda')) or (t == 'duelo' and acao == 'desafio'):
+    if (acao == 'convite' and t in ('grupo', 'troca', 'guilda')) or (t == 'duelo' and acao in ('desafio', 'ataque')):
         return 'convite'
     return None
 

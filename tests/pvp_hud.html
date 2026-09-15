@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a Arena e o Campo de PvP na HUD (390x844)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A ARENA E O CAMPO DE PVP NA TELA (14/09). O index.html de verdade num quadro de 390x844 com o save na
+     memória (?sandbox=1). A Rede é um dublê por cima da de verdade (a Bia está no Campo, a Cris na praça), a
+     Sessão do site e o servidor da Arena são de mentira (as rotas /api/arena/* respondem daqui), e o Campo do
+     Hub (naCampo/entraCampo/saiCampo, do agente do visual) é trocado por um espião. Cobra, na tela:
+       - o painel da Arena sem a conta do site (o porquê) e com ela (inscrever, o quadro);
+       - a ficha "escolha os dois heróis" (reaproveitável): pede DOIS, na ordem dos toques;
+       - a inscrição: o POST com os dois em ordem, o painel "Inscrito com…" e o selo pequeno na praça;
+       - o desafio que chega: "Adversário encontrado: Nome · nv X · Coroa Y — Confirmar (30 s)" e a partida
+         pronta entregue ao Duelo (sem escolha às cegas);
+       - o quadro: a própria inscrição sem botão, quem está fora da paridade apagado, o desafio a um inscrito;
+       - o Campo: a entrada com a dupla em ordem (a aparência do 1º vai ao Hub e à presença; o 2º não), a coroa
+         travada na ficha, o toque que ATACA sem menu (e a recusa curta da paridade) e a saída. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 8000)) return r(false);
+        setTimeout(volta, 60);
+      })();
+    });
+  }
+
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?mobile=1&sandbox=1&snap=1&pvp-hud';
+  var w, doc, J, R, U, toastEl;
+  var saidas = [], perfis = [], pedidos = [], respostas = {}, entradasCampo = [], saidasCampo = 0, noCampo = false;
+  var perfilBia = { id: 'bia', nome: 'Bia', titulo: '', classe: 'arqueiro', sala: null, x: 1.2, z: 6.4, nuvem: 22,
+                    zona: 'campo', luta: false, resumo: { forte: 10, brasa: 1210 } };
+  var perfilCris = { id: 'cris', nome: 'Cris', titulo: '', classe: 'sumo', sala: null, x: -2.0, z: 5.0, nuvem: 33,
+                     zona: 'praca', luta: false, resumo: { forte: 11 } };
+
+  function telaAberta() { return doc.querySelector('#ui-root .ui-screen.is-on'); }
+  function painelAberto() { var s = telaAberta(); return s ? s.querySelector('.hub-painel') : null; }
+  function painelTxt() { var p = painelAberto(); return (p && !p.classList.contains('is-off')) ? p.textContent : ''; }
+  function fichaAberta() { return doc.querySelector('.ui-sheet.is-on'); }
+  function tituloFicha() { var f = fichaAberta(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function toastTxt() { return (toastEl && toastEl.classList.contains('is-on')) ? toastEl.textContent : ''; }
+  function botao(caixa, re) {
+    var b = null;
+    [].forEach.call(caixa ? caixa.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    return b;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function dubles() {
+    R = J.Rede;
+    R.entrar = function (perfil) { perfis.push(JSON.parse(JSON.stringify(perfil || {}))); return true; };
+    R.meuId = function () { return 'ana'; };
+    R.meuCx = function () { return 'cxana'; };
+    R.minhaSala = function () { return null; };
+    R.pares = function () { return [perfilBia, perfilCris]; };
+    R.nomeDe = function (id) { return id === 'bia' ? 'Bia' : (id === 'cris' ? 'Cris' : 'Aventureiro'); };
+    R.privado = function () { return true; };
+    R.dirige = function (tipo, para, acao, dados) { saidas.push({ tipo: tipo, para: para, acao: acao, dados: dados }); return true; };
+    R.sussurrar = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+    R._tique = function () { return false; };
+    // o Campo do Hub (o do agente do visual) trocado por um espião
+    J.Hub.naCampo = function () { return noCampo; };
+    J.Hub.entraCampo = function (op) { entradasCampo.push(op || null); noCampo = true; };
+    J.Hub.saiCampo = function () { saidasCampo++; noCampo = false; };
+    // a Sessão do site e o servidor da Arena de mentira (só as rotas da Arena respondem)
+    J.Sessao.ativa = function () { return true; };
+    J.Sessao.api = function (rota, op) {
+      pedidos.push({ rota: rota, metodo: op && op.method, corpo: op && op.body ? JSON.parse(JSON.stringify(op.body)) : null });
+      var r = respostas[rota];
+      return Promise.resolve(typeof r === 'function' ? r(op) : (r || { ok: false, status: 404, erro: 'rota de mentira' }));
+    };
+    if (J.Autoridade) {
+      J.Autoridade.ligada = function () { return true; };
+      J.Autoridade.abreDuelo = function () { return Promise.resolve({ ok: true, carry: null }); };
+    }
+    J.Arena.CONSULTA_MS = 300;
+  }
+  function ultSaida(acao) { for (var i = saidas.length - 1; i >= 0; i--) if (saidas[i].acao === acao) return saidas[i]; return null; }
+  function ultPedido(rota) { for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota === rota) return pedidos[i]; return null; }
+
+  var t0 = Date.now(), ids = [];
+  (function aguarda() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Grupo && J.Duelo && J.Arena && J.Hub && J.DB && J.Sessao);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s (ou falta JOGO.Arena)');
+      return setTimeout(aguarda, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    U = J.UI;
+    toastEl = doc.querySelector('.ui-toast');
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s');
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    ids = ids.slice(0, 2);
+    U.selection(ids.slice());
+    dubles();
+    J.DB.batizar('Ana').then(function () {
+      U.showScreen('hub');
+      return ate(function () { return !!painelAberto() && typeof J.Hub.aoTocarFantasma === 'function'; }, 20000);
+    }).then(function (ok) {
+      check('(a praça abriu, com o toque nos fantasmas ligado)', ok);
+      return arena();
+    }).then(quadroArena).then(campo).then(function () { fim(); }, function (e) { fim('erro: ' + (e && e.stack || e)); });
+  })();
+
+  function forteDe(lista) {
+    var m = 1;
+    lista.forEach(function (h) { var x = J.Progress.hero(h); if (x && (x.level || 1) > m) m = x.level || 1; });
+    return m;
+  }
+  function classeDe(h) { var x = J.Progress.hero(h); return (x && x.classId) || h; }
+
+  // ---------------------------------------------------------------- a Arena
+  function arena() {
+    var ses = J.Sessao.ativa;
+    J.Sessao.ativa = function () { return false; };
+    J.Hub.aoAproximar({ tipo: 'arena', id: 'arena', nome: 'Arena' });
+    check('arena · sem a conta do site o painel diz o porquê (e não oferece inscrever)',
+          /conta do site/.test(painelTxt()) && !botao(painelAberto(), /Inscrever minha dupla/), painelTxt().slice(0, 160));
+    J.Sessao.ativa = ses;
+    J.Hub.aoAproximar({ tipo: 'arena', id: 'arena', nome: 'Arena' });
+    check('arena · o painel explica os dois jeitos (amistoso na praça, ranqueado no quadro)',
+          /Desafio amistoso/.test(painelTxt()) && /Ranqueado/.test(painelTxt()) && !/Desafiar para duelo/.test(painelTxt()));
+    var bIns = botao(painelAberto(), /Inscrever minha dupla/);
+    check('arena · com a conta: "Inscrever minha dupla" e "Ver o quadro de inscritos"', !!bIns && !!botao(painelAberto(), /Ver o quadro de inscritos/));
+    bIns.click();
+    var f = fichaAberta();
+    check('arena · a ficha reaproveitável "escolha os dois" abre com os heróis', tituloFicha() === 'Inscrição na Arena' &&
+          f.querySelectorAll('.av-carta[data-heroi]').length >= 2, tituloFicha());
+    // começa com a seleção da praça: tira os dois e escolhe na ordem inversa
+    [].forEach.call(f.querySelectorAll('.av-carta.is-on'), function (c) { c.click(); });
+    f = fichaAberta();
+    f.querySelector('.av-carta[data-heroi="' + ids[1] + '"]').click();
+    f = fichaAberta();
+    var bPronto = botao(f, /Inscrever no quadro/);
+    check('arena · com um só escolhido o botão espera o segundo ("1/2")', !!bPronto && bPronto.classList.contains('is-off') && /1\/2/.test(bPronto.textContent),
+          bPronto && bPronto.textContent);
+    f.querySelector('.av-carta[data-heroi="' + ids[0] + '"]').click();
+    f = fichaAberta();
+    var ordem = [].map.call(f.querySelectorAll('.av-carta.is-on'), function (c) {
+      return c.getAttribute('data-heroi') + ':' + (c.querySelector('.dupla-ordem') || {}).textContent;
+    }).sort().join(',');
+    check('arena · a ordem dos toques aparece nas cartas (1º e 2º)', ordem === [ids[1] + ':1º', ids[0] + ':2º'].sort().join(','), ordem);
+    var classes = [{ classId: classeDe(ids[1]), nivel: 5 }, { classId: classeDe(ids[0]), nivel: 4 }];
+    respostas['/api/arena/inscrever'] = function () {
+      return { ok: true, status: 200, agoraMs: Date.now(), fase: 'inscrito', desdeMs: Date.now() - 42000,
+               herois: [ids[1], ids[0]], classes: classes, nivel: 5 };
+    };
+    respostas['/api/arena/estado'] = function () {
+      return { ok: true, status: 200, agoraMs: Date.now(), fase: 'inscrito', desdeMs: Date.now() - 42000,
+               herois: [ids[1], ids[0]], classes: classes, nivel: 5 };
+    };
+    botao(f, /Inscrever no quadro/).click();
+    return ate(function () { return J.Arena.estado().fase === 'inscrito'; }).then(function (ok) {
+      var p = ultPedido('/api/arena/inscrever');
+      check('arena · inscrever: o POST leva os DOIS na ordem escolhida', ok && p && p.corpo.herois.join() === [ids[1], ids[0]].join(), JSON.stringify(p));
+      return ate(function () { return /Inscrito com/.test(painelTxt()); }, 3000);
+    }).then(function (ok) {
+      check('arena · o painel mostra a inscrição, o tempo na espera e "Sair da inscrição"',
+            ok && /esperando há 0:4/.test(painelTxt()) && !!botao(painelAberto(), /Sair da inscrição/), painelTxt().slice(0, 200));
+      return ate(function () { var s = doc.querySelector('.arena-selo'); return s && /inscrito/.test(s.textContent); }, 3000);
+    }).then(function (ok) {
+      check('arena · o selo pequeno na praça diz que está na fila (e pode andar)', ok, (doc.querySelector('.arena-selo') || {}).textContent);
+      J.Hub.aoAproximar(null);
+      // alguém desafiou: o estado passa a "casada"
+      respostas['/api/arena/estado'] = function () {
+        return { ok: true, status: 200, agoraMs: Date.now(), fase: 'casada', papel: 'inscrito', lado: 'A', prazoMs: Date.now() + 30000,
+                 confirmei: false, eleConfirmou: false, herois: [ids[1], ids[0]], classes: classes, nivel: 5,
+                 adversario: { conta: 22, nome: 'Bia', nivel: 6, brasa: 1210, herois: ['arqueiro'], classes: [{ classId: 'arqueiro', nivel: 6 }] } };
+      };
+      return ate(function () { return /Adversário encontrado/.test(painelTxt()); }, 4000);
+    }).then(function (ok) {
+      var t = painelTxt();
+      check('arena · o desafio chega mesmo andando pela praça: "Adversário encontrado: Bia · nv 6 · Coroa II" e "Confirmar (30 s)"',
+            ok && /Adversário encontrado: Bia · nv 6 · Coroa II/.test(t) && /Confirmar \((29|30) s\)/.test(t) && !!botao(painelAberto(), /Recusar/), t.slice(0, 220));
+      respostas['/api/arena/confirmar'] = function () {
+        return { ok: true, status: 200, agoraMs: Date.now(), fase: 'pronta', did: 'arena-hud0001', papel: 'inscrito', lado: 'A',
+                 herois: [ids[1], ids[0]], classes: classes, nivel: 5,
+                 adversario: { conta: 22, nome: 'Bia', nivel: 6, brasa: 1210, herois: ['arqueiro'], classes: [] } };
+      };
+      respostas['/api/arena/estado'] = respostas['/api/arena/confirmar'];
+      botao(painelAberto(), /Confirmar/).click();
+      return ate(function () { return !!ultSaida('arena'); }, 4000);
+    }).then(function (ok) {
+      var ch = ultSaida('arena');
+      check('arena · confirmado: a partida pronta vai ao Duelo sem ficha de escolha (o inscrito chama a Bia com o did)',
+            ok && ch.para === 'bia' && ch.dados.did === 'arena-hud0001' && J.Duelo.estado().modo === 'arena' &&
+            tituloFicha() === '' && !/Adversário encontrado/.test(painelTxt()), JSON.stringify(ch && ch.dados));
+      J.Duelo.cancelar('x');
+      J.Duelo._reset();
+      J.Arena._reset();
+    });
+  }
+
+  // ---------------------------------------------------------------- o quadro
+  function quadroArena() {
+    respostas['/api/arena/estado'] = function () { return { ok: true, status: 200, agoraMs: Date.now(), fase: 'livre' }; };
+    var meu = forteDe(ids);
+    respostas['/api/arena/quadro'] = function () {
+      return { ok: true, status: 200, agoraMs: Date.now(), paridade: 5, inscritos: [
+        { conta: 1, nome: 'Ana', nivel: meu, brasa: 1000, classes: [{ classId: classeDe(ids[0]), nivel: meu }], desdeMs: Date.now() - 5000, eu: true },
+        { conta: 44, nome: 'Duda', nivel: meu + 6, brasa: 1500, classes: [{ classId: 'bruxo', nivel: meu + 6 }, { classId: 'sumo', nivel: 3 }], desdeMs: Date.now() - 9000, eu: false },
+        { conta: 33, nome: 'Cris', nivel: meu + 5, brasa: 1300, classes: [{ classId: 'sumo', nivel: meu + 5 }, { classId: 'curandeiro', nivel: 2 }], desdeMs: Date.now() - 65000, eu: false }
+      ] };
+    };
+    U.openSheet('arenaQuadro');
+    return ate(function () { var f = fichaAberta(); return f && f.querySelectorAll('.aq-linha').length === 3; }, 4000).then(function (ok) {
+      var f = fichaAberta();
+      var eu = f && f.querySelector('.aq-linha[data-conta="1"]'), duda = f && f.querySelector('.aq-linha[data-conta="44"]'),
+          cris = f && f.querySelector('.aq-linha[data-conta="33"]');
+      check('quadro · os inscritos com as duas classes, a coroa e o tempo', ok && /Cris/.test(cris.textContent) && /Coroa IV/.test(cris.textContent) &&
+            /Sumo|Bárbaro/i.test(cris.textContent) && /esperando há 1:0/.test(cris.textContent), cris && cris.textContent);
+      check('quadro · a própria inscrição aparece sem botão de desafio', eu && /sua inscrição/.test(eu.textContent) && !eu.querySelector('button'));
+      check('quadro · quem está fora da paridade (6 acima) fica apagado e não desafia', duda && duda.classList.contains('is-fora') &&
+            botao(duda, /Fora da paridade/) && !botao(duda, /^Desafiar$/));
+      var bD = botao(cris, /^Desafiar$/);
+      check('quadro · quem está na paridade (5 acima) tem "Desafiar"', !!bD && !cris.classList.contains('is-fora'));
+      respostas['/api/arena/desafiar'] = function (op) {
+        return { ok: true, status: 200, agoraMs: Date.now(), fase: 'casada', papel: 'desafiante', lado: 'B', prazoMs: Date.now() + 30000,
+                 confirmei: false, eleConfirmou: false, herois: op.body.herois, classes: [], nivel: meu,
+                 adversario: { conta: 33, nome: 'Cris', nivel: meu + 5, brasa: 1300, herois: ['x', 'y'], classes: [{ classId: 'sumo', nivel: meu + 5 }] } };
+      };
+      bD.click();
+      f = fichaAberta();
+      check('quadro · desafiar abre a MESMA ficha de escolher os dois, com a dupla dela à vista', /Desafiar Cris/.test(tituloFicha()) &&
+            f.querySelectorAll('.av-carta.is-on').length === 2 && /nv/.test(f.textContent), tituloFicha());
+      botao(f, /^Desafiar$/).click();
+      return ate(function () { return !!ultPedido('/api/arena/desafiar'); }, 3000);
+    }).then(function (ok) {
+      var p = ultPedido('/api/arena/desafiar');
+      check('quadro · o desafio vai ao servidor com o alvo e os dois heróis', ok && p.corpo.alvo === 33 && p.corpo.herois.length === 2);
+      return ate(function () { return /Adversário encontrado: Cris/.test(painelTxt()); }, 3000);
+    }).then(function (ok) {
+      check('quadro · quem desafiou também confirma (o painel do adversário encontrado)', ok && /você desafiou/.test(painelTxt()), painelTxt().slice(0, 120));
+      respostas['/api/arena/recusar'] = function () { return { ok: true, status: 200, agoraMs: Date.now(), fase: 'livre' }; };
+      botao(painelAberto(), /Recusar/).click();
+      return ate(function () { return J.Arena.estado().fase === 'livre' && !/Adversário encontrado/.test(painelTxt()); }, 3000);
+    }).then(function (ok) {
+      check('quadro · recusar fecha o painel e a Arena volta a livre', ok && !!ultPedido('/api/arena/recusar'));
+      U.closeSheet();
+    });
+  }
+
+  // ---------------------------------------------------------------- o Campo de PvP
+  function campo() {
+    J.Hub.aoAproximar({ tipo: 'campo', id: 'campo', nome: 'Campo de PvP' });
+    var t = painelTxt();
+    check('campo · o painel da entrada avisa: coroa ligada, não desliga, ataque sem aviso',
+          /coroa ligada/.test(t) && /não desliga/.test(t) && /atacar sem aviso/.test(t) && !!botao(painelAberto(), /^Entrar$|Ligar a coroa e entrar/), t.slice(0, 200));
+    botao(painelAberto(), /^Entrar$|Ligar a coroa e entrar/).click();
+    var f = fichaAberta();
+    check('campo · a entrada pede a dupla do Campo, em ordem', /dupla do Campo/.test(tituloFicha()) && /1º/.test(f.textContent) && /2º/.test(f.textContent), tituloFicha());
+    [].forEach.call(f.querySelectorAll('.av-carta.is-on'), function (c) { c.click(); });
+    fichaAberta().querySelector('.av-carta[data-heroi="' + ids[1] + '"]').click();
+    fichaAberta().querySelector('.av-carta[data-heroi="' + ids[0] + '"]').click();
+    perfis.length = 0;
+    botao(fichaAberta(), /Entrar no Campo/).click();
+    return ate(function () { return entradasCampo.length === 1 && perfis.length > 0; }, 4000).then(function (ok) {
+      var perfil = perfis[perfis.length - 1] || {};
+      check('campo · entrou: o Hub recebe a aparência do 1º escolhido', ok && entradasCampo[0] && entradasCampo[0].aparencia === classeDe(ids[1]),
+            JSON.stringify(entradasCampo[0]));
+      check('campo · a dupla do Campo fica guardada NA ORDEM (a HUD e o Duelo)', U._campo().dupla.join() === [ids[1], ids[0]].join() &&
+            J.Duelo.duplaCampo().join() === [ids[1], ids[0]].join());
+      check('campo · a presença leva a aparência do 1º e o nível do mais forte — o 2º não viaja como aparência',
+            perfil.classe === classeDe(ids[1]) && perfil.resumo && perfil.resumo.forte === forteDe(ids), JSON.stringify({ c: perfil.classe, f: perfil.resumo && perfil.resumo.forte }));
+      U.openSheet('char');
+      return ate(function () { var fc = fichaAberta(); return fc && fc.querySelector('.coroa-trava'); }, 3000);
+    }).then(function (ok) {
+      var fc = fichaAberta();
+      check('campo · a coroa fica travada na ficha, com o porquê', ok && /A coroa fica ligada no Campo de PvP/.test(fc.querySelector('.coroa-trava').textContent) &&
+            !botao(fc, /Esconder a coroa/));
+      U.closeSheet();
+      // o toque: a Bia no Campo, fora da paridade (20 acima) — recusa curta, sem menu
+      saidas.length = 0;
+      perfilBia.resumo = { forte: forteDe(ids) + 20, brasa: 1210 };
+      J.Hub.aoTocarFantasma('bia');
+      check('campo · tocar em quem está fora da paridade: aviso curto do porquê, sem menu e sem ataque',
+            /diferença de nível passa de 10/.test(toastTxt()) && !ultSaida('ataque') && !/Ver perfil/.test(painelTxt()), toastTxt());
+      perfilCris.zona = 'praca';
+      J.Hub.aoTocarFantasma('cris');
+      check('campo · tocar em quem não está no Campo: "não está no Campo de PvP"', /Cris não está no Campo de PvP/.test(toastTxt()) && !ultSaida('ataque'), toastTxt());
+      perfilBia.resumo = { forte: forteDe(ids) + 3, brasa: 1210 };
+      J.Hub.aoTocarFantasma('bia');
+      var at = ultSaida('ataque');
+      check('campo · tocar na Bia no Campo ATACA na hora (sem menu): o ataque sai com o modo campo',
+            !!at && at.para === 'bia' && at.dados.modo === 'campo' && J.Duelo.estado().modo === 'campo' && !/Ver perfil/.test(painelTxt()) &&
+            /Você atacou Bia/.test(toastTxt()), JSON.stringify(at && at.dados) + ' · ' + toastTxt());
+      J.Duelo.cancelar('x'); J.Duelo._reset();
+      J.Duelo.defineDuplaCampo([ids[1], ids[0]]);
+      // a saída (e a troca da dupla)
+      J.Hub.aoAproximar({ tipo: 'campo-saida', id: 'campo-saida', nome: 'Saída' });
+      check('campo · a saída mostra a dupla do Campo, "Trocar dupla" e "Voltar à praça"',
+            !!botao(painelAberto(), /Trocar dupla/) && !!botao(painelAberto(), /Voltar à praça/), painelTxt().slice(0, 160));
+      botao(painelAberto(), /Voltar à praça/).click();
+      check('campo · saiu: o Hub volta à praça e a ficha destrava a coroa', saidasCampo === 1 && !noCampo && U._campo().dentro === false);
+      U.openSheet('char');
+      return ate(function () { var fc = fichaAberta(); return fc && botao(fc, /coroa acima da cabeça/); }, 3000);
+    }).then(function (ok) {
+      check('campo · fora do Campo o botão da coroa volta', ok && !fichaAberta().querySelector('.coroa-trava'));
+      U.closeSheet();
+      J.Hub.aoTocarFantasma('cris');
+      check('praça · fora do Campo tocar abre o painel, com "Desafio amistoso"', /Ver perfil/.test(painelTxt()) && !!botao(painelAberto(), /Desafio amistoso/),
+            painelTxt().slice(0, 120));
+    });
+  }
+})();
+</script>
+</body>
+</html>

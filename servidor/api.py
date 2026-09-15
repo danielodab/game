@@ -74,6 +74,7 @@ from juiz_ponte import Juiz   # 12/09: as regras do jogo em Node (servidor/juiz/
 # 13/09: a autoridade (salas.py): bilhete e fechamento de sala, ops de economia, o PUT cosmético
 from salas import ESQUEMA_SALAS, SalasMixin, chave_do_lado, lado_da_troca, lado_vazio
 from grupo import ESQUEMA_GRUPO, GrupoMixin   # 13/09: a sala em grupo e o duelo ranqueado conferidos no servidor
+from arena import ESQUEMA_ARENA, ArenaMixin   # 14/09: a fila da Arena (o PvP ranqueado por inscrição)
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 import nomes                     # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
@@ -332,6 +333,14 @@ ROTAS = {
     ('POST', '/api/grupo/pocao'):             ('grupo_pocao', True),      # 13/09: cada um cura os próprios
     ('POST', '/api/duelo/abrir'):             ('duelo_abrir', True),      # 14/09: a vida com que cada lado entra
     ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
+    # 14/09: a fila da Arena (arena.py)
+    ('POST', '/api/arena/inscrever'):         ('arena_inscrever', True),
+    ('GET',  '/api/arena/quadro'):            ('arena_quadro', True),
+    ('POST', '/api/arena/desafiar'):          ('arena_desafiar', True),
+    ('POST', '/api/arena/confirmar'):         ('arena_confirmar', True),
+    ('POST', '/api/arena/recusar'):           ('arena_recusar', True),
+    ('POST', '/api/arena/sair'):              ('arena_sair', True),
+    ('GET',  '/api/arena/estado'):            ('arena_estado', True),
     # 14/09, a vida única do herói (salas.py): a vida de agora e a poção fora da batalha, em qualquer lugar
     ('GET',  '/api/vida'):                    ('vida_lista', True),
     ('POST', '/api/vida/pocao'):              ('vida_pocao', True),
@@ -702,7 +711,7 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin):
+          AmigosMixin, ArenaMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -727,6 +736,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
         self.con.executescript(ESQUEMA_MERCADO)  # 13/09: o mercadinho entre contas (mercado.py) — idem
         self.con.executescript(ESQUEMA_AMIGOS)   # 13/09: amigos e inimigos (amigos.py) — idem; o relé lê só para ler
+        self.con.executescript(ESQUEMA_ARENA)    # 14/09: a fila da Arena (arena.py) — idem
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)

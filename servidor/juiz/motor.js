@@ -25,7 +25,7 @@ const RAIZ = process.env.SOTERRA_RAIZ || path.resolve(__dirname, '..', '..');
 /* A ordem é a do index.html: dados, depois motor, fusão e IA. */
 const DADOS = [
   'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
-  'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+  'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js', 'js/core/data/arenas.js',
   'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
   'js/core/data/items_extra.js', 'js/core/data/items_selos.js',
   // 13/09: as poções de vida — o motor cura com o número daqui e a banca cobra o preço daqui

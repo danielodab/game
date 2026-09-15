@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o Campo de PvP (a cena)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1000px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1000px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+  body.foto #tela{width:100%;height:100%} body.foto #saida{display:none}
+</style>
+</head>
+<body>
+<!-- O CAMPO DE PVP (14/09, dono: "um mapa exclusivo de PvP… só vão entrar com a coroa
+     ligada… ao clicar em cima o jogador pode atacar sem aviso prévio"). Esta prova é da
+     CENA (js/render3d/hub3d.js), não da regra: abre o jogo de verdade, entra no
+     Acampamento e cobra — a entrada do Campo na praça; Hub.entraCampo({aparencia}) troca a
+     cena, o herói nasce no `nasce` do campo_pvp.js com o corpo da aparência e a HUD que
+     reentra não o tira de lá; a saída de volta no lugar do desenho; os muros barram (o
+     empurrão sai na face, e andando através de um pilar ninguém entra na pedra); o
+     fantasma de OUTRA zona some e não responde ao toque, o da mesma zona aparece e
+     responde; o teto de 20 conta só a zona; Hub.saiCampo volta à praça ao lado da entrada
+     com o corpo do avatar.
+       ?foto=1   pula as cobranças: entra no Campo com dois fantasmas e para (foto);
+                 window.__vista('cima' | 'chao' | 'entrada') enquadra. -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var FOTO = /[?&]foto=1/.test(location.search);
+  if (FOTO) document.body.className = 'foto';
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra != null && extra !== '' ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · ')) : ('tudo passou (' + linhas.length + ')');
+    window.__fail = falhas.length;
+    window.__pronto = true;
+  }
+  // esperas por TENTATIVAS (o relógio do headless é virtual)
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 400);
+      })();
+    });
+  }
+  function respiro(n) { var k = 0; return espera(function () { return ++k >= n; }, n + 1, 100); }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document, H = null, D = null, canvas = null;
+    function botao(re) {
+      return [].filter.call(d.querySelectorAll('button'), function (b) { return re.test(b.textContent); })[0] || null;
+    }
+    function lugares(tipo) { return H._lugares().filter(function (l) { return !tipo || l.tipo === tipo; }); }
+    function toca(p) {
+      ['pointerdown', 'pointerup'].forEach(function (tipo) {
+        canvas.dispatchEvent(new w.PointerEvent(tipo, { clientX: p.x, clientY: p.y, bubbles: true, pointerId: 1, button: 0 }));
+      });
+    }
+    // o ponto está DENTRO da pedra do muro (sem a folga do corpo)?
+    function dentroDe(c, x, z) {
+      var cs = Math.cos(c.rot), sn = Math.sin(c.rot), dx = x - c.x, dz = z - c.z;
+      var lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+      return Math.abs(lx) < c.hx - 1e-6 && Math.abs(lz) < c.hz - 1e-6;
+    }
+    // a distância de um ponto à pedra de um muro (0 dentro)
+    function distAoMuro(c, x, z) {
+      var cs = Math.cos(c.rot), sn = Math.sin(c.rot), dx = x - c.x, dz = z - c.z;
+      var lx = Math.abs(dx * cs - dz * sn) - c.hx, lz = Math.abs(dx * sn + dz * cs) - c.hz;
+      return Math.hypot(Math.max(0, lx), Math.max(0, lz));
+    }
+
+    espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 400)
+      .then(function () { return w.JOGO.DB.batizar('Prova Campo'); })
+      .then(function () {
+        botao(/^Descer$/).click();
+        return espera(function () { return !!botao(/^Escolher$/); }, 100);
+      })
+      .then(function () { botao(/^Escolher$/).click(); return respiro(4); })
+      .then(function () {
+        botao(/Confirmar/).click();
+        return espera(function () {
+          H = w.JOGO.Hub; D = w.JOGO.DATA.campoPvp;
+          canvas = d.querySelector('.hub-canvas');
+          return H && H._estado && H._estado().pos && canvas && H._lugares().some(function (l) { return l.tipo === 'campo'; });
+        }, 400);
+      })
+      .then(function () {
+        var e0 = H._estado();
+        var corpoAvatar = e0.corpo;
+        // os dois fantasmas: um da praça e um do Campo, perto de onde cada cena põe o herói
+        H.fantasmaEntra('f-praca', { nome: 'Bia', classe: 'sumo', x: -1.5, z: 17.5 });
+        H.fantasmaEntra('f-campo', { nome: 'Caio', classe: 'bruxo', zona: 'campo', x: (D.nasce.x || 0) + 1.8, z: D.nasce.z - 3.5 });
+
+        if (FOTO) {
+          try { botao(/^Entendi$/).click(); } catch (eT) {}      // a dica do tutor tapa o meio da foto
+          H.entraCampo({ aparencia: 'bruxo' });
+          return respiro(25).then(function () { window.__pronto = true; return 'foto'; });
+        }
+
+        // ---- 1. a praça
+        var ent = lugares('campo');
+        check('a praça tem a entrada do Campo (tipo campo)', ent.length === 1 && ent[0].id === 'campo', JSON.stringify(ent[0] || null));
+        check('a entrada não tem parede (entra-se nela)', ent.length === 1 && !ent[0].solido);
+        check('começa fora do Campo, na zona da praça', H.naCampo() === false && H.zona() === 'praca');
+        check('na praça: o fantasma da praça tem corpo, o do Campo não',
+              H._fantasmaVisivel('f-praca') && !H._fantasmaVisivel('f-campo'));
+
+        // ---- 2. entra
+        var ok = H.entraCampo({ aparencia: 'bruxo' });
+        var e1 = H._estado();
+        check('Hub.entraCampo devolve true e naCampo() liga', ok === true && H.naCampo() === true && e1.campo === true);
+        check('a zona passa a ser o Campo', H.zona() === 'campo' && e1.zona === 'campo');
+        check('o herói nasce no `nasce` do campo_pvp.js',
+              e1.pos && Math.hypot(e1.pos.x - D.nasce.x, e1.pos.z - D.nasce.z) < 0.3, JSON.stringify(e1.pos));
+        check('o corpo local é o da APARÊNCIA (1º herói), não o do avatar',
+              e1.aparencia === 'bruxo' && e1.corpo && e1.corpo !== corpoAvatar, corpoAvatar + ' → ' + e1.corpo);
+        var saidas = lugares('campo-saida');
+        check('no Campo há UMA saída, no lugar do desenho',
+              saidas.length === 1 && saidas[0].id === 'campo-saida' &&
+              Math.abs(saidas[0].x - D.saida.x) < 0.01 && Math.abs(saidas[0].z - D.saida.z) < 0.01 && saidas[0].raio > 2,
+              JSON.stringify(saidas[0] || null));
+        check('no Campo não há portal nem obra da praça',
+              lugares().every(function (l) { return l.tipo === 'campo-saida'; }), lugares().map(function (l) { return l.id; }).join(','));
+        check('no Campo: o fantasma do Campo tem corpo, o da praça não',
+              H._fantasmaVisivel('f-campo') && !H._fantasmaVisivel('f-praca'));
+        // a HUD reentra a cada repintura (Hub.entrar sem opts): não pode tirar do Campo
+        H.entrar(canvas.parentElement, 'sumo');
+        var e1b = H._estado();
+        check('Hub.entrar sem opts (a repintura da HUD) mantém o Campo e a aparência',
+              H.naCampo() && e1b.aparencia === 'bruxo' && e1b.corpo === e1.corpo, e1b.corpo);
+
+        // ---- 3. os muros
+        var C = H._caixas();
+        check('cada muro do desenho virou um sólido retangular', C.length === D.muros.length, C.length + ' de ' + D.muros.length);
+        var vazou = [], mexeu = [];
+        C.forEach(function (c, i) {
+          var p = H._empurra(c.x, c.z);
+          if (dentroDe({ x: c.x, z: c.z, hx: c.hx + H._corpoNaCaixa, hz: c.hz + H._corpoNaCaixa, rot: c.rot }, p.x, p.z)) vazou.push(i);
+          var fx = c.x + Math.cos(c.rot) * (c.hx + 2.5), fz = c.z - Math.sin(c.rot) * (c.hx + 2.5);
+          var q = H._empurra(fx, fz);
+          if (Math.abs(q.x - fx) > 1e-6 || Math.abs(q.z - fz) > 1e-6) mexeu.push(i);
+        });
+        check('o ponto no meio de cada muro sai para fora da pedra (com o corpo)', vazou.length === 0, vazou.join(','));
+        check('o ponto fora do muro não se mexe', mexeu.length === 0, mexeu.join(','));
+        var perto = [];
+        D.muros.forEach(function (m, i) {
+          var c = C[i];
+          if (distAoMuro(c, D.saida.x, D.saida.z) < 3 || distAoMuro(c, D.nasce.x, D.nasce.z) < 3) perto.push(i);
+        });
+        check('nenhum muro a menos de 3 m da saída ou do nascimento', perto.length === 0, perto.join(','));
+        return { corpoAvatar: corpoAvatar };
+      })
+      .then(function (ctx) {
+        if (ctx === 'foto') return 'foto';
+        // ---- 4. o toque: a câmera já seguiu o herói (o laço de quadros)
+        var tocou = [], antes = H.aoTocarFantasma;
+        H.aoTocarFantasma = function (id) { tocou.push(id); };
+        return respiro(15).then(function () {
+          var p = H._naTela('f-campo');
+          check('o fantasma do Campo aparece na tela', !!p, JSON.stringify(p));
+          if (p) toca(p);
+          check('tocar no fantasma da MESMA zona chega ao aoTocarFantasma', tocou.indexOf('f-campo') >= 0, tocou.join(','));
+          check('o fantasma da OUTRA zona não tem onde tocar', H._naTela('f-praca') === null);
+          var q = H._projeta(-1.5, 1.0, 17.5);   // onde o da praça estaria
+          tocou.length = 0;
+          if (q) toca(q);
+          check('tocar onde o fantasma da praça estaria não o toca', tocou.indexOf('f-praca') < 0, tocou.join(','));
+          H.aoTocarFantasma = antes;
+
+          // ---- 5. a zona por fantasma e o teto
+          H.fantasmaZona('f-praca', 'campo');
+          var veio = H._fantasmaVisivel('f-praca');
+          H.fantasmaZona('f-praca', 'praca');
+          check('Hub.fantasmaZona: mudou para o Campo aparece, voltou para a praça some',
+                veio && !H._fantasmaVisivel('f-praca'));
+          var ids = [];
+          for (var i = 0; i < 24; i++) { ids.push('c' + i); H.fantasmaEntra('c' + i, { nome: 'C' + i, classe: 'sumo', zona: 'campo', x: -20 + (i % 8) * 2, z: -20 + Math.floor(i / 8) * 2 }); }
+          for (var j = 0; j < 4; j++) { ids.push('p' + j); H.fantasmaEntra('p' + j, { nome: 'P' + j, classe: 'sumo', x: 3 + j, z: 18 }); }
+          H.defineZona('campo');
+          var ativos = H._corposAtivos();
+          var algumDaPraca = ids.filter(function (x) { return x.charAt(0) === 'p'; }).some(function (x) { return H._fantasmaVisivel(x); });
+          check('o teto de 20 corpos vale entre os da zona, e ninguém da praça entra', ativos === 20 && !algumDaPraca,
+                ativos + ' corpos, praça visível: ' + algumDaPraca);
+          ids.forEach(function (x) { H.fantasmaSai(x); });
+          H.defineZona('campo');
+          check('o fantasma do Campo segue com corpo depois da limpeza', H._fantasmaVisivel('f-campo'));
+          return ctx;
+        });
+      })
+      .then(function (ctx) {
+        if (ctx === 'foto') return 'foto';
+        // ---- 6. andando através de um pilar: ninguém entra na pedra
+        var C = H._caixas();
+        var pos0 = H._estado().pos;
+        H.irPara(pos0.x, pos0.z - 16);           // do nascimento para o norte, pelo pilar do meio-sul
+        var dentro = [], amostras = 0;
+        return espera(function () {
+          var p = H._estado().pos;
+          amostras++;
+          C.forEach(function (c, i) { if (dentroDe(c, p.x, p.z)) dentro.push(i + '@' + p.x + ',' + p.z); });
+          return amostras >= 40;
+        }, 60, 150).then(function () {
+          var p = H._estado().pos;
+          check('andando através de um pilar o corpo nunca entra na pedra', dentro.length === 0,
+                amostras + ' amostras; ' + dentro.slice(0, 3).join(' '));
+          check('e contornou o pilar (andou para o norte)', p.z < pos0.z - 6, JSON.stringify(pos0) + ' → ' + JSON.stringify(p));
+          return ctx;
+        });
+      })
+      .then(function (ctx) {
+        if (ctx === 'foto') return;
+        // ---- 7. sai
+        var ok = H.saiCampo();
+        var e2 = H._estado();
+        var ent = lugares('campo')[0];
+        var dEnt = ent ? Math.hypot(e2.pos.x - ent.x, e2.pos.z - ent.z) : 99;
+        check('Hub.saiCampo devolve true e naCampo() desliga', ok === true && H.naCampo() === false && H.zona() === 'praca');
+        check('volta à praça AO LADO da entrada, fora do raio de conversa dela',
+              ent && dEnt > ent.raio && dEnt < ent.raio + 2.5, dEnt.toFixed(2) + ' (raio ' + (ent && ent.raio) + ')');
+        check('com o corpo do avatar de sempre', e2.corpo === ctx.corpoAvatar && !e2.aparencia, e2.corpo);
+        check('a praça voltou inteira (portais e obras)', lugares('portal').length === 6 && lugares('arena').length === 1);
+        check('na praça de novo: o da praça com corpo, o do Campo sem',
+              H._fantasmaVisivel('f-praca') && !H._fantasmaVisivel('f-campo'));
+        check('saiCampo fora do Campo devolve false', H.saiCampo() === false);
+        H.fantasmaSai('f-praca'); H.fantasmaSai('f-campo');
+      })
+      .then(fecha)
+      .catch(function (e) { check('a prova rodou até o fim', false, e && e.message); fecha(); });
+  };
+
+  // o enquadramento das fotos
+  window.__vista = function (qual) {
+    var H = f.contentWindow.JOGO.Hub;
+    // de cima: 50 m (mais longe a névoa do fim de tarde engole o Campo)
+    if (qual === 'cima') { H.irPara(0, 0); H._cam({ dist: 50, tilt: 0.3, ang: 0, livre: true }); return H._estado().cam; }
+    if (qual === 'chao') { H._cam({ dist: 24, tilt: 1.02, ang: 0 }); return H._estado().cam; }
+    if (qual === 'entrada') {
+      if (H.naCampo()) H.saiCampo();
+      var ent = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0];
+      // a câmera de través, do lado de fora do anel: a entrada, a calçada dela e a Arena
+      var r = Math.hypot(ent.x, ent.z) || 1, ux = ent.x / r, uz = ent.z / r;
+      H._cam({ dist: 24, tilt: 0.95, ang: Math.atan2(ux - uz * 0.6, uz + ux * 0.6) });
+      return H._estado();
+    }
+    return null;
+  };
+})();
+</script>
+</body>
+</html>

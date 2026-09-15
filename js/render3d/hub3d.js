@@ -48,7 +48,38 @@ var JOGO = (typeof window !== 'undefined')
   var RAIO_SALA = 15;
   var salaAtual = null, salaCfg = null, salaPlantada = false, salaTentativas = 0;
   function chaveSala(s) { return s.dungeonId + ':' + s.roomIndex; }
-  function raioAtual() { return salaAtual ? RAIO_SALA : RAIO_MAPA; }
+  function raioAtual() { return salaAtual ? RAIO_SALA : campoAtivo ? campoCfg().meioLado : RAIO_MAPA; }
+  /* O CAMPO DE PVP (14/09, dono: "um mapa exclusivo de PvP… uma 'sala de espera' e ao
+   * atacar entra automaticamente em uma batalha"). É mais uma CENA desta máquina, como a
+   * antessala: Hub.entraCampo troca a praça pelo Campo e Hub.saiCampo volta. O desenho
+   * mora em js/core/data/campo_pvp.js (provisório até o dono desenhar o dele); a regra
+   * (coroa, ataque, batalha) é da HUD e do js/core — aqui só a cena, o passo e quem se vê.
+   *   · zonaAtual — 'praca' ou 'campo': fantasma de outra zona fica no PAPEL (sem corpo e
+   *     sem toque). A antessala conta como praça (a sala já é filtrada pela HUD).
+   *   · aparenciaCampo — no Campo o corpo é o do 1º herói escolhido (dono, 14/09: "o 1º a
+   *     selecionar fica a aparência e o segundo fica selecionado, é o elemento surpresa");
+   *     classeAvatar guarda o corpo de sempre, que volta na saída.
+   *   · caixas — os muros do Campo são RETÂNGULOS girados, não círculos: um círculo que
+   *     cobrisse um muro de 8 m engoliria 4 m de cada lado dele. */
+  var campoAtivo = false, zonaAtual = 'praca', aparenciaCampo = null, classeAvatar = null;
+  var auraDoHeroi = false;
+  var caixas = [];
+  var CAMPO_RESERVA = { meioLado: 30, chao: {}, muros: [], tochas: [], saida: { x: 0, z: 24 }, nasce: { x: 0, z: 20 } };
+  function campoCfg() {
+    var C = (JOGO.DATA && JOGO.DATA.campoPvp) || CAMPO_RESERVA;
+    return {
+      meioLado: (+C.meioLado > 5) ? +C.meioLado : 30,
+      chao: C.chao || {},
+      muros: Array.isArray(C.muros) ? C.muros : [],
+      tochas: Array.isArray(C.tochas) ? C.tochas : [],
+      saida: C.saida || CAMPO_RESERVA.saida,
+      nasce: C.nasce || CAMPO_RESERVA.nasce
+    };
+  }
+  function naZona(reg) {
+    var z = reg && reg.perfil && reg.perfil.zona;
+    return ((z === 'campo') ? 'campo' : 'praca') === zonaAtual;
+  }
   var fantasmas = {};               // id da Rede -> corpo igual ao do heroi
   var bicho = null;                 // o PET do avatar: { node, alvo, andando, petId, semCorrida }
   var aoChegar = null;              // callback pendente da caminhada atual
@@ -169,7 +200,19 @@ var JOGO = (typeof window !== 'undefined')
     if (texLajotas) return texLajotas;
     var cv = document.createElement('canvas');
     cv.width = 256; cv.height = 256;
-    var g = cv.getContext('2d');
+    pintaLajotas(cv.getContext('2d'));
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(RAIO_MAPA / 2, RAIO_MAPA / 2);
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texLajotas = tex;
+    return tex;
+  }
+  /* 14/09: o DESENHO das lajotas saiu da textura para uma função que só pinta um canvas
+   * 2D de 256 px — sem THREE e sem o Acampamento de pé. É ela que o tabuleiro da praça
+   * tática (renderer3d_v2, tema 'praca') usa: a mesma pedra nos dois mapas, sem cópia. */
+  function pintaLajotas(g) {
     g.fillStyle = '#3f4348';                       // a junta, escura
     g.fillRect(0, 0, 256, 256);
     var NL = 4, lado = 256 / NL, junta = 5;
@@ -187,13 +230,6 @@ var JOGO = (typeof window !== 'undefined')
                    lado - junta, 3);
       }
     }
-    var tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(RAIO_MAPA / 2, RAIO_MAPA / 2);
-    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
-    texLajotas = tex;
-    return tex;
   }
 
   /* A GRAMA DA PRAÇA (12/09, pedido do dono: "troque o chão da praça por
@@ -207,7 +243,16 @@ var JOGO = (typeof window !== 'undefined')
     if (texGrama) return texGrama;
     var cv = document.createElement('canvas');
     cv.width = 256; cv.height = 256;
-    var g = cv.getContext('2d');
+    pintaGrama(cv.getContext('2d'));
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texGrama = tex;
+    return tex;
+  }
+  // 14/09: como pintaLajotas — só o canvas 2D, para o tabuleiro da praça tática reusar
+  function pintaGrama(g) {
     var semente = 1234567;
     function sorte() { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; }
     function emVolta(desenha) {
@@ -246,12 +291,6 @@ var JOGO = (typeof window !== 'undefined')
         g.stroke();
       });
     }
-    var tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
-    texGrama = tex;
-    return tex;
   }
 
   function corDoTema(tema) {
@@ -479,10 +518,19 @@ var JOGO = (typeof window !== 'undefined')
     // metade da praça nova antes de o jogador dar dez passos
     scene.fog = new THREE.Fog(0x0d1512, raioAtual() * 1.4, raioAtual() * 3.4);
 
-    scene.add(new THREE.HemisphereLight(0xcfe8d8, 0x1a2420, 0.95));
+    var hemi = new THREE.HemisphereLight(0xcfe8d8, 0x1a2420, 0.95);
+    scene.add(hemi);
     var sol = new THREE.DirectionalLight(0xffe9c4, 1.05);
     sol.position.set(12, 22, 8);
     scene.add(sol);
+    if (campoAtivo) {
+      // 14/09: o Campo é fim de tarde — céu de brasa, luz baixa e quente, para as tochas
+      // lerem e o lugar não parecer a praça com outro chão
+      scene.background = new THREE.Color(0x1a1311);
+      scene.fog = new THREE.Fog(0x1a1311, raioAtual() * 1.3, raioAtual() * 3.2);
+      hemi.color.set(0xe0c8b0); hemi.groundColor.set(0x241a14); hemi.intensity = 0.78;
+      sol.color.set(0xffc890); sol.intensity = 0.9;
+    }
 
     // O CHÃO SEM GRADE — agora QUADRADO e de LAJOTAS CINZA (pedido 30/08:
     // "o chão cinza como se fosse lajotas"). A textura é desenhada em canvas
@@ -494,7 +542,7 @@ var JOGO = (typeof window !== 'undefined')
     // o mundo em volta, mais escuro, para a praça não terminar num fio duro
     var fundo = new THREE.Mesh(
       new THREE.PlaneGeometry(raioAtual() * 5, raioAtual() * 5),
-      new THREE.MeshBasicMaterial({ color: 0x121a14 })
+      new THREE.MeshBasicMaterial({ color: campoAtivo ? 0x120d0b : 0x121a14 })
     );
     fundo.rotation.x = -Math.PI / 2;
     fundo.position.y = -0.02;
@@ -504,6 +552,8 @@ var JOGO = (typeof window !== 'undefined')
 
     // a antessala é OUTRA cena: pátio murado, porta e saída — sem praça
     if (salaAtual) { montaSala(); return; }
+    // o Campo de PvP também (14/09): muros, tochas e o portal de volta — sem praça
+    if (campoAtivo) { montaCampo(); return; }
 
     montaPortais();
     montaBanco();
@@ -513,6 +563,7 @@ var JOGO = (typeof window !== 'undefined')
     montaForja();
     montaLoteria();
     montaPoco();
+    montaEntradaCampo();             // 14/09: o portal vermelho do Campo de PvP (antes do caminho: ganha ramal)
     montaCaminhos();
     // as CONSTRUÇÕES do usuário (árvore, arena, banco, mercado, sede) vestem
     // os volumes acima quando os GLBs abrirem — a sonda de sempre
@@ -674,6 +725,292 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
   }
+  // ============================================================ O CAMPO DE PVP (14/09)
+  /* A PEDRA E A TERRA DO CAMPO: dois tiles de 256 px em canvas, semeados (o Campo é o
+   * mesmo em toda visita), como a grama e as lajotas da praça. `chao` pinta lajes
+   * irregulares de pedra escura sobre terra — com as cores do campo_pvp.js; `muro` pinta
+   * fiadas de blocos (4 fiadas, 2 blocos por fiada: num tile de 2 m, bloco de 1 m por
+   * 50 cm). Os cantos das lajes que caem na borda do tile ficam presos a ela, senão a
+   * emenda aparece a cada 4 m. */
+  var texCampo = {};
+  function texturaCampo(tipo, cores) {
+    var chave = tipo + '|' + JSON.stringify(cores || {});
+    if (texCampo[chave]) return texCampo[chave];
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 256;
+    var g = cv.getContext('2d');
+    var semente = tipo === 'muro' ? 424242 : 777001;
+    function sorte() { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; }
+    if (tipo === 'muro') {
+      g.fillStyle = '#2b2724';
+      g.fillRect(0, 0, 256, 256);
+      for (var j = 0; j < 4; j++) {
+        for (var i = -1; i < 3; i++) {
+          var bx = i * 128 + (j % 2) * 64, by = j * 64;
+          var tom = 84 + Math.floor(sorte() * 26);
+          g.fillStyle = 'rgb(' + tom + ',' + (tom - 4) + ',' + (tom - 9) + ')';
+          g.fillRect(bx + 3, by + 3, 122, 58);
+          g.fillStyle = 'rgba(255,255,255,0.08)';        // luz na aresta de cima
+          g.fillRect(bx + 3, by + 3, 122, 4);
+          g.fillStyle = 'rgba(0,0,0,0.18)';              // sombra na de baixo
+          g.fillRect(bx + 3, by + 55, 122, 6);
+        }
+      }
+    } else {
+      var c = cores || {};
+      g.fillStyle = c.terra || '#3a322b';
+      g.fillRect(0, 0, 256, 256);
+      var N = 4, lado = 64, pts = [], yy, xx;
+      for (yy = 0; yy <= N; yy++) {
+        pts.push([]);
+        for (xx = 0; xx <= N; xx++) {
+          pts[yy].push([xx * lado + ((xx % N) ? (sorte() - 0.5) * 24 : 0),
+                        yy * lado + ((yy % N) ? (sorte() - 0.5) * 24 : 0)]);
+        }
+      }
+      for (yy = 0; yy <= N; yy++) pts[yy][N][1] = pts[yy][0][1];   // a borda dá a volta
+      for (xx = 0; xx <= N; xx++) pts[N][xx][0] = pts[0][xx][0];
+      for (yy = 0; yy < N; yy++) {
+        for (xx = 0; xx < N; xx++) {
+          var q = [pts[yy][xx], pts[yy][xx + 1], pts[yy + 1][xx + 1], pts[yy + 1][xx]];
+          var mx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, my = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+          g.beginPath();
+          for (var k = 0; k < 4; k++) {
+            var px = mx + (q[k][0] - mx) * 0.9, py = my + (q[k][1] - my) * 0.9;   // a junta
+            if (k === 0) g.moveTo(px, py); else g.lineTo(px, py);
+          }
+          g.closePath();
+          g.fillStyle = c.pedra || '#51473e';
+          g.fill();
+          g.fillStyle = sorte() < 0.5 ? 'rgba(0,0,0,' + (0.05 + sorte() * 0.2) + ')'
+                                      : 'rgba(255,240,220,' + (0.02 + sorte() * 0.06) + ')';
+          g.fill();
+          g.strokeStyle = c.junta || '#211c18';
+          g.lineWidth = 2;
+          g.stroke();
+        }
+      }
+      // manchas de terra e pó por cima (dão a volta no tile)
+      for (var m = 0; m < 70; m++) {
+        var sx = sorte() * 256, sy = sorte() * 256, sr = 2 + sorte() * 9, escura = sorte() < 0.7;
+        for (var ox = -256; ox <= 256; ox += 256) {
+          for (var oy = -256; oy <= 256; oy += 256) {
+            g.fillStyle = escura ? 'rgba(0,0,0,0.16)' : 'rgba(120,100,80,0.14)';
+            g.beginPath();
+            g.ellipse(sx + ox, sy + oy, sr, sr * 0.7, 0, 0, Math.PI * 2);
+            g.fill();
+          }
+        }
+      }
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texCampo[chave] = tex;
+    return tex;
+  }
+  /* o uv de uma caixa em METROS (m por tile): o de fábrica vai de 0 a 1 em cada face, e
+   * um muro de 8 m esticaria o mesmo desenho de um pilar de 1,6 m. Faces da BoxGeometry:
+   * +x, -x, +y, -y, +z, -z, quatro vértices cada. */
+  function uvDeCaixa(geo, sx, sy, sz, m) {
+    var uv = geo.attributes.uv;
+    var dims = [[sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy]];
+    for (var f = 0; f < 6; f++) {
+      for (var v = 0; v < 4; v++) {
+        var i = f * 4 + v;
+        uv.setXY(i, uv.getX(i) * dims[f][0] / m, uv.getY(i) * dims[f][1] / m);
+      }
+    }
+    uv.needsUpdate = true;
+  }
+  function chaoDoCampo() {
+    var C = campoCfg(), lado = C.meioLado * 2 + 4;
+    var geo = new THREE.PlaneGeometry(lado, lado);
+    var uv = geo.attributes.uv;
+    for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * lado / 4, uv.getY(i) * lado / 4);   // 4 m por tile
+    var quad = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: texturaCampo('chao', C.chao), roughness: 1 }));
+    quad.rotation.x = -Math.PI / 2;
+    return quad;
+  }
+  /* O ARCO DE PORTAL das cenas novas (o do Campo na praça e o de volta no Campo): o
+   * mesmo anel, miolo e base dos portais da praça, com o rótulo em cima do aro (13/09:
+   * a 4,9, acima do topo de 4,06). `filme` usa o redemoinho dos portais tingido na cor;
+   * `brilhoChao` acende um disco no chão na mesma cor — é o que lê de longe. */
+  var texBrilhoVermelho = null, texBrilhoTocha = null;
+  function arcoPortal(o) {
+    var g = new THREE.Group();
+    var aro = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.26, 12, 40),
+      new THREE.MeshStandardMaterial({ color: o.aro, emissive: o.aroBrilho || 0x000000, roughness: 0.85 }));
+    aro.position.y = 2.1;
+    g.add(aro);
+    var tp = o.filme ? texturaPortal() : null;
+    var miolo = new THREE.Mesh(new THREE.CircleGeometry(1.5, 32), tp
+      ? new THREE.MeshBasicMaterial({ map: tp, color: o.cor, transparent: true, opacity: 0.85,
+                                      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })
+      : new THREE.MeshBasicMaterial({ color: o.cor, transparent: true, opacity: 0.42,
+                                      side: THREE.DoubleSide, depthWrite: false }));
+    miolo.position.y = 2.1;
+    g.add(miolo);
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.2, 0.5, 24),
+                              new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 }));
+    base.position.y = 0.25;
+    g.add(base);
+    if (o.brilhoChao) {
+      if (!texBrilhoVermelho) {
+        texBrilhoVermelho = fazTexRadial([[0, 'rgba(255,70,50,0.9)'], [0.45, 'rgba(230,40,30,0.35)'], [1, 'rgba(200,20,10,0)']]);
+      }
+      var disco = new THREE.Mesh(new THREE.CircleGeometry(3.6, 32),
+        new THREE.MeshBasicMaterial({ map: texBrilhoVermelho, transparent: true, opacity: 0.8,
+                                      blending: THREE.AdditiveBlending, depthWrite: false }));
+      disco.rotation.x = -Math.PI / 2;
+      disco.position.y = 0.08;
+      disco.userData.semCaixa = true;          // é luz no chão, não corpo: a prova de folga não o mede
+      g.add(disco);
+    }
+    var r = rotulo(o.texto, o.corTexto);
+    r.position.y = 4.9;
+    if (o.rotuloEsc) r.scale.multiplyScalar(o.rotuloEsc);
+    g.add(r);
+    return { g: g, miolo: miolo };
+  }
+  /* A ENTRADA DO CAMPO NA PRAÇA (14/09, "um portal de pedra com brilho VERMELHO perto da
+   * Arena"). Mora no gramado de dentro do anel de avenida, do lado da Arena: por fora do
+   * anel não havia vão — entre a Arena (24 m de coliseu) e o corredor do primeiro portal
+   * sobravam 3,6 m, e um arco de 5,7 m não cabe sem encostar. Por dentro, a base (2,86 m
+   * de raio no porte 1,3×) fica a mais de 0,5 m do disco da Árvore e do anel, e a 5 m da
+   * avenida da Arena (PRACA.campo; tests/paredes.html mede as folgas). Encara a Árvore,
+   * como os outros portais, e não tem parede: entra-se nele. */
+  function montaEntradaCampo() {
+    if (!PRACA.campo) return;
+    var pp = pontoDaPraca('campo');
+    // 15/09 (foto): o redemoinho tingido lia CLARO sobre a grama e a calçada, quase azul;
+    // o disco chapado vermelho (o da saída da antessala) é o que diz "vermelho" de longe
+    var a = arcoPortal({ aro: 0x5a5348, aroBrilho: 0x3a0806, cor: 0xe0352b, filme: false, brilhoChao: true,
+                         texto: 'Campo de PvP', corTexto: '#ff9a8a' });
+    a.g.position.set(pp.x, 0, pp.z);
+    a.g.lookAt(0, 0, 0);
+    a.g.scale.setScalar(1.3);
+    scene.add(a.g);
+    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP',
+                   pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 4.6, node: a.g, miolo: a.miolo });
+  }
+  /* A CENA DO CAMPO: a borda de pedra (logo depois dos 94% onde o passo para), os muros
+   * do campo_pvp.js — cada um vira caixa sólida —, as tochas (poste, cuia, chama e um
+   * disco de luz no chão: luz pintada, sem PointLight, que no celular custaria a cena
+   * inteira) e o portal vermelho de volta à praça. */
+  var tochasCampo = [];
+  function montaCampo() {
+    var C = campoCfg(), R = C.meioLado;
+    var matMuro = new THREE.MeshStandardMaterial({ map: texturaCampo('muro'), roughness: 1 });
+    var matTopo = new THREE.MeshStandardMaterial({ color: 0x3b3531, roughness: 1 });
+    function caixaDePedra(x, z, larg, prof, alt, rot) {
+      var g = new THREE.Group();
+      var geo = new THREE.BoxGeometry(larg, alt, prof);
+      uvDeCaixa(geo, larg, alt, prof, 2);
+      var corpo = new THREE.Mesh(geo, matMuro);
+      corpo.position.y = alt / 2;
+      g.add(corpo);
+      var topo = new THREE.Mesh(new THREE.BoxGeometry(larg + 0.24, 0.18, prof + 0.24), matTopo);
+      topo.position.y = alt + 0.09;
+      g.add(topo);
+      g.position.set(x, 0, z);
+      g.rotation.y = rot || 0;
+      scene.add(g);
+      return g;
+    }
+    var B = R + 0.7;
+    caixaDePedra(0, -B, 2 * B + 1.4, 1.4, 1.6, 0);
+    caixaDePedra(0, B, 2 * B + 1.4, 1.4, 1.6, 0);
+    caixaDePedra(-B, 0, 1.4, 2 * B - 1.4, 1.6, 0);
+    caixaDePedra(B, 0, 1.4, 2 * B - 1.4, 1.6, 0);
+    C.muros.forEach(function (m) {
+      var larg = +m.larg || 1, prof = +m.prof || 1, alt = +m.alt || 3, rot = +m.rotY || 0;
+      var x = +m.x || 0, z = +m.z || 0;
+      caixaDePedra(x, z, larg, prof, alt, rot);
+      caixas.push({ x: x, z: z, hx: larg / 2, hz: prof / 2, rot: rot, alt: alt });
+    });
+    if (!texBrilhoTocha) {
+      texBrilhoTocha = fazTexRadial([[0, 'rgba(255,214,140,1)'], [0.3, 'rgba(255,150,60,0.55)'], [1, 'rgba(255,90,20,0)']]);
+    }
+    var matPoste = new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 1 });
+    var matCuia = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.7, metalness: 0.3 });
+    var matChama = new THREE.MeshBasicMaterial({ color: 0xffc070 });
+    var matLuz = new THREE.MeshBasicMaterial({ map: texBrilhoTocha, transparent: true, opacity: 0.24,
+                                              blending: THREE.AdditiveBlending, depthWrite: false });
+    var geoLuz = new THREE.PlaneGeometry(7, 7);
+    C.tochas.forEach(function (t, i) {
+      var g = new THREE.Group();
+      var poste = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 2.3, 8), matPoste);
+      poste.position.y = 1.15;
+      g.add(poste);
+      var cuia = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.14, 0.24, 10), matCuia);
+      cuia.position.y = 2.36;
+      g.add(cuia);
+      var chama = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 8), matChama);
+      chama.position.y = 2.7;
+      g.add(chama);
+      var brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
+        depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
+      brilho.scale.setScalar(2.4);
+      brilho.position.y = 2.72;
+      g.add(brilho);
+      var luz = new THREE.Mesh(geoLuz, matLuz);
+      luz.rotation.x = -Math.PI / 2;
+      luz.position.y = 0.03;
+      g.add(luz);
+      g.position.set(+t.x || 0, 0, +t.z || 0);
+      scene.add(g);
+      marcaSolido(+t.x || 0, +t.z || 0, 0.45);
+      tochasCampo.push({ brilho: brilho, chama: chama, fase: i * 1.7 });
+    });
+    var sd = C.saida;
+    var s = arcoPortal({ aro: 0x9a2320, aroBrilho: 0x4a0a08, cor: 0xe0352b, brilhoChao: true,
+                         texto: 'Voltar à praça', corTexto: '#ffd2cb', rotuloEsc: 0.8 });
+    s.g.position.set(sd.x, 0, sd.z);
+    if (Math.hypot(sd.x, sd.z) > 0.5) s.g.lookAt(0, 0, 0);
+    s.g.scale.setScalar(0.9);
+    scene.add(s.g);
+    lugares.push({ id: 'campo-saida', tipo: 'campo-saida', nome: 'Voltar à praça',
+                   pos: new THREE.Vector3(sd.x, 0, sd.z), raio: 3.8, node: s.g, miolo: s.miolo });
+  }
+  /* O MURO RETANGULAR barra como o círculo barra: o ponto que entrou sai pela face mais
+   * próxima (a de menor penetração), e o corpo DESLIZA ao longo dela no passo seguinte.
+   * A conta é no referencial do muro (rotation.y = rot leva o x local a (cos, -sen)).
+   * `CORPO_NA_CAIXA` é a meia-largura do corpo: sem ela o herói entrava meio corpo na
+   * pedra antes de parar. */
+  var CORPO_NA_CAIXA = 0.45;
+  function foraDaCaixa(p, c, folga) {
+    var cs = Math.cos(c.rot), sn = Math.sin(c.rot);
+    var dx = p.x - c.x, dz = p.z - c.z;
+    var lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+    var hx = c.hx + folga, hz = c.hz + folga;
+    if (Math.abs(lx) >= hx || Math.abs(lz) >= hz) return;
+    if (hx - Math.abs(lx) < hz - Math.abs(lz)) lx = (lx >= 0) ? hx : -hx;
+    else lz = (lz >= 0) ? hz : -hz;
+    p.x = c.x + lx * cs + lz * sn;
+    p.z = c.z - lx * sn + lz * cs;
+  }
+  /* TROCAR DE CENA SEM PERDER NINGUÉM (praça ↔ Campo): diferente da troca de sala, os
+   * fantasmas FICAM — descem ao papel (a posição continua andando) e a zona nova decide
+   * quem ganha corpo (Hub.defineZona). O herói é remontado por quem chamou. */
+  function trocaDeCena() {
+    for (var fk in fantasmas) {
+      if (fantasmas.hasOwnProperty(fk) && fantasmas[fk].corpo) desmaterializa(fantasmas[fk]);
+    }
+    lugares.length = 0;
+    solidos.length = 0;
+    caixas.length = 0;
+    tochasCampo.length = 0;
+    chefesParados.length = 0;
+    chefesFicha.length = 0;
+    ultimoPerto = null;
+    aoChegar = null;
+    heroi = null;
+    bicho = null;
+    montaCena();
+  }
+
   /* Trocar de cena (praça ↔ sala, sala ↔ sala): fantasmas e lugares saem,
    * o herói e o bicho renascem na cena nova pelo caminho de sempre. */
   function refazCena() {
@@ -683,6 +1020,8 @@ var JOGO = (typeof window !== 'undefined')
     fantasmas = {};
     lugares.length = 0;
     solidos.length = 0;
+    caixas.length = 0;
+    tochasCampo.length = 0;
     chefesParados.length = 0;
     chefesFicha.length = 0;
     ultimoPerto = null;
@@ -705,7 +1044,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function dentroDoMapa(p, folga) {
     var lim = folga || 0.94;
-    if (salaAtual) {
+    if (salaAtual || campoAtivo) {         // a antessala e o Campo são quadrados
       var l = raioAtual() * lim;
       p.x = Math.max(-l, Math.min(l, p.x));
       p.z = Math.max(-l, Math.min(l, p.z));
@@ -718,6 +1057,7 @@ var JOGO = (typeof window !== 'undefined')
     return p;
   }
   function montaChao() {
+    if (campoAtivo) return chaoDoCampo();   // 14/09: terra e pedra escura
     if (salaAtual) {
       var matSala = new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 });
       var quad = new THREE.Mesh(new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2), matSala);
@@ -868,7 +1208,10 @@ var JOGO = (typeof window !== 'undefined')
     loteria: { ang: Math.PI, r: 40.0, frente: 1.2 },
     mercado: { ang: 2.80, r: 38.0, frente: 2.0 },
     banco:   { ang: 2.30, r: 35.0, frente: 2.5 },
-    sede:    { ang: 1.78, r: 36.0, frente: 3.0 }
+    sede:    { ang: 1.78, r: 36.0, frente: 3.0 },
+    // 14/09: a entrada do Campo de PvP, no gramado de dentro do anel, do lado da Arena
+    // (a conta das folgas está em montaEntradaCampo); a calçada vem da praça da Árvore
+    campo:   { ang: -1.42, r: 16.6, frente: 1.0 }
   };
   function pontoDaPraca(id) {
     var p = PRACA[id];
@@ -1121,7 +1464,8 @@ var JOGO = (typeof window !== 'undefined')
     return tex;
   }
   function montaCaminhos() {
-    if (!scene || salaAtual) return;
+    if (!scene || salaAtual || campoAtivo) return;
+    caminhosVias = [];
     function acumulador() { return { pos: [], uv: [], idx: [] }; }
     var pedra = acumulador(), junta = acumulador();
     function vertice(acc, x, y, z) {
@@ -1164,6 +1508,7 @@ var JOGO = (typeof window !== 'undefined')
       faixa(junta, ux * de, uz * de, ux * ate, uz * ate, CAMINHO_MEIA + MEIO_FIO, 0.03);
       faixa(pedra, ux * de, uz * de, ux * ate, uz * ate, CAMINHO_MEIA, 0.05);
       n++;
+      caminhosVias.push({ ang: ang, de: de, ate: ate });   // 14/09: a prova mede a folga dos lugares
     }
     function malha(acc, mat) {
       var geo = new THREE.BufferGeometry();
@@ -1206,7 +1551,8 @@ var JOGO = (typeof window !== 'undefined')
       }
       var cfg = PRACA[lg.id];
       if (!cfg) return;
-      var avenida = lg.id === 'arena' || lg.id === 'sede' || lg.id === 'loteria';
+      // o Campo mora DENTRO do anel: o ramal dele sai da praça da Árvore, não do anel
+      var avenida = lg.id === 'arena' || lg.id === 'sede' || lg.id === 'loteria' || lg.id === 'campo';
       via(ang, avenida ? MIOLO_RAIO - 1 : ANEL_RAIO, r - cfg.frente);
     });
     malha(junta, new THREE.MeshStandardMaterial({ color: 0x5c5040, roughness: 1,
@@ -1215,7 +1561,7 @@ var JOGO = (typeof window !== 'undefined')
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     caminhosFeitos = n;
   }
-  var caminhosFeitos = 0;
+  var caminhosFeitos = 0, caminhosVias = [];
 
   /* A SEDE DAS GUILDAS (25/08): o estandarte a leste. O lugar existe ANTES
    * da casa própria — a casa 3D de cada guilda vem com a fase do lobby;
@@ -1709,7 +2055,8 @@ var JOGO = (typeof window !== 'undefined')
     var node = null;
     try { node = m2.unit(classId || 'sumo', { classId: classId || 'sumo' }); } catch (e) {}
     if (!node) return;
-    node.position.set(0, 0, raioAtual() * 0.35);
+    var nasce = campoAtivo ? campoCfg().nasce : null;       // 14/09: no Campo, onde o desenho manda
+    node.position.set(nasce ? (+nasce.x || 0) : 0, 0, nasce ? (+nasce.z || 0) : raioAtual() * 0.35);
     scene.add(node);
     heroi = { node: node, alvo: null, andando: false };
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
@@ -2168,6 +2515,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var j = 0; j < solidos.length; j++) {
       fora(solidos[j].x, solidos[j].z, solidos[j].r + (folga || 0));
     }
+    // 14/09: os muros retangulares do Campo
+    for (var q = 0; q < caixas.length; q++) foraDaCaixa(p, caixas[q], CORPO_NA_CAIXA + (folga || 0));
     return p;
   }
 
@@ -2287,7 +2636,7 @@ var JOGO = (typeof window !== 'undefined')
     // tronco, sem travar (o alvo continua o mesmo e o próximo passo tenta
     // de novo, um pouco mais adiante na tangente).
     var dTr = Math.hypot(p.x, p.z);
-    if (!salaAtual && dTr < TRONCO_RAIO && dTr > 0.01) {
+    if (!salaAtual && !campoAtivo && dTr < TRONCO_RAIO && dTr > 0.01) {
       var kTr = TRONCO_RAIO / dTr;
       p.x *= kTr; p.z *= kTr;
     }
@@ -2411,6 +2760,14 @@ var JOGO = (typeof window !== 'undefined')
         : 0.34 + Math.sin(relogio * 1.8 + i) * 0.10;
     }
 
+    // 14/09: as tochas do Campo tremem — o brilho pulsa e a chama balança
+    for (var tq = 0; tq < tochasCampo.length; tq++) {
+      var tc = tochasCampo[tq];
+      var osc = Math.sin(relogio * 9.0 + tc.fase) * 0.5 + Math.sin(relogio * 13.7 + tc.fase * 2.1) * 0.5;
+      tc.brilho.scale.setScalar(2.4 + osc * 0.25);
+      tc.chama.scale.set(1, 1 + osc * 0.18, 1);
+    }
+
     if (heroi) {
       var chegou = andaCorpo(heroi, dt);
       if (chegou && aoChegar) { var f = aoChegar; aoChegar = null; f(); }
@@ -2511,6 +2868,7 @@ var JOGO = (typeof window !== 'undefined')
         if (!fantasmas.hasOwnProperty(fk3)) continue;
         var cF = fantasmas[fk3].corpo;
         if (!cF) continue;                       // sem corpo, sem toque
+        if (!naZona(fantasmas[fk3])) continue;   // 14/09: nem de outra zona
         var hitsF = raycaster.intersectObjects(alvosDeToque(cF), true);
         if (hitsF && hitsF.length && hitsF[0].distance < distF) { distF = hitsF[0].distance; melhorF = fk3; }
       }
@@ -2540,7 +2898,7 @@ var JOGO = (typeof window !== 'undefined')
       // empurrado para a borda — o resto do desvio acontece no passo
       // (na antessala não há árvore)
       var dT = Math.hypot(p.x, p.z);
-      if (!salaAtual && dT < TRONCO_RAIO + 0.4) {
+      if (!salaAtual && !campoAtivo && dT < TRONCO_RAIO + 0.4) {
         var kT = (TRONCO_RAIO + 0.4) / Math.max(0.01, dT);
         p.x *= kT; p.z *= kT;
       }
@@ -2572,6 +2930,12 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------------ pública
   /* aoAproximar(lugar|null) — o hud pendura aqui o painel de portal/banco/arena */
   Hub.aoAproximar = null;
+  /* 14/09: o que o tabuleiro da praça tática (renderer3d_v2, tema 'praca') pega daqui
+   * para ser a MESMA praça: o desenho das lajotas e da grama (só canvas 2D — valem com o
+   * Acampamento fechado) e a cor de cada Fecho no miolo do portal. */
+  Hub.pintaLajotas = pintaLajotas;
+  Hub.pintaGrama = pintaGrama;
+  Hub.corDoTema = corDoTema;
 
   Hub.entrar = function (cont, classId, opts) {
     THREE = window.THREE;
@@ -2581,9 +2945,22 @@ var JOGO = (typeof window !== 'undefined')
     // trocar de sala (ou voltar à praça) refaz a cena inteira
     var salaNova = (opts && opts.sala) ? chaveSala(opts.sala) : null;
     var trocouSala = salaNova !== salaAtual;
+    /* 14/09: O CAMPO DE PVP é outra cena, como a antessala. `opts.campo` (true/false)
+     * troca; uma sala tira do Campo; sem nada, a cena fica onde está — a HUD reentra a
+     * cada repintura e não pode tirar o jogador do Campo sem querer. */
+    var campoNovo = (opts && opts.sala) ? false
+                  : (opts && typeof opts.campo === 'boolean') ? opts.campo : campoAtivo;
+    var trocouCampo = campoNovo !== campoAtivo;
     var jaTinha = !!renderer;
     salaAtual = salaNova;
     salaCfg = (opts && opts.sala) || null;
+    campoAtivo = campoNovo;
+    if (!campoAtivo) aparenciaCampo = null;
+    else if (opts && opts.aparencia) aparenciaCampo = opts.aparencia;
+    if (trocouSala || trocouCampo) zonaAtual = campoAtivo ? 'campo' : 'praca';
+    // o corpo de SEMPRE é o do avatar; no Campo, o da aparência escolhida (o 1º herói)
+    if (classId) classeAvatar = classId;
+    var corpoDe = (campoAtivo && aparenciaCampo) ? aparenciaCampo : (classId || classeAvatar);
     if (!renderer) {
       canvas = document.createElement('canvas');
       canvas.className = 'hub-canvas';
@@ -2604,12 +2981,14 @@ var JOGO = (typeof window !== 'undefined')
       container.appendChild(canvas);
     }
     if (jaTinha && trocouSala) refazCena();
-    if (!heroi) montaHeroi(classId);
-    else if (classId && heroi.classId !== classId) {
+    else if (jaTinha && trocouCampo) trocaDeCena();
+    if (!heroi) montaHeroi(corpoDe);
+    else if (corpoDe && heroi.classId !== corpoDe) {
       // trocou de herói entre visitas: o corpo acompanha
-      scene.remove(heroi.node); heroi = null; montaHeroi(classId);
+      scene.remove(heroi.node); heroi = null; montaHeroi(corpoDe);
     }
-    if (heroi) heroi.classId = classId;
+    if (heroi) heroi.classId = corpoDe;
+    if (jaTinha && trocouCampo && !trocouSala) { Hub.defineZona(zonaAtual); avisaZona(); }
     sincronizaBicho();
     ajusta();
     /* Reentrar com o hub JA NA TELA (trocou o líder da dupla pela ficha) não
@@ -2707,6 +3086,7 @@ var JOGO = (typeof window !== 'undefined')
     corpo.aura = g;
   }
   Hub.aura = function (liga) {
+    auraDoHeroi = !!liga;              // 14/09: a troca de cena (Campo) remonta o herói e religa
     acendeAura(heroi, !!liga);
     return !!heroi;
   };
@@ -2801,6 +3181,160 @@ var JOGO = (typeof window !== 'undefined')
                raio: l.raio || 0, solido: l.solido || 0 };
     });
   };
+  /* ================================================== O CAMPO DE PVP — A API (14/09)
+   * Hub.entraCampo({aparencia})  a praça (ou nada) vira o Campo; o herói nasce no `nasce`
+   *                              do campo_pvp.js com o corpo da classe `aparencia` (o 1º
+   *                              herói escolhido); sem ela, o avatar de sempre. Já no
+   *                              Campo, só troca a aparência. → true
+   * Hub.saiCampo()               volta à praça, ao lado da entrada (do lado da Árvore e
+   *                              fora do raio de conversa — o painel não reabre sozinho),
+   *                              com o corpo do avatar. → false se não estava no Campo
+   * Hub.naCampo()                → boolean
+   * Hub.defineZona('praca'|'campo')  quem ganha corpo e toque: só fantasma com
+   *                              `perfil.zona` igual (sem zona = 'praca'), até o teto de
+   *                              20, pelos mais perto. entraCampo/saiCampo já chamam.
+   * Hub.fantasmaZona(id, zona)   um fantasma que já está na lista mudou de zona
+   * Hub.aoTrocarZona(zona, pos)  gancho opcional: a cena trocou (a Rede pode anunciar)
+   * Os lugares chegam à HUD pelo aoAproximar de sempre: {id:'campo', tipo:'campo'} na praça
+   * e {id:'campo-saida', tipo:'campo-saida'} no Campo. Hub.entrar(…, {campo: true|false})
+   * também troca (a HUD que reentra sem opts não tira ninguém do Campo). */
+  function avisaZona() {
+    ultimoPerto = null;
+    if (Hub.aoAproximar) { try { Hub.aoAproximar(null); } catch (e) {} }
+    if (Hub.aoTrocarZona) {
+      try {
+        Hub.aoTrocarZona(zonaAtual, heroi ? { x: heroi.node.position.x, z: heroi.node.position.z } : null);
+      } catch (e2) {}
+    }
+  }
+  function remontaNoLugar(classId, x, z) {
+    montaHeroi(classId || 'sumo');
+    if (!heroi) return;
+    heroi.classId = classId || 'sumo';
+    if (x != null && z != null) heroi.node.position.set(x, 0, z);
+    if (auraDoHeroi) acendeAura(heroi, true);
+    sincronizaBicho();
+  }
+  Hub.entraCampo = function (opts) {
+    var ap = (opts && opts.aparencia) || null;
+    if (campoAtivo) {
+      if (ap && ap !== aparenciaCampo) {
+        aparenciaCampo = ap;
+        if (heroi && scene) {
+          var p = heroi.node.position.clone();
+          scene.remove(heroi.node);
+          heroi = null;
+          remontaNoLugar(ap, p.x, p.z);
+        }
+      }
+      return true;
+    }
+    if (heroi && heroi.classId) classeAvatar = heroi.classId;
+    aparenciaCampo = ap;
+    campoAtivo = true;
+    salaAtual = null;
+    salaCfg = null;
+    zonaAtual = 'campo';
+    if (!renderer || !THREE) return true;        // monta na próxima Hub.entrar
+    trocaDeCena();
+    remontaNoLugar(aparenciaCampo || classeAvatar);
+    Hub.defineZona('campo');
+    avisaZona();
+    return true;
+  };
+  Hub.saiCampo = function () {
+    if (!campoAtivo) return false;
+    campoAtivo = false;
+    aparenciaCampo = null;
+    zonaAtual = 'praca';
+    if (!renderer || !THREE) return true;
+    trocaDeCena();
+    /* AO LADO, e não à frente (15/09, foto): do lado da Árvore o herói ficava a 11 m do
+     * tronco e a câmera de órbita (atrás e acima dele) nascia DENTRO da copa de 17 m. O
+     * passo vai de través, no sentido do arco dos portais (longe da Arena), fora do raio
+     * de conversa — o painel da entrada não reabre sozinho. */
+    var x = null, z = null;
+    for (var i = 0; i < lugares.length; i++) {
+      var lg = lugares[i];
+      if (lg.tipo !== 'campo') continue;
+      var a = Math.atan2(lg.pos.x, -lg.pos.z), d = lg.raio + 1.2;
+      var p = empurraDosSolidos({ x: lg.pos.x + Math.cos(a) * d, z: lg.pos.z + Math.sin(a) * d }, 0.4);
+      x = p.x;
+      z = p.z;
+    }
+    remontaNoLugar(classeAvatar, x, z);
+    Hub.defineZona('praca');
+    avisaZona();
+    return true;
+  };
+  Hub.naCampo = function () { return campoAtivo; };
+  Hub.zona = function () { return zonaAtual; };
+  Hub.aoTrocarZona = null;
+  Hub.defineZona = function (z) {
+    zonaAtual = (z === 'campo') ? 'campo' : 'praca';
+    if (!scene) return zonaAtual;
+    var hp = heroi ? heroi.node.position : null, lista = [];
+    for (var id in fantasmas) {
+      if (!fantasmas.hasOwnProperty(id)) continue;
+      var reg = fantasmas[id];
+      if (!naZona(reg)) { if (reg.corpo) desmaterializa(reg); continue; }
+      var fx = reg.corpo ? reg.corpo.node.position.x : reg.x;
+      var fz = reg.corpo ? reg.corpo.node.position.z : reg.z;
+      lista.push({ id: id, dist: hp ? Math.hypot(fx - hp.x, fz - hp.z) : 0, temCorpo: !!reg.corpo });
+    }
+    // a zona nova se enche de uma vez (é troca de cena, não passeio): até o teto
+    var dz = Hub._escolheCorpos(lista, Hub.TETO_FANTASMAS, MARGEM_TROCA, Hub.TETO_FANTASMAS);
+    for (var s = 0; s < dz.sai.length; s++) desmaterializa(fantasmas[dz.sai[s]]);
+    /* 15/09 (a prova pegou 24): a histerese do _escolheCorpos segura quem já tem corpo
+     * até 2 m além do corte, e enchendo de uma vez os de dentro passavam do teto. Só entra
+     * quem cabe nas vagas LIVRES (os mais perto primeiro); a avaliação de 1,2 s troca o
+     * resto aos poucos, como sempre. */
+    var livres = Hub.TETO_FANTASMAS - Hub._corposAtivos();
+    for (var e = 0; e < dz.entra.length && e < livres; e++) materializa(fantasmas[dz.entra[e]]);
+    return zonaAtual;
+  };
+  Hub.fantasmaZona = function (id, zona) {
+    var reg = fantasmas[id];
+    if (!reg) return false;
+    reg.perfil = reg.perfil || {};
+    reg.perfil.zona = zona || 'praca';
+    if (!naZona(reg)) { if (reg.corpo) desmaterializa(reg); }
+    else if (!reg.corpo && Hub._corposAtivos() < Hub.TETO_FANTASMAS) materializa(reg);
+    return !!reg.corpo;
+  };
+  // provas
+  Hub._fantasmaVisivel = function (id) { var r = fantasmas[id]; return !!(r && r.corpo && r.corpo.node.parent); };
+  Hub._caixas = function () {
+    return caixas.map(function (c) { return { x: c.x, z: c.z, hx: c.hx, hz: c.hz, rot: c.rot, alt: c.alt }; });
+  };
+  Hub._corpoNaCaixa = CORPO_NA_CAIXA;
+  Hub._caminhos = function () {
+    return { miolo: MIOLO_RAIO + MEIO_FIO, anel: ANEL_RAIO, meia: CAMINHO_MEIA + MEIO_FIO, vias: caminhosVias.slice() };
+  };
+  /* a caixa (mundo) do nó de um lugar: a prova confere que a entrada do Campo não
+   * encosta em obra nenhuma */
+  Hub._caixaDoLugar = function (id) {
+    for (var i = 0; i < lugares.length; i++) {
+      if (lugares[i].id !== id || !THREE) continue;
+      var b = new THREE.Box3();
+      lugares[i].node.updateMatrixWorld(true);
+      lugares[i].node.traverse(function (n) {
+        // sem o rótulo (sprite no alto) e sem a luz pintada no chão
+        if (n.isMesh && n.geometry && !(n.userData && n.userData.semCaixa)) b.expandByObject(n);
+      });
+      if (b.isEmpty()) return null;
+      return { x0: b.min.x, x1: b.max.x, y0: b.min.y, y1: b.max.y, z0: b.min.z, z1: b.max.z };
+    }
+    return null;
+  };
+  // um ponto do mundo na tela (coordenadas da página) — a prova toca onde algo estaria
+  Hub._projeta = function (x, y, z) {
+    if (!camera || !canvas || !THREE) return null;
+    var v = new THREE.Vector3(x, y, z).project(camera);
+    var r = canvas.getBoundingClientRect();
+    return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+  };
+
   Hub.TETO_FANTASMAS = 20;
   var MARGEM_TROCA = 2.0;           // só larga o corpo quem ficou 2m atrás do corte
 
@@ -2905,6 +3439,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var id in fantasmas) {
       if (!fantasmas.hasOwnProperty(id)) continue;
       var reg = fantasmas[id];
+      // 14/09: quem está na OUTRA zona não conta para o teto e não fica com corpo
+      if (!naZona(reg)) { if (reg.corpo) desmaterializa(reg); continue; }
       var fx = reg.corpo ? reg.corpo.node.position.x : reg.x;
       var fz = reg.corpo ? reg.corpo.node.position.z : reg.z;
       lista.push({ id: id, dist: Math.hypot(fx - hp.x, fz - hp.z),
@@ -2923,7 +3459,8 @@ var JOGO = (typeof window !== 'undefined')
                 corpo: null };
     fantasmas[id] = reg;
     // dentro do teto? corpo na hora — acima dele, espera a avaliação decidir
-    if (Hub._corposAtivos() < Hub.TETO_FANTASMAS) materializa(reg);
+    // 14/09: só quem é da minha zona (praça/Campo) ganha corpo
+    if (naZona(reg) && Hub._corposAtivos() < Hub.TETO_FANTASMAS) materializa(reg);
     return true;
   };
   Hub.fantasmaAlvo = function (id, x, z) {
@@ -3018,6 +3555,10 @@ var JOGO = (typeof window !== 'undefined')
                        z: +bicho.node.position.z.toFixed(2), andando: !!bicho.andando,
                        clipe: bicho.clipe || 'idle' } : null,
       sala: salaAtual,                    // 03/09: null = praça
+      campo: campoAtivo,                  // 14/09: o Campo de PvP
+      zona: zonaAtual,
+      aparencia: aparenciaCampo,
+      avatar: classeAvatar,
       caminhos: caminhosFeitos,           // 13/09: avenidas de pedra plantadas
       nome: nomeJogador,
       titulo: tituloJogador,

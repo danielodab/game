@@ -283,15 +283,16 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual(self.sql(vidas, ana.conta['id'], bia.conta['id'])[0]['n'], 2)
 
     # -- o duelo ranqueado ----------------------------------------------------------------------------
-    def joga_duelo(self, a, b, semente=999):
+    def joga_duelo(self, a, b, semente=999, dungeon='cistern'):
         sa, sb = self.save(a), self.save(b)
-        return roda_node([JOGADORES], {'modo': 'duelo', 'dungeonId': 'cistern', 'roomIndex': 0, 'semente': semente,
+        return roda_node([JOGADORES], {'modo': 'duelo', 'dungeonId': dungeon, 'roomIndex': 0, 'semente': semente,
                                        'A': {'progress': sa['progress'], 'db': sa['db'], 'dono': 'ana', 'herois': ['sumo']},
                                        'B': {'progress': sb['progress'], 'db': sb['db'], 'dono': 'bia',
                                              'herois': ['curandeiro']}})
 
     def corpo_duelo(self, a, b, did, jogo, **kw):
-        corpo = {'did': did, 'dungeonId': 'cistern', 'roomIndex': 0, 'semente': 999,
+        # 14/09: o modo viaja no fechar; o duelo ranqueado de sempre destas provas é o do Campo de PvP
+        corpo = {'did': did, 'modo': 'campo', 'dungeonId': 'cistern', 'roomIndex': 0, 'semente': 999,
                  'A': {'conta': a.conta['id'], 'dono': 'ana', 'herois': ['sumo']},
                  'B': {'conta': b.conta['id'], 'dono': 'bia', 'herois': ['curandeiro']},
                  'lances': jogo['lances'], 'hashFinal': jogo['hash'], 'fotografada': False}
@@ -389,6 +390,94 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertEqual((r['fase'], r['ranqueado'], r['motivo']), ('recusado', False, 'divergiu'))
         self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1))
+
+    # -- 14/09: as três formas de duelo (desafio, arena, campo) ------------------------------------------------
+    def vidas_do_duelo(self, a, b):
+        return self.sql("SELECT COUNT(*) AS n FROM vida_heroi WHERE conta_id IN (?, ?)", a.conta['id'], b.conta['id'])[0]['n']
+
+    def test_14_desafio_nunca_ranqueia_e_grava_a_vida(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        jogo = self.joga_duelo(a, b, dungeon='praca')
+        self.assertIn(jogo['fase'], ('won', 'lost', 'empate'), 'o duelo na praça (js/core/data/arenas.js) acaba')
+        did = self.did()
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, modo='desafio', dungeonId='praca'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['ranqueado'], r['motivo'], r['modo'], r['fase']), (False, 'amistoso', 'desafio', jogo['fase']), r)
+        self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1), 'a Brasa não muda em nenhum dos dois')
+        self.assertEqual(self.vidas_do_duelo(a, b), 2, 'o juiz refez: a vida do fim dos dois fica gravada')
+        linha = self.sql("SELECT venc, fase FROM duelos WHERE did = ?", did)[0]
+        self.assertIsNone(linha['venc'], 'o amistoso não conta nos tetos (a coluna venc fica vazia)')
+        # mesmo acima dos tetos o desafio não vira 'teto': nem olha
+        t = int(time.time())
+        for i in range(3):
+            self.sql("INSERT INTO duelos(did, a_id, b_id, fase, venc, criado_em, resultado) VALUES (?, ?, ?, 'won', 'A', ?, '{}')",
+                     'teto-desafio-%d-%d' % (a.conta['id'], i), a.conta['id'], b.conta['id'], t - 60)
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, self.did(), jogo, modo='desafio', dungeonId='praca'))
+        self.assertEqual((status, r.get('motivo'), r.get('ranqueado')), (200, 'amistoso', False), r)
+        # sem modo (a página de antes do deploy) também é amistoso; modo torto é 400
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, self.did(), jogo, modo=None, dungeonId='praca'))
+        self.assertEqual((status, r.get('motivo')), (200, 'modo'), r)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, self.did(), jogo, modo='guerra'))
+        self.assertEqual(status, 400, r)
+
+    def test_15_arena_sem_partida_nao_ranqueia(self):
+        self.precisa('duelo')
+        a, b = self.duplas_de_duelo()
+        jogo = self.joga_duelo(a, b)
+        did = self.did()
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, modo='arena'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['ranqueado'], r['motivo'], r['modo']), (False, 'sem-partida', 'arena'), r)
+        self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1))
+        self.assertEqual(self.vidas_do_duelo(a, b), 2, 'o amistoso também grava a vida')
+        # a arena (ou o campo) no mapa do desafio não ranqueia: 'mapa'
+        jogo_p = self.joga_duelo(a, b, dungeon='praca')
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, self.did(), jogo_p, modo='campo', dungeonId='praca'))
+        self.assertEqual((status, r.get('ranqueado'), r.get('motivo')), (200, False, 'mapa'), r)
+        # COM a partida pronta desse did entre essas duas contas (e esses heróis), ranqueia; a partida vira 'jogada'
+        outra = self.com_estado('Intrusa Arena', 'sumo', 20)
+        jogo_o = self.joga_duelo(a, outra)
+        dids = [self.did() for _ in range(3)]
+        agora_ms = int(time.time() * 1000)
+        for did_p, herois_b in ((dids[0], '["curandeiro"]'), (dids[1], '["curandeiro"]'), (dids[2], '["bruxo"]')):
+            self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, b_nivel, "
+                     "a_desde_ms, a_ok, b_ok, criada_ms, prazo_ms, pronta_ms, estado) VALUES (?, ?, ?, '[\"sumo\"]', ?, '[]', "
+                     "'[]', 20, 20, ?, 1, 1, ?, ?, ?, 'pronta')", did_p, a.conta['id'], b.conta['id'], herois_b,
+                     agora_ms, agora_ms, agora_ms + 30000, agora_ms)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, outra, dids[0], jogo_o, modo='arena'))
+        self.assertEqual((status, r.get('motivo')), (200, 'sem-partida'), 'a partida é dessas duas contas, não do did solto')
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, dids[2], jogo, modo='arena'))
+        self.assertEqual((status, r.get('motivo')), (200, 'dupla'), 'os heróis que lutaram são os que o quadro mostrou')
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, dids[1], jogo, modo='arena'))
+        self.assertEqual(status, 200, r)
+        self.assertTrue(r['ranqueado'], r)
+        self.assertEqual(self.sql("SELECT estado FROM arena_partidas WHERE did = ?", dids[1])[0]['estado'], 'jogada')
+
+    def test_16_campo_sem_paridade_nao_ranqueia(self):
+        self.precisa('duelo')
+        a, b = self.com_estado('Ana Campo', 'sumo', 20), self.com_estado('Bia Campo', 'curandeiro', 9)
+        jogo = self.joga_duelo(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, self.did(), jogo, modo='campo'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['ranqueado'], r['motivo'], r['modo']), (False, 'paridade', 'campo'), 'diferença 11 no Campo')
+        self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1))
+        # a mesma diferença na Arena (≤ 5) também não, mesmo com a partida pronta
+        did = self.did()
+        agora_ms = int(time.time() * 1000)
+        self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, b_nivel, "
+                 "a_desde_ms, a_ok, b_ok, criada_ms, prazo_ms, pronta_ms, estado) VALUES (?, ?, ?, '[\"sumo\"]', "
+                 "'[\"curandeiro\"]', '[]', '[]', 20, 9, ?, 1, 1, ?, ?, ?, 'pronta')",
+                 did, a.conta['id'], b.conta['id'], agora_ms, agora_ms, agora_ms, agora_ms)
+        jogo2 = self.joga_duelo(a, b, semente=321)
+        status, r = a.pede('POST', '/api/duelo/fechar', dict(self.corpo_duelo(a, b, did, jogo2, modo='arena'), semente=321))
+        self.assertEqual((status, r.get('ranqueado'), r.get('motivo')), (200, False, 'paridade'), r)
+        # diferença 10 no Campo ranqueia
+        c, d = self.com_estado('Cris Campo', 'sumo', 19), self.com_estado('Duda Campo', 'curandeiro', 9)
+        jogo3 = self.joga_duelo(c, d)
+        status, r = c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(c, d, self.did(), jogo3, modo='campo'))
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['ranqueado'], jogo3['fase'] in ('won', 'lost', 'empate'), r)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a praça tática (o duelo na praça)</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  iframe{position:fixed;left:0;top:0;width:100%;height:100%;border:0}
+  #saida{position:fixed;left:8px;bottom:8px;max-width:560px;max-height:46%;overflow:auto;
+         background:rgba(11,13,16,.88);border:1px solid #2b3542;border-radius:6px;padding:6px 8px;font:11px/1.45 monospace}
+  #summary{padding:4px 8px;border-radius:5px;background:#1b222c;margin-bottom:4px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+  body.foto #saida{display:none}
+</style>
+</head>
+<body>
+<!-- A PRAÇA TÁTICA (14/09, dono: "o desafio é apenas um duelo simples, isso acontece em
+     um mapa na praça mesmo — o mapa da praça tático, com a árvore central, os portais e
+     barracas como obstáculos"). Abre o jogo de verdade, monta o duelo com
+     Engine.createDuelSala('praca', 0, …) — dois heróis de cada lado — no renderizador de
+     verdade, espera a arte da praça vestir e cobra pelo relatório da montagem
+     (Renderer.ultimaMontagemPraca): a árvore, os seis portais, as obras e as barracas
+     entraram, nenhuma casa '#' ou '=' ficou sem peça, as obras são a ARTE (não a
+     provisória), a árvore é alta mas não apaga o tabuleiro da câmera padrão.
+       ?foto=1        esconde o painel (para a foto)
+     window.__vista('padrao' | 'cima') enquadra a foto. -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  if (/[?&]foto=1/.test(location.search)) document.body.className = 'foto';
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra != null && extra !== '' ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome);
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · ')) : ('tudo passou (' + linhas.length + ')');
+    window.__fail = falhas.length;
+    window.__pronto = true;
+  }
+  // espera por TENTATIVAS, não por relógio: no headless o tempo é virtual
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 500);
+      })();
+    });
+  }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document;
+    espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 400)
+      .then(function () { return w.JOGO.DB.batizar('Prova Praca'); })
+      .then(function () {
+        var G = w.JOGO.Game, E = w.JOGO.Engine, P = w.JOGO.Progress;
+        var A = ['sumo', 'curandeiro'], B = ['bruxo', 'arqueiro'];
+        // a descida direta (bancada de teste: batalha na hora, com heróis que o save novo do
+        // sandbox tem) abre a tela de batalha; o estado passa a ser o do duelo na praça.
+        // 15/09: não pelo startDuel — o treino mudou de regra e recusava o save do sandbox
+        w.JOGO.UI.selection(['sumo', 'curandeiro']);
+        G.startRun(['sumo', 'curandeiro'], 'greenhouse', { direto: true });
+        return espera(function () { return G.screen === 'battle'; }, 400).then(function () {
+          // a ficha do Progress quando o herói existe; senão, a ficha mínima da classe
+          function payload(ids) {
+            var pl = null;
+            try { pl = P && P.battleParty && P.battleParty(ids); } catch (e) { pl = null; }
+            return ids.map(function (id, i) {
+              var p = pl && pl[i];
+              return (p && p.classId) ? p : { classId: id, heroId: id, level: 5 };
+            });
+          }
+          G.state = E.createDuelSala('praca', 0, payload(A), payload(B), { seed: 7 });
+          try { [].slice.call(d.querySelectorAll('button')).filter(function (b) { return /Entendi/.test(b.textContent); })[0].click(); } catch (e2) {}
+          var R = w.JOGO.Renderer;
+          // a montagem da praça com TODAS as obras de arte (a espera pede as que faltam)
+          return espera(function () {
+            var rel = R.ultimaMontagemPraca;
+            if (!rel) return false;
+            var ob = rel.obras;
+            return Object.keys(ob).length >= 5 && Object.keys(ob).every(function (k) { return ob[k] === 'arte'; }) ? rel : false;
+          }, 400).catch(function () { return R.ultimaMontagemPraca; });
+        });
+      })
+      .then(function (rel) {
+        var G = w.JOGO.Game, R = w.JOGO.Renderer, st = G.state;
+        check('o estado é o duelo na praça', st && st.dungeonId === 'praca' && st.duelSala === true);
+        check('dois heróis de cada lado',
+              st.units.filter(function (u) { return u.side === 'player'; }).length === 2 &&
+              st.units.filter(function (u) { return u.side === 'enemy'; }).length === 2);
+        check('o tabuleiro montou a praça (relatório exposto)', !!rel);
+        if (!rel) { fecha(); return; }
+        var p = rel.papeis;
+        check('UMA árvore no meio', p.arvore === 1, p.arvore);
+        check('os seis portais e as doze muretas', p.portal === 6 && p.portal_mureta === 12, p.portal + ' / ' + p.portal_mureta);
+        check('as quatro raízes e os seis bancos da calçada', p.raiz === 4 && p.banco_praca === 6, p.raiz + ' / ' + p.banco_praca);
+        check('Arena, Sede, Poço e Banco', p.arena === 1 && p.sede === 1 && p.poco === 1 && p.banco === 1);
+        check('as três barracas (forja, loteria, mercado)', p.forja === 1 && p.loteria === 1 && p.mercado === 1);
+        check('nenhuma casa ALTA (#) ficou sem peça', rel.altoSemPeca === 0, rel.altoSemPeca);
+        check('nenhuma casa BAIXA (=) ficou sem peça', rel.baixoSemPeca === 0, rel.baixoSemPeca);
+        // as casas cobertas batem com a legenda: 36 '#' + 30 '='
+        var nAlto = 0, nBaixo = 0;
+        st.grid.tiles.forEach(function (row) { row.forEach(function (t) { if (t.type === 'wall') nAlto++; else if (t.type === 'cover') nBaixo++; }); });
+        check('toda casa de obstáculo está debaixo de uma peça', rel.casasCobertas === nAlto + nBaixo,
+              rel.casasCobertas + ' de ' + (nAlto + nBaixo));
+        var ob = rel.obras;
+        check('as cinco obras são a ARTE da praça (não a provisória)',
+              ['praca_arvore', 'praca_arena', 'praca_sede', 'praca_banco', 'praca_poco'].every(function (k) { return ob[k] === 'arte'; }),
+              JSON.stringify(ob));
+        var usos = R.ultimaMontagem || {};
+        check('nenhum muro de calabouço foi plantado', !Object.keys(usos).some(function (k) { return /^(jd_|cs_)/.test(k); }),
+              Object.keys(usos).join(','));
+        // A ÁRVORE ALTA: mais alta que o muro, sem apagar o tabuleiro da câmera padrão
+        var arv = rel.arvore;
+        check('a árvore é mais alta que o muro alto', arv && arv.alt > 3.1 * 1.5, arv && arv.alt);
+        if (arv) {
+          var THREE = w.THREE, cam = R.camera();
+          var caixa = new THREE.Box3(new THREE.Vector3(arv.caixa.x0, arv.caixa.y0, arv.caixa.z0),
+                                     new THREE.Vector3(arv.caixa.x1, arv.caixa.y1, arv.caixa.z1));
+          // a copa não é caixa cheia: mede-se com a caixa encolhida a 80% na horizontal
+          var meio = caixa.getCenter(new THREE.Vector3()), tam = caixa.getSize(new THREE.Vector3());
+          caixa.setFromCenterAndSize(meio, new THREE.Vector3(tam.x * 0.8, tam.y, tam.z * 0.8));
+          var jogaveis = 0, escondidas = 0, ray = new THREE.Ray(), alvo = new THREE.Vector3(), hit = new THREE.Vector3();
+          for (var y = 0; y < st.grid.h; y++) for (var x = 0; x < st.grid.w; x++) {
+            if (st.grid.tiles[y][x].type !== 'floor') continue;
+            jogaveis++;
+            alvo.copy(R.world(x, y, 1.0));
+            ray.origin.copy(cam.position);
+            ray.direction.copy(alvo).sub(cam.position).normalize();
+            if (ray.intersectBox(caixa, hit) && hit.distanceTo(cam.position) < alvo.distanceTo(cam.position)) escondidas++;
+          }
+          var frac = escondidas / Math.max(1, jogaveis);
+          check('da câmera padrão a árvore esconde no máximo 8% das casas jogáveis', frac <= 0.08,
+                escondidas + ' de ' + jogaveis + ' = ' + (frac * 100).toFixed(1) + '%, alt ' + arv.alt + ' larg ' + arv.larg);
+          window.__arvore = { escondidas: escondidas, jogaveis: jogaveis, alt: arv.alt, larg: arv.larg };
+        }
+        /* 15/09: um mapa com `pecas` que este tabuleiro NÃO sabe vestir (o Salão da Sede,
+         * arenas.js 'sede') segue com o muro de sempre — nenhuma casa alta some. Só fora da
+         * foto (troca o tabuleiro). */
+        if (/[?&]foto=1/.test(location.search) || !w.JOGO.DATA.arena || !w.JOGO.DATA.arena('sede')) { fecha(); return; }
+        var E = w.JOGO.Engine, stP = G.state;
+        var heroisP = stP.units.filter(function (u) { return u.side === 'player'; }).map(function (u) { return { classId: u.classId, heroId: u.heroId, level: 5 }; });
+        var heroisE = stP.units.filter(function (u) { return u.side === 'enemy'; }).map(function (u) { return { classId: u.classId, heroId: u.heroId, level: 5 }; });
+        try { G.state = E.createDuelSala('sede', 0, heroisP, heroisE, { seed: 3 }); } catch (eS) { check('o Salão da Sede monta', false, eS.message); fecha(); return; }
+        espera(function () { return R.ultimaMontagemPraca === null && G.state.dungeonId === 'sede' ? true : false; }, 60, 250)
+          .then(function () {
+            var usoS = R.ultimaMontagem || {};
+            var pecasS = Object.keys(usoS).filter(function (k) { return /^praca:/.test(k); });
+            check('o Salão da Sede (peças desconhecidas) monta sem peça da praça e sem o relatório dela', pecasS.length === 0, pecasS.join(','));
+            check('... e o tabuleiro não quebrou (a montagem saiu)', Object.keys(usoS).length > 0 || R.isReady(), JSON.stringify(usoS).slice(0, 120));
+            G.state = stP;
+            fecha();
+          })
+          .catch(function () { check('o Salão da Sede remonta o tabuleiro', false, 'ultimaMontagemPraca=' + JSON.stringify(R.ultimaMontagemPraca)); G.state = stP; fecha(); });
+      })
+      .catch(function (e) { check('a prova rodou até o fim', false, e && e.message); fecha(); });
+  };
+
+  // o enquadramento das fotos (a câmera do jogador não é tocada pela prova)
+  window.__vista = function (qual) {
+    var R = f.contentWindow.JOGO.Renderer;
+    if (qual === 'cima') R.setCamera({ tilt: 0.2, dist: 58, ang: 0 });
+    else if (qual === 'lado') R.setCamera({ tilt: 1.2, dist: 30, ang: -Math.PI / 4 });
+    else R.recentrar();
+    return R.getCamera();
+  };
+})();
+</script>
+</body>
+</html>

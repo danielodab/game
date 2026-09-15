@@ -188,7 +188,10 @@
   // ====================================================== a praça
   var herois, relogio = 0, maxDe = {};
   function relogioParado(ms) { relogio = ms; V._relogio = function () { return relogio; }; }
-  function caixaPraca() { return doc.querySelector('.screen-hub.is-on .vida-bloco.is-praca'); }
+  // 14/09 (noite): a praça tem o cartão da vida sempre à vista (.vida-praca; a prova dele é tests/vida_praca.html)
+  function caixaPraca() { return doc.querySelector('.screen-hub.is-on .vida-praca'); }
+  function cartaoPraca(hid) { var c = caixaPraca(); return c ? c.querySelector('.vp-heroi[data-chave="' + hid + '"]') : null; }
+  function numPraca(hid) { var k = cartaoPraca(hid), n = k && k.querySelector('.vp-num'); return n ? n.textContent : ''; }
   function linhaVida(caixa, hid) { return caixa ? caixa.querySelector('.vida-heroi[data-chave="' + hid + '"]') : null; }
   function numVida(caixa, hid) { var r = linhaVida(caixa, hid); var n = r && r.querySelector('.vh-num'); return n ? n.textContent : ''; }
   function toca(el) { el.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); if (el.onclick) {} }
@@ -204,19 +207,19 @@
       U.showScreen('hub');
       return ate(function () { return U.telaAtual() === 'hub' && !!caixaPraca(); }, 60000);
     }).then(function (ok) {
-      check('a praça monta o quadro da vida, ESCONDIDO com todos cheios', ok && caixaPraca().hidden === true &&
+      check('a praça mostra o cartão da vida SEMPRE, também com todos cheios (100%)', ok && caixaPraca().hidden === false &&
+            herois.every(function (h) { return numPraca(h) === maxDe[h] + '/' + maxDe[h]; }) &&
             G.vidaNaEspera(herois).every(function (v) { return v.hp === v.max; }));
       // o fim de uma luta: o primeiro herói com 120 PV a menos
       V.fim(obj(herois[0], maxDe[herois[0]] - 120), obj(herois[0], maxDe[herois[0]]));
-      return ate(function () { return !caixaPraca().hidden && !!linhaVida(caixaPraca(), herois[0]); }, 4000);
+      return ate(function () { return numPraca(herois[0]) === (maxDe[herois[0]] - 120) + '/' + maxDe[herois[0]]; }, 4000);
     }).then(function (ok) {
       var cx = caixaPraca(), h0 = herois[0], mx = maxDe[h0];
-      check('o herói ferido aparece no quadro da praça com a barra e o PV (sem esperar tique: a Vida avisa)',
-            ok && numVida(cx, h0) === (mx - 120) + '/' + mx + ' PV' && cx.querySelectorAll('.vida-heroi').length === herois.length,
-            numVida(cx, h0));
+      check('o herói ferido aparece no cartão da praça com o PV (sem esperar tique: a Vida avisa)',
+            ok && cx.querySelectorAll('.vp-heroi').length === herois.length, numPraca(h0));
       check('... e diz quanto falta: "+1 PV a cada 2 s · cheio em 4:00"; o outro herói, "vida cheia"',
-            /\+1 PV a cada 2 s · cheio em 4:00/.test(linhaVida(cx, h0).textContent) &&
-            (herois.length < 2 || /vida cheia/.test(linhaVida(cx, herois[1]).textContent)), linhaVida(cx, h0).textContent);
+            /\+1 PV a cada 2 s · cheio em 4:00/.test(cartaoPraca(h0).title) &&
+            (herois.length < 2 || /vida cheia/.test(cartaoPraca(herois[1]).title)), cartaoPraca(h0).title);
       // o canto não tapa o cais nem o chat
       var rb = cx.getBoundingClientRect(), dock = doc.querySelector('.screen-hub.is-on .hub-dock'), chat = doc.querySelector('.hub-chat');
       var rd = dock ? dock.getBoundingClientRect() : null, rc = (chat && chat.offsetParent) ? chat.getBoundingClientRect() : null;
@@ -225,18 +228,18 @@
             [Math.round(rb.left), Math.round(rb.top), Math.round(rb.right), Math.round(rb.bottom)].join(',') +
             (rd ? ' cais ' + Math.round(rd.top) : '') + (rc ? ' chat ' + Math.round(rc.top) : ''));
       relogio += 10000;
-      return ate(function () { return numVida(caixaPraca(), h0) === (mx - 115) + '/' + mx + ' PV'; }, 3000);
+      return ate(function () { return numPraca(h0) === (mx - 115) + '/' + mx; }, 3000);
     }).then(function (ok) {
       var h0 = herois[0], mx = maxDe[h0];
-      check('10 s na praça: +5 PV na barra, sem recarregar a tela', ok, numVida(caixaPraca(), h0));
-      var larg = linhaVida(caixaPraca(), h0).querySelector('.vh-enche').style.width;
-      check('a largura da barra acompanha o PV', larg === Math.round(100 * (mx - 115) / mx) + '%', larg);
+      check('10 s na praça: +5 PV no cartão, sem recarregar a tela', ok, numPraca(h0));
+      var alt = cartaoPraca(h0).querySelector('.vp-cor-enche').style.height;
+      check('o coração enche até o % do PV', alt === Math.max(1, Math.min(99, Math.round(100 * (mx - 115) / mx))) + '%', alt);
       // uma volta com o relógio DE VERDADE
       V._relogio = null;
       V.fim(obj(h0, mx - 115), obj(h0, mx));
       var antes = mx - 115;
       return passo(4600).then(function () {
-        var hp = parseInt(numVida(caixaPraca(), h0), 10);
+        var hp = parseInt(numPraca(h0), 10);
         check('com o relógio de verdade a barra sobe AO VIVO (4,6 s = +2 PV)', hp >= antes + 2 && hp <= antes + 3, antes + ' → ' + hp);
         relogioParado(Date.now());
         V.fim(obj(h0, mx - 115), obj(h0, mx));
@@ -244,19 +247,19 @@
       });
     }).then(function () {
       var h0 = herois[0], mx = maxDe[h0];
-      var bs = linhaVida(caixaPraca(), h0).querySelectorAll('.vh-pocao');
+      var bs = caixaPraca().querySelectorAll('.vp-pocao');     // as poções vão ao herói do anel (o primeiro)
       check('na praça, os botões das poções que a conta tem, com a cura e a contagem', bs.length === 2 &&
             /\+30/.test(bs[0].textContent) && /×3/.test(bs[0].textContent) && /\+70/.test(bs[1].textContent) && /×5/.test(bs[1].textContent) &&
             !!bs[0].querySelector('canvas'), [].map.call(bs, function (b) { return b.textContent; }).join(' | '));
       check('o Game diz que se bebe aqui (fora da batalha)', G.podeBeberEspera(h0, MED) === null, G.podeBeberEspera(h0, MED));
-      clica(linhaVida(caixaPraca(), h0).querySelector('.vh-pocao[data-pocao="' + MED + '"]'));
-      return ate(function () { return P.consumivelVer(MED) === 4 && numVida(caixaPraca(), h0) === (mx - 45) + '/' + mx + ' PV'; }, 5000);
+      clica(caixaPraca().querySelector('.vp-pocao[data-pocao="' + MED + '"]'));
+      return ate(function () { return P.consumivelVer(MED) === 4 && numPraca(h0) === (mx - 45) + '/' + mx; }, 5000);
     }).then(function (ok) {
       var h0 = herois[0];
       check('tocar a Média na praça cura 70 PV naquele herói e gasta uma', ok && V.agora(h0).hp === maxDe[h0] - 45,
-            numVida(caixaPraca(), h0) + ' · ' + P.consumivelVer(MED));
+            numPraca(h0) + ' · ' + P.consumivelVer(MED));
       return ate(function () {
-        var b = linhaVida(caixaPraca(), h0).querySelector('.vh-pocao[data-pocao="' + MED + '"]');
+        var b = caixaPraca().querySelector('.vp-pocao[data-pocao="' + MED + '"]');
         return b && /×4/.test(b.textContent);
       }, 3000);
     }).then(function (ok) {
@@ -400,15 +403,15 @@
   // ====================================================== quem enche some
   function cheio() {
     U.showScreen('hub');
-    return ate(function () { return U.telaAtual() === 'hub' && caixaPraca() && !caixaPraca().hidden; }, 30000).then(function (ok) {
-      check('de volta à praça, os heróis a 30 PV aparecem no quadro', ok);
+    return ate(function () { return U.telaAtual() === 'hub' && caixaPraca() && numPraca(herois[0]) === '30/' + maxDe[herois[0]]; }, 30000).then(function (ok) {
+      check('de volta à praça, os heróis a 30 PV aparecem no cartão', ok, numPraca(herois[0]));
       // um herói que "subiu de nível": o registro tem o máximo velho (60), o de agora é maior
       var h0 = herois[0];
       V.fim(obj(h0, 50), obj(h0, 60));
       relogio += 10 * 60 * 1000;                    // dez minutos: todos enchem
-      return ate(function () { return caixaPraca().hidden; }, 4000);
+      return ate(function () { return herois.every(function (h) { var k = cartaoPraca(h); return k && k.classList.contains('is-cheio'); }); }, 4000);
     }).then(function (ok) {
-      check('quem enche some: o quadro da praça se esconde e o registro fica vazio', ok &&
+      check('quem enche sai do registro e o cartão da praça segue à vista com 100%', ok && !caixaPraca().hidden &&
             herois.every(function (h) { return V.agora(h) === null; }) && Object.keys(V._registro()).length === 0,
             JSON.stringify(V._registro()));
       var ok2 = G.startRun(herois.slice(), 'greenhouse');

@@ -321,12 +321,12 @@
     d.fase = 'escolhendo'; d.did = 'ana-hudd1'; d.eu = 'A'; d.chave = 'kkkkkkkk:kbkbkbkb';
     d.op = { id: 'bia', cx: 'cxbia', nome: 'Bia' }; d.prazo = J.Duelo._agora() + 90000; d.minha = null;
     U.openSheet('dueloRede');
-    check('(a ficha da escolha do duelo abre)', /duelo com Bia/.test(tituloFicha()), tituloFicha());
+    check('(a ficha da escolha do duelo abre)', /Desafio amistoso com Bia/.test(tituloFicha()), tituloFicha());
     var x = doc.querySelector('.ui-sheet.is-on .btn-close');
     if (x) x.click(); else U.closeSheet();
     check('(o ✕ fechou a ficha)', !fichaAberta());
     U.update(1.1);
-    check('23: com a minha dupla por escolher, a ficha do duelo VOLTA sozinha no tique', /duelo com Bia/.test(tituloFicha()), tituloFicha() || '(fechada)');
+    check('23: com a minha dupla por escolher, a ficha do duelo VOLTA sozinha no tique', /Desafio amistoso com Bia/.test(tituloFicha()), tituloFicha() || '(fechada)');
     U.closeSheet();
     J.Hub.aoAproximar({ tipo: 'arena', nome: 'Arena de Duelos' });
     check('23: o painel da Arena oferece "Voltar à escolha do duelo"', !!botao(painelAberto(), /Voltar à escolha do duelo/));

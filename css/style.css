@@ -849,11 +849,51 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
    painel do grupo da direita; desce um degrau quando a faixa dos eventos está no ar), nas telas
    de fim e na ficha do duelo em rede */
 .vida-bloco[hidden] { display: none; }
-.vida-bloco.is-praca { width: min(236px, calc(100% - 214px)); min-width: 168px; box-sizing: border-box;
-  max-height: max(120px, calc(100% - var(--sa-t, 0px) - 330px)); }
-.hub-evento:not(.is-off) ~ .vida-bloco.is-praca { top: calc(var(--sa-t, 0px) + 104px); }
-.vida-bloco.is-praca .vida-tit { font-size: 11px; }
-.vida-bloco.is-praca .vh-pocao { padding: 1px 6px 1px 2px; font-size: 10.5px; }
+/* 14/09 (noite): A VIDA NA PRAÇA (hud.js vidaPraca) — no lugar do quadro compacto que só aparecia
+   ferido. SEMPRE à vista no canto de cima à esquerda: um cartão por herói escolhido (a foto, o
+   coração que enche e muda de cor, "132/170" e o % pequeno) e, embaixo, as poções para quem tem o
+   anel dourado. O `top` vem MEDIDO do topo da praça (e da faixa dos eventos, quando cruza); a
+   largura deixa a coluna do painel do grupo da direita livre; o cais e o chat moram embaixo */
+.vida-praca { position: absolute; left: calc(var(--sa-l, 0px) + 12px); top: calc(var(--sa-t, 0px) + 58px); z-index: 5;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  max-width: calc(100% - 210px - var(--sa-l, 0px) - var(--sa-r, 0px)); }
+.vida-praca[hidden] { display: none; }
+.vp-cartoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.vp-heroi { display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 4px 10px 4px 4px; cursor: pointer;
+  border-radius: 12px; border: 1px solid rgba(240,234,216,.16); background: rgba(12,14,16,.84);
+  color: var(--text); font: inherit; text-align: left; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.vp-heroi.is-alvo { border-color: var(--gold, #ffc44d); box-shadow: 0 0 0 1px var(--gold, #ffc44d), 0 0 14px rgba(255,196,77,.28); }
+.vp-foto { flex: none; width: 40px; height: 40px; border-radius: 9px; overflow: hidden; background: #0a0d11; }
+.vp-foto > canvas, .vp-foto > .art-missing { width: 40px !important; height: 40px !important; display: block; }
+.vp-cor { position: relative; flex: none; width: 24px; height: 22px; }
+.vp-cor svg { position: absolute; left: 0; bottom: 0; width: 24px; height: 22px; display: block; }
+.vp-cor-fundo svg { fill: rgba(255,255,255,.08); stroke: rgba(255,130,120,.6); stroke-width: 2.2; }
+.vp-cor-enche { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; overflow: hidden; transition: height .25s linear; }
+.vp-cor-enche svg { fill: #e0524a; }
+.vp-heroi.is-baixo .vp-cor-enche svg { fill: #f08a3c; }
+.vp-heroi.is-cheio .vp-cor-enche svg { fill: #ff4d5e; }
+.vp-heroi.is-cheio .vp-cor { filter: drop-shadow(0 0 4px rgba(255,77,94,.65)); }
+.vp-heroi.is-zero .vp-cor-fundo svg { stroke: #8a8f96; }
+.vp-heroi.is-zero .vp-cor { animation: vpPulsa 1s ease-in-out infinite; }
+@keyframes vpPulsa { 50% { transform: scale(.84); } }
+.vp-tx { display: flex; flex-direction: column; gap: 1px; line-height: 1.05; min-width: 0; }
+.vp-num { font: 700 13px var(--ui-sans); color: #ffd9d2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vp-pct { font: 400 10.5px var(--ui-sans); color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vp-heroi.is-cheio .vp-num { color: #f0ead8; }
+.vp-heroi.is-cheio .vp-pct { color: #7fe08a; }
+.vp-heroi.is-zero .vp-num, .vp-heroi.is-zero .vp-pct { color: #ff8a8a; }
+.vp-pocoes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.vp-pocoes .vh-pocao { min-height: 30px; }
+.vp-para { font: 400 11px var(--ui-sans); color: #dbe4ee; text-shadow: 0 1px 2px #000; }
+.vp-para b { color: var(--gold, #ffc44d); }
+.vp-sem { max-width: 230px; color: #dbe4ee; text-shadow: 0 1px 2px #000; }
+@media (max-width: 480px) {
+  .vida-praca { max-width: calc(100% - 84px - var(--sa-l, 0px) - var(--sa-r, 0px)); }
+  .vp-heroi { min-height: 44px; gap: 5px; padding: 3px 8px 3px 3px; }
+  .vp-foto, .vp-foto > canvas, .vp-foto > .art-missing { width: 36px !important; height: 36px !important; }
+  .vp-num { font-size: 12px; }
+  .vp-pocoes .vh-pocao { min-height: 34px; }
+}
 .vida-bloco.is-fim { width: min(420px, 100%); margin: 0 auto 10px; box-sizing: border-box; text-align: left; }
 .vida-bloco.is-duelo { margin: 8px 0; }
 .av-carta.is-zero { opacity: .6; }
@@ -2759,3 +2799,35 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .inativo-cx h2 { margin: 0; font: 700 19px var(--ui-serif); color: var(--gold); }
 .inativo-cx p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+
+/* ==========================================================================
+   A ARENA E O CAMPO DE PVP (14/09): o quadro de inscritos, a escolha dos dois
+   heróis em ordem, o adversário encontrado e o selo pequeno de quem espera.
+   ========================================================================== */
+.arena-bloco { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.arena-off { color: #e8b86a; }
+.arena-selo {
+  pointer-events: auto; position: absolute; right: 10px; top: 58px; z-index: 6;
+  padding: 4px 10px; border-radius: 999px; font: 600 11px var(--ui-sans, system-ui);
+  color: #ffe2a0; background: rgba(60,20,24,.82); border: 1px solid rgba(224,128,152,.55);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45); cursor: pointer; max-width: 70vw;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dupla-escolha .av-carta { position: relative; }
+.dupla-ordem {
+  position: absolute; top: 4px; left: 4px; min-width: 22px; padding: 1px 5px; border-radius: 999px;
+  font: 700 11px var(--ui-sans, system-ui); color: #1b1408; background: var(--gold, #e8c25a);
+}
+.aq-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.aq-linha {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--rad-s, 8px);
+  border: 1px solid var(--line2, #2b3542); background: rgba(255,255,255,.03);
+}
+.aq-linha.is-eu { border-color: rgba(232,194,90,.55); }
+.aq-linha.is-fora { opacity: .5; }
+.aq-tx { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.35; }
+.aq-nome small { color: var(--dim); font-weight: 400; }
+.aq-dupla { color: #e8eef6; }
+.aq-desde { color: var(--dim); font-size: 11px; }
+.aq-tag { font-size: 11px; color: var(--gold, #e8c25a); white-space: nowrap; }
+.coroa-trava { cursor: not-allowed; }

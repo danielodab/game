@@ -1181,6 +1181,7 @@ var JOGO = (typeof window !== 'undefined')
       duplaMinha: lado === 'player' ? duplas.a : duplas.b,
       duplaDele: lado === 'player' ? duplas.b : duplas.a,
       arena: info.arena || (rede && rede.arena) || null,
+      modo: info.modo || null,             // 14/09: 'desafio' | 'arena' | 'campo' — a tela diz se valeu coroa e para onde volta
       clima: st.weather, seValesse: seValesse,
       // os campos do duelo de treino: a tela de hoje continua de pé
       venceuA: fase === 'won', duplaA: duplas.a, duplaB: duplas.b

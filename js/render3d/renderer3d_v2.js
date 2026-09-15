@@ -85,7 +85,11 @@ var JOGO = (typeof window !== 'undefined')
     forge:    { fog: '#5e2510', sky: '#e09668', gnd: '#46205c', sun: '#ffd8a0', sunI: 1.08, hemiI: 0.78, rim: '#ff9a5a' },
     scaffold: { fog: '#454a5c', sky: '#c8d2ea', gnd: '#3a3550', sun: '#eef7f5', sunI: 1.12, hemiI: 0.88, rim: '#cfe4ff' },
     mine:     { fog: '#403322', sky: '#c8a878', gnd: '#2e2440', sun: '#ffe0a8', sunI: 1.00, hemiI: 0.76, rim: '#c9a227' },
-    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.08, hemiI: 0.84, rim: '#ffd166' }
+    heart:    { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.08, hemiI: 0.84, rim: '#ffd166' },
+    /* 14/09 (dono: "o duelo deve ocorrer no mapa da praça"): a luz de DIA da praça 3D
+     * (hub3d montaCena: céu 0xcfe8d8, sol 0xffe9c4). A névoa é o verde-acinzentado da
+     * grama longe — a do jardim (#3d5c30) deixava a praça com cara de estufa. */
+    praca:    { fog: '#56684c', sky: '#cfe8d8', gnd: '#2e3a30', sun: '#ffe9c4', sunI: 1.10, hemiI: 0.88, rim: '#fff0c8' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
 
@@ -207,8 +211,12 @@ var JOGO = (typeof window !== 'undefined')
   }
   function dungeonOf(st) {
     var D = DATA();
-    if (!D.dungeons || !st) return null;
-    for (var i = 0; i < D.dungeons.length; i++) if (D.dungeons[i].id === st.dungeonId) return D.dungeons[i];
+    if (!st) return null;
+    var i;
+    for (i = 0; D.dungeons && i < D.dungeons.length; i++) if (D.dungeons[i].id === st.dungeonId) return D.dungeons[i];
+    // 14/09: o mapa de luta que não é calabouço (js/core/data/arenas.js — a praça). Sem
+    // isto o duelo na praça caía no tema do jardim e na paleta de reserva.
+    for (i = 0; D.arenas && i < D.arenas.length; i++) if (D.arenas[i] && D.arenas[i].id === st.dungeonId) return D.arenas[i];
     return null;
   }
   function themeOf(st) {
@@ -501,7 +509,8 @@ var JOGO = (typeof window !== 'undefined')
     forge:    ['keg', 'box_big', 'crates'],
     scaffold: ['crates', 'barrel', 'chest'],
     mine:     ['crates', 'barrel', 'rubble'],
-    heart:    ['chest', 'crates', 'barrel']
+    heart:    ['chest', 'crates', 'barrel'],
+    praca:    ['crates', 'barrel', 'chest']      // 14/09: só vale para casa baixa SEM peça
   };
   function hashXY(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
   function lighten(hex, k) {
@@ -806,10 +815,419 @@ var JOGO = (typeof window !== 'undefined')
     return fila.i === 1 + (fila.semente % miolo);
   }
 
+  // ======================================================= A PRAÇA TÁTICA (14/09)
+  //
+  // Dono: "o desafio é apenas um duelo simples, isso acontece em um mapa na praça mesmo —
+  // o mapa da praça tático, com a árvore central, os portais e barracas como obstáculos".
+  //
+  // O mapa em grade mora em js/core/data/arenas.js, com a mesma legenda de um calabouço,
+  // e traz `pecas` dizendo o que cada bloco É. Aqui cada peça veste com a arte da praça
+  // 3D (models-praca: praca_arvore, praca_arena…) NO LUGAR do muro de calabouço, e o chão
+  // é o da praça: lajotas cinza no jogável e grama baixa no '~'. Sala sem `pecas` não
+  // passa por nada disto.
+  //
+  // A REGRA DO TABULEIRO continua mandando na arte, e não o contrário: o que bloqueia
+  // visão ('#') tem de PARECER alto e o que é cobertura baixa ('=') tem de parecer baixo.
+  // Por isso as obras entram na PEGADA delas (a largura da pegada manda) e ganham um piso
+  // de altura — a Arena de 4×8 m, escalada só pela largura, sairia com 1,6 m, e um bloco
+  // que corta a linha de visão não pode ser mais baixo que um herói. As barracas, que na
+  // praça têm 6 m de toldo, NÃO vestem a obra: achatada a 0,9 m ela vira um tapete
+  // listrado. Viram o que uma barraca tem na altura do joelho — a bancada da forja, o
+  // balcão da sorte, os caixotes do mercadinho.
+  var OBRA_PRACA = {
+    /* A ÁRVORE: 3×3 casas (6 m) com a copa podendo passar 25% da pegada (ela fica
+     * acima da cabeça de todo mundo). A ALTURA é a conta da câmera padrão (tilt 0,98,
+     * dist 22): a sombra de visada de uma coisa de altura h cobre h·tan(0,98) ≈ 1,5·h
+     * atrás dela. Com 17 m, como na praça, a árvore apagaria a metade norte do mapa;
+     * com 6,4 ela esconde ~4,8 m (duas casas e pouco) — alta ao lado do muro de 3,1, e o
+     * tabuleiro atrás dela continua na tela. A prova mede as casas escondidas.
+     * 15/09 (foto): a arte é mais larga que alta (altura = 54% da largura), e a copa
+     * presa a 7,5 m deixava a árvore com 4 m — pouco acima do muro. O piso de 6 m (com
+     * esticão de no máximo 1,6×) a devolve ao porte de marco. */
+    arvore: { chave: 'praca_arvore', sobra: 1.25, altMin: 6.0, altMax: 6.4, estMax: 1.6, rot: 2.4 },
+    // a Arena e a Sede (2×4): a pegada manda na largura; o piso é a parede alta
+    arena:  { chave: 'praca_arena', sobra: 1.08, altMin: WALL_H, altMax: WALL_H * 1.45, estMax: 2.4 },
+    sede:   { chave: 'praca_sede',  sobra: 1.08, altMin: WALL_H, altMax: WALL_H * 1.45, estMax: 2.4 },
+    banco:  { chave: 'praca_banco', sobra: 1.08, altMin: WALL_H, altMax: WALL_H * 1.35, estMax: 2.4 },
+    /* o Poço é baixo e largo (altura = 46% da largura): numa casa ele teria 0,9 m. A
+     * boca passa 20% da casa e a armação estica até 85% do muro — lê como poço com
+     * telhado, e não como balde */
+    poco:   { chave: 'praca_poco',  sobra: 1.2,  altMin: WALL_H * 0.85, altMax: WALL_H * 1.2, estMax: 2.6 }
+  };
+  /* SÓ AS PEÇAS QUE ESTE TABULEIRO SABE VESTIR tomam casa. Um mapa com `pecas` de outro
+   * papel (15/09: o Salão da Sede, arenas.js 'sede' — parede_salao, trono, pilar…) segue
+   * com o muro de sempre nessas casas; sem este filtro a peça desconhecida apagava o muro
+   * e deixava a casa alta invisível. */
+  var PAPEIS_PRACA = { arvore: 1, arena: 1, sede: 1, banco: 1, poco: 1, portal: 1, portal_mureta: 1,
+                       banco_praca: 1, raiz: 1, forja: 1, loteria: 1, mercado: 1 };
+  function pecasDaSala(st) {
+    var dg = dungeonOf(st);
+    var room = dg && dg.rooms && dg.rooms[st.roomIndex];
+    var lista = (room && Array.isArray(room.pecas))
+      ? room.pecas.filter(function (pc) { return pc && PAPEIS_PRACA[pc.papel] === 1; }) : [];
+    return lista.length ? lista : null;
+  }
+  // um material por chave dentro da montagem: o mergeStatic funde por material (uuid),
+  // então seis bancos de pedra viram UMA chamada de desenho
+  function pracaMat(cache, chave, cor, extra) {
+    if (cache[chave]) return cache[chave];
+    var o = { color: col3(cor), roughness: 0.92, metalness: 0 };
+    if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) o[k] = extra[k];
+    cache[chave] = new THREE.MeshStandardMaterial(o);
+    return cache[chave];
+  }
+  // A MESMA PEDRA E A MESMA GRAMA DA PRAÇA: o desenho vem do hub3d (Hub.pintaLajotas /
+  // pintaGrama só pintam um canvas 2D; não precisam do Acampamento aberto). Sem o hub3d
+  // carregado (página de teste avulsa) o chão sai na cor chapada — nunca quebra.
+  var texPracaCache = {};
+  function texturaPraca(tipo) {
+    if (texPracaCache[tipo]) return texPracaCache[tipo];
+    var Hb = JOGO.Hub;
+    var pinta = Hb && (tipo === 'grama' ? Hb.pintaGrama : Hb.pintaLajotas);
+    var cv = document.createElement('canvas');
+    if (tipo === 'listras') {
+      // a lona da Barraquinha da Sorte (as mesmas listras do hub3d montaLoteria)
+      cv.width = 128; cv.height = 32;
+      var c2 = cv.getContext('2d');
+      for (var i = 0; i < 8; i++) { c2.fillStyle = i % 2 ? '#e8c25a' : '#a4232b'; c2.fillRect(i * 16, 0, 16, 32); }
+    } else {
+      if (!pinta) return null;
+      cv.width = cv.height = 256;
+      try { pinta(cv.getContext('2d')); } catch (e) { return null; }
+    }
+    var tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
+    texPracaCache[tipo] = tex;
+    return tex;
+  }
+  function malha(geo, mat, x, y, z) {
+    var m = new THREE.Mesh(geo, mat);
+    m.position.set(x || 0, y || 0, z || 0);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  }
+
+  /* O CHÃO DA PRAÇA: um gramado grande por baixo de tudo (é o '~' e o mundo em volta,
+   * 16 cm abaixo da pedra — terra baixa, sem buraco de lava nem água), as lajotas numa
+   * malha só sobre as casas jogáveis e um meio-fio escuro onde a pedra encontra a grama.
+   * O uv é MUNDO/4, como na praça: o tile de 4 m tem quatro pedras por fileira, então
+   * cada casa de 2 m mostra duas — e a pedra não se repete casa a casa. Origem = casa
+   * (0,0), como o resto do kit. */
+  function chaoDaPraca(st, w, h, cache) {
+    var g = new THREE.Group();
+    var SIZE = CELL * 64;
+    var cx = (w - 1) / 2 * CELL, cz = (h - 1) / 2 * CELL;
+    var texG = texturaPraca('grama');
+    var geoG = new THREE.PlaneGeometry(SIZE, SIZE);
+    geoG.rotateX(-Math.PI / 2);
+    var uvG = geoG.attributes.uv, posG = geoG.attributes.position;
+    for (var i = 0; i < uvG.count; i++) uvG.setXY(i, (posG.getX(i) + cx) / 4, -(posG.getZ(i) + cz) / 4);
+    var grama = malha(geoG, texG ? pracaMat(cache, 'grama', '#dcdcdc', { map: texG, roughness: 1 })
+                                 : pracaMat(cache, 'grama', '#4c7a34'), cx, -0.16, cz);
+    grama.castShadow = false;
+    g.add(grama);
+
+    function eChao(x, y) {
+      if (x < 0 || y < 0 || x >= w || y >= h) return false;
+      return tileKind(gridTile(st, x, y)) !== 'hole';
+    }
+    var pos = [], uv = [], nor = [], idx = [];
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      if (!eChao(x, y)) continue;
+      var x0 = (x - 0.5) * CELL, x1 = (x + 0.5) * CELL, z0 = (y - 0.5) * CELL, z1 = (y + 0.5) * CELL;
+      var b = pos.length / 3;
+      pos.push(x0, 0, z0, x0, 0, z1, x1, 0, z1, x1, 0, z0);
+      uv.push(x0 / 4, -z0 / 4, x0 / 4, -z1 / 4, x1 / 4, -z1 / 4, x1 / 4, -z0 / 4);
+      nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);      // anti-horário visto de cima: a face é a de cima
+    }
+    if (pos.length) {
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      var texL = texturaPraca('lajotas');
+      var laj = malha(geo, texL ? pracaMat(cache, 'lajota', '#e6e6e6', { map: texL, roughness: 1 })
+                                : pracaMat(cache, 'lajota', '#77736a'));
+      laj.castShadow = false;
+      g.add(laj);
+    }
+    // o meio-fio: 26 cm de pedra escura em cada aresta de fronteira (do topo da lajota
+    // até abaixo da grama — fecha o degrau de 16 cm, que de lado mostrava o vão)
+    var matFio = pracaMat(cache, 'meiofio', '#2f3338', { roughness: 1 });
+    var geoX = new THREE.BoxGeometry(CELL + 0.26, 0.28, 0.26), geoZ = new THREE.BoxGeometry(0.26, 0.28, CELL + 0.26);
+    for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
+      if (!eChao(xx, yy)) continue;
+      if (!eChao(xx, yy - 1)) g.add(malha(geoX, matFio, xx * CELL, -0.06, (yy - 0.5) * CELL));
+      if (!eChao(xx, yy + 1)) g.add(malha(geoX, matFio, xx * CELL, -0.06, (yy + 0.5) * CELL));
+      if (!eChao(xx - 1, yy)) g.add(malha(geoZ, matFio, (xx - 0.5) * CELL, -0.06, yy * CELL));
+      if (!eChao(xx + 1, yy)) g.add(malha(geoZ, matFio, (xx + 0.5) * CELL, -0.06, yy * CELL));
+    }
+    return g;
+  }
+
+  /* A OBRA NA PEGADA: gira primeiro (medir antes de girar desloca o centro — o tombo de
+   * eixo de sempre), mede, escala pela LARGURA da pegada (x e z iguais, sem deformar a
+   * planta) e só então acerta a altura dentro de [altMin, altMax] — o esticão vertical
+   * tem teto (`estMax`) para a obra não virar agulha. Assenta pelo pé e centra. */
+  function obraNaPegada(chave, pw, ph, rotY, o) {
+    var cena = null;
+    try { cena = (M && M.rawScene) ? M.rawScene(chave) : null; } catch (e) { cena = null; }
+    if (!cena) return null;
+    var giro = new THREE.Group();
+    giro.add(cena.clone(true));
+    giro.rotation.y = rotY || 0;
+    giro.updateMatrixWorld(true);
+    var bb = new THREE.Box3().setFromObject(giro);
+    var bx = bb.max.x - bb.min.x, by = bb.max.y - bb.min.y, bz = bb.max.z - bb.min.z;
+    if (!(bx > 0.01 && by > 0.01 && bz > 0.01)) return null;
+    var sobra = o.sobra || 1;
+    var k = Math.min(pw * sobra / bx, ph * sobra / bz);
+    var ky = k;
+    if (o.altMax && by * ky > o.altMax) ky = o.altMax / by;
+    if (o.altMin && by * ky < o.altMin) ky = Math.min(o.altMin / by, k * (o.estMax || 1));
+    giro.scale.set(k, ky, k);
+    giro.updateMatrixWorld(true);
+    bb = new THREE.Box3().setFromObject(giro);
+    giro.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    giro.traverse(function (n) { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+    var berco = new THREE.Group();
+    berco.add(giro);
+    berco.userData.chave = chave;
+    return { no: berco, alt: bb.max.y - bb.min.y, larg: bb.max.x - bb.min.x, prof: bb.max.z - bb.min.z };
+  }
+
+  /* A OBRA QUE AINDA NÃO DECODIFICOU (no jogo servido o GLB pode descer depois do
+   * tabuleiro): um volume de pedra do tamanho da pegada, na altura do muro — a regra já
+   * vale na primeira foto. A arte troca quando chegar (esperaObrasDaPraca). */
+  function provisoriaDaPraca(papel, pw, ph, cache) {
+    var g = new THREE.Group();
+    if (papel === 'arvore') {
+      g.add(malha(new THREE.CylinderGeometry(0.55, 0.8, 3.2, 10), pracaMat(cache, 'tronco', '#5b4330'), 0, 1.6, 0));
+      var copa = malha(new THREE.SphereGeometry(2.6, 14, 10), pracaMat(cache, 'copa', '#4f7d3a'), 0, 4.2, 0);
+      copa.scale.y = 0.72;
+      g.add(copa);
+      return g;
+    }
+    var alt = papel === 'poco' ? WALL_H * 0.85 : WALL_H;
+    g.add(malha(new THREE.BoxGeometry(pw * 0.9, alt, ph * 0.9), pracaMat(cache, 'obra-pedra', '#6d655a'), 0, alt / 2, 0));
+    g.add(malha(new THREE.BoxGeometry(pw * 0.96, 0.2, ph * 0.96), pracaMat(cache, 'obra-topo', '#4f4a40'), 0, alt + 0.1, 0));
+    return g;
+  }
+
+  /* O PORTAL: o anel de pedra da praça (hub3d montaPortais) com o miolo aceso na cor do
+   * Fecho de `ordem` e o halo do kit. Numa casa: o topo do aro fica na altura do muro
+   * (WALL_H), e o aro PASSA um pouco para as muretas dos lados — que são parte da mesma
+   * construção, e é por isso que ele corre no eixo delas. Portal fechado: miolo apagado
+   * e o X vermelho, como na praça. */
+  function portalDaPraca(ordem, eixoZ, cache) {
+    var D = DATA(), ds = D.dungeons || [], dg = ds[ordem] || null;
+    var cor = (JOGO.Hub && JOGO.Hub.corDoTema) ? JOGO.Hub.corDoTema(dg && dg.theme) : '#d8dee4';
+    var fechado = !!(dg && D.portalFechado && D.portalFechado(dg.id));
+    var g = new THREE.Group();
+    g.add(malha(new THREE.CylinderGeometry(0.92, 1.06, 0.34, 20), pracaMat(cache, 'portal-base', '#4a443c'), 0, 0.17, 0));
+    var R0 = 1.12, T0 = 0.22, cy = WALL_H - R0 - T0;
+    g.add(malha(new THREE.TorusGeometry(R0, T0, 10, 36), pracaMat(cache, 'portal-pedra', '#5a5348'), 0, cy, 0));
+    // os dois pés que prendem o aro na base (sem eles o anel boiava)
+    [-0.55, 0.55].forEach(function (px) {
+      g.add(malha(new THREE.BoxGeometry(0.3, cy - 0.9, 0.34), pracaMat(cache, 'portal-pedra', '#5a5348'), px, 0.34 + (cy - 0.9) / 2 - 0.02, 0));
+    });
+    var chaveM = 'portal-miolo|' + (fechado ? 'fechado' : cor);
+    if (!cache[chaveM]) {
+      cache[chaveM] = new THREE.MeshBasicMaterial({ color: col3(fechado ? '#3a3f44' : cor), transparent: true,
+        opacity: fechado ? 0.3 : 0.74, side: THREE.DoubleSide, depthWrite: false });
+    }
+    var miolo = new THREE.Mesh(new THREE.CircleGeometry(R0 - 0.1, 32), cache[chaveM]);
+    miolo.position.y = cy;
+    g.add(miolo);
+    if (fechado) {
+      [Math.PI / 4, -Math.PI / 4].forEach(function (rz) {
+        var barra = malha(new THREE.BoxGeometry(1.8, 0.22, 0.08), pracaMat(cache, 'portal-x', '#ff2e2e', { emissive: col3('#5a0808') }), 0, cy, 0.06);
+        barra.rotation.z = rz;
+        g.add(barra);
+      });
+    } else {
+      var K = kit();
+      if (K && K.makeHalo) {
+        try { var halo = K.makeHalo(cor, 2.4, 0.42); halo.position.y = cy; g.add(halo); } catch (eH) {}
+      }
+    }
+    if (eixoZ) g.rotation.y = Math.PI / 2;
+    return g;
+  }
+  // a mureta dos dois lados do portal: pedra baixa (cobertura), no eixo do arco
+  function muretaDaPraca(eixoZ, cache) {
+    var g = new THREE.Group(), alt = LOW_H * 0.9;
+    g.add(malha(new THREE.BoxGeometry(CELL * 1.02, alt, 0.62), pracaMat(cache, 'portal-pedra', '#5a5348'), 0, alt / 2, 0));
+    g.add(malha(new THREE.BoxGeometry(CELL * 1.06, 0.1, 0.74), pracaMat(cache, 'mureta-topo', '#6d655a'), 0, alt + 0.05, 0));
+    if (eixoZ) g.rotation.y = Math.PI / 2;
+    return g;
+  }
+  // o banco de pedra da calçada: assento, dois pés e o encosto do lado de fora — 0,97 m
+  function bancoDePedra(rotY, cache) {
+    var g = new THREE.Group();
+    var pedra = pracaMat(cache, 'banco-pedra', '#8d867a'), pe = pracaMat(cache, 'banco-pe', '#6d655a');
+    g.add(malha(new THREE.BoxGeometry(1.7, 0.14, 0.56), pedra, 0, 0.5, 0.04));
+    [-0.62, 0.62].forEach(function (px) { g.add(malha(new THREE.BoxGeometry(0.24, 0.44, 0.46), pe, px, 0.22, 0.04)); });
+    g.add(malha(new THREE.BoxGeometry(1.7, 0.44, 0.12), pedra, 0, 0.75, -0.26));
+    g.rotation.y = rotY;
+    return g;
+  }
+  /* a RAIZ da Árvore aflorando na lajota: três arcos baixos (até 0,62 m) correndo para
+   * FORA do tronco — a direção diz de onde ela vem. Local +x = para fora. */
+  function raizDaArvore(ux, uz, cache) {
+    var g = new THREE.Group(), mat = pracaMat(cache, 'raiz', '#5b4330', { roughness: 1 });
+    [[-0.5, 0.62, 0.17], [0.05, 0.46, 0.13], [0.52, 0.34, 0.1]].forEach(function (r, i) {
+      var t = r[0], alto = r[1];
+      var curva = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-1.05, -0.08, t * 0.6), new THREE.Vector3(-0.4, alto, t),
+        new THREE.Vector3(0.35, alto * 0.72, t * 1.1), new THREE.Vector3(1.0, -0.08, t * 1.25 + (i - 1) * 0.1)
+      ]);
+      g.add(malha(new THREE.TubeGeometry(curva, 14, r[2], 7, false), mat));
+    });
+    g.rotation.y = Math.atan2(-uz, ux);
+    return g;
+  }
+  /* AS BARRACAS COMO COBERTURA BAIXA — o que uma barraca tem na altura do joelho, no
+   * eixo comprido da pegada (local x). Tudo abaixo de 1,15 m: um herói (~2,05) vê por
+   * cima, e é isso que a casa '=' promete. */
+  function barracaDaPraca(papel, pw, ph, cache) {
+    var g = new THREE.Group();
+    var L = Math.max(pw, ph);
+    var madeira = pracaMat(cache, 'madeira', '#6b4a2e');
+    if (papel === 'forja') {
+      // a bancada de pedra do ferreiro, a bigorna numa ponta e o braseiro na outra
+      g.add(malha(new THREE.BoxGeometry(L * 0.86, 0.66, 0.8), pracaMat(cache, 'forja-pedra', '#5c574d'), 0, 0.33, 0));
+      g.add(malha(new THREE.BoxGeometry(L * 0.9, 0.12, 0.92), madeira, 0, 0.72, 0));
+      var ferro = pracaMat(cache, 'ferro', '#3a3d42', { metalness: 0.35, roughness: 0.6 });
+      g.add(malha(new THREE.BoxGeometry(0.3, 0.18, 0.24), ferro, -L * 0.26, 0.87, 0));
+      g.add(malha(new THREE.BoxGeometry(0.66, 0.16, 0.3), ferro, -L * 0.26, 1.04, 0));
+      g.add(malha(new THREE.CylinderGeometry(0.34, 0.26, 0.16, 12), ferro, L * 0.26, 0.86, 0));
+      g.add(malha(new THREE.CylinderGeometry(0.29, 0.29, 0.05, 12),
+        pracaMat(cache, 'brasa', '#2a0a06', { emissive: col3('#ff5a1a'), emissiveIntensity: 1.1 }), L * 0.26, 0.95, 0));
+    } else if (papel === 'loteria') {
+      // o balcão de madeira com a lona listrada na frente e três caixas de prêmio
+      g.add(malha(new THREE.BoxGeometry(L * 0.92, 0.82, 0.8), madeira, 0, 0.41, 0));
+      var texLi = texturaPraca('listras');
+      if (texLi) {
+        var chaveLi = 'lona';
+        if (!cache[chaveLi]) cache[chaveLi] = new THREE.MeshStandardMaterial({ map: texLi, roughness: 0.95 });
+        [0.415, -0.415].forEach(function (pz) {
+          g.add(malha(new THREE.BoxGeometry(L * 0.9, 0.5, 0.03), cache[chaveLi], 0, 0.46, pz));
+        });
+      }
+      [['#c94f6d', -L * 0.3], ['#e8c25a', 0], ['#4a7d96', L * 0.3]].forEach(function (c) {
+        g.add(malha(new THREE.BoxGeometry(0.34, 0.26, 0.34), pracaMat(cache, 'premio' + c[0], c[0]), c[1], 0.95, 0));
+      });
+    } else {
+      // o mercadinho: caixotes, barril e baú do kit, numa fileira; sem kit, caixas
+      var K = kit(), kinds = ['crates', 'barrel', 'chest', 'crates'];
+      for (var i = 0; i < kinds.length; i++) {
+        var px = (i - (kinds.length - 1) / 2) * (L / kinds.length);
+        var prop = null;
+        try { prop = K ? K.buildProp('garden', kinds[i], 11 + i * 5) : null; } catch (eK) { prop = null; }
+        if (prop) { fitHeight(prop, i === 1 ? 1.0 : 0.85, CELL * 0.5); prop.position.set(px, 0, (i % 2) ? 0.12 : -0.1); }
+        else prop = malha(new THREE.BoxGeometry(0.8, 0.8, 0.8), madeira, px, 0.4, 0);
+        g.add(prop);
+      }
+    }
+    if (ph > pw) g.rotation.y = Math.PI / 2;
+    return g;
+  }
+
+  /* Monta UMA peça no centro da pegada dela. Anota no relatório o que entrou e se a obra
+   * foi a ARTE ou a provisória. `pecas` é a lista inteira (o portal procura as muretas
+   * dele para saber o eixo). */
+  function montaPecaDaPraca(pc, pecas, cache, rel) {
+    var pw = (pc.w || 1) * CELL, ph = (pc.h || 1) * CELL;
+    var cxC = pc.x + ((pc.w || 1) - 1) / 2, cyC = pc.y + ((pc.h || 1) - 1) / 2;
+    var mx = (gridW - 1) / 2, my = (gridH - 1) / 2;
+    var ang = Math.atan2(mx - cxC, my - cyC);                      // de frente para o meio
+    var rot90 = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);   // na grade, de 90 em 90°
+    var no = null, obra = OBRA_PRACA[pc.papel];
+    function eixoZDoPortal(papelOutro) {
+      for (var i = 0; i < pecas.length; i++) {
+        var o = pecas[i];
+        if (o.papel === papelOutro && o.ordem === pc.ordem) return o.x === pc.x;
+      }
+      return false;
+    }
+    if (obra) {
+      var f = obraNaPegada(obra.chave, pw, ph, pc.papel === 'arvore' ? obra.rot : rot90, obra);
+      if (f) {
+        no = f.no;
+        rel.obras[obra.chave] = 'arte';
+        if (pc.papel === 'arvore') {
+          var larg = Math.max(f.larg, f.prof);
+          rel.arvore = { alt: +f.alt.toFixed(2), larg: +larg.toFixed(2),
+            caixa: { x0: wx(cxC) - f.larg / 2, x1: wx(cxC) + f.larg / 2, y0: 0, y1: f.alt,
+                     z0: wz(cyC) - f.prof / 2, z1: wz(cyC) + f.prof / 2 } };
+        }
+      } else {
+        no = provisoriaDaPraca(pc.papel, pw, ph, cache);
+        rel.obras[obra.chave] = 'provisoria';
+        if (rel.pendentes.indexOf(obra.chave) < 0) rel.pendentes.push(obra.chave);
+      }
+    } else if (pc.papel === 'portal') {
+      no = portalDaPraca(pc.ordem | 0, eixoZDoPortal('portal_mureta'), cache);
+    } else if (pc.papel === 'portal_mureta') {
+      no = muretaDaPraca(eixoZDoPortal('portal'), cache);
+    } else if (pc.papel === 'banco_praca') {
+      no = bancoDePedra(rot90, cache);
+    } else if (pc.papel === 'raiz') {
+      var ux = cxC - mx, uz = cyC - my, r = Math.hypot(ux, uz) || 1;
+      no = raizDaArvore(ux / r, uz / r, cache);
+    } else if (pc.papel === 'forja' || pc.papel === 'loteria' || pc.papel === 'mercado') {
+      no = barracaDaPraca(pc.papel, pw, ph, cache);
+    }
+    if (!no) return null;
+    no.position.set(cxC * CELL, 0, cyC * CELL);
+    rel.papeis[pc.papel] = (rel.papeis[pc.papel] || 0) + 1;
+    return no;
+  }
+
+  /* A ARTE QUE DESCE DEPOIS: pede as obras que faltaram ao carregador (Bundle.pede — o
+   * GLB fora do grupo que já desceu só vem se alguém pedir) e, quando a primeira chegar,
+   * derruba a chave do tabuleiro: o próximo quadro remonta a sala com a arte. Espera um
+   * respiro depois da primeira para as irmãs chegarem juntas (uma remontagem, não cinco).
+   * Uma montagem nova cancela a espera velha. 400 voltas: o relógio virtual do headless. */
+  var pracaEspera = 0;
+  function esperaObrasDaPraca(chaves) {
+    var minha = ++pracaEspera, voltas = 0, viu = 0;
+    try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(chaves.slice()); } catch (eB) {}
+    (function deNovo() {
+      if (minha !== pracaEspera || ++voltas > 400) return;
+      setTimeout(function () {
+        if (minha !== pracaEspera) return;
+        var chegaram = chaves.filter(function (ch) {
+          try { return !!(M && M.rawScene && M.rawScene(ch)); } catch (e) { return false; }
+        }).length;
+        if (chegaram === chaves.length || (chegaram > 0 && ++viu > 3)) { boardKey = null; return; }
+        deNovo();
+      }, 500);
+    })();
+  }
+  R._obrasDaPraca = OBRA_PRACA;       // a prova lê as alturas daqui, sem repetir número
+
   function buildBoardKit(st, pal, theme) {
     var K = kit();
     if (!K) return false;
     var w = gridW, h = gridH;
+    // 14/09: a praça tática — o que cada bloco é (arenas.js `pecas`) e o chão da praça
+    var pecasSala = pecasDaSala(st);
+    var praca = theme === 'praca';
+    var casaDaPeca = {};
+    if (pecasSala) {
+      pecasSala.forEach(function (pc) {
+        for (var py = 0; py < (pc.h || 1); py++) for (var px = 0; px < (pc.w || 1); px++) casaDaPeca[(pc.x + px) + ',' + (pc.y + py)] = pc;
+      });
+    }
+    var matsPraca = {};
+    var relPraca = pecasSala ? { papeis: {}, obras: {}, pendentes: [], altoSemPeca: 0, baixoSemPeca: 0,
+                                 casasCobertas: 0, arvore: null } : null;
+    pracaEspera++;                        // montagem nova: a espera da anterior para
     var envG = new THREE.Group();
     envG.name = 'envkit';
     // o kit da v1 nasce com a célula (0,0) na origem; o nosso mundo é centrado
@@ -819,6 +1237,10 @@ var JOGO = (typeof window !== 'undefined')
     // CHAO ESTENDIDO: o campo tem de ser um LUGAR. O chao da v1 nasce escuro
     // demais para a luz nova, e props apoiados nele pareciam boiar no vazio.
     try {
+      if (praca) {
+        // 14/09: lajotas da praça no jogável, grama baixa no '~' (chaoDaPraca)
+        staticG.add(chaoDaPraca(st, w, h, matsPraca));
+      } else {
       // O rodapé recebe a SILHUETA da sala: sem isso ele desenhava um retângulo
       // em volta da grade e re-quadrava o mapa inteiro, justamente depois de as
       // salas ganharem contorno próprio. Vazio ('hole') e fora da grade não são sala.
@@ -834,6 +1256,7 @@ var JOGO = (typeof window !== 'undefined')
       // ainda manda no clima e o desenho da textura sobrevive por baixo.
       retint(ground, lighten(pal.floor2, 0.42), 0.34, gcache);
       staticG.add(ground);
+      }
     } catch (e) {}
 
     function isWall(x2, y2) {
@@ -874,6 +1297,13 @@ var JOGO = (typeof window !== 'undefined')
       var seed = hashXY(x, y);
       var node = null;
       var naBorda = (x === 0 || y === 0 || x === w - 1 || y === h - 1);
+      // 14/09: casa vestida por uma peça da praça não ganha muro (a peça monta depois
+      // do laço, uma vez por pegada); na praça o chão já veio inteiro no chaoDaPraca
+      if (relPraca && (k === 'high' || k === 'low')) {
+        if (casaDaPeca[x + ',' + y]) { relPraca.casasCobertas++; continue; }
+        if (k === 'high') relPraca.altoSemPeca++; else relPraca.baixoSemPeca++;
+      }
+      if (praca && k !== 'high' && k !== 'low') continue;
       if (k === 'high') {
         // A BORDA TAMBÉM É DELE AGORA.
         //
@@ -953,7 +1383,7 @@ var JOGO = (typeof window !== 'undefined')
       } else if (k === 'low') {
         // obstáculo BAIXO: chão normal + a peça da DIVISÓRIA. Bloqueia passagem,
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
-        node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        node = praca ? null : K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
         // A peça sai da FILEIRA, não da casa: cinco casas seguidas usam a mesma
         // e leem como uma barreira só. Sorteando por casa, uma corrida de cinco
         // virava cinco objetos diferentes — entulho, não divisória.
@@ -1007,11 +1437,26 @@ var JOGO = (typeof window !== 'undefined')
     }
     for (var L = 0; L < lowNodes.length; L++) staticG.add(lowNodes[L].node);
 
+    // 14/09: as peças da praça, uma por pegada
+    if (pecasSala) {
+      for (var pq = 0; pq < pecasSala.length; pq++) {
+        var noPeca = null;
+        try { noPeca = montaPecaDaPraca(pecasSala[pq], pecasSala, matsPraca, relPraca); } catch (eP) { noPeca = null; }
+        if (noPeca) {
+          staticG.add(noPeca);
+          var chPeca = 'praca:' + pecasSala[pq].papel;
+          usoPecas[chPeca] = (usoPecas[chPeca] || 0) + 1;
+        }
+      }
+    }
+
     // props de borda: o campo é um LUGAR, não um diorama solto no vazio
     // Props de borda: encostados na arena (nunca boiando no horizonte), com
     // altura normalizada e um disco de contato que os assenta no chao.
+    // 14/09: na praça NÃO — o mundo em volta é o gramado da própria praça, e os troncos
+    // e colunas do jardim espalhados em volta davam cara de estufa ao mapa
     var padPos = [];
-    try {
+    if (!praca) try {
       var kinds = K.propKinds(theme);
       var rr = 0;
       var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
@@ -1070,7 +1515,7 @@ var JOGO = (typeof window !== 'undefined')
     envG.add((K.mergeStatic && !window.__nomerge) ? K.mergeStatic(staticG) : staticG);
     try {
       if (K.buildGridLines) envG.add(K.buildGridLines(theme, w, h));
-      if (K.buildBrazier) {
+      if (K.buildBrazier && !praca) {      // 14/09: a praça é de dia, sem braseiro de canto
         var corners = [[-1.1, -1.1], [w + 0.1, -1.1], [-1.1, h + 0.1], [w + 0.1, h + 0.1]];
         for (var b2 = 0; b2 < 4; b2++) {
           var brz = K.buildBrazier(theme, b2);
@@ -1101,6 +1546,9 @@ var JOGO = (typeof window !== 'undefined')
     // o relatório fica exposto DEPOIS de a sala inteira montar, nunca no meio:
     // teste que lesse um parcial acharia um aquário "faltando" que ainda vinha.
     R.ultimaMontagem = usoPecas;
+    // 14/09: o relatório da praça tática (null sem `pecas`) — e a arte que faltou, pedida
+    R.ultimaMontagemPraca = relPraca;
+    if (relPraca && relPraca.pendentes.length) esperaObrasDaPraca(relPraca.pendentes);
     return true;
   }
 

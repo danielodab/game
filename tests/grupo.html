@@ -44,9 +44,15 @@ JOGO.Rede = {
   meuCx: function () { return this._cx; },
   minhaSala: function () { return sala; },
   nomeDe: function (id) { return NOMES[id] || ('Aventureiro-' + String(id).slice(0, 4)); },
+  _extra: {},                                 // 14/09: o que a presença diz de cada um (zona, luta, resumo.forte)
   pares: function () {
-    var m = this._mestres || {};
-    return [{ id: 'bia', nome: 'Bia', mestre: m.bia === true }, { id: 'cris', nome: 'Cris', mestre: m.cris === true }];
+    var m = this._mestres || {}, x = this._extra || {};
+    function par(id, nome, nuvem) {
+      var e = x[id] || {};
+      return { id: id, nome: nome, mestre: m[id] === true, nuvem: nuvem, zona: e.zona || 'praca', luta: e.luta === true,
+               resumo: e.resumo || null, sala: e.sala || null };
+    }
+    return [par('bia', 'Bia', 22), par('cris', 'Cris', 33)];
   },
   ouvir: function (tipo, fn) {
     (ouvintes[tipo] = ouvintes[tipo] || []).push(fn);
@@ -110,8 +116,11 @@ JOGO.DB = {
 JOGO.Troca = { estado: function () { return trocaEstado; } };
 JOGO.Engine = { spell: function (id) { return (id === 's1' || id === 's2') ? { id: id } : null; } };
 var marcas = [];
-JOGO.Hub = { marcaGrupo: function (id, papel) { marcas.push(id + ':' + papel); return true; } };
+JOGO.Hub = { marcaGrupo: function (id, papel) { marcas.push(id + ':' + papel); return true; },
+             _campo: false, naCampo: function () { return this._campo; } };   // 14/09: o Campo de PvP
 JOGO.DATA = {
+  // 14/09: o mapa do desafio amistoso (js/core/data/arenas.js) — fora dos calabouços
+  arenas: [{ id: 'praca', name: 'A Praça', rooms: [{}] }],
   dungeons: [
     { id: 'greenhouse', name: 'A Estufa Soterrada', rooms: [{}, {}, {}] },
     { id: 'cistern', name: 'A Cisterna Afogada', rooms: [{}, {}, {}] },
@@ -621,9 +630,12 @@ JOGO.DATA = {
           ata.semente === Du._semente(did, rv.dados.sal, salB) && ata.duplaA.length === 2 && ata.duplaA[0].heroId === 'sumo' &&
           ata.duplaB.length === 1 && ata.duplaB[0].heroId === 'minotauro' && ata.oponente.id === 'bia' && ata.oponente.cx === 'cxbia1',
           JSON.stringify(ata && { s: ata.semente, a: ata.duplaA.length, b: ata.duplaB.length }));
-    check('a arena da ata é a do sorteio, num calabouço aberto', ata && (ata.dungeonId === 'greenhouse' || ata.dungeonId === 'cistern') &&
-          ata.dungeonId === Du._arena(ata.semente).dungeonId && ata.roomIndex === Du._arena(ata.semente).roomIndex &&
-          /Arena sorteada: A (Estufa|Cisterna)/.test(avisos.join('|')));
+    // 14/09 (o dono): "o duelo deve ocorrer no mapa da praça" — o desafio não sorteia
+    check('o desafio amistoso é SEMPRE na praça (sala 0), com o modo na ata', ata && ata.dungeonId === 'praca' && ata.roomIndex === 0 &&
+          ata.modo === 'desafio' && /Desafio amistoso na Praça — a coroa não muda/.test(avisos.join('|')),
+          JSON.stringify(ata && [ata.dungeonId, ata.roomIndex, ata.modo]));
+    check('o sorteio de sempre (a Arena e o Campo) segue nos calabouços abertos', ['greenhouse', 'cistern'].indexOf(Du._mapaDoModo('arena', 12345).dungeonId) >= 0 &&
+          Du._mapaDoModo('campo', 777).dungeonId === Du._arena(777).dungeonId && Du._mapaDoModo('desafio', 777).dungeonId === 'praca');
     Gm.screen = 'battle'; Gr._tique();
     check('com a arena aberta, cancelar não vale (sair é desistir, pelo Coop)', Du.cancelar('x') === false && Du.estado().fase === 'batalha');
     Gm.screen = 'duelFim'; Gr._tique();
@@ -989,10 +1001,188 @@ JOGO.DATA = {
               /sumo está sem vida: espere 4 s/.test(ultAviso()) && sincronizou === s0 + 1 && dv5, ultAviso());
         JOGO.Autoridade = null;
         JOGO.Vida = null;
-        fim();
+        modos();
       }, 30);
     }, 30);
   }, 80);
+
+  /* ============================================================ 14/09: o Campo de PvP e a Arena */
+  function modos() {
+    var H = JOGO.Hub;
+    function revelaComo(did, dupla) {
+      var s = JSON.stringify(dupla), salX = 'fedcba9876543210fedcba9876543210';
+      chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'compromisso', dados: { did: did, h: Du._sha256(s + '|' + salX), n: dupla.length } });
+      chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'revela', dados: { did: did, dupla: s, sal: salX } });
+    }
+    // ---- o desafio leva o modo
+    reset();
+    Du.desafiar('bia');
+    check('desafio · o desafio leva modo "desafio"', ult('duelo', 'desafio').dados.modo === 'desafio' && Du.estado().modo === 'desafio');
+    reset();
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'desafio', dados: { did: 'bia-outro1', versao: 'dev:sig1', modo: 'arena' } });
+    check('desafio · um "desafio" com outro modo é ignorado', Du.estado().fase === 'livre' && desafios.length === 0 && conta('duelo', 'resposta') === 0);
+
+    // ---- o Campo: quem ataca
+    reset(); R._extra = {}; H._campo = false;
+    check('campo · fora do Campo tocar não ataca ("fora-do-campo")', Du.atacar('bia').motivo === 'fora-do-campo');
+    H._campo = true;
+    check('campo · o alvo na praça não é atacável', Du.atacar('bia').motivo === 'alvo-fora');
+    R._extra = { bia: { zona: 'campo', luta: true } };
+    check('campo · o alvo que já luta não é atacável', Du.atacar('bia').motivo === 'alvo-luta');
+    R._extra = { bia: { zona: 'campo', resumo: { forte: 23 } } };
+    check('campo · a dupla do Campo guarda a ORDEM e tira o Mestre', Du.defineDuplaCampo(['arqueiro', 'gm', 'sumo']).join() === 'arqueiro,sumo');
+    var rp = Du.atacar('bia');
+    check('campo · diferença 11 (a presença diz nv 23, a minha dupla chega a nv 12): "paridade"', rp.motivo === 'paridade' && rp.meu === 12 && rp.dele === 23, JSON.stringify(rp));
+    check('campo · nada saiu nas recusas', conta('duelo', 'ataque') === 0);
+    R._extra = { bia: { zona: 'campo', resumo: { forte: 22 } } };
+    var ra = Du.atacar('bia'), at = ult('duelo', 'ataque');
+    check('campo · diferença 10: o ataque sai sem pergunta, com o modo e o nível do mais forte',
+          ra.ok && at && at.dados.modo === 'campo' && at.dados.forte === 12 && Du.estado().fase === 'desafiei' && Du.estado().modo === 'campo');
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: at.dados.did, ok: true, kb: 'kbkbkbkb', modo: 'campo' } });
+    var cpC = ult('duelo', 'compromisso');
+    check('campo · a resposta automática do alvo: o compromisso sai SOZINHO com a dupla do Campo, na ordem',
+          cpC && cpC.dados.n === 2 && Du.estado().fase === 'comprometido' && Du._st().minha.ids.join() === 'arqueiro,sumo' && sheetsAbertas() === 0);
+    reset(); H._campo = true; R._extra = { bia: { zona: 'campo' } };
+    check('campo · com dois heróis na conta, a dupla do Campo de um só não ataca ("dois")', Du.atacar('bia').motivo === 'dois');
+    Du.defineDuplaCampo(['sumo', 'arqueiro']);
+    Du.atacar('bia');
+    var at2 = ult('duelo', 'ataque');
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: at2.dados.did, ok: false, motivo: 'vida-zero-alvo', modo: 'campo' } });
+    check('campo · a recusa do alvo chega com o porquê', Du.estado().fase === 'livre' && /Bia está sem vida agora/.test(ultAviso()), ultAviso());
+    reset(); H._campo = true; R._extra = { bia: { zona: 'campo' } };
+    Du.defineDuplaCampo(['sumo', 'arqueiro']);
+    Du.atacar('bia');
+    T += 15001; Gr._tique();
+    check('campo · o ataque sem resposta cai em 15 s', Du.estado().fase === 'livre' && ultAviso() === 'O ataque não teve resposta.', ultAviso());
+
+    // ---- o Campo: quem é atacado
+    reset(); H._campo = true; R._extra = { bia: { zona: 'campo', resumo: { forte: 9 } } };
+    Du.defineDuplaCampo(['sumo']);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'ataque', dados: { did: 'bia-camp01', versao: 'dev:sig1', chave: 'chaveC12', modo: 'campo', forte: 9 } });
+    var resC = ult('duelo', 'resposta');
+    check('campo · o atacado NÃO confirma: responde sim à conexão de quem atacou e já compromete a dupla do Campo',
+          resC && resC.dados.ok === true && resC.dados.modo === 'campo' && resC.cx === 'cxbia1' && conta('duelo', 'compromisso') === 1 &&
+          Du.estado().modo === 'campo' && Du.estado().eu === 'B' && desafios.length === 0 && Du._st().chave === 'chaveC12:' + resC.dados.kb);
+    check('campo · o aviso do ataque', /Bia te atacou no Campo de PvP/.test(avisos.join('|')));
+    reset(); H._campo = false;
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'ataque', dados: { did: 'bia-camp02', versao: 'dev:sig1', chave: 'c', modo: 'campo' } });
+    check('campo · atacado fora do Campo: recusa "fora-do-campo"', ult('duelo', 'resposta').dados.motivo === 'fora-do-campo' && Du.estado().fase === 'livre');
+    reset(); H._campo = true; R._extra = { bia: { zona: 'campo', resumo: { forte: 30 } } };
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'ataque', dados: { did: 'bia-camp03', versao: 'dev:sig1', chave: 'c', modo: 'campo', forte: 12 } });
+    check('campo · atacado com a paridade estourada (a presença diz nv 30; o `forte` do envelope não vale): "paridade"',
+          ult('duelo', 'resposta').dados.motivo === 'paridade');
+    reset(); H._campo = true; R._extra = { bia: { zona: 'campo', resumo: { forte: 12 } } };
+    JOGO.Vida = { zerado: function () { return { heroId: 'sumo', esperaS: 3 }; } };
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'ataque', dados: { did: 'bia-camp04', versao: 'dev:sig1', chave: 'c', modo: 'campo' } });
+    check('campo · atacado sem vida: recusa "vida-zero-alvo"', ult('duelo', 'resposta').dados.motivo === 'vida-zero-alvo' && Du.estado().fase === 'livre');
+    JOGO.Vida = null;
+    reset(); H._campo = true; Gm.screen = 'battle';
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'ataque', dados: { did: 'bia-camp05', versao: 'dev:sig1', chave: 'c', modo: 'campo' } });
+    check('campo · atacado no meio de uma luta: recusa', ult('duelo', 'resposta').dados.ok === false && Du.estado().fase === 'livre');
+    Gm.screen = 'hub'; H._campo = false;
+
+    // ---- a partida pronta do quadro da Arena
+    reset();
+    var ri = Du.iniciaArena({ did: 'arena-0011223344', lado: 'A', conta: 22, nome: 'Bia', herois: ['sumo', 'arqueiro'], heroisDele: ['minotauro'] });
+    var chA = ult('duelo', 'arena');
+    check('arena · o inscrito (lado A) acha a conta da partida na Rede e chama, com o did do servidor',
+          ri.ok && chA && chA.para === 'bia' && chA.dados.did === 'arena-0011223344' && chA.dados.modo === 'arena' &&
+          Du.estado().modo === 'arena' && Du.estado().fase === 'desafiei' && Du.estado().eu === 'A');
+    T += 3001; Gr._tique();
+    check('arena · sem resposta, o chamado se repete', conta('duelo', 'arena') === 2);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: 'arena-0011223344', ok: true, kb: 'kbarena1', modo: 'arena' } });
+    check('arena · sem ficha de escolha: o compromisso sai com a dupla do quadro, na ordem',
+          conta('duelo', 'compromisso') === 1 && Du._st().minha.ids.join() === 'sumo,arqueiro' && Du._st().chave === chA.dados.chave + ':kbarena1');
+    revelaComo('arena-0011223344', [{ heroId: 'lobo', classId: 'sumo', level: 12, spells: ['s1'], dono: 'bia' }]);
+    check('arena · a dupla revelada que não é a do quadro é trapaça', ult('duelo', 'cancela') && ult('duelo', 'cancela').dados.motivo === 'trapaca' && Co.duelos.length === 0);
+    reset();
+    Du.iniciaArena({ did: 'arena-0011223355', lado: 'A', conta: 22, nome: 'Bia', herois: ['sumo', 'arqueiro'], heroisDele: ['minotauro'] });
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'resposta', dados: { did: 'arena-0011223355', ok: true, kb: 'kbarena2', modo: 'arena' } });
+    revelaComo('arena-0011223355', [{ heroId: 'minotauro', classId: 'sumo', level: 12, spells: ['s1'], dono: 'bia' }]);
+    check('arena · a dupla do quadro confere: o Coop inicia com o modo arena e o mapa SORTEADO',
+          Co.duelos.length === 1 && Co.duelos[0].modo === 'arena' && ['greenhouse', 'cistern'].indexOf(Co.duelos[0].dungeonId) >= 0,
+          JSON.stringify(Co.duelos[0] && [Co.duelos[0].modo, Co.duelos[0].dungeonId]));
+    reset();
+    var rb = Du.iniciaArena({ did: 'arena-bbbb01', lado: 'B', conta: 22, nome: 'Bia', herois: ['arqueiro'], heroisDele: ['minotauro'] });
+    chega('duelo', { de: 'cris', cx: 'cxcris', acao: 'arena', dados: { did: 'arena-bbbb01', versao: 'dev:sig1', chave: 'cc', modo: 'arena' } });
+    check('arena · lado B: o chamado de OUTRA conta não é aceito', rb.ok && Du.estado().fase === 'desafiado' && conta('duelo', 'resposta') === 0);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'arena', dados: { did: 'arena-bbbb01', versao: 'dev:sig1', chave: 'chaveA99', modo: 'arena' } });
+    var rsB = ult('duelo', 'resposta');
+    check('arena · lado B aceita SOZINHO a conta da partida e compromete a dupla do quadro',
+          rsB && rsB.dados.ok === true && rsB.cx === 'cxbia1' && conta('duelo', 'compromisso') === 1 && Du._st().chave === 'chaveA99:' + rsB.dados.kb);
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'arena', dados: { did: 'arena-bbbb01', versao: 'dev:sig1', chave: 'chaveA99', modo: 'arena' } });
+    check('arena · o chamado repetido (a resposta se perdeu) recebe a MESMA resposta', conta('duelo', 'resposta') === 2 && ult('duelo', 'resposta').dados.kb === rsB.dados.kb);
+    reset();
+    chega('duelo', { de: 'bia', cx: 'cxbia1', acao: 'arena', dados: { did: 'arena-cccc01', versao: 'dev:sig1', chave: 'chaveA77', modo: 'arena' } });
+    check('arena · o chamado que chega antes da partida pronta fica guardado (nada responde)', conta('duelo', 'resposta') === 0 && Du.estado().fase === 'livre');
+    Du.iniciaArena({ did: 'arena-cccc01', lado: 'B', conta: 22, nome: 'Bia', herois: ['arqueiro'], heroisDele: ['minotauro'] });
+    check('arena · a partida pronta chega e o chamado guardado é aceito', ult('duelo', 'resposta') && ult('duelo', 'resposta').dados.ok === true);
+
+    // ---- o cliente do quadro (JOGO.Arena) com a Sessão de mentira
+    reset();
+    var Aq = JOGO.Arena, pedidos = [], respostas = {}, casou = [], agoraA = 1000;
+    Aq._reset();
+    Aq._agora = function () { return agoraA; };
+    Aq.aoCasou = function (e) { casou.push(e); };
+    JOGO.Sessao = null;
+    check('arena · sem a conta do site o quadro fica desligado, com o porquê', Aq.disponivel().motivo === 'sem-sessao' && /conta do site/.test(Aq.estado().desligada));
+    JOGO.Sessao = { ativa: function () { return true; }, api: function (rota, op) {
+      pedidos.push({ rota: rota, metodo: op.method, corpo: op.body ? JSON.parse(JSON.stringify(op.body)) : null });
+      var r = respostas[rota];
+      return Promise.resolve(typeof r === 'function' ? r(op) : (r || { ok: false, status: 500, erro: 'nada' }));
+    } };
+    var classesQ = [{ classId: 'sumo', nivel: 12 }, { classId: 'arqueiro', nivel: 9 }];
+    respostas['/api/arena/inscrever'] = { ok: true, status: 200, agoraMs: 5000, fase: 'inscrito', desdeMs: 4000, herois: ['sumo', 'arqueiro'], classes: classesQ, nivel: 12 };
+    Aq.inscrever(['sumo']).then(function (r1) {
+      check('arena · inscrever com um herói só (a conta tem dois): "dois", sem pedido', r1.motivo === 'dois' && pedidos.length === 0);
+      return Aq.inscrever(['sumo', 'arqueiro']);
+    }).then(function (r2) {
+      var e = Aq.estado();
+      check('arena · inscrever: POST com os dois em ordem; o estado "inscrito" no relógio daqui',
+            r2.ok && pedidos[0].rota === '/api/arena/inscrever' && pedidos[0].corpo.herois.join() === 'sumo,arqueiro' &&
+            e.fase === 'inscrito' && e.desdeMs === 0 && Aq.inscrita(), JSON.stringify(e));
+      respostas['/api/arena/estado'] = { ok: true, status: 200, agoraMs: 8000, fase: 'casada', papel: 'inscrito', lado: 'A', prazoMs: 30000,
+        confirmei: false, eleConfirmou: false, herois: ['sumo', 'arqueiro'], classes: classesQ, nivel: 12,
+        adversario: { conta: 22, nome: 'Bia', nivel: 10, brasa: 1210, herois: ['minotauro'], classes: [{ classId: 'sumo', nivel: 10 }] } };
+      agoraA = 3600; Gr._tique();
+      check('arena · enquanto inscrito, o tique consulta o estado', pedidos[pedidos.length - 1].rota === '/api/arena/estado' && pedidos[pedidos.length - 1].metodo === 'GET');
+      return new Promise(function (ok) { setTimeout(ok, 20); });
+    }).then(function () {
+      var e = Aq.estado();
+      check('arena · desafiado: "casada" com o adversário e o prazo, e o aviso (aoCasou)', e.fase === 'casada' && casou.length === 1 &&
+            e.adversario.nome === 'Bia' && e.adversario.classes[0].classId === 'sumo' && e.prazoMs === 30000 - (8000 - 3600), JSON.stringify(e));
+      respostas['/api/arena/confirmar'] = { ok: true, status: 200, agoraMs: 9000, fase: 'pronta', did: 'arena-pronta01', papel: 'inscrito', lado: 'A',
+        herois: ['sumo', 'arqueiro'], classes: classesQ, nivel: 12,
+        adversario: { conta: 22, nome: 'Bia', nivel: 10, brasa: 1210, herois: ['minotauro'], classes: [] } };
+      return Aq.confirmar();
+    }).then(function (r3) {
+      var ch = ult('duelo', 'arena');
+      check('arena · os dois confirmados: a partida pronta vai ao Duelo (lado A chama a Bia com o did)', r3.ok && ch && ch.dados.did === 'arena-pronta01' &&
+            Du.estado().modo === 'arena' && Du.estado().heroisArena.join() === 'sumo,arqueiro' && !Aq.inscrita());
+      Du._reset(); Aq._reset();
+      respostas['/api/arena/desafiar'] = { ok: true, status: 200, agoraMs: 1000, fase: 'casada', papel: 'desafiante', lado: 'B', prazoMs: 31000,
+        herois: ['arqueiro', 'sumo'], classes: [], nivel: 12, adversario: { conta: 33, nome: 'Cris', nivel: 11, brasa: 1000, herois: ['x', 'y'], classes: [] } };
+      respostas['/api/arena/quadro'] = { ok: true, status: 200, agoraMs: 2000, paridade: 5,
+        inscritos: [{ conta: 33, nome: 'Cris', nivel: 11, brasa: 1000, classes: classesQ, desdeMs: 1500, eu: false }] };
+      return Aq.quadro();
+    }).then(function (q) {
+      check('arena · o quadro: os inscritos com as classes e o tempo no relógio daqui', q.ok && q.inscritos.length === 1 && q.inscritos[0].classes.length === 2 &&
+            q.inscritos[0].desdeMs === 1500 - (2000 - 3600) && q.paridade === 5, JSON.stringify(q));
+      return Aq.desafiar(33, ['arqueiro', 'sumo']);
+    }).then(function (r4) {
+      var pd = pedidos[pedidos.length - 1];
+      check('arena · desafiar um inscrito: POST {alvo, herois} e o estado "casada" de quem desafiou', r4.ok && pd.rota === '/api/arena/desafiar' &&
+            pd.corpo.alvo === 33 && pd.corpo.herois.join() === 'arqueiro,sumo' && Aq.estado().papel === 'desafiante');
+      respostas['/api/arena/sair'] = { ok: true, status: 200, fase: 'livre' };
+      Gm.screen = 'battle'; Gr._tique();
+      check('arena · quem entra em batalha sai da Arena (POST sair)', pedidos[pedidos.length - 1].rota === '/api/arena/sair' && Aq.estado().fase === 'livre' &&
+            /Você saiu da Arena/.test(ultAviso()));
+      Gm.screen = 'hub';
+      JOGO.Sessao = null;
+      fim();
+    });
+  }
+  function sheetsAbertas() { return 0; }
 })();
 </script>
 </body>

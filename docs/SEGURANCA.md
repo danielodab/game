@@ -197,6 +197,40 @@ primeiro turno e devolve por lado `vidaFim` (`Engine.vidaDoLado`) e `vidaMax`. U
 outra vida diverge (422). A resposta ganha `vida: {heroId: PV agora}` dos heróis de quem pede.
 Risco aceito: a página de antes (sem `duelo/abrir`) entra cheia — o mesmo que era antes de 14/09.
 
+**As três formas de duelo (14/09).** O `modo` viaja no desafio/ataque da Rede, na ata, no Coop e no
+corpo do `POST /api/duelo/fechar` (`desafio | arena | campo`; outro valor = 400). O juiz refaz TODOS
+(a vida grava sempre); só a Brasa depende do modo, e o motivo fica guardado no resultado:
+- `desafio` (tocar no jogador na praça): mapa FIXO `praca` (`js/core/data/arenas.js`, fora de
+  `DATA.dungeons`). Nunca ranqueia (`motivo: 'amistoso'`) e não conta nos tetos. Sem `modo` (a página
+  de antes do deploy) também é amistoso (`'modo'`). O mapa está preso aos lances: trocar `praca` por um
+  calabouço no fechar diverge no replay (422).
+- `arena` (o quadro de inscritos, `servidor/arena.py`): ranqueia só se existe a partida pronta desse
+  `did` entre essas duas contas (`'sem-partida'`), com OS heróis que o quadro mostrou (`'dupla'`), e na
+  paridade de 5 níveis entre o herói mais forte de cada lado, lida nos estados do servidor (`'paridade'`).
+- `campo` (o Campo de PvP): paridade de 10 (`'paridade'`). Arena e campo no mapa `praca` = `'mapa'`.
+Os tetos (3/par, 20/conta em 24 h) valem para arena e campo. A coluna `duelos.venc` (o que os tetos
+contam) só é preenchida no ranqueado; o amistoso guarda o vencedor só no `resultado`.
+
+**O quadro da Arena** (`arena_inscritos`, `arena_partidas`; tabelas novas, tempos em ms):
+`POST /api/arena/inscrever {herois:[2]}` (os dois em ordem; 1 só se a conta só tem 1 que pode lutar —
+400 `dois`; o Mestre não entra — 400 `mestre`; herói a 0 PV — 409 `vida-zero`), `GET /api/arena/quadro`
+(`{inscritos:[{conta, nome, nivel, brasa, classes:[{classId, nivel}], desdeMs, eu}], paridade}`),
+`POST /api/arena/desafiar {alvo, herois:[2]}` (409 `paridade`/`vida-zero-alvo`/`sem-inscricao`/
+`inscrito`/`casada`), `POST /api/arena/confirmar`, `POST /api/arena/recusar`, `POST /api/arena/sair`,
+`GET /api/arena/estado` (`livre | inscrito | casada | pronta`). Casada vale 30 s: os dois confirmados =
+`pronta` com o `did` (inscrito = lado A); recusa, desistência de quem desafiou ou prazo = o inscrito
+volta ao quadro com o lugar de antes. Quem não consulta o estado há 20 s sai do quadro. Teto de 120
+pedidos (inscrever + desafiar) por conta por hora (429). Os clientes seguem o duelo pela Rede com o did
+do servidor e as duplas PÚBLICAS (compromisso e revelação automáticos; a revelação que não bate com o
+quadro é trapaça no cliente e `'dupla'` no servidor). Decisão: o inimigo marcado aparece e desafia.
+
+**O Campo de PvP (cliente).** A presença (`oi`/`eco`/`pulso`) leva `zona: 'praca' | 'campo'`
+(`Hub.naCampo`) e o `luta`; a aparência (`classe`) no Campo é a do 1º herói da dupla do Campo — o 2º
+não viaja. O ataque é o dirigido `duelo/ataque` (paga o balde e a caixa de entrada do convite, como o
+desafio); o atacado confere zona, ocupação, vida e paridade (pelo `resumo.forte` da presença, não pelo
+envelope) e recusa com o motivo. Risco aceito: a zona e o `forte` são palavra do cliente — quem fecha
+decide a Brasa é a paridade lida no servidor, e os tetos seguram o combinado entre duas contas.
+
 **A poção** se bebe FORA da batalha, em qualquer lugar (praça, antessala, depois do duelo): `POST
 /api/vida/pocao {heroId, pocaoId}`. A API confere o herói na conta (400 `heroi`) e a vida ferida (409
 `cheio`, com `hp`/`hpMax` quando há linha — antes de gastar); o juiz roda a op INTERNA `beberPocao

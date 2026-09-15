@@ -1169,13 +1169,18 @@
     var Br = JG.Brasa;
     if (Br) {
       sec('arena', 'Arena e Brasa',
-        '<p>Na Arena os heróis duelam: cada um escolhe a dupla às cegas, e a arena é sorteada. A pontuação é a Brasa: todo mundo começa com ' + SITE.num(Br.INICIAL) +
+        '<p>Há três jeitos de lutar contra outro jogador. O <b>desafio amistoso</b>: toque em alguém na praça — a luta é no mapa da praça, ' +
+        'cada um leva 1 ou 2 heróis escolhidos às cegas, e a coroa não muda. A <b>Arena</b>: inscreva os seus dois heróis no quadro de ' +
+        'inscritos (todos veem as classes) e espere um desafio, ou desafie um inscrito com até 5 níveis de diferença; os dois confirmam em 30 s ' +
+        'e a luta é numa sala sorteada dos calabouços — vale coroa. O <b>Campo de PvP</b>: só se entra com a coroa ligada, escolhendo dois ' +
+        'heróis em ordem (o 1º é a aparência, o 2º é a surpresa); lá dentro qualquer um ataca sem aviso quem estiver a até 10 níveis — também vale coroa.</p>' +
+        '<p>A pontuação é a Brasa: todo mundo começa com ' + SITE.num(Br.INICIAL) +
         ', ganhar de quem vale menos paga pouco, perder devolve o que se subiu, e ninguém cai abaixo de ' + SITE.num(Br.PISO) + '. A cada ' + num(Br.TEMPORADA_DIAS) +
         ' dias a temporada fecha e os pontos voltam para perto do meio.</p><div class="wk-rolagem"><table class="wk-tabela"><thead><tr><th>coroa</th><th class="n">a partir de</th></tr></thead><tbody>' +
         (Br.TIERS || []).map(function (t) {
           return '<tr><td>' + E(t.nome) + '</td><td class="n">' + SITE.num(t.min) + (t.exigeTopo ? ' e ser o 1º do placar' : '') + '</td></tr>';
-        }).join('') + '</tbody></table></div><p class="apoio">Por enquanto os duelos entre jogadores são amistosos: a Brasa de verdade acende quando o servidor apitar o duelo.</p>',
-        'arena duelo brasa coroa pvp temporada');
+        }).join('') + '</tbody></table></div><p class="apoio">Quem decide a coroa é o servidor: ele refaz a luta da Arena e do Campo, confere a diferença de nível e segura quantos duelos valem por dia entre as mesmas duas contas.</p>',
+        'arena duelo brasa coroa pvp temporada desafio amistoso quadro inscricao campo');
     }
 
     var Po = JG.Poco;
@@ -1186,7 +1191,7 @@
     }
 
     sec('dupla', 'Em dupla',
-      '<p>Toque noutro jogador na praça para chamar para o grupo, mandar mensagem particular, propor troca ou desafiar para duelo. O grupo é de dois: quem chama lidera, escolhe o calabouço e a dificuldade, e os dois descem juntos, cada um com um herói. O saque de cada sala é sorteado uma vez para o grupo. Quem cai da conexão no meio da batalha tem o herói tocado pela máquina até o fim da sala.</p>',
+      '<p>Toque noutro jogador na praça para chamar para o grupo, mandar mensagem particular, propor troca ou chamar para um desafio amistoso (na praça, sem coroa). O grupo é de dois: quem chama lidera, escolhe o calabouço e a dificuldade, e os dois descem juntos, cada um com um herói. O saque de cada sala é sorteado uma vez para o grupo. Quem cai da conexão no meio da batalha tem o herói tocado pela máquina até o fim da sala.</p>',
       'grupo dupla multijogador duelo troca mensagem');
 
     var PG = D.pergaminhos, BX = D.bonusXp;

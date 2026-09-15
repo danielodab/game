@@ -196,6 +196,24 @@
           }
           check('portal fechado (' + l.id + ') segue pelado', !temMuro);
         });
+
+        /* 14/09: a ENTRADA DO CAMPO DE PVP (perto da Arena, dentro do anel) não encosta
+         * em muro de corredor, pilar de boca nem chefe: a base dela fica a 0,5 m ou mais
+         * de todo sólido avulso, e o meio dela está livre. */
+        var campo = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0];
+        check('a entrada do Campo existe', !!campo);
+        if (campo) {
+          var cxC = H._caixaDoLugar('campo');
+          var rB = Math.max(cxC.x1 - cxC.x0, cxC.z1 - cxC.z0) / 2;
+          var piorS = 99, quem = '';
+          S.forEach(function (s) {
+            var v = Math.hypot(s.x - campo.x, s.z - campo.z) - s.r - rB;
+            if (v < piorS) { piorS = v; quem = s.x.toFixed(1) + ',' + s.z.toFixed(1); }
+          });
+          check('a entrada do Campo fica a 0,5 m ou mais de todo muro de corredor', piorS >= 0.5,
+                'mais perto: ' + piorS.toFixed(2) + ' m (' + quem + ')');
+          check('o meio da entrada do Campo está livre', livre({ x: campo.x, z: campo.z }));
+        }
         fecha();
       })
       .catch(function (e) {

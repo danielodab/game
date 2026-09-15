@@ -1176,6 +1176,8 @@ var JOGO = (typeof window !== 'undefined')
     var s = sala ? screens.antessala : screens.hub;
     clear(s);
     var chaveSala = sala ? (sala.dungeonId + ':' + sala.roomIndex) : null;
+    // 14/09: quem desce a um calabouço (a antessala) deixou o Campo de PvP — a volta é à praça
+    if (sala && campoHud) campoHud.dentro = false;
     function perguntaSair() {
       // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
       if (emGrupo()) {
@@ -1231,9 +1233,10 @@ var JOGO = (typeof window !== 'undefined')
     s.appendChild(mundo);
 
     /* 13/09: na antessala, o quadro da vida no canto — a barra de cada herói subindo e as poções.
-     * 14/09 (a vida única): na PRAÇA também, compacto, com os heróis escolhidos — só enquanto
-     * algum não está cheio — e a vida se acerta com o servidor a cada chegada à praça */
-    s.appendChild(vidaBloco(sala ? 'antessala' : 'praca'));
+     * 14/09 (a vida única): na PRAÇA, o cartão de cada herói escolhido SEMPRE à vista (a foto, o
+     * coração com o PV e o %, as poções para quem tem o anel — vidaPraca) — e a vida se acerta
+     * com o servidor a cada chegada à praça */
+    s.appendChild(sala ? vidaBloco('antessala') : vidaPraca());
     if (!sala) safe(function () { return JOGO.Vida.sincroniza(); }, null);
 
     var painel = el('div', 'hub-painel is-off');
@@ -1333,6 +1336,7 @@ var JOGO = (typeof window !== 'undefined')
         // desce" — o guarda-roupa saiu, e com ele a escolha separada
         if (selHeroes[0] && JOGO.Hub && JOGO.Hub.entrar) {
           JOGO.Hub.entrar(mundo, selHeroes[0], { sala: sala });
+          if (!sala) reentraCampo();    // 14/09: quem lutou no Campo volta ao Campo
         }
         // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
         // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
@@ -1495,8 +1499,9 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'arena') {
         painel.appendChild(el('h3', null, 'Arena de Duelos'));
         painel.appendChild(el('p', 'hub-nota',
-          'Para duelar com alguém, toque na pessoa na praça e escolha <b>Desafiar para duelo</b>. ' +
-          'Cada um leva a sua dupla, escolhida às cegas, numa sala sorteada.'));
+          '<b>Desafio amistoso</b>: toque em alguém na praça (no mapa da praça; a coroa não muda). ' +
+          '<b>Ranqueado</b>: inscreva a sua dupla no quadro e espere um desafio — ou desafie um inscrito.'));
+        painelArena(painel);          // 14/09: o quadro de inscritos da Arena
         // 11/09 (revisão): a volta para a ficha do duelo pela Rede que ficou para trás
         var deA = safe(function () { return Dl().estado(); }, null);
         if (deA && (deA.fase === 'escolhendo' || deA.fase === 'comprometido' || deA.fase === 'revelado')) {
@@ -1553,6 +1558,10 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(btn('Girar a sorte', 'btn-primary btn-block', function () {
           openSheet('loteria');
         }));
+      } else if (lugar.tipo === 'campo') {
+        painelCampo(painel);          // 14/09: a entrada do Campo de PvP
+      } else if (lugar.tipo === 'campo-saida') {
+        painelCampoSaida(painel);     // 14/09: a saída do Campo (e a troca da dupla)
       } else if (lugar.tipo === 'forja') {
         // A BARRACA DO FERREIRO (30/08): a forja ganhou endereço na praça —
         // a bigorna continua no cais para quem prefere o atalho
@@ -1631,7 +1640,8 @@ var JOGO = (typeof window !== 'undefined')
                  titulo: tituloPendurado(j.titulo),
                  // `classe` no protocolo sempre foi APARÊNCIA — agora pode ser
                  // uma fusão do guarda-roupa; o fantasma do outro lado veste igual
-                 classe: selHeroes[0] || 'sumo',
+                 // 14/09: no Campo de PvP, a aparência do 1º da dupla do Campo (o 2º não viaja)
+                 classe: aparenciaDaRede(),
                  resumo: safe(resumoDaConta, null),
                  aura: safe(temAuraSelos, false),
                  sala: chaveSala,          // 03/09: a antessala (null = praça)
@@ -1660,6 +1670,8 @@ var JOGO = (typeof window !== 'undefined')
           var par = null;
           R.pares().forEach(function (p2) { if (p2.id === id) par = p2; });
           if (!par) return;
+          // 14/09 (o dono): no Campo de PvP "ao clicar em cima o jogador pode atacar sem aviso prévio" — sem menu
+          if (campoDentro()) { ataqueNoCampo(par); return; }
           painelJogador(par);
         };
         /* O PAINEL DO JOGADOR (11/09, pedido do dono): retrato, nome e título,
@@ -1711,7 +1723,7 @@ var JOGO = (typeof window !== 'undefined')
               }));
           }
           if (!sala && Dl()) {
-            grade.appendChild(btn('Desafiar para duelo', 'btn-ghost', function () {
+            grade.appendChild(btn('Desafio amistoso', 'btn-ghost', function () {   // 14/09: o duelo na praça, sem coroa
               var r = safe(function () { return Dl().desafiar(id); }, null);
               if (r && r.ok) { fecha(); toast('Desafio enviado a ' + par.nome + '. Esperando a resposta…'); }
               else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
@@ -1886,6 +1898,10 @@ var JOGO = (typeof window !== 'undefined')
             // 03/09: desceu para outra sala (some) ou chegou à minha (aparece)
             if ((ev.sala || null) === chaveSala) {
               JOGO.Hub.fantasmaEntra(ev.id, ev);
+              // 14/09: a mesma sala, outra zona (entrou ou saiu do Campo de PvP): o Hub mostra só a zona dele
+              if (typeof JOGO.Hub.fantasmaZona === 'function') {
+                safe(function () { return JOGO.Hub.fantasmaZona(ev.id, ev.zona || 'praca'); }, null);
+              }
               chatLinha(null, ev.nome + (chaveSala ? ' chegou à sala.' : ' voltou ao acampamento.'));
             } else {
               JOGO.Hub.fantasmaSai(ev.id);
@@ -4679,7 +4695,14 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(cx);
 
       var oculta = j.coroaOculta === true;
-      caixa.appendChild(btn(oculta ? 'Mostrar a coroa acima da cabeça'
+      if (campoDentro()) {
+        // 14/09 (o dono): no Campo de PvP a coroa fica ligada "e lá não poderá desligar"
+        var bTrava = btn('A coroa fica ligada no Campo de PvP', 'btn-mini btn-block btn-ghost is-apagado coroa-trava', function () {
+          toast('No Campo de PvP a coroa não desliga — saia do Campo para escondê-la.');
+        });
+        bTrava.title = 'saia do Campo de PvP para esconder a coroa';
+        caixa.appendChild(bTrava);
+      } else caixa.appendChild(btn(oculta ? 'Mostrar a coroa acima da cabeça'
                                    : 'Esconder a coroa acima da cabeça',
         'btn-mini btn-block ' + (oculta ? 'btn-gold' : 'btn-ghost'), function () {
           JOGO.DB.definirCoroaOculta(!oculta).then(function () {
@@ -5172,6 +5195,8 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'troca') sheetTroca();
     else if (name === 'duelo') sheetDuelo();
     else if (name === 'dueloRede') sheetDueloRede();                       // 11/09: o duelo pela Rede
+    else if (name === 'escolheDupla') sheetEscolheDupla(arg);              // 14/09: escolha os dois heróis (Arena, Campo…)
+    else if (name === 'arenaQuadro') sheetArenaQuadro();                   // 14/09: o quadro de inscritos da Arena
     else if (name === 'sussurro') sheetSussurro(arg && arg.id, arg && arg.nome);   // 11/09: a mensagem particular
     else closeSheet();
   }
@@ -6039,6 +6064,8 @@ var JOGO = (typeof window !== 'undefined')
              brasa: resumoBrasaPts, partidas: resumoBrasaPartidas,
              // a coroa escondida viaja: o fantasma desta conta também não a usa
              coroaOculta: resumoCoroaOculta,
+             // 14/09: o nível do herói mais forte da dupla da vez (a do Campo lá dentro) — a paridade do ataque
+             forte: forteDaVez(),
              galeria: resumoGaleria, poco: resumoPoco, guilda: resumoGuilda };
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
@@ -9589,9 +9616,10 @@ var JOGO = (typeof window !== 'undefined')
     var p = abrePainel('convite');
     if (!p) { toast(c.nome + ' te desafia para um duelo.'); return; }
     painelConv = { tipo: 'duelo', did: c.did };
-    cabecalhoPainel(p, classeDoPar(c.id), 'neutro', '<b>' + esc(c.nome) + '</b> te desafia para um duelo.', '');
-    p.appendChild(el('p', 'hub-nota', 'Cada um leva a sua dupla, escolhida às cegas; a arena é sorteada entre ' +
-      'os calabouços abertos. Amistoso: a Brasa não muda.'));
+    cabecalhoPainel(p, classeDoPar(c.id), 'neutro', '<b>' + esc(c.nome) + '</b> te chama para um desafio amistoso.', '');
+    // 14/09: o desafio é na praça e não mexe na coroa
+    p.appendChild(el('p', 'hub-nota', '<b>Desafio amistoso — a coroa não muda.</b> Mapa: A Praça. ' +
+      'Cada um leva 1 ou 2 heróis, escolhidos às cegas.'));
     p.appendChild(barraPrazo(c.expira, function () { return Dl()._agora(); }));
     var duo = el('div', 'pn-duplo');
     duo.appendChild(btn('Aceitar', 'btn-primary', function () {
@@ -9653,9 +9681,8 @@ var JOGO = (typeof window !== 'undefined')
    * está fora da luta — nunca na batalha:
    *   'antessala' — fixo no canto, com as poções (os heróis da descida e os do parceiro);
    *   'porta'     — no painel da porta, compacto (as poções ficam no quadro do canto);
-   *   'praca'     — fixo e compacto no canto de cima da praça, com os heróis escolhidos: longe do
-   *                 cais, do chat de baixo e do painel do grupo da direita;
-   *   'fim'       — nas telas de fim (sala limpa, calabouço vencido, derrota, fim do duelo);
+   *   (a PRAÇA tem o cartão dela desde 14/09 à noite — vidaPraca, logo abaixo —, sempre à vista);
+   *   'fim'      — nas telas de fim (sala limpa, calabouço vencido, derrota, fim do duelo);
    *   'duelo'     — na ficha da escolha do duelo em rede, com os heróis que podem duelar.
    * Todo quadro só aparece enquanto algum herói dele não está cheio (some quando todos enchem).
    * Cada linha tem a barra de PV subindo AO VIVO ("+1 PV a cada 2 s · cheio em m:ss") e, nos
@@ -9685,7 +9712,6 @@ var JOGO = (typeof window !== 'undefined')
   }
   // os heróis de cada quadro; null = os da descida (e os do parceiro), que o Game conhece
   function heroisDaVida(modo) {
-    if (modo === 'praca') return selHeroes.slice();
     if (modo === 'duelo') return safe(function () { return Dl().herois(); }, []) || [];
     if (modo === 'fim') {
       var pt = safe(function () { return G().party; }, null);
@@ -9699,11 +9725,9 @@ var JOGO = (typeof window !== 'undefined')
   }
   /* o quadro (escondido enquanto todos estão cheios) */
   function vidaBloco(modo) {
-    var fixo = modo === 'antessala' || modo === 'praca';
-    var box = el('div', 'vida-bloco is-' + modo + (fixo ? ' is-fixo' : '') +
-                        ((modo === 'porta' || modo === 'praca') ? ' is-compacto' : ''));
-    if (modo === 'praca') box.appendChild(el('div', 'vida-tit', 'Vida: <b>+1 PV a cada ' + segPorPv() + ' s</b> — ou beba uma poção'));
-    else if (modo !== 'porta') {
+    var fixo = modo === 'antessala';
+    var box = el('div', 'vida-bloco is-' + modo + (fixo ? ' is-fixo' : '') + (modo === 'porta' ? ' is-compacto' : ''));
+    if (modo !== 'porta') {
       box.appendChild(el('div', 'vida-tit', 'A vida volta sozinha: <b>+1 PV a cada ' + segPorPv() + ' s</b> — ou beba uma poção'));
     }
     var linhas = el('div', 'vida-lista');
@@ -9790,6 +9814,147 @@ var JOGO = (typeof window !== 'undefined')
       vidaTique();
     });
   }
+
+  /* A VIDA NA PRAÇA (14/09, o dono: "de alguma forma deve aparecer essa vida na praça também, pro
+   * jogador saber quando está cheia ou não. Pode ser um coração com o total e % pequeno abaixo,
+   * localizado no canto superior esquerdo, com a foto do personagem. No caso, se ele desceu com 2
+   * personagens deve aparecer a foto e vida dos dois, e ele pode selecionar para quem quer
+   * carregar a vida com pote").
+   * No lugar do quadro compacto que só aparecia com alguém ferido: o cartão fica SEMPRE à vista
+   * (cheio também, 100%). Um cartão por herói escolhido (selHeroes) — em grupo só os MEUS, a vida
+   * do parceiro já mora no painel do grupo e na antessala —: a foto, o coração que enche com o PV
+   * e muda de cor (cheio brilha; abaixo de 35% alaranja; a 0 fica cinza e pulsa), "132/170" e o %
+   * pequeno embaixo (a 0, os segundos até 1 PV). TOCAR num cartão escolhe PARA QUEM vão as poções
+   * (o anel dourado); os botões de baixo curam esse (bebeVida: recusa com o motivo, ex. cheio).
+   * O PV cheio é o do Game.vidaNaEspera: o máximo do registro da Vida, ou — cheio, sem registro —
+   * o hp do Progress.battleParty, o mesmo número com que a batalha o poria em campo.
+   * O DOM só se refaz quando muda a dupla ou as poções; o tique (vidaTique) troca números, alturas
+   * e classes, e mede o topo da praça para o cartão nunca ficar por baixo dele. */
+  var vidaAlvoPraca = null;
+  var CORACAO_SVG = '<svg viewBox="0 0 32 29" aria-hidden="true"><path d="M16 28 13.8 26C5.9 18.9 1 14.5 1 9 ' +
+    '1 4.5 4.5 1 9 1c2.5 0 5 1.2 7 3.1C18 2.2 20.5 1 23 1c4.5 0 8 3.5 8 8 0 5.5-4.9 9.9-12.8 17z"/></svg>';
+  function vidaPraca() {
+    var box = el('div', 'vida-praca');
+    var cartoes = el('div', 'vp-cartoes'), pocoesEl = el('div', 'vp-pocoes');
+    box.appendChild(cartoes);
+    box.appendChild(pocoesEl);
+    var q = { box: box, cartoes: cartoes, pocoesEl: pocoesEl, para: null, sig: '', rows: {}, modo: 'praca',
+              pinta: pintaVidaPraca, top: -1 };
+    vidaQuadros.push(q);
+    pintaVidaPraca(q);
+    ligaVidaTique();
+    return box;
+  }
+  function pctVida(v) {
+    if (!(v.max > 0) || v.hp < 1) return 0;
+    if (v.hp >= v.max) return 100;
+    return Math.max(1, Math.min(99, Math.round(100 * v.hp / v.max)));
+  }
+  function pintaVidaPraca(q) {
+    var lista = (safe(function () { return G().vidaNaEspera(selHeroes.slice()); }, []) || [])
+      .filter(function (v) { return v && v.meu; });
+    q.box.hidden = !lista.length;          // o jogo sem Game, ou o Mestre sem herói da conta
+    if (!lista.length) return;
+    if (!lista.some(function (v) { return v.chave === vidaAlvoPraca; })) vidaAlvoPraca = lista[0].chave;
+    var pocoes = safe(function () { return G().pocoesNaEspera(); }, []) || [];
+    var sig = lista.map(function (v) { return v.chave; }).join('|') + '#' +
+              pocoes.map(function (po) { return po.id + 'x' + po.n; }).join(',');
+    if (sig !== q.sig) {
+      q.sig = sig;
+      clear(q.cartoes);
+      clear(q.pocoesEl);
+      q.rows = {};
+      q.para = null;
+      lista.forEach(function (v) {
+        var h = hero(v.heroId) || {};
+        var card = el('button', 'vp-heroi');
+        card.type = 'button';
+        card.setAttribute('data-chave', v.chave);
+        card.setAttribute('data-heroi', v.heroId);
+        var foto = el('span', 'vp-foto');
+        foto.appendChild(art('portrait', [h.classId || String(v.heroId).split('#')[0],
+          { element: h.element || 'neutro', size: 64 }], 40));
+        card.appendChild(foto);
+        var cor = el('span', 'vp-cor', '<span class="vp-cor-fundo">' + CORACAO_SVG + '</span>' +
+                                        '<span class="vp-cor-enche">' + CORACAO_SVG + '</span>');
+        card.appendChild(cor);
+        var tx = el('span', 'vp-tx');
+        var num = el('b', 'vp-num', ''), pct = el('small', 'vp-pct', '');
+        tx.appendChild(num);
+        tx.appendChild(pct);
+        card.appendChild(tx);
+        tap(card, function () { vidaAlvoPraca = v.chave; vidaTique(); });
+        q.rows[v.chave] = { card: card, num: num, pct: pct, enche: cor.querySelector('.vp-cor-enche'), nome: v.nome };
+        q.cartoes.appendChild(card);
+      });
+      if (pocoes.length) {
+        if (lista.length > 1) { q.para = el('span', 'vp-para', ''); q.pocoesEl.appendChild(q.para); }
+        pocoes.forEach(function (po) {
+          var b = el('button', 'vh-pocao vp-pocao');
+          b.type = 'button';
+          b.setAttribute('data-pocao', po.id);
+          b.appendChild(art('pocaoIcon', [po.id, 22], 22));
+          b.appendChild(el('span', 'vh-cura', '+' + po.def.cura));
+          b.appendChild(el('span', 'vh-qtd', '×' + po.n));
+          b.title = po.def.name + ': cura ' + po.def.cura + ' PV (você tem ' + po.n + ')';
+          tap(b, function () { if (vidaAlvoPraca) bebeVida(vidaAlvoPraca, po.id); });
+          q.pocoesEl.appendChild(b);
+        });
+      } else {
+        q.pocoesEl.appendChild(el('p', 'vh-sem vp-sem', 'Sem poções: a banca do mercador vende no Mercadinho.'));
+      }
+    }
+    var dois = lista.length > 1;
+    lista.forEach(function (v) {
+      var r = q.rows[v.chave];
+      if (!r) return;
+      var p = pctVida(v), cheio = v.hp >= v.max, zero = v.hp < 1, alvo = v.chave === vidaAlvoPraca;
+      var n = v.hp + '/' + v.max, pt = zero ? '1 PV em ' + Math.max(1, v.ate1S) + ' s' : p + '%';
+      if (r.num.textContent !== n) r.num.textContent = n;
+      if (r.pct.textContent !== pt) r.pct.textContent = pt;
+      if (r.enche.style.height !== p + '%') r.enche.style.height = p + '%';
+      r.card.classList.toggle('is-cheio', cheio);
+      r.card.classList.toggle('is-zero', zero);
+      r.card.classList.toggle('is-baixo', !cheio && !zero && p < 35);
+      r.card.classList.toggle('is-alvo', alvo);
+      r.card.setAttribute('aria-pressed', alvo ? 'true' : 'false');
+      var tt = v.nome + ': ' + n + ' PV' + (cheio ? ' — vida cheia'
+        : (zero ? ' — 1 PV em ' + Math.max(1, v.ate1S) + ' s' : ' — +1 PV a cada ' + segPorPv() + ' s · cheio em ' + mmss(v.cheioEmS))) +
+        (dois ? ' · toque para escolher quem bebe a poção' : '');
+      if (r.card.title !== tt) r.card.title = tt;
+      if (alvo && q.para) {
+        var pr = 'Poção para <b>' + esc(v.nome) + '</b>:';
+        if (q.para.innerHTML !== pr) q.para.innerHTML = pr;
+      }
+    });
+    [].forEach.call(q.pocoesEl.querySelectorAll('.vp-pocao'), function (b) {
+      var m = safe(function () { return G().podeBeberEspera(vidaAlvoPraca, b.getAttribute('data-pocao')); }, 'batalha');
+      b.classList.toggle('is-dim', !!m);
+    });
+    posicionaVidaPraca(q);
+  }
+  /* o topo do cartão: logo abaixo do nome/moedas/Menu da praça (no celular os chips descem uma
+   * linha) e, quando a faixa dos eventos está no ar e cruza a coluna do cartão, abaixo dela */
+  function posicionaVidaPraca(q) {
+    var tela = q.box.parentNode;
+    if (!tela || !tela.getBoundingClientRect) return;
+    var rt = tela.getBoundingClientRect();
+    if (!rt.width) return;
+    var fundo = 0, rb = q.box.getBoundingClientRect();
+    ['.hub-top .hub-quem', '.hub-top .hub-acts', '.hub-evento:not(.is-off)'].forEach(function (sel) {
+      var e = tela.querySelector(sel);
+      if (!e) return;
+      var r = e.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      if (r.left >= rb.left + Math.max(rb.width, 1) || r.right <= rb.left) return;   // não cruza a coluna
+      fundo = Math.max(fundo, r.bottom - rt.top);
+    });
+    var top = Math.max(0, Math.round(fundo + 8));
+    if (!fundo) top = -1;
+    if (top === q.top) return;
+    q.top = top;
+    q.box.style.top = top < 0 ? '' : top + 'px';
+  }
   function ligaVidaTique() {
     if (!vidaTimer) vidaTimer = setTimeout(vidaTique, 250);
   }
@@ -9797,7 +9962,7 @@ var JOGO = (typeof window !== 'undefined')
     if (vidaTimer) { clearTimeout(vidaTimer); vidaTimer = null; }
     vidaQuadros = vidaQuadros.filter(function (q) { return document.body.contains(q.box); });
     if (!VIDA_TELAS[current]) return;
-    vidaQuadros.forEach(pintaVida);
+    vidaQuadros.forEach(function (q) { (q.pinta || pintaVida)(q); });   // a praça pinta o cartão dela
     // o botão da porta (solo): apagado enquanto houver herói a 0 PV, com os segundos que faltam
     var portas = document.querySelectorAll('.vida-porta');
     var ev = portas.length ? safe(function () { return G().esperaVida(); }, null) : null;
@@ -10422,14 +10587,16 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (est.did !== dueloDid) { dueloDid = est.did; dueloEscolha = []; }
     var nome = (est.oponente && est.oponente.nome) || 'o outro lado';
-    var body = sheetShell('Arena — duelo com ' + esc(nome), est.escolhi
-      ? 'A sua dupla está guardada.'
-      : 'Escolha 1 ou 2 heróis seus. ' + esc(nome) + ' não vê a sua dupla até as duas estarem escolhidas.');
+    // 14/09: por aqui só passa o desafio amistoso (a Arena e o Campo escolhem sozinhos)
+    var body = sheetShell('Desafio amistoso com ' + nome, est.escolhi
+      ? 'A sua dupla está guardada. Mapa: A Praça — a coroa não muda.'
+      : 'Mapa: A Praça — a coroa não muda. Escolha 1 ou 2 heróis seus: ' + esc(nome) + ' não vê a sua dupla até as duas estarem escolhidas.');
     sheetName = 'dueloRede';
     var caixa = el('div', 'ms-caixa du-rede');
     body.appendChild(caixa);
     if (est.fase === 'batalha') {
-      caixa.appendChild(el('p', 'du-espera', 'Arena sorteada: <b>' + esc(est.arena ? est.arena.nome : '') + '</b>. Abrindo…'));
+      caixa.appendChild(el('p', 'du-espera', (est.modo === 'desafio' ? 'Mapa: <b>' : 'Arena sorteada: <b>') +
+        esc(est.arena ? est.arena.nome : '') + '</b>. Abrindo…'));
       return;
     }
     function carta(hid, marcada, clicavel) {
@@ -10506,11 +10673,397 @@ var JOGO = (typeof window !== 'undefined')
     dueloRelogio = setInterval(anda, 500);
     anda();
   }
+  /* ======================================================= 14/09: A ARENA E O CAMPO DE PVP NA TELA
+   * O dono: "na inscrição de pvp onde ele se inscreve na arena para esperar que alguém aceite o desafio... esse
+   * ele pré-seleciona as duas classes já e quem vai desafiar consegue ver.. essa inscrição dá ranking na coroa
+   * também"; e o Campo: "esse mapa os jogadores só vão entrar com a coroa ligada e lá não poderá desligar, e lá
+   * ao clicar em cima o jogador pode atacar sem aviso prévio", com a dupla em ordem — "sendo o 1º a selecionar
+   * que fica a aparência e o segundo fica selecionado, é o elemento surpresa pro inimigo". */
+  function Ar() { return JOGO.Arena || null; }
+  var arenaRelogio = null, arenaSig = '';
+  var campoHud = { dentro: false, dupla: [] };
+  function campoDentro() {
+    var H = JOGO.Hub;
+    return !!(H && typeof H.naCampo === 'function' && safe(function () { return H.naCampo(); }, false));
+  }
+  function aparenciaDe(hid) { var h = hid ? hero(hid) : null; return (h && h.classId) || hid || 'sumo'; }
+  function aparenciaDaRede() {
+    return (campoDentro() && campoHud.dupla[0]) ? aparenciaDe(campoHud.dupla[0]) : (selHeroes[0] || 'sumo');
+  }
+  function forteDeIds(ids) {
+    var m = 1;
+    (ids || []).forEach(function (hid) { var h = hero(hid); if (h && (h.level || 1) > m) m = h.level || 1; });
+    return m;
+  }
+  function forteDaVez() { return forteDeIds((campoDentro() && campoHud.dupla.length) ? campoHud.dupla : selHeroes); }
+  function agoraArena() { return safe(function () { return Ar()._agora(); }, Date.now()); }
+  function coroaNome(pts) {
+    var t = safe(function () { return JOGO.Brasa.tierDe(pts, false); }, null);
+    return (t && t.nome) || 'Coroa I';
+  }
+  function nomesDupla(classes) {
+    return (classes || []).map(function (c) { return className((c && c.classId) || '?') + ' nv ' + ((c && c.nivel) || 1); }).join(' e ');
+  }
+  function nomeHeroiNv(hid) { var h = hero(hid) || {}; return className(h.classId || hid) + ' nv ' + (h.level || 1); }
+
+  /* ESCOLHA OS DOIS HERÓIS (a ficha reaproveitável: a Arena, o Campo e — depois — a guerra de guilda 2×2).
+   * op = { titulo, sub, rotulo, inicial: [ids], ordem: bool (diz o que é o 1º), aoEscolher(ids) }. Pede
+   * DOIS (um só quando a conta só tem um herói que pode lutar), na ordem dos toques, e espera a vida. */
+  var escolhaDupla = { op: null, ids: [] };
+  function sheetEscolheDupla(op) {
+    if (op && op !== escolhaDupla.op) {
+      escolhaDupla.op = op;
+      escolhaDupla.ids = [];
+      (op.inicial || []).forEach(function (h) {
+        if (h && escolhaDupla.ids.length < 2 && escolhaDupla.ids.indexOf(h) < 0) escolhaDupla.ids.push(h);
+      });
+    }
+    op = escolhaDupla.op || {};
+    var herois = safe(function () { return Dl().herois(); }, []) || [];
+    escolhaDupla.ids = escolhaDupla.ids.filter(function (h) { return herois.indexOf(h) >= 0; });
+    var precisa = Math.min(2, herois.length);
+    var body = sheetShell(op.titulo || 'Escolha os dois heróis', op.sub || 'Toque na ordem: o 1º e o 2º.');
+    sheetName = 'escolheDupla';
+    var caixa = el('div', 'ms-caixa du-rede dupla-escolha');
+    body.appendChild(caixa);
+    var fila = el('div', 'av-fila');
+    herois.forEach(function (hid) {
+      fila.appendChild(cartaDupla(hid, escolhaDupla.ids.indexOf(hid), function () {
+        var j = escolhaDupla.ids.indexOf(hid);
+        if (j >= 0) escolhaDupla.ids.splice(j, 1);
+        else if (escolhaDupla.ids.length < 2) escolhaDupla.ids.push(hid);
+        else { toast('São dois: tire um antes de pôr outro.'); return; }
+        sheetEscolheDupla();
+      }));
+    });
+    if (!herois.length) fila.appendChild(el('p', 'empty', 'Nenhum herói seu pode lutar.'));
+    caixa.appendChild(fila);
+    if (herois.length === 1) caixa.appendChild(el('p', 'du-espera', 'Você só tem um herói que pode lutar: ele vai sozinho.'));
+    else if (op.ordem) caixa.appendChild(el('p', 'du-espera', 'O <b>1º</b> é o que todos veem; o <b>2º</b> fica em segredo até a luta.'));
+    var pronto = precisa > 0 && escolhaDupla.ids.length >= precisa;
+    var rot = (op.rotulo || 'Pronto') + (pronto ? '' : ' (' + escolhaDupla.ids.length + '/' + precisa + ')');
+    caixa.appendChild(btn(rot, 'btn-primary btn-block dupla-pronto' + (pronto ? '' : ' is-off'), function () {
+      if (!pronto) { toast(precisa > 1 ? 'Escolha os dois heróis.' : 'Escolha o herói.'); return; }
+      var ev = safe(function () { return G().esperaVida(escolhaDupla.ids.slice()); }, null);
+      if (ev) { toast(textoEsperaVida(ev) + ' — ou beba uma poção.'); return; }
+      if (typeof op.aoEscolher === 'function') safe(function () { return op.aoEscolher(escolhaDupla.ids.slice()); }, null);
+    }));
+    caixa.appendChild(btn('Cancelar', 'btn-ghost btn-block', closeSheet));
+  }
+  UI.escolheDupla = function (op) { openSheet('escolheDupla', op); };
+  function cartaDupla(hid, ordem, aoTocar) {
+    var h = hero(hid) || {};
+    var cid = h.classId || hid;
+    var vd = safe(function () { return G().vidaNaEspera([hid])[0]; }, null);
+    var card = el('button', 'av-carta' + (ordem >= 0 ? ' is-on' : '') + (vd && vd.hp < 1 ? ' is-zero' : ''));
+    card.type = 'button';
+    card.setAttribute('data-heroi', hid);
+    card.appendChild(art('portrait', [cid, { element: h.element || 'neutro', size: 168 }], 84, 'av-pic'));
+    card.appendChild(el('span', 'av-nome', esc(className(cid)) + '<small>nv ' + (h.level || 1) + '</small>'));
+    if (ordem >= 0) card.appendChild(el('b', 'dupla-ordem', (ordem + 1) + 'º'));
+    if (vd && vd.hp < vd.max) {
+      var vbar = el('span', 'av-vida'), vfill = el('i');
+      vfill.style.width = Math.round(100 * vd.hp / vd.max) + '%';
+      vbar.appendChild(vfill);
+      vbar.title = vd.hp + '/' + vd.max + ' PV';
+      card.appendChild(vbar);
+    }
+    tap(card, aoTocar);
+    return card;
+  }
+
+  // ---- a Arena: o bloco do painel do lugar, a inscrição e o quadro
+  function textoArena(r) {
+    if (!r) return 'A Arena não respondeu.';
+    var m = r.motivo;
+    if (m === 'vida-zero') return 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.';
+    if (m === 'vida-zero-alvo') return 'Um herói dessa inscrição está sem vida agora.';
+    if (m === 'paridade') return 'A diferença de nível entre os heróis mais fortes passa de 5: não vale.';
+    if (m === 'sem-inscricao') return 'Essa inscrição saiu do quadro.';
+    if (m === 'inscrito') return 'Saia da sua inscrição antes de desafiar outra.';
+    if (m === 'casada') return 'Você já tem uma partida da Arena em andamento.';
+    if (m === 'sem-partida') return 'O prazo da partida passou.';
+    if (r.erro && ['sem-sessao', 'arquivo', 'servidor', 'rede', 'arena'].indexOf(m) >= 0) return r.erro;
+    return textoMotivo(m, null);
+  }
+  function painelArena(p) {
+    var A = Ar();
+    if (!A) return;
+    var e = A.estado();
+    var caixa = el('div', 'arena-bloco');
+    p.appendChild(caixa);
+    if (e.desligada) { caixa.appendChild(el('p', 'hub-nota arena-off', '⚔ ' + esc(e.desligada))); return; }
+    if (e.fase === 'livre') {
+      caixa.appendChild(btn('Inscrever minha dupla', 'btn-gold btn-block arena-inscrever', pedeInscricao));
+    } else if (e.fase === 'inscrito') {
+      caixa.appendChild(el('p', 'hub-nota arena-inscrito', 'Inscrito com <b>' + esc(nomesDupla(e.classes)) +
+        '</b> · esperando há <b class="arena-relogio" data-desde="' + e.desdeMs + '">' + relogioTxt(agoraArena() - e.desdeMs) +
+        '</b>. Pode andar pela praça.'));
+      caixa.appendChild(btn('Sair da inscrição', 'btn-warn btn-block arena-sair', function () {
+        A.sair();
+        toast('Você saiu do quadro da Arena.');
+      }));
+    } else if (e.fase === 'casada') {
+      caixa.appendChild(btn('Ver o adversário encontrado', 'btn-gold btn-block', function () { mostraArenaCasada(A.estado()); }));
+    } else if (e.fase === 'pronta') {
+      caixa.appendChild(el('p', 'hub-nota', 'Partida pronta — a luta abre em instantes…'));
+    }
+    caixa.appendChild(btn('Ver o quadro de inscritos', 'btn-ghost btn-block arena-ver-quadro', function () { openSheet('arenaQuadro'); }));
+  }
+  function pedeInscricao() {
+    openSheet('escolheDupla', { titulo: 'Inscrição na Arena', rotulo: 'Inscrever no quadro',
+      sub: 'Escolha os dois heróis, em ordem. Quem olhar o quadro vê as duas classes — e quem desafiar mostra as dele. Vale coroa.',
+      inicial: selHeroes.slice(),
+      aoEscolher: function (ids) {
+        return Ar().inscrever(ids).then(function (r) {
+          if (r.ok) { closeSheet(); toast('A sua dupla está no quadro da Arena. Pode andar pela praça esperando.', 'good'); repintaLugar(); }
+          else toast(textoArena(r));
+          return r;
+        });
+      } });
+  }
+  var quadroArena = { lista: null, erro: null, pedindo: false, t: 0 };
+  function sheetArenaQuadro(semPedir) {
+    var A = Ar();
+    var body = sheetShell('Quadro da Arena', 'Quem espera desafio. Vale coroa: até 5 níveis entre os heróis mais fortes de cada lado.');
+    sheetName = 'arenaQuadro';
+    var caixa = el('div', 'ms-caixa arena-quadro');
+    body.appendChild(caixa);
+    var e = A ? A.estado() : { desligada: 'A Arena não carregou.' };
+    if (e.desligada) { caixa.appendChild(el('p', 'empty arena-off', esc(e.desligada))); return; }
+    var meu = forteDeIds(selHeroes);
+    caixa.appendChild(el('p', 'du-espera', 'A sua dupla escolhida chega a <b>nv ' + meu + '</b>: quem está fora da paridade fica apagado.'));
+    if (e.fase === 'livre') caixa.appendChild(btn('Inscrever minha dupla', 'btn-gold btn-block', pedeInscricao));
+    else if (e.fase === 'inscrito') caixa.appendChild(el('p', 'hub-nota', 'Você está no quadro — espere um desafio.'));
+    var lista = el('div', 'aq-lista');
+    caixa.appendChild(lista);
+    if (quadroArena.lista === null) lista.appendChild(el('p', 'empty', quadroArena.erro ? esc(quadroArena.erro) : 'Lendo o quadro…'));
+    else if (!quadroArena.lista.length) lista.appendChild(el('p', 'empty', 'Ninguém inscrito agora. Inscreva a sua dupla e espere um desafio!'));
+    else quadroArena.lista.forEach(function (x) { lista.appendChild(linhaQuadro(x, meu, e)); });
+    if (!semPedir) atualizaQuadro();
+  }
+  function atualizaQuadro() {
+    var A = Ar();
+    if (!A || quadroArena.pedindo) return;
+    quadroArena.pedindo = true;
+    quadroArena.t = Date.now();
+    A.quadro().then(function (r) {
+      quadroArena.pedindo = false;
+      if (r && r.ok) { quadroArena.lista = r.inscritos; quadroArena.erro = null; }
+      else quadroArena.erro = (r && r.erro) || 'o servidor não respondeu';
+      if (sheetName === 'arenaQuadro') sheetArenaQuadro(true);
+    });
+  }
+  function linhaQuadro(x, meu, e) {
+    var par = (Ar() && Ar().PARIDADE) || 5;
+    var fora = !x.eu && Math.abs(meu - x.nivel) > par;
+    var ln = el('div', 'aq-linha' + (x.eu ? ' is-eu' : '') + (fora ? ' is-fora' : ''));
+    ln.setAttribute('data-conta', String(x.conta));
+    ln.appendChild(art('portrait', [((x.classes[0] || {}).classId) || 'sumo', { element: 'neutro', size: 48 }], 36));
+    var tx = el('div', 'aq-tx');
+    tx.appendChild(el('b', 'aq-nome', esc(x.nome) + ' <small>nv ' + x.nivel + ' · ' + esc(coroaNome(x.brasa)) + '</small>'));
+    tx.appendChild(el('span', 'aq-dupla', esc(nomesDupla(x.classes))));
+    tx.appendChild(el('span', 'aq-desde', 'esperando há ' + relogioTxt(agoraArena() - x.desdeMs)));
+    ln.appendChild(tx);
+    if (x.eu) ln.appendChild(el('span', 'aq-tag', 'sua inscrição'));
+    else if (fora) {
+      ln.appendChild(btn('Fora da paridade', 'btn-mini btn-ghost is-apagado aq-desafiar', function () {
+        toast('A diferença de nível passa de ' + par + ' (você nv ' + meu + ', ' + x.nome + ' nv ' + x.nivel + '): não vale.');
+      }));
+    } else if (e.fase !== 'livre') {
+      ln.appendChild(btn('Desafiar', 'btn-mini btn-ghost is-apagado aq-desafiar', function () {
+        toast(e.fase === 'inscrito' ? 'Saia da sua inscrição antes de desafiar outra.' : 'Você já tem uma partida da Arena em andamento.');
+      }));
+    } else ln.appendChild(btn('Desafiar', 'btn-mini btn-gold aq-desafiar', function () { pedeDesafioArena(x); }));
+    return ln;
+  }
+  function pedeDesafioArena(x) {
+    openSheet('escolheDupla', { titulo: 'Desafiar ' + x.nome, rotulo: 'Desafiar',
+      sub: 'A dupla de ' + esc(x.nome) + ': <b>' + esc(nomesDupla(x.classes)) + '</b> (nv ' + x.nivel + '). Escolha os seus dois — ' +
+           esc(x.nome) + ' vê as suas classes antes de confirmar.',
+      inicial: selHeroes.slice(),
+      aoEscolher: function (ids) {
+        var nv = forteDeIds(ids);
+        if (Math.abs(nv - x.nivel) > ((Ar() && Ar().PARIDADE) || 5)) {
+          toast('Com essa dupla (nv ' + nv + ') a diferença para nv ' + x.nivel + ' passa do limite.');
+          return null;
+        }
+        return Ar().desafiar(x.conta, ids).then(function (r) {
+          if (r.ok) { closeSheet(); toast('Desafio enviado a ' + x.nome + '. Os dois confirmam em 30 s.', 'good'); }
+          else { toast(textoArena(r)); if (r.motivo === 'sem-inscricao' || r.motivo === 'paridade') atualizaQuadro(); }
+          return r;
+        });
+      } });
+  }
+  /* a partida casada: "Adversário encontrado: Nome · nv X · Coroa Y — Confirmar (30 s)" — no painel, em qualquer
+   * ponto da praça (o inscrito estava andando) */
+  function mostraArenaCasada(e) {
+    e = e || (Ar() && Ar().estado());
+    if (!e || e.fase !== 'casada') return;
+    var p = abrePainel('convite');
+    if (!p) { toast('Arena: adversário encontrado — confirme o duelo na praça!'); return; }
+    painelConv = { tipo: 'arena' };
+    pintaArenaCasada(p, e);
+    if (sheetName) toast('Adversário encontrado na Arena — veja o painel');
+  }
+  function pintaArenaCasada(p, e) {
+    clear(p);
+    p.classList.add('arena-casada');
+    var ad = e.adversario || { classes: [] };
+    cabecalhoPainel(p, ((ad.classes[0] || {}).classId) || 'sumo', 'neutro',
+      'Adversário encontrado: <b>' + esc(ad.nome) + '</b> · nv ' + ad.nivel + ' · ' + esc(coroaNome(ad.brasa)),
+      e.papel === 'inscrito' ? 'desafiou a sua inscrição' : 'você desafiou');
+    p.appendChild(el('p', 'hub-nota', 'A dupla de ' + esc(ad.nome) + ': <b>' + esc(nomesDupla(ad.classes)) + '</b>.<br>A sua: <b>' +
+      esc(nomesDupla(e.classes)) + '</b>. Vale coroa; o mapa é sorteado.'));
+    p.appendChild(barraPrazo(e.prazoMs, agoraArena));
+    var resta = Math.max(0, Math.ceil((e.prazoMs - agoraArena()) / 1000));
+    if (e.confirmei) {
+      p.appendChild(el('p', 'du-espera', 'Você confirmou. Esperando ' + esc(ad.nome) + '… <b class="arena-relogio" data-prazo="' +
+        e.prazoMs + '">' + resta + ' s</b>'));
+      p.appendChild(btn('Desistir', 'btn-ghost btn-block', function () { Ar().recusar(); fechaPainel(); }));
+    } else {
+      var duo = el('div', 'pn-duplo');
+      var bOk = btn('Confirmar (' + resta + ' s)', 'btn-primary arena-confirma', function () {
+        Ar().confirmar().then(function (r) { if (!r.ok) toast(textoArena(r)); });
+      });
+      bOk.setAttribute('data-prazo', String(e.prazoMs));
+      duo.appendChild(bOk);
+      duo.appendChild(btn('Recusar', 'btn-ghost arena-recusa', function () { Ar().recusar(); fechaPainel(); }));
+      p.appendChild(duo);
+    }
+    if (e.eleConfirmou) p.appendChild(el('p', 'du-espera', esc(ad.nome) + ' já confirmou.'));
+  }
+  function aoArenaMudou(e) {
+    e = e || {};
+    var sig = [e.fase, e.confirmei, e.eleConfirmou, e.did, (e.herois || []).join('+'), !!e.desligada].join('|');
+    var mudou = sig !== arenaSig;
+    arenaSig = sig;
+    pintaSeloArena();
+    if (!mudou) return;
+    if (painelModo === 'convite' && painelConv && painelConv.tipo === 'arena') {
+      var pv = painelVivo();
+      if (e.fase === 'casada' && pv) pintaArenaCasada(pv, e);
+      else fechaPainel();
+    }
+    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'arena') repintaLugar();
+    if (sheetName === 'arenaQuadro') sheetArenaQuadro(true);
+  }
+  /* O SELO pequeno no canto da praça: inscrito na Arena (e há quanto tempo), o adversário encontrado, o Campo */
+  function pintaSeloArena() {
+    var s = safe(function () { return screens.hub; }, null);
+    if (!s) return;
+    var e = Ar() ? Ar().estado() : null, txt = '';
+    if (e && e.fase === 'inscrito') txt = '⚔ Arena · inscrito ' + relogioTxt(agoraArena() - e.desdeMs);
+    else if (e && e.fase === 'casada') txt = '⚔ Arena · adversário encontrado!';
+    else if (e && e.fase === 'pronta') txt = '⚔ Arena · abrindo a luta…';
+    if (campoDentro()) txt = (txt ? txt + ' · ' : '') + '☠ Campo de PvP';
+    var selo = s.querySelector('.arena-selo');
+    if (!txt) { if (selo && selo.parentNode) selo.parentNode.removeChild(selo); return; }
+    if (!selo) {
+      selo = el('button', 'arena-selo');
+      selo.type = 'button';
+      tap(selo, function () {
+        var e2 = Ar() && Ar().estado();
+        if (e2 && e2.fase === 'casada') mostraArenaCasada(e2);
+        else if (e2 && e2.fase !== 'livre') openSheet('arenaQuadro');
+      });
+      s.appendChild(selo);
+    }
+    if (selo.textContent !== txt) selo.textContent = txt;
+  }
+  function tiqueArenaTela() {
+    pintaSeloArena();
+    var agora = agoraArena();
+    [].forEach.call(document.querySelectorAll('.arena-relogio[data-desde]'), function (x) {
+      x.textContent = relogioTxt(agora - Number(x.getAttribute('data-desde')));
+    });
+    [].forEach.call(document.querySelectorAll('.arena-relogio[data-prazo], .arena-confirma[data-prazo]'), function (x) {
+      var sg = Math.max(0, Math.ceil((Number(x.getAttribute('data-prazo')) - agora) / 1000));
+      x.textContent = x.classList.contains('arena-confirma') ? 'Confirmar (' + sg + ' s)' : sg + ' s';
+    });
+    if (sheetName === 'arenaQuadro' && Date.now() - quadroArena.t > 4000) atualizaQuadro();
+  }
+
+  // ---- o Campo de PvP: a entrada, a saída, a dupla do Campo e o toque que ataca
+  function painelCampo(p) {
+    p.appendChild(el('h3', null, 'Campo de PvP'));
+    p.appendChild(el('p', 'hub-nota', 'Só com a <b>coroa ligada</b>; lá dentro ela não desliga. <b>Qualquer um pode te atacar ' +
+      'sem aviso</b> — e você também. Vale coroa (até 10 níveis de diferença).'));
+    p.appendChild(el('p', 'hub-nota', 'Na entrada você escolhe a dupla do Campo, em ordem: o 1º é a sua aparência lá dentro; ' +
+      'o 2º fica em segredo até a luta.'));
+    if (emGrupo()) { p.appendChild(el('p', 'hub-nota', 'Saia do grupo para entrar no Campo.')); return; }
+    var oculta = resumoCoroaOculta === true;
+    p.appendChild(btn(oculta ? 'Ligar a coroa e entrar' : 'Entrar', 'btn-warn btn-block campo-entrar', function () {
+      pedeDuplaCampo(oculta, false);
+    }));
+  }
+  function painelCampoSaida(p) {
+    p.appendChild(el('h3', null, 'Sair do Campo de PvP'));
+    p.appendChild(el('p', 'hub-nota', 'A dupla do Campo: <b>' + esc(campoHud.dupla.map(nomeHeroiNv).join(' e ') || '—') +
+      '</b> (o 1º é a sua aparência aqui).'));
+    p.appendChild(btn('Trocar dupla', 'btn-ghost btn-block campo-trocar', function () { pedeDuplaCampo(false, true); }));
+    p.appendChild(btn('Voltar à praça', 'btn-primary btn-block campo-sair', saiDoCampo));
+  }
+  function pedeDuplaCampo(ligarCoroa, trocando) {
+    openSheet('escolheDupla', { titulo: trocando ? 'Trocar a dupla do Campo' : 'A dupla do Campo de PvP', ordem: true,
+      rotulo: trocando ? 'Trocar a dupla' : (ligarCoroa ? 'Ligar a coroa e entrar' : 'Entrar no Campo'),
+      sub: 'Toque na ordem. O <b>1º</b> é a aparência que todos veem no Campo; o <b>2º</b> é a surpresa — só aparece na luta.',
+      inicial: (campoHud.dupla.length ? campoHud.dupla : selHeroes).slice(),
+      aoEscolher: function (ids) { entraNoCampo(ids, ligarCoroa, trocando); } });
+  }
+  function entraNoCampo(ids, ligarCoroa, trocando) {
+    var H = JOGO.Hub;
+    if (!H || typeof H.entraCampo !== 'function') { toast('O Campo de PvP ainda está sendo construído.'); return; }
+    if (safe(function () { return Dl().estado().fase; }, 'livre') !== 'livre') { toast('Termine o duelo antes.'); return; }
+    function vai() {
+      campoHud.dupla = safe(function () { return Dl().defineDuplaCampo(ids); }, null) || ids.slice();
+      campoHud.dentro = true;
+      closeSheet();
+      if (painelModo === 'lugar') fechaPainel();
+      safe(function () { H.entraCampo({ aparencia: aparenciaDe(campoHud.dupla[0]) }); return true; }, null);
+      reanunciaPerfil();
+      safe(function () { return JOGO.Rede._tique(); }, null);
+      pintaSeloArena();
+      toast(trocando ? 'A dupla do Campo mudou.' : 'Você entrou no Campo de PvP. Cuidado: aqui qualquer um ataca.', trocando ? 'good' : 'bad');
+    }
+    if (ligarCoroa && JOGO.DB && JOGO.DB.definirCoroaOculta) {
+      JOGO.DB.definirCoroaOculta(false).then(function () { resumoCoroaOculta = false; vai(); });
+    } else vai();
+  }
+  function saiDoCampo() {
+    if (safe(function () { return Dl().estado().fase; }, 'livre') !== 'livre') { toast('Termine a luta antes de sair.'); return; }
+    campoHud.dentro = false;
+    fechaPainel();
+    safe(function () { JOGO.Hub.saiCampo(); return true; }, null);
+    reanunciaPerfil();
+    safe(function () { return JOGO.Rede._tique(); }, null);
+    pintaSeloArena();
+    toast('Você voltou à praça.');
+  }
+  function reentraCampo() {
+    var H = JOGO.Hub;
+    if (!campoHud.dentro || !H || typeof H.entraCampo !== 'function' || campoDentro()) return;
+    safe(function () { H.entraCampo({ aparencia: aparenciaDe(campoHud.dupla[0]) }); return true; }, null);
+    safe(function () { return JOGO.Rede._tique(); }, null);
+  }
+  function ataqueNoCampo(par) {
+    var r = safe(function () { return Dl().atacar(par.id); }, null);
+    if (r && r.ok) { toast('Você atacou ' + par.nome + '!', 'bad'); return; }
+    var m = r ? r.motivo : 'ocupado';
+    if (m === 'vida-zero') toast('A sua dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.');
+    else if (m === 'paridade') toast('A diferença de nível passa de 10 (você nv ' + r.meu + ', ' + par.nome + ' nv ' + r.dele + '): aqui não dá.');
+    else if (m === 'alvo-fora' || m === 'alvo-luta') toast(textoMotivo(m, par.nome));
+    else toast(textoMotivo(m, null));
+  }
+  UI._campo = function () { return { dentro: campoHud.dentro, dupla: campoHud.dupla.slice() }; };   // provas
+
   function aoDueloMudou(est) {
     var p = painelVivo();
     if (p && painelModo === 'convite' && painelConv && painelConv.tipo === 'duelo' &&
         !(est && est.fase === 'desafiado' && est.did === painelConv.did)) fechaPainel();
     var f = est ? est.fase : 'livre';
+    // 14/09: a Arena (duplas do quadro) e o Campo (a dupla do Campo) não têm ficha de escolha
+    if (est && (est.modo === 'arena' || est.modo === 'campo')) { if (sheetName === 'dueloRede') closeSheet(); return; }
     if (f === 'escolhendo' || f === 'comprometido' || f === 'revelado' || (f === 'batalha' && sheetName === 'dueloRede')) {
       if (current === 'hub') openSheet('dueloRede');
     } else if (sheetName === 'dueloRede') closeSheet();
@@ -10544,22 +11097,29 @@ var JOGO = (typeof window !== 'undefined')
       esc(nomes(data.duplaDele))));
     var ar = data.arena || {};
     box.appendChild(el('p', 'game-sub', (ar.nome ? 'Arena: ' + esc(ar.nome) + ' · ' : '') + 'clima: ' + esc(nomeClima(data.clima))));
-    box.appendChild(el('p', 'du-valeria', 'Amistoso — a Brasa de verdade acende quando o servidor apitar o duelo.' +
-      (data.seValesse != null ? ' Se valesse: +' + esc(data.seValesse) + '.' : '')));
+    // 14/09: o que valeu depende do modo — o desafio nunca mexe na coroa; a Arena e o Campo o servidor confere
+    box.appendChild(el('p', 'du-valeria', data.modo === 'desafio'
+      ? 'Desafio amistoso — a coroa não muda.'
+      : (data.modo === 'arena' || data.modo === 'campo')
+        ? (data.modo === 'arena' ? 'Arena ranqueada' : 'Campo de PvP') + ' — o servidor confere a luta e a coroa muda (o aviso chega em instantes).'
+        : 'Amistoso — a Brasa de verdade acende quando o servidor apitar o duelo.' +
+          (data.seValesse != null ? ' Se valesse: +' + esc(data.seValesse) + '.' : '')));
     box.appendChild(vidaBloco('fim'));       // 14/09: o meu lado sai do duelo com a vida com que terminou
     var ult = safe(function () { return Dl().ultimo(); }, null);
     var opId = (op && op.id) || (ult && ult.id) || null;
     var naPraca = !!opId && !!safe(function () {
       return JOGO.Rede.pares().some(function (p) { return p.id === opId && !p.sala; });
     }, false);
-    if (naPraca) {
+    if (naPraca && data.modo !== 'arena' && data.modo !== 'campo') {
       box.appendChild(btn('Desafiar de novo', 'btn-gold btn-block', function () {
         navTo('hub');
         var r = safe(function () { return Dl().desafiar(opId); }, null);
         toast(r && r.ok ? 'Desafio enviado a ' + nomeOp + '. Esperando a resposta…' : textoMotivo(r ? r.motivo : 'ocupado', null));
       }));
     }
-    box.appendChild(btn('Voltar ao Acampamento', 'btn-primary btn-block', function () { navTo('hub'); }));
+    // 14/09: do Campo de PvP se volta ao Campo (buildHub → reentraCampo)
+    box.appendChild(btn(data.modo === 'campo' && campoHud.dentro ? 'Voltar ao Campo de PvP' : 'Voltar ao Acampamento',
+      'btn-primary btn-block', function () { navTo('hub'); }));
     s.appendChild(box);
   }
 
@@ -10596,6 +11156,13 @@ var JOGO = (typeof window !== 'undefined')
       };
     }
     if (Du) { Du.aoMudar = aoDueloMudou; Du.aoDesafio = mostraDesafio; }
+    // 14/09: o quadro da Arena — o selo, o painel do adversário encontrado e os relógios
+    var Aq = Ar();
+    if (Aq) {
+      Aq.aoMudar = aoArenaMudou;
+      Aq.aoCasou = mostraArenaCasada;
+      if (!arenaRelogio) arenaRelogio = setInterval(function () { safe(function () { tiqueArenaTela(); return true; }, null); }, 1000);
+    }
     if (S) S.aoChegar = aoSussurroChegou;
     if (C) {
       C.aoMudar = aoCoopMudou;

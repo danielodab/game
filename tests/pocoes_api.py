@@ -111,7 +111,10 @@ class ProvaDasPocoes(A.ProvaDaAutoridade):
         corpo = {'did': did, 'dungeonId': 'cistern', 'roomIndex': 0, 'semente': 999,
                  'A': {'conta': a.conta['id'], 'dono': 'ana', 'herois': ['sumo']},
                  'B': {'conta': b.conta['id'], 'dono': 'bia', 'herois': ['curandeiro']},
-                 'lances': jogo['lances'], 'hashFinal': jogo['hash'], 'fotografada': False}
+                 'lances': jogo['lances'], 'hashFinal': jogo['hash'], 'fotografada': False,
+                 # 14/09: o duelo leva o modo; sem ele vale como amistoso (a página de antes). O Campo ranqueia com
+                 # paridade de 10 níveis — as duas contas da prova são nível 20
+                 'modo': 'campo'}
         corpo.update(kw)
         return quem.pede('POST', '/api/duelo/fechar', corpo)
 

@@ -85,7 +85,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
   (function () {
     var D0 = window.__RAIZ + 'js/core/', B = window.__BASE, V = window.__V;
     var dados = ['data/elements.js', 'data/classes.js', 'data/spells.js', 'data/progression.js',
-      'data/monsters.js', 'data/dungeons.js', 'data/fusions.js', 'data/pets.js', 'data/items.js',
+      'data/monsters.js', 'data/dungeons.js', 'data/arenas.js', 'data/fusions.js', 'data/pets.js', 'data/items.js',
       'data/items_extra.js', 'data/items_selos.js'];
     var i;
     for (i = 0; i < dados.length; i++) document.write('<scr' + 'ipt src="' + D0 + dados[i] + V + '"></scr' + 'ipt>');
@@ -1199,6 +1199,20 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     ['ana', 'bia'].forEach(function (id) {
       cli[id].J.Guilda = { registraTreino: function () { treinos20++; return Promise.resolve({ ok: true }); } };
     });
+    // 14/09: o modo decide o mapa — o desafio só na praça; a arena e o campo só no sorteio
+    (function () {
+      var pA0 = [ana.J.Coop.payloadMeu('espadachim')], pB0 = [bia.J.Coop.payloadMeu('curandeiro')];
+      var ar0 = ana.J.Coop.sorteiaArena(4242), pr0 = ana.J.Coop.arenaDoDesafio();
+      var base0 = { did: 'modo-x', semente: 4242, duplaA: pA0, duplaB: pB0, eu: 'A', oponente: { id: 'bia', cx: bia.cx } };
+      function com(o) { var c = JSON.parse(JSON.stringify(base0)); for (var k in o) c[k] = o[k]; return c; }
+      check('K10 · o mapa do desafio é a praça (js/core/data/arenas.js) e o motor a monta com as duas duplas',
+            pr0 && pr0.dungeonId === 'praca' && pr0.roomIndex === 0 &&
+            !!ana.J.Engine.createDuelSala('praca', 0, JSON.parse(JSON.stringify(pA0)), JSON.parse(JSON.stringify(pB0)), { seed: 4242 }));
+      check('K10 · desafio num calabouço, ou arena na praça: o Coop recusa (o modo e o mapa não batem)',
+            ana.J.Coop.iniciaDuelo(com({ modo: 'desafio', dungeonId: ar0.dungeonId, roomIndex: ar0.roomIndex })) === false &&
+            ana.J.Coop.iniciaDuelo(com({ modo: 'arena', dungeonId: 'praca', roomIndex: 0 })) === false &&
+            ana.J.Coop.iniciaDuelo(com({ modo: 'campo', dungeonId: 'praca', roomIndex: 0 })) === false);
+    })();
     var okDu = duelo('ana-d1', 918273, ['espadachim', 'arqueiro'], ['curandeiro', 'bruxo']);
     check('K10 · o duelo abre nos dois clientes, na MESMA sala sorteada, com os lados de tela certos',
           okDu && tela('ana') === 'battle' && tela('bia') === 'battle' &&
