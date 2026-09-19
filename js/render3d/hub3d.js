@@ -73,7 +73,13 @@ var JOGO = (typeof window !== 'undefined')
       muros: Array.isArray(C.muros) ? C.muros : [],
       tochas: Array.isArray(C.tochas) ? C.tochas : [],
       saida: C.saida || CAMPO_RESERVA.saida,
-      nasce: C.nasce || CAMPO_RESERVA.nasce
+      nasce: C.nasce || CAMPO_RESERVA.nasce,
+      // 19/09: o catálogo do dono que veste os muros, os enfeites e as bandeiras (ver o
+      // topo do campo_pvp.js); sem nada no desenho, o jardim veste e não há enfeite
+      tema: (C.tema === 'cistern' || C.tema === 'misto') ? C.tema : 'garden',
+      borda: C.borda || {},
+      enfeites: Array.isArray(C.enfeites) ? C.enfeites : [],
+      bandeiras: Array.isArray(C.bandeiras) ? C.bandeiras : null
     };
   }
   function naZona(reg) {
@@ -524,12 +530,25 @@ var JOGO = (typeof window !== 'undefined')
     sol.position.set(12, 22, 8);
     scene.add(sol);
     if (campoAtivo) {
-      // 14/09: o Campo é fim de tarde — céu de brasa, luz baixa e quente, para as tochas
-      // lerem e o lugar não parecer a praça com outro chão
-      scene.background = new THREE.Color(0x1a1311);
-      scene.fog = new THREE.Fog(0x1a1311, raioAtual() * 1.3, raioAtual() * 3.2);
-      hemi.color.set(0xe0c8b0); hemi.groundColor.set(0x241a14); hemi.intensity = 0.78;
-      sol.color.set(0xffc890); sol.intensity = 0.9;
+      /* 14/09: o Campo é fim de tarde — céu de brasa, luz baixa e quente, para as tochas
+       * lerem e o lugar não parecer a praça com outro chão.
+       * 19/09 (dono, com foto: "o mapa pvp está muito ruim" — a foto era escura e marrom,
+       * os corpos não recortavam): o fim de tarde ficou LEGÍVEL. O céu e a névoa ganharam
+       * brasa de verdade (0x3a2118, e a névoa só começa a 1,7 meio-lado: antes engolia os
+       * cantos do próprio Campo), a luz de céu subiu para 0,95 num âmbar claro, o sol
+       * desceu para o oeste (x negativo, baixo: 14 de altura para 24 de lado) e ficou mais
+       * forte, e entrou um CONTRALUZ frio do norte-alto (0x8fb4ff, 0,55) — a câmera nasce
+       * ao sul olhando o norte, então a luz de trás acende ombros e cabeça e o herói
+       * recorta do chão quente. A mesma tríade (quente de um lado, frio do outro) que a
+       * praça já usa sem saber, com a hemisférica verde. */
+      scene.background = new THREE.Color(0x3a2118);
+      scene.fog = new THREE.Fog(0x3a2118, raioAtual() * 1.7, raioAtual() * 4.2);
+      hemi.color.set(0xffd9b0); hemi.groundColor.set(0x4a3128); hemi.intensity = 0.95;
+      sol.color.set(0xffb576); sol.intensity = 1.35;
+      sol.position.set(-24, 14, 10);
+      var contraluz = new THREE.DirectionalLight(0x8fb4ff, 0.55);
+      contraluz.position.set(8, 16, -26);
+      scene.add(contraluz);
     }
 
     // O CHÃO SEM GRADE — agora QUADRADO e de LAJOTAS CINZA (pedido 30/08:
@@ -542,7 +561,7 @@ var JOGO = (typeof window !== 'undefined')
     // o mundo em volta, mais escuro, para a praça não terminar num fio duro
     var fundo = new THREE.Mesh(
       new THREE.PlaneGeometry(raioAtual() * 5, raioAtual() * 5),
-      new THREE.MeshBasicMaterial({ color: campoAtivo ? 0x120d0b : 0x121a14 })
+      new THREE.MeshBasicMaterial({ color: campoAtivo ? 0x2a1710 : 0x121a14 })
     );
     fundo.rotation.x = -Math.PI / 2;
     fundo.position.y = -0.02;
@@ -726,12 +745,17 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
   // ============================================================ O CAMPO DE PVP (14/09)
-  /* A PEDRA E A TERRA DO CAMPO: dois tiles de 256 px em canvas, semeados (o Campo é o
-   * mesmo em toda visita), como a grama e as lajotas da praça. `chao` pinta lajes
-   * irregulares de pedra escura sobre terra — com as cores do campo_pvp.js; `muro` pinta
-   * fiadas de blocos (4 fiadas, 2 blocos por fiada: num tile de 2 m, bloco de 1 m por
-   * 50 cm). Os cantos das lajes que caem na borda do tile ficam presos a ela, senão a
-   * emenda aparece a cada 4 m. */
+  /* A PEDRA DO CAMPO: dois tiles de 256 px em canvas, semeados (o Campo é o mesmo em toda
+   * visita), como a grama e as lajotas da praça.
+   * 19/09 (dono, com foto: "o mapa pvp está muito ruim" — o chão era um tijolo gigante e
+   * escuro): `chao` voltou a ser LAJOTA, a mesma régua da praça (pintaLajotas: 4 lajotas
+   * por tile de 4 m, padrão corrido, tom por hash), num tom TERROSO e mais escuro, com
+   * rachaduras finas e pó por cima — arena de terra batida sobre pedra velha, não calçada
+   * nova. As cores vêm do campo_pvp.js (`chao`): `pedra` é o tom-base das lajotas, `junta`
+   * as juntas e as rachaduras, `terra` o pó que mancha. `muro` (4 fiadas de blocos por
+   * tile de 2 m) só veste as PRIMITIVAS PROVISÓRIAS — o bloco que segura a vaga até o
+   * módulo do dono decodificar no jogo servido. As rachaduras e o pó dão a volta no tile,
+   * senão a emenda aparece a cada 4 m. */
   var texCampo = {};
   function texturaCampo(tipo, cores) {
     var chave = tipo + '|' + JSON.stringify(cores || {});
@@ -758,46 +782,58 @@ var JOGO = (typeof window !== 'undefined')
       }
     } else {
       var c = cores || {};
-      g.fillStyle = c.terra || '#3a322b';
+      var pedra = new THREE.Color(c.pedra || '#5e5248'), terra = new THREE.Color(c.terra || '#4a3a2e');
+      var junta = c.junta || '#2a2320';
+      g.fillStyle = junta;
       g.fillRect(0, 0, 256, 256);
-      var N = 4, lado = 64, pts = [], yy, xx;
-      for (yy = 0; yy <= N; yy++) {
-        pts.push([]);
-        for (xx = 0; xx <= N; xx++) {
-          pts[yy].push([xx * lado + ((xx % N) ? (sorte() - 0.5) * 24 : 0),
-                        yy * lado + ((yy % N) ? (sorte() - 0.5) * 24 : 0)]);
+      // as lajotas: a régua da praça (4 por tile, padrão corrido, tom por hash de índice)
+      var NL = 4, lado = 256 / NL, jt = 6;
+      for (var jj = 0; jj < NL; jj++) {
+        var desloca = (jj % 2) * (lado / 2);
+        for (var ii = -1; ii <= NL; ii++) {
+          var h = ((ii * 7 + jj * 13 + 5) * 2654435761) % 100;
+          var k = 0.80 + (h % 31) / 100;                 // 0,80..1,10 do tom-base
+          g.fillStyle = 'rgb(' + Math.round(pedra.r * 255 * k) + ',' + Math.round(pedra.g * 255 * k) + ',' +
+                        Math.round(pedra.b * 255 * k) + ')';
+          var lx = ii * lado + desloca + jt / 2, ly = jj * lado + jt / 2;
+          g.fillRect(lx, ly, lado - jt, lado - jt);
+          g.fillStyle = 'rgba(255,236,210,0.07)';         // o fio de luz de cima
+          g.fillRect(lx, ly, lado - jt, 3);
+          g.fillStyle = 'rgba(0,0,0,0.16)';               // e a sombra de baixo
+          g.fillRect(lx, ly + lado - jt - 4, lado - jt, 4);
         }
       }
-      for (yy = 0; yy <= N; yy++) pts[yy][N][1] = pts[yy][0][1];   // a borda dá a volta
-      for (xx = 0; xx <= N; xx++) pts[N][xx][0] = pts[0][xx][0];
-      for (yy = 0; yy < N; yy++) {
-        for (xx = 0; xx < N; xx++) {
-          var q = [pts[yy][xx], pts[yy][xx + 1], pts[yy + 1][xx + 1], pts[yy + 1][xx]];
-          var mx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, my = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
-          g.beginPath();
-          for (var k = 0; k < 4; k++) {
-            var px = mx + (q[k][0] - mx) * 0.9, py = my + (q[k][1] - my) * 0.9;   // a junta
-            if (k === 0) g.moveTo(px, py); else g.lineTo(px, py);
-          }
-          g.closePath();
-          g.fillStyle = c.pedra || '#51473e';
-          g.fill();
-          g.fillStyle = sorte() < 0.5 ? 'rgba(0,0,0,' + (0.05 + sorte() * 0.2) + ')'
-                                      : 'rgba(255,240,220,' + (0.02 + sorte() * 0.06) + ')';
-          g.fill();
-          g.strokeStyle = c.junta || '#211c18';
-          g.lineWidth = 2;
-          g.stroke();
+      // rachaduras finas, em zigue-zague (dão a volta no tile)
+      g.strokeStyle = junta;
+      g.lineWidth = 1.5;
+      g.lineCap = 'round';
+      for (var r = 0; r < 14; r++) {
+        var rx = sorte() * 256, ry = sorte() * 256, ang = sorte() * Math.PI * 2, segs = 2 + Math.floor(sorte() * 3);
+        var pontos = [[rx, ry]];
+        for (var s = 0; s < segs; s++) {
+          ang += (sorte() - 0.5) * 1.4;
+          var len = 6 + sorte() * 12;
+          pontos.push([pontos[s][0] + Math.cos(ang) * len, pontos[s][1] + Math.sin(ang) * len]);
         }
-      }
-      // manchas de terra e pó por cima (dão a volta no tile)
-      for (var m = 0; m < 70; m++) {
-        var sx = sorte() * 256, sy = sorte() * 256, sr = 2 + sorte() * 9, escura = sorte() < 0.7;
         for (var ox = -256; ox <= 256; ox += 256) {
           for (var oy = -256; oy <= 256; oy += 256) {
-            g.fillStyle = escura ? 'rgba(0,0,0,0.16)' : 'rgba(120,100,80,0.14)';
             g.beginPath();
-            g.ellipse(sx + ox, sy + oy, sr, sr * 0.7, 0, 0, Math.PI * 2);
+            for (var q = 0; q < pontos.length; q++) {
+              if (q === 0) g.moveTo(pontos[q][0] + ox, pontos[q][1] + oy); else g.lineTo(pontos[q][0] + ox, pontos[q][1] + oy);
+            }
+            g.stroke();
+          }
+        }
+      }
+      // pó e terra por cima (dão a volta no tile)
+      var tr = Math.round(terra.r * 255) + ',' + Math.round(terra.g * 255) + ',' + Math.round(terra.b * 255);
+      for (var m = 0; m < 40; m++) {
+        var sx = sorte() * 256, sy = sorte() * 256, sr = 3 + sorte() * 11, escura = sorte() < 0.5;
+        for (var ox2 = -256; ox2 <= 256; ox2 += 256) {
+          for (var oy2 = -256; oy2 <= 256; oy2 += 256) {
+            g.fillStyle = escura ? 'rgba(0,0,0,0.09)' : 'rgba(' + tr + ',' + (0.12 + sorte() * 0.14).toFixed(2) + ')';
+            g.beginPath();
+            g.ellipse(sx + ox2, sy + oy2, sr, sr * 0.65, sorte() * 3, 0, Math.PI * 2);
             g.fill();
           }
         }
@@ -824,14 +860,58 @@ var JOGO = (typeof window !== 'undefined')
     }
     uv.needsUpdate = true;
   }
+  /* O CHÃO DO CAMPO (19/09): o quadrado de lajotas (2 m além do meio-lado, para a borda de
+   * ruína assentar em pedra e não no escuro), o CÍRCULO DA ARENA no centro — um disco das
+   * mesmas lajotas um tom mais claro, um anel de pedra clara em volta e um anel fino no
+   * miolo: a marca do lugar onde se cruza a espada — e o MEIO-FIO de pedra escura correndo
+   * por dentro da borda, como o da praça. `chao.arena` no campo_pvp.js é o raio do disco
+   * (0 = sem arena). O uv do disco é o do quadrado (mundo/4): as lajotas continuam de um
+   * para o outro sem emenda. */
   function chaoDoCampo() {
-    var C = campoCfg(), lado = C.meioLado * 2 + 4;
+    var C = campoCfg(), R = C.meioLado, lado = R * 2 + 4;
+    var g = new THREE.Group();
     var geo = new THREE.PlaneGeometry(lado, lado);
     var uv = geo.attributes.uv;
     for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * lado / 4, uv.getY(i) * lado / 4);   // 4 m por tile
-    var quad = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: texturaCampo('chao', C.chao), roughness: 1 }));
+    var tex = texturaCampo('chao', C.chao);
+    var quad = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
     quad.rotation.x = -Math.PI / 2;
-    return quad;
+    g.add(quad);
+    var rA = (C.chao && +C.chao.arena > 0) ? +C.chao.arena : 0;
+    if (rA > 0) {
+      var geoD = new THREE.CircleGeometry(rA, 48), pos = geoD.attributes.position, uvD = geoD.attributes.uv;
+      for (var k = 0; k < uvD.count; k++) uvD.setXY(k, (pos.getX(k) + lado / 2) / 4, (pos.getY(k) + lado / 2) / 4);
+      var disco = new THREE.Mesh(geoD, new THREE.MeshStandardMaterial({ map: tex, color: 0xcbbaa4, roughness: 1 }));
+      disco.rotation.x = -Math.PI / 2;
+      disco.position.y = 0.015;
+      g.add(disco);
+      // pedra clara, mas não branca — e de cor FIXA: com o sol de 1,35 do fim de tarde
+      // qualquer material iluminado saía como um anel de giz na foto aérea (0xa0 e 0x6e
+      // deram o mesmo branco); a marca no chão é pintura, não pedra que reflete
+      var matAnel = new THREE.MeshBasicMaterial({ color: 0x6f6250 });
+      var anel = new THREE.Mesh(new THREE.RingGeometry(rA, rA + 0.5, 64), matAnel);
+      anel.rotation.x = -Math.PI / 2;
+      anel.position.y = 0.03;
+      g.add(anel);
+      var miolo = new THREE.Mesh(new THREE.RingGeometry(rA * 0.42, rA * 0.42 + 0.22, 48), matAnel);
+      miolo.rotation.x = -Math.PI / 2;
+      miolo.position.y = 0.03;
+      g.add(miolo);
+    }
+    // o meio-fio: quatro fiadas de pedra escura por dentro da borda de ruína (o passo para
+    // a 0,94 do meio-lado; a fiada começa em 0,95 e o corpo encosta nela, não a atravessa)
+    // 0x1a, não 0x2e: com o sol e o contraluz do fim de tarde somando ~2,8× a fiada
+    // de 0x2e saía cinza-claro na foto aérea, um risco de giz em vez de pedra escura
+    var mf = R * 0.96, matMF = new THREE.MeshStandardMaterial({ color: 0x1a1512, roughness: 1 });
+    var geoMF = new THREE.BoxGeometry(mf * 2 + 0.6, 0.3, 0.6);
+    [[0, -mf, 0], [0, mf, 0], [-mf, 0, Math.PI / 2], [mf, 0, Math.PI / 2]].forEach(function (p) {
+      var b = new THREE.Mesh(geoMF, matMF);
+      b.position.set(p[0], 0.15, p[1]);
+      b.rotation.y = p[2];
+      g.add(b);
+    });
+    g.userData.chaoCampo = 'lajotas';    // a prova confere que o tijolo antigo se foi
+    return g;
   }
   /* O ARCO DE PORTAL das cenas novas (o do Campo na praça e o de volta no Campo): o
    * mesmo anel, miolo e base dos portais da praça, com o rótulo em cima do aro (13/09:
@@ -895,75 +975,494 @@ var JOGO = (typeof window !== 'undefined')
     lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP',
                    pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 4.6, node: a.g, miolo: a.miolo });
   }
-  /* A CENA DO CAMPO: a borda de pedra (logo depois dos 94% onde o passo para), os muros
-   * do campo_pvp.js — cada um vira caixa sólida —, as tochas (poste, cuia, chama e um
-   * disco de luz no chão: luz pintada, sem PointLight, que no celular custaria a cena
-   * inteira) e o portal vermelho de volta à praça. */
+  /* A CENA DO CAMPO (19/09, reescrita — dono, com foto: "o mapa pvp está muito ruim"). O
+   * que havia: uma caixa de tijolo por muro do desenho, quatro caixas compridas de borda,
+   * tocha de cilindro e cone — tudo primitiva, escuro e marrom, uma caixa de teste. O
+   * dono vai desenhar os muros definitivos um dia; até lá o Campo tem de parecer um lugar
+   * do jogo, no nível da praça e dos calabouços. Então:
+   *   · cada MURO do desenho vira uma FILEIRA de módulos de muro do dono — o mesmo
+   *     muroDaCasa do tabuleiro (renderer3d_v2): estica o módulo à altura pedida e a
+   *     MODULO_CAMPO (2,2 m, ≈ uma casa) de largura — com um PILAR do dono em cada ponta;
+   *     mureta (alt < 1,6) usa o papel 'baixo'; muro de larg ≈ prof é um pilar só. A
+   *     COLISÃO continua sendo a caixa do desenho (`caixas`, foraDaCaixa): a prova conta
+   *     por ela, e a pedra do dono é mais fina que a caixa — sobra a folga do corpo.
+   *   · a BORDA é um quadrado de ruína: módulos do dono a ~6 m (proporção quase natural,
+   *     sem esticão) em cinco vãos por lado, pilar em cada emenda e nos cantos, os quatro
+   *     módulos do catálogo alternando (inteiro, brecha, ruína, mato: é ruína, não muralha).
+   *     A colisão da borda NÃO é ela: é o clamp de dentroDoMapa (94% do meio-lado), como
+   *     sempre foi — a fileira fica 0,2 m ALÉM do meio-lado, com a face de dentro a ~1 m
+   *     do passo, e o meio-fio de pedra (chaoDoCampo) sela o vão.
+   *   · as TOCHAS são BRASEIROS do kit (K.buildBrazier: tocha de pé, chama, halo que
+   *     pulsa) com o disco de luz pintada no chão — luz pintada, sem PointLight, que no
+   *     celular custaria a cena inteira.
+   *   · ENFEITES do catálogo do dono (campo_pvp.js `enfeites`: por chave ou por papel),
+   *     cada um com um sólido pequeno (o de chão não barra); BANDEIRAS VERMELHAS do kit
+   *     (K.buildWall do tema 'forge' sem parede: pilar + pano, o único caminho do kit até
+   *     o banner_red) na entrada e na saída.
+   *   · DESEMPENHO: nenhuma peça entra na cena como malha própria. Tudo o que é vestido vai
+   *     para o INSTANCIADOR (instanciaCampo): UMA InstancedMesh por geometria+material, com
+   *     a geometria do próprio rawScene ou do kit — os 40 módulos da borda são uma chamada
+   *     por módulo diferente, e nada é copiado. MEDIDO (19/09, tests/campo_pvp ?foto=1,
+   *     câmera padrão, 1280×800): a praça custa 67 chamadas de desenho (94 vista da
+   *     entrada, 0,54-0,86 M de triângulos); o Campo velho custava 69-81; o novo custa 63
+   *     (51 rente a um muro) com 176 instâncias em 39 malhas e 1,6 M de triângulos — a
+   *     conta que sobra é de vértices, não de chamadas. No celular (JOGO.Mobile.economico)
+   *     a borda tem um módulo por vão (com vãos abertos entre eles: ruína) e os enfeites
+   *     de chão saem: 59 chamadas, 1,3 M de triângulos.
+   *   · SOB DEMANDA: no jogo servido os módulos de muro e o pilar do jardim (jd_) são do
+   *     grupo 'calabouco:greenhouse' do manifesto e os da cisterna (cs_) do 'calabouco:cistern' — não descem
+   *     no boot. Cada VAGA cuja peça ainda não abriu recebe uma PRIMITIVA (bloco de pedra
+   *     com coroamento, pilar afilado, marco baixo) e a chave vai ao Bundle.pede; quando o
+   *     Models3D2 avisa (aoChegar), vesteCampo troca a primitiva pela peça e refaz as
+   *     instâncias — o padrão das obras da praça (montaConstrucoes). Em casa (file://)
+   *     tudo já está aberto e nada disto acontece. */
   var tochasCampo = [];
-  function montaCampo() {
-    var C = campoCfg(), R = C.meioLado;
-    var matMuro = new THREE.MeshStandardMaterial({ map: texturaCampo('muro'), roughness: 1 });
-    var matTopo = new THREE.MeshStandardMaterial({ color: 0x3b3531, roughness: 1 });
-    function caixaDePedra(x, z, larg, prof, alt, rot) {
-      var g = new THREE.Group();
-      var geo = new THREE.BoxGeometry(larg, alt, prof);
-      uvDeCaixa(geo, larg, alt, prof, 2);
-      var corpo = new THREE.Mesh(geo, matMuro);
-      corpo.position.y = alt / 2;
-      g.add(corpo);
-      var topo = new THREE.Mesh(new THREE.BoxGeometry(larg + 0.24, 0.18, prof + 0.24), matTopo);
-      topo.position.y = alt + 0.09;
-      g.add(topo);
-      g.position.set(x, 0, z);
-      g.rotation.y = rot || 0;
-      scene.add(g);
-      return g;
+  var MODULO_CAMPO = 2.2;          // a largura de um módulo de muro do desenho (≈ uma casa)
+  var campoObra = null;            // a obra da cena atual: as vagas, o que falta, as instâncias
+  var ouveCampo = false;
+  /* altura-alvo POR PEÇA dos enfeites (o acervo é prop de tabuleiro: altura natural de
+   * 0,1 a 0,7 — sem alvo, a estátua nasceria do tamanho de um vaso) e, sem chave na
+   * tabela, por papel */
+  var ALVO_CAMPO = {
+    jd_estatua: 2.6, jd_coluna_vidro: 2.8, jd_cipo: 2.4, jd_pilar: 3.0, jd_estufa_arvore: 4.2, jd_escada: 2.4,
+    jd_tronco: 1.3, jd_vaso: 1.1, jd_redoma: 0.9, jd_canteiro: 1.1, jd_carrinho: 1.3, jd_regador: 0.9,
+    jd_cristal_g: 1.0, jd_cristal_p: 0.5, jd_raiz: 0.5, jd_poca: 0.08,
+    cs_estandarte: 3.0, cs_luminaria: 2.7, cs_espelho: 2.4, cs_trono: 2.1, cs_fonte: 1.6, cs_poco_lirio: 1.2,
+    cs_sal: 1.3, cs_lustre: 0.8, cs_barril: 0.95, cs_aquario: 2.4
+  };
+  var ALVO_PAPEL = { sotaque_alto: 2.6, sotaque: 1.4, chao: 0.5, borda: 2.4, pilar: 3.0, marco: 2.4 };
+  function papelDaChave(tema, chave) {
+    var cat = JOGO.CENARIO && JOGO.CENARIO[tema];
+    if (!cat) return null;
+    var papeis = ['chao', 'sotaque', 'sotaque_alto', 'borda', 'pilar', 'marco', 'alto', 'baixo'];
+    for (var i = 0; i < papeis.length; i++) {
+      if (Array.isArray(cat[papeis[i]]) && cat[papeis[i]].indexOf(chave) >= 0) return papeis[i];
     }
-    var B = R + 0.7;
-    caixaDePedra(0, -B, 2 * B + 1.4, 1.4, 1.6, 0);
-    caixaDePedra(0, B, 2 * B + 1.4, 1.4, 1.6, 0);
-    caixaDePedra(-B, 0, 1.4, 2 * B - 1.4, 1.6, 0);
-    caixaDePedra(B, 0, 1.4, 2 * B - 1.4, 1.6, 0);
-    C.muros.forEach(function (m) {
-      var larg = +m.larg || 1, prof = +m.prof || 1, alt = +m.alt || 3, rot = +m.rotY || 0;
-      var x = +m.x || 0, z = +m.z || 0;
-      caixaDePedra(x, z, larg, prof, alt, rot);
-      caixas.push({ x: x, z: z, hx: larg / 2, hz: prof / 2, rot: rot, alt: alt });
+    return null;
+  }
+  function chaveDoCampo(tema, papel, semente) {
+    var cat = JOGO.CENARIO && JOGO.CENARIO[tema], lista = cat && cat[papel];
+    if (!lista || !lista.length) return null;
+    return lista[semente % lista.length];
+  }
+  /* o módulo de muro do dono tem o lado comprido em X ou em Z? Medido uma vez por chave
+   * no rawScene (a praça mede o mesmo em eixoLongoEmX): o muroDaCasa estica pelo maior
+   * eixo, e um módulo comprido em Z entraria atravessado na fileira. */
+  var eixoCampo = {};
+  function eixoLongoEmZ(chave) {
+    if (eixoCampo[chave] != null) return eixoCampo[chave];
+    var m2 = M2(), cena = null;
+    try { cena = m2 && m2.rawScene(chave); } catch (e) {}
+    if (!cena) return false;
+    cena.updateMatrixWorld(true);
+    var b = new THREE.Box3().setFromObject(cena);
+    var r = (b.max.z - b.min.z) > (b.max.x - b.min.x) * 1.15;
+    eixoCampo[chave] = r;
+    return r;
+  }
+  /* uma peça SOLTA do dono (enfeite) num berço: escala pela altura com teto de largura,
+   * gira, assenta pelo pé e centra — o plantaTema da praça, sem pôr na cena */
+  function bercoDaPeca(chave, altAlvo, teto, rot) {
+    var m2 = M2(), cena = null;
+    try { cena = m2 && m2.rawScene(chave); } catch (e) {}
+    if (!cena) return null;
+    var no = cena.clone(true);
+    no.rotation.y = rot || 0;
+    no.updateMatrixWorld(true);
+    var cx = new THREE.Box3().setFromObject(no);
+    var alt = cx.max.y - cx.min.y;
+    var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+    if (!isFinite(alt) || alt <= 0.01) return null;
+    var k = altAlvo / alt;
+    if (teto && isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+    no.scale.multiplyScalar(k);
+    no.updateMatrixWorld(true);
+    cx = new THREE.Box3().setFromObject(no);
+    no.position.set(-(cx.min.x + cx.max.x) / 2, -cx.min.y, -(cx.min.z + cx.max.z) / 2);
+    var berco = new THREE.Group();
+    berco.add(no);
+    berco.userData.chave = chave;
+    return berco;
+  }
+  /* A PEÇA DE UMA VAGA, já no lugar: null enquanto o modelo não abriu (a chave que falta
+   * fica anotada em `v.chave`, para o Bundle.pede). Muro, pilar e borda passam pelo
+   * muroDaCasa do tabuleiro — a mesma régua de esticão, pilar que não engorda e corpo da
+   * cisterna medido (alto_corpo 'auto'). A borda ganha um teto de PROFUNDIDADE: o módulo
+   * 'mato' do jardim é 2× mais fundo que os outros (o mato sai da parede) e, a 6 m de
+   * largura, entraria 3,6 m para dentro do passo. */
+  function pecaDoCampo(v) {
+    var m2 = M2();
+    if (!m2 || !m2.rawScene) return null;
+    var berco = null;
+    if (v.tipo === 'enfeite') {
+      berco = bercoDaPeca(v.chave, v.alt, v.teto, v.rot);
+      if (!berco) return null;
+    } else {
+      var Rd = JOGO.Renderer3D2;
+      if (!Rd || !Rd.muroDaCasa) return null;
+      var chave = chaveDoCampo(v.tema, v.papel, v.semente);
+      if (!chave) return null;
+      v.chave = chave;
+      if (!m2.rawScene(chave)) return null;
+      try { berco = Rd.muroDaCasa(v.tema, v.papel, v.semente, v.alt, v.larg); } catch (e) { berco = null; }
+      if (!berco) return null;
+      berco.rotation.y = v.rot + ((v.papel !== 'pilar' && eixoLongoEmZ(chave)) ? Math.PI / 2 : 0);
+      if (v.tetoProf) {
+        berco.updateMatrixWorld(true);
+        var no = berco.children[0], cb = new THREE.Box3().setFromObject(no);
+        var prof = cb.max.z - cb.min.z;
+        if (isFinite(prof) && prof > v.tetoProf) { no.scale.z *= v.tetoProf / prof; }
+      }
+    }
+    berco.position.set(v.x, 0, v.z);
+    berco.userData.vaga = v.tipo;
+    return berco;
+  }
+  /* A PRIMITIVA PROVISÓRIA da vaga: melhor que a caixa de tijolo de antes — bloco de pedra
+   * com coroamento no tom do chão, pilar afilado com capitel, marco baixo para o enfeite.
+   * Só aparece no jogo servido, entre o pedido e a chegada do módulo do dono. */
+  var matProvCampo = null;
+  function provisoriaDoCampo(v) {
+    if (!matProvCampo) {
+      matProvCampo = {
+        muro: new THREE.MeshStandardMaterial({ map: texturaCampo('muro'), roughness: 1 }),
+        pedra: new THREE.MeshStandardMaterial({ color: 0x5a5049, roughness: 1 })
+      };
+    }
+    var g = new THREE.Group();
+    if (v.papel === 'pilar') {
+      var pil = new THREE.Mesh(new THREE.CylinderGeometry(v.larg * 0.38, v.larg * 0.48, v.alt, 8), matProvCampo.pedra);
+      pil.position.y = v.alt / 2;
+      g.add(pil);
+      var cap = new THREE.Mesh(new THREE.BoxGeometry(v.larg, 0.24, v.larg), matProvCampo.pedra);
+      cap.position.y = v.alt + 0.12;
+      g.add(cap);
+    } else if (v.tipo === 'enfeite') {
+      var h = Math.min(v.alt || 1, 1.2);
+      var marco = new THREE.Mesh(new THREE.BoxGeometry(0.6, h, 0.6), matProvCampo.pedra);
+      marco.position.y = h / 2;
+      g.add(marco);
+    } else {
+      var prof = Math.min(v.prof || 1, 0.9);
+      var geo = new THREE.BoxGeometry(v.larg, v.alt, prof);
+      uvDeCaixa(geo, v.larg, v.alt, prof, 2);
+      var corpo = new THREE.Mesh(geo, matProvCampo.muro);
+      corpo.position.y = v.alt / 2;
+      g.add(corpo);
+      var topo = new THREE.Mesh(new THREE.BoxGeometry(v.larg + 0.2, 0.16, prof + 0.2), matProvCampo.pedra);
+      topo.position.y = v.alt + 0.08;
+      g.add(topo);
+    }
+    g.position.set(v.x, 0, v.z);
+    g.rotation.y = v.rot || 0;
+    return g;
+  }
+  /* O INSTANCIADOR DO CAMPO: recebe os nós prontos (berços com a peça do dono, braseiros e
+   * bandeiras do kit, discos de luz) e devolve UM grupo com uma InstancedMesh por par
+   * geometria+material — a geometria é a do rawScene ou do kit, compartilhada, nada é
+   * copiado (o mergeStatic do tabuleiro copia vértices e, sem índice, triplica a memória:
+   * para 120 peças de 15 mil triângulos seriam ~200 MB, que o celular não tem). Sprites (o
+   * halo do braseiro) saem soltos, com a transformação de mundo, para continuar pulsando;
+   * o marcador de luz do kit (torchLight) não tem quem o acenda aqui e cai. frustumCulled
+   * fica desligado: a esfera de uma InstancedMesh é a da geometria na origem, não a das
+   * instâncias, e a borda inteira sumiria ao virar a câmera. */
+  function instanciaCampo(nos) {
+    var baldes = {}, ordem = [], soltos = [];
+    nos.forEach(function (no) {
+      no.updateMatrixWorld(true);
+      no.traverse(function (n) {
+        if (n.isSprite) { soltos.push(n); return; }
+        if (!n.isMesh || n.isSkinnedMesh || n.isInstancedMesh || !n.geometry || !n.material || Array.isArray(n.material)) return;
+        var k = n.geometry.uuid + '|' + n.material.uuid;
+        var b = baldes[k];
+        if (!b) { b = baldes[k] = { geo: n.geometry, mat: n.material, mats: [], ordemRender: n.renderOrder || 0 }; ordem.push(k); }
+        b.mats.push(n.matrixWorld.clone());
+      });
     });
+    var g = new THREE.Group(), instancias = 0;
+    ordem.forEach(function (k) {
+      var b = baldes[k];
+      var im = new THREE.InstancedMesh(b.geo, b.mat, b.mats.length);
+      for (var i = 0; i < b.mats.length; i++) im.setMatrixAt(i, b.mats[i]);
+      im.instanceMatrix.needsUpdate = true;
+      im.frustumCulled = false;
+      im.renderOrder = b.ordemRender;
+      im.userData.instancias = b.mats.length;
+      g.add(im);
+      instancias += b.mats.length;
+    });
+    var wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+    soltos.forEach(function (s) {
+      s.updateWorldMatrix(true, false);
+      s.matrixWorld.decompose(wp, wq, ws);
+      var c = s.clone();
+      c.position.copy(wp);
+      c.quaternion.copy(wq);
+      c.scale.copy(ws);
+      g.add(c);
+    });
+    g.userData.malhas = ordem.length;
+    g.userData.instancias = instancias;
+    return g;
+  }
+  /* A BANDEIRA VERMELHA do Campo: mastro de madeira escura (3,4 m) com travessa, e o pano
+   * pendurado da travessa — um plano de 6 × 10 quadros com uma onda em z (o pano não é
+   * uma tábua) e a barra de baixo rasgada em dentes (pela geometria, sem alfa: a malha
+   * instanciada não quer material transparente). A cor do pano vem em vértice: vermelho
+   * de sangue com a barra de cima mais escura, um losango claro no meio. O pano olha para
+   * +z no giro 0 (o sul, a câmera de quem chega). Geometria e materiais são UM por cena
+   * (bandeiraCampoGeo/Mat): as quatro bandeiras viram duas InstancedMesh. */
+  var bandeiraCampo = null;
+  function bandeiraDoCampo(i) {
+    if (!bandeiraCampo) {
+      var NX = 6, NY = 10, L = 0.9, H = 1.7;
+      var geo = new THREE.PlaneGeometry(L, H, NX, NY);
+      var pos = geo.attributes.position, cor = new Float32Array(pos.count * 3);
+      var vermelho = new THREE.Color(0x9e1e1a), escuro = new THREE.Color(0x4a0c0a), claro = new THREE.Color(0xd8503c);
+      for (var v = 0; v < pos.count; v++) {
+        var px = pos.getX(v), py = pos.getY(v);
+        var u = px / L + 0.5, t = 0.5 - py / H;              // u de 0 a 1, t = 0 em cima
+        pos.setZ(v, Math.sin(u * Math.PI * 2 + t * 3) * 0.05 * (0.3 + t));   // a onda cresce para baixo
+        // a barra de baixo rasgada: os vértices da última fileira sobem em dentes alternados
+        if (t > 0.99) pos.setY(v, py + ((Math.round(u * NX) % 2) ? 0.16 : 0.0));
+        var c = vermelho;
+        if (t < 0.14) c = escuro;
+        else if (Math.abs(u - 0.5) * 2 + Math.abs(t - 0.5) * 2.2 < 0.42) c = claro;
+        cor[v * 3] = c.r; cor[v * 3 + 1] = c.g; cor[v * 3 + 2] = c.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(cor, 3));
+      geo.computeVertexNormals();
+      bandeiraCampo = {
+        pano: geo,
+        matPano: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }),
+        mastro: new THREE.CylinderGeometry(0.045, 0.06, 3.4, 7),
+        travessa: new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6),
+        ponta: new THREE.ConeGeometry(0.09, 0.22, 6),
+        matMadeira: new THREE.MeshStandardMaterial({ color: 0x3a2a20, roughness: 1 }),
+        matMetal: new THREE.MeshStandardMaterial({ color: 0x8a7a50, roughness: 0.5, metalness: 0.4 })
+      };
+    }
+    var B = bandeiraCampo, g = new THREE.Group();
+    var mastro = new THREE.Mesh(B.mastro, B.matMadeira);
+    mastro.position.y = 1.7;
+    g.add(mastro);
+    var travessa = new THREE.Mesh(B.travessa, B.matMadeira);
+    travessa.rotation.z = Math.PI / 2;
+    travessa.position.set(0, 3.25, 0.02);
+    g.add(travessa);
+    var ponta = new THREE.Mesh(B.ponta, B.matMetal);
+    ponta.position.y = 3.5;
+    g.add(ponta);
+    var pano = new THREE.Mesh(B.pano, B.matPano);
+    pano.position.set(0, 3.22 - 0.85, 0.08);
+    g.add(pano);
+    g.userData.bandeira = i;
+    return g;
+  }
+  function refazInstanciasDoCampo(obra) {
+    if (obra.instancias) {
+      obra.cena.remove(obra.instancias);
+      obra.instancias.traverse(function (n) { if (n.isInstancedMesh) { try { n.dispose(); } catch (e) {} } });
+    }
+    var nos = [];
+    obra.vagas.forEach(function (v) { if (v.no) nos.push(v.no); });
+    nos = nos.concat(obra.fixos);
+    obra.instancias = instanciaCampo(nos);
+    obra.cena.add(obra.instancias);
+    // os halos dos braseiros voltam a pulsar: são os sprites soltos do grupo instanciado
+    tochasCampo.length = 0;
+    obra.instancias.children.forEach(function (n, i) {
+      if (n.isSprite) tochasCampo.push({ brilho: n, base: n.scale.x, fase: i * 1.7 });
+    });
+  }
+  function agendaCampo(obra) {
+    if (obra.voltas > 400) return;           // o relógio virtual do headless queima voltas
+    obra.voltas++;
+    setTimeout(function () { if (campoObra === obra && scene === obra.cena) vesteCampo(); }, 500);
+  }
+  /* VESTIR O CAMPO: passa pelas vagas, veste as que já têm peça aberta (a primitiva sai),
+   * refaz as instâncias se algo mudou, pede ao Bundle o que falta (uma vez por chave) e
+   * fica ouvindo o Models3D2 — a chegada chama de novo. */
+  function vesteCampo() {
+    var obra = campoObra;
+    if (!obra || !scene || obra.cena !== scene) return;
+    var m2 = M2();
+    if (!m2 || !m2.rawScene) { agendaCampo(obra); return; }
+    var mudou = false, faltam = {};
+    obra.vagas.forEach(function (v) {
+      if (v.no) return;
+      var no = pecaDoCampo(v);
+      if (!no) {
+        if (v.chave) faltam[v.chave] = true;
+        if (!v.prov) { v.prov = provisoriaDoCampo(v); obra.provisorios.add(v.prov); }
+        return;
+      }
+      v.no = no;
+      if (v.prov) { obra.provisorios.remove(v.prov); v.prov = null; }
+      obra.montagem[v.chave] = (obra.montagem[v.chave] || 0) + 1;
+      mudou = true;
+    });
+    if (mudou || !obra.instancias) refazInstanciasDoCampo(obra);
+    var chaves = Object.keys(faltam);
+    obra.pendentes = chaves.length;
+    if (!chaves.length) return;
+    var novas = chaves.filter(function (k) { return obra.pedidas.indexOf(k) < 0; });
+    if (novas.length) {
+      novas.forEach(function (k) { obra.pedidas.push(k); });
+      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(novas); } catch (eP) {}
+    }
+    if (!ouveCampo && m2.aoChegar) {
+      ouveCampo = true;
+      m2.aoChegar(function () { try { vesteCampo(); } catch (eV) {} });
+    }
+    agendaCampo(obra);
+  }
+  function montaCampo() {
+    var C = campoCfg(), R = C.meioLado, tema = C.tema;
+    var eco = !!(JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico());
+    var obra = campoObra = { cena: scene, vagas: [], fixos: [], provisorios: new THREE.Group(), instancias: null,
+                             montagem: {}, pedidas: [], pendentes: 0, voltas: 0, eco: eco, tema: tema,
+                             braseiros: 0, bandeiras: 0 };
+    scene.add(obra.provisorios);
+    function temaDe(i, forcado) {
+      if (forcado === 'garden' || forcado === 'cistern') return forcado;
+      return tema === 'misto' ? ((i % 2) ? 'cistern' : 'garden') : tema;
+    }
+    function vaga(v) { obra.vagas.push(v); return v; }
+
+    // ---- os muros do desenho: caixa sólida + fileira de módulos + pilar nas pontas
+    C.muros.forEach(function (m, i) {
+      var larg = +m.larg || 1, prof = +m.prof || 1, alt = +m.alt || 3, rot = +m.rotY || 0;
+      var x = +m.x || 0, z = +m.z || 0, tm = temaDe(i, m.tema);
+      caixas.push({ x: x, z: z, hx: larg / 2, hz: prof / 2, rot: rot, alt: alt });
+      var cs = Math.cos(rot), sn = Math.sin(rot);
+      function ponta(lx) { return { x: x + lx * cs, z: z - lx * sn }; }   // rotation.y = rot: +x local → (cos, −sen)
+      if (larg <= 2.3 && prof <= 2.3) {         // larg ≈ prof: um pilar só
+        vaga({ tipo: 'pilar', muro: i, tema: tm, papel: 'pilar', semente: i, x: x, z: z, rot: rot,
+               alt: alt, larg: Math.min(larg, prof), prof: prof });
+        return;
+      }
+      var papel = alt < 1.6 ? 'baixo' : 'alto';
+      var n = Math.max(1, Math.round(larg / MODULO_CAMPO)), w = larg / n;
+      for (var k = 0; k < n; k++) {
+        var p = ponta((k + 0.5) * w - larg / 2);
+        vaga({ tipo: 'muro', muro: i, tema: tm, papel: papel, semente: i * 3 + k, x: p.x, z: p.z, rot: rot,
+               alt: alt, larg: w * 1.03, prof: prof });
+      }
+      [-larg / 2, larg / 2].forEach(function (lx, kp) {
+        var p = ponta(lx);
+        vaga({ tipo: 'pilar', muro: i, tema: tm, papel: 'pilar', semente: i + kp, x: p.x, z: p.z, rot: rot,
+               alt: alt + (papel === 'baixo' ? 0.4 : 0.5), larg: Math.min(prof + 0.4, 1.7), prof: prof });
+      });
+    });
+
+    // ---- a borda de ruína: cinco vãos por lado, pilar em cada emenda e nos cantos
+    var B = R + 0.2, altB = (+C.borda.alt > 0.5) ? +C.borda.alt : 2.6, temaBorda = (tema === 'misto') ? 'garden' : tema;
+    var VAOS = 5, passo = (2 * B) / VAOS, pilaresBorda = {};
+    // a frente do módulo (+z local) encara o centro do Campo
+    var lados = [{ ax: 'x', fixo: -B, rot: 0 }, { ax: 'x', fixo: B, rot: Math.PI },
+                 { ax: 'z', fixo: B, rot: -Math.PI / 2 }, { ax: 'z', fixo: -B, rot: Math.PI / 2 }];
+    lados.forEach(function (L, li) {
+      function ponto(t) { return L.ax === 'x' ? { x: t, z: L.fixo } : { x: L.fixo, z: t }; }
+      var mpv = eco ? 1 : 2, wB = passo / mpv;
+      for (var j = 0; j < VAOS; j++) {
+        for (var mm = 0; mm < mpv; mm++) {
+          var q = ponto(-B + j * passo + (mm + 0.5) * wB);
+          vaga({ tipo: 'borda', tema: temaBorda, papel: 'alto', semente: li * 7 + j * 2 + mm, x: q.x, z: q.z,
+                 rot: L.rot, alt: altB, larg: wB * 1.02, prof: 1.6, tetoProf: 2.0 });
+        }
+      }
+      for (var jp = 0; jp <= VAOS; jp++) {
+        var qp = ponto(-B + jp * passo), chaveP = qp.x.toFixed(1) + ',' + qp.z.toFixed(1);
+        if (pilaresBorda[chaveP]) continue;
+        pilaresBorda[chaveP] = true;
+        vaga({ tipo: 'bordaPilar', tema: temaBorda, papel: 'pilar', semente: li + jp, x: qp.x, z: qp.z,
+               rot: L.rot, alt: altB + 0.7, larg: 1.7, prof: 1.7 });
+      }
+    });
+
+    // ---- os braseiros (as `tochas` do desenho) e o disco de luz no chão de cada um
     if (!texBrilhoTocha) {
       texBrilhoTocha = fazTexRadial([[0, 'rgba(255,214,140,1)'], [0.3, 'rgba(255,150,60,0.55)'], [1, 'rgba(255,90,20,0)']]);
     }
-    var matPoste = new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 1 });
-    var matCuia = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.7, metalness: 0.3 });
-    var matChama = new THREE.MeshBasicMaterial({ color: 0xffc070 });
-    var matLuz = new THREE.MeshBasicMaterial({ map: texBrilhoTocha, transparent: true, opacity: 0.24,
+    var Kt = K(), kitPronto = !!(Kt && Kt.isReady && Kt.isReady() && Kt.buildBrazier);
+    var matLuz = new THREE.MeshBasicMaterial({ map: texBrilhoTocha, transparent: true, opacity: 0.3,
                                               blending: THREE.AdditiveBlending, depthWrite: false });
-    var geoLuz = new THREE.PlaneGeometry(7, 7);
+    var geoLuz = new THREE.PlaneGeometry(7.5, 7.5);
+    var matPoste = kitPronto ? null : new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 1 });
     C.tochas.forEach(function (t, i) {
-      var g = new THREE.Group();
-      var poste = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 2.3, 8), matPoste);
-      poste.position.y = 1.15;
-      g.add(poste);
-      var cuia = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.14, 0.24, 10), matCuia);
-      cuia.position.y = 2.36;
-      g.add(cuia);
-      var chama = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 8), matChama);
-      chama.position.y = 2.7;
-      g.add(chama);
-      var brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
-        depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
-      brilho.scale.setScalar(2.4);
-      brilho.position.y = 2.72;
-      g.add(brilho);
+      var x = +t.x || 0, z = +t.z || 0, br = null;
+      if (kitPronto) { try { br = Kt.buildBrazier(tema === 'cistern' ? 'cistern' : 'garden', i); } catch (e) { br = null; } }
+      if (!br) {
+        // sem kit: o poste com a chama de antes
+        br = new THREE.Group();
+        var poste = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 2.3, 8), matPoste);
+        poste.position.y = 1.15;
+        br.add(poste);
+        var chama = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 8), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+        chama.position.y = 2.55;
+        br.add(chama);
+        var brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
+          depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
+        brilho.scale.setScalar(2.4);
+        brilho.position.y = 2.6;
+        br.add(brilho);
+      }
+      br.position.set(x, 0, z);
+      br.rotation.y = i * 0.7;
+      obra.fixos.push(br);
       var luz = new THREE.Mesh(geoLuz, matLuz);
       luz.rotation.x = -Math.PI / 2;
-      luz.position.y = 0.03;
-      g.add(luz);
-      g.position.set(+t.x || 0, 0, +t.z || 0);
-      scene.add(g);
-      marcaSolido(+t.x || 0, +t.z || 0, 0.45);
-      tochasCampo.push({ brilho: brilho, chama: chama, fase: i * 1.7 });
+      luz.position.set(x, 0.04, z);
+      obra.fixos.push(luz);
+      marcaSolido(x, z, 0.45);
+      obra.braseiros++;
     });
+
+    // ---- as bandeiras vermelhas (na entrada e na saída, se o desenho não disser onde).
+    // Tentei o pano do kit (K.buildWall do tema 'forge' com bannerDir — o único caminho até
+    // o banner_red): vem preso a um pilar gordo de 2,4 m sobre uma lajota escura, e na foto
+    // lia como cone de trânsito. A bandeira é PRÓPRIA: mastro fino com travessa e um pano
+    // vermelho de 0,9 × 1,7 m, ondulado e rasgado embaixo (bandeiraDoCampo) — 2 malhas,
+    // instanciadas com as outras.
+    var bandeiras = C.bandeiras;
+    if (!bandeiras) {
+      var sd0 = C.saida, ns0 = C.nasce, r0 = Math.hypot(sd0.x, sd0.z) || 1;
+      var ux0 = sd0.x / r0, uz0 = sd0.z / r0;             // da saída para o centro é (−u)
+      bandeiras = [
+        { x: ns0.x - 3.4, z: ns0.z + 0.6, rot: 0 }, { x: ns0.x + 3.4, z: ns0.z + 0.6, rot: 0 },
+        { x: sd0.x - uz0 * 3.3, z: sd0.z + ux0 * 3.3, rot: Math.atan2(-ux0, -uz0) },
+        { x: sd0.x + uz0 * 3.3, z: sd0.z - ux0 * 3.3, rot: Math.atan2(-ux0, -uz0) }
+      ];
+    }
+    bandeiras.forEach(function (b, i) {
+      var x = +b.x || 0, z = +b.z || 0, rot = +b.rot || 0;
+      var no = bandeiraDoCampo(i);
+      no.position.set(x, 0, z);
+      no.rotation.y = rot;
+      obra.fixos.push(no);
+      marcaSolido(x, z, 0.35);
+      obra.bandeiras++;
+    });
+
+    // ---- os enfeites do catálogo do dono
+    C.enfeites.forEach(function (e, i) {
+      var x = +e.x || 0, z = +e.z || 0, chave = e.chave || null, papel = e.papel || null, tm;
+      if (chave) {
+        tm = /^cs_/.test(chave) ? 'cistern' : 'garden';
+        papel = papel || papelDaChave(tm, chave) || 'sotaque';
+      } else {
+        tm = temaDe(i, e.tema);
+        chave = chaveDoCampo(tm, papel || 'sotaque', i);
+        if (!chave) return;
+      }
+      if (eco && papel === 'chao') return;      // celular: o enfeite de chão sai
+      var alt = (+e.alt > 0) ? +e.alt : (ALVO_CAMPO[chave] || ALVO_PAPEL[papel] || 1.4);
+      vaga({ tipo: 'enfeite', tema: tm, papel: papel, chave: chave, x: x, z: z, rot: +e.rot || 0, alt: alt, teto: alt * 1.6 });
+      if (papel !== 'chao') marcaSolido(x, z, papel === 'sotaque_alto' ? 0.6 : 0.5);
+    });
+
+    vesteCampo();
     var sd = C.saida;
     var s = arcoPortal({ aro: 0x9a2320, aroBrilho: 0x4a0a08, cor: 0xe0352b, brilhoChao: true,
                          texto: 'Voltar à praça', corTexto: '#ffd2cb', rotuloEsc: 0.8 });
@@ -1002,6 +1501,7 @@ var JOGO = (typeof window !== 'undefined')
     solidos.length = 0;
     caixas.length = 0;
     tochasCampo.length = 0;
+    campoObra = null;                 // 19/09: a obra do Campo é da cena que se vai
     chefesParados.length = 0;
     chefesFicha.length = 0;
     ultimoPerto = null;
@@ -1009,6 +1509,12 @@ var JOGO = (typeof window !== 'undefined')
     heroi = null;
     bicho = null;
     montaCena();
+    /* 19/09 (dono: "quando eu entro nele os personagens ficam achatados e quando eu volto
+     * pra praça continuam achatados"): montaCena nasce com a câmera em proporção 1:1 e
+     * quem a acerta pelo tamanho da tela é ajusta() — o Hub.entrar chama, esta troca não
+     * chamava. A imagem quadrada esticada na tela larga era o "achatado", e a volta passava
+     * pelo mesmo caminho. */
+    ajusta();
   }
 
   /* Trocar de cena (praça ↔ sala, sala ↔ sala): fantasmas e lugares saem,
@@ -1022,6 +1528,7 @@ var JOGO = (typeof window !== 'undefined')
     solidos.length = 0;
     caixas.length = 0;
     tochasCampo.length = 0;
+    campoObra = null;
     chefesParados.length = 0;
     chefesFicha.length = 0;
     ultimoPerto = null;
@@ -2760,12 +3267,13 @@ var JOGO = (typeof window !== 'undefined')
         : 0.34 + Math.sin(relogio * 1.8 + i) * 0.10;
     }
 
-    // 14/09: as tochas do Campo tremem — o brilho pulsa e a chama balança
+    // 14/09: as tochas do Campo tremem — o brilho pulsa (19/09: é o halo do braseiro do
+    // kit, solto do grupo instanciado; a chama, instanciada, fica parada)
     for (var tq = 0; tq < tochasCampo.length; tq++) {
       var tc = tochasCampo[tq];
       var osc = Math.sin(relogio * 9.0 + tc.fase) * 0.5 + Math.sin(relogio * 13.7 + tc.fase * 2.1) * 0.5;
-      tc.brilho.scale.setScalar(2.4 + osc * 0.25);
-      tc.chama.scale.set(1, 1 + osc * 0.18, 1);
+      tc.brilho.scale.setScalar((tc.base || 2.4) * (1 + osc * 0.12));
+      if (tc.chama) tc.chama.scale.set(1, 1 + osc * 0.18, 1);
     }
 
     if (heroi) {
@@ -3308,6 +3816,38 @@ var JOGO = (typeof window !== 'undefined')
     return caixas.map(function (c) { return { x: c.x, z: c.z, hx: c.hx, hz: c.hz, rot: c.rot, alt: c.alt }; });
   };
   Hub._corpoNaCaixa = CORPO_NA_CAIXA;
+  /* 19/09: o relatório da obra do Campo, para a prova contar — como o tabuleiro conta por
+   * R.ultimaMontagem: as instâncias apagam os berços, então se conta pelas VAGAS. Por
+   * muro do desenho: quantos módulos e pilares a fileira tem e quantos já vestiram (e
+   * com que chave); a borda; os enfeites; braseiros e bandeiras; o que foi pedido ao
+   * Bundle e o que ainda falta; as instâncias vivas; e o chão (lajotas, não o tijolo). */
+  Hub._campoMontagem = function () {
+    var o = campoObra;
+    if (!o || o.cena !== scene) return null;
+    var porMuro = [], borda = { modulos: 0, pilares: 0, vestidos: 0 }, enf = { vagas: 0, vestidos: 0, chaves: {} };
+    o.vagas.forEach(function (v) {
+      if (v.muro != null) {
+        var pm = porMuro[v.muro] = porMuro[v.muro] || { modulos: 0, pilares: 0, vestidos: 0, chaves: {}, papeis: {} };
+        if (v.papel === 'pilar') pm.pilares++; else pm.modulos++;
+        pm.papeis[v.papel] = (pm.papeis[v.papel] || 0) + 1;
+        if (v.no) { pm.vestidos++; pm.chaves[v.chave] = (pm.chaves[v.chave] || 0) + 1; }
+      } else if (v.tipo === 'borda' || v.tipo === 'bordaPilar') {
+        if (v.papel === 'pilar') borda.pilares++; else borda.modulos++;
+        if (v.no) borda.vestidos++;
+      } else if (v.tipo === 'enfeite') {
+        enf.vagas++;
+        if (v.no) { enf.vestidos++; enf.chaves[v.chave] = (enf.chaves[v.chave] || 0) + 1; }
+      }
+    });
+    return {
+      tema: o.tema, eco: o.eco, porMuro: porMuro, borda: borda, enfeites: enf,
+      montagem: o.montagem, pedidas: o.pedidas.slice(), pendentes: o.pendentes,
+      provisorios: o.provisorios.children.length, braseiros: o.braseiros, bandeiras: o.bandeiras,
+      instancias: o.instancias ? { malhas: o.instancias.userData.malhas, total: o.instancias.userData.instancias,
+                                   sprites: o.instancias.children.filter(function (n) { return n.isSprite; }).length } : null,
+      chao: (chao && chao.userData && chao.userData.chaoCampo) || null
+    };
+  };
   Hub._caminhos = function () {
     return { miolo: MIOLO_RAIO + MEIO_FIO, anel: ANEL_RAIO, meia: CAMINHO_MEIA + MEIO_FIO, vias: caminhosVias.slice() };
   };
@@ -3559,7 +4099,12 @@ var JOGO = (typeof window !== 'undefined')
       zona: zonaAtual,
       aparencia: aparenciaCampo,
       avatar: classeAvatar,
+      // 19/09: 1 = a câmera bate com a tela (o achatado do Campo era isto fora de 1)
+      aspecto: (camera && container) ? +(camera.aspect / ((container.clientWidth || 800) / (container.clientHeight || 500))).toFixed(3) : null,
       caminhos: caminhosFeitos,           // 13/09: avenidas de pedra plantadas
+      // 19/09: o custo do último quadro (chamadas de desenho e triângulos) — a prova do
+      // Campo cobra que ele não custe muito mais que a praça vazia
+      desenho: renderer ? { calls: renderer.info.render.calls, tris: renderer.info.render.triangles } : null,
       nome: nomeJogador,
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),

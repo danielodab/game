@@ -25,8 +25,19 @@
      fantasma de OUTRA zona some e não responde ao toque, o da mesma zona aparece e
      responde; o teto de 20 conta só a zona; Hub.saiCampo volta à praça ao lado da entrada
      com o corpo do avatar.
+     19/09 (dono, com foto: "o mapa pvp está muito ruim"): a cena ganhou a arte do dono, e a
+     prova cobra a VESTIMENTA (Hub._campoMontagem, o relatório da obra — as instâncias
+     apagam os berços, então se conta pelas vagas, como o tabuleiro conta por
+     R.ultimaMontagem): cada muro do desenho virou uma fileira de módulos do catálogo com
+     pilar nas pontas (a mureta com o papel 'baixo'), a borda é de ruína com pilares nas
+     emendas, os braseiros e as bandeiras existem, o chão é de lajotas (não o tijolo), e o
+     Campo custa poucas chamadas de desenho a mais que a praça (tudo instanciado). No
+     caminho SERVIDO (http) as peças jd_*/cs_* não estão no grupo base do manifesto: a prova
+     confere que foram pedidas ao Bundle, que estão no manifesto fora do base, e que
+     chegaram e vestiram (as primitivas provisórias sumiram).
        ?foto=1   pula as cobranças: entra no Campo com dois fantasmas e para (foto);
-                 window.__vista('cima' | 'chao' | 'entrada') enquadra. -->
+                 window.__vista('cima' | 'chao' | 'entrada' | 'perto') enquadra.
+       ?mobile=1 (só com foto) abre o jogo no modo celular (a borda econômica). -->
 <iframe id="tela" src="../index.html?sandbox=1"></iframe>
 <div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
 <script>
@@ -34,6 +45,9 @@
   var FOTO = /[?&]foto=1/.test(location.search);
   if (FOTO) document.body.className = 'foto';
   var f = document.getElementById('tela');
+  // 19/09: a foto do modo celular (a borda econômica) — só o jogo lê ?mobile=1
+  if (FOTO && /[?&]mobile=1/.test(location.search)) f.src = '../index.html?sandbox=1&mobile=1';
+  var SERVIDO = location.protocol !== 'file:';
   var linhas = [], falhas = [];
   function check(nome, ok, extra) {
     linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
@@ -103,8 +117,13 @@
         }, 400);
       })
       .then(function () {
+        // 19/09: a praça só conta como referência de custo com as obras de pé
+        return espera(function () { return H._estado().construcoes && H._estado().enfeites; }, 400).then(function () {}, function () {});
+      })
+      .then(function () {
         var e0 = H._estado();
         var corpoAvatar = e0.corpo;
+        var custoPraca = e0.desenho;
         // os dois fantasmas: um da praça e um do Campo, perto de onde cada cena põe o herói
         H.fantasmaEntra('f-praca', { nome: 'Bia', classe: 'sumo', x: -1.5, z: 17.5 });
         H.fantasmaEntra('f-campo', { nome: 'Caio', classe: 'bruxo', zona: 'campo', x: (D.nasce.x || 0) + 1.8, z: D.nasce.z - 3.5 });
@@ -128,6 +147,7 @@
         var e1 = H._estado();
         check('Hub.entraCampo devolve true e naCampo() liga', ok === true && H.naCampo() === true && e1.campo === true);
         check('a zona passa a ser o Campo', H.zona() === 'campo' && e1.zona === 'campo');
+        check('a câmera do Campo bate com a proporção da tela (19/09: entrava achatado)', e1.aspecto != null && Math.abs(e1.aspecto - 1) < 0.02, String(e1.aspecto));
         check('o herói nasce no `nasce` do campo_pvp.js',
               e1.pos && Math.hypot(e1.pos.x - D.nasce.x, e1.pos.z - D.nasce.z) < 0.3, JSON.stringify(e1.pos));
         check('o corpo local é o da APARÊNCIA (1º herói), não o do avatar',
@@ -166,7 +186,78 @@
           if (distAoMuro(c, D.saida.x, D.saida.z) < 3 || distAoMuro(c, D.nasce.x, D.nasce.z) < 3) perto.push(i);
         });
         check('nenhum muro a menos de 3 m da saída ou do nascimento', perto.length === 0, perto.join(','));
-        return { corpoAvatar: corpoAvatar };
+        return { corpoAvatar: corpoAvatar, custoPraca: custoPraca };
+      })
+      .then(function (ctx) {
+        if (ctx === 'foto') return 'foto';
+        // ---- 3b. a vestimenta (19/09): a arte do dono nos muros, na borda e no chão
+        var M0 = H._campoMontagem();
+        check('a obra do Campo existe e o desenho tem o tema do catálogo', !!M0 && (M0.tema === 'garden' || M0.tema === 'cistern' || M0.tema === 'misto'), M0 && M0.tema);
+        check('o chão do Campo é de lajotas (o tijolo gigante se foi)', !!M0 && M0.chao === 'lajotas', M0 && M0.chao);
+        check('cada muro do desenho tem a sua fileira de vagas', !!M0 && M0.porMuro.length === D.muros.length && M0.porMuro.every(function (pm) { return pm && (pm.modulos + pm.pilares) > 0; }),
+              M0 && M0.porMuro.length + ' de ' + D.muros.length);
+        var errados = [];
+        D.muros.forEach(function (m, i) {
+          var pm = M0 && M0.porMuro[i];
+          if (!pm) { errados.push(i + ':sem'); return; }
+          var pilarSo = m.larg <= 2.3 && m.prof <= 2.3;
+          if (pilarSo) { if (pm.modulos !== 0 || pm.pilares !== 1) errados.push(i + ':pilar ' + pm.modulos + '/' + pm.pilares); return; }
+          var n = Math.max(1, Math.round(m.larg / 2.2));
+          if (pm.modulos !== n || pm.pilares !== 2) errados.push(i + ':' + pm.modulos + '≠' + n + ' ou pilares ' + pm.pilares);
+          var papelEsperado = m.alt < 1.6 ? 'baixo' : 'alto';
+          if ((pm.papeis[papelEsperado] || 0) !== n) errados.push(i + ':papel ' + JSON.stringify(pm.papeis));
+        });
+        check('muro = um módulo por ~2,2 m com pilar nas duas pontas; mureta usa o módulo baixo; larg ≈ prof é um pilar só', errados.length === 0, errados.join(' · '));
+        check('a borda é um quadrado de ruína com pilares nos cantos e nas emendas', !!M0 && M0.borda.pilares >= 8 && M0.borda.modulos >= 20 && (M0.eco || (M0.borda.pilares === 20 && M0.borda.modulos === 40)),
+              M0 && JSON.stringify(M0.borda));
+        check('os braseiros existem, um por tocha do desenho, com o halo que pulsa', !!M0 && M0.braseiros === D.tochas.length && !!M0.instancias && M0.instancias.sprites === D.tochas.length,
+              M0 && (M0.braseiros + ' braseiros, ' + (M0.instancias && M0.instancias.sprites) + ' halos'));
+        check('as bandeiras vermelhas existem (entrada e saída)', !!M0 && M0.bandeiras >= 2, M0 && M0.bandeiras);
+        var manifesto = null;
+        var pegaManifesto = SERVIDO
+          ? fetch('../assets/models/bundle/manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (m) { manifesto = m; }, function () {})
+          : Promise.resolve();
+        return pegaManifesto.then(function () {
+          if (SERVIDO) {
+            // no jogo servido os módulos do dono não estão no grupo base: têm de ser pedidos
+            var grupo = {};
+            (manifesto && manifesto.itens || []).forEach(function (it) { grupo[it.chave] = it.grupo || 'base'; });
+            check('servido: as peças que faltavam foram pedidas ao Bundle (jd_muro_*, jd_pilar…)',
+                  M0.pedidas.length > 0 && M0.pedidas.indexOf('jd_pilar') >= 0 && M0.pedidas.some(function (k) { return /^jd_muro_/.test(k); }), M0.pedidas.join(','));
+            var foraDoManifesto = M0.pedidas.filter(function (k) { return !grupo[k]; });
+            var noBase = M0.pedidas.filter(function (k) { return grupo[k] === 'base'; });
+            check('servido: cada chave pedida está no manifesto e fora do grupo base (por isso faltava)',
+                  !!manifesto && foraDoManifesto.length === 0 && noBase.length === 0,
+                  'fora: ' + foraDoManifesto.join(',') + ' · base: ' + noBase.join(',') + ' · grupos: ' +
+                  M0.pedidas.map(function (k) { return k + '=' + grupo[k]; }).join(' '));
+          }
+          // as peças chegam (servido) ou já estavam abertas (file://): tudo vestido, nada provisório
+          return espera(function () { var M = H._campoMontagem(); return M && M.pendentes === 0 && M.provisorios === 0; }, 400, 500)
+            .then(function () { return true; }, function () { return false; });
+        }).then(function (chegou) {
+          var M1 = H._campoMontagem();
+          check('as peças chegaram e vestiram tudo: nenhuma vaga pendente, nenhuma primitiva provisória',
+                chegou && M1.pendentes === 0 && M1.provisorios === 0, JSON.stringify({ pendentes: M1.pendentes, provisorios: M1.provisorios }));
+          var todosVestidos = M1.porMuro.every(function (pm) { return pm.vestidos === pm.modulos + pm.pilares; });
+          check('cada muro do desenho ganhou os módulos vestidos (contados por chave do catálogo)',
+                todosVestidos && M1.porMuro.every(function (pm) { return Object.keys(pm.chaves).length > 0; }),
+                M1.porMuro.map(function (pm) { return pm.vestidos + '/' + (pm.modulos + pm.pilares); }).join(' '));
+          var cat = w.JOGO.CENARIO && w.JOGO.CENARIO[M1.tema === 'misto' ? 'garden' : M1.tema];
+          var pilares = (cat && cat.pilar) || [];
+          var pilarVestido = M1.porMuro.every(function (pm) { return pilares.some(function (k) { return pm.chaves[k] > 0; }); });
+          check('os pilares das pontas são o pilar do catálogo do dono', pilarVestido, JSON.stringify(pilares));
+          check('a borda vestiu inteira', M1.borda.vestidos === M1.borda.modulos + M1.borda.pilares, JSON.stringify(M1.borda));
+          check('os enfeites do desenho vestiram (estátua, estandarte, barril…)',
+                M1.enfeites.vagas > 0 && M1.enfeites.vestidos === M1.enfeites.vagas, JSON.stringify(M1.enfeites));
+          check('tudo instanciado: uma malha por peça diferente, muitas instâncias', !!M1.instancias && M1.instancias.malhas < 80 && M1.instancias.total > M1.instancias.malhas,
+                JSON.stringify(M1.instancias));
+          return respiro(3).then(function () {
+            var custo = H._estado().desenho;
+            check('o Campo custa no máximo ~120 chamadas de desenho a mais que a praça',
+                  !!custo && !!ctx.custoPraca && custo.calls <= ctx.custoPraca.calls + 120, 'praça ' + JSON.stringify(ctx.custoPraca) + ' → Campo ' + JSON.stringify(custo));
+            return ctx;
+          });
+        });
       })
       .then(function (ctx) {
         if (ctx === 'foto') return 'foto';
@@ -252,6 +343,22 @@
     // de cima: 50 m (mais longe a névoa do fim de tarde engole o Campo)
     if (qual === 'cima') { H.irPara(0, 0); H._cam({ dist: 50, tilt: 0.3, ang: 0, livre: true }); return H._estado().cam; }
     if (qual === 'chao') { H._cam({ dist: 24, tilt: 1.02, ang: 0 }); return H._estado().cam; }
+    // de dentro, ao pé do muro de quina do noroeste, com o herói ao lado (escala); espera a
+    // caminhada acabar antes de devolver
+    if (qual === 'perto') {
+      H.irPara(-9.2, -8.4);
+      // espera por QUADROS (rAF), não por setTimeout: o relógio virtual do headless
+      // queima os timers antes de o corpo dar dez passos
+      var wj = f.contentWindow;
+      return new Promise(function (ok) {
+        var n = 0;
+        (function v() {
+          n++;
+          if ((n > 30 && !H._estado().andando) || n > 900) { H._cam({ dist: 9.5, tilt: 0.78, ang: 2.2 }); return ok(H._estado().pos); }
+          wj.requestAnimationFrame(v);
+        })();
+      });
+    }
     if (qual === 'entrada') {
       if (H.naCampo()) H.saiCampo();
       var ent = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0];
