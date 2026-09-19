@@ -374,17 +374,23 @@ var JOGO = (typeof window !== 'undefined')
     'sump-crab':      { model: 'sump-crab',      scale: 0.67 },  // 1,21 m — "do tamanho de uma mesa"
     'mist-warbler':   { model: 'mist-warbler',   scale: 0.72 },  // 1,30 m — passaro de vapor
     'boss-baroness':  { model: 'boss-baroness',  scale: 1.00 },  // 2,95 m — o vestido de baile e a sala e dele
-    // --- Prole da Fornalha (Fecho de Brasa)
-    'ember-imp':      { model: 'skeleton_minion', scale: 0.82 },
-    'walking-anvil':  { model: 'q_bull',         scale: 1.05 },
-    'ash-wraith':     { model: 'skeleton_mage',  scale: 1.00 },
-    'slag-mound':     { model: 'q_frog',         scale: 1.05 },
-    'faceless-smith': { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.15 },
-    'quench-hound':   { model: 'q_wolf',         scale: 0.85 },
-    'chain-hauler':   { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.20 },
-    'spark-whelp':    { model: 'q_velociraptor', scale: 0.70 },
-    'slag-bit':       { model: 'q_frog',         scale: 0.50 },
-    'boss-heartforge':{ model: 'q_bluedemon',   scale: 1.85 },   // era T-Rex
+    // --- Prole da Fornalha (Fecho de Brasa) — A ARTE E DO USUARIO (19/09).
+    //
+    // Os dez sairam do Meshy, Magno incluso (tools/embute_monstros.py, lote
+    // emberlock). Antes eram emprestados (esqueletos, boi, sapo, lobo, demonio).
+    // A escala sai da ESCADA DE PORTE do briefing (docs/FECHO_DE_BRASA.html),
+    // que por sua vez sai da descricao em monsters.js. Conta de sempre:
+    // altura = 1,80 m x escala (chefe: 2,95 m x escala).
+    'spark-whelp':    { model: 'spark-whelp',    scale: 0.42 },  // 0,76 m — a menor coisa do Fecho
+    'slag-bit':       { model: 'slag-bit',       scale: 0.47 },  // 0,85 m — caco do Monte
+    'ember-imp':      { model: 'ember-imp',      scale: 0.64 },  // 1,15 m — diabrete de carvao
+    'walking-anvil':  { model: 'walking-anvil',  scale: 0.86 },  // 1,55 m — bigorna com pernas
+    'quench-hound':   { model: 'quench-hound',   scale: 0.92 },  // 1,66 m — cao de vapor, de pe
+    'slag-mound':     { model: 'slag-mound',     scale: 1.06 },  // 1,91 m — monte de escoria
+    'ash-wraith':     { model: 'ash-wraith',     scale: 1.17 },  // 2,11 m — vulto de fuligem
+    'faceless-smith': { model: 'faceless-smith', scale: 1.22 },  // 2,20 m — avental sem ninguem dentro
+    'chain-hauler':   { model: 'chain-hauler',   scale: 1.50 },  // 2,70 m — guindaste com o trilho as costas
+    'boss-heartforge':{ model: 'boss-heartforge', scale: 1.19 }, // 3,51 m — o forno-tita, o maior da sala
     // --- Coro dos Andaimes (Andaimes do Vento)
     'plank-shrike':   { model: 'q_wasp',         scale: 0.95 },
     'gust-gremlin':   { model: 'skeleton_minion', scale: 0.85 },

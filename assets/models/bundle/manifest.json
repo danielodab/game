@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-13T09:51:17",
+ "gerado": "2026-09-19T16:04:02",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -114,6 +114,158 @@
    "bytes": 547356,
    "hash": "c1b32d167c1e",
    "grupo": "calabouco:cistern"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_muro",
+   "arquivo": "cenario-fecho/fj_muro.glb",
+   "bytes": 812668,
+   "hash": "f11692afbd09",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_muro_quebrado",
+   "arquivo": "cenario-fecho/fj_muro_quebrado.glb",
+   "bytes": 700812,
+   "hash": "07301f3d44a9",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_pilar",
+   "arquivo": "cenario-fecho/fj_pilar.glb",
+   "bytes": 728276,
+   "hash": "9ba7c48f9b4d",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_forno",
+   "arquivo": "cenario-fecho/fj_forno.glb",
+   "bytes": 516880,
+   "hash": "2e3ebb1a1587",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_chamine",
+   "arquivo": "cenario-fecho/fj_chamine.glb",
+   "bytes": 407664,
+   "hash": "a04b067a0b1e",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_correntes",
+   "arquivo": "cenario-fecho/fj_correntes.glb",
+   "bytes": 501256,
+   "hash": "3e9ee4b76fff",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_prensa",
+   "arquivo": "cenario-fecho/fj_prensa.glb",
+   "bytes": 429708,
+   "hash": "b9a258011760",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_bigorna",
+   "arquivo": "cenario-fecho/fj_bigorna.glb",
+   "bytes": 454296,
+   "hash": "0e228b4a498d",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_calha",
+   "arquivo": "cenario-fecho/fj_calha.glb",
+   "bytes": 637040,
+   "hash": "99a69a18fb64",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_lingotes",
+   "arquivo": "cenario-fecho/fj_lingotes.glb",
+   "bytes": 406380,
+   "hash": "f28e20416138",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_bancada",
+   "arquivo": "cenario-fecho/fj_bancada.glb",
+   "bytes": 542812,
+   "hash": "d918d3c74430",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_fole",
+   "arquivo": "cenario-fecho/fj_fole.glb",
+   "bytes": 429952,
+   "hash": "8210f727e3b7",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_braseiro",
+   "arquivo": "cenario-fecho/fj_braseiro.glb",
+   "bytes": 486676,
+   "hash": "374add88136f",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_grelha",
+   "arquivo": "cenario-fecho/fj_grelha.glb",
+   "bytes": 422008,
+   "hash": "e60235993b42",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_limalha",
+   "arquivo": "cenario-fecho/fj_limalha.glb",
+   "bytes": 473380,
+   "hash": "1571284760ca",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_carvao",
+   "arquivo": "cenario-fecho/fj_carvao.glb",
+   "bytes": 480436,
+   "hash": "d60b3e0bf792",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_pilao",
+   "arquivo": "cenario-fecho/fj_pilao.glb",
+   "bytes": 554172,
+   "hash": "50465dedb13a",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_carrinho",
+   "arquivo": "cenario-fecho/fj_carrinho.glb",
+   "bytes": 510676,
+   "hash": "a144dfa93df7",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "fj_sino",
+   "arquivo": "cenario-fecho/fj_sino.glb",
+   "bytes": 535284,
+   "hash": "a291897e4a75",
+   "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
@@ -1229,6 +1381,86 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "ember-imp",
+   "arquivo": "models-meshy-emberlock/ember-imp.glb",
+   "bytes": 1258244,
+   "hash": "788e5bb03571",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "walking-anvil",
+   "arquivo": "models-meshy-emberlock/walking-anvil.glb",
+   "bytes": 1193112,
+   "hash": "eefb5ed6f40c",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ash-wraith",
+   "arquivo": "models-meshy-emberlock/ash-wraith.glb",
+   "bytes": 1159808,
+   "hash": "f52ed06bceea",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "slag-mound",
+   "arquivo": "models-meshy-emberlock/slag-mound.glb",
+   "bytes": 1380180,
+   "hash": "eb1a14838b66",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "faceless-smith",
+   "arquivo": "models-meshy-emberlock/faceless-smith.glb",
+   "bytes": 1165904,
+   "hash": "0fbb3dfc090f",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "quench-hound",
+   "arquivo": "models-meshy-emberlock/quench-hound.glb",
+   "bytes": 1284060,
+   "hash": "1d7fa522ad5d",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "chain-hauler",
+   "arquivo": "models-meshy-emberlock/chain-hauler.glb",
+   "bytes": 1536868,
+   "hash": "977d274343f5",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "spark-whelp",
+   "arquivo": "models-meshy-emberlock/spark-whelp.glb",
+   "bytes": 1236076,
+   "hash": "c6dcf95e3424",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "slag-bit",
+   "arquivo": "models-meshy-emberlock/slag-bit.glb",
+   "bytes": 1280248,
+   "hash": "5f642ef0a660",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "boss-heartforge",
+   "arquivo": "models-meshy-emberlock/boss-heartforge.glb",
+   "bytes": 1481064,
+   "hash": "769656e76337",
+   "grupo": "calabouco:emberlock"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "boss-gardener",
    "arquivo": "models-meshy-jardim/boss-gardener.glb",
    "bytes": 1297004,
@@ -1998,6 +2230,16 @@
    "run",
    "walk"
   ],
+  "ember-imp": [],
+  "walking-anvil": [],
+  "ash-wraith": [],
+  "slag-mound": [],
+  "faceless-smith": [],
+  "quench-hound": [],
+  "chain-hauler": [],
+  "spark-whelp": [],
+  "slag-bit": [],
+  "boss-heartforge": [],
   "boss-gardener": [
    "HitReact",
    "attack",
@@ -2243,10 +2485,11 @@
  },
  "tabelas": {
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
+  "cenario-fecho.js": "tabelas/cenario-fecho.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js"
  },
- "totalBytes": 141615540,
- "totalBase64": 188821008,
+ "totalBytes": 164621480,
+ "totalBase64": 219495636,
  "grupos": {
   "base": {
    "itens": 91,
@@ -2255,6 +2498,10 @@
   "calabouco:cistern": {
    "itens": 23,
    "bytes": 19417836
+  },
+  "calabouco:emberlock": {
+   "itens": 29,
+   "bytes": 23005940
   },
   "calabouco:greenhouse": {
    "itens": 21,

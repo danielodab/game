@@ -13,8 +13,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -28,8 +28,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -43,8 +43,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -58,8 +58,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -73,8 +73,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -82,14 +82,14 @@
       "id": "quench-hound",
       "nome": "Cão-de-Têmpera",
       "boss": false,
-      "pasta": "Cão-de-Têmpera",
+      "pasta": "Cão de têmpera",
       "prefixo": "Cão-de-Têmpera",
       "mapa": {
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -103,8 +103,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -118,8 +118,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -133,8 +133,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -148,8 +148,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     }

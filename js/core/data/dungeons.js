@@ -492,29 +492,53 @@ JOGO.DATA = JOGO.DATA || {};
     defaultWeather: 'estiagem',
     weatherShiftEveryRounds: 0,
     tileEventRate: 0.25,
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o cenário próprio chegou (19/09),
+    // como as da Cisterna: anel de muro fechado (os módulos do Daniel vestem
+    // a borda), o forno de fundição UMA vez por sala (papel `marco`), pouco
+    // enfeite, e um desenho tático DIFERENTE por sala. O ELENCO DA DESCIDA é o
+    // mesmo de antes (6 Tições, 2 Bigornas, 1 Cinzento, 1 Monte, 2 Cães, 1
+    // Ferreiro, 6 Puxa-Correntes e Magno — 20 spawns): a XP por descida é
+    // calibrada contra a Cisterna e os Andaimes (validate_world) e não podia
+    // andar. As identidades:
+    //   1. CORREDOR — três pistas separadas por dois canais de brasa ('~',
+    //      lava do tema) com pontes desencontradas; a Bigorna tranca a porta
+    //      da pista do meio, os Tições esperam nas pontes e o Cinzento atira
+    //      do fundo. Quem entra em fila leva seta; quem contorna pisa na ponte
+    //      onde o Tição estoura.
+    //   2. NAVE — duas fileiras de pilares fazem a nave e as laterais; calhas
+    //      de têmpera ('=') cortam as laterais e o meio. É a sala ALAGADA
+    //      (chuva): os Cães botam por cima das calhas, o Puxa-Corrente traz
+    //      quem se esconde atrás dos pilares, e o Monte de Escória fica num
+    //      NICHO fechado no canto — matá-lo lá é despejar duas Escorinhas no
+    //      espaço mais apertado da sala.
+    //   3. CÂMARA — arena ABERTA para o gimmick da PEÇA MARCADA: o Sopro de
+    //      Fornalha empurra 3 casas em linha, e os fossos de brasa nos quatro
+    //      cantos ('~') apertam a fuga; os Puxa-Correntes nos cantos puxam o
+    //      herói para perto dos fossos, e os blocos de bigorna ('=') são o
+    //      único abrigo contra a linha. A Bigorna guarda o flanco de Magno.
     rooms: [
       {
         name: 'O Corredor de Brasas',
         weather: 'estiagem',
         sceneryTheme: 'forge',
         layout: [
-          '~~~~######~~~######~~~~',
-          '~~~~#..,.......,..#~~~~',
-          '~~~~#.###.....###.#~~~~',
-          '~~~~#.#.........#.#~~~~',
-          '#...==...a...==......##',
-          '#...#####...#####.....#',
-          '#....b................#',
-          '#PP.................c.#',
-          '#PP...................#',
-          '#PP...................#',
-          '#.....................#',
-          '#...#####...#####.....#',
-          '#...==...a...==......##',
-          '~~~~#.#.........#.#~~~~',
-          '~~~~#.###.....###.#~~~~',
-          '~~~~#..,.......,..#~~~~',
-          '~~~~######~~~######~~~~'
+          '#######################',
+          '#......,.....#......,.#',
+          '#..=====.....#.=====..#',
+          '#............#........#',
+          '#.........a...........#',
+          '#..~~~~~..~~~~~~..~~~.#',
+          '#.....#...........#...#',
+          '#PP...#.....===...#...#',
+          '#PP....c....===.....b.#',
+          '#.....#.....===...#...#',
+          '#.....#...........#...#',
+          '#.~~~..~~~~~~..~~~~~..#',
+          '#...........a.........#',
+          '#........#............#',
+          '#..=====.#....=====...#',
+          '#.,......#.........,..#',
+          '#######################'
         ],
         monsters: { a: 'ember-imp', b: 'ash-wraith', c: 'walking-anvil' }
       },
@@ -525,28 +549,28 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'chuva',
         sceneryTheme: 'forge',
         layout: [
-          '~~~~~####~~~~~####~~~~~',
-          '~~~~~#..#~~~~~#..#~~~~~',
-          '~~~~~#..,.....,..#~~~~~',
-          '#####.==#####==..#~~~~~',
-          '#...a...........a..~~~~',
-          '#..#####..~..#####..###',
-          '#..#...#.....#...#....#',
-          '#..#...#..d..#...#....#',
-          '#PP.....==...==.......#',
-          '#PP....b.......c.....e#',
-          '#PP.....==...==.......#',
-          '#..#...#..d..#...#....#',
-          '#..#...#.....#...#....#',
-          '#..#####..~..#####..###',
-          '#................#~~~~~',
-          '#####.==#####==..#~~~~~',
-          '~~~~~#..,.....,..#~~~~~',
-          '~~~~~#...........#~~~~~',
-          '~~~~~#############~~~~~'
+          '#######################',
+          '#..,.........,........#',
+          '#..=====....=====.....#',
+          '#.....................#',
+          '#......a.........a....#',
+          '#..=====....=====.....#',
+          '#....#...#...#...#....#',
+          '#.....................#',
+          '#PP....d...===........#',
+          '#PP.........c....e....#',
+          '#..........===...d....#',
+          '#.....................#',
+          '#....#...#...#...#....#',
+          '#..=====....=====..===#',
+          '#..................#b.#',
+          '#..=====....=====..#..#',
+          '#.....................#',
+          '#..,..................#',
+          '#######################'
         ],
         monsters: {
-          a: 'ember-imp', b: 'slag-mound', c: 'walking-anvil',
+          a: 'ember-imp', b: 'slag-mound', c: 'chain-hauler',
           d: 'quench-hound', e: 'faceless-smith'
         }
       },
@@ -555,27 +579,27 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'estiagem',
         sceneryTheme: 'forge',
         layout: [
-          '~~~~~######~~~######~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~#..,.......,..#~~~~~',
-          '~~~~~#.===#####===.#~~~~~',
-          '#....==...a....==.......#',
-          '#....b.........b........#',
-          '#..###.......###........#',
-          '#..#...........#........#',
-          '#PP....b.....b..........#',
-          '#PP.........z...........#',
-          '#PP....b.....b..........#',
-          '#..#...........#........#',
-          '#..###.......###........#',
-          '#..............a........#',
-          '#....==........==.......#',
-          '~~~~~#.===#####===.#~~~~~',
-          '~~~~~#..,.......,..#~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~######~~~######~~~~~'
+          '#########################',
+          '#~~~......,......,...~~~#',
+          '#~~...##.........##...~~#',
+          '#~....c...........c....~#',
+          '#.....======.======.....#',
+          '#.......................#',
+          '#...##.........=....##..#',
+          '#.....a.................#',
+          '#PP....==......==.......#',
+          '#PP....=....z.d.=.......#',
+          '#......==......==.......#',
+          '#.......................#',
+          '#...##...=.....a....##..#',
+          '#.......................#',
+          '#.....======.======.....#',
+          '#~....c.....c.....c....~#',
+          '#~~...##.........##...~~#',
+          '#~~~......,......,...~~~#',
+          '#########################'
         ],
-        monsters: { z: 'boss-heartforge', a: 'ember-imp', b: 'chain-hauler' }
+        monsters: { z: 'boss-heartforge', a: 'ember-imp', c: 'chain-hauler', d: 'walking-anvil' }
       }
     ],
     lootTable: [
@@ -1036,7 +1060,9 @@ JOGO.DATA = JOGO.DATA || {};
  * ficar só nos dois temas prontos. Abrir é tirar o id desta lista. */
 // 10/09: "somente dois portais devem estar liberados, os dois primeiros" —
 // o Fecho de Brasa fecha também até os monstros dele chegarem
-JOGO.DATA.portaisFechados = ['emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
+// 19/09: o Fecho de Brasa abriu — o lote dele (dez monstros, muros, forno e
+// quinze enfeites) entrou; sobram os três de baixo.
+JOGO.DATA.portaisFechados = ['windscaffold', 'quakemine', 'brokenheart'];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
 };
