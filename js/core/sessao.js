@@ -183,6 +183,21 @@
     if (typeof S.aoInativo === 'function') { try { S.aoInativo({ tinhaConta: tinha }); } catch (e3) {} }
   }
   S._desligaPorInatividade = desligaPorInatividade;   // as provas chamam direto
+  /* O MESTRE NÃO CAI POR INATIVIDADE (19/09, pedido do dono: "a conta admin não tem
+   * limite de 15 min no game"). A conta do cartório diz se é gm ({id, nome, gm} —
+   * conferida pelo servidor no login, não pelo save); o relógio segue correndo (o
+   * tocou() continua valendo para quem trocar de conta na mesma aba), só não desliga. */
+  S.isentoDeInatividade = function () {
+    var c = S.conta();
+    return !!(c && c.gm);
+  };
+  // um tique do vigia (o mesmo que o setInterval chama; as provas chamam direto)
+  S._tiqueInatividade = function () {
+    if (S.isentoDeInatividade()) return false;
+    if (S.ociosoMs() < S.INATIVO_MS) return false;
+    desligaPorInatividade();
+    return true;
+  };
   S.vigiaInatividade = function () {
     if (vigiaId || typeof document === 'undefined' || typeof setInterval !== 'function') return false;
     S.tocou();
@@ -195,9 +210,7 @@
         if (!document.hidden) S.tocou();
       });
     } catch (e4) {}
-    vigiaId = setInterval(function () {
-      if (S.ociosoMs() >= S.INATIVO_MS) desligaPorInatividade();
-    }, 30000);
+    vigiaId = setInterval(function () { S._tiqueInatividade(); }, 30000);
     return true;
   };
 
