@@ -154,7 +154,15 @@ var JOGO = (typeof window !== 'undefined')
     chefeD: 2.8,       // o chefe, atrás do portal
     chefeFolga: 0.45,  // entre o corpo do chefe e a face do muro
     muroR: 1.9,        // o raio sólido de uma peça de muro
-    alt: 3.4           // a altura do muro
+    alt: 3.4,          // a altura do muro
+    /* 20/09: O CORREDOR DO PORTÃO do Campo é outro bicho — ABERTO no fim. O portal de
+     * espadas do dono tem 9,5 m de largura por 7,8 de fundo (mais que a pista de 8,4),
+     * então a fileira começa 1 m mais longe e PARA a 6,5 m do meio do arco: a ponta do
+     * muro não entra no leque de lâminas. Sem câmara, sem degrau e sem fundo — quem chega
+     * ao fim do caminho entra no arco. `teto` e `fundura` peneiram os módulos: na praça a
+     * peça é escalada INTEIRA (plantaTema), então só entra o módulo que chega aos 3,4 m
+     * dentro de 4,9 m de largura e sem comer mais de 2,0 m de pista. */
+    portao: { comp: 13.5, fim: -6.5, passo: 3.4, teto: 4.9, fundura: 2.0 }
   };
   /* AS CONTAS QUE FIXARAM ESSES NÚMEROS (12/09, com RAIO_MAPA 50) — medidas,
    * não gosto. Os números entre parênteses são os de hoje (19/09, R 58: o
@@ -1000,16 +1008,16 @@ var JOGO = (typeof window !== 'undefined')
    * 19/09 (dono, com foto: "melhore a praça central pois o portal do mapa pvp está no
    * meio... se for necessário aumente o mapa geral para encaixar esse pvp"): virou o
    * SÉTIMO PORTÃO DO ARCO — um passo a oeste do portal 0 (PRACA.campo), encarando a
-   * Árvore como os outros, no mesmo porte 1,3×, e com o MESMO corredor murado dos
-   * portais abertos (plantaCantinhos lê o lugar pelo `portao` e pelo `tema`: os muros do
-   * catálogo do Campo, campoCfg().tema). A diferença é o que fica no fim: em vez do
-   * chefe, dois braseiros e duas bandeiras vermelhas — é o lugar da luta entre jogadores,
-   * não a boca de um Fecho. O arco continua vermelho e sem parede (entra-se nele); o raio
-   * de conversa foi de 4,6 para 6,4, o de portal aberto, porque a câmara tem 10 m de fundo
-   * e com 4,6 o painel ficava mudo atrás do arco. Folgas (R 58, medidas): câmara↔câmara
-   * do portal 0 8,23 m; conversa 6,4 ↔ 6,4 do portal 0 sobra 6,19; ↔ Arena (13) sobra
-   * 8,84; pegada do corredor ↔ caixa da Arena 11,64 (tests/paredes.html e corredores.html
-   * cobram). */
+   * Árvore como os outros, no mesmo porte 1,3×, e com corredor murado (plantaCantinhos lê
+   * o lugar pelo `portao` e pelo `tema`: os muros do catálogo do Campo, campoCfg().tema —
+   * desde 20/09 o lote de PvP do próprio dono). Duas diferenças para um portal de
+   * calabouço: o corredor é RETO E ABERTO no fim (sem câmara, sem fundo — o portal de
+   * espadas é mais largo que a pista e o caminho entra nele), e no fim não há chefe, e sim
+   * dois braseiros e duas bandeiras vermelhas. O arco continua vermelho e sem parede
+   * (entra-se nele); o raio de conversa é 6,4, o de portal aberto, porque com 4,6 o painel
+   * ficava mudo atrás do arco. Folgas (R 58, medidas): conversa 6,4 ↔ 6,4 do portal 0
+   * sobra 6,19; ↔ Arena (13) sobra 8,84; pegada do corredor ↔ caixa da Arena 11,64
+   * (tests/paredes.html e corredores.html cobram). */
   function montaEntradaCampo() {
     if (!PRACA.campo) return;
     var pp = pontoDaPraca('campo');
@@ -1021,13 +1029,17 @@ var JOGO = (typeof window !== 'undefined')
     a.g.lookAt(0, 0, 0);
     a.g.scale.setScalar(1.3);
     scene.add(a.g);
-    /* 20/09 (o dono, com foto: "o campo pvp não vai ter esses muros, vou fazer um
-     * específico para isso... e não será um portal"): o portão PERDEU o corredor murado.
-     * Sem `portao`, plantaCantinhos passa direto e nada de muro, câmara, braseiro ou
-     * bandeira nasce aqui — o que fica é o PORTAL DE ESPADAS do dono (OBRAS.campo veste
-     * `praca_portal_pvp`), sozinho no gramado, com a calçada chegando até ele. O aro de
-     * pedra e a base de cilindro são só o provisório de antes de o GLB abrir. */
-    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP',
+    /* 20/09, em dois tempos. Primeiro o dono tirou os muros EMPRESTADOS ("o campo pvp
+     * não vai ter esses muros, vou fazer um específico para isso... e não será um
+     * portal") e ficou o PORTAL DE ESPADAS dele sozinho no gramado (OBRAS.campo veste
+     * `praca_portal_pvp`). Depois, com a arte na mão ("coloque os muros em volta desse
+     * caminho pro pvp e alguns enfeites no tema"), o corredor VOLTOU — agora com os muros
+     * DELE: o tema do portão é o mesmo do Campo (campoCfg().tema, hoje 'pvp'), e é por
+     * `portao` + `tema` que plantaCantinhos o reconhece. O corredor do portão é aberto no
+     * fim (CORREDOR.portao). O aro de pedra e a base de cilindro são só o provisório de
+     * antes de o GLB abrir. */
+    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP', portao: true,
+                   tema: campoCfg().tema,
                    pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 6.4, node: a.g, miolo: a.miolo });
   }
   /* A CENA DO CAMPO (19/09, reescrita — dono, com foto: "o mapa pvp está muito ruim"). O
@@ -2518,6 +2530,29 @@ var JOGO = (typeof window !== 'undefined')
       scene.add(no);
       return no;
     }
+    /* OS MÓDULOS QUE CABEM NA FILEIRA (20/09). No corredor da praça a peça é escalada
+     * INTEIRA (plantaTema: escala pela altura, com teto de largura), e não esticada como
+     * no tabuleiro (muroDaCasa). Com isso um módulo MURETA — o `pv_muro_alto` do dono é
+     * 2× mais largo que alto — sairia com 2,25 m, mais baixo que o herói de 2,05 e ao
+     * lado de vizinhos de 3,4 m; e um módulo FUNDO — o muro rachado espalha os escombros
+     * por 3,6 m — comeria metade da pista e engoliria os enfeites encostados no muro.
+     * Então a fileira do portão usa só quem chega ao porte dentro do teto e sem afundar.
+     * As peças de fora não se perdem: no Campo o esticão dá conta das duas. */
+    function murosDoPorte(lista, altAlvo, teto, fundura) {
+      return (lista || []).filter(function (ch) {
+        var cena = null;
+        try { cena = m2.rawScene(ch); } catch (e) { return false; }
+        if (!cena) return false;
+        cena.updateMatrixWorld(true);
+        var b = new THREE.Box3().setFromObject(cena);
+        var a = b.max.y - b.min.y;
+        var l = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+        var f = Math.min(b.max.x - b.min.x, b.max.z - b.min.z);
+        if (!(a > 0.01) || !(l > 0.01)) return false;
+        var k = altAlvo / a;
+        return l * k <= teto + 0.01 && f * k <= fundura + 0.01;
+      });
+    }
 
     /* O CORREDOR DO PORTAL (12/09, pedido do dono: "os portais estão muito
      * feios e mal organizados; coloque muros e faça um corredor, e nesse
@@ -2568,7 +2603,8 @@ var JOGO = (typeof window !== 'undefined')
     plantaCantinhos = function () {
     if (!scene || scene !== cantinhoCena) return;
     lugares.forEach(function (lg, li) {
-      // 19/09: o PORTÃO do Campo (tipo 'campo', com tema e `portao`) ganha o mesmo corredor
+      // 19/09: o PORTÃO do Campo (tipo 'campo', com tema e `portao`) ganha corredor também
+      // — desde 20/09 o dele é RETO E ABERTO no fim, com os muros do lote de PvP do dono
       var portao = lg.tipo === 'campo' && !!lg.portao;
       if ((lg.tipo !== 'portal' && !portao) || !lg.tema || lg.fechado) return;
       if (cantinhoFeito[lg.id]) return;
@@ -2607,22 +2643,33 @@ var JOGO = (typeof window !== 'undefined')
       // a meia-largura do muro naquele ponto: corredor até CAM_DE, câmara
       // depois dele — e uma peça DIAGONAL fecha o degrau entre as duas
       function largEm(d) { return d < CAM_DE ? COR_LARG : CAM_LARG; }
+      /* 20/09: NO PORTÃO a fileira é reta e curta — começa 1 m antes e para a 6,5 m do
+       * meio do arco (CORREDOR.portao), sem câmara: a largura é a do corredor do começo
+       * ao fim, e a peneira `murosDoPorte` tira os módulos que não servem à escala
+       * inteira. Sem lista peneirada (catálogo emprestado, tudo mureta), volta o catálogo
+       * cru — corredor baixo é melhor que corredor nenhum. */
+      var P = portao ? CORREDOR.portao : null;
+      var dIni = P ? -P.comp : -COR_COMP;
+      var dFim = P ? P.fim : COR_FUNDO;
+      var tetoMuro = P ? P.teto : 4.6;
+      var listaAlto = P ? murosDoPorte(catT.alto, COR_ALT, P.teto, P.fundura) : catT.alto;
+      if (P && !listaAlto.length) listaAlto = catT.alto;
       var k = 0;
-      for (var d = -COR_COMP; d <= COR_FUNDO + 0.01; d += COR_PASSO, k++) {
-        var chave = pega(catT.alto, k);
+      for (var d = dIni; d <= dFim + 0.01; d += COR_PASSO, k++) {
+        var chave = pega(listaAlto, k);
         if (!chave) continue;
         var angLado = anguloDoMuro(chave, ux, uz);
-        var lg2 = largEm(d);
+        var lg2 = P ? COR_LARG : largEm(d);
         [lg2, -lg2].forEach(function (lado) {
           var q = pt(d, lado);
-          var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, angLado);
+          var no = plantaTema(chave, COR_ALT, tetoMuro, q.x, q.z, angLado);
           if (no) marcaSolido(q.x, q.z, CORREDOR.muroR, lg.id);
         });
       }
       // O DEGRAU: sem ele a câmara abriria com um vão aberto de cada lado,
       // que é por onde o jogador escaparia do corredor. Uma peça atravessada
       // em cada lado fecha os 2,4 m do alargamento.
-      var chaveDeg = pega(catT.alto, 1);
+      var chaveDeg = P ? null : pega(catT.alto, 1);
       if (chaveDeg) {
         var angDeg = anguloDoMuro(chaveDeg, tx, tz);
         [1, -1].forEach(function (sinal) {
@@ -2633,8 +2680,9 @@ var JOGO = (typeof window !== 'undefined')
           if (plantaTema(chaveDeg, COR_ALT, 4.6, q.x, q.z, angDeg)) marcaSolido(q.x, q.z, 1.5, lg.id);
         });
       }
-      // ---- O FUNDO, atrás do portal: três peças fechando a saída
-      [-4.4, -1.5, 1.5, 4.4].forEach(function (lado, kf) {
+      // ---- O FUNDO, atrás do portal: três peças fechando a saída (o portão não tem —
+      // atrás dele fica o arco de espadas, e o caminho acaba entrando nele)
+      (P ? [] : [-4.4, -1.5, 1.5, 4.4]).forEach(function (lado, kf) {
         var chaveF = pega(catT.alto, kf + 1);
         if (!chaveF) return;
         var q = pt(COR_FUNDO, lado);
@@ -2647,15 +2695,23 @@ var JOGO = (typeof window !== 'undefined')
         var angP = anguloDoMuro(pilar, ux, uz);
         var lb = CORREDOR.bocaLarg;
         [lb, -lb].forEach(function (lado) {
-          var q = pt(-COR_COMP - 0.6, lado);
+          var q = pt(dIni - 0.6, lado);
           if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, angP)) marcaSolido(q.x, q.z, 1.2, lg.id);
         });
       }
       // ---- AS PEÇAS DENTRO: encostadas nos muros, nunca no meio da pista
-      var dentro = [[-11.5, 3.0, 'sotaque'], [-7.0, -3.0, 'sotaque_alto'],
-                    [-4.6, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
+      /* 20/09, o dono: "alguns enfeites no tema". No PORTÃO as vagas são outras: o
+       * catálogo de PvP não tem `sotaque_alto`, o fim do corredor é aberto e a boca é das
+       * bandeiras. Ficam SEIS barreiras do lote (sacos de areia, caixote de armas,
+       * cavalo-de-frisa e tonel, que o `pega` reveza), aos pares, encostadas nos dois
+       * muros — nada no meio da pista, que é por onde se anda. */
+      var dentro = P
+        ? [[-11.8, 3.2, 'sotaque'], [-11.8, -3.2, 'sotaque'],
+           [-9.4, 3.2, 'sotaque'], [-9.4, -3.2, 'sotaque'],
+           [-7.0, 3.2, 'sotaque'], [-7.0, -3.2, 'sotaque']]
+        : [[-11.5, 3.0, 'sotaque'], [-7.0, -3.0, 'sotaque_alto'],
+           [-4.6, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
       dentro.forEach(function (it, ki) {
-        if (portao && (ki === 0 || ki === 3)) return;   // 19/09: no portão as duas vagas da boca são das bandeiras
         var chaveI = pega(catT[it[2]], ki);
         if (!chaveI) return;
         var q = pt(it[0], it[1]);
@@ -2669,16 +2725,16 @@ var JOGO = (typeof window !== 'undefined')
         var q = pt(c[0], c[1]);
         plantaTema(chaoP, 0.55, 2.2, q.x, q.z, kc * 0.9);
       });
-      /* ---- O PORTÃO DO CAMPO (19/09) não tem chefe: no canto onde o chefe de um portal
-       * fica (d = CHEFE_D, atrás do arco) ficam DOIS BRASEIROS do kit, um de cada lado da
-       * câmara (t ±3,1 — o corpo de 0,8 fica a 1,3 m da face do muro de 5,2 e a 2,3 m da
-       * pista), com a luz pintada no chão; e por dentro dos pilares da boca DUAS BANDEIRAS
-       * VERMELHAS (as do Campo, bandeiraDoCampo, nas vagas dos dois enfeites da boca:
-       * d -12, t ±3, o pano encarando quem chega). Lê-se de longe como o lugar da luta
-       * entre jogadores, não como a boca de um Fecho. */
+      /* ---- O PORTÃO DO CAMPO não tem chefe. No lugar dele, DOIS BRASEIROS do kit com a
+       * luz pintada no chão — 20/09 eles desceram do fundo (onde o chefe de um portal
+       * fica, atrás do arco) para o FIM DA FILEIRA, 1,5 m adiante do último muro e 1,3 m
+       * antes do arco: é o trecho que o dono vê ao subir o caminho, e agora ele é o fim
+       * do corredor, não o meio de uma saleta. E na boca, por dentro dos pilares, DUAS
+       * BANDEIRAS VERMELHAS (bandeiraDoCampo, t ±3, o pano encarando quem chega). Lê-se
+       * de longe como o lugar da luta entre jogadores, não como a boca de um Fecho. */
       if (portao) {
-        [3.1, -3.1].forEach(function (lado, kb) {
-          var q = pt(CHEFE_D, lado);
+        [3.0, -3.0].forEach(function (lado, kb) {
+          var q = pt(P.fim + 1.3, lado);
           var b = braseiroComLuz(lg.tema, kb);
           b.br.position.set(q.x, 0, q.z);
           b.br.rotation.y = kb * 0.7;
@@ -2688,7 +2744,7 @@ var JOGO = (typeof window !== 'undefined')
           marcaSolido(q.x, q.z, 0.8, lg.id);
         });
         [3.0, -3.0].forEach(function (lado, kb) {
-          var q = pt(-12.0, lado);
+          var q = pt(dIni + 0.3, lado);
           var bd = bandeiraDoCampo(kb);
           bd.position.set(q.x, 0, q.z);
           bd.rotation.y = Math.atan2(-ux, -uz);

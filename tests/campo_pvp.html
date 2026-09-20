@@ -345,10 +345,10 @@
                 'd ' + dE.toFixed(2) + ' · t ' + tE.toFixed(2));
           check('a entrada mora no arco dos portais (r = 0,75 do meio-lado, a oeste)', Math.abs(rE / 0.75 - 58) < 0.5 && ent.x < -35 && Math.abs(ent.z) < 4,
                 JSON.stringify({ x: +ent.x.toFixed(2), z: +ent.z.toFixed(2) }));
-          // 20/09 (o dono): o portão PERDEU o corredor murado — ele vai fazer os muros dele.
-          // Fica o portal de espadas sozinho, com o raio de conversa de portal aberto.
-          check('a entrada NÃO tem corredor (o dono faz os muros) e mantém o raio de conversa',
-                !ent.portao && ent.raio === 6.4, JSON.stringify(ent));
+          // 20/09 (o dono): o corredor do portão voltou com os muros DELE — o catálogo do
+          // Campo veste a fileira, e o raio de conversa é o de portal aberto.
+          check('a entrada é o portão do arco, com corredor do lote de PvP e o raio de conversa',
+                !!ent.portao && ent.tema === 'pvp' && ent.raio === 6.4, JSON.stringify(ent));
         }
         check('com o corpo do avatar de sempre', e2.corpo === ctx.corpoAvatar && !e2.aparencia, e2.corpo);
         check('a praça voltou inteira (portais e obras)', lugares('portal').length === 6 && lugares('arena').length === 1);
