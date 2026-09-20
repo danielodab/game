@@ -129,6 +129,8 @@ GRUPO_DA_PASTA = {
     'models-praca': 'base', 'muro-escudo': 'base',
     'cenario-jardim': 'calabouco:greenhouse', 'models-meshy-jardim': 'calabouco:greenhouse',
     'cenario-cisterna': 'calabouco:cistern', 'models-meshy-cisterna': 'calabouco:cistern',
+    'cenario-fecho': 'calabouco:emberlock', 'models-meshy-emberlock': 'calabouco:emberlock',
+    'cenario-andaimes': 'calabouco:windscaffold', 'models-meshy-windscaffold': 'calabouco:windscaffold',
     'coroas-pvp-3d': 'coroas', 'models-meshy-sum': 'classe:invocador',
     'models-monsters': 'fechados', 'models-bosses': 'fechados', 'models-summons': 'fechados',
 }

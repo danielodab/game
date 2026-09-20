@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O Fecho de Brasa</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prata&family=Karla:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+  :root {
+    /* A forja: fuligem, ferro frio, e a luz vindo de baixo — das grelhas. */
+    --cinza:     #f2ece3;   /* cinza de cinza, quente */
+    --cinza-2:   #e8e0d3;
+    --carta:     #fbf7f0;
+    --tinta:     #221611;
+    --tinta-2:   #756257;
+    --risco:     #d6cabb;
+    --brasa:     #c4502e;   /* a brasa do calabouço */
+    --brasa-f:   #9c3a1c;
+    --ouro:      #a87218;   /* latão de forja */
+    --ferro:     #5c554e;
+    --fundo-cod: #ece4d7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --cinza:     #171009;
+      --cinza-2:   #201712;
+      --carta:     #241a13;
+      --tinta:     #eee1d3;
+      --tinta-2:   #a68f7f;
+      --risco:     #3d2d20;
+      --brasa:     #ff8c4a;
+      --brasa-f:   #ffb347;
+      --ouro:      #dda34a;
+      --ferro:     #948a7e;
+      --fundo-cod: #120b06;
+    }
+  }
+  :root[data-theme="dark"] {
+    --cinza:     #171009;
+    --cinza-2:   #201712;
+    --carta:     #241a13;
+    --tinta:     #eee1d3;
+    --tinta-2:   #a68f7f;
+    --risco:     #3d2d20;
+    --brasa:     #ff8c4a;
+    --brasa-f:   #ffb347;
+    --ouro:      #dda34a;
+    --ferro:     #948a7e;
+    --fundo-cod: #120b06;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--cinza);
+    color: var(--tinta);
+    font: 400 16px/1.65 Karla, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .env { max-width: 60rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+  /* ---------------------------------------------------------- abertura */
+  .capa { border-bottom: 1px solid var(--risco); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  .sobrenome {
+    font: 700 11px/1 "JetBrains Mono", monospace;
+    letter-spacing: .18em; text-transform: uppercase;
+    color: var(--brasa); margin: 0 0 1rem;
+  }
+  h1 {
+    font: 400 clamp(2.4rem, 7vw, 4rem)/1.02 Prata, Georgia, serif;
+    margin: 0 0 1rem; text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .linha-fina {
+    font-size: 1.05rem; color: var(--tinta-2); max-width: 42rem; margin: 0;
+  }
+
+  /* ------------------------------------------------------- a regra dura */
+  .regra {
+    background: var(--carta);
+    border-left: 3px solid var(--brasa);
+    padding: 1.4rem 1.6rem;
+    margin: 2.5rem 0;
+  }
+  .regra h2 {
+    font: 400 1.35rem/1.2 Prata, Georgia, serif;
+    margin: 0 0 .6rem;
+  }
+  .regra p { margin: 0 0 .8rem; }
+  .regra p:last-child { margin-bottom: 0; }
+  .regra ol { margin: 0; padding-left: 1.2rem; }
+  .regra li { margin-bottom: .45rem; }
+
+  h2.secao {
+    font: 400 1.6rem/1.2 Prata, Georgia, serif;
+    margin: 3.5rem 0 .4rem; text-wrap: balance;
+  }
+  .secao-nota { color: var(--tinta-2); margin: 0 0 1.5rem; max-width: 42rem; }
+
+  /* ------------------------------------------------------------- tintas */
+  .tintas { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .6rem; margin: 1.2rem 0 0; }
+  .tinta-c {
+    background: var(--carta); border: 1px solid var(--risco);
+    padding: .7rem .8rem; font: 400 .8rem/1.5 "JetBrains Mono", monospace;
+  }
+  .tinta-c i {
+    display: inline-block; width: .9em; height: .9em; margin-right: .45em;
+    vertical-align: -0.08em; border: 1px solid rgba(0,0,0,.25);
+  }
+  .tinta-c b { display: block; font-weight: 700; }
+  .tinta-c span { color: var(--tinta-2); }
+
+  /* ------------------------------------------------------------ a régua */
+  .regua { margin: 1.5rem 0 0; }
+  .regua-linha {
+    display: grid; grid-template-columns: 11rem 1fr 4rem;
+    align-items: center; gap: .8rem;
+    padding: .3rem 0; border-bottom: 1px solid var(--risco);
+  }
+  .regua-nome { font-size: .88rem; font-weight: 500; }
+  .regua-barra { position: relative; height: 16px; background: var(--cinza-2); }
+  .regua-barra i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ferro); display: block; }
+  .regua-barra i.chefe { background: var(--brasa); }
+  .regua-m {
+    font: 400 .8rem/1 "JetBrains Mono", monospace;
+    color: var(--tinta-2); text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .regua-heroi {
+    position: absolute; top: -3px; bottom: -3px; width: 2px;
+    background: var(--tinta); opacity: .55;
+  }
+
+  /* ------------------------------------------------------------- bichos */
+  .bicho {
+    background: var(--carta);
+    border: 1px solid var(--risco);
+    padding: 1.6rem;
+    margin: 1.2rem 0;
+    display: grid; grid-template-columns: 1fr 15rem; gap: 1.8rem;
+  }
+  @media (max-width: 46rem) { .bicho { grid-template-columns: 1fr; gap: 1.2rem; } }
+
+  .bicho h3 {
+    font: 400 1.5rem/1.15 Prata, Georgia, serif;
+    margin: 0 0 .1rem;
+  }
+  .bicho .jogo {
+    font: 400 .78rem/1 "JetBrains Mono", monospace;
+    color: var(--tinta-2); margin: 0 0 1rem; letter-spacing: .02em;
+  }
+  .bicho p { margin: 0 0 .9rem; }
+  .bicho p:last-child { margin-bottom: 0; }
+
+  .rot {
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--brasa); display: block; margin: 1.1rem 0 .35rem;
+  }
+
+  .virada {
+    background: var(--cinza-2);
+    padding: .9rem 1rem;
+    border-top: 2px solid var(--ouro);
+    margin: 1rem 0 0;
+  }
+  .virada .rot { margin-top: 0; color: var(--ouro); }
+  .virada p { font-size: .95rem; }
+
+  /* --------------------------------------------------------- o prompt */
+  .prompt {
+    position: relative;
+    background: var(--fundo-cod);
+    border-left: 3px solid var(--brasa);
+    padding: .9rem 1rem;
+    margin: 1rem 0 0;
+  }
+  .prompt .rot { margin-top: 0; }
+  .prompt pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font: 400 .82rem/1.6 "JetBrains Mono", monospace;
+  }
+  .prompt button {
+    position: absolute; top: .55rem; right: .6rem;
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--carta); background: var(--brasa);
+    border: 0; padding: .4rem .55rem; cursor: pointer;
+  }
+  .prompt button:active { background: var(--brasa-f); }
+
+  /* ------------------------------------------------------------- peças */
+  h3.papel { font: 400 1.25rem/1.2 Prata, Georgia, serif; margin: 2.4rem 0 .2rem; }
+  .papel-nota { color: var(--tinta-2); margin: 0 0 1rem; font-size: .95rem; max-width: 42rem; }
+  .peca {
+    background: var(--carta); border: 1px solid var(--risco);
+    padding: 1.1rem 1.3rem; margin: .8rem 0;
+  }
+  .peca h4 { font: 700 1.02rem/1.3 Karla, system-ui, sans-serif; margin: 0 0 .15rem; }
+  .peca .mini { font: 400 .78rem/1.4 "JetBrains Mono", monospace; color: var(--tinta-2); margin: 0 0 .6rem; }
+  .peca p { margin: 0 0 .6rem; font-size: .95rem; }
+  .peca .prompt { margin-top: .6rem; }
+
+  /* coluna de especificação */
+  .spec { font: 400 .85rem/1.6 "JetBrains Mono", monospace; }
+  .spec dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .1rem .8rem; }
+  .spec dt { color: var(--tinta-2); }
+  .spec dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .spec .alt { font-size: 1.5rem; color: var(--brasa-f); font-weight: 700; line-height: 1.2; }
+  .spec hr { border: 0; border-top: 1px solid var(--risco); margin: .9rem 0; }
+  .spec ul { margin: 0; padding-left: 1.1rem; }
+  .spec li { margin-bottom: .25rem; }
+
+  .selo {
+    display: inline-block; font: 700 9px/1 "JetBrains Mono", monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+    padding: .35rem .5rem; margin-bottom: .9rem;
+  }
+  .selo.gente { background: var(--cinza-2); color: var(--tinta-2); }
+  .selo.vira  { background: var(--ferro); color: var(--cinza); }
+  .selo.chefe { background: var(--brasa); color: var(--carta); }
+
+  /* ------------------------------------------------------------ entrega */
+  .entrega pre {
+    background: var(--fundo-cod);
+    padding: 1rem 1.2rem; overflow-x: auto;
+    font: 400 .8rem/1.7 "JetBrains Mono", monospace;
+    margin: 1rem 0;
+  }
+  .entrega code { font: 400 .85em/1 "JetBrains Mono", monospace; background: var(--fundo-cod); padding: .1em .3em; }
+  code { font: 400 .85em/1 "JetBrains Mono", monospace; background: var(--fundo-cod); padding: .1em .3em; }
+</style>
+</head>
+<body>
+<div class="env">
+
+  <header class="capa">
+    <p class="sobrenome">Soterra — terceiro fecho — dez criaturas — prompts prontos</p>
+    <h1>O Fecho de Brasa</h1>
+    <p class="linha-fina">O último Fecho, forjado ao redor da primeira chama do mundo. Dez bichos
+    para modelar, todos já escritos no jogo — feitiços, IA e salas prontos. Cada ficha traz o que
+    a criatura é, como ela vira gente, e um prompt em inglês pronto para colar no Meshy.</p>
+  </header>
+
+  <div class="regra">
+    <h2>A única regra que muda tudo</h2>
+    <p><strong>Todo bicho tem de ser humanoide, de pé, em pose A.</strong> Mesma razão da Estufa e
+    da Corte: o esqueleto do Meshy tem 24 ossos de gente e a biblioteca de animação dele é de
+    gente. Bípede em pose A ganha ataque, reação e morte; quadrúpede ganha só o andar — e passa a
+    briga inteira deslizando parado.</p>
+    <p>Aqui o problema mudou de forma: na Corte eram bichos de água sem ombro; no Fecho são
+    <strong>coisas de forja sem corpo</strong> — uma bigorna, um guindaste, uma pilha de refugo.
+    O truque continua o mesmo: <strong>não humanize a coisa — vista a coisa num corpo.</strong>
+    A Bigorna não vira um homem-bigorna: a bigorna vira a cabeça-e-ombros de um corpanzil.
+    A caixa <em>como vira gente</em> de cada ficha resolve isso um a um.</p>
+  </div>
+
+  <div class="regra">
+    <h2>Como usar os prompts</h2>
+    <ol>
+      <li><strong>Cole o prompt</strong> da ficha no texto-para-3D do Meshy e mande — ele já é
+      completo: pede o traço cartoon, corpo bípede humanoide em pose A e silhueta limpa. Se a
+      geração vier torta, gere de novo antes de tentar consertar depois.</li>
+      <li><strong>Rig humanoide</strong>, como sempre. Confira que braço é braço e perna é perna
+      antes de animar — no Puxa-Corrente e no Cão isso é o que decide o lote.</li>
+      <li><strong>Cinco clipes por bicho</strong>: <code>idle</code>, <strong>uma</strong>
+      locomoção (<code>walk</code> OU <code>run</code> — nunca os dois: o jogo escolhe run antes
+      de walk, e o walk nunca toca), <code>attack</code>, <code>hit</code>, <code>death</code>.
+      A ficha diz se o bicho anda ou corre.</li>
+      <li><strong>Não se preocupe com o swap</strong> attack/hit do exportador nem com a Icosphere
+      solta: o embutidor mede o conteúdo e conserta os dois sozinho.</li>
+    </ol>
+  </div>
+
+  <h2 class="secao">A cor é do jogo</h2>
+  <p class="secao-nota">Como nos lotes anteriores: o jogo multiplica a sua textura pela cor do
+  elemento do bicho. O volume é seu; o matiz é do jogo. Modele em <strong>valor</strong> — escuro
+  contra claro — e os detalhes quentes ficam <strong>quase brancos</strong>: depois da tinta, um
+  veio quase branco acende laranja sozinho. Cor assada na textura briga com a tinta e sai barro.</p>
+  <div class="tintas">
+    <div class="tinta-c"><b><i style="background:#ff8c3a"></i>fogo → laranja</b>
+      <span>Tição · Monte · Ferreiro · Fagulha · Escorinha · Magno</span></div>
+    <div class="tinta-c"><b><i style="background:#9bd06a"></i>terra → verde</b>
+      <span>Bigorna — ferro cinza neutro; o verde vira azinhavre</span></div>
+    <div class="tinta-c"><b><i style="background:#c8b6ff"></i>ar → lilás</b>
+      <span>Cinzento — cinza de fuligem aceita o lilás numa boa</span></div>
+    <div class="tinta-c"><b><i style="background:#57c8ec"></i>água → azul</b>
+      <span>Cão-de-Têmpera — vapor pálido sobre miolo escuro</span></div>
+    <div class="tinta-c"><b><i style="background:#d8dee4"></i>neutro → quase branco</b>
+      <span>Puxa-Corrente — fica com a cor que você der</span></div>
+  </div>
+
+  <h2 class="secao">A escada de porte</h2>
+  <p class="secao-nota">A altura sai da descrição que já está no jogo. A linha escura é o herói de
+  régua a 2,05 m; para calibrar o olho: o Ladino tem 1,75 m, o Minotauro 2,62 m, um corpo fundido
+  3,00 m, a casa mede 2,0 m e a parede sobe a 3,10 m. A régua do teste cobra todo porte entre
+  0,7 e 3,6 m — e o chefe como o maior.</p>
+  <div class="regua">
+    <div class="regua-linha"><span class="regua-nome">Magno, o Acendedor</span>
+      <span class="regua-barra"><i class="chefe" style="width:97.2%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">3,50 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Puxa-Corrente</span>
+      <span class="regua-barra"><i style="width:75%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">2,70 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Ferreiro Sem-Rosto</span>
+      <span class="regua-barra"><i style="width:61.1%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">2,20 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Cinzento</span>
+      <span class="regua-barra"><i style="width:58.3%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">2,10 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Monte de Escória</span>
+      <span class="regua-barra"><i style="width:52.8%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">1,90 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Cão-de-Têmpera</span>
+      <span class="regua-barra"><i style="width:45.8%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">1,65 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Bigorna Ambulante</span>
+      <span class="regua-barra"><i style="width:43.1%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">1,55 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Tição</span>
+      <span class="regua-barra"><i style="width:31.9%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">1,15 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Escorinha</span>
+      <span class="regua-barra"><i style="width:23.6%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">0,85 m</span></div>
+    <div class="regua-linha"><span class="regua-nome">Fagulha</span>
+      <span class="regua-barra"><i style="width:20.8%"></i><span class="regua-heroi" style="left:56.9%"></span></span>
+      <span class="regua-m">0,75 m</span></div>
+  </div>
+
+  <h2 class="secao">Os dez</h2>
+  <p class="secao-nota">O fogo domina a casa; a Bigorna é terra, o Cinzento virou ar (fuligem
+  suspensa) e o Cão-de-Têmpera é a única água — nascida do fosso que apaga as espadas. Cada um tem
+  de fazer uma coisa que os outros não fazem, e a silhueta precisa dizer qual antes de o jogador
+  ler o nome.</p>
+
+  <!-- ============================================================ MAGNO -->
+  <div class="bicho">
+    <div>
+      <span class="selo chefe">chefe — a peça marcada</span>
+      <h3>Magno, o Acendedor</h3>
+      <p class="jogo">boss-heartforge · fogo · 420 PV · fixação 50 · PA 8</p>
+      <p>O coração do último Fecho em forma de titã: um forno a lenha com grelha no peito, o
+      martelo-chaminé ao ombro e a primeira chama do mundo queimando lá dentro. Ele não guarda o
+      portão. Ele <em>é</em> o portão.</p>
+      <p>A peça mais importante é a <strong>grelha do peito</strong>. É dali que sai o gimmick da
+      luta inteira — a Marca, o Sopro de Fornalha, o Atiçar-se — e é para onde o jogador vai
+      olhar. Modele-a grande, funda, com a luz vindo de dentro: a coisa mais clara do corpo todo.
+      O martelo é uma chaminé de verdade — cabeça de conduto fuliginoso, cabo comprido — e
+      descansa no ombro quando ele não está batendo.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Já nasce gigante com forma de gente. O cuidado é não fazer golem de pedra genérico:
+        ele é <strong>alvenaria e ferro</strong> — tijolo refratário, chapa aparafusada, portas de
+        forno nos ombros, pernas de pilar de fornalha. Arquitetura que anda, não pedra que anda.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A colossal furnace titan, a wood-fired forge shaped like a giant: huge furnace grate in the chest glowing white-hot from within, body of firebrick masonry and bolted black iron plates, furnace-pillar legs, oven-door shoulders, embers leaking from every seam, resting on one shoulder an enormous long-handled hammer whose head is a soot-stained chimney stack, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">3,50 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>chefe</dd>
+        <dt>imune</dt><dd>empurrão</dd>
+        <dt>fúria</dt><dd>abaixo de 50%</dd>
+        <dt>locomoção</dt><dd>anda — fornalha não corre</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>O martelo desce</strong> — a cruz inteira paga; a sala range</li>
+        <li><strong>A grelha abre</strong> — um gesto só vende o Sopro e o Atiçar-se</li>
+        <li><strong>A marca</strong> — mão aberta encostando, de quem carimba a peça</li>
+        <li><strong>Morte</strong> — apaga de dentro para fora; a grelha escurece primeiro</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ==================================================== PUXA-CORRENTE -->
+  <div class="bicho">
+    <div>
+      <span class="selo vira">precisa virar gente</span>
+      <h3>Puxa-Corrente</h3>
+      <p class="jogo">chain-hauler · neutro · 78 PV · fixação 30 · PP 1</p>
+      <p>Um guindaste de forja que criou vontade: um carretel de ferro pendurado no trilho do
+      teto, com correntes que ele lança como anzóis. Não persegue ninguém — traz todo mundo até
+      ele, e prende no gancho.</p>
+      <p>O problema: ele é pendurado, e o rig anda no chão. A saída: ele <strong>arrancou o
+      próprio pedaço de trilho</strong> e o carrega às costas, arqueado sobre a cabeça como uma
+      canga. O carretel continua "pendurado" — só que do trilho que ele mesmo sustenta. Isso vende
+      o ancorado (imune a empurrão) e explica por que ele mal sai do lugar.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Vigas rebitadas como pernas, corpo de treliça de ferro, e a <strong>cabeça é o tambor
+        do carretel</strong>. Os braços terminam em correntes pesadas com ganchos — a mão dentro
+        do elo maior, para o osso da mão animar a corrente de graça.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A forge gantry crane come alive: hulking frame of riveted iron girders standing on two beam legs, the head is a massive chain winch drum, a torn section of overhead rail arched over its shoulders like a yoke, arms ending in heavy hanging chains with large hooks, soot and grease stains on dark neutral iron, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">2,70 m</div>
+      <dl>
+        <dt>elemento</dt><dd>neutro — quase sem tinta</dd>
+        <dt>papel</dt><dd>alcance — puxa e prende</dd>
+        <dt>imune</dt><dd>empurrão — ancorado</dd>
+        <dt>passos</dt><dd>PP 1 — quase parado</dd>
+        <dt>locomoção</dt><dd>anda — pouco e mal</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>O puxão</strong> — lança o gancho e RECOLHE girando o tambor; é a assinatura</li>
+        <li><strong>Reação</strong> — as correntes balançam; o corpo, ancorado, não</li>
+        <li><strong>Morte</strong> — o trilho que ele carregava cai por cima dele</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================================================== FERREIRO -->
+  <div class="bicho">
+    <div>
+      <span class="selo gente">já é gente — sem o recheio</span>
+      <h3>Ferreiro Sem-Rosto</h3>
+      <p class="jogo">faceless-smith · fogo · 80 PV · suporte · PA 6</p>
+      <p>Um avental de couro e dois braços musculosos pendurados em nada: onde deveria haver um
+      corpo, só calor tremulando. Tempera os aliados como lâminas e os cobre de chapas ardentes —
+      é o suporte que transforma lacaio em problema.</p>
+      <p>Mesmo golpe do vestido da Baronesa: <strong>o avental é o corpo</strong>. Modele-o cheio,
+      com o colarinho aberto para o nada, e os braços — reais, enormes, de luvas pesadas — saindo
+      na altura dos ombros. Uma das mãos segura o martelo e nunca solta: isso resolve essa mão em
+      todas as animações. O vão do corpo se preenche com fumaça escura e brasas fracas — nada de
+      tentar transparência, que o exportador não segura.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>O avental comprido desce até o chão e esconde as pernas; o rig anda por baixo, como a
+        saia da Baronesa. Cabeça não existe — e é isso que o nome promete.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A blacksmith with no body: a worn leather smithing apron filled out in human shape with its collar open onto nothing, two huge muscular bare arms floating at the shoulders with heavy gloves, one hand gripping a smith hammer, dark smoke and faint embers filling the gap where head and torso should be, the long apron reaching the ground and hiding the legs, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">2,20 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>suporte — mate primeiro</dd>
+        <dt>têmpera</dt><dd>+20 poder no aliado</dd>
+        <dt>chapa</dt><dd>20 de escudo no aliado</dd>
+        <dt>locomoção</dt><dd>anda</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>Um gesto só</strong> — a marretada: no inimigo é dano, no aliado é Têmpera;
+        ele conserta gente a marteladas</li>
+        <li><strong>Idle de oficina</strong> — o martelo picando o nada, em ritmo</li>
+        <li><strong>Morte</strong> — o avental cai vazio; o calor apaga</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================================================== CINZENTO -->
+  <div class="bicho">
+    <div>
+      <span class="selo gente">já é gente</span>
+      <h3>Cinzento</h3>
+      <p class="jogo">ash-wraith · ar · 70 PV · alcance · iniciativa 65</p>
+      <p>O contorno de um ferreiro antigo desenhado em fuligem suspensa, com dois pontos de brasa
+      no lugar dos olhos. Atira setas de cinza e se desmancha no ar quando ameaçado — some no
+      vendaval e volta na sua nuca.</p>
+      <p>Fuligem, não fantasma de lençol: o corpo em <strong>camadas de cinza</strong>, bordas
+      esfarelando em flocos, o desenho do avental de ferreiro ainda legível na cinza. Os dois
+      olhos de brasa são o único ponto quente — bem pequenos e bem claros, para sobreviverem à
+      tinta lilás por contraste de valor.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Já é o vulto de um homem. Saia rasgada de cinza no lugar das pernas — o rig anda por
+        baixo, e deslizar, neste bicho, está certo. Braços finos e compridos, um deles com o
+        <strong>dedo apontado</strong>: é a arma dele.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>The ghost of an old blacksmith drawn in suspended soot: tall gaunt wraith made of layered ash and smoke, frayed edges crumbling into drifting flakes, the shape of a smith apron still readable in the ash, two tiny glowing ember eyes, long thin arms with one pointing finger, lower body tapering into a ragged ash skirt that hides the legs, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">2,10 m</div>
+      <dl>
+        <dt>elemento</dt><dd>ar — tinta lilás</dd>
+        <dt>papel</dt><dd>alcance — 2 setas por turno</dd>
+        <dt>sudário</dt><dd>impossível de mirar 1 turno</dd>
+        <dt>esquiva</dt><dd>26 — escorregadio</dd>
+        <dt>locomoção</dt><dd>anda — deslizar está certo</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>A seta</strong> — aponta o dedo e a fuligem obedece</li>
+        <li><strong>Respirar no parado</strong> — o corpo infla e solta flocos</li>
+        <li><strong>Morte</strong> — desmancha sem cair; a fuligem perde o desenho</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================================================ MONTE DE ESCÓRIA -->
+  <div class="bicho">
+    <div>
+      <span class="selo vira">precisa virar gente</span>
+      <h3>Monte de Escória</h3>
+      <p class="jogo">slag-mound · fogo · 95 PV · quebra em duas · fixação 26</p>
+      <p>Uma pilha de refugo de forja que aprendeu a se arrastar, deixando um rastro vitrificado.
+      Quebre-a e ela desmorona em duas Escorinhas incandescentes — que explodem. A pior coisa para
+      matar em espaço apertado.</p>
+      <p>A palavra é <strong>agregado</strong>: pedaços soltos empilhados, veios de brasa
+      aparecendo entre um caco e outro. Ele tem de <em>parecer</em> que desmonta — porque
+      desmonta: a morte dele é o nascimento das duas pequenas. Corcunda enorme, sem pescoço; o
+      caco do topo é a cabeça, com uma rachadura acesa de boca.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Bípede curvado: braços grossos de cacos fundidos, pernas curtas, e a silhueta
+        continua sendo "monte" — de pé, mas monte. Escorridos vitrificados descendo pelos
+        flancos contam o rastro sem precisar de chão.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A heap of forge slag that learned to stand: broad hunched biped stacked from loose chunks of cooled slag and clinker with glowing molten seams between them, huge rounded back, no neck, the top chunk forming a head with a single glowing crack for a mouth, thick arms of fused cinder, short legs, vitrified drips down the sides, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">1,90 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>corpo a corpo — lento</dd>
+        <dt>morte</dt><dd>vira 2 Escorinhas</dd>
+        <dt>iniciativa</dt><dd>20 — quase a pior</dd>
+        <dt>locomoção</dt><dd>anda — arrastando os pés</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>Peso Morto</strong> — desaba para a frente em câmera lenta, fervendo</li>
+        <li><strong>Morte</strong> — DESMORONA em pedaços; é ela que torna as duas
+        Escorinhas críveis</li>
+        <li><strong>Reação</strong> — os cacos se assentam e voltam ao lugar</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================================================ CÃO-DE-TÊMPERA -->
+  <div class="bicho">
+    <div>
+      <span class="selo vira">precisa virar gente</span>
+      <h3>Cão-de-Têmpera</h3>
+      <p class="jogo">quench-hound · agua · 72 PV · a única água do Fecho · iniciativa 70</p>
+      <p>Um cão de vapor condensado que nasceu no fosso onde as lâminas eram mergulhadas ainda
+      vermelhas. O pelo goteja, a mordida chia, e onde ele passa a brasa apaga — inclusive a dos
+      donos da casa.</p>
+      <p>Superfície em dois valores: <strong>vapor pálido por fora, um miolo escuro e
+      encharcado</strong> aparecendo por baixo. É contraste de valor, não de cor — a tinta azul
+      do jogo faz o resto.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>O pior caso da sala: quadrúpede. Levante-o como lobisomem — curvado sobre duas pernas
+        digitígradas, as patas dianteiras viradas braços compridos de garras com membrana, e a
+        <strong>cabeça de cão inteira</strong> em cima, mandíbula aberta chiando. Cauda de névoa
+        atrás fecha a silhueta.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A hound of condensed steam standing like a hunched werewolf: full canine head with jaws open in a hissing bite, lean body of flowing pale vapor over a dark soaked core, front legs turned into long arms with webbed claws, digitigrade hind legs, dripping water, tail of trailing mist, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">1,65 m</div>
+      <dl>
+        <dt>elemento</dt><dd>água — tinta azul</dd>
+        <dt>papel</dt><dd>corpo a corpo — bote</dd>
+        <dt>chiado</dt><dd>descola escudo, 2× por turno</dd>
+        <dt>resiste</dt><dd>fogo 30 — apaga brasa</dd>
+        <dt>locomoção</dt><dd>corre — baixo, de caçada</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>O bote</strong> — salta 4 casas e morde ainda pingando; o gesto começa
+        na cabeça</li>
+        <li><strong>O chiado</strong> — jato de vapor de mandíbula aberta</li>
+        <li><strong>Idle</strong> — pinga; o vapor sobe devagar</li>
+        <li><strong>Morte</strong> — evapora</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================== BIGORNA AMBULANTE -->
+  <div class="bicho">
+    <div>
+      <span class="selo vira">precisa virar gente</span>
+      <h3>Bigorna Ambulante</h3>
+      <p class="jogo">walking-anvil · terra · 110 PV · tanque · fixação 38</p>
+      <p>Uma bigorna centenária que criou pernas atarracadas e um rancor proporcional ao número
+      de marteladas que levou. Impossível de empurrar; péssima ideia deixar chegar perto. Lenta
+      como culpa antiga.</p>
+      <p><strong>Atenção à tinta:</strong> ela é o único bicho de terra — o jogo vai multiplicar
+      a textura por <strong>verde</strong>. Deixe o ferro num cinza neutro (o verde vira ferro
+      azinhavrado, envelhecido — certo para "centenária") e não asse laranja de brasa nela:
+      laranja × verde = barro.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>A bigorna é a <strong>cabeça-e-ombros</strong>: o chifre aponta para a frente como um
+        queixo teimoso. Embaixo, um corpanzil de ferro fundido coberto de mossas e cicatrizes de
+        talhadeira, braços pesados de arrastar os nós dos dedos, pernas curtas e grossas demais
+        para correr — o jogo já diz que ela é a mais lenta da sala.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A centuries-old anvil that grew a body: the anvil forms its head and shoulders with the horn pointing forward like a stubborn chin, squat hulking torso of scarred cast iron below, heavy knuckle-dragging arms, short thick legs, covered in hammer dents, chisel scars and chipped edges, plain matte gray iron with no glow, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">1,55 m</div>
+      <dl>
+        <dt>largura</dt><dd>quase a mesma — um bloco</dd>
+        <dt>elemento</dt><dd>terra — tinta VERDE</dd>
+        <dt>papel</dt><dd>tanque</dd>
+        <dt>iniciativa</dt><dd>10 — a pior · esquiva 0</dd>
+        <dt>imune</dt><dd>empurrão · fúria a 50%</dd>
+        <dt>locomoção</dt><dd>anda — cada passo custa</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>Peso</strong> — é a mais lenta do jogo, e essa é a graça dela</li>
+        <li><strong>Esmagamento</strong> — tomba a cabeça-bigorna em cima do alvo; física
+        básica, resultados excelentes</li>
+        <li><strong>Reação</strong> — não recua: treme, range e volta</li>
+        <li><strong>Fúria</strong> — as rachaduras é que se abrem</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========================================================= TIÇÃO -->
+  <div class="bicho">
+    <div>
+      <span class="selo gente">já é gente</span>
+      <h3>Tição</h3>
+      <p class="jogo">ember-imp · fogo · 60 PV · bomba que corre · iniciativa 75</p>
+      <p>Um carvão em brasa com braços finos e um sorriso rachado de luz alaranjada. Corre até
+      você rindo. A risada é o estopim: onde ele morre importa mais do que quando — porque ele
+      explode.</p>
+      <p>O <strong>sorriso é a silhueta</strong>: uma rachadura enorme, acesa por dentro,
+      atravessando o corpo-carvão redondo. Carvão fosco quase preto, rachaduras <strong>quase
+      brancas</strong> — depois da tinta do jogo elas acendem laranja sozinhas. Braços de graveto
+      com garras compridas, perninhas tortas.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Já nasce bípede: um diabrete. Sem pescoço — a cabeça é o próprio corpo, como o
+        Carrapichinho da Estufa, e o sorriso faz o serviço do rosto inteiro.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A small imp made of living charcoal: round cracked coal body split by a huge jagged grin glowing from inside, thin twig-like arms ending in long claws, short bandy legs, matte charcoal-black skin covered in near-white glowing cracks, embers flaking off its shoulders, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">1,15 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>corpo a corpo — kamikaze</dd>
+        <dt>morte</dt><dd>explode — 22 no raio 1</dd>
+        <dt>fraco</dt><dd>água −25</dd>
+        <dt>locomoção</dt><dd>CORRE — rindo</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>A corrida</strong> — inclinado para a frente, de estopim aceso; é a
+        personalidade dele</li>
+        <li><strong>Garra Acesa</strong> — rasgo de garras, rápido</li>
+        <li><strong>Morte</strong> — INCHA, o sorriso abre demais, e estoura; o jogador tem
+        de ler o aviso</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================================================== ESCORINHA -->
+  <div class="bicho">
+    <div>
+      <span class="selo vira">precisa virar gente</span>
+      <h3>Escorinha</h3>
+      <p class="jogo">slag-bit · fogo · 30 PV · ato dois de três · nasce do Monte</p>
+      <p>Um caco de escória ainda rubro, rastejando com propósito. Nasce quando o Monte desmorona
+      — o jogador vê duas de uma vez, no meio da briga, e precisa entender <em>na hora</em> que
+      são bombas: pequeno + brilhando = perigo.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>O caco fica de pé: um fragmento anguloso com duas perninhas tocas e bracinhos de
+        garra, corcunda, e uma rachadura acesa atravessada na frente como um olho. Tem de ler
+        como um pedaço quebrado do Monte — mesmo material, mesmos veios.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A broken shard of forge slag with limbs: a single jagged chunk of dark clinker standing hunched on two stubby legs, small clawed arms, molten glow inside every fracture line, one bright crack across the front like an eye, sparks trailing from its back, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">0,85 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>estilhaço — só invocada</dd>
+        <dt>morte</dt><dd>explode — 12 no raio 1</dd>
+        <dt>locomoção</dt><dd>anda — de pé, torta</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>Andar de caco</strong> — torto, rasteiro, com propósito</li>
+        <li><strong>Respingo</strong> — chacoalha e espirra escória</li>
+        <li><strong>Morte</strong> — brilha forte e ESTOURA; ela também é bomba</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ======================================================= FAGULHA -->
+  <div class="bicho">
+    <div>
+      <span class="selo gente">já é gente</span>
+      <h3>Fagulha</h3>
+      <p class="jogo">spark-whelp · fogo · 28 PV · descartável do chefe · iniciativa 80</p>
+      <p>Uma faísca com pernas e opinião. Magno as estala dos dedos no meio da luta — ele fabrica
+      o próprio exército descartável. Vive pouco, termina alto.</p>
+      <p>Corpo-gota de fogo branco com as bordas crepitando em zigue-zague, bracinhos tremulando,
+      perninhas tocas. Miolo <strong>quase branco</strong> escurecendo até pontas carbonizadas —
+      o contraste de valor faz a tinta do jogo trabalhar sozinha.</p>
+      <div class="virada">
+        <span class="rot">como vira gente</span>
+        <p>Já nasce bípede — é uma faísca <em>com pernas</em>. A menor coisa do Fecho, e a mais
+        rápida: a silhueta é uma chama inclinada para a frente, sempre a caminho de alguém.</p>
+      </div>
+      <div class="prompt">
+        <span class="rot">prompt — colar no Meshy</span>
+        <pre>A living spark: a tiny flame creature with a teardrop body of white-hot fire, crackling zigzag edges, stubby legs and small flickering arms, a nearly white glowing core darkening to charred black tips, leaning forward with mischievous energy, stylized 3D cartoon game monster, toon shading, hand-painted cartoon look, full body, standing upright in A-pose with arms slightly spread, bipedal humanoid body with two arms and two legs like a person, symmetrical, bold clean silhouette, muted desaturated colors, strong contrast between dark and glowing-bright areas, no base, no pedestal, no background</pre>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="alt">0,75 m</div>
+      <dl>
+        <dt>elemento</dt><dd>fogo — tinta laranja</dd>
+        <dt>papel</dt><dd>enxame — só invocada</dd>
+        <dt>morte</dt><dd>explode — 15 no raio 1</dd>
+        <dt>iniciativa</dt><dd>80 — a maior do Fecho</dd>
+        <dt>locomoção</dt><dd>corre</dd>
+      </dl>
+      <hr>
+      <span class="rot">as animações têm de vender</span>
+      <ul>
+        <li><strong>Tudo rápido</strong> — nervosa, tremida, nunca parada de verdade</li>
+        <li><strong>Estalo</strong> — encosta e estala; dói mais do que parece</li>
+        <li><strong>Morte</strong> — um clarão seco</li>
+        <li><strong>Nascer</strong> — ela entra em cena pela mão de Magno; se a biblioteca
+        tiver um Spawn, é dela</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- =========================================================== enfeites -->
+  <h2 class="secao">Os enfeites do mapa</h2>
+  <p class="secao-nota">Os muros, as muretas e o pilar ficam com você, como combinado — aqui é o
+  resto do kit, nos mesmos papéis que o Jardim e a Cisterna entregaram. A medida de cada papel
+  vem do motor: <strong>sotaque</strong> veste as fileiras baixas a 0,95 m; <strong>sotaque
+  alto</strong> entra nas fileiras altas a 3,10 m; o <strong>marco</strong> é a vitrine única por
+  sala (regra do aquário — até 3,4 m); o <strong>chão</strong> é piso vestido (0,25–0,5 m); e a
+  <strong>borda</strong> fica fora da arena a 2,2–4,6 m — cenário de fundo pode e deve ser maior
+  que a arquitetura da sala, foi a lição da escada de podar. Modele na escala que for cômoda: a
+  proporção é sua, a escala eu normalizo.</p>
+  <p class="secao-nota">Três regras que valem para todas: <strong>nada de tampo plano</strong>
+  sem coisa em cima (a câmera isométrica lê como placa flutuando); <strong>volume
+  vertical</strong> sempre; e aqui <strong>a cor é sua</strong> — enfeite não leva tinta de
+  elemento. A paleta da casa: tijolo refratário, ferro escuro, fuligem — e a brasa laranja como o
+  único ponto quente, guardada para poucas peças.</p>
+
+  <h3 class="papel">Sotaque — 0,95 m, dentro da arena</h3>
+  <p class="papel-nota">Vistas de todos os lados, no meio do campo, intercaladas com as suas
+  muretas. Cinco peças, cada uma contando uma etapa da forja.</p>
+
+  <div class="peca">
+    <h4>Bigorna fria no cepo</h4>
+    <p class="mini">sotaque · o ícone da casa — e o aviso: uma delas acordou</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A big cold blacksmith anvil sitting on a thick scarred wooden stump, chipped edges, hammer dents, dark worn iron dusted with ash, heavy chunky proportions, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Calha de têmpera</h4>
+    <p class="mini">sotaque · a água preta onde o Cão-de-Têmpera nasceu</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A long narrow quenching trough of riveted dark iron standing on short legs, filled with still black water, scorch marks and drip stains down the sides, a pair of blacksmith tongs resting across one end, faint steam wisp, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Pilha de lingotes</h4>
+    <p class="mini">sotaque · riqueza empilhada na altura da cintura</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A waist-high stack of metal ingots piled in a crisscross pattern, slightly uneven and leaning, a faint warm glow deep in the core of the pile, dark iron bars with bright scratched edges, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Bancada com ferramentas cravadas</h4>
+    <p class="mini">sotaque · a ferramenta em pé quebra a leitura de placa</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A sturdy blacksmith workbench with tools stuck upright into the wooden top: a hammer, tongs and a chisel embedded in the wood, scattered rivets and burn marks, heavy wooden legs with iron brackets, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Fole duplo de couro</h4>
+    <p class="mini">sotaque · o pulmão da forja, remendado e cansado</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A large standing double bellows of cracked patched leather and dark wood, nozzle tilted slightly upward, iron fittings and worn wooden handles, resting at an angle like abandoned equipment, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <h3 class="papel">Sotaque alto — 3,10 m, corta a linha de visão</h3>
+  <p class="papel-nota">Entram nas fileiras altas junto com os seus muros — aparecem muito,
+  porque são altas e bloqueiam visão o tempo todo. Três peças.</p>
+
+  <div class="peca">
+    <h4>Chaminé de forja</h4>
+    <p class="mini">sotaque_alto · tijolo vitrificado e fuligem escorrida</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A tall square brick forge chimney, refractory bricks vitrified by heat, streaks of soot running down the sides, a small arched vent glowing faintly at the base, crumbling top edge, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Feixe de correntes com ganchos</h4>
+    <p class="mini">sotaque_alto · o parente parado do Puxa-Corrente</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A thick bundle of heavy iron chains hanging straight down from a broken ceiling mount at the top, ending in large hooks at different heights, links worn shiny on the edges, slightly tangled near the floor, tall vertical prop, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Prensa parada no meio do golpe</h4>
+    <p class="mini">sotaque_alto · a máquina que ninguém desligou — só parou</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A massive iron screw press frozen mid-strike, heavy riveted frame, thick central screw with the flat die stopped halfway down, grease stains and soot, worn edges, tall vertical machine, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <h3 class="papel">O marco — um por sala, até 3,4 m</h3>
+  <p class="papel-nota">A regra do aquário: uma peça monumental, única, que trava na primeira
+  casa de sotaque da fileira alta e gira com a parede. É a assinatura da sala.</p>
+
+  <div class="peca">
+    <h4>Forno de fundição</h4>
+    <p class="mini">marco · a boca escura com brasa no fundo — o parente parado de Magno</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A monumental smelting furnace built of firebrick and iron bands, a dark arched mouth with embers glowing deep inside, a soot-stained chimney rising from the top, tool hooks on the sides, ash spilling over the lip of the mouth, imposing front face, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <h3 class="papel">Chão — 0,25 a 0,5 m, só piso vestido</h3>
+  <p class="papel-nota">Sem colisão, por cima do ladrilho. O catálogo do Fecho deve declarar
+  <code>chao_alt: 0.4</code> — a 0,25 m a grelha vira selo de correio, como o barril da Cisterna
+  virava brinquedo. Três peças.</p>
+
+  <div class="peca">
+    <h4>Grelha de piso acesa</h4>
+    <p class="mini">chao · a luz do calabouço vem de baixo — a descrição da casa promete isso</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A flat square floor grate of black cast iron with thick crossing bars, warm light glowing up through the gaps from below, a scorched stone frame around it, very low profile floor prop, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Limalha com martelo esquecido</h4>
+    <p class="mini">chao · alguém largou o turno no meio</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A low scattered pile of metal filings and dead sparks on the floor with a forgotten blacksmith hammer lying in the middle, tiny bright glints of fresh metal in the dark pile, very low profile floor prop, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Carvão derramado</h4>
+    <p class="mini">chao · o balde tombou e ninguém recolheu</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A low spill of charcoal lumps and ash across the floor with a small tipped-over iron bucket at one end, a few lumps still glowing orange in the cracks, very low profile floor prop, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <h3 class="papel">Borda — 2,2 a 4,6 m, fora da arena</h3>
+  <p class="papel-nota">O fundo que faz o campo parecer dentro de um lugar maior. Três peças —
+  e, como a Cisterna fez, a chaminé e o feixe de correntes podem repetir aqui de graça, no
+  catálogo mesmo, sem gerar de novo.</p>
+
+  <div class="peca">
+    <h4>Martelo-pilão</h4>
+    <p class="mini">borda · a ferramenta grande demais para um homem só</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A giant water-powered trip hammer machine at rest: a massive wooden beam arm with a huge iron hammer head resting over an anvil block, sturdy wooden frame with iron straps, dusty and idle, large background machine, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Carrinho de minério no trilho</h4>
+    <p class="mini">borda · a matéria-prima que continua chegando para ninguém</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A mine cart full of coal and ore standing on a short section of rails, dark iron body with wooden reinforcements, one wheel slightly off the track, soot stains and chipped paint, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <div class="peca">
+    <h4>Sino de fim de turno</h4>
+    <p class="mini">borda · ninguém mais bate nele — e é por isso que ele conta história</p>
+    <div class="prompt"><span class="rot">prompt — colar no Meshy</span>
+    <pre>A big bronze shift bell hanging inside a heavy iron arch frame with sturdy legs, a frayed pull rope dangling from the bell, soot and verdigris stains on the bronze, stylized 3D cartoon game prop, toon shading, hand-painted look, bold clean silhouette, single object, no ground, no base, no background</pre></div>
+  </div>
+
+  <!-- ============================================================ entrega -->
+  <h2 class="secao">A entrega</h2>
+  <p class="secao-nota">O manifesto do lote já existe (<code>tools/monstros/emberlock.json</code>)
+  e espera exatamente estes nomes de pasta e de arquivo. O caminho completo do recebimento está
+  em <code>docs/RECEBER_LOTE.md</code>.</p>
+  <div class="entrega">
+<pre>C:\Users\danie\Downloads\assets_ok\mapa\O Fecho de Brasa\monstros\
+    Tição\                  Tição idle.glb · Tição run.glb · Tição attack.glb
+                            Tição hit.glb · Tição death.glb
+    Bigorna Ambulante\      (walk em vez de run — e assim por diante,
+    Cinzento\                cada bicho com a locomoção da ficha)
+    Monte de Escória\
+    Ferreiro Sem-Rosto\
+    Cão-de-Têmpera\
+    Puxa-Corrente\
+    Fagulha\
+    Escorinha\
+    Magno, o Acendedor\
+C:\Users\danie\Downloads\assets_ok\mapa\O Fecho de Brasa\muros\
+    (os seus muros, muretas e pilar + os enfeites da seção acima,
+     um GLB por peça, nome livre — o embutidor mapeia)</pre>
+    <p>Com o lote na pasta: raio-X e fusão pelo <code>tools/embute_monstros.py</code> (os
+    comandos estão no RECEBER_LOTE), o arquivo novo na lista do <code>index.html</code>,
+    <code>tools/extrai_assets.py</code> para o bundle servido, e a régua em
+    <code>tests/bestiario.html?calabouco=emberlock</code> confere kit próprio, clipe por papel e
+    porte. Por fim, <code>emberlock</code> sai de <code>portaisFechados</code> — e o maior portão
+    já construído abre com ciúme do próprio fogo.</p>
+  </div>
+
+</div>
+<script>
+  // botão de copiar em cada prompt — conveniência; sem ele o texto continua selecionável
+  document.querySelectorAll('.prompt').forEach(function (box) {
+    var pre = box.querySelector('pre'); if (!pre) return;
+    var b = document.createElement('button');
+    b.textContent = 'copiar';
+    b.addEventListener('click', function () {
+      function ok() { b.textContent = 'copiado'; setTimeout(function () { b.textContent = 'copiar'; }, 1600); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pre.textContent).then(ok, function () { seleciona(); });
+      } else { seleciona(); }
+      function seleciona() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        try { document.execCommand('copy'); ok(); } catch (e) {}
+      }
+    });
+    box.appendChild(b);
+  });
+</script>
+</body>
+</html>

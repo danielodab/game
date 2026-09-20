@@ -1,10 +1,18 @@
 # Receber o lote de um portal fechado (monstros, cenário, arte)
 
-Os quatro portais fechados — **Fecho de Brasa** (`emberlock`), **Andaimes do
-Vento** (`windscaffold`), **Mina Trêmula** (`quakemine`) e **Coração Partido**
+Os portais fechados — **Mina Trêmula** (`quakemine`) e **Coração Partido**
 (`brokenheart`) — abrem quando o lote deles entra. Este é o caminho, do mesmo
-jeito que a Estufa e a Cisterna entraram, só que agora com ferramenta
-genérica em vez de script copiado.
+jeito que a Estufa, a Cisterna, o **Fecho de Brasa** (`emberlock`, aberto em
+19/09) e os **Andaimes do Vento** (`windscaffold`, abertos na noite de 19/09)
+entraram, só que agora com ferramenta genérica em vez de script copiado.
+
+Os Andaimes foram o segundo lote pela ferramenta genérica e não precisaram de
+mapa: as três folhas ("itens 1/2/3.glb", sem o nome das peças) vieram com vão
+suficiente para `separa_pecas.py --conta 5,4,6` achar o patamar sozinho; as
+peças saíram numeradas e foram nomeadas pela folha de contato
+(`tools/embute_cenario_andaimes.py` guarda o de-para). O muro veio com uma viga
+em cada ponta (`alto_corpo: 'auto'`), e o pilar chegou com o nome do que é —
+`viga.glb`.
 
 ## O que o lote precisa ter
 
@@ -46,12 +54,24 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    escala 1; o porte se acerta depois em `js/render3d/models3d_v2.js`
    (`MONSTER_LOOK`, campo `scale`), como foi feito na Cisterna.
 6. **O cenário** (muros e enfeites do tema, para a batalha e para o
-   cantinho do portal na praça): `tools/separa_cenario.py`,
-   `tools/normaliza_muros_cisterna.py` e `tools/embute_cenario_cisterna.py`
-   são o modelo — copie os dois últimos trocando `cistern` pelo tema do
-   calabouço (`forge`, `scaffold`, `mine`, `heart`) e registre o catálogo
-   em `JOGO.CENARIO[tema]` com os papéis `alto`, `pilar`, `marco`,
-   `sotaque`, `sotaque_alto`, `chao`, `borda`.
+   cantinho do portal na praça): o Fecho de Brasa (19/09) é o modelo mais
+   novo — `tools/normaliza_muros_fecho.py` (muros e pilar, sem separar),
+   `tools/separa_pecas.py` (as folhas de enfeite) e
+   `tools/embute_cenario_fecho.py` (o catálogo). Copie os dois de nome
+   próprio trocando a pasta e o tema (`scaffold`, `mine`, `heart`) e
+   registre `JOGO.CENARIO[tema]` com os papéis `alto`, `pilar`, `marco`,
+   `sotaque`, `sotaque_alto`, `chao`, `borda` (+ `chao_alt`, `alto_corpo`).
+
+   O separador: `separa_pecas.py -- <pasta>` (ensaio) agrupa por
+   proximidade de VÉRTICE e lê no nome do arquivo quantas peças a folha tem
+   ("A-B-C.glb" = três; `--conta 4,5,7` quando o Meshy gerou objeto a mais).
+   Quando peças vêm ENCOSTADAS (grelha na limalha, sino no carrinho), nenhuma
+   distância separa: `--bruto 0.02,0.007,0.007` exporta cada grupo e as duas
+   metades dele numerados, `tools/contato_cenario.py` fotografa, e um mapa
+   diz o que junta com o quê — `--mapa mapa.json` monta e nomeia as peças
+   (`{"folha2": {"g": 0.007, "Forno de fundição": ["7b"], "Prensa": ["7a",
+   "5"]}}`). O `separa_cenario.py` antigo (por caixa) segue valendo para
+   folha com vão largo entre as peças.
 7. **Abrir o portal**: tire o id de `JOGO.DATA.portaisFechados` em
    `js/core/data/dungeons.js`. O X vermelho some, a descida volta, o
    Calabouço do Dia e o Poço passam a contar com ele, e as peças dele
