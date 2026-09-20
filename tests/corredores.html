@@ -91,22 +91,26 @@
         var abertos = L.filter(function (l) { return !l.fechado; });
         var fechados = L.filter(function (l) { return l.fechado; });
         var S = H._solidos();
-        // 19/09: o portão do Campo (tipo 'campo', com `portao`) tem corredor como um portal aberto
-        var portao = H._lugares().filter(function (l) { return l.tipo === 'campo' && l.portao; })[0] || null;
+        /* 20/09 (o dono: "o campo pvp não vai ter esses muros, vou fazer um específico para isso"):
+         * o portão do Campo PERDEU o corredor. Ele continua no arco, com o portal de espadas do dono,
+         * mas sem muro, câmara, cantinho, braseiro ou bandeira — e por isso sai das réguas de corredor
+         * abaixo. O que se cobra dele agora é o contrário: que NÃO tenha nada disso. */
+        var entrada = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0] || null;
+        var portao = null;
         var corredores = H._corredores();
 
         check('todo portal ABERTO ganhou corredor (hoje são ' + abertos.length + ')',
               abertos.length >= 2 && abertos.every(function (l) { return corredores.indexOf(l.id) >= 0; }),
               corredores.join(','));
-        check('o portão do Campo existe e ganhou corredor (e mais ninguém)',
-              !!portao && corredores.indexOf('campo') >= 0 && corredores.length === abertos.length + 1,
+        check('a entrada do Campo existe e NÃO tem corredor (só os portais abertos têm)',
+              !!entrada && !entrada.portao && corredores.indexOf('campo') < 0 && corredores.length === abertos.length,
               corredores.join(','));
         check('cada portal aberto tem o chefe dele parado ao lado (o portão não tem chefe)',
               H._chefesParados() === abertos.length, H._chefesParados() + ' chefes');
         check('a praça ganhou muros de verdade (sólidos avulsos)', S.length > 20, S.length);
         var doPortao = S.filter(function (s) { return s.dono === 'campo'; });
-        check('os sólidos do corredor do portão levam o dono (muros, pilares, braseiros, bandeiras)',
-              doPortao.length >= 20, doPortao.length);
+        check('a entrada do Campo não planta sólido nenhum (entra-se nela; os muros são do dono)',
+              doPortao.length === 0 && !entrada.solido, doPortao.length + ' sólidos · solido ' + (entrada && entrada.solido));
 
         // um ponto do MUNDO a partir de coordenadas do corredor
         function ponto(l, dd, lado) {

@@ -146,6 +146,12 @@ def grupo_de(pasta, chave):
     """O grupo de um modelo — quando ele desce no jogo servido."""
     if chave in PRACA:
         return 'base'
+    # o lote de PvP (20/09) mora num arquivo so, mas desce em dois tempos: o
+    # PORTAL DE ESPADAS fica de pe na praca (base, 0,43 MB), e os muros e as
+    # barreiras do Campo (4,5 MB) so descem para quem entra la — a pre-busca
+    # do Acampamento os traz em segundo plano (js/assets_bundle.js).
+    if pasta == 'cenario-pvp':
+        return 'base' if chave == 'praca_portal_pvp' else 'campo:pvp'
     if pasta.startswith('models-fus'):
         m = RE_FUSAO.match(chave)
         if m and m.group(1) in CLASSES and m.group(2) in CLASSES:

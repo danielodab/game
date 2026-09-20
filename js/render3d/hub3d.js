@@ -76,13 +76,24 @@ var JOGO = (typeof window !== 'undefined')
       tochas: Array.isArray(C.tochas) ? C.tochas : [],
       saida: C.saida || CAMPO_RESERVA.saida,
       nasce: C.nasce || CAMPO_RESERVA.nasce,
-      // 19/09: o catálogo do dono que veste os muros, os enfeites e as bandeiras (ver o
-      // topo do campo_pvp.js); sem nada no desenho, o jardim veste e não há enfeite
-      tema: (C.tema === 'cistern' || C.tema === 'misto') ? C.tema : 'garden',
+      /* 19/09: o catálogo que veste os muros, os enfeites e as bandeiras (ver o topo do
+       * campo_pvp.js). 20/09: vale QUALQUER catálogo carregado — o do dono ('pvp', o lote
+       * do Campo) inclusive; antes a lista era fixa em jardim/cisterna e um tema novo caía
+       * calado no jardim, que foi o que aconteceu com o lote de 20/09. 'misto' alterna os
+       * dois emprestados. Sem catálogo nenhum na mão, o jardim veste. */
+      tema: temaDoCampo(C.tema),
       borda: C.borda || {},
       enfeites: Array.isArray(C.enfeites) ? C.enfeites : [],
       bandeiras: Array.isArray(C.bandeiras) ? C.bandeiras : null
     };
+  }
+  /* 20/09: o tema do Campo é válido se há catálogo com esse nome (JOGO.CENARIO), ou se é
+   * 'misto' (alterna jardim e cisterna). O lote do dono chega como 'pvp'. */
+  function temaDoCampo(t) {
+    if (t === 'misto') return t;
+    var cat = JOGO.CENARIO || {};
+    if (t && cat[t]) return t;
+    return cat.pvp ? 'pvp' : 'garden';
   }
   function naZona(reg) {
     var z = reg && reg.perfil && reg.perfil.zona;
@@ -972,6 +983,9 @@ var JOGO = (typeof window !== 'undefined')
       disco.rotation.x = -Math.PI / 2;
       disco.position.y = 0.08;
       disco.userData.semCaixa = true;          // é luz no chão, não corpo: a prova de folga não o mede
+      // 20/09: a luz do chão SOBREVIVE à vestimenta (veste() varre os filhos do lugar e
+      // só o rótulo escapava): sem ela, o portal do dono ficava apagado no gramado
+      disco.userData.brilhoChao = true;
       g.add(disco);
     }
     var r = rotulo(o.texto, o.corTexto);
@@ -1007,8 +1021,13 @@ var JOGO = (typeof window !== 'undefined')
     a.g.lookAt(0, 0, 0);
     a.g.scale.setScalar(1.3);
     scene.add(a.g);
-    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP', portao: true,
-                   tema: campoCfg().tema === 'cistern' ? 'cistern' : 'garden',   // o catálogo que veste o corredor
+    /* 20/09 (o dono, com foto: "o campo pvp não vai ter esses muros, vou fazer um
+     * específico para isso... e não será um portal"): o portão PERDEU o corredor murado.
+     * Sem `portao`, plantaCantinhos passa direto e nada de muro, câmara, braseiro ou
+     * bandeira nasce aqui — o que fica é o PORTAL DE ESPADAS do dono (OBRAS.campo veste
+     * `praca_portal_pvp`), sozinho no gramado, com a calçada chegando até ele. O aro de
+     * pedra e a base de cilindro são só o provisório de antes de o GLB abrir. */
+    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP',
                    pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 6.4, node: a.g, miolo: a.miolo });
   }
   /* A CENA DO CAMPO (19/09, reescrita — dono, com foto: "o mapa pvp está muito ruim"). O
@@ -1403,7 +1422,7 @@ var JOGO = (typeof window !== 'undefined')
                              braseiros: 0, bandeiras: 0 };
     scene.add(obra.provisorios);
     function temaDe(i, forcado) {
-      if (forcado === 'garden' || forcado === 'cistern') return forcado;
+      if (forcado && (JOGO.CENARIO || {})[forcado]) return forcado;   // 20/09: qualquer catálogo, não só os dois emprestados
       return tema === 'misto' ? ((i % 2) ? 'cistern' : 'garden') : tema;
     }
     function vaga(v) { obra.vagas.push(v); return v; }
@@ -1503,7 +1522,8 @@ var JOGO = (typeof window !== 'undefined')
     C.enfeites.forEach(function (e, i) {
       var x = +e.x || 0, z = +e.z || 0, chave = e.chave || null, papel = e.papel || null, tm;
       if (chave) {
-        tm = /^cs_/.test(chave) ? 'cistern' : 'garden';
+        // 20/09: o prefixo diz o catálogo — cs_ cisterna, pv_ o lote do Campo, o resto jardim
+        tm = /^cs_/.test(chave) ? 'cistern' : (/^pv_/.test(chave) ? 'pvp' : 'garden');
         papel = papel || papelDaChave(tm, chave) || 'sotaque';
       } else {
         tm = temaDe(i, e.tema);
@@ -2236,7 +2256,11 @@ var JOGO = (typeof window !== 'undefined')
       loteria: { chave: 'praca_loteria', alvoAlt: 5.5, teto: 9 },
       // o Poço (13/09): a arte é baixa e larga (altura = 46% da largura) —
       // a boca de 7,9 m se lê de longe sem virar prédio
-      poco:    { chave: 'praca_poco',    alvoAlt: 3.6, teto: 8 }
+      poco:    { chave: 'praca_poco',    alvoAlt: 3.6, teto: 8 },
+      // 20/09: o PORTAL DE ESPADAS do Campo de PvP (lote do dono). Alto como um portal
+      // de calabouço (o herói tem 2,05 m e passa por baixo) e largo o bastante para o
+      // leque de lâminas caber sem o teto morder a altura
+      campo:   { chave: 'praca_portal_pvp', alvoAlt: 6.0, teto: 9.5 }
     };
     function montaObra(chave, alvoAlt, teto, rotY) {
       var cena = null;
@@ -2271,19 +2295,44 @@ var JOGO = (typeof window !== 'undefined')
     var cenaDasObras = scene, pendentes = [];
     function veste(lg) {
       var obra = OBRAS[lg.tipo];
+      var giro = Math.atan2(-lg.pos.x, -lg.pos.z);
+      /* 20/09: o PORTÃO do Campo é o único lugar cujo nó já vem GIRADO (o arco provisório
+       * usa lookAt para encarar a Árvore). A obra traz o giro dela dentro, então o nó
+       * volta ao zero — senão o portal do dono saía girado duas vezes. */
+      if (lg.tipo === 'campo') lg.node.rotation.set(0, 0, 0);
       // o prédio ENCARA o centro da praça, como os portais
-      var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto,
-                            Math.atan2(-lg.pos.x, -lg.pos.z));
+      var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto, giro);
       if (!feito) return false;
-      // fora os volumes provisórios; o RÓTULO fica e sobe para o teto
-      var rot = null;
+      /* fora os volumes provisórios; o RÓTULO fica e sobe para o teto. E a LUZ DO CHÃO
+       * (20/09) fica: é ela que diz "entrada" de longe, e quem a punha era o arco
+       * provisório que acaba de sair. */
+      var rot = null, brilho = null;
       for (var c = lg.node.children.length - 1; c >= 0; c--) {
         var filho = lg.node.children[c];
         if (filho.isSprite) { rot = filho; continue; }
+        if (filho.userData && filho.userData.brilhoChao) { brilho = filho; continue; }
         lg.node.remove(filho);
       }
       lg.node.add(feito.no);
       if (rot) rot.position.y = feito.alt + 1.4;
+      /* O VÃO ACESO (20/09): o portal do dono vem com o vão VAZIO — o prompt pediu assim,
+       * porque é o jogo que acende o vermelho ali. O disco nasce no meio do arco, na
+       * altura do peito de quem passa, virado para a mesma frente da obra, e entra na
+       * respiração dos portais (o laço do quadro pulsa `lg.miolo`). */
+      if (lg.tipo === 'campo') {
+        /* medido no modelo do dono: a viga come o terço de cima, e o vão livre vai do chão
+         * a 73% da altura, com 36% da largura. O disco fica no meio dessa abertura (36% da
+         * altura) e com folga nas laterais (raio de 24% = 2,9 m de diâmetro num vão de 3,4). */
+        var vao = new THREE.Mesh(new THREE.CircleGeometry(feito.alt * 0.24, 32),
+          new THREE.MeshBasicMaterial({ color: 0xe0352b, transparent: true, opacity: 0.42,
+                                        side: THREE.DoubleSide, depthWrite: false }));
+        vao.position.y = feito.alt * 0.36;
+        vao.rotation.y = giro;
+        vao.userData.semCaixa = true;
+        lg.node.add(vao);
+        lg.miolo = vao;
+        if (brilho) brilho.position.y = 0.08;
+      }
       /* A PAREDE (11/09, dono: "tirando a árvore central, o personagem passa
        * pelas barracas, arena, banco — isso não pode acontecer"). Só o
        * tronco da Árvore-Mundo era sólido; o resto era cenário atravessável.
@@ -2292,7 +2341,9 @@ var JOGO = (typeof window !== 'undefined')
        * cima da cabeça e não são parede. E nunca maior que o raio de
        * conversa menos uma folga — o painel do lugar abre por proximidade, e
        * uma parede além dele deixaria o prédio mudo. */
-      lg.solido = Math.max(1.0, Math.min(feito.raio * 0.72, (lg.raio || 3) - 1.2));
+      // 20/09: no PORTÃO do Campo não — entra-se nele (é uma porta, não um prédio), e a
+      // prova cobra `campo.solido` zerado
+      if (lg.tipo !== 'campo') lg.solido = Math.max(1.0, Math.min(feito.raio * 0.72, (lg.raio || 3) - 1.2));
       return true;
     }
     for (var i = 0; i < lugares.length; i++) {

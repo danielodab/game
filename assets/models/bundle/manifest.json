@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-19T20:17:09",
+ "gerado": "2026-09-20T12:52:00",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -570,6 +570,94 @@
    "bytes": 900304,
    "hash": "83be8d3d0687",
    "grupo": "base"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "praca_portal_pvp",
+   "arquivo": "cenario-pvp/praca_portal_pvp.glb",
+   "bytes": 441788,
+   "hash": "99c5576a3f97",
+   "grupo": "base"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_muro_alto",
+   "arquivo": "cenario-pvp/pv_muro_alto.glb",
+   "bytes": 461768,
+   "hash": "a3466ae58438",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_muro_pedra",
+   "arquivo": "cenario-pvp/pv_muro_pedra.glb",
+   "bytes": 505548,
+   "hash": "d827d68097b4",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_muro_rachado",
+   "arquivo": "cenario-pvp/pv_muro_rachado.glb",
+   "bytes": 586456,
+   "hash": "928c9cd364a6",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_palicada",
+   "arquivo": "cenario-pvp/pv_palicada.glb",
+   "bytes": 501504,
+   "hash": "d539567409bd",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_pilar",
+   "arquivo": "cenario-pvp/pv_pilar.glb",
+   "bytes": 396024,
+   "hash": "cc79fb235c9f",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_muro_medio",
+   "arquivo": "cenario-pvp/pv_muro_medio.glb",
+   "bytes": 457992,
+   "hash": "a1a0b86bc381",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_sacos",
+   "arquivo": "cenario-pvp/pv_sacos.glb",
+   "bytes": 456648,
+   "hash": "4152ab7543a9",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_caixote",
+   "arquivo": "cenario-pvp/pv_caixote.glb",
+   "bytes": 400476,
+   "hash": "fd0206f8e009",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_frisa",
+   "arquivo": "cenario-pvp/pv_frisa.glb",
+   "bytes": 326148,
+   "hash": "59d67e93742e",
+   "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "pv_tonel",
+   "arquivo": "cenario-pvp/pv_tonel.glb",
+   "bytes": 522040,
+   "hash": "95a8b48b25f3",
+   "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
@@ -2721,14 +2809,15 @@
   "cenario-andaimes.js": "tabelas/cenario-andaimes.js",
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
   "cenario-fecho.js": "tabelas/cenario-fecho.js",
-  "cenario-jardim.js": "tabelas/cenario-jardim.js"
+  "cenario-jardim.js": "tabelas/cenario-jardim.js",
+  "cenario-pvp.js": "tabelas/cenario-pvp.js"
  },
- "totalBytes": 188608044,
- "totalBase64": 251477756,
+ "totalBytes": 193664436,
+ "totalBase64": 258219620,
  "grupos": {
   "base": {
-   "itens": 91,
-   "bytes": 38088400
+   "itens": 92,
+   "bytes": 38530188
   },
   "calabouco:cistern": {
    "itens": 23,
@@ -2745,6 +2834,10 @@
   "calabouco:windscaffold": {
    "itens": 28,
    "bytes": 23986564
+  },
+  "campo:pvp": {
+   "itens": 10,
+   "bytes": 4614604
   },
   "classe:invocador": {
    "itens": 9,

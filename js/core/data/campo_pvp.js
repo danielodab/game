@@ -26,9 +26,11 @@ JOGO.DATA = JOGO.DATA || {};
  * giro `rot`/`rotY` é em radianos, no sentido do relógio visto de cima; 1,57 = 90°):
  *   · meioLado — metade do lado do quadrado. 30 = um Campo de 60 × 60 m. Ninguém anda
  *     além de 94% dele (a borda de ruína fica logo depois).
- *   · tema — o catálogo do dono que veste os muros: 'garden' (os muros de pilastras do
- *     jardim, com musgo), 'cistern' (a pedra da cisterna) ou 'misto' (um muro de cada,
- *     alternando). Um muro sozinho pode dizer `tema: 'cistern'` e fugir da regra.
+ *   · tema — o catálogo que veste os muros. Desde 20/09 é 'pvp': o lote do próprio dono
+ *     (muro alto, muro médio, muro de pedra, muro rachado, paliçada e pilar, em
+ *     assets/embedded/cenario-pvp.js). Os emprestados continuam valendo se quiser trocar:
+ *     'garden' (jardim), 'cistern' (cisterna) ou 'misto'. Um muro sozinho pode dizer
+ *     `tema: 'cistern'` e fugir da regra.
  *   · chao — as cores das lajotas: `pedra` (o tom-base), `junta` (as juntas e as
  *     rachaduras) e `terra` (o pó que mancha). Hex '#rrggbb'. `arena` é o raio do
  *     círculo de arena marcado no centro (0 = sem círculo).
@@ -55,7 +57,7 @@ JOGO.DATA = JOGO.DATA || {};
  * que nenhum muro encoste neles). */
 JOGO.DATA.campoPvp = {
   meioLado: 30,
-  tema: 'garden',
+  tema: 'pvp',            // 20/09: o catálogo do DONO (cenario-pvp.js) — muro alto, médio, pedra, rachado, paliçada e pilar
   chao: { pedra: '#5e5248', junta: '#2a2320', terra: '#4a3a2e', arena: 8.6 },
   borda: { alt: 2.6 },
   muros: [
@@ -83,29 +85,33 @@ JOGO.DATA.campoPvp = {
     { x: 0, z: -26 }, { x: -26, z: 0 }, { x: 26, z: 0 },
     { x: -9, z: 3 }, { x: 9, z: -3 }
   ],
+  /* AS OITO BARREIRAS DO DONO (20/09, lote próprio do PvP): as quatro ALTAS entram nos
+   * `muros` acima (o catálogo sorteia muro de pedra, rachado e paliçada ao longo da
+   * fileira, com o pilar nas pontas); as quatro BAIXAS ficam aqui, espalhadas como
+   * cobertura de quem avança — sacos de areia, caixote de armas, cavalo-de-frisa e tonel
+   * com escudos. Elas barram o passo num raio de ~50 cm e é nelas que se encosta. */
   enfeites: [
-    // as duas estátuas do jardineiro, de guarda ao muro do meio
-    { x: -6.8, z: 2.6,   chave: 'jd_estatua',    rot: 0.9 },
-    { x: 6.8,  z: -2.6,  chave: 'jd_estatua',    rot: -2.2 },
-    // as luminárias da corte iluminam a arena, uma de cada lado
-    { x: -10.2, z: -1.2, chave: 'cs_luminaria',  rot: 0.4 },
-    { x: 10.2,  z: 1.2,  chave: 'cs_luminaria',  rot: 3.5 },
-    // os estandartes encharcados, à volta do braseiro do norte
-    { x: -3.4, z: -25.5, chave: 'cs_estandarte', rot: 0.3 },
-    { x: 3.4,  z: -25.5, chave: 'cs_estandarte', rot: -0.3 },
-    // barris tombados perto da entrada, e o trono afogado esquecido na quina noroeste
-    { x: -5.0, z: 24.2,  chave: 'cs_barril',     rot: 1.2 },
-    { x: -6.1, z: 23.3,  chave: 'cs_barril',     rot: 2.6 },
-    { x: -19.5, z: -23,  chave: 'cs_trono',      rot: 2.4 },
-    // pedra e sal, tronco e vaso — o chão vivido
-    { x: 20,   z: 23,    chave: 'cs_sal',        rot: 0.6 },
-    { x: -15.5, z: -16.5, chave: 'jd_tronco',    rot: 1.1 },
-    { x: 14.5, z: 15,    chave: 'jd_vaso',       rot: 0.2 },
-    // enfeites de chão (não barram): cristais e raízes rompendo as lajotas
-    { x: -17,  z: 17,    chave: 'jd_cristal_g',  rot: 0.5 },
-    { x: 17,   z: -17,   chave: 'jd_cristal_g',  rot: 2.1 },
-    { x: -16,  z: -6,    chave: 'jd_raiz',       rot: 0.8 },
-    { x: 16,   z: 6,     chave: 'jd_raiz',       rot: 3.9 }
+    // a boca da arena central: cobertura para quem chega pelo corredor do meio
+    { x: -6.8, z: 2.6,   chave: 'pv_sacos',   rot: 0.9 },
+    { x: 6.8,  z: -2.6,  chave: 'pv_sacos',   rot: -2.2 },
+    // as duas entradas laterais, onde o corpo a corpo se decide
+    { x: -10.2, z: -1.2, chave: 'pv_frisa',   rot: 0.4 },
+    { x: 10.2,  z: 1.2,  chave: 'pv_frisa',   rot: 3.5 },
+    // atrás dos muros de quina: quem flanqueia tem onde se abaixar
+    { x: -13.5, z: -6.5, chave: 'pv_caixote', rot: 1.1 },
+    { x: 13.5,  z: 6.5,  chave: 'pv_caixote', rot: 4.2 },
+    { x: -13.5, z: 6.5,  chave: 'pv_tonel',   rot: 2.4 },
+    { x: 13.5,  z: -6.5, chave: 'pv_tonel',   rot: 5.6 },
+    // o caminho do nascimento até o meio, para ninguém atravessar o descampado a seco
+    { x: -4.0, z: 15.0,  chave: 'pv_frisa',   rot: 1.3 },
+    { x: 4.0,  z: 15.0,  chave: 'pv_sacos',   rot: 2.8 },
+    { x: -4.0, z: -15.0, chave: 'pv_tonel',   rot: 0.6 },
+    { x: 4.0,  z: -15.0, chave: 'pv_caixote', rot: 3.9 },
+    // as quinas do fundo: esconderijo de quem espera
+    { x: -19.5, z: -19.5, chave: 'pv_caixote', rot: 2.4 },
+    { x: 19.5,  z: 19.5,  chave: 'pv_sacos',   rot: 0.2 },
+    { x: -19.5, z: 19.5,  chave: 'pv_tonel',   rot: 1.7 },
+    { x: 19.5,  z: -19.5, chave: 'pv_frisa',   rot: 5.1 }
   ],
   bandeiras: [
     // na entrada, uma de cada lado de quem chega

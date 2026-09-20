@@ -845,6 +845,12 @@ var JOGO = (typeof window !== 'undefined')
     var sel = [];
     try { sel = (JOGO.UI && JOGO.UI.selection) ? JOGO.UI.selection() : []; } catch (e2) { sel = []; }
     fora = fora.concat(B.plano({ party: sel }));
+    // 20/09: o CAMPO DE PVP tambem e um lugar para onde se desce — o cenario
+    // dele (os muros e as barreiras do dono) nao esta no grupo `base`, entao
+    // vem aqui, em segundo plano, enquanto o jogador anda pela praca. Quem
+    // entrar antes de chegar ve as pecas provisorias e o hub3d pede as que
+    // faltam (Bundle.pede).
+    try { doTema(((D().campoPvp) || {}).tema, fora); } catch (eC) {}
     Object.keys(porChave).forEach(function (k) { if (/^coroa_pvp_n/.test(k)) fora.push(k); });
     var visto = {}, saida = [];
     fora.forEach(function (k) { if (k && !visto[k] && porChave[k]) { visto[k] = true; saida.push(k); } });

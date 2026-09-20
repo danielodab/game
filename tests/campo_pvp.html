@@ -193,7 +193,12 @@
         if (ctx === 'foto') return 'foto';
         // ---- 3b. a vestimenta (19/09): a arte do dono nos muros, na borda e no chão
         var M0 = H._campoMontagem();
-        check('a obra do Campo existe e o desenho tem o tema do catálogo', !!M0 && (M0.tema === 'garden' || M0.tema === 'cistern' || M0.tema === 'misto'), M0 && M0.tema);
+        // 20/09: o Campo veste o LOTE DO DONO (o catálogo `pvp`: muro alto, médio,
+        // pedra, rachado, paliçada e pilar). Antes ele caía no jardim porque o
+        // embutido se chamava models-pvp.js e o jogo servido não lia a tabela.
+        var cats = Object.keys((w.JOGO || {}).CENARIO || {});
+        check('o catálogo do dono (pvp) chegou — embutido e tabela do bundle', cats.indexOf('pvp') >= 0, cats.join(','));
+        check('a obra do Campo existe e veste o lote de PvP do dono', !!M0 && M0.tema === 'pvp', M0 && M0.tema);
         check('o chão do Campo é de lajotas (o tijolo gigante se foi)', !!M0 && M0.chao === 'lajotas', M0 && M0.chao);
         check('cada muro do desenho tem a sua fileira de vagas', !!M0 && M0.porMuro.length === D.muros.length && M0.porMuro.every(function (pm) { return pm && (pm.modulos + pm.pilares) > 0; }),
               M0 && M0.porMuro.length + ' de ' + D.muros.length);
@@ -223,8 +228,10 @@
             // no jogo servido os módulos do dono não estão no grupo base: têm de ser pedidos
             var grupo = {};
             (manifesto && manifesto.itens || []).forEach(function (it) { grupo[it.chave] = it.grupo || 'base'; });
-            check('servido: as peças que faltavam foram pedidas ao Bundle (jd_muro_*, jd_pilar…)',
-                  M0.pedidas.length > 0 && M0.pedidas.indexOf('jd_pilar') >= 0 && M0.pedidas.some(function (k) { return /^jd_muro_/.test(k); }), M0.pedidas.join(','));
+            // 20/09: o lote do dono (pv_*) desce no grupo `campo:pvp`, não no base — quem
+            // entra no Campo pede as peças, e a pré-busca do Acampamento adianta o serviço
+            check('servido: as peças que faltavam foram pedidas ao Bundle (pv_muro_*, pv_pilar…)',
+                  M0.pedidas.length > 0 && M0.pedidas.indexOf('pv_pilar') >= 0 && M0.pedidas.some(function (k) { return /^pv_muro_/.test(k); }), M0.pedidas.join(','));
             var foraDoManifesto = M0.pedidas.filter(function (k) { return !grupo[k]; });
             var noBase = M0.pedidas.filter(function (k) { return grupo[k] === 'base'; });
             check('servido: cada chave pedida está no manifesto e fora do grupo base (por isso faltava)',
@@ -338,7 +345,10 @@
                 'd ' + dE.toFixed(2) + ' · t ' + tE.toFixed(2));
           check('a entrada mora no arco dos portais (r = 0,75 do meio-lado, a oeste)', Math.abs(rE / 0.75 - 58) < 0.5 && ent.x < -35 && Math.abs(ent.z) < 4,
                 JSON.stringify({ x: +ent.x.toFixed(2), z: +ent.z.toFixed(2) }));
-          check('a entrada tem corredor (portão) e o raio de conversa de portal aberto', !!ent.portao && ent.raio === 6.4, JSON.stringify(ent));
+          // 20/09 (o dono): o portão PERDEU o corredor murado — ele vai fazer os muros dele.
+          // Fica o portal de espadas sozinho, com o raio de conversa de portal aberto.
+          check('a entrada NÃO tem corredor (o dono faz os muros) e mantém o raio de conversa',
+                !ent.portao && ent.raio === 6.4, JSON.stringify(ent));
         }
         check('com o corpo do avatar de sempre', e2.corpo === ctx.corpoAvatar && !e2.aparencia, e2.corpo);
         check('a praça voltou inteira (portais e obras)', lugares('portal').length === 6 && lugares('arena').length === 1);
@@ -370,6 +380,30 @@
           n++;
           if ((n > 30 && !H._estado().andando) || n > 900) { H._cam({ dist: 9.5, tilt: 0.78, ang: 2.2 }); return ok(H._estado().pos); }
           wj.requestAnimationFrame(v);
+        })();
+      });
+    }
+    // 20/09: o PORTAL DE ESPADAS visto da praça, com o herói ao pé dele (escala).
+    // Volta para a praça, caminha até a calçada da entrada e espera os passos.
+    if (qual === 'portal' || qual === 'portal_frente') {
+      if (H.naCampo()) H.saiCampo();
+      var ep = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0];
+      var rp = Math.hypot(ep.x, ep.z) || 1, px = ep.x / rp, pz = ep.z / rp;
+      var perto = qual === 'portal_frente' ? 15 : 8;
+      H.irPara(ep.x - px * perto, ep.z - pz * perto);
+      var wp = f.contentWindow;
+      return new Promise(function (ok) {
+        var n = 0;
+        (function v() {
+          n++;
+          if ((n > 40 && !H._estado().andando) || n > 900) {
+            var ang = Math.atan2(-px, -pz);
+            // quase rente ao chão: é assim que se vê se a lâmina encosta na grama
+            if (qual === 'portal_frente') H._cam({ dist: 20, tilt: 1.35, ang: ang });
+            else H._cam({ dist: 13, tilt: 0.92, ang: ang });
+            return ok(H._estado().pos);
+          }
+          wp.requestAnimationFrame(v);
         })();
       });
     }
