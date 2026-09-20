@@ -1,6 +1,6 @@
 {
   "calabouco": "windscaffold",
-  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Os Andaimes do Vento\\monstros",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Andaimes do vento\\monstros",
   "saida": "assets/embedded/models-meshy-windscaffold.js",
   "monstros": [
     {
@@ -13,8 +13,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -28,8 +28,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -43,8 +43,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -58,8 +58,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -73,8 +73,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -88,8 +88,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -103,8 +103,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -118,8 +118,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -133,8 +133,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -148,8 +148,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     }

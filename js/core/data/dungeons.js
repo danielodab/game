@@ -649,31 +649,176 @@ JOGO.DATA = JOGO.DATA || {};
     defaultWeather: 'vendaval',
     weatherShiftEveryRounds: 0,
     tileEventRate: 0.3,
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o lote do dono chegou (19/09),
+    // como as da Cisterna e do Fecho: anel de tapume fechado (os módulos de
+    // muro do Daniel vestem a borda), o guindaste travado UMA vez por sala
+    // (papel `marco`), pouco enfeite, e um desenho tático DIFERENTE por sala
+    // — aqui o desenho é feito de VAZIO ('~'), porque o chão dos Andaimes é o
+    // que não existe. O ELENCO DA DESCIDA é o mesmo de antes (5 Picanços, 4
+    // Gremlins, 3 Enforca-Cordas, 5 Serpes-Pipa, 2 Enxames, 1 Coro, 1 Golem e
+    // Cambota — 22 spawns): a XP por descida é calibrada contra o Fecho e a
+    // Mina (validate_world) e não podia andar. As identidades:
+    //   1. PASSARELA — uma CRUZ de passarelas sobre quatro poços de vazio: a
+    //      pista horizontal liga os heróis ao Enforca-Corda e as pistas
+    //      verticais sobem para os três nichos dos guindastes. Os Gremlins
+    //      esperam nas beiradas para empurrar quem passa; quem atravessa pelo
+    //      meio leva laço do Enforca-Corda, quem contorna pelos nichos leva
+    //      mergulho de Picanço.
+    //   2. POÇO — um ANEL em volta do poço de serviço: o vazio ocupa o miolo
+    //      e a luta acontece na volta, com guarda-corpos ('=') e vãos abertos
+    //      nas beiradas. É o sotavento (calmo): o tapume do lado leste ('#')
+    //      abriga o Golem de Lastro, que parou de apanhar do vento; o
+    //      Coro-Assobio cura de longe pelo lado sul e as Serpes-Pipa atiram
+    //      do norte. Dar a volta pelo lado errado é ficar entre o poço e a
+    //      Serpe.
+    //   3. PONTE — a ponte do Mestre-de-Obras: uma travessia de três casas de
+    //      largura sobre o vazio, com guarda-corpos pela metade, ligando a
+    //      plataforma dos heróis à plataforma de Cambota. Duas ALAS (norte e
+    //      sul) presas por pranchas de UMA casa; os Enforca-Cordas nos cantos
+    //      da plataforma dele puxam quem está na ponte para a beirada, e o
+    //      Desabar a Ala manda 3 casas para o vazio — o gimmick precisa de
+    //      vazio de todo lado, e a ponte dá.
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o lote do dono chegou (19/09),
+    // como as da Cisterna e do Fecho: anel de tapume fechado (os módulos de
+    // muro do Daniel vestem a borda), o guindaste travado UMA vez por sala
+    // (papel `marco`), pouco enfeite, e um desenho tático DIFERENTE por sala
+    // — aqui o desenho é feito de VAZIO ('~'), porque o chão dos Andaimes é o
+    // que não existe. O ELENCO DA DESCIDA é o mesmo de antes (5 Picanços, 4
+    // Gremlins, 3 Enforca-Cordas, 5 Serpes-Pipa, 2 Enxames, 1 Coro, 1 Golem e
+    // Cambota — 22 spawns): a XP por descida é calibrada contra o Fecho e a
+    // Mina (validate_world) e não podia andar. As identidades:
+    //   1. PASSARELA — uma CRUZ de passarelas sobre quatro poços de vazio: a
+    //      pista horizontal liga os heróis ao Enforca-Corda e as pistas
+    //      verticais sobem para os três nichos dos guindastes. Os Gremlins
+    //      esperam nas beiradas para empurrar quem passa; quem atravessa pelo
+    //      meio leva laço do Enforca-Corda, quem contorna pelos nichos leva
+    //      mergulho de Picanço.
+    //   2. POÇO — um ANEL em volta do poço de serviço: o vazio ocupa o miolo
+    //      e a luta acontece na volta, com guarda-corpos ('=') e vãos abertos
+    //      nas beiradas. É o sotavento (calmo): o tapume do lado leste ('#')
+    //      abriga o Golem de Lastro, que parou de apanhar do vento; o
+    //      Coro-Assobio cura de longe pelo lado sul e as Serpes-Pipa atiram
+    //      do norte. Dar a volta pelo lado errado é ficar entre o poço e a
+    //      Serpe.
+    //   3. PONTE — a ponte do Mestre-de-Obras: uma travessia de três casas de
+    //      largura sobre o vazio, com guarda-corpos pela metade, ligando a
+    //      plataforma dos heróis à plataforma de Cambota. Duas ALAS (norte e
+    //      sul) presas por pranchas de UMA casa; os Enforca-Cordas nos cantos
+    //      da plataforma dele puxam quem está na ponte para a beirada, e o
+    //      Desabar a Ala manda 3 casas para o vazio — o gimmick precisa de
+    //      vazio de todo lado, e a ponte dá.
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o lote do dono chegou (19/09),
+    // como as da Cisterna e do Fecho: anel de tapume fechado (os módulos de
+    // muro do Daniel vestem a borda), o guindaste travado UMA vez por sala
+    // (papel `marco`), pouco enfeite, e um desenho tático DIFERENTE por sala
+    // — aqui o desenho é feito de VAZIO ('~'), porque o chão dos Andaimes é o
+    // que não existe. O ELENCO DA DESCIDA é o mesmo de antes (5 Picanços, 4
+    // Gremlins, 3 Enforca-Cordas, 5 Serpes-Pipa, 2 Enxames, 1 Coro, 1 Golem e
+    // Cambota — 22 spawns): a XP por descida é calibrada contra o Fecho e a
+    // Mina (validate_world) e não podia andar. As identidades:
+    //   1. PASSARELA — uma CRUZ de passarelas sobre quatro poços de vazio: a
+    //      pista horizontal liga os heróis ao Enforca-Corda e as pistas
+    //      verticais sobem para os três nichos dos guindastes. Os Gremlins
+    //      esperam nas beiradas para empurrar quem passa; quem atravessa pelo
+    //      meio leva laço do Enforca-Corda, quem contorna pelos nichos leva
+    //      mergulho de Picanço.
+    //   2. POÇO — um ANEL em volta do poço de serviço: o vazio ocupa o miolo
+    //      e a luta acontece na volta, com guarda-corpos ('=') e vãos abertos
+    //      nas beiradas. É o sotavento (calmo): o tapume do lado leste ('#')
+    //      abriga o Golem de Lastro, que parou de apanhar do vento; o
+    //      Coro-Assobio cura de longe pelo lado sul e as Serpes-Pipa atiram
+    //      do norte. Dar a volta pelo lado errado é ficar entre o poço e a
+    //      Serpe.
+    //   3. PONTE — a ponte do Mestre-de-Obras: uma travessia de três casas de
+    //      largura sobre o vazio, com guarda-corpos pela metade, ligando a
+    //      plataforma dos heróis à plataforma de Cambota. Duas ALAS (norte e
+    //      sul) presas por pranchas de UMA casa; os Enforca-Cordas nos cantos
+    //      da plataforma dele puxam quem está na ponte para a beirada, e o
+    //      Desabar a Ala manda 3 casas para o vazio — o gimmick precisa de
+    //      vazio de todo lado, e a ponte dá.
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o lote do dono chegou (19/09),
+    // como as da Cisterna e do Fecho: anel de tapume fechado (os módulos de
+    // muro do Daniel vestem a borda), o guindaste travado UMA vez por sala
+    // (papel `marco`), pouco enfeite, e um desenho tático DIFERENTE por sala
+    // — aqui o desenho é feito de VAZIO ('~'), porque o chão dos Andaimes é o
+    // que não existe. O ELENCO DA DESCIDA é o mesmo de antes (5 Picanços, 4
+    // Gremlins, 3 Enforca-Cordas, 5 Serpes-Pipa, 2 Enxames, 1 Coro, 1 Golem e
+    // Cambota — 22 spawns): a XP por descida é calibrada contra o Fecho e a
+    // Mina (validate_world) e não podia andar. As identidades:
+    //   1. PASSARELA — uma CRUZ de passarelas sobre quatro poços de vazio: a
+    //      pista horizontal liga os heróis ao Enforca-Corda e as pistas
+    //      verticais sobem para os três nichos dos guindastes. Os Gremlins
+    //      esperam nas beiradas para empurrar quem passa; quem atravessa pelo
+    //      meio leva laço do Enforca-Corda, quem contorna pelos nichos leva
+    //      mergulho de Picanço.
+    //   2. POÇO — um ANEL em volta do poço de serviço: o vazio ocupa o miolo
+    //      e a luta acontece na volta, com guarda-corpos ('=') e vãos abertos
+    //      nas beiradas. É o sotavento (calmo): o tapume do lado leste ('#')
+    //      abriga o Golem de Lastro, que parou de apanhar do vento; o
+    //      Coro-Assobio cura de longe pelo lado sul e as Serpes-Pipa atiram
+    //      do norte. Dar a volta pelo lado errado é ficar entre o poço e a
+    //      Serpe.
+    //   3. PONTE — a ponte do Mestre-de-Obras: uma travessia de três casas de
+    //      largura sobre o vazio, com guarda-corpos pela metade, ligando a
+    //      plataforma dos heróis à plataforma de Cambota. Duas ALAS (norte e
+    //      sul) presas por pranchas de UMA casa; os Enforca-Cordas nos cantos
+    //      da plataforma dele puxam quem está na ponte para a beirada, e o
+    //      Desabar a Ala manda 3 casas para o vazio — o gimmick precisa de
+    //      vazio de todo lado, e a ponte dá.
+    // AS TRÊS SALAS FORAM REDESENHADAS quando o lote do dono chegou (19/09),
+    // como as da Cisterna e do Fecho: anel de tapume fechado (os módulos de
+    // muro do Daniel vestem a borda), o guindaste travado UMA vez por sala
+    // (papel `marco`), pouco enfeite, e um desenho tático DIFERENTE por sala
+    // — aqui o desenho é feito de VAZIO ('~'), porque o chão dos Andaimes é o
+    // que não existe. O ELENCO DA DESCIDA é o mesmo de antes (5 Picanços, 4
+    // Gremlins, 3 Enforca-Cordas, 5 Serpes-Pipa, 2 Enxames, 1 Coro, 1 Golem e
+    // Cambota — 22 spawns): a XP por descida é calibrada contra o Fecho e a
+    // Mina (validate_world) e não podia andar. As identidades:
+    //   1. PASSARELA — uma CRUZ de passarelas sobre quatro poços de vazio: a
+    //      pista horizontal liga os heróis ao Enforca-Corda e as pistas
+    //      verticais sobem para os três nichos dos guindastes. Os Gremlins
+    //      esperam nas beiradas para empurrar quem passa; quem atravessa pelo
+    //      meio leva laço do Enforca-Corda, quem contorna pelos nichos leva
+    //      mergulho de Picanço.
+    //   2. POÇO — um ANEL em volta do poço de serviço: o vazio ocupa o miolo
+    //      e a luta acontece na volta, com guarda-corpos ('=') e vãos abertos
+    //      nas beiradas. É o sotavento (calmo): o tapume do lado leste ('#')
+    //      abriga o Golem de Lastro, que parou de apanhar do vento; o
+    //      Coro-Assobio cura de longe pelo lado sul e as Serpes-Pipa atiram
+    //      do norte. Dar a volta pelo lado errado é ficar entre o poço e a
+    //      Serpe.
+    //   3. PONTE — a ponte do Mestre-de-Obras: uma travessia de três casas de
+    //      largura sobre o vazio, com guarda-corpos pela metade, ligando a
+    //      plataforma dos heróis à plataforma de Cambota. Duas ALAS (norte e
+    //      sul) presas por pranchas de UMA casa; os Enforca-Cordas nos cantos
+    //      da plataforma dele puxam quem está na ponte para a beirada, e o
+    //      Desabar a Ala manda 3 casas para o vazio — o gimmick precisa de
+    //      vazio de todo lado, e a ponte dá.
     rooms: [
       {
         name: 'A Passarela dos Guindastes',
         weather: 'vendaval',
         sceneryTheme: 'scaffold',
         layout: [
-          '~~~~#####~~~~~#####~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#..===...===..#~~~~',
-          '##...a.......a......###',
-          '#..##...=====...##....#',
-          '#PP##...........##....#',
-          '#PP....b.....b......c~~',
-          '#PP..................~~',
-          '#PP....b.....b.......~~',
-          '#..##...........##....#',
-          '#..##...=====...##....#',
-          '##..................###',
-          '~~~~#..===...===..#~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#...#~~~~~#...#~~~~',
-          '~~~~#####~~~~~#####~~~~'
+          '#######################',
+          '#.,..=..#.....#..=..,.#',
+          '#.......#..a..#.......#',
+          '#~~~~..=#.....#=..~~~~#',
+          '#~~~~...=.....=...~~~~#',
+          '#~~~~.....=.=.....~~~~#',
+          '#~~~~=...........=~~~~#',
+          '#.....b.......b.......#',
+          '#PP.....===.===.......#',
+          '#PP.........c.........#',
+          '#PP.....===.===.......#',
+          '#.....b.......b.......#',
+          '#~~~~=...........=~~~~#',
+          '#~~~~.....=.=.....~~~~#',
+          '#~~~~...=.....=...~~~~#',
+          '#~~~~..=#.....#=..~~~~#',
+          '#.......#..a..#.......#',
+          '#.,..=..#.....#..=..,.#',
+          '#######################'
         ],
         monsters: { a: 'plank-shrike', b: 'gust-gremlin', c: 'rope-hanger' }
       },
@@ -684,25 +829,25 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'calmo',
         sceneryTheme: 'scaffold',
         layout: [
-          '~~~~~######~~~######~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~#..,.......,..#~~~~~',
-          '#####.==#####==.....#####',
-          '#...a...........a.......#',
-          '#..###.......###........#',
-          '#PP.#.........#..d......#',
-          '#PP.=.........=.........#',
-          '#PP...b.......c.........#',
-          '#PP.=.........=.........#',
-          '#PP.#.........#..d......#',
-          '#..###.......###........#',
-          '#.......................#',
-          '#####.==#####==.....#####',
-          '~~~~~#..,.......,..#~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~#....#~~~#....#~~~~~',
-          '~~~~~######~~~######~~~~~'
+          '#########################',
+          '#.,....................,#',
+          '#...=====.......=====...#',
+          '#........a.....a........#',
+          '#...#...............#...#',
+          '#...#.#~~~~~~~~~~~#.#...#',
+          '#.....=~~~~~~~~~~~=.#...#',
+          '#.....=~~~~~~~~~~~=.....#',
+          '#PP...=~~~~~~~~~~~=.#.d.#',
+          '#PP...d~~~~~~~~~~~..#.c.#',
+          '#PP...=~~~~~~~~~~~=.#...#',
+          '#.....=~~~~~~~~~~~=.....#',
+          '#...#.#~~~~~~~~~~~#.#...#',
+          '#...#...............#...#',
+          '#........b..............#',
+          '#...=====.......=====...#',
+          '#.,....................,#',
+          '#.......=.......=.......#',
+          '#########################'
         ],
         monsters: { a: 'kite-serpent', b: 'whistle-choir', c: 'ballast-golem', d: 'mote-swarm' }
       },
@@ -711,27 +856,27 @@ JOGO.DATA = JOGO.DATA || {};
         weather: 'vendaval',
         sceneryTheme: 'scaffold',
         layout: [
-          '~~~~~#####~~~~~#####~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#..,.......,..#~~~~~',
-          '#...===.......===...#...#',
-          '#...a...........a....#..#',
-          '#..##...=====...##......#',
-          '#PP##....b.b....##......~',
-          '#PP.......z.............~',
-          '#PP##....b......##......~',
-          '#..##...=====...##..#...#',
-          '#...c...........c....#..#',
-          '#...a...................#',
-          '~~~~~#..,.......,..#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#...#~~~~~#...#~~~~~',
-          '~~~~~#####~~~~~#####~~~~~'
+          '#########################',
+          '#.,.....#...#...#.....,.#',
+          '#.......#..==#..#..b....#',
+          '#..==#.............#==..#',
+          '#......b....#.##...a....#',
+          '#..#....~~~~~~~~~....#..#',
+          '#~~~~~~.~~~~~~~~~.~~~~c.#',
+          '#~~~~~~.~~~~~~~~~.~~~...#',
+          '#...a~~.~~~~~~~~~.~~....#',
+          '#PP..==..===.===........#',
+          '#PP.................z...#',
+          '#PP..==..===.===........#',
+          '#....~~.~~~~~~~~~.~~....#',
+          '#~~~~~~.~~~~~~~~~.~~~...#',
+          '#~~~~~~.~~~~~~~~~.~~~~c.#',
+          '#..#....~~~~~~~~~....#..#',
+          '#......b....#.##...a....#',
+          '#..==#.............#==..#',
+          '#.......#..==#..#.......#',
+          '#.,.....#...#...#.....,.#',
+          '#########################'
         ],
         monsters: { z: 'boss-windwright', a: 'plank-shrike', b: 'kite-serpent', c: 'rope-hanger' }
       }
@@ -1061,8 +1206,10 @@ JOGO.DATA = JOGO.DATA || {};
 // 10/09: "somente dois portais devem estar liberados, os dois primeiros" —
 // o Fecho de Brasa fecha também até os monstros dele chegarem
 // 19/09: o Fecho de Brasa abriu — o lote dele (dez monstros, muros, forno e
-// quinze enfeites) entrou; sobram os três de baixo.
-JOGO.DATA.portaisFechados = ['windscaffold', 'quakemine', 'brokenheart'];
+// quinze enfeites) entrou; à noite os Andaimes do Vento abriram também (dez
+// monstros, muro, muro quebrado, viga, guindaste e quinze enfeites). Sobram
+// a Mina e o Coração.
+JOGO.DATA.portaisFechados = ['quakemine', 'brokenheart'];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
 };

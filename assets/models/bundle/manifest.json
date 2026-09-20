@@ -1,8 +1,152 @@
 {
- "gerado": "2026-09-19T16:04:02",
+ "gerado": "2026-09-19T20:17:09",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
+  {
+   "alvo": "MODELS",
+   "chave": "av_muro",
+   "arquivo": "cenario-andaimes/av_muro.glb",
+   "bytes": 861444,
+   "hash": "5e35d9223d6f",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_muro_quebrado",
+   "arquivo": "cenario-andaimes/av_muro_quebrado.glb",
+   "bytes": 823884,
+   "hash": "823d10ad6a42",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_viga",
+   "arquivo": "cenario-andaimes/av_viga.glb",
+   "bytes": 764924,
+   "hash": "ee6025b65711",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_guindaste",
+   "arquivo": "cenario-andaimes/av_guindaste.glb",
+   "bytes": 523008,
+   "hash": "9d702cea619a",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_chamine",
+   "arquivo": "cenario-andaimes/av_chamine.glb",
+   "bytes": 443492,
+   "hash": "9178aa618948",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_mastro",
+   "arquivo": "cenario-andaimes/av_mastro.glb",
+   "bytes": 473688,
+   "hash": "3945150e661d",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_torre",
+   "arquivo": "cenario-andaimes/av_torre.glb",
+   "bytes": 552856,
+   "hash": "824c850edc0d",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_caixa",
+   "arquivo": "cenario-andaimes/av_caixa.glb",
+   "bytes": 521724,
+   "hash": "ccb30f1e03d5",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_saco",
+   "arquivo": "cenario-andaimes/av_saco.glb",
+   "bytes": 431596,
+   "hash": "6269097d96ce",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_cabo",
+   "arquivo": "cenario-andaimes/av_cabo.glb",
+   "bytes": 504224,
+   "hash": "b64650d9c162",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_estrado",
+   "arquivo": "cenario-andaimes/av_estrado.glb",
+   "bytes": 504376,
+   "hash": "61690bead61a",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_grade",
+   "arquivo": "cenario-andaimes/av_grade.glb",
+   "bytes": 506308,
+   "hash": "0c50bf15b633",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_tabuas",
+   "arquivo": "cenario-andaimes/av_tabuas.glb",
+   "bytes": 439588,
+   "hash": "8f7fcda1d960",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_ninho",
+   "arquivo": "cenario-andaimes/av_ninho.glb",
+   "bytes": 393948,
+   "hash": "dd25f1effb46",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_corda",
+   "arquivo": "cenario-andaimes/av_corda.glb",
+   "bytes": 360908,
+   "hash": "7f14724497ad",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_elevador",
+   "arquivo": "cenario-andaimes/av_elevador.glb",
+   "bytes": 478524,
+   "hash": "0e84de150f5e",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_passarela",
+   "arquivo": "cenario-andaimes/av_passarela.glb",
+   "bytes": 472936,
+   "hash": "9699a35b554e",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "av_barraca",
+   "arquivo": "cenario-andaimes/av_barraca.glb",
+   "bytes": 486908,
+   "hash": "14c62720a4c6",
+   "grupo": "calabouco:windscaffold"
+  },
   {
    "alvo": "MODELS",
    "chave": "cs_muro_inteiro",
@@ -1605,6 +1749,86 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "plank-shrike",
+   "arquivo": "models-meshy-windscaffold/plank-shrike.glb",
+   "bytes": 1341764,
+   "hash": "74c62364e71d",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "gust-gremlin",
+   "arquivo": "models-meshy-windscaffold/gust-gremlin.glb",
+   "bytes": 1218768,
+   "hash": "ee42b76bafa6",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "rope-hanger",
+   "arquivo": "models-meshy-windscaffold/rope-hanger.glb",
+   "bytes": 1716764,
+   "hash": "80cd0dcef480",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "kite-serpent",
+   "arquivo": "models-meshy-windscaffold/kite-serpent.glb",
+   "bytes": 1412812,
+   "hash": "246e724a6242",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ballast-golem",
+   "arquivo": "models-meshy-windscaffold/ballast-golem.glb",
+   "bytes": 1756568,
+   "hash": "86bddceef4c4",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "whistle-choir",
+   "arquivo": "models-meshy-windscaffold/whistle-choir.glb",
+   "bytes": 1408548,
+   "hash": "5e0fabe88295",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mote-swarm",
+   "arquivo": "models-meshy-windscaffold/mote-swarm.glb",
+   "bytes": 1348896,
+   "hash": "25f070e0d225",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mote-bit",
+   "arquivo": "models-meshy-windscaffold/mote-bit.glb",
+   "bytes": 1408188,
+   "hash": "c07290fa922c",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "nail-sprite",
+   "arquivo": "models-meshy-windscaffold/nail-sprite.glb",
+   "bytes": 1175548,
+   "hash": "1db46023436b",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "boss-windwright",
+   "arquivo": "models-meshy-windscaffold/boss-windwright.glb",
+   "bytes": 1654372,
+   "hash": "fe70b4b0733f",
+   "grupo": "calabouco:windscaffold"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "meshy_sumo",
    "arquivo": "models-meshy/meshy_sumo.glb",
    "bytes": 1091988,
@@ -2373,6 +2597,16 @@
    "run",
    "walk"
   ],
+  "plank-shrike": [],
+  "gust-gremlin": [],
+  "rope-hanger": [],
+  "kite-serpent": [],
+  "ballast-golem": [],
+  "whistle-choir": [],
+  "mote-swarm": [],
+  "mote-bit": [],
+  "nail-sprite": [],
+  "boss-windwright": [],
   "meshy_sumo": [
    "HitReact",
    "attack",
@@ -2484,12 +2718,13 @@
   ]
  },
  "tabelas": {
+  "cenario-andaimes.js": "tabelas/cenario-andaimes.js",
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
   "cenario-fecho.js": "tabelas/cenario-fecho.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js"
  },
- "totalBytes": 164621480,
- "totalBase64": 219495636,
+ "totalBytes": 188608044,
+ "totalBase64": 251477756,
  "grupos": {
   "base": {
    "itens": 91,
@@ -2506,6 +2741,10 @@
   "calabouco:greenhouse": {
    "itens": 21,
    "bytes": 18878112
+  },
+  "calabouco:windscaffold": {
+   "itens": 28,
+   "bytes": 23986564
   },
   "classe:invocador": {
    "itens": 9,

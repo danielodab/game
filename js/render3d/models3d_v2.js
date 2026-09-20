@@ -391,17 +391,23 @@ var JOGO = (typeof window !== 'undefined')
     'faceless-smith': { model: 'faceless-smith', scale: 1.22 },  // 2,20 m — avental sem ninguem dentro
     'chain-hauler':   { model: 'chain-hauler',   scale: 1.50 },  // 2,70 m — guindaste com o trilho as costas
     'boss-heartforge':{ model: 'boss-heartforge', scale: 1.19 }, // 3,51 m — o forno-tita, o maior da sala
-    // --- Coro dos Andaimes (Andaimes do Vento)
-    'plank-shrike':   { model: 'q_wasp',         scale: 0.95 },
-    'gust-gremlin':   { model: 'skeleton_minion', scale: 0.85 },
-    'rope-hanger':    { model: 'skeleton_rogue', scale: 1.00 },
-    'kite-serpent':   { model: 'q_snake',        scale: 1.15 },
-    'ballast-golem':  { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_B'], scale: 1.30 },
-    'whistle-choir':  { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.00 },
-    'mote-swarm':     { model: 'q_wasp',         scale: 0.70 },
-    'mote-bit':       { model: 'q_wasp',         scale: 0.50 },
-    'nail-sprite':    { model: 'q_wasp',         scale: 0.60 },
-    'boss-windwright':{ model: 'q_alpaking',    scale: 1.76 },   // era esqueleto guerreiro
+    // --- Coro dos Andaimes (Andaimes do Vento) — A ARTE E DO USUARIO (19/09).
+    //
+    // Os dez sairam do Meshy, Cambota incluso (tools/embute_monstros.py, lote
+    // windscaffold). Antes eram emprestados (vespa, cobra, esqueletos, alpaca).
+    // A escala sai da ESCADA DE PORTE do briefing (docs/PROMPTS_PORTAIS_FECHADOS.md),
+    // que por sua vez sai da descricao em monsters.js. Conta de sempre:
+    // altura = 1,80 m x escala (chefe: 2,95 m x escala).
+    'nail-sprite':    { model: 'nail-sprite',    scale: 0.44 },  // 0,79 m — o prego com olhinhos
+    'mote-bit':       { model: 'mote-bit',       scale: 0.50 },  // 0,90 m — metade da nuvem
+    'gust-gremlin':   { model: 'gust-gremlin',   scale: 0.61 },  // 1,10 m — orelhas de vela
+    'plank-shrike':   { model: 'plank-shrike',   scale: 0.78 },  // 1,40 m — passaro de bico curvo
+    'mote-swarm':     { model: 'mote-swarm',     scale: 0.83 },  // 1,49 m — nuvem com forma de gente
+    'whistle-choir':  { model: 'whistle-choir',  scale: 1.06 },  // 1,91 m — feixe de tubos que flutua
+    'rope-hanger':    { model: 'rope-hanger',    scale: 1.22 },  // 2,20 m — no pendurado na roldana
+    'kite-serpent':   { model: 'kite-serpent',   scale: 1.28 },  // 2,30 m — a pipa que virou serpente
+    'ballast-golem':  { model: 'ballast-golem',  scale: 1.44 },  // 2,59 m — armacao cheia de brita
+    'boss-windwright':{ model: 'boss-windwright', scale: 1.15 }, // 3,39 m — o capataz de vigas, o maior da obra
     // --- Turno da Noite (Mina Tremula)
     'pick-revenant':  { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.00 },
     'firedamp-wisp':  { model: 'q_wasp',         scale: 0.70 },

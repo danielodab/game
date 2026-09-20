@@ -53,7 +53,7 @@ PAPEIS = ["idle", "walk", "run", "attack", "hit", "death"]
 
 NOMES_CALABOUCO = {
     "greenhouse": "A Estufa Soterrada", "cistern": "A Corte Afogada",
-    "emberlock": "O Fecho de Brasa", "windscaffold": "Os Andaimes do Vento",
+    "emberlock": "O Fecho de Brasa", "windscaffold": "Andaimes do vento",
     "quakemine": "A Mina Tremula", "brokenheart": "O Coracao Partido",
 }
 

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — o cenário dos Andaimes do Vento, peça por peça</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:left;color:#cdd6e2}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  #app{position:absolute;left:-4000px;top:0;width:640px;height:480px}
+  canvas#game-canvas{width:640px;height:480px;display:block}
+</style>
+</head>
+<body>
+<h1>O cenário dos Andaimes do Vento — peça por peça, e o guindaste ÚNICO</h1>
+<div class="sub">As mesmas réguas do cenário da Cisterna — muro na altura cheia, mureta uniforme,
+peça assentada e centrada — e a regra própria deste tema: o GUINDASTE TRAVADO é papel
+<code>marco</code> e aparece <em>exatamente uma vez por sala</em>. As três salas do calabouço são
+montadas de verdade (motor + renderizador) e o relatório da montagem é contado.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/ai.js',
+    'js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-windscaffold.js',
+    'assets/embedded/cenario-andaimes.js',
+    'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js',
+    'assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js',
+    'js/render3d/renderer3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; return; }
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) +
+      ' de ' + res.length + ' checagens ok';
+    window.__done = true;
+    window.__fail = mau;
+  }
+
+  var TEMA = 'scaffold', CAL = 'windscaffold', MARCO = 'av_guindaste';
+  var MUROS = { av_muro: 1, av_muro_quebrado: 1, av_viga: 1 };
+  var CELL = 2.0;
+  // OS ALVOS SAO OS DO JOGO (WALL_H = CELL x 1,55, LOW_H = CELL x 0,46). O
+  // `chao` dos Andaimes mede 0,40 como o do Fecho: a grade e as tábuas a
+  // 25 cm viravam selo, e a 0,50 (Cisterna) o ninho saía do tamanho de um herói.
+  var WALL_H = CELL * 1.55, LOW_H = CELL * 0.46;
+  var ALVO = { alto: WALL_H, pilar: WALL_H, sotaque_alto: WALL_H,
+               baixo: LOW_H, sotaque: 0.95, chao: 0.40, borda: 1.30 };
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2;
+    var canvas = document.getElementById('game-canvas');
+    try { JOGO.Renderer.init(canvas, { preserveDrawingBuffer: true }); }
+    catch (e) { check('Renderer.init', false, e.message); return fecha(); }
+    try { if (JOGO.Game.init) JOGO.Game.init(); } catch (e) {}
+
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var voltas = 0;
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      // POR VOLTAS, nunca por Date.now: no headless o relógio corre em tempo virtual
+      if (!ok && !erro && ++voltas < 2400) return setTimeout(espera, 100);
+      check('os modelos carregaram', !!ok, erro || '');
+      mede();
+    })();
+
+    // a MESMA conta de `pecaUsuario`, para a medida valer o que o jogo faz
+    function normaliza(no, alvo, limite) {
+      no.updateMatrixWorld(true);
+      var bb = new THREE.Box3().setFromObject(no);
+      var h = bb.max.y - bb.min.y;
+      var larg = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+      if (!isFinite(h) || h <= 0.01) return null;
+      var k = alvo / h;
+      var teto = (limite == null ? CELL * 0.95 : limite);
+      if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
+      no.scale.multiplyScalar(k);
+      var berco = new THREE.Group();
+      berco.add(no);
+      no.updateMatrixWorld(true);
+      var pre = new THREE.Box3().setFromObject(no);
+      if (isFinite(pre.min.y)) no.position.y -= pre.min.y;
+      var cX = (pre.min.x + pre.max.x) / 2, cZ = (pre.min.z + pre.max.z) / 2;
+      if (isFinite(cX)) no.position.x -= cX;
+      if (isFinite(cZ)) no.position.z -= cZ;
+      berco.updateMatrixWorld(true);
+      var bb2 = new THREE.Box3().setFromObject(berco);
+      return { alt: bb2.max.y - bb2.min.y,
+               larg: Math.max(bb2.max.x - bb2.min.x, bb2.max.z - bb2.min.z),
+               base: bb2.min.y,
+               desvio: Math.max(Math.abs(bb2.min.x + bb2.max.x) / 2,
+                                Math.abs(bb2.min.z + bb2.max.z) / 2),
+               cruaAlt: h, cruaLarg: larg };
+    }
+
+    function medeMuro(papel, chave, alvo) {
+      var R = window.JOGO && JOGO.Renderer;
+      if (!R || !R.muroDaCasa) return null;
+      var lista = (JOGO.CENARIO[TEMA] || {})[papel] || [];
+      var semente = lista.indexOf(chave);
+      if (semente < 0) return null;
+      var larg = (R.LARG_MURO || CELL);
+      var g = R.muroDaCasa(TEMA, papel, semente, alvo, papel === 'pilar' ? CELL : larg);
+      if (!g) return null;
+      g.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(g);
+      if (!isFinite(b.min.y)) return null;
+      var alt = b.max.y - b.min.y;
+      var lg = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+      return { alt: alt, larg: lg, base: b.min.y,
+               desvio: Math.max(Math.abs(b.min.x + b.max.x) / 2,
+                                Math.abs(b.min.z + b.max.z) / 2),
+               estica: g.userData.estica, corpo: g.userData.corpo,
+               caixa: g.userData.caixa, cruaAlt: alt, cruaLarg: lg };
+    }
+
+    function mede() {
+      var cat = JOGO.CENARIO && JOGO.CENARIO[TEMA];
+      check('DATA do cenário dos Andaimes existe (chave `scaffold`)', !!cat);
+      if (!cat) return fecha();
+
+      check('há 2 muros no papel `alto` (o inteiro e o quebrado)',
+            (cat.alto || []).length === 2, (cat.alto || []).join(', '));
+      check('o `marco` é o guindaste travado, e só ele',
+            (cat.marco || []).length === 1 && cat.marco[0] === MARCO, (cat.marco || []).join(', '));
+      check('o `pilar` é a viga', (cat.pilar || []).length === 1, (cat.pilar || []).join(', '));
+      check('há 3 enfeites altos (chaminé, mastro, torre)', (cat.sotaque_alto || []).length === 3, (cat.sotaque_alto || []).join(', '));
+      check('há 4 sotaques baixos (caixa, saco, cabo, estrado)', (cat.sotaque || []).length === 4, (cat.sotaque || []).join(', '));
+      check('há 4 enfeites de chão (grade, tábuas, ninho, corda)', (cat.chao || []).length === 4, (cat.chao || []).join(', '));
+      check('há 5 peças de borda (elevador, passarela, barraca + chaminé e torre repetidas)',
+            (cat.borda || []).length === 5, (cat.borda || []).join(', '));
+      check('o `chao_alt` declara 0,40 m', cat.chao_alt === 0.4, String(cat.chao_alt));
+
+      var linhas = [], curtas = [], semModelo = [];
+      Object.keys(ALVO).forEach(function (papel) {
+        (cat[papel] || []).forEach(function (chave) {
+          var cena = null;
+          try { cena = M.rawScene(chave); } catch (e) {}
+          if (!cena) { semModelo.push(chave); return; }
+          var m;
+          if (papel === 'alto' || papel === 'baixo' || papel === 'pilar') {
+            m = medeMuro(papel, chave, ALVO[papel]);
+          } else {
+            m = normaliza(cena.clone(true), ALVO[papel], null);
+          }
+          if (!m) { semModelo.push(chave + ' (caixa vazia)'); return; }
+          // A peça pode ficar abaixo de 60% do papel por UMA razão só: bateu no
+          // teto de largura da casa (0,95 casa) e é chata por natureza — a
+          // grade de respiradouro e as tábuas soltas SÃO piso, e a passarela
+          // quebrada é comprida. Nesses casos ela é tão grande quanto a casa
+          // deixa; o que a régua proíbe é a peça virar selo POR ALTURA sem
+          // ter enchido a casa.
+          var noTeto = (papel === 'chao' || papel === 'borda') && m.larg >= CELL * 0.95 - 0.02;
+          if (papel !== 'alto' && m.alt < ALVO[papel] * 0.60 && !noTeto)
+            curtas.push(chave + ' ' + m.alt.toFixed(2) + '/' + ALVO[papel].toFixed(2));
+          linhas.push({ chave: chave, papel: papel, alvo: ALVO[papel], base: m.base,
+                        desvio: m.desvio, alt: m.alt, larg: m.larg, estica: m.estica,
+                        corpo: m.corpo, caixa: m.caixa,
+                        razao: m.cruaLarg / m.cruaAlt,
+                        nome: (JOGO.CENARIO_NOME || {})[chave] || chave });
+        });
+      });
+
+      // O MARCO mede à parte, com o teto largo que o jogo lhe dá (1,7 casa)
+      var fo = null;
+      try { fo = normaliza(M.rawScene(MARCO).clone(true), WALL_H, CELL * 1.7); } catch (e) {}
+      check('o guindaste monta e assenta no chão', !!fo && Math.abs(fo.base) <= 0.02,
+            fo ? ('base ' + fo.base.toFixed(2)) : 'não montou');
+      if (fo) {
+        check('o guindaste sai monumental sem engolir a parede (1,60–3,10 m de altura)',
+              fo.alt >= 1.60 && fo.alt <= 3.10, fo.alt.toFixed(2) + ' m');
+        check('o guindaste respeita o teto de 1,7 casa de largura',
+              fo.larg <= CELL * 1.7 + 0.01, fo.larg.toFixed(2) + ' m');
+      }
+
+      check('todas as peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
+      // 2 alto + 1 pilar + 3 sotaque_alto + 2 baixo + 5 sotaque + 3 chao +
+      // 5 borda = 21. O número é cru de propósito: ele grita quando uma
+      // peça SOME.
+      check('há 21 medições de peça no cenário', linhas.length === 21, linhas.length + ' peças');
+      check('nenhuma peça encolhe abaixo de 60% do papel',
+            curtas.length === 0, curtas.join(' · '));
+
+      var fundas = linhas.filter(function (l) { return Math.abs(l.base) > 0.02; });
+      check('toda peça assenta com a base no chão', fundas.length === 0,
+            fundas.map(function (l) { return l.chave + ' base ' + l.base.toFixed(2); }).join(' · '));
+      var tortas = linhas.filter(function (l) { return l.desvio > 0.05; });
+      check('toda peça fica centrada na casa', tortas.length === 0,
+            tortas.map(function (l) { return l.chave + ' ' + l.desvio.toFixed(2) + ' m fora'; }).join(' · '));
+
+      // com `alto_corpo: 'auto'` a régua cobra o CORPO do muro: passa do maior
+      // herói (2,62) e não estoura a parede; a caixa fica no teto dos pilares
+      var muros = linhas.filter(function (l) { return l.papel === 'alto'; });
+      var corpoFora = muros.filter(function (l) {
+        return !(l.corpo >= 2.62 && l.corpo <= ALVO.alto + 0.15);
+      });
+      check('o CORPO de todo muro passa do maior herói e não estoura (2,62–3,25 m)',
+            muros.length > 0 && corpoFora.length === 0,
+            muros.map(function (l) { return l.chave + ' corpo ' + (l.corpo || 0).toFixed(2) + ' m'; }).join(' · '));
+      var caixaFora = muros.filter(function (l) { return l.caixa > ALVO.alto * 1.7 + 0.02; });
+      check('a caixa respeita o teto dos pilares (≤ 1,7× a parede)',
+            caixaFora.length === 0,
+            muros.map(function (l) { return l.chave + ' caixa ' + (l.caixa || 0).toFixed(2) + ' m'; }).join(' · '));
+      var estreitos = muros.filter(function (l) { return l.larg < CELL * 1.2; });
+      check('todo muro passa da própria casa (a fileira fecha)',
+            muros.length > 0 && estreitos.length === 0,
+            estreitos.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+      var largos = muros.filter(function (l) { return l.larg > CELL * 1.6; });
+      check('nenhum muro cobre a casa vizinha (teto de 1,6 casa)', largos.length === 0,
+            largos.map(function (l) { return l.chave + ' ' + l.larg.toFixed(2) + ' m'; }).join(' · '));
+
+      var pilares = linhas.filter(function (l) { return l.papel === 'pilar'; });
+      // A VIGA tem um calço de base e o prumo pendurado numa corda: o poste é
+      // fino, mas a caixa no chão vale 59% da altura (3,10 m → 1,83 m). O jogo
+      // dá ao pilar a casa inteira de largura (muroDaCasa: teto CELL) e ela
+      // cabe; a régua cobra o mesmo teto do jogo, não o 0,75 da Cisterna.
+      var pFora = pilares.filter(function (l) {
+        return Math.abs(l.alt - ALVO.pilar) > 0.02 || l.larg > CELL + 0.02;
+      });
+      check('a viga fecha a altura da parede e cabe na casa (larg ≤ 2,0 m)',
+            pilares.length === 1 && pFora.length === 0,
+            pilares.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + '×' + l.larg.toFixed(2); }).join(' · '));
+
+      var muretas = linhas.filter(function (l) { return l.papel === 'baixo'; });
+      var mFora = muretas.filter(function (l) { return Math.abs(l.alt - ALVO.baixo) > 0.02; });
+      check('toda mureta tem a mesma altura (' + ALVO.baixo.toFixed(2) + ' m)',
+            muretas.length > 0 && mFora.length === 0,
+            mFora.map(function (l) { return l.chave + ' ' + l.alt.toFixed(2) + ' m'; }).join(' · '));
+
+      // O muro inteiro da forja tem pilastras nas pontas e corpo a 51% da caixa
+      // (a Cisterna: 52%): para o CORPO fechar a parede o esticão vertical vai
+      // ao teto de 1,7× e a razão sai 4,1× — um décimo acima da régua da
+      // Cisterna, com a mesma textura de tijolo segurando. O teto aqui é 4,2.
+      var demais = muros.filter(function (l) { return l.estica > 4.2; });
+      check('o esticão fica dentro do aceitável (≤ 4,2×)',
+            muros.length > 0 && demais.length === 0,
+            'muro ' + muros.map(function (l) { return l.estica.toFixed(1) + '×'; }).join(' / '));
+
+      tabela(linhas);
+      salas();
+    }
+
+    // ---- AS TRÊS SALAS DE VERDADE: monta cada uma e conta os fornos
+    function salas() {
+      var dg = null;
+      (JOGO.DATA.dungeons || []).forEach(function (d) { if (d.id === CAL) dg = d; });
+      check('o calabouço `' + CAL + '` existe com 3 salas', !!dg && dg.rooms.length === 3,
+            dg ? (dg.rooms.length + ' salas') : 'não achei');
+      if (!dg) return fecha();
+      check('o portal dos Andaimes está ABERTO', !(JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(CAL)));
+
+      try { JOGO.Progress.reset(); } catch (e) {}
+      var ids = [];
+      try { ids = JOGO.Progress.heroIds().slice(0, 2); } catch (e) {}
+
+      for (var s = 0; s < dg.rooms.length; s++) {
+        var nome = dg.rooms[s].name;
+        var estado = null;
+        try {
+          estado = JOGO.Engine.createBattle(CAL, s, JOGO.Progress.battleParty(ids));
+          JOGO.Game.state = estado;
+          for (var f = 0; f < 24; f++) {
+            try { if (JOGO.Game.update) JOGO.Game.update(0.05); } catch (e) {}
+            try { JOGO.Renderer.render(0.05); } catch (e) {}
+          }
+        } catch (e) {
+          check('sala ' + s + ' (' + nome + ') monta', false, e.message);
+          continue;
+        }
+        // quem sabe o que entrou é o montador — `R.ultimaMontagem`
+        var porChave = JOGO.Renderer.ultimaMontagem || {};
+        var fornos = porChave[MARCO] || 0, doUsuario = 0;
+        Object.keys(porChave).forEach(function (ch) {
+          if (ch.indexOf('av_') === 0) doUsuario += porChave[ch];
+        });
+        check('sala ' + s + ' (' + nome + '): o guindaste aparece EXATAMENTE 1 vez',
+              fornos === 1, fornos + ' guindaste(s)');
+        check('sala ' + s + ' (' + nome + '): o cenário é do usuário (peças av_*)',
+              doUsuario >= 8, doUsuario + ' peças');
+        var enfeites = 0;
+        Object.keys(porChave).forEach(function (ch) {
+          if (MUROS[ch] || ch === MARCO) return;
+          enfeites += porChave[ch];
+        });
+        // a conta do "não polua": 18 de borda + os pontuais de dentro
+        check('sala ' + s + ' (' + nome + '): enfeite contido (≤ 36 com a borda)',
+              enfeites <= 36, enfeites + ' enfeites');
+        // os monstros da sala vestem o kit PRÓPRIO (o look aponta para o id)
+        var emprestado = [];
+        (estado.units || []).forEach(function (u) {
+          if (u.side !== 'enemy') return;
+          var look = null; try { look = JOGO.Models3D2.lookFor(u.defId); } catch (e) {}
+          if (!look || look.model !== u.defId) emprestado.push(u.defId + '→' + (look && look.model));
+        });
+        check('sala ' + s + ' (' + nome + '): todo monstro veste o kit dos Andaimes', emprestado.length === 0, emprestado.join(' · '));
+      }
+      fecha();
+    }
+
+    function tabela(linhas) {
+      var h = '<table><tr><th class="n">peça</th><th>papel</th><th>alvo</th>' +
+              '<th>altura</th><th>largura</th><th>larg/alt cru</th></tr>';
+      linhas.sort(function (a, b) { return b.alvo - a.alvo || b.alt - a.alt; });
+      linhas.forEach(function (l) {
+        var bom = (l.alvo - l.alt) <= 0.10 || l.papel === 'alto' || l.papel === 'baixo';
+        h += '<tr><td class="n">' + l.nome + '</td><td>' + l.papel + '</td>' +
+             '<td>' + l.alvo.toFixed(2) + '</td>' +
+             '<td class="' + (bom ? 'ok' : 'no') + '">' + l.alt.toFixed(2) + '</td>' +
+             '<td>' + l.larg.toFixed(2) + '</td>' +
+             '<td>' + l.razao.toFixed(2) + '</td></tr>';
+      });
+      document.getElementById('tabela').innerHTML = h + '</table>';
+    }
+  });
+})();
+</script>
+</body>
+</html>

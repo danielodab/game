@@ -1,10 +1,18 @@
 # Receber o lote de um portal fechado (monstros, cenário, arte)
 
-Os portais fechados — **Andaimes do Vento** (`windscaffold`), **Mina Trêmula**
-(`quakemine`) e **Coração Partido** (`brokenheart`) — abrem quando o lote
-deles entra. Este é o caminho, do mesmo jeito que a Estufa, a Cisterna e o
-**Fecho de Brasa** (`emberlock`, aberto em 19/09) entraram, só que agora com
-ferramenta genérica em vez de script copiado.
+Os portais fechados — **Mina Trêmula** (`quakemine`) e **Coração Partido**
+(`brokenheart`) — abrem quando o lote deles entra. Este é o caminho, do mesmo
+jeito que a Estufa, a Cisterna, o **Fecho de Brasa** (`emberlock`, aberto em
+19/09) e os **Andaimes do Vento** (`windscaffold`, abertos na noite de 19/09)
+entraram, só que agora com ferramenta genérica em vez de script copiado.
+
+Os Andaimes foram o segundo lote pela ferramenta genérica e não precisaram de
+mapa: as três folhas ("itens 1/2/3.glb", sem o nome das peças) vieram com vão
+suficiente para `separa_pecas.py --conta 5,4,6` achar o patamar sozinho; as
+peças saíram numeradas e foram nomeadas pela folha de contato
+(`tools/embute_cenario_andaimes.py` guarda o de-para). O muro veio com uma viga
+em cada ponta (`alto_corpo: 'auto'`), e o pilar chegou com o nome do que é —
+`viga.glb`.
 
 ## O que o lote precisa ter
 
