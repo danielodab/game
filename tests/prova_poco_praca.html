@@ -40,13 +40,26 @@ f.onload = function () {
             // para do lado da praça (o poço encara o centro) e abre o painel
             var k = (Math.hypot(p.x, p.z) - (p.solido || 3) - 2.5) / Math.max(0.01, Math.hypot(p.x, p.z));
             if (w.JOGO.Hub.irPara) w.JOGO.Hub.irPara(p.x * k, p.z * k);
-            setTimeout(function () {
-              if (Q.painel !== '0') {
-                try { w.JOGO.Hub.aoAproximar({ id: 'poco', tipo: 'poco', nome: 'Poço sem Fundo' }); } catch (e5) {}
+            /* 20/09: espera a caminhada acabar por QUADROS (rAF), não por
+             * setTimeout — o relógio virtual do headless queima os timers antes
+             * de o corpo dar dez passos, e a foto pegava o herói no meio do
+             * caminho, de costas para o poço. Com a praça de 58 m o poço ficou
+             * a 37 m do nascimento (era 30), e os 3,5 s de antes nunca davam. */
+            var q = 0;
+            (function anda() {
+              var e4 = null;
+              try { e4 = w.JOGO.Hub._estado(); } catch (e6) {}
+              if (++q > 30 && e4 && !e4.andando) {
+                if (Q.painel !== '0') {
+                  try { w.JOGO.Hub.aoAproximar({ id: 'poco', tipo: 'poco', nome: 'Poço sem Fundo' }); } catch (e5) {}
+                }
+                if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: Q.dist || 13, tilt: Q.tilt || 9, ang: Q.ang != null ? Q.ang : 4.4 });
+                setTimeout(function () { window.__pronto = true; }, 1500);
+                return;
               }
-              if (w.JOGO.Hub._cam) w.JOGO.Hub._cam({ dist: Q.dist || 13, tilt: Q.tilt || 9, ang: Q.ang != null ? Q.ang : 4.4 });
-              setTimeout(function () { window.__pronto = true; }, 1500);
-            }, 3500);
+              if (q > 900) { window.__pronto = true; return; }
+              w.requestAnimationFrame(anda);
+            })();
             return;
           }
           setTimeout(aguarda, 400);

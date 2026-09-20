@@ -1989,7 +1989,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   /* OS CAMINHOS DE PEDRA (13/09, "capriche" do dono no mapa novo): a praça
-   * redonda em volta da Árvore-Mundo, um ANEL de avenida (r 22) que passa
+   * redonda em volta da Árvore-Mundo, um ANEL de avenida (r 25,5) que passa
    * na frente de todos os quarteirões, quatro avenidas ligando a praça ao
    * anel — norte (os portais), oeste (o portão do Campo, desde 19/09; antes
    * era a Arena), a Sede e a do sul, onde o herói nasce e que segue até a
@@ -2004,7 +2004,18 @@ var JOGO = (typeof window !== 'undefined')
    * briga de profundidade — o pixel é idêntico. Duas malhas só: a pedra e o
    * meio-fio escuro por baixo, um pouco mais largo, que desenha a borda.
    * O clique no chão testa só `chao`, e o raio atravessa os caminhos. */
-  var MIOLO_RAIO = 12, ANEL_RAIO = 22, CAMINHO_MEIA = 1.35, MEIO_FIO = 0.28;
+  /* 20/09: O ANEL ACOMPANHOU O MAPA (22 → 25,5, × 1,16). Ficou para trás quando a
+   * praça foi de 50 para 58 ("aumente o mapa geral para encaixar esse pvp"): a
+   * avenida circular encolhia em relação à praça e não passava mais na frente de
+   * nada — a boca dos corredores abria 5,57 m por fora da pista, no gramado, e o
+   * herói, que nasce a 0,35·R = 20,3 m, nascia EM CIMA do meio-fio de dentro
+   * (22 - 1,63 = 20,37: 7 cm). Com 25,5 a pista corre de 23,87 a 27,13: o herói
+   * nasce 3,57 m antes dela, na avenida do sul, e a boca de cada um dos sete
+   * corredores fica 2,07 m por fora da pista — o ramal cobre o vão. O MIOLO não
+   * cresce: é a copa da Árvore (28 m), que não cresceu. Medido em
+   * scratchpad/confere_anel.js; as faces de dentro das obras ficam de 8,38
+   * (Sede) a 18,87 m (Forja) da pista. */
+  var MIOLO_RAIO = 12, ANEL_RAIO = 25.5, CAMINHO_MEIA = 1.35, MEIO_FIO = 0.28;
   /* A PEDRA DOS CAMINHOS: lajota clara e quente (arenito), própria — a
    * cinza da antessala, no meio da grama, virou uma estrela quase preta na
    * primeira foto aérea. Mesmo gerador determinístico, tile de 4 m. */
