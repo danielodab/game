@@ -69,7 +69,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     return false;
   }
-  function sRange(sp) { return sp.range || { min: 0, max: 1, line: false, los: false }; }
+  // 19/09: o mesmo padrão do motor (Engine.RANGE_PADRAO, los:true) — a IA não pode
+  // enxergar por um feitiço sem `range` o que o Engine.cast depois recusa
+  function sRange(sp) { return sp.range || (JOGO.Engine && JOGO.Engine.RANGE_PADRAO) || { min: 0, max: 1, line: false, los: true }; }
   function sAoe(sp) { return sp.aoe || { shape: 'single', size: 0 }; }
 
   // campo de distâncias BFS a partir de (tx,ty), atravessando chão
@@ -137,6 +139,14 @@ var JOGO = (typeof window !== 'undefined')
     if (ctx.spellHasSwap(spell) && !occ) return false;
     // v2: targetSide
     var ts = spell.targetSide;
+    /* FEITIÇO DE ÁREA MIRA O CHÃO — a mesma exceção do motor (validTargetCell).
+     * 19/09: a IA exigia um inimigo NA casa, então os candidatos vizinhos que
+     * targetCandidates acrescenta para as áreas eram todos reprovados aqui, e
+     * o monstro nunca largava a explosão entre dois heróis. A valoração
+     * (castValue) já soma os atingidos pela área; só faltava deixar passar. */
+    var ar = spell.aoe;
+    var temArea = !!(ar && ar.shape && ar.shape !== 'single' && (ar.size || 0) > 0);
+    if (temArea && (ts === 'enemy' || ts === 'ally')) return true;
     if (ts === 'enemy' && (!occ || occ.side === unit.side)) return false;
     if (ts === 'ally' && !((occ && occ.side === unit.side) || self)) return false;
     if (ts === 'self' && !self) return false;
@@ -422,7 +432,8 @@ var JOGO = (typeof window !== 'undefined')
         var u = ctx.enemies[i];
         if (hit[u.uid]) continue;
         var d = manhattan(cur.x, cur.y, u.x, u.y);
-        if (d <= range && d < best) { best = d; next = u; }
+        // 19/09: o motor só salta para quem a vítima de agora vê (chainDamage)
+        if (d <= range && d < best && E().los(state, cur.x, cur.y, u.x, u.y)) { best = d; next = u; }
       }
       cur = next;
     }

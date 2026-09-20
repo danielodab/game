@@ -137,6 +137,20 @@ var JOGO = (typeof window !== 'undefined')
     return [p.dungeonId, p.roomIndex, p.dificuldade || 'normal', (p.herois || []).join('+')].join('|');
   }
   /* pede o bilhete em segundo plano; `quandoPronto` roda quando ele chegar */
+  /* 19/09 (a 2ª rodada de conserto): a VERSÃO DAS REGRAS desta página vai em TODA abertura (a sala, o grupo, o
+   * duelo; a confirmação da guerra em grupo.js) — o servidor recusa na abertura (409 regras-velhas, e o `erro`
+   * já diz "recarregue a página") a página que ficou aberta através de um deploy que mudou uma regra, em vez
+   * de deixá-la jogar e cair como fraude no fim; sem o campo o servidor entende a página de ANTES do número
+   * (docs/SEGURANCA.md §4.1) */
+  function versaoRegras() { return (JOGO.Engine && typeof JOGO.Engine.VERSAO_REGRAS === 'number') ? JOGO.Engine.VERSAO_REGRAS : undefined; }
+  function comVersao(corpo) {
+    var c = {}, v = versaoRegras();
+    for (var k in corpo) if (Object.prototype.hasOwnProperty.call(corpo, k)) c[k] = corpo[k];
+    if (v !== undefined) c.versaoRegras = v;
+    return c;
+  }
+  A.versaoRegras = versaoRegras;
+
   A.prepara = function (pedido, quandoPronto) {
     if (!A.ligada() || !pedido) return;
     var k = chaveSala(pedido);
@@ -147,7 +161,8 @@ var JOGO = (typeof window !== 'undefined')
     // 15/09: a luta que ficou aberta (a aba fechada no meio) fecha ANTES de o bilhete novo abrir
     A.fechaPendente().then(function () {
       return api('/api/sala/abrir', { dungeonId: pedido.dungeonId, roomIndex: pedido.roomIndex,
-                                      dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois });
+                                      dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois,
+                                      versaoRegras: versaoRegras() });   // 19/09: a versão das regras desta página
     })
       .then(function (r) {
         A.notaLargada(r);                               // 15/09: o servidor largou uma luta de antes
@@ -204,12 +219,13 @@ var JOGO = (typeof window !== 'undefined')
     return A.LUTA_CHAVE + ((C && C.sufixo) ? C.sufixo() : '');
   }
   function armario() { try { return window.localStorage || null; } catch (e) { return null; } }
+  var TIPOS_LUTA = { sala: true, grupo: true, guerra: true };   // 19/09: a guerra de guilda pronta também é luta aberta
   A.lutaAberta = function () {
     var ls = armario();
     if (!ls) return null;
     try {
       var v = JSON.parse(ls.getItem(chaveLuta()) || 'null');
-      return (v && (v.tipo === 'sala' || v.tipo === 'grupo') && typeof v.ref === 'string') ? v : null;
+      return (v && TIPOS_LUTA[v.tipo] === true && typeof v.ref === 'string') ? v : null;
     } catch (e) { return null; }
   };
   function gravaLuta(v) {
@@ -217,20 +233,22 @@ var JOGO = (typeof window !== 'undefined')
     if (!ls) return;
     try { if (v) ls.setItem(chaveLuta(), JSON.stringify(v)); else ls.removeItem(chaveLuta()); } catch (e) {}
   }
-  /* a luta nasceu: 'sala' com o bilhete, 'grupo' com o gid */
+  /* a luta nasceu: 'sala' com o bilhete, 'grupo' e 'guerra' com o gid */
   A.abreLuta = function (tipo, ref) {
-    if ((tipo !== 'sala' && tipo !== 'grupo') || typeof ref !== 'string' || !ref || !A.ligada()) return;
+    if (TIPOS_LUTA[tipo] !== true || typeof ref !== 'string' || !ref || !A.ligada()) return;
     var v = A.lutaAberta();
     if (v && v.ref === ref) return;
     gravaLuta({ tipo: tipo, ref: ref, lances: [], fim: false });
   };
   /* os lances de agora (a lista inteira: o registro é o que o servidor refaz); `fim` = a luta acabou e o fechar de
-   * sempre já saiu (na sala em grupo o registro que sobrar fecha como fim, e não como `largou`) */
-  A.anotaLuta = function (ref, lances, fim) {
+   * sempre já saiu (na sala em grupo o registro que sobrar fecha como fim, e não como `largou`); 19/09: `corpo` = o
+   * corpo inteiro do fechar (a guerra: com o hash do fim, `fotografada`, `wo`) — quem reabre o jogo reenvia esse */
+  A.anotaLuta = function (ref, lances, fim, corpo) {
     var v = A.lutaAberta();
     if (!v || v.ref !== ref) return;
     v.lances = Object.prototype.toString.call(lances) === '[object Array]' ? lances.slice() : [];
     if (fim) v.fim = true;
+    if (corpo && typeof corpo === 'object') v.corpo = corpo;
     gravaLuta(v);
   };
   A.esqueceLuta = function (ref) {
@@ -245,9 +263,15 @@ var JOGO = (typeof window !== 'undefined')
     var v = A.lutaAberta();
     if (!v) return Promise.resolve(null);
     if (fechandoLuta[v.ref]) return fechandoLuta[v.ref].then(function () { return A.lutaAberta() ? A.fechaPendente() : null; });
-    var p = v.tipo === 'sala'
-      ? A.fecha(v.ref, v.lances || [], null)
-      : A.fechaGrupo({ gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false, largou: !v.fim });
+    var p;
+    if (v.tipo === 'sala') p = A.fecha(v.ref, v.lances || [], null);
+    else if (v.tipo === 'guerra') {
+      // 19/09: a guerra pendente — quem SAIU declara a saída; quem fechou e a página foi embora reenvia o corpo
+      // guardado; quem só sumiu fecha sem fim (o servidor põe em espera até o registro com fim de outro dos quatro)
+      p = v.saiu ? A.saiDaGuerra(v.ref)
+        : A.fechaGuerra((v.corpo && v.corpo.gid === v.ref) ? v.corpo
+                        : { gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false });
+    } else p = A.fechaGrupo({ gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false, largou: !v.fim });
     return p.then(function (r) {
       A.esqueceLuta(v.ref);
       try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
@@ -271,7 +295,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata (15/09: depois de fechar a luta pendente) */
   A.abreGrupo = function (corpo) {
-    return A.fechaPendente().then(function () { return api('/api/grupo/abrir', corpo); })
+    return A.fechaPendente().then(function () { return api('/api/grupo/abrir', comVersao(corpo)); })
       .then(function (r) { A.notaLargada(r); return r; });
   };
   /* e cada membro fecha com o registro do motor dele (os lances dos dois e as marcas) */
@@ -292,6 +316,33 @@ var JOGO = (typeof window !== 'undefined')
       .then(function () { return fechaEm('/api/duelo/fechar', corpo); })
       .then(function (r2) { return esperaDuelo(corpo, r2, n + 1); });
   }
+  /* A GUERRA DE GUILDA (19/09, o dono: "dê uma revisada na guerra de guild"). O fechar da guerra passa por aqui — a
+   * fila de retentativa (servidor fora por instantes já deixava os quatro sem XP e sem vida), `extra.keepalive` e a
+   * resposta 'aguardando' (o fechamento sem fim, o fotografado, o recusado pelo juiz e o W.O. ainda sem a prova de
+   * queda) perguntada de novo a cada ESPERA_GUERRA_MS até a resposta de vez — `aoAguardar` avisa cada volta (a tela
+   * diz "esperando o registro de outro jogador"). O 422 do juiz também não é final (o limpo de outro vence): a
+   * resposta recusada leva `fase` para a espera continuar. */
+  A.ESPERA_GUERRA_MS = 5000;
+  A.ESPERA_GUERRA_VEZES = 60;
+  A.fechaGuerra = function (corpo, extra, aoAguardar) {
+    return fechaEm('/api/guerra/fechar', corpo, extra).then(function (r) { return esperaGuerra(corpo, r, 0, aoAguardar); });
+  };
+  function esperaGuerra(corpo, r, n, aoAguardar) {
+    if (!r || r.fase !== 'aguardando' || parado || n >= A.ESPERA_GUERRA_VEZES) return r;
+    if (typeof aoAguardar === 'function') { try { aoAguardar(r); } catch (e) {} }
+    return new Promise(function (volta) { A._espera(A.ESPERA_GUERRA_MS, volta); })
+      .then(function () { return fechaEm('/api/guerra/fechar', corpo); })
+      .then(function (r2) { return esperaGuerra(corpo, r2, n + 1, aoAguardar); });
+  }
+  /* quem SAI da guerra pronta declara (POST /api/guerra/sair {gid}, keepalive): os heróis dele a 0 na hora, e é a
+   * prova que o juiz exige para a marca `morte` dele nos registros dos outros três. A luta aberta guarda `saiu` até o
+   * servidor responder de vez (a página que for embora antes declara ao abrir o jogo) */
+  A.saiDaGuerra = function (gid) {
+    if (typeof gid !== 'string' || !gid) return Promise.resolve(null);
+    var v = A.lutaAberta();
+    if (v && v.ref === gid) { v.saiu = true; gravaLuta(v); }
+    return fechaEm('/api/guerra/sair', { gid: gid }, { keepalive: true });
+  };
 
   /* A POÇÃO NA SALA DE ESPERA (13/09, o dono: "a poção seria para curar a vida e não precisar
    * esperar para ir para a próxima sala"). O servidor tira a poção do estado dele e soma a cura
@@ -327,7 +378,7 @@ var JOGO = (typeof window !== 'undefined')
    * resolve {ok, carry: {heroId: PV}|null} ou {ok:false, motivo: 'vida-zero', heroi, esperaS}. */
   A.abreDuelo = function (corpo) {
     return descarregaFila().then(function () { return A.fechaPendente(); }).then(function () {
-      return api('/api/duelo/abrir', corpo);
+      return api('/api/duelo/abrir', comVersao(corpo));
     }).then(function (r) {
       A.notaLargada(r);                                 // 15/09: o servidor largou uma luta de antes
       if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
@@ -364,7 +415,8 @@ var JOGO = (typeof window !== 'undefined')
   /* 15/09: o fechar da sala e da sala em grupo é também o da luta aberta — enquanto ele está a caminho, a luta
    * pendente espera por ele (fechandoLuta), e a resposta de vez apaga o registro */
   function fechaEm(rota, corpo, extra) {
-    var ref = (rota === '/api/sala/fechar' && corpo && corpo.bilhete) || (rota === '/api/grupo/fechar' && corpo && corpo.gid) || null;
+    var ref = (rota === '/api/sala/fechar' && corpo && corpo.bilhete) ||
+              ((rota === '/api/grupo/fechar' || rota === '/api/guerra/fechar' || rota === '/api/guerra/sair') && corpo && corpo.gid) || null;
     var p = fechaEmBruto(rota, corpo, extra).then(function (r) {
       if (ref) {
         if (fechandoLuta[ref] === p) delete fechandoLuta[ref];
@@ -393,7 +445,7 @@ var JOGO = (typeof window !== 'undefined')
             return;
           }
           if (foraDoAr(r)) {
-            if (!avisou) aviso('Conferindo a sala com o servidor… (sem resposta, tentando de novo)');
+            if (!avisou) aviso('Conferindo a ' + (rota.indexOf('/guerra/') >= 0 ? 'guerra' : 'sala') + ' com o servidor… (sem resposta, tentando de novo)');
             setTimeout(function () { tenta(true); }, A.RETENTA_MS);
             return;
           }
@@ -405,8 +457,9 @@ var JOGO = (typeof window !== 'undefined')
             return;
           }
           ultimo.erro = (r && r.erro) || 'recusada';
+          // 19/09: a `fase` e o `esperaAte` viajam na recusa também — o 422 do juiz na guerra vai para a espera
           resolve({ ok: false, recusada: true, erro: (r && r.erro) || 'o servidor recusou a sala',
-                    motivo: r && r.motivo });
+                    motivo: r && r.motivo, fase: (r && r.fase) || null, esperaAte: r && r.esperaAte });
         });
       }
       tenta(false);

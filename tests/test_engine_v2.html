@@ -720,6 +720,302 @@
       ok(E.los(st, 1, 4, 4, 4) === true, 'buracos (2,4)(3,4) não bloqueiam');
     });
 
+    // 19/09 — A VISÃO (o dono: "obstáculos atrapalham"): simétrica e estrita,
+    // fresta de canto fechada, área que não atravessa muro, cobertura −25% e
+    // as casas sem visão para a tela. A prova em TODOS os mapas é
+    // tests/visao_mapas.js (Node); aqui ficam os casos mínimos, numa sala
+    // sintética com mureta '=' na linha do tiro e dois '#' encostados pelo canto.
+    function arenaVisao() {
+      if (!TD.rooms[6]) {
+        TD.rooms.push({ name: 'visao', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '###########',
+            '#P..=a....#',
+            '#.........#',
+            '#..#......#',
+            '#...#.....#',
+            '#.........#',
+            '###########'],
+          monsters: { a: 't-dummy' } });
+      }
+      return arena(6, { a: 't-dummy' });
+    }
+
+    t('LoS 19/09: simétrica e estrita — Engine.los(A,B) === Engine.los(B,A) para todo par de chão', function () {
+      var st = arenaVisao(), pares = 0, assim = 0;
+      for (var y1 = 0; y1 < st.grid.h; y1++) for (var x1 = 0; x1 < st.grid.w; x1++) {
+        for (var y2 = 0; y2 < st.grid.h; y2++) for (var x2 = 0; x2 < st.grid.w; x2++) {
+          if (st.grid.tiles[y1][x1].type !== 'floor' || st.grid.tiles[y2][x2].type !== 'floor') continue;
+          pares++;
+          if (E.los(st, x1, y1, x2, y2) !== E.los(st, x2, y2, x1, y1)) assim++;
+        }
+      }
+      ok(pares > 1000, 'há pares');
+      eq(assim, 0, 'pares assimétricos');
+      ok(typeof E.VERSAO_REGRAS === 'number' && E.VERSAO_REGRAS >= 2, 'a versão das regras subiu com a visão');
+    });
+
+    t('LoS 19/09: a fresta entre dois "#" encostados pelo canto está fechada', function () {
+      var st = arenaVisao();
+      eq(st.grid.tiles[3][3].type, 'wall', '# em (3,3)');
+      eq(st.grid.tiles[4][4].type, 'wall', '# em (4,4)');
+      ok(E.los(st, 4, 3, 3, 4) === false, 'os dois chãos do quadrado não se veem');
+      ok(E.los(st, 3, 4, 4, 3) === false, '… nem na volta');
+      ok(E.los(st, 5, 2, 2, 5) === false, 'a diagonal longa pelo vão fecha');
+      ok(E.los(st, 2, 3, 4, 3) === false, 'o muro reto continua bloqueando');
+      ok(E.los(st, 3, 1, 5, 1) === true, 'a mureta "=" não bloqueia a visão');
+      var muro = E.muroNaLinha(st, 2, 3, 4, 3);
+      ok(!!muro && muro.x === 3 && muro.y === 3, 'muroNaLinha aponta o # em (3,3)');
+      ok(E.muroNaLinha(st, 3, 1, 5, 1) === null, 'sem muro na linha, null');
+    });
+
+    t('AoE 19/09: a área não atravessa muro — toda casa precisa de visão do centro; a linha para no primeiro #', function () {
+      var st = arenaVisao();
+      var circ = E.aoeTiles(st, { id: 't-c2', aoe: { shape: 'circle', size: 2 } }, 2, 3, 2, 3);
+      var temAtras = false, temCentro = false, temLado = false, semVisao = 0;
+      for (var i = 0; i < circ.length; i++) {
+        var c = circ[i];
+        if (c.x === 4 && c.y === 3) temAtras = true;          // do outro lado do # em (3,3)
+        if (c.x === 2 && c.y === 3) temCentro = true;
+        if (c.x === 2 && c.y === 5) temLado = true;           // contorna: a esquina livre entra
+        if (!(c.x === 2 && c.y === 3) && !E.los(st, 2, 3, c.x, c.y)) semVisao++;
+      }
+      ok(temCentro, 'a casa do centro entra sempre');
+      ok(!temAtras, 'a casa atrás do muro não entra');
+      ok(temLado, 'a explosão contorna a esquina');
+      eq(semVisao, 0, 'nenhuma casa sem visão do centro');
+      var linha = E.aoeTiles(st, { id: 't-l5', aoe: { shape: 'line', size: 5 } }, 1, 3, 2, 3);
+      eq(linha.length, 1, 'a linha de 5 a partir de (2,3) para no # em (3,3): só o centro');
+      var livre = E.aoeTiles(st, { id: 't-l5', aoe: { shape: 'line', size: 5 } }, 1, 2, 2, 2);
+      eq(livre.length, 5, 'sem muro, a linha inteira');
+      var julg = E.aoeTiles(st, { id: 'gm-julgamento', aoe: { shape: 'circle', size: 99 } }, 1, 1, 1, 1);
+      var comum = E.aoeTiles(st, { id: 't-nova', aoe: { shape: 'circle', size: 99 } }, 1, 1, 1, 1);
+      ok(julg.length > comum.length, 'o Julgamento do Mestre é a exceção nomeada: atravessa');
+    });
+
+    t('Cobertura 19/09: alvo encostado na mureta e atingido por cima dela sofre −25% (arredonda para baixo)', function () {
+      var st = arenaVisao();
+      var h = byHero(st, 't-h1'), d = byDef(st, 't-dummy');
+      eq(h.x + ',' + h.y, '1,1', 'herói em (1,1)');
+      eq(d.x + ',' + d.y, '5,1', 'alvo em (5,1), encostado no = de (4,1)');
+      ok(E.coberto(st, 1, 1, 5, 1) === true, 'Engine.coberto: o traçado entra pela mureta');
+      ok(E.coberto(st, 1, 1, 6, 1) === false, 'um passo depois da mureta não é cobertura');
+      ok(E.coberto(st, 5, 2, 5, 1) === false, 'corpo a corpo encostado nunca é coberto');
+      h.pa = 10; drain();
+      ok(E.cast(st, h.uid, 't-nuke10', 5, 1) === true, 'o tiro sai');
+      var evs = drain();
+      var dano = findEv(evs, 'damage', function (e) { return e.uid === d.uid; });
+      ok(!!dano, 'evento de dano');
+      eq(dano.amount, 7, '10 → 7 (−25%, para baixo)');
+      eq(dano.coberto, true, 'o evento diz coberto');
+      eq(dano.reducao, 3, 'e quanto tirou');
+      var disse = false;
+      for (var i = 0; i < evs.length; i++) if (evs[i].type === 'log' && /cobertura −25%/.test(evs[i].text)) disse = true;
+      ok(disse, 'o log do motor diz "cobertura −25%"');
+      // a cura não muda (presa ao PV máximo: devolve os 7 que o tiro tirou)
+      var faltava = d.hpMax - d.hp;
+      h.pa = 10; drain();
+      ok(E.cast(st, h.uid, 't-heal20', 5, 1) === true, 'a cura sai');
+      var cura = findEv(drain(), 'heal', function (e) { return e.uid === d.uid; });
+      ok(!!cura && cura.amount === Math.min(20, faltava) && !cura.coberto, 'cura inteira, sem cobertura');
+      // sem mureta no caminho: cheio
+      d.x = 6; h.pa = 10; drain();
+      ok(E.cast(st, h.uid, 't-nuke10', 6, 1) === true, 'o tiro livre sai');
+      var cheio = findEv(drain(), 'damage', function (e) { return e.uid === d.uid; });
+      ok(!!cheio && cheio.amount === 10 && !cheio.coberto, 'dano cheio sem cobertura');
+      // o mínimo é 1: nunca zera
+      d.x = 5; h.pa = 10; drain();
+      ok(E.cast(st, h.uid, 't-cd1', 5, 1) === true, 'o tiro de 1 sai');
+      var um = findEv(drain(), 'damage', function (e) { return e.uid === d.uid; });
+      ok(!!um && um.amount === 1 && !um.coberto, '1 fica 1 (a cobertura não anula)');
+    });
+
+    t('casasSemVisao 19/09: o alcance menos a visão, cada casa com o muro que a bloqueia', function () {
+      var st = arenaVisao();
+      var h = byHero(st, 't-h1');
+      // um tiro de alcance 8 com visão: de (1,1), (5,5) e as casas atrás do canto ficam cegas
+      sp('t-visao8', { range: { min: 2, max: 8, line: false, los: true },
+        effects: [{ type: 'damage', element: 'neutro', min: 1, max: 1 }] });
+      var vistas = E.spellRange(st, h.uid, 't-visao8');
+      var cegas = E.casasSemVisao(st, h.uid, 't-visao8');
+      ok(cegas.length > 0, 'há casas no alcance sem visão');
+      var temCanto = false;
+      for (var k = 0; k < cegas.length; k++) if (cegas[k].x === 5 && cegas[k].y === 5) temCanto = true;
+      ok(temCanto, '(5,5), atrás dos dois # em diagonal, está entre as cegas');
+      var mapa = {}, i;
+      for (i = 0; i < vistas.length; i++) mapa[vistas[i].x + ',' + vistas[i].y] = 'v';
+      for (i = 0; i < cegas.length; i++) {
+        var c = cegas[i];
+        ok(!mapa[c.x + ',' + c.y], 'uma casa cega não está no alcance pintado');
+        mapa[c.x + ',' + c.y] = 'c';
+        ok(!!c.muro && st.grid.tiles[c.muro.y][c.muro.x].type === 'wall', 'o muro apontado é #');
+        ok(E.los(st, h.x, h.y, c.x, c.y) === false, 'e a casa não tem visão mesmo');
+      }
+      var faltam = 0;
+      for (var y = 0; y < st.grid.h; y++) for (var x = 0; x < st.grid.w; x++) {
+        if (st.grid.tiles[y][x].type !== 'floor') continue;
+        var dist = Math.abs(x - h.x) + Math.abs(y - h.y);
+        if (dist < 2 || dist > 8) continue;
+        if (!mapa[x + ',' + y]) faltam++;
+      }
+      eq(faltam, 0, 'vistas ∪ cegas = o alcance inteiro');
+      eq(E.casasSemVisao(st, h.uid, 't-nuke10').length, 0, 'feitiço sem los devolve vazio');
+    });
+
+    // 19/09, a rodada de conserto (os achados da revisão): a cobertura cortava o
+    // dano CRU e o difícil multiplicava depois (o log dizia −3 num tiro que
+    // perdera 5); o Salto de Brasa media a cobertura de onde partiu; o raio em
+    // cadeia saltava por cima de muro e a explosão de morte feria através dele.
+    t('Cobertura 19/09: o corte vem DEPOIS da dificuldade, e o log diz o número de verdade', function () {
+      var st = arenaVisao();
+      var h = byHero(st, 't-h1'), d = byDef(st, 't-dummy');
+      st.dificuldade = 'dificil';
+      var escala = E.dif(st).dano || 1;
+      ok(escala > 1, 'o difícil multiplica o dano do inimigo (' + escala + ')');
+      d.spells = ['t-nuke10'];
+      function tiroDoInimigo(tx, ty) {
+        d.pa = 10; d.cooldowns = {}; d.castsThisTurn = {}; drain();
+        ok(E.cast(st, d.uid, 't-nuke10', tx, ty) === true, 'o tiro do inimigo sai');
+        var evs = drain();
+        return { dano: findEv(evs, 'damage', function (e) { return e.uid === h.uid; }), evs: evs };
+      }
+      d.x = 1; d.y = 1; h.x = 6; h.y = 1;                 // sem mureta na última casa
+      var cheio = tiroDoInimigo(6, 1).dano;
+      ok(!!cheio && cheio.amount === Math.max(1, Math.round(10 * escala)) && !cheio.coberto, 'sem mureta: 10 × dificuldade = ' + (cheio && cheio.amount));
+      h.x = 5;                                            // encostado na mureta (4,1)
+      var r = tiroDoInimigo(5, 1), cob = r.dano;
+      var esperado = Math.max(1, Math.floor(cheio.amount * 0.75));
+      ok(!!cob && cob.coberto === true, 'coberto');
+      eq(cob.amount, esperado, 'o corte é sobre o dano já escalado (' + cheio.amount + ' → ' + esperado + ')');
+      eq(cob.reducao, cheio.amount - esperado, 'a redução do evento é a de verdade');
+      var disse = false;
+      for (var i = 0; i < r.evs.length; i++) if (r.evs[i].type === 'log' && r.evs[i].text.indexOf('(−' + cob.reducao + ')') >= 0) disse = true;
+      ok(disse, 'e o log diz o mesmo número');
+    });
+
+    t('Cobertura 19/09: o feitiço que se move antes de bater mede a cobertura de onde o conjurador CAIU', function () {
+      var st = arenaVisao();
+      var h = byHero(st, 't-h1'), d = byDef(st, 't-dummy');
+      eq(h.x + ',' + h.y + ' ' + d.x + ',' + d.y, '1,1 5,1', 'herói em (1,1), alvo em (5,1) encostado na mureta');
+      ok(E.coberto(st, 1, 1, 5, 1) === true, 'do ponto de partida o alvo estaria coberto');
+      h.spells.push('is-cinder-leap'); h.pa = 10; h.cooldowns = {}; h.castsThisTurn = {}; drain();
+      ok(E.cast(st, h.uid, 'is-cinder-leap', 6, 1) === true, 'o Salto de Brasa sai');
+      var dano = findEv(drain(), 'damage', function (e) { return e.uid === d.uid; });
+      eq(h.x + ',' + h.y, '6,1', 'o herói caiu em (6,1)');
+      ok(!!dano && dano.amount > 0 && !dano.coberto, 'o golpe de contato sai cheio, sem cobertura');
+    });
+
+    function arenaRaio() {
+      if (!TD.rooms[6]) arenaVisao();
+      if (!TD.rooms[7]) {
+        TD.rooms.push({ name: 'raio', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '###########',
+            '#P..a#b...#',
+            '#.........#',
+            '#...c.....#',
+            '###########'],
+          monsters: { a: 't-boom3', b: 't-dummy', c: 't-dummy' } });
+      }
+      if (!D.monsters['t-boom3']) {
+        mon('t-boom3', { stats: { hp: 1000, initiative: 7 }, traits: [{ type: 'explodeOnDeath', element: 'neutro', damage: 30, radius: 3 }] });
+      }
+      if (!D.spells['t-chain10']) sp('t-chain10', { effects: [{ type: 'chain', jumps: 3, falloff: 1, element: 'neutro', min: 10, max: 10 }] });
+      return arena(7, { a: 't-boom3', b: 't-dummy', c: 't-dummy' });
+    }
+
+    t('Raio em cadeia e explosão de morte 19/09: nem saltam nem ferem por cima de muro', function () {
+      var st = arenaRaio();
+      var h = byHero(st, 't-h1'), bomba = byDef(st, 't-boom3');
+      var b = E.unitAt(st, 6, 1), c = E.unitAt(st, 4, 3);
+      ok(!!bomba && bomba.x === 4 && bomba.y === 1 && !!b && !!c, 'a bomba em (4,1), o # em (5,1), b em (6,1) e c em (4,3)');
+      ok(E.los(st, 4, 1, 6, 1) === false && E.los(st, 4, 1, 4, 3) === true, 'b atrás do muro, c à vista');
+      h.spells.push('t-chain10'); h.pa = 10; h.cooldowns = {}; h.castsThisTurn = {}; drain();
+      ok(E.cast(st, h.uid, 't-chain10', 4, 1) === true, 'o raio sai');
+      var evs = drain(), saltos = 0;
+      for (var i = 0; i < evs.length; i++) if (evs[i].type === 'chainHop') saltos++;
+      eq(b.hp, b.hpMax, 'b, atrás do muro, não leva o salto');
+      ok(c.hp < c.hpMax, 'c, à vista, leva');
+      eq(saltos, 2, 'dois saltos: a bomba e c');
+      bomba.hp = 5;
+      var hb = b.hp, hc = c.hp;
+      h.pa = 10; h.castsThisTurn = {}; drain();
+      ok(E.cast(st, h.uid, 't-nuke10', 4, 1) === true, 'o tiro que mata a bomba sai');
+      drain();
+      ok(!bomba.alive, 'a bomba morreu e explodiu');
+      eq(b.hp, hb, 'b, atrás do muro, não é ferido pela explosão');
+      ok(c.hp < hc, 'c, à vista, é ferido');
+    });
+
+    // 19/09, a 2ª rodada de conserto: a cobertura dos saltos do raio e das casas
+    // da área era medida do CONJURADOR, e a visão desses golpes é medida de
+    // outro lugar (a vítima anterior; o centro do impacto) — a mureta "errada"
+    // concedia ou negava os −25%. Agora cada golpe mede da casa de onde a visão
+    // dele é exigida.
+    function arenaOrigem() {
+      if (!TD.rooms[7]) arenaRaio();
+      if (!TD.rooms[8]) {
+        TD.rooms.push({ name: 'origem-raio', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#########',
+            '#P..=b..#',
+            '#.......#',
+            '#....a..#',
+            '#########'],
+          monsters: { a: 't-dummy', b: 't-dummy' } });
+        TD.rooms.push({ name: 'origem-area', weather: 't-calmo', sceneryTheme: 'teste', layout: [
+            '#########',
+            '#P.#=v..#',
+            '#.......#',
+            '#.......#',
+            '#########'],
+          monsters: { v: 't-dummy' } });
+      }
+      if (!D.spells['t-bola2']) {
+        sp('t-bola2', { targetSide: 'enemy', range: { min: 1, max: 6, line: false, los: true },
+          aoe: { shape: 'circle', size: 2 }, effects: [{ type: 'damage', element: 'neutro', min: 20, max: 20 }] });
+      }
+    }
+
+    t('Cobertura 19/09: o salto do raio e a casa da área medem a cobertura de onde a visão do golpe é exigida', function () {
+      arenaOrigem();
+      // o raio: P(1,1) → a(5,3) → b(5,1). A mureta (4,1) está na linha P→b, não na do salto a→b (que sobe por (5,2))
+      var st = arena(8, { a: 't-dummy', b: 't-dummy' });
+      var h = byHero(st, 't-h1'), a = E.unitAt(st, 5, 3), b = E.unitAt(st, 5, 1);
+      ok(!!a && !!b && E.coberto(st, 1, 1, 5, 1) === true && E.coberto(st, 5, 3, 5, 1) === false, 'coberto(P→b), mas não coberto(a→b)');
+      function raio() {
+        a.hp = a.hpMax; b.hp = b.hpMax;
+        h.pa = 10; h.cooldowns = {}; h.castsThisTurn = {}; drain();
+        ok(E.cast(st, h.uid, 't-chain10', 5, 3) === true, 'o raio sai');
+        var evs = drain();
+        return { a: findEv(evs, 'damage', function (e) { return e.uid === a.uid; }), b: findEv(evs, 'damage', function (e) { return e.uid === b.uid; }) };
+      }
+      h.spells.push('t-chain10');
+      var r = raio();
+      ok(!!r.a && r.a.amount > 0 && !r.a.coberto, 'o primeiro golpe, do conjurador: a sem cobertura');
+      ok(!!r.b && r.b.amount === r.a.amount && !r.b.coberto, 'o salto a→b sai da vítima anterior: b leva o mesmo, sem cobertura');
+      // a mureta entre a vítima e o salto: (5,2) vira '=' e (4,1) chão — agora o salto entra por ela
+      st.grid.tiles[2][5].type = 'cover'; st.grid.tiles[1][4].type = 'floor';
+      var r2 = raio(), esperado = Math.max(1, Math.floor(r2.a.amount * 0.75));
+      ok(!!r2.b && r2.b.coberto === true && r2.b.amount === esperado && r2.b.reducao === r2.a.amount - esperado,
+         'a mureta entre a e b cobre o salto (' + r2.a.amount + ' → ' + esperado + ')');
+      // a área: P(1,1) não vê v(5,1) ('#' em (3,1)); o círculo 2 no chão (5,3) chega a v por (5,2)
+      st = arena(9, { v: 't-dummy' });
+      h = byHero(st, 't-h1'); var v = E.unitAt(st, 5, 1);
+      ok(!!v && E.los(st, 1, 1, 5, 1) === false && E.los(st, 5, 3, 5, 1) === true, 'P não vê v; o centro (5,3) vê');
+      ok(E.coberto(st, 1, 1, 5, 1) === true && E.coberto(st, 5, 3, 5, 1) === false, 'coberto(P→v) atravessa o muro; coberto(centro→v) não');
+      function bola() {
+        v.hp = v.hpMax;
+        h.pa = 10; h.cooldowns = {}; h.castsThisTurn = {}; drain();
+        ok(E.cast(st, h.uid, 't-bola2', 5, 3) === true, 'a área no chão sai');
+        return findEv(drain(), 'damage', function (e) { return e.uid === v.uid; });
+      }
+      h.spells.push('t-bola2');
+      var d1 = bola();
+      ok(!!d1 && d1.amount > 0 && !d1.coberto, 'a vítima fora do centro mede do centro: sem cobertura (' + (d1 && d1.amount) + ')');
+      st.grid.tiles[2][5].type = 'cover'; st.grid.tiles[1][4].type = 'floor';
+      var d2 = bola(), esperado2 = Math.max(1, Math.floor(d1.amount * 0.75));
+      ok(!!d2 && d2.coberto === true && d2.amount === esperado2 && d2.reducao === d1.amount - esperado2,
+         'a mureta entre o centro e a vítima cobre (' + d1.amount + ' → ' + esperado2 + ')');
+    });
+
     t('v2 terreno: "=" é obstáculo BAIXO — bloqueia passagem, não bloqueia visão', function () {
       var st = arena(4, { a: 't-dummy' });
       eq(st.grid.tiles[1][3].type, 'cover', 'tile cover');

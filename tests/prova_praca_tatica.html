@@ -147,13 +147,15 @@
         if (!rel) { fecha(); return; }
         var p = rel.papeis;
         check('UMA árvore no meio', p.arvore === 1, p.arvore);
-        check('os seis portais e as doze muretas', p.portal === 6 && p.portal_mureta === 12, p.portal + ' / ' + p.portal_mureta);
+        // 19/09: o portão do Campo de PvP entrou na borda oeste com as duas muretas dele (14)
+        check('os seis portais, o portão do Campo e as catorze muretas',
+              p.portal === 6 && p.portal_campo === 1 && p.portal_mureta === 14, p.portal + ' / ' + p.portal_campo + ' / ' + p.portal_mureta);
         check('as quatro raízes e os seis bancos da calçada', p.raiz === 4 && p.banco_praca === 6, p.raiz + ' / ' + p.banco_praca);
         check('Arena, Sede, Poço e Banco', p.arena === 1 && p.sede === 1 && p.poco === 1 && p.banco === 1);
         check('as três barracas (forja, loteria, mercado)', p.forja === 1 && p.loteria === 1 && p.mercado === 1);
         check('nenhuma casa ALTA (#) ficou sem peça', rel.altoSemPeca === 0, rel.altoSemPeca);
         check('nenhuma casa BAIXA (=) ficou sem peça', rel.baixoSemPeca === 0, rel.baixoSemPeca);
-        // as casas cobertas batem com a legenda: 36 '#' + 30 '='
+        // as casas cobertas batem com a legenda: 35 '#' + 31 '=' (19/09: +1 '#' e +2 '=' do portão; contado no motor)
         var nAlto = 0, nBaixo = 0;
         st.grid.tiles.forEach(function (row) { row.forEach(function (t) { if (t.type === 'wall') nAlto++; else if (t.type === 'cover') nBaixo++; }); });
         check('toda casa de obstáculo está debaixo de uma peça', rel.casasCobertas === nAlto + nBaixo,

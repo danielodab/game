@@ -157,12 +157,22 @@ def espera_api(base, proc=None, segundos=15):
 class Cliente:
     """Um jogador falando com a API: guarda o token e manda JSON."""
 
+    # 19/09: a VERSÃO DAS REGRAS da página (docs/SEGURANCA.md §4.1). As provas são a página NOVA: quando o palco
+    # adota o número do juiz (autoridade_api.adota_regras), todo POST de abertura sem `versaoRegras` o leva — a
+    # API recusa (409 regras-velhas) quem abre sem o campo, que é a página de antes do número. A prova que quer
+    # ser a página velha manda `versaoRegras=None` de propósito (a chave presente vale como está)
+    REGRAS = None
+    ABERTURAS = ('/api/sala/abrir', '/api/grupo/abrir', '/api/duelo/abrir', '/api/guerra/confirmar')
+
     def __init__(self, base):
         self.base = base
         self.token = None
         self.conta = None
 
     def pede(self, metodo, rota, corpo=None, token='sessao'):
+        if (Cliente.REGRAS is not None and metodo == 'POST' and rota in Cliente.ABERTURAS
+                and isinstance(corpo, dict) and 'versaoRegras' not in corpo):
+            corpo = dict(corpo, versaoRegras=Cliente.REGRAS)
         dados = None if corpo is None else json.dumps(corpo).encode('utf-8')
         req = urllib.request.Request(self.base + rota, data=dados, method=metodo)
         req.add_header('Content-Type', 'application/json')

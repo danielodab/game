@@ -118,6 +118,15 @@ CREATE TABLE IF NOT EXISTS salas(
 );
 CREATE INDEX IF NOT EXISTS salas_conta ON salas(conta_id, aberta_em);
 CREATE INDEX IF NOT EXISTS salas_estado ON salas(conta_id, estado);
+-- A VERSÃO DAS REGRAS DO BILHETE (19/09, docs/SEGURANCA.md §4.1). Tabela nova (nunca ALTER): o
+-- número que o juiz anunciou ao abrir (Engine.VERSAO_REGRAS, GET /regras) e o hash dos dados dele.
+-- Ao fechar, o juiz confere o número contra o seu: um deploy que mudou uma regra no meio da sala
+-- vence o bilhete ('regras-mudaram') em vez de recusar o jogador honesto como fraude ('divergiu')
+CREATE TABLE IF NOT EXISTS salas_regras(
+  bilhete   TEXT PRIMARY KEY REFERENCES salas(bilhete) ON DELETE CASCADE,
+  regras    INTEGER NOT NULL,
+  versao    TEXT
+);
 -- A VIDA ENTRE AS SALAS (13/09, pedido do dono: "quando acaba a luta o jogador fica com a vida que
 -- terminou a última luta.. carrega 1 pv a cada 2 segundos"). Uma linha por herói da sala VENCIDA
 -- (a solo pelo bilhete, a em grupo pelo gid, em `ref`), com a chave do carry (heroId, ou dono:heroId
@@ -625,6 +634,41 @@ class SalasMixin:
         self._regras_guardadas = (time.monotonic() + REGRAS_CACHE, r)
         return r
 
+    def _regras_esquece(self):
+        """19/09 (a 2ª rodada de conserto): o GET /regras fica guardado REGRAS_CACHE s, e a API pode ter subido
+        ANTES do juiz novo — o número guardado seria o velho por até 5 min: bilhetes abertos com ele venceriam ao
+        fechar, e a página nova, recarregada, levaria 409 sem ter culpa. Quem vê um sinal de que o juiz é outro (o
+        422 'regras-mudaram' no fechamento; a página que manda um número diferente do guardado) esquece o guardado,
+        e a consulta seguinte pergunta de novo. Barato: o juiz responde /regras de um cache dele."""
+        self._regras_guardadas = None
+
+    def _confere_versao_cliente(self, corpo, regras):
+        """19/09 (a 2ª rodada de conserto): a VERSÃO DAS REGRAS da página contra a do juiz, em TODA abertura (a sala
+        solo, a sala em grupo, o duelo, a confirmação da guerra). `versaoRegras` AUSENTE = versão 1: a única página
+        que não manda o campo é a de antes do número (18/09), que joga com o engine.js e o ai.js da versão 1 — a
+        revisão mediu 22% das salas dela caindo como 'divergiu' (fraude) quando o juiz novo as refazia. Só passa sem
+        o campo quando o juiz também não anuncia número (juiz velho). Diferentes: antes do 409 a API pergunta ao
+        juiz de novo (o guardado pode ser de antes do deploy) e só recusa se ele confirmar. Devolve as regras (as
+        guardadas ou as reconferidas). Chamar FORA da tranca: fala com o juiz."""
+        cliente = corpo.get('versaoRegras')
+        if cliente is not None and not _inteiro_puro(cliente):
+            raise Recusa(400, 'versaoRegras precisa ser um inteiro')
+        if cliente is None:
+            cliente = 1
+        juiz = regras.get('regras')
+        if _inteiro_puro(juiz) and cliente != juiz:
+            # o guardado pode estar velho: confere de novo — no máximo uma vez a cada 2 s, para quem manda um
+            # número errado de propósito não fazer a API martelar o juiz
+            if time.monotonic() - self.__dict__.get('_regras_reconferida', 0.0) > 2.0:
+                self._regras_reconferida = time.monotonic()
+                self._regras_esquece()
+                regras = self._regras()
+                juiz = regras.get('regras')
+        if _inteiro_puro(juiz) and cliente != juiz:
+            raise Recusa(409, 'as regras do jogo mudaram: recarregue a página para jogar com as de agora',
+                         motivo='regras-velhas', regras=juiz)
+        return regras
+
     @staticmethod
     def _confere_herois(conta, progress, herois, de_quem=''):
         """Os heróis existem no estado do servidor da conta e a classe deles está liberada
@@ -677,11 +721,11 @@ class SalasMixin:
             resposta['largada'] = largada
         return status, resposta
 
-    def _larga_pendentes(self, conta):
-        """As lutas da conta que seguem abertas no servidor: a que já fechou (ou abandonada há mais de
+    def _larga_salas_pendentes(self, conta):
+        """As SALAS da conta que seguem abertas no servidor: a que já fechou (ou abandonada há mais de
         LARGADA_JANELA_MS) só fica 'fechada'; a que segue aberta é LARGADA — os heróis da conta nela a 0 (com o
         máximo que o juiz dá), a sala solo 'perdida' (a em grupo segue aberta: o parceiro ainda fecha a dele).
-        Devolve {'herois': [...]} ou None."""
+        Devolve {'herois': [...]} ou None. (19/09: a guerra pronta entra por _larga_pendentes, abaixo.)"""
         cid = conta['id']
         agora_ms = int(time.time() * 1000)
         largar, velhas = [], []
@@ -727,6 +771,18 @@ class SalasMixin:
                 herois.extend(h for h in hs if h not in herois)
         if herois:
             log.info("luta largada: conta #%d, heróis %s a 0", cid, ', '.join(herois))
+        return {'herois': herois} if herois else None
+
+    def _larga_pendentes(self, conta):
+        """A luta largada de qualquer tipo: as salas (acima) e, 19/09, a GUERRA pronta que a conta deixou aberta
+        (guerra.py, _guerra_larga: a tabela luta_aberta_guerra — o CHECK da luta_aberta só aceita sala/grupo).
+        Devolve {'herois': [...]} ou None."""
+        r = self._larga_salas_pendentes(conta)
+        larga_guerra = getattr(self, '_guerra_larga', None)
+        herois = list(r['herois']) if r else []
+        for h in (larga_guerra(conta) if larga_guerra is not None else []):
+            if h not in herois:
+                herois.append(h)
         return {'herois': herois} if herois else None
 
     def _larga_maximos(self, conta, r, s):
@@ -810,6 +866,12 @@ class SalasMixin:
             raise Recusa(400, 'calabouço desconhecido ou fechado')
         if sala >= n:
             raise Recusa(400, 'essa sala não existe nesse calabouço (são %d)' % n)
+        # 19/09, A VERSÃO DAS REGRAS (docs/SEGURANCA.md §4.1): o juiz anuncia o Engine.VERSAO_REGRAS dele e a
+        # página manda o seu em versaoRegras. Diferentes (e a AUSÊNCIA é a versão 1: só a página de antes do
+        # número não manda — a 2ª rodada de conserto): a página está com um engine.js de antes do deploy e
+        # refaria a sala com outro resultado — 409 para recarregar, em vez de jogar e cair como fraude
+        regras = self._confere_versao_cliente(corpo, regras)
+        regras_juiz = regras.get('regras')
         t = agora()
         with self._escrita():
             estado = self._estado_exige(cid)
@@ -830,6 +892,10 @@ class SalasMixin:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
                 (bilhete, cid, dungeon, sala, dificuldade, semente, json.dumps(herois),
                  json.dumps(carry) if carry is not None else None, t))
+            # 19/09: a versão das regras com que o bilhete abriu (o juiz confere ao fechar)
+            if _inteiro_puro(regras_juiz):
+                self.con.execute("INSERT OR REPLACE INTO salas_regras(bilhete, regras, versao) VALUES (?, ?, ?)",
+                                 (bilhete, regras_juiz, regras.get('versao') if isinstance(regras.get('versao'), str) else None))
             # 15/09: a luta aberta da conta — quem abrir outra sem fechar esta a larga (_larga_pendentes)
             self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
                              "VALUES ('sala', ?, ?, ?, ?, 'aberta')",
@@ -865,6 +931,11 @@ class SalasMixin:
                 s = self.con.execute("SELECT * FROM salas WHERE bilhete = ?", (bilhete,)).fetchone()
                 if s is None or s['conta_id'] != cid:           # o de outra conta: a mesma resposta
                     raise Recusa(404, 'bilhete não encontrado')
+                # 19/09: a versão das regras com que o bilhete abriu. LINHA AUSENTE = bilhete de ANTES do número (aberto
+                # antes do deploy que trouxe a tabela) = versão 1, a implícita do engine.js: a revisão mediu 12 de 54
+                # salas de antes caindo como 'divergiu' (fraude) quando o juiz novo as refazia sem conferir nada
+                rg = self.con.execute("SELECT regras FROM salas_regras WHERE bilhete = ?", (bilhete,)).fetchone()
+                regras_bilhete = rg['regras'] if rg is not None and _inteiro_puro(rg['regras']) else 1
                 if s['estado'] == 'vencida':
                     raise Recusa(410, 'bilhete vencido: abra a sala de novo')
                 if s['estado'] != 'aberta':
@@ -887,13 +958,27 @@ class SalasMixin:
                 'conta': {'id': cid, 'gm': bool(conta['gm'])},
                 'bilhete': {'dungeonId': s['dungeon'], 'roomIndex': s['sala'], 'dificuldade': s['dificuldade'],
                             'semente': s['semente'], 'herois': json.loads(s['herois']),
-                            'carry': _objeto(s['carry'])},
+                            'carry': _objeto(s['carry']),
+                            'regras': regras_bilhete},           # 19/09: o juiz confere contra a versão dele
                 'lances': lances, 'hashFinal': hash_final,
                 'progress': estado['progress'], 'db': estado['db'],
                 'contexto': {'agoraMs': int(instante * 1000), 'fatores': fatores, 'guilda': guilda}}
             try:
                 saida = self.juiz.pede('POST', '/sala/fecha', pedido)
             except Recusa as e:
+                if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                    # 19/09: o deploy trocou uma regra no meio da sala — o bilhete VENCE (não é fraude), com a
+                    # trilha dizendo o porquê; o jogo abre a sala de novo com as regras de agora
+                    self._regras_esquece()                      # o juiz é outro: o /regras guardado pode ser velho
+                    with self._escrita():
+                        n = self.con.execute("UPDATE salas SET estado = 'vencida', fechada_em = ? "
+                                             "WHERE bilhete = ? AND estado = 'aberta'", (agora(), bilhete)).rowcount
+                        if n:
+                            self._evento(cid, 'sala-vencida', {'bilhete': bilhete, 'motivo': 'regras-mudaram',
+                                                               'erro': e.erro, 'regras': regras_bilhete})
+                    log.info("sala vencida por regras novas: #%d — %.200s", cid, e.erro)
+                    raise Recusa(410, 'as regras do jogo mudaram no meio da sala — abra a sala de novo',
+                                 motivo='regras-mudaram')
                 if e.status == 422:                             # o replay não fecha: a sala não paga
                     self._sala_recusa(cid, bilhete, e.extra.get('motivo') or 'juiz', e.erro)
                 raise

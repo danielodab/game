@@ -870,6 +870,7 @@ var JOGO = (typeof window !== 'undefined')
    * com o muro de sempre nessas casas; sem este filtro a peça desconhecida apagava o muro
    * e deixava a casa alta invisível. */
   var PAPEIS_PRACA = { arvore: 1, arena: 1, sede: 1, banco: 1, poco: 1, portal: 1, portal_mureta: 1,
+                       portal_campo: 1,   // 19/09: o portão do Campo de PvP, na borda oeste
                        banco_praca: 1, raiz: 1, forja: 1, loteria: 1, mercado: 1 };
   /* 15/09: cada tema tem a SUA tabela de papéis (o Salão da Sede ganhou a dele, mais
    * abaixo). Tema sem tabela cai na da praça, que era a regra de antes. */
@@ -1035,11 +1036,16 @@ var JOGO = (typeof window !== 'undefined')
    * Fecho de `ordem` e o halo do kit. Numa casa: o topo do aro fica na altura do muro
    * (WALL_H), e o aro PASSA um pouco para as muretas dos lados — que são parte da mesma
    * construção, e é por isso que ele corre no eixo delas. Portal fechado: miolo apagado
-   * e o X vermelho, como na praça. */
-  function portalDaPraca(ordem, eixoZ, cache) {
-    var D = DATA(), ds = D.dungeons || [], dg = ds[ordem] || null;
-    var cor = (JOGO.Hub && JOGO.Hub.corDoTema) ? JOGO.Hub.corDoTema(dg && dg.theme) : '#d8dee4';
-    var fechado = !!(dg && D.portalFechado && D.portalFechado(dg.id));
+   * e o X vermelho, como na praça.
+   * 19/09: `campo` monta o PORTÃO DO CAMPO DE PVP — o mesmo arco, vermelho (#e0352b, a cor
+   * da entrada na praça 3D), sem Fecho por trás (não procura DATA.dungeons) e nunca
+   * fechado: na praça 3D ele virou o sétimo dente do arco dos portais, e no tabuleiro
+   * ocupa a mesma coluna da borda oeste, entre o portal 0 e a Arena. */
+  function portalDaPraca(ordem, eixoZ, cache, campo) {
+    var D = DATA(), ds = D.dungeons || [], dg = campo ? null : (ds[ordem] || null);
+    var cor = campo ? '#e0352b'
+            : (JOGO.Hub && JOGO.Hub.corDoTema) ? JOGO.Hub.corDoTema(dg && dg.theme) : '#d8dee4';
+    var fechado = !campo && !!(dg && D.portalFechado && D.portalFechado(dg.id));
     var g = new THREE.Group();
     g.add(malha(new THREE.CylinderGeometry(0.92, 1.06, 0.34, 20), pracaMat(cache, 'portal-base', '#4a443c'), 0, 0.17, 0));
     var R0 = 1.12, T0 = 0.22, cy = WALL_H - R0 - T0;
@@ -1186,8 +1192,12 @@ var JOGO = (typeof window !== 'undefined')
       }
     } else if (pc.papel === 'portal') {
       no = portalDaPraca(pc.ordem | 0, eixoZDoPortal('portal_mureta'), cache);
+    } else if (pc.papel === 'portal_campo') {
+      // 19/09: o portão do Campo de PvP — vermelho, sem Fecho, nunca fechado
+      no = portalDaPraca(0, eixoZDoPortal('portal_mureta'), cache, true);
     } else if (pc.papel === 'portal_mureta') {
-      no = muretaDaPraca(eixoZDoPortal('portal'), cache);
+      // a mureta acompanha o eixo do arco que ela ladeia: um portal OU o portão do Campo
+      no = muretaDaPraca(eixoZDoPortal('portal') || eixoZDoPortal('portal_campo'), cache);
     } else if (pc.papel === 'banco_praca') {
       no = bancoDePedra(rot90, cache);
     } else if (pc.papel === 'raiz') {
@@ -3116,6 +3126,59 @@ var JOGO = (typeof window !== 'undefined')
   /* O toque numa CASA (já resolvida da tela): a mesma porta do clique, exposta
    * para as páginas de prova baterem na casa sem projetar pixels. */
   R._tapCasa = function (x, y, tipo) { if (!R.isBusy()) tapCasa({ x: x, y: y }, tipo || 'mouse'); };
+  /* AS CASAS NO ALCANCE MAS SEM VISÃO (19/09): do motor (Engine.casasSemVisao, que devolve
+   * cada casa com o muro que a bloqueia) ou, num motor sem ela, medidas aqui — as casas de
+   * chão dentro da distância (e da linha) do feitiço que o alcance pintado não trouxe e
+   * que Engine.los recusa. `range` é a lista já pintada (spellRange), para não repetir. */
+  function casasSemVisao(st, u, spellId, spell, range) {
+    var en = engine();
+    if (!en || !st || !u) return [];
+    var lista = safe(function () { return en.casasSemVisao ? en.casasSemVisao(st, u.uid, spellId) : null; }, null);
+    if (lista) return lista;
+    if (!en.los || !spell || !range || !st.grid) return [];
+    var rg = spell.range || en.RANGE_PADRAO || { min: 0, max: 1 };
+    if (rg.los === false) return [];
+    var tem = {}, out = [];
+    for (var i = 0; i < range.length; i++) tem[range[i].x + ',' + range[i].y] = 1;
+    var min = rg.min || 0, max = (rg.max != null) ? rg.max : 1;
+    for (var y = 0; y < st.grid.h; y++) for (var x = 0; x < st.grid.w; x++) {
+      var t = st.grid.tiles[y] && st.grid.tiles[y][x];
+      if (!t || t.type !== 'floor' || tem[x + ',' + y]) continue;
+      var d = Math.abs(x - u.x) + Math.abs(y - u.y);
+      if (d < min || d > max) continue;
+      if (rg.line && !(x === u.x || y === u.y)) continue;
+      if (safe(function () { return en.los(st, u.x, u.y, x, y); }, true)) continue;
+      out.push({ x: x, y: y, muro: en.muroNaLinha ? safe(function () { return en.muroNaLinha(st, u.x, u.y, x, y); }, null) : null });
+    }
+    return out;
+  }
+  /* POR QUE A CONJURAÇÃO NÃO SAIU (19/09). O passo tem explainNoStep no motor; a
+   * conjuração recusada só devolvia false, e a casa atrás do muro ficava muda. Devolve o
+   * motivo quando a casa tocada está no alcance do feitiço escolhido mas sem linha de
+   * visão ("Sem linha de visão: muro em (x,y)."), ou null. O toque o põe no registro da
+   * batalha ANTES de chegar ao jogo, porque o jogo desmarca o feitiço na casa inválida. */
+  R.explainNoCast = function (x, y) {
+    var g = game(), en = engine(), st = state();
+    if (!g || !g.selectedSpellId || !en || !st) return null;
+    var u = safe(function () { return en.activeUnit ? en.activeUnit(st) : null; }, null);
+    if (!u) return null;
+    var spellId = g.selectedSpellId;
+    var spell = safe(function () { return en.spell ? en.spell(spellId) : null; }, null) || (DATA().spells && DATA().spells[spellId]) || null;
+    var range = safe(function () { return en.spellRange ? en.spellRange(st, u.uid, spellId) : null; }, null);
+    var lista = casasSemVisao(st, u, spellId, spell, range);
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].x !== x || lista[i].y !== y) continue;
+      var m = lista[i].muro;
+      return 'Sem linha de visão' + (m ? ': muro em (' + m.x + ',' + m.y + ')' : '') + '.';
+    }
+    return null;
+  };
+  function explicaToque(x, y) {
+    var motivo = R.explainNoCast(x, y);
+    if (!motivo) return;
+    var en = engine();
+    try { if (en && en.log) en.log(motivo); } catch (e) {}
+  }
   function tapCasa(t, tipo) {
     var g = game(); if (!g || !g.onTileClicked || !t) return;
     // na ESCOLHA DA POSIÇÃO (03/09) o toque é direto, também no dedo: não há
@@ -3123,11 +3186,12 @@ var JOGO = (typeof window !== 'undefined')
     var stT = state();
     if (stT && stT.phase === 'placing') { g.onTileClicked(t.x, t.y); return; }
 
-    if (!modoToque(tipo)) { g.onTileClicked(t.x, t.y); return; }
+    if (!modoToque(tipo)) { explicaToque(t.x, t.y); g.onTileClicked(t.x, t.y); return; }
 
     var sig = assinaturaMira();
     if (mira && mira.x === t.x && mira.y === t.y && mira.sig === sig) {
       mira = null;
+      explicaToque(t.x, t.y);
       g.onTileClicked(t.x, t.y);
       if (g.onTileHover) g.onTileHover(-1, -1);
       ovSig = '';
@@ -3645,6 +3709,15 @@ var JOGO = (typeof window !== 'undefined')
           if (hv && range[rr].x === hv.x && range[rr].y === hv.y) noAlcance = true;
         }
       }
+      /* 19/09: AS CASAS NO ALCANCE MAS SEM LINHA DE VISÃO, com cor própria. spellRange já
+       * filtra pela visão, então a casa atrás do muro simplesmente não era pintada e o
+       * jogador via o alcance "recortado" sem saber se era distância, linha ou parede
+       * ("eu não consigo mas ele consegue"). A lista vem do motor (Engine.casasSemVisao:
+       * cada casa que passa por distância e linha e cai só pela visão, com o muro que a
+       * bloqueia) ou, sem ele, é medida aqui com Engine.los. Cinza-azulado, num quadrado
+       * menor (0,55) que o do alcance: lê como "chega, mas há muro no caminho". */
+      var semVisao = casasSemVisao(st, active, spellId, spell, range);
+      for (var sv = 0; sv < semVisao.length; sv++) ovTile(semVisao[sv].x, semVisao[sv].y, '#9aa3ad', 0.16, 0.06, 0.55);
 
       // ALVOS por cima, forte: quem dá para acertar de verdade.
       var targets = safe(function () { return en.castTargets ? en.castTargets(st, active.uid, spellId) : null; }, null);

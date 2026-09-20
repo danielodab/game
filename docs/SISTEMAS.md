@@ -45,15 +45,67 @@ O chão de cada sala é desenhado como **texto**, num retângulo de 21×17 a 27�
 |---|---|
 | `.` | chão |
 | `,` | chão decorado |
-| `#` | obstáculo **alto** — bloqueia passagem **e visão** |
-| `=` | obstáculo **baixo** — bloqueia passagem, **não** bloqueia visão (cobertura) |
-| `~` | vazio/buraco — dá para empurrar alguém para dentro |
+| `#` | obstáculo **alto** — bloqueia passagem **e visão**; dois `#` encostados só pelo canto também fecham a fresta entre eles |
+| `=` | obstáculo **baixo** — bloqueia passagem, **não** bloqueia visão; quem está encostado nele e é atingido por cima dele tem **cobertura −25%** |
+| `~` | vazio/buraco — dá para empurrar alguém para dentro; não bloqueia visão |
 | `P` | onde o herói nasce |
 | `a`–`z` | onde cada monstro nasce |
 
 A diferença entre `#` e `=` é o que faz posicionamento importar: atrás de um
 obstáculo baixo você é atingível mas tem cobertura; atrás de um alto, ninguém te
 vê.
+
+### A visão (19/09)
+
+O que "obstáculos atrapalham" quer dizer no motor, medido em **todas** as salas
+(`tests/visao_mapas.js`, sobre o motor do juiz em Node):
+
+- **Simétrica e estrita.** `Engine.los(A,B)` traça de A a B **e** de B a A, e os
+  dois têm de passar. Quem vê é visto. Antes o traçado de um sentido só deixava
+  5.768 pares (2,7%) em que A via B e B não via A — o arqueiro acertava o monstro
+  e o monstro, da mesma casa, não acertava o arqueiro.
+- **Só `#` bloqueia.** `=`, buraco, armadilha e evento de chão não. O muro
+  invocado (o Minotauro) vira `#` enquanto vive e devolve a visão ao cair.
+- **A fresta de canto está fechada.** Dois `#` encostados só pelo canto não
+  deixam a visão passar entre eles (eram 325 pares em 8 cantos). Não é o
+  supercover: esse tiraria 8,9% da visão do jogo inteiro.
+- **A área não atravessa muro.** Toda casa da área precisa de visão a partir do
+  **centro do impacto**, em todas as formas; a casa do centro entra sempre; a
+  linha para no primeiro muro. A explosão contorna a esquina, mas não fura a
+  parede. Exceção nomeada: o Julgamento do Mestre.
+- **Cobertura −25%.** Se o alvo está encostado (ortogonal) num `=` e o traçado de
+  onde o golpe **sai** até ele entra por esse `=` (a última casa antes do alvo é a
+  mureta), o dano dos efeitos de dano (`damage`, `chain`, `detonateMarks`) perde
+  25% — arredonda para baixo, nunca abaixo de 1. "De onde o golpe sai" é a mesma
+  casa de onde a visão daquele golpe é exigida: o **conjurador** (onde ele está na
+  hora do golpe: o Salto de Brasa bate cheio ao cair encostado) para o alvo na
+  casa do centro; o **centro do impacto** para as outras casas da área; a
+  **vítima anterior** para cada salto do raio. Uma mureta que só está na linha do
+  conjurador não cobre o salto nem a casa da área, e uma que está entre o centro
+  e a vítima cobre mesmo que o conjurador nem veja a vítima. O corte é sobre o
+  dano **já escalado pela dificuldade** (um só lugar, `dealDamage`: no difícil, o
+  tiro de 10 vira 14 e a mureta o deixa em 10, −4). O evento de dano leva
+  `coberto: true` e `reducao`, e o log diz "cobertura −25% (−N)" com o mesmo N.
+  Cura, controle, invocação e auto-alvo não mudam; corpo a corpo encostado nunca
+  é coberto (o traçado não cruza casa nenhuma). `Engine.coberto(state, x0, y0,
+  x1, y1)` responde.
+- **O raio e a explosão também respeitam o muro.** O raio em cadeia só salta para
+  quem a vítima de agora vê; a explosão de morte (`explodeOnDeath`) só fere quem
+  vê a bomba. Nenhum dos dois contorna ou fura um `#`.
+- **Todo feitiço com alcance > 0 exige `los`.** Os validadores cobram; a única
+  exceção nomeada é `gm-julgamento`. Um feitiço sem `range` cai em
+  `Engine.RANGE_PADRAO` (`{min: 0, max: 1, line: false, los: true}`), no motor,
+  na IA e na fusão — com max 1 o `los` não decide nada hoje (casas encostadas
+  sempre se veem); é o cinto para um `range` futuro sem `los`.
+- **A tela sabe o porquê.** `Engine.casasSemVisao(state, uid, spellId)` devolve
+  as casas no alcance (distância e linha) que caem só pela visão, cada uma com o
+  primeiro muro que a bloqueia (`{x, y, muro: {x, y}}`), para o tabuleiro pintar
+  "no alcance mas sem visão" com cor própria.
+- **A IA mira o chão.** Com um feitiço de área ela pode largar a explosão entre
+  dois heróis, como o motor já permitia ao jogador.
+
+O juiz refaz a sala com esta mesma função, então mudar a visão muda o fim de
+salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1).
 
 ### Alcance e área
 
@@ -176,10 +228,11 @@ sem evento de morte e **sem contar derrota**.
 
 ### Os números
 
-- **15 duplas** possíveis (as combinações de 6 classes 2 a 2).
-- **105 formas** — 7 por dupla, nos degraus **0, 5, 10, 12, 15, 20, 30**.
-- **16 misturas** elementais (os pares de elemento dos dois heróis).
-- **105 × 25 = 2.625 feitiços compostos.**
+- **21 duplas** possíveis (as combinações de 7 classes 2 a 2 — o Minotauro entrou).
+- **147 formas** — 7 por dupla, nos degraus **0, 5, 10, 12, 15, 20, 30**.
+- **25 misturas** elementais (os pares ORDENADOS de elemento dos dois heróis,
+  `A+B`, com os 5 elementos).
+- **147 × 25 = 3.675 feitiços compostos** (medido no motor, 19/09).
 
 ### Forma × mistura
 

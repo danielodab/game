@@ -57,7 +57,8 @@ function fecha(corpo) {
     dungeonId: b.dungeonId, roomIndex: b.roomIndex, dificuldade: b.dificuldade || 'normal',
     semente: b.semente, party, carry: b.carry || null,
     escolhePosicao: b.escolhePosicao !== false,
-    lances: c.lances, hashFinal: c.hashFinal
+    lances: c.lances, hashFinal: c.hashFinal,
+    regras: b.regras            // 19/09: a versão das regras guardada no bilhete (sala.js confere)
   });
 
   // 3. a recompensa pelo funil do jogo
@@ -165,7 +166,8 @@ function fechaGrupo(corpo) {
     modo: 'grupo', colocador: lider.m.dono,
     dungeonId: ata.dungeonId, roomIndex: ata.roomIndex, dificuldade: ata.dificuldade || 'normal',
     semente: ata.semente, party: JSON.parse(JSON.stringify(party)), carry: ata.carry || null,
-    carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal
+    carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal,
+    regras: ata.regras          // 19/09: a versão das regras da ata, quando a API a guardar (sala.js confere)
   });
   const final = JSON.stringify(r.estado);
   // 14/09, a vida única: o PV do fim (dono:heroId) e o máximo em qualquer fim refeito, não só na vitória

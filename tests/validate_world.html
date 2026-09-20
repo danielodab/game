@@ -174,6 +174,14 @@
     var collide = keys(MS).filter(function (id) { return has(D.spells, id); });
     check('nenhum id de feitiço de monstro colide com DATA.spells (Criativo Classes)',
       collide.length === 0, collide.join(', '));
+    // 19/09: a mesma régua da visão para os feitiços de classe (só leitura aqui; a prova por mapa é
+    // tests/visao_mapas.js, que também cobre pets, itens e as fusões compostas)
+    var semLos = keys(D.spells).filter(function (id) {
+      var r = D.spells[id] && D.spells[id].range;
+      return !!r && r.max > 0 && r.los !== true && id !== 'gm-julgamento';
+    });
+    check('DATA.spells: todo feitiço com alcance > 0 exige los:true (exceção nomeada: gm-julgamento)',
+      semLos.length === 0, semLos.join(', '));
   }
 
   function validateEffects(label, effects) {
@@ -218,6 +226,12 @@
     check(L + ': range completo',
       !!s.range && typeof s.range.min === 'number' && typeof s.range.max === 'number' &&
       s.range.max >= s.range.min && typeof s.range.line === 'boolean' && typeof s.range.los === 'boolean');
+    // 19/09: alcance > 0 EXIGE linha de visão — a regra valia por disciplina de autoria (3.388/3.388) e nenhum
+    // validador cobrava; um monstro novo com los:false e alcance 5 passaria a atirar através de paredes sem aviso.
+    // A única exceção nomeada é o Julgamento do Mestre (gm.js), que nem mora aqui.
+    check(L + ': alcance > 0 ⇒ los:true (exceção nomeada: gm-julgamento)',
+      !s.range || !(s.range.max > 0) || s.range.los === true || id === 'gm-julgamento',
+      s.range && ('alcance ' + s.range.min + '–' + s.range.max + ' com los ' + s.range.los));
     check(L + ': aoe.shape válido', !!s.aoe && inList(s.aoe.shape, SHAPES), s.aoe && String(s.aoe.shape));
     check(L + ': aoe.size numérico', !!s.aoe && typeof s.aoe.size === 'number');
     check(L + ': needsEmptyTile booleano', typeof s.needsEmptyTile === 'boolean');

@@ -1690,6 +1690,14 @@ var JOGO = (typeof window !== 'undefined')
           addShake(Math.min(9, 2.2 + ev.amount * 0.08));
           if (ev.amount >= 45) freezeT = Math.max(freezeT, 0.07);
         }
+        /* 19/09: A COBERTURA BAIXA. O motor manda `coberto: true` (e a `reducao`) quando a
+         * vítima estava atrás de um '=' (Engine.coberto): o número menor precisa de um
+         * porquê na tela, senão parece dano errado. Um segundo flutuante, miúdo e cinza,
+         * logo abaixo do número: "cobertura −25%". */
+        if (ev.coberto) {
+          floater({ x: p.x, y: p.y - 0.55, z: p.z },
+                  'cobertura −' + ((JOGO.Engine && JOGO.Engine.COBERTURA_PCT) || 25) + '%', '#b8c4d0', false);
+        }
         break;
       }
 

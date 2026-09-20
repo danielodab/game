@@ -42,7 +42,9 @@ var JOGO = (typeof window !== 'undefined')
    * ao lado dela. Círculos {x, z, r}, a mesma conta da parede das
    * construções: barato de testar e suficiente para uma peça de cenário. */
   var solidos = [];
-  function marcaSolido(x, z, r) { solidos.push({ x: x, z: z, r: r }); }
+  // 19/09: `dono` (o id do lugar) diz de quem é o sólido — a prova do corredor do
+  // portão do Campo ignora os dele mesmo ao medir a folga da base do arco
+  function marcaSolido(x, z, r, dono) { solidos.push({ x: x, z: z, r: r, dono: dono || null }); }
   // A ANTESSALA (03/09): a mesma máquina da praça monta o PÁTIO de uma sala
   // do calabouço — null = praça; 'garden:1' = antessala da sala 2 da Estufa
   var RAIO_SALA = 15;
@@ -108,8 +110,23 @@ var JOGO = (typeof window !== 'undefined')
    * com os corredores dos portais ocupando 15 m para dentro do arco, a arena
    * de 24 m de vão não tinha como ficar no oeste sem invadir um deles. Com
    * 50, o arco dos portais, a arena, a Sede e a rua das barracas ficam em
-   * quatro faixas que não se encostam. */
-  var RAIO_MAPA = 50;
+   * quatro faixas que não se encostam.
+   * 19/09 (dono, com foto: "melhore a praça central pois o portal do mapa pvp
+   * está no meio... se for necessário aumente o mapa geral para encaixar esse
+   * pvp. Os portais de calabouços e muros preciso manter nesse padrão"). A
+   * praça foi de 50 para 58 (lado 116 m): a entrada do Campo deixou o gramado
+   * de dentro do anel e virou o SÉTIMO PORTÃO do arco, com o mesmo corredor
+   * dos portais — e um corredor de 20 m de fundo por 11 de boca não cabia no
+   * oeste sem o mapa crescer E o quarteirão da batalha (Arena, Poço, Forja)
+   * descer para o canto sudoeste. Medido (scratchpad/praca_geo.js): 54 é o
+   * menor R em que todas as réguas fecham (sobra 0,57 m); com 58 a pior sobra
+   * é 1,66 m, margem para a arte girar. O arco dos seis NÃO mudou (mesmos
+   * ângulos, passo e ordem): só o raio dele cresce com R. */
+  var RAIO_MAPA = 58;
+  /* O ARCO DOS PORTAIS, num lugar só: o primeiro ângulo, o passo entre vizinhos
+   * e o raio (fração do meio-lado). montaPortais lê daqui e o portão do Campo
+   * é o dente seguinte do mesmo leque (PRACA.campo = ARCO_A0 - ARCO_PASSO). */
+  var ARCO_A0 = -1.10, ARCO_PASSO = 0.44, ARCO_R = 0.75;
   /* o tronco da Árvore-Mundo é SÓLIDO: quem anda desliza por fora dele */
   var TRONCO_RAIO = 4.6;
   /* AS MEDIDAS DO CORREDOR DO PORTAL, num lugar só — a prova
@@ -128,25 +145,32 @@ var JOGO = (typeof window !== 'undefined')
     muroR: 1.9,        // o raio sólido de uma peça de muro
     alt: 3.4           // a altura do muro
   };
-  /* AS CONTAS QUE FIXARAM ESSES NÚMEROS (12/09) — medidas, não gosto:
+  /* AS CONTAS QUE FIXARAM ESSES NÚMEROS (12/09, com RAIO_MAPA 50) — medidas,
+   * não gosto. Os números entre parênteses são os de hoje (19/09, R 58: o
+   * arco cresceu com o mapa e as folgas só aumentaram):
    *   · os portais vizinhos do arco estão a 2·37,5·sen(0,22) = 16,37 m um do
-   *     outro (e NÃO os ~13 m que um comentário antigo dizia: aquilo era com
-   *     RAIO_MAPA 40). A corda cresce com a profundidade: 15,05 m em d=-3,2.
+   *     outro (hoje 2·43,5·sen(0,22) = 18,99 m) — e NÃO os ~13 m que um
+   *     comentário antigo dizia: aquilo era com RAIO_MAPA 40. A corda cresce
+   *     com a profundidade: 15,05 m em d=-3,2 (hoje 17,6).
    *   · uma câmara de 6,6 de meia-largura punha os muros de duas saletas
    *     vizinhas a 2,87 m entre centros — sólidos de 1,9 sobrepostos em
    *     0,93 m, a cunha entre os corredores desaparecendo e o arco virando
-   *     parede corrida. Com 5,2 sobra ~1,2 m de folga real.
+   *     parede corrida. Com 5,2 sobrava ~1,2 m de folga real (hoje 8,23 m
+   *     entre os muros das câmaras vizinhas).
    *   · o corredor encurtou de 15 para 12,5 porque na boca a corda é menor
-   *     (10,9 m em d=-12,5): com 15 as duas bocas se interpenetravam — os
-   *     pilares ficavam a 1,4 m entre centros. Com 12,5 e a boca fechando
-   *     para 3,6 sobram 3,7 m entre pilares vizinhos. */
+   *     (10,9 m em d=-12,5; hoje 13,5): com 15 as duas bocas se
+   *     interpenetravam — os pilares ficavam a 1,4 m entre centros. Com 12,5
+   *     e a boca fechando para 3,6 sobravam 3,7 m entre pilares vizinhos
+   *     (hoje 6,24). */
 
   /* A câmera 3D: a MESMA gramática da batalha — arrastar orbita e inclina,
    * roda dá zoom, toque curto age. Orbita em volta DO HERÓI: no mapa aberto o
    * corpo é a âncora, e deslocar o pivô para longe do próprio personagem é se
-   * perder num minimapa. maxDist acompanhou o mapa novo. */
+   * perder num minimapa. maxDist acompanhou o mapa novo (19/09: 56 para o
+   * meio-lado 58 — a mesma proporção de 48 para 50, "afastar até ver quase
+   * tudo"; a névoa começa a 1,4·R e não engole o afastamento máximo). */
   var cam = { ang: 0.0, tilt: 0.95, dist: 20,
-              minDist: 7, maxDist: 48, minTilt: 0.35, maxTilt: 1.25 };
+              minDist: 7, maxDist: 56, minTilt: 0.35, maxTilt: 1.25 };
   var TAP_PX = 6;                   // o mesmo limiar clique/arrasto da batalha
 
   // ---------------------------------------------------------------- utilidades
@@ -200,7 +224,9 @@ var JOGO = (typeof window !== 'undefined')
    * O tom de cada pedra sai de um hash do índice — nada de Math.random,
    * a praça é a mesma em toda visita. Um tile de 256px cobre 4×4 m e se
    * repete: em 80 m são 20 repetições, longe o bastante para o olho não
-   * pegar o carimbo. */
+   * pegar o carimbo. Desde 12/09 a praça é de grama e esta textura veste só
+   * o pátio da ANTESSALA (30 m): a repetição é FIXA (19/09) — era RAIO_MAPA/2
+   * e a lajota da antessala encolhia toda vez que a praça crescia. */
   var texLajotas = null;
   function texturaLajotas() {
     if (texLajotas) return texLajotas;
@@ -210,7 +236,7 @@ var JOGO = (typeof window !== 'undefined')
     var tex = new THREE.CanvasTexture(cv);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(RAIO_MAPA / 2, RAIO_MAPA / 2);
+    tex.repeat.set(25, 25);
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     texLajotas = tex;
     return tex;
@@ -955,12 +981,21 @@ var JOGO = (typeof window !== 'undefined')
     return { g: g, miolo: miolo };
   }
   /* A ENTRADA DO CAMPO NA PRAÇA (14/09, "um portal de pedra com brilho VERMELHO perto da
-   * Arena"). Mora no gramado de dentro do anel de avenida, do lado da Arena: por fora do
-   * anel não havia vão — entre a Arena (24 m de coliseu) e o corredor do primeiro portal
-   * sobravam 3,6 m, e um arco de 5,7 m não cabe sem encostar. Por dentro, a base (2,86 m
-   * de raio no porte 1,3×) fica a mais de 0,5 m do disco da Árvore e do anel, e a 5 m da
-   * avenida da Arena (PRACA.campo; tests/paredes.html mede as folgas). Encara a Árvore,
-   * como os outros portais, e não tem parede: entra-se nele. */
+   * Arena"). Nasceu no gramado de dentro do anel, do lado da Arena, porque por fora não
+   * havia vão: entre a Arena e o corredor do primeiro portal sobravam 3,6 m (R 50).
+   * 19/09 (dono, com foto: "melhore a praça central pois o portal do mapa pvp está no
+   * meio... se for necessário aumente o mapa geral para encaixar esse pvp"): virou o
+   * SÉTIMO PORTÃO DO ARCO — um passo a oeste do portal 0 (PRACA.campo), encarando a
+   * Árvore como os outros, no mesmo porte 1,3×, e com o MESMO corredor murado dos
+   * portais abertos (plantaCantinhos lê o lugar pelo `portao` e pelo `tema`: os muros do
+   * catálogo do Campo, campoCfg().tema). A diferença é o que fica no fim: em vez do
+   * chefe, dois braseiros e duas bandeiras vermelhas — é o lugar da luta entre jogadores,
+   * não a boca de um Fecho. O arco continua vermelho e sem parede (entra-se nele); o raio
+   * de conversa foi de 4,6 para 6,4, o de portal aberto, porque a câmara tem 10 m de fundo
+   * e com 4,6 o painel ficava mudo atrás do arco. Folgas (R 58, medidas): câmara↔câmara
+   * do portal 0 8,23 m; conversa 6,4 ↔ 6,4 do portal 0 sobra 6,19; ↔ Arena (13) sobra
+   * 8,84; pegada do corredor ↔ caixa da Arena 11,64 (tests/paredes.html e corredores.html
+   * cobram). */
   function montaEntradaCampo() {
     if (!PRACA.campo) return;
     var pp = pontoDaPraca('campo');
@@ -972,8 +1007,9 @@ var JOGO = (typeof window !== 'undefined')
     a.g.lookAt(0, 0, 0);
     a.g.scale.setScalar(1.3);
     scene.add(a.g);
-    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP',
-                   pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 4.6, node: a.g, miolo: a.miolo });
+    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP', portao: true,
+                   tema: campoCfg().tema === 'cistern' ? 'cistern' : 'garden',   // o catálogo que veste o corredor
+                   pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 6.4, node: a.g, miolo: a.miolo });
   }
   /* A CENA DO CAMPO (19/09, reescrita — dono, com foto: "o mapa pvp está muito ruim"). O
    * que havia: uma caixa de tijolo por muro do desenho, quatro caixas compridas de borda,
@@ -1259,6 +1295,48 @@ var JOGO = (typeof window !== 'undefined')
     g.userData.bandeira = i;
     return g;
   }
+  /* UM BRASEIRO COM A LUZ NO CHÃO (19/09, tirado de montaCampo para servir também ao
+   * portão do Campo na praça): a tocha de pé do kit (K.buildBrazier: poste, chama e o
+   * halo que pulsa) ou, sem kit, o poste com a chama de antes — e um disco de luz PINTADA
+   * (sem PointLight, que no celular custaria a cena inteira). Devolve as duas peças
+   * soltas, `br` e `luz`, porque o Campo instancia cada uma por geometria. */
+  var braseiroLuz = null;
+  function braseiroComLuz(tema, i) {
+    if (!texBrilhoTocha) {
+      texBrilhoTocha = fazTexRadial([[0, 'rgba(255,214,140,1)'], [0.3, 'rgba(255,150,60,0.55)'], [1, 'rgba(255,90,20,0)']]);
+    }
+    if (!braseiroLuz) {
+      braseiroLuz = {
+        mat: new THREE.MeshBasicMaterial({ map: texBrilhoTocha, transparent: true, opacity: 0.3,
+                                           blending: THREE.AdditiveBlending, depthWrite: false }),
+        geo: new THREE.PlaneGeometry(7.5, 7.5),
+        matPoste: new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 1 })
+      };
+    }
+    var Kt = K(), br = null;
+    if (Kt && Kt.isReady && Kt.isReady() && Kt.buildBrazier) {
+      try { br = Kt.buildBrazier(tema === 'cistern' ? 'cistern' : 'garden', i); } catch (e) { br = null; }
+    }
+    if (!br) {
+      // sem kit: o poste com a chama de antes
+      br = new THREE.Group();
+      var poste = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 2.3, 8), braseiroLuz.matPoste);
+      poste.position.y = 1.15;
+      br.add(poste);
+      var chama = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 8), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+      chama.position.y = 2.55;
+      br.add(chama);
+      var brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
+        depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
+      brilho.scale.setScalar(2.4);
+      brilho.position.y = 2.6;
+      br.add(brilho);
+    }
+    var luz = new THREE.Mesh(braseiroLuz.geo, braseiroLuz.mat);
+    luz.rotation.x = -Math.PI / 2;
+    luz.userData.semCaixa = true;            // é luz no chão, não corpo: a prova de folga não a mede
+    return { br: br, luz: luz };
+  }
   function refazInstanciasDoCampo(obra) {
     if (obra.instancias) {
       obra.cena.remove(obra.instancias);
@@ -1382,39 +1460,15 @@ var JOGO = (typeof window !== 'undefined')
     });
 
     // ---- os braseiros (as `tochas` do desenho) e o disco de luz no chão de cada um
-    if (!texBrilhoTocha) {
-      texBrilhoTocha = fazTexRadial([[0, 'rgba(255,214,140,1)'], [0.3, 'rgba(255,150,60,0.55)'], [1, 'rgba(255,90,20,0)']]);
-    }
-    var Kt = K(), kitPronto = !!(Kt && Kt.isReady && Kt.isReady() && Kt.buildBrazier);
-    var matLuz = new THREE.MeshBasicMaterial({ map: texBrilhoTocha, transparent: true, opacity: 0.3,
-                                              blending: THREE.AdditiveBlending, depthWrite: false });
-    var geoLuz = new THREE.PlaneGeometry(7.5, 7.5);
-    var matPoste = kitPronto ? null : new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 1 });
+    // (19/09: a peça saiu para braseiroComLuz — o portão do Campo na praça usa a mesma)
     C.tochas.forEach(function (t, i) {
-      var x = +t.x || 0, z = +t.z || 0, br = null;
-      if (kitPronto) { try { br = Kt.buildBrazier(tema === 'cistern' ? 'cistern' : 'garden', i); } catch (e) { br = null; } }
-      if (!br) {
-        // sem kit: o poste com a chama de antes
-        br = new THREE.Group();
-        var poste = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 2.3, 8), matPoste);
-        poste.position.y = 1.15;
-        br.add(poste);
-        var chama = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 8), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
-        chama.position.y = 2.55;
-        br.add(chama);
-        var brilho = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
-          depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
-        brilho.scale.setScalar(2.4);
-        brilho.position.y = 2.6;
-        br.add(brilho);
-      }
-      br.position.set(x, 0, z);
-      br.rotation.y = i * 0.7;
-      obra.fixos.push(br);
-      var luz = new THREE.Mesh(geoLuz, matLuz);
-      luz.rotation.x = -Math.PI / 2;
-      luz.position.set(x, 0.04, z);
-      obra.fixos.push(luz);
+      var x = +t.x || 0, z = +t.z || 0;
+      var b = braseiroComLuz(tema, i);
+      b.br.position.set(x, 0, z);
+      b.br.rotation.y = i * 0.7;
+      obra.fixos.push(b.br);
+      b.luz.position.set(x, 0.04, z);
+      obra.fixos.push(b.luz);
       marcaSolido(x, z, 0.45);
       obra.braseiros++;
     });
@@ -1613,12 +1667,14 @@ var JOGO = (typeof window !== 'undefined')
       // arco de -63° a +63°, ao norte (z negativo), a 3/4 do meio-lado.
       // No mapa antigo sobrava 0,5 m entre as zonas de conversa de dois
       // portais vizinhos — era a queixa dos "portais colados". Agora cada
-      // vizinho fica a ~13 m do outro, com espaço para o cantinho temático
-      // — e os extremos não descem tanto a ponto de a Sede e a Arena os
-      // taparem da câmera padrão.
-      var ang = (-1.10 + (2.20 * i / Math.max(1, n - 1)));
-      var px = Math.sin(ang) * RAIO_MAPA * 0.75;
-      var pz = -Math.cos(ang) * RAIO_MAPA * 0.75;
+      // vizinho fica a 18,99 m do outro (19/09, R 58; era 16,37 em R 50),
+      // com espaço para o cantinho temático — e os extremos não descem
+      // tanto a ponto de a Sede e a Arena os taparem da câmera padrão.
+      // 19/09: o padrão do arco (ARCO_A0, ARCO_PASSO, ARCO_R) é o que o dono
+      // pediu para manter; o portão do Campo é o dente seguinte (i = -1).
+      var ang = ARCO_A0 + ARCO_PASSO * i;
+      var px = Math.sin(ang) * RAIO_MAPA * ARCO_R;
+      var pz = -Math.cos(ang) * RAIO_MAPA * ARCO_R;
       var cor = new THREE.Color(corDoTema(dg.theme));
 
       var g = new THREE.Group();
@@ -1675,9 +1731,9 @@ var JOGO = (typeof window !== 'undefined')
        * do corredor tem quase 10 m de fundo — 41% do piso dela ficava fora
        * do painel, então o jogador chegava ao lado do chefe e o portal ficava
        * mudo. Portal ABERTO (que tem câmara) passa a 6,4; o fechado, que é
-       * só o disco com o X, fica nos 4,2. O teto é 8,18 (metade dos 16,37 m
-       * entre vizinhos do arco): com 6,4 não há como dois portais disputarem
-       * o mesmo passo. */
+       * só o disco com o X, fica nos 4,2. O teto é 9,5 (metade dos 18,99 m
+       * entre vizinhos do arco; era 8,18 em R 50): com 6,4 não há como dois
+       * portais disputarem o mesmo passo. */
       lugares.push({ id: dg.id, tipo: 'portal', nome: dg.name || dg.id,
                      tema: dg.theme || null, fechado: fechado,
                      pos: new THREE.Vector3(px, 0, pz), raio: fechado ? 4.2 : 6.4,
@@ -1693,7 +1749,8 @@ var JOGO = (typeof window !== 'undefined')
    * de barracas colada no sul, com o Banco no meio dela e o Poço solto no
    * gramado. Agora a praça lê como uma bússola em volta da Árvore-Mundo:
    *   · NORTE — os portais (o arco de sempre);
-   *   · OESTE, o quarteirão da BATALHA — Arena, o Poço ao lado dela e a Forja
+   *   · OESTE, o quarteirão da BATALHA — na ponta oeste do arco o portão do
+   *     Campo de PvP (19/09) e, descendo, Arena, o Poço ao lado dela e a Forja
    *     (lutar, descer, forjar);
    *   · LESTE, o quarteirão do OURO E DA GUILDA — Sede, Banco e Mercadinho;
    *   · SUL — a entrada: a avenida onde o herói nasce termina na Barraquinha
@@ -1706,19 +1763,30 @@ var JOGO = (typeof window !== 'undefined')
    * portais, não terminar antes") — a obra cobre a ponta. Na Arena, só até
    * debaixo da muralha (a arena de terra fica limpa); no Poço, até a borda
    * de pedra. */
+  /* 19/09 (R 50 → 58, o portão do Campo no arco): o LESTE e o SUL só
+   * escalaram com o mapa (r × 1,16); o quarteirão OESTE desceu para o canto
+   * sudoeste — a Arena em -2,16 / 48 e a Forja em -2,85 / 51 — porque foi o
+   * que a busca em grade (scratchpad/varre2.js) achou de maior folga mínima:
+   * mais compacto (Arena 44, Forja 47) derrubava Arena↔Poço para 2,4 m. As
+   * folgas entre caixas medidas ficam em 5,7 m ou mais (Arena↔Poço 5,71,
+   * Poço↔Forja 5,66, Forja↔Barraquinha 6,03); a caixa da Arena fica a 2,05 m
+   * do meio-fio no canto e a da Forja a 3,25 — se a arte de uma delas trocar
+   * por outra mais larga, medir de novo antes de plantar. */
   var PRACA = {
-    arena:   { ang: -1.78, r: 36.0, frente: 9.8 },
+    arena:   { ang: -2.16, r: 48.0, frente: 9.8 },   // era (-1,78; 36) → (-39,9; 26,7), canto SO
     // o poço: a caixa medida abraça a armação de madeira, a base de pedra
     // tem só ~5 m — a 3,3 do centro a calçada parava na grama (foto do dono)
-    poco:    { ang: -2.40, r: 34.0, frente: 2.0 },
-    forja:   { ang: -2.80, r: 38.0, frente: 2.0 },
-    loteria: { ang: Math.PI, r: 40.0, frente: 1.2 },
-    mercado: { ang: 2.80, r: 38.0, frente: 2.0 },
-    banco:   { ang: 2.30, r: 35.0, frente: 2.5 },
-    sede:    { ang: 1.78, r: 36.0, frente: 3.0 },
-    // 14/09: a entrada do Campo de PvP, no gramado de dentro do anel, do lado da Arena
-    // (a conta das folgas está em montaEntradaCampo); a calçada vem da praça da Árvore
-    campo:   { ang: -1.42, r: 16.6, frente: 1.0 }
+    poco:    { ang: -2.62, r: 39.5, frente: 2.0 },   // era (-2,40; 34) → (-19,7; 34,3)
+    forja:   { ang: -2.85, r: 51.0, frente: 2.0 },   // era (-2,80; 38) → (-14,7; 48,9)
+    loteria: { ang: Math.PI, r: 46.5, frente: 1.2 }, // 40 × 1,16
+    mercado: { ang: 2.80, r: 44.0, frente: 2.0 },    // 38 × 1,16
+    banco:   { ang: 2.30, r: 40.5, frente: 2.5 },    // 35 × 1,16
+    sede:    { ang: 1.78, r: 42.0, frente: 3.0 },    // 36 × 1,16
+    // 19/09: o portão do Campo de PvP é o SÉTIMO DENTE do arco dos portais, um passo a
+    // oeste do portal 0 (ang -1,54, r 0,75·R = 43,5 → (-43,5; -1,3)) — o mesmo corredor,
+    // a mesma câmara, o mesmo porte (montaEntradaCampo e plantaCantinhos). Era o gramado
+    // de dentro do anel (-1,42; 16,6), "no meio" da praça, ao lado da Árvore (foto do dono).
+    campo:   { ang: ARCO_A0 - ARCO_PASSO, r: ARCO_R * RAIO_MAPA, frente: 1.0 }
   };
   function pontoDaPraca(id) {
     var p = PRACA[id];
@@ -1923,9 +1991,10 @@ var JOGO = (typeof window !== 'undefined')
   /* OS CAMINHOS DE PEDRA (13/09, "capriche" do dono no mapa novo): a praça
    * redonda em volta da Árvore-Mundo, um ANEL de avenida (r 22) que passa
    * na frente de todos os quarteirões, quatro avenidas ligando a praça ao
-   * anel — norte (os portais), a Arena, a Sede e a do sul, onde o herói
-   * nasce e que segue até a Barraquinha — e um RAMAL curto do anel até cada
-   * construção e cada portal. A primeira versão (uma avenida por lugar, 13
+   * anel — norte (os portais), oeste (o portão do Campo, desde 19/09; antes
+   * era a Arena), a Sede e a do sul, onde o herói nasce e que segue até a
+   * Barraquinha — e um RAMAL curto do anel até cada construção e cada
+   * portal. A primeira versão (uma avenida por lugar, 13
    * raios saindo da Árvore) virou uma estrela mecânica na foto aérea; o anel
    * lê como cidade. Sem caminho, o gramado era um tapete com prédios soltos.
    *
@@ -2058,8 +2127,12 @@ var JOGO = (typeof window !== 'undefined')
       }
       var cfg = PRACA[lg.id];
       if (!cfg) return;
-      // o Campo mora DENTRO do anel: o ramal dele sai da praça da Árvore, não do anel
-      var avenida = lg.id === 'arena' || lg.id === 'sede' || lg.id === 'loteria' || lg.id === 'campo';
+      /* 19/09: o Campo virou o portão da ponta oeste do arco, e a AVENIDA OESTE é a dele —
+       * sai da praça da Árvore, cruza o anel, entra pela boca do corredor e termina sob a
+       * base do arco (a bússola: N portais, O Campo, L Sede, S Barraquinha). A Arena saiu
+       * das avenidas e ganhou RAMAL do anel, como o Poço e a Forja — senão seriam cinco
+       * raios saindo da Árvore, a estrela mecânica da primeira versão. */
+      var avenida = lg.id === 'sede' || lg.id === 'loteria' || lg.id === 'campo';
       via(ang, avenida ? MIOLO_RAIO - 1 : ANEL_RAIO, r - cfg.frente);
     });
     malha(junta, new THREE.MeshStandardMaterial({ color: 0x5c5040, roughness: 1,
@@ -2433,7 +2506,9 @@ var JOGO = (typeof window !== 'undefined')
     plantaCantinhos = function () {
     if (!scene || scene !== cantinhoCena) return;
     lugares.forEach(function (lg, li) {
-      if (lg.tipo !== 'portal' || !lg.tema || lg.fechado) return;
+      // 19/09: o PORTÃO do Campo (tipo 'campo', com tema e `portao`) ganha o mesmo corredor
+      var portao = lg.tipo === 'campo' && !!lg.portao;
+      if ((lg.tipo !== 'portal' && !portao) || !lg.tema || lg.fechado) return;
       if (cantinhoFeito[lg.id]) return;
       var catT = JOGO.CENARIO && JOGO.CENARIO[lg.tema];
       if (!catT) return;
@@ -2441,11 +2516,17 @@ var JOGO = (typeof window !== 'undefined')
       // praça (pré-busca). Planta só com todas na mão — meio corredor não —
       // e o aviso do Models3D2 (aoChegar) chama de novo quando chegarem.
       var precisa = [catT.alto, catT.pilar, catT.sotaque_alto, catT.sotaque, catT.chao];
-      var falta = false;
+      var faltam = [];
       precisa.forEach(function (lista) {
-        (lista || []).forEach(function (ch) { if (!m2.rawScene(ch)) falta = true; });
+        (lista || []).forEach(function (ch) { if (!m2.rawScene(ch)) faltam.push(ch); });
       });
-      if (falta) return;
+      if (faltam.length) {
+        // 19/09: o portão do Campo veste o catálogo do Campo, que só desce com o Fecho
+        // daquele tema aberto (pré-busca); se um dia ele estiver fechado, o portão pede
+        // as peças por conta própria — como a cena do Campo já faz
+        if (portao) { try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(faltam); } catch (eP) {} }
+        return;
+      }
       cantinhoFeito[lg.id] = true;
 
       var px2 = lg.pos.x, pz2 = lg.pos.z;
@@ -2473,7 +2554,7 @@ var JOGO = (typeof window !== 'undefined')
         [lg2, -lg2].forEach(function (lado) {
           var q = pt(d, lado);
           var no = plantaTema(chave, COR_ALT, 4.6, q.x, q.z, angLado);
-          if (no) marcaSolido(q.x, q.z, CORREDOR.muroR);
+          if (no) marcaSolido(q.x, q.z, CORREDOR.muroR, lg.id);
         });
       }
       // O DEGRAU: sem ele a câmara abriria com um vão aberto de cada lado,
@@ -2487,7 +2568,7 @@ var JOGO = (typeof window !== 'undefined')
           var q = pt(CAM_DE, meio);
           // o teto de largura é o mesmo das fileiras (4,6): com 3,0 a peça
           // cedia a escala e saía 1 m mais baixa que os muros ao lado dela
-          if (plantaTema(chaveDeg, COR_ALT, 4.6, q.x, q.z, angDeg)) marcaSolido(q.x, q.z, 1.5);
+          if (plantaTema(chaveDeg, COR_ALT, 4.6, q.x, q.z, angDeg)) marcaSolido(q.x, q.z, 1.5, lg.id);
         });
       }
       // ---- O FUNDO, atrás do portal: três peças fechando a saída
@@ -2496,7 +2577,7 @@ var JOGO = (typeof window !== 'undefined')
         if (!chaveF) return;
         var q = pt(COR_FUNDO, lado);
         var angF = anguloDoMuro(chaveF, tx, tz);
-        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, angF)) marcaSolido(q.x, q.z, CORREDOR.muroR);
+        if (plantaTema(chaveF, COR_ALT, 4.6, q.x, q.z, angF)) marcaSolido(q.x, q.z, CORREDOR.muroR, lg.id);
       });
       // ---- OS PILARES na boca do corredor: a entrada tem de se ler de longe
       var pilar = pega(catT.pilar, 0);
@@ -2505,18 +2586,19 @@ var JOGO = (typeof window !== 'undefined')
         var lb = CORREDOR.bocaLarg;
         [lb, -lb].forEach(function (lado) {
           var q = pt(-COR_COMP - 0.6, lado);
-          if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, angP)) marcaSolido(q.x, q.z, 1.2);
+          if (plantaTema(pilar, 3.8, 2.2, q.x, q.z, angP)) marcaSolido(q.x, q.z, 1.2, lg.id);
         });
       }
       // ---- AS PEÇAS DENTRO: encostadas nos muros, nunca no meio da pista
       var dentro = [[-11.5, 3.0, 'sotaque'], [-7.0, -3.0, 'sotaque_alto'],
                     [-4.6, 3.1, 'sotaque'], [-12.5, -3.1, 'sotaque_alto']];
       dentro.forEach(function (it, ki) {
+        if (portao && (ki === 0 || ki === 3)) return;   // 19/09: no portão as duas vagas da boca são das bandeiras
         var chaveI = pega(catT[it[2]], ki);
         if (!chaveI) return;
         var q = pt(it[0], it[1]);
         var altI = it[2] === 'sotaque_alto' ? 2.6 : 1.5;
-        if (plantaTema(chaveI, altI, 2.4, q.x, q.z, ki * 1.4)) marcaSolido(q.x, q.z, 0.8);
+        if (plantaTema(chaveI, altI, 2.4, q.x, q.z, ki * 1.4)) marcaSolido(q.x, q.z, 0.8, lg.id);
       });
       // o CHÃO do corredor: peças rasas na pista, que não empurram ninguém
       [[-9.0, 0], [-5.0, 1.4], [-1.6, -1.6]].forEach(function (c, kc) {
@@ -2525,6 +2607,33 @@ var JOGO = (typeof window !== 'undefined')
         var q = pt(c[0], c[1]);
         plantaTema(chaoP, 0.55, 2.2, q.x, q.z, kc * 0.9);
       });
+      /* ---- O PORTÃO DO CAMPO (19/09) não tem chefe: no canto onde o chefe de um portal
+       * fica (d = CHEFE_D, atrás do arco) ficam DOIS BRASEIROS do kit, um de cada lado da
+       * câmara (t ±3,1 — o corpo de 0,8 fica a 1,3 m da face do muro de 5,2 e a 2,3 m da
+       * pista), com a luz pintada no chão; e por dentro dos pilares da boca DUAS BANDEIRAS
+       * VERMELHAS (as do Campo, bandeiraDoCampo, nas vagas dos dois enfeites da boca:
+       * d -12, t ±3, o pano encarando quem chega). Lê-se de longe como o lugar da luta
+       * entre jogadores, não como a boca de um Fecho. */
+      if (portao) {
+        [3.1, -3.1].forEach(function (lado, kb) {
+          var q = pt(CHEFE_D, lado);
+          var b = braseiroComLuz(lg.tema, kb);
+          b.br.position.set(q.x, 0, q.z);
+          b.br.rotation.y = kb * 0.7;
+          scene.add(b.br);
+          b.luz.position.set(q.x, 0.04, q.z);
+          scene.add(b.luz);
+          marcaSolido(q.x, q.z, 0.8, lg.id);
+        });
+        [3.0, -3.0].forEach(function (lado, kb) {
+          var q = pt(-12.0, lado);
+          var bd = bandeiraDoCampo(kb);
+          bd.position.set(q.x, 0, q.z);
+          bd.rotation.y = Math.atan2(-ux, -uz);
+          scene.add(bd);
+          marcaSolido(q.x, q.z, 0.35, lg.id);
+        });
+      }
 
     });
     /* O CHEFE tem guarda PRÓPRIA (12/09): o modelo dele desce depois das
@@ -3117,7 +3226,7 @@ var JOGO = (typeof window !== 'undefined')
     scene.add(no);
     chefesParados.push(no);
     // o corpo do chefe barra o passo como o muro barra
-    marcaSolido(px, pz, Math.max(1.0, meiaT * 0.75));
+    marcaSolido(px, pz, Math.max(1.0, meiaT * 0.75), lg.id);
     chefesFicha.push({ portal: lg.id, chefe: bossId, x: px, z: pz,
                        d: d, t: t, meiaT: meiaT, limite: limite });
     return no;
@@ -3669,7 +3778,7 @@ var JOGO = (typeof window !== 'undefined')
     return p;
   };
   /* os sólidos avulsos (muros do corredor, pilares, chefes), para a prova */
-  Hub._solidos = function () { return solidos.map(function (c) { return { x: c.x, z: c.z, r: c.r }; }); };
+  Hub._solidos = function () { return solidos.map(function (c) { return { x: c.x, z: c.z, r: c.r, dono: c.dono || null }; }); };
   Hub._chefesParados = function () { return chefesParados.length; };
   /* a ficha dos chefes plantados: onde estão e quanto medem de través */
   Hub._chefesFicha = function () { return chefesFicha.slice(); };
@@ -3685,7 +3794,7 @@ var JOGO = (typeof window !== 'undefined')
   Hub._lugares = function () {
     return lugares.map(function (l) {
       return { id: l.id, tipo: l.tipo, x: l.pos.x, z: l.pos.z,
-               tema: l.tema || null, fechado: !!l.fechado,
+               tema: l.tema || null, fechado: !!l.fechado, portao: !!l.portao,   // 19/09: o portão do Campo tem corredor
                raio: l.raio || 0, solido: l.solido || 0 };
     });
   };
@@ -3694,9 +3803,10 @@ var JOGO = (typeof window !== 'undefined')
    *                              do campo_pvp.js com o corpo da classe `aparencia` (o 1º
    *                              herói escolhido); sem ela, o avatar de sempre. Já no
    *                              Campo, só troca a aparência. → true
-   * Hub.saiCampo()               volta à praça, ao lado da entrada (do lado da Árvore e
-   *                              fora do raio de conversa — o painel não reabre sozinho),
-   *                              com o corpo do avatar. → false se não estava no Campo
+   * Hub.saiCampo()               volta à praça, à frente do portão do Campo (na pista do
+   *                              corredor dele, fora do raio de conversa — o painel não
+   *                              reabre sozinho), com o corpo do avatar. → false se não
+   *                              estava no Campo
    * Hub.naCampo()                → boolean
    * Hub.defineZona('praca'|'campo')  quem ganha corpo e toque: só fantasma com
    *                              `perfil.zona` igual (sem zona = 'praca'), até o teto de
@@ -3757,16 +3867,18 @@ var JOGO = (typeof window !== 'undefined')
     zonaAtual = 'praca';
     if (!renderer || !THREE) return true;
     trocaDeCena();
-    /* AO LADO, e não à frente (15/09, foto): do lado da Árvore o herói ficava a 11 m do
-     * tronco e a câmera de órbita (atrás e acima dele) nascia DENTRO da copa de 17 m. O
-     * passo vai de través, no sentido do arco dos portais (longe da Arena), fora do raio
-     * de conversa — o painel da entrada não reabre sozinho. */
+    /* PELO EIXO, rumo à boca (19/09). Até 15/09 o passo era DE TRAVÉS (raio+1,2 no sentido
+     * do arco), porque a entrada morava no gramado da Árvore e à frente dela a câmera de
+     * órbita nascia dentro da copa. Agora o portão tem corredor: de través por 7,6 m o
+     * herói cairia do lado de FORA do muro da câmara (meia-largura 5,2, sólido até 7,1).
+     * Então ele reaparece 7,6 m à frente do arco, no meio da pista do corredor, de costas
+     * para ele — fora do raio de conversa (6,4): o painel da entrada não reabre sozinho. */
     var x = null, z = null;
     for (var i = 0; i < lugares.length; i++) {
       var lg = lugares[i];
       if (lg.tipo !== 'campo') continue;
-      var a = Math.atan2(lg.pos.x, -lg.pos.z), d = lg.raio + 1.2;
-      var p = empurraDosSolidos({ x: lg.pos.x + Math.cos(a) * d, z: lg.pos.z + Math.sin(a) * d }, 0.4);
+      var r0 = Math.hypot(lg.pos.x, lg.pos.z) || 1, d = lg.raio + 1.2;
+      var p = empurraDosSolidos({ x: lg.pos.x - lg.pos.x / r0 * d, z: lg.pos.z - lg.pos.z / r0 * d }, 0.4);
       x = p.x;
       z = p.z;
     }

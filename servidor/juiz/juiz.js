@@ -32,7 +32,7 @@ const motor = require('./motor');
 const rotas = {};
 function registra(metodo, caminho, fn) { rotas[metodo + ' ' + caminho] = fn; }
 
-registra('GET', '/saude', () => ({ ok: true, versao: versaoDosDados() }));
+registra('GET', '/saude', () => ({ ok: true, versao: versaoDosDados(), regras: versaoDasRegras() }));
 
 /* AS REGRAS que a API precisa para abrir um bilhete sem carregar o jogo: os
  * calabouços abertos e quantas salas cada um tem, e as classes. */
@@ -49,14 +49,27 @@ registra('GET', '/regras', () => {
   });
   // o Poço não tem fim: cada andar nasce da semente do bilhete
   if (J.Poco && J.Poco.salaSemeada) calaboucos.poco = 9999;
-  regrasCache = { ok: true, versao: versaoDosDados(), calaboucos, classes: Object.keys(J.DATA.classes || {}) };
+  regrasCache = { ok: true, versao: versaoDosDados(), regras: versaoDasRegras(),
+                  calaboucos, classes: Object.keys(J.DATA.classes || {}) };
   return regrasCache;
 });
 
-/* A VERSÃO DAS REGRAS: um hash dos arquivos que o juiz carrega. O cliente manda
- * a dele (o mesmo cálculo não cabe no navegador, então a API compara com o
- * js/versao.js do build); aqui ela serve para a API saber se o juiz subiu com
- * os arquivos do mesmo deploy. */
+/* A VERSÃO DOS DADOS: um hash dos arquivos que o juiz carrega. O cálculo não
+ * cabe no navegador; serve para a API saber se o juiz subiu com os arquivos do
+ * mesmo deploy. A VERSÃO DAS REGRAS (19/09) é outra coisa: o número que o
+ * próprio engine.js declara (Engine.VERSAO_REGRAS) e sobe só quando uma regra
+ * muda o fim de uma sala refeita. É esse que o bilhete guarda ao abrir e que a
+ * sala confere ao fechar (sala.js, 'regras-mudaram'): cliente velho e juiz
+ * novo não podem refazer a mesma sala com resultado diferente sem o servidor
+ * saber — e sem o jogador honesto ser tratado como fraude. */
+let regrasNumCache = null;
+function versaoDasRegras() {
+  if (regrasNumCache == null) {
+    const E = motor.mundo().JOGO.Engine;
+    regrasNumCache = (E && typeof E.VERSAO_REGRAS === 'number') ? E.VERSAO_REGRAS : 1;
+  }
+  return regrasNumCache;
+}
 let versaoCache = null;
 function versaoDosDados() {
   if (versaoCache) return versaoCache;
@@ -124,5 +137,6 @@ const servidor = http.createServer((req, res) => {
 });
 
 servidor.listen(PORTA, HOST, () => {
-  console.log('[juiz] ouvindo em ' + HOST + ':' + PORTA + ' · regras ' + versaoDosDados() + ' · raiz ' + motor.RAIZ);
+  console.log('[juiz] ouvindo em ' + HOST + ':' + PORTA + ' · dados ' + versaoDosDados() +
+              ' · regras v' + versaoDasRegras() + ' · raiz ' + motor.RAIZ);
 });

@@ -95,6 +95,15 @@ def espera_url(url, proc, segundos=60):
     return False
 
 
+def adota_regras(juiz):
+    """19/09: o palco lê `regras` (Engine.VERSAO_REGRAS) do juiz que acabou de subir, e os Clientes das provas
+    passam a mandá-lo em toda abertura (servidor_api.Cliente.REGRAS): as provas são a página NOVA — a API recusa
+    (409 regras-velhas) quem abre sem o campo, que é a página de antes do número."""
+    with urllib.request.urlopen(juiz + '/regras', timeout=5) as r:
+        Cliente.REGRAS = json.loads(r.read().decode('utf-8')).get('regras')
+    return Cliente.REGRAS
+
+
 def status_de(url, corpo):
     req = urllib.request.Request(url, data=json.dumps(corpo).encode('utf-8'), method='POST',
                                  headers={'Content-Type': 'application/json'})
@@ -138,6 +147,7 @@ class ProvaDaAutoridade(unittest.TestCase):
         pj = cls._processo('juiz', [NODE, JUIZ, '--porta', str(porta_juiz)])
         if not espera_url(cls.juiz + '/saude', pj):
             raise RuntimeError('o juiz não subiu; veja ' + cls.pasta)
+        adota_regras(cls.juiz)                  # 19/09: as provas são a página nova (versaoRegras nas aberturas)
         # o estado de partida: o de uma conta nova do jogo (o primeiro PUT do cliente)
         codigo = ("const est = require(process.argv[1]); const w = est.mundoEconomico({}); est.poeEstado(w, null, null);"
                   "const s = est.tiraEstado(w);"

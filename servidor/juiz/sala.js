@@ -133,6 +133,16 @@ function refazEm(J, entrada) {
   if (lances.length > LANCES_MAX) throw recusa('lances demais', 'entrada');
 
   const E = J.Engine;
+  /* A VERSÃO DAS REGRAS DO BILHETE (19/09). A API guarda, ao abrir, o número que
+   * o juiz anunciou (Engine.VERSAO_REGRAS); se o juiz de agora é outro (o deploy
+   * mudou uma regra no meio da sala), o replay daria 'divergiu' e o jogador
+   * honesto seria tratado como fraude. Aqui a sala cai ANTES de ser refeita,
+   * com um motivo próprio, e a API a vence em vez de recusar. Sem o número no
+   * pedido (página de antes, provas) não se confere nada. */
+  if (inteiro(c.regras) && c.regras !== E.VERSAO_REGRAS) {
+    throw recusa('as regras mudaram desde que a sala abriu (bilhete v' + c.regras + ', juiz v' + E.VERSAO_REGRAS + ')',
+                 'regras-mudaram');
+  }
   let turnosJogador = 0;
   if (typeof c.preparar === 'function') c.preparar(J);    // provas: ganchos no mundo antes da sala
 
@@ -217,9 +227,18 @@ function refazEm(J, entrada) {
       if (!emRede) throw recusa('marca de rede numa sala solo', 'lance');
       const alvo = E.findUnit(st, l.u);
       if (!alvo || !ehDeGente(alvo)) throw recusa('marca numa unidade que não é de gente', 'lance');
+      if (l.ev !== 'ia' && l.ev !== 'morte') throw recusa('marca desconhecida: ' + String(l.ev), 'lance');
+      /* 19/09: a marca é palavra do cliente — quatro marcas `morte` contra os heróis do adversário, sem lance
+       * nenhum, davam a vitória e zeravam o outro lado (provado no juiz de verdade). Quem chama pode dizer que
+       * marca vale (`confereMarca(alvo, l)` devolve o porquê de NÃO valer): a guerra (guerra.js) só aceita a
+       * marca `morte` sobre herói do MESMO lado de quem fecha, ou com a prova do servidor (a saída declarada,
+       * guerra_saidas); a marca `ia` passa de quem for. Sem o gancho, a sala em grupo e o duelo seguem como antes */
+      if (typeof c.confereMarca === 'function') {
+        const falta = c.confereMarca(alvo, l);
+        if (falta) throw recusa(String(falta), 'marca-sem-prova');
+      }
       if (l.ev === 'ia') alvo.ia = !!l.v;
-      else if (l.ev === 'morte') { if (alvo.alive && !alvo.offBoard && E.processDeath) E.processDeath(st, alvo); }
-      else throw recusa('marca desconhecida: ' + String(l.ev), 'lance');
+      else if (alvo.alive && !alvo.offBoard && E.processDeath) E.processDeath(st, alvo);
       E.events.length = 0;
       continue;
     }

@@ -343,7 +343,8 @@ ROTAS = {
     ('POST', '/api/arena/recusar'):           ('arena_recusar', True),
     ('POST', '/api/arena/sair'):              ('arena_sair', True),
     ('GET',  '/api/arena/estado'):            ('arena_estado', True),
-    # 15/09: a guerra de guilda 2x2 na Sede (guerra.py)
+    # 15/09: a guerra de guilda 2x2 na Sede (guerra.py). 19/09: sair {gid} é a saída declarada da guerra pronta
+    # (os heróis da conta a 0 na hora); fechar aceita desistiu/wo e responde 'aguardando' enquanto não há um fim
     ('POST', '/api/guerra/inscrever'):        ('guerra_inscrever', True),
     ('POST', '/api/guerra/juntar'):           ('guerra_juntar', True),
     ('POST', '/api/guerra/confirmar'):        ('guerra_confirmar', True),

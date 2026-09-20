@@ -163,8 +163,11 @@ var JOGO = (typeof window !== 'undefined')
       fimGrupo: null, fimGrupoDele: null, fimGrupoMeu: null, fimFotoPedidaEm: 0,
       tortos: 0,
       // 15/09: a guerra de guilda 2×2 — { gid, meuId, lado, ordem: [4 ids], js: {id: jogador}, guildas, nomes,
-      // euFora, resultado, fechou } (ver "a guerra de guilda", mais abaixo)
-      guerra: null, dentroLiberado: false, saiuNome: null
+      // euFora, euCai, tarde, resultado, fechou } (ver "a guerra de guilda", mais abaixo)
+      guerra: null, dentroLiberado: false, saiuNome: null,
+      woDesde: 0,                   // 19/09: os DOIS adversários fora desde então (a contagem do W.O. na tela)
+      iaPendentes: [],              // 19/09: marcas `ia` da guerra à espera da VEZ do herói: [{uid, v}], na ordem em que chegaram
+      iaSeq: 0, iaVisto: {}, iaBuffer: []   // 19/09: o contador das minhas marcas, o último `n` visto de cada um, as guardadas na foto
     };
   }
 
@@ -847,6 +850,13 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !e || !e.processDeath) return false;
     // sala ja decidida: nada a derrubar (e processDeath rechecaria o fim)
     if (st.phase !== 'playing' && st.phase !== 'placing') { S.mortePendente = {}; return false; }
+    // 19/09: quem saiu da guerra antes de o salão abrir (`sai` com `todos`): todos os heróis dele caem
+    if (S.tipo === 'guerra') {
+      outrosGuerra().forEach(function (j) {
+        if (!j.saiuTudo) return;
+        unidadesDe(st, j.id, true).forEach(function (u) { S.mortePendente[u.uid] = true; });
+      });
+    }
     var uids = Object.keys(S.mortePendente), fez = false;
     for (var i = 0; i < uids.length; i++) {
       var u = e.findUnit(st, uids[i]);
@@ -886,8 +896,8 @@ var JOGO = (typeof window !== 'undefined')
     muda();
   }
 
-  Coop.parceiroSumiu = function (id, t0) {
-    if (S.tipo === 'guerra') { sumiuGuerra(id, t0); return; }
+  Coop.parceiroSumiu = function (id, t0, cx) {
+    if (S.tipo === 'guerra') { sumiuGuerra(id, t0, cx); return; }
     var p = parceiro();
     if (!p || id !== p.id) return;
     var t = num(+t0, 0) || agora();
@@ -1281,10 +1291,18 @@ var JOGO = (typeof window !== 'undefined')
     try { return (A && A.ligada && A.ligada()) ? A : null; } catch (e) { return null; }
   }
   function anotaLutaGrupo() {
+    // 19/09: a guerra pronta também é luta aberta — a página que for embora no meio fecha a parte desta conta ao voltar
+    if (S.tipo === 'guerra') { anotaLutaGuerra(); return; }
     if (S.tipo !== 'grupo' || !S.ata || !S.ata.gid || !S.bid) return;
     var A = autoridadeLigada();
     if (!A || !A.abreLuta || !A.anotaLuta) return;
     try { A.abreLuta('grupo', S.ata.gid); A.anotaLuta(S.ata.gid, S.logSrv || []); } catch (e) {}
+  }
+  function anotaLutaGuerra(fim, corpo) {
+    if (S.tipo !== 'guerra' || !S.guerra || !S.bid) return;
+    var A = autoridadeLigada();
+    if (!A || !A.abreLuta || !A.anotaLuta) return;
+    try { A.abreLuta('guerra', S.guerra.gid); A.anotaLuta(S.guerra.gid, S.logSrv || [], !!fim, corpo || null); } catch (e) {}
   }
   function marcaSrv(ev, uid, v) { anotaSrv({ a: 'x', ev: ev, u: uid, v: v, ok: true }); }
   /* o registro para fechar a sala no servidor */
@@ -1305,7 +1323,10 @@ var JOGO = (typeof window !== 'undefined')
     var lista = S.log[T] || (S.log[T] = []);
     l.T = T; l.k = lista.length; l.b = S.bid; l.ok = !!ok; l.de = meuId();
     var T2 = st.turno || 0;
-    if (T2 !== T || st.phase !== 'playing') { l.T2 = T2; l.h = E().hash(st); }
+    // 19/09: no lance LOCAL o hash é o VIVO — aqui ele É o da virada (o Game só chama o aoTurno depois deste registro,
+    // e a marca `ia` guardada para a vez deste herói só entra lá). Ler S.hashes[T2] aqui pegava, depois de uma foto, o
+    // hash da linha do tempo VELHA (o turno T2 já tinha passado por este motor antes de restaurar) e divergia de novo
+    if (T2 !== T || st.phase !== 'playing') { l.T2 = T2; try { l.h = E().hash(st); } catch (eH) { l.h = 0; } }
     if (l.a === 'e') l.bk = Math.round(num(g.banked, 0));
     lista.push(l);
     envia('lance', paraFio(l, false));
@@ -1422,7 +1443,7 @@ var JOGO = (typeof window !== 'undefined')
         delete l.reenvia;
         l.ok = !!ok;
         var T2 = st.turno || 0;
-        if (T2 !== T || st.phase !== 'playing') { l.T2 = T2; l.h = E().hash(st); }
+        if (T2 !== T || st.phase !== 'playing') { l.T2 = T2; l.h = hashDoTurno(st); }
         else { delete l.T2; delete l.h; }
         envia('lance', paraFio(l, false));
       }
@@ -1433,10 +1454,19 @@ var JOGO = (typeof window !== 'undefined')
     if (typeof l.ok === 'boolean' && l.ok !== !!ok) mot = 'ok';
     if (!mot && l.T2 != null) {
       if ((st.turno || 0) !== l.T2) mot = 'turno';
-      else if (E().hash(st) !== l.h) mot = 'hash';
+      else if (hashDoTurno(st) !== l.h) mot = 'hash';
     }
     if (mot) divergiu(mot, T);
   };
+  /* 19/09: o hash que se CONFERE no lance que chegou (e o do meu lance reaplicado depois da foto) é o da VIRADA do
+   * turno (S.hashes[T], tirado no aoTurno antes das marcas `ia` guardadas para a vez daquele herói), não o vivo de
+   * logo depois — na guerra, quem aplica uma marca pendente na virada tinha o hash vivo diferente do de quem a aplicou
+   * ao receber, e divergia à toa. Só com a batalha viva: no fim o hash que vale é o do estado final, vivo. */
+  function hashDoTurno(st) {
+    var T = st.turno || 0;
+    if (S.tipo === 'guerra' && st.phase === 'playing' && S.hashes && typeof S.hashes[T] === 'number') return S.hashes[T];
+    return E().hash(st);
+  }
   /* O outro pede os MEUS lances de (T, k) em diante. Com freio: um pedido por
    * PEDE_MIN_MS e no máximo PEDE_MAX lances por pedido — uma rajada de `pede`
    * me fazia estourar o balde do relé e ser desligado (e no duelo, W.O.). */
@@ -1463,26 +1493,32 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------ turno, hash e foto
   /* O Game chama sempre que `state.turno` muda (depois de QUALQUER chamada ao motor). */
-  Coop.aoTurno = function (st) {
-    if (!st || !S.bid) return;
-    var T = st.turno || 0, e = E(), g = G();
-    try { S.hashes[T] = e.hash(st); } catch (e1) {}
-    if (st.phase === 'playing') { try { S.foto = { T: T, estado: e.foto(st) }; } catch (e2) {} }
-    var k;
-    for (k in S.hashes) if (Object.prototype.hasOwnProperty.call(S.hashes, k) && +k < T - Coop.HASHES) delete S.hashes[k];
-    for (k in S.log) if (Object.prototype.hasOwnProperty.call(S.log, k) && +k < T - Coop.HASHES) delete S.log[k];
+  /* a vez de quem eu espero: o relógio do prazo dele corre desde AGORA (aoTurno e, 19/09, a restauração pela foto —
+   * o relógio de antes da foto é o do motor congelado, e estourava a vez de quem estava ali) */
+  function armaEspera(st) {
+    var g = G(), e = E(), T = st.turno || 0;
     var u = (st.phase === 'playing') ? e.activeUnit(st) : null;
     var donoU = (u && g && g.donoDe) ? g.donoDe(u) : null;
     if (donoU === 'parceiro') {
       var jgT = jogadorGuerra(u.dono), bkT = jgT ? jgT.bk : S.bkParceiro;
       S.esperando = { uid: u.uid, T: T, desde: agora(), dono: u.dono || null,
                       prazo: Math.round((num(g.turnTime, 30) + bkT) * 1000) };
-    } else {
-      S.esperando = null;
-      // o MEU turno começou: o `vivo` sai na hora — quem espera mede o meu
-      // prazo desde este instante, e não até 8 s depois
-      if (donoU === 'eu' && !S.fim) { S.vivoEm = agora(); envia('vivo', { b: S.bid, T: T }); }
-    }
+    } else S.esperando = null;
+    return donoU;
+  }
+  Coop.aoTurno = function (st) {
+    if (!st || !S.bid) return;
+    var T = st.turno || 0, e = E();
+    try { S.hashes[T] = e.hash(st); } catch (e1) {}
+    if (st.phase === 'playing') { try { S.foto = { T: T, estado: e.foto(st) }; } catch (e2) {} }
+    aplicaIaPendentes(st);                // 19/09: as marcas `ia` à espera da vez deste herói (depois do hash da virada)
+    var k;
+    for (k in S.hashes) if (Object.prototype.hasOwnProperty.call(S.hashes, k) && +k < T - Coop.HASHES) delete S.hashes[k];
+    for (k in S.log) if (Object.prototype.hasOwnProperty.call(S.log, k) && +k < T - Coop.HASHES) delete S.log[k];
+    var donoU = armaEspera(st);
+    // o MEU turno começou: o `vivo` sai na hora — quem espera mede o meu
+    // prazo desde este instante, e não até 8 s depois
+    if (donoU === 'eu' && !S.fim) { S.vivoEm = agora(); envia('vivo', { b: S.bid, T: T }); }
     // e a cada turno que passa (no máximo um a cada 2 s): quem está parado num
     // lance que se perdeu sabe logo que eu já passei dele, e pede
     if (donoU !== 'eu' && !S.fim && st.phase === 'playing' && agora() - S.vivoEm >= 2000) {
@@ -1523,8 +1559,10 @@ var JOGO = (typeof window !== 'undefined')
     var g = G(), st = g && g.state;
     if (!st || !S.bid) return;
     // nunca em placing (o `placement` guarda referência de unidade): pede assim
-    // que a batalha começar — e sem travar a colocação, que o `p` destrava
-    if (st.phase === 'placing') { S.fotoDepois = true; return; }
+    // que a batalha começar — e sem travar a colocação, que o `p` destrava.
+    // 19/09: quem ENTROU ATRASADO na guerra (a ata chegou com ele fora da praça) nasce em placing enquanto os três
+    // já jogam — o placing dele nunca acabaria sozinho, então a foto de quem manda é pedida daqui mesmo
+    if (st.phase === 'placing' && !(S.tipo === 'guerra' && S.guerra && S.guerra.tarde)) { S.fotoDepois = true; return; }
     // um pedido em curso basta: o tique repete no prazo (dois gatilhos juntos —
     // o `ia` e o `religou` — pediam duas vezes, e o freio da autoridade calava o segundo)
     if (S.sincronizando && agora() - S.fotoPedidaEm < Coop.FOTO_REPEDE_MS) return;
@@ -1532,7 +1570,9 @@ var JOGO = (typeof window !== 'undefined')
     S.sincronizando = true;
     S.fotoPedidaEm = agora();
     envia('foto-pede', { b: S.bid, T: st.turno || 0 });
-    if (primeira) avisa('Sincronizando com ' + nomeParceiro() + '…', 'info');
+    // 19/09: na guerra a foto vem de quem MANDA (A1, A2, B1, B2 pela ordem), que tem nome — "o parceiro" era o
+    // vocabulário do grupo e saía errado (a foto podia vir da guilda adversária)
+    if (primeira) avisa('Sincronizando com ' + (S.tipo === 'guerra' ? nomeGuerra(autoridadeGuerra()) : nomeParceiro()) + '…', 'info');
   }
   function mandaFoto() {
     var g = G(), st = g && g.state;
@@ -1555,7 +1595,14 @@ var JOGO = (typeof window !== 'undefined')
       var u = st.units[i];
       if ((u.kind === 'hero' || u.kind === 'fusion') && u.ia) ia.push(u.uid);
     }
-    return envia('foto', { b: S.bid, T: S.foto.T, estado: S.foto.estado, lances: ls, lider: autoridadeId(), ia: ia });
+    var pkt = { b: S.bid, T: S.foto.T, estado: S.foto.estado, lances: ls, lider: autoridadeId(), ia: ia };
+    // 19/09, a guerra: as marcas que AINDA esperam a vez do herói vão junto — quem restaura as guarda igual — e até
+    // que `n` de cada um esta foto já traz (o que ele guardou com `n` maior entra depois dela)
+    if (S.tipo === 'guerra') {
+      pkt.iaPend = (S.iaPendentes || []).map(function (p) { return { u: p.uid, v: !!p.v }; });
+      pkt.iaVisto = clone(S.iaVisto || {});
+    }
+    return envia('foto', pkt);
   }
   function rFotoPede(d) {
     // no duelo não há foto; quem cedeu a autoridade não fotografa
@@ -1603,6 +1650,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!g || !g.restauraFoto) return false;
     if (!fotoSemFusaoCruzada(pkt.estado)) {
       S.sincronizando = false;
+      if (S.tipo === 'guerra') drenaIaGuerra();
       avisa('A foto de ' + nomeParceiro() + ' trazia uma fusão entre heróis de jogadores diferentes — ignorada.', 'aviso');
       muda();
       return false;
@@ -1625,6 +1673,9 @@ var JOGO = (typeof window !== 'undefined')
       if (!nova[key]) nova[key] = l;
     }
     for (t in S.log) if (Object.prototype.hasOwnProperty.call(S.log, t) && +t >= T0) delete S.log[t];
+    // 19/09: os hashes de T0 em diante eram da linha do tempo VELHA deste motor (ele já tinha passado por esses turnos
+    // antes de restaurar): conferir o próximo lance contra eles acusava divergência de novo, a cada volta
+    for (t in S.hashes) if (Object.prototype.hasOwnProperty.call(S.hashes, t) && +t >= T0) delete S.hashes[t];
     S.log[T0] = [];
     S.fila = nova;
     var lances = (pkt.lances || []).map(function (x) { var y = clone(x); if (!y.de) y.de = autoridadeId(); return y; });
@@ -1634,8 +1685,13 @@ var JOGO = (typeof window !== 'undefined')
       if (Object.prototype.hasOwnProperty.call(S.fila, kk) && S.fila[kk].de === eu) S.fila[kk].reenvia = true;
     }
     var ok = false;
-    var ia = [];
+    /* 19/09: a lista `ia` da foto é a VERDADE INTEIRA de quem está fora agora — quem não está nela sai da marca. Antes
+     * ela só marcava: quem voltava como A2 recebia a marca de volta pela foto do começo do turno (tirada quando ainda
+     * estava fora), ficava 'fora' no próprio motor enquanto os três o viam de volta, e a vez dele passava sozinha.
+     * Sem lista (a foto do FIM) o restauraFoto não mexe em marca nenhuma. */
+    var ia = null;
     if (Object.prototype.toString.call(pkt.ia) === '[object Array]') {
+      ia = [];
       for (var q = 0; q < pkt.ia.length && q < 16; q++) if (typeof pkt.ia[q] === 'string') ia.push(pkt.ia[q]);
     }
     try { ok = !!g.restauraFoto({ T: T0, estado: pkt.estado, lances: lances, ia: ia }); } catch (e) { ok = false; }
@@ -1647,7 +1703,29 @@ var JOGO = (typeof window !== 'undefined')
       S.meAssumiu = false;
       S.fimFotoPedidaEm = 0;
       S.fimGrupo = null;
+      S.fotoDepois = false;              // 19/09: a foto veio — o pedido guardado para "quando a batalha começar" é moot
       if (!pkt.fim) S.foto = { T: T0, estado: pkt.estado };
+      if (S.tipo === 'guerra' && ia) {
+        // a foto é a verdade inteira: as marcas aplicadas (a lista `ia`) e as que ainda esperam a vez do herói
+        // (`iaPend`) são as de quem manda — as minhas de antes da foto saem
+        var pend = [];
+        if (Object.prototype.toString.call(pkt.iaPend) === '[object Array]') {
+          for (var w = 0; w < pkt.iaPend.length && w < 32; w++) {
+            var pp = pkt.iaPend[w];
+            if (pp && typeof pp.u === 'string') pend.push({ uid: pp.u, v: !!pp.v });
+          }
+        }
+        S.iaPendentes = pend;
+        var visto = {};
+        if (pkt.iaVisto && typeof pkt.iaVisto === 'object') {
+          for (var kv in pkt.iaVisto) if (Object.prototype.hasOwnProperty.call(pkt.iaVisto, kv) && jogadorGuerra(kv)) visto[kv] = num(+pkt.iaVisto[kv], 0);
+        }
+        S.iaVisto = visto;
+        sincronizaMarcasGuerra();
+        drenaIaGuerra();                 // as marcas que chegaram enquanto eu esperava a foto e ela ainda não trazia
+      }
+      // o prazo de quem eu espero corre desde a foto (o relógio de antes é o do motor congelado)
+      if (g.state) armaEspera(g.state);
     }
     muda();
     return ok;
@@ -2177,10 +2255,27 @@ var JOGO = (typeof window !== 'undefined')
    *   - QUEM CAI: passada a carência, quem MARCA os heróis dele (u.ia: o turno passa) é o PARCEIRO DE GUILDA —
    *     nunca o adversário, que ganharia pulando a vez do outro. Quem volta é desmarcado pelo parceiro (ou por si
    *     mesmo, se o parceiro também está fora). Quem SAI da guerra morre (a voz `sai`, como no grupo).
-   *   - W.O. DO LADO INTEIRO: só quando os DOIS adversários estão fora há WO_MS. O servidor refaz o W.O. e não vê
-   *     fim: não rende XP — forjar um não dá nada.
+   *   - W.O. DO LADO INTEIRO: só quando os DOIS adversários estão fora há WO_MS. O fechar vai com `wo: true` e sem
+   *     o hash do fim; o servidor só o confirma com a queda dos dois anotada pelo relé (aí rende XP nos tetos) — sem
+   *     essa prova vale só a vida da luta. Forjar um W.O. não dá nada.
    *   - O FIM: cada um dos quatro fecha no servidor (quem manda na hora; os outros GUERRA_FECHA_MS depois, e
-   *     recebem o guardado — o registro limpo de outro vale se o meu foi fotografado). */
+   *     recebem o guardado — o registro limpo de outro vale se o meu foi fotografado).
+   * 19/09 (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário"):
+   *   - QUEM CAIU (ou entrou atrasado) NÃO VOLTA A MANDAR até o fim da guerra — o `cedeu` do grupo, espelhado nos
+   *     quatro: cada um guarda `caiuAlgumaVez` de quem viu cair (o `caiu` do relé, o silêncio, a marca `ia`, o
+   *     `ausente`) e `euCai` de si mesmo (a volta da conexão, a marca do parceiro, o `dentro` que chegou com a guerra
+   *     solta). E a memória VIAJA: todo `vivo`, `dentro`, `foto-pede`, `foto` e `ia` leva `caidos` (quem este cliente
+   *     sabe que caiu, ele mesmo inclusive); quem recebe só acrescenta — a decisão de quem manda converge nos quatro
+   *     num `vivo`. Sem isso quem estava fora quando outro caiu voltava vendo outra autoridade e recusava a foto certa
+   *     para sempre. Quem volta pede a foto SEMPRE e a lista `ia` da foto é a verdade inteira (quem não está nela sai
+   *     da marca; `iaPend` traz as marcas que ainda esperam a vez do herói).
+   *   - QUEM RELIGA anuncia `dentro {religou: true}` aos três SEM cx (a conexão nova não conhece a deles nem eles a
+   *     dela): um `dentro` assim, vindo de um cx novo, vale como "caiu e voltou" mesmo sem o `caiu` do relé — é o que
+   *     salva a guerra quando o próprio relé reinicia (os quatro voltam sem `caiu` nenhum).
+   *   - QUEM SAI declara ao servidor (POST /api/guerra/sair {gid}, com keepalive e a fila de retentativa da Autoridade):
+   *     os heróis dele a 0 na hora, também aqui (Vida.fim) — e é a prova que o juiz exige para a marca `morte` dele.
+   *   - O FECHAR passa pela Autoridade (retentativa, keepalive, 'aguardando' perguntado de novo a cada 5 s) e o corpo
+   *     fica guardado na luta aberta da conta para sair ao abrir o jogo; o W.O. vai com `wo: true` depois dos 60 s. */
   Coop.MAPA_GUERRA = 'sede';
   Coop.GUERRA_FECHA_MS = 2500;
   var GUERRA_ACOES = ['dentro', 'lance', 'pede', 'foto-pede', 'foto', 'ia', 'sai', 'vivo', 'dessinc', 'carga'];
@@ -2199,15 +2294,177 @@ var JOGO = (typeof window !== 'undefined')
     return (g && g.nomes && g.nomes[id]) || nomeDe(id);
   }
   function foraGuerra(j) { return !!(j && (j.saiu || j.marcado || j.sumidoDesde)); }
+  /* 19/09: quem manda é o primeiro da ordem que está AQUI e NUNCA CAIU (nem entrou atrasado). Só se os quatro já
+   * caíram alguma vez vale o primeiro presente. Antes era só "o primeiro presente": a A1 que caía e voltava retomava
+   * a autoridade sem sincronizar e a foto velha dela rebobinava a guerra dos outros três. */
+  function presenteGuerra(id) {
+    var g = S.guerra;
+    return id === g.meuId ? !g.euFora : !foraGuerra(g.js[id]);
+  }
+  function caiuGuerra(id) {
+    var g = S.guerra;
+    return id === g.meuId ? !!g.euCai : !!(g.js[id] && g.js[id].caiuAlgumaVez);
+  }
+  /* o turno em que ele se ACERTOU depois da última queda (null = voltou e ainda não; undefined = nunca caiu) */
+  function sincDe(id) {
+    var g = S.guerra;
+    if (id === g.meuId) return g.euCai ? (g.euSincT == null ? null : g.euSincT) : undefined;
+    var j = g.js[id];
+    if (!j || !j.caiuAlgumaVez) return undefined;
+    return j.sincT == null ? null : j.sincT;
+  }
+  /* QUEM MANDA (19/09, a segunda rodada): (1) o primeiro da ordem presente que NUNCA caiu; (2) senão, entre os
+   * presentes que caíram e já se ACERTARAM (sincT: o turno da foto que os restaurou), o que se acertou no turno mais
+   * BAIXO — está em dia há mais tempo —, empate pela ordem; (3) só se ninguém presente se acertou ainda (os quatro
+   * acabaram de voltar juntos, o relé reiniciou) vale o primeiro presente da ordem, e esse solta o próprio motor
+   * (tiqueGuerra) depois de ouvir todos os presentes desde a volta. Antes, com os quatro já caídos alguma vez, valia
+   * "o primeiro presente": a A1 que caía de novo e voltava se via como quem manda SEM foto (o `ia` dela foi ao cx
+   * velho), soltava o motor no turno em que caiu, mandava `dessinc` aos três e a foto velha dela rebobinava a guerra
+   * deles — o mesmo defeito da primeira revisão, de volta depois de um reinício do relé. Quem voltou e ainda não se
+   * acertou (sincT null) nunca é eleito enquanto há alguém acertado; a decisão converge porque o sincT viaja. */
   function autoridadeGuerra() {
     var g = S.guerra;
     if (!g) return null;
-    for (var i = 0; i < g.ordem.length; i++) {
-      var id = g.ordem[i];
-      if (id === g.meuId) { if (!g.euFora) return id; continue; }
-      if (!foraGuerra(g.js[id])) return id;
+    var i, id, T, melhor = null, mT = Infinity;
+    for (i = 0; i < g.ordem.length; i++) { id = g.ordem[i]; if (presenteGuerra(id) && !caiuGuerra(id)) return id; }
+    for (i = 0; i < g.ordem.length; i++) {
+      id = g.ordem[i];
+      if (!presenteGuerra(id)) continue;
+      T = sincDe(id);
+      if (typeof T === 'number' && T < mT) { mT = T; melhor = id; }
     }
+    if (melhor) return melhor;
+    for (i = 0; i < g.ordem.length; i++) { id = g.ordem[i]; if (presenteGuerra(id)) return id; }
     return g.meuId;
+  }
+  /* A MEMÓRIA DA QUEDA VIAJA (19/09): quem eu sei que caiu alguma vez (eu inclusive) vai em todo `vivo`, `dentro`,
+   * `foto-pede`, `foto` e `ia` como `caidos: {id: sincT}` (null = voltou e ainda não se acertou). Quem recebe só
+   * ACRESCENTA — a união converge nos quatro em segundos. Antes cada um montava a memória dos sinais que viu, e quem
+   * estava fora quando a A1 caiu voltava vendo a A1 como quem manda: recusava a foto da Bia, a A1 (euCai) nunca
+   * respondia, e ficava "Sincronizando com Ana…" para sempre.
+   * A segunda rodada: `caidos[x]` só vale de quem tem o direito de falar por x — o PRÓPRIO x (o `sincT` dele é a
+   * palavra dele) ou o parceiro de guilda de x (que só diz "caiu", a mesma régua da marca `ia`). Vindo de qualquer
+   * um, um `vivo` forjado punha os três como caídos e fazia de quem quisesse a autoridade dos outros (uma foto de
+   * mentira aceita por quem pedisse). O "caiu" do parceiro não apaga um sincT que EU soube depois da minha volta
+   * (pode ser a memória velha dele); apaga o que soube antes de cair (essa é a velha). */
+  function caidosGuerra() {
+    var g = S.guerra, out = {};
+    if (!g) return out;
+    for (var i = 0; i < g.ordem.length; i++) {
+      var T = sincDe(g.ordem[i]);
+      if (T !== undefined) out[g.ordem[i]] = T;
+    }
+    return out;
+  }
+  function sincValido(v) {
+    if (v === null) return null;
+    if (typeof v !== 'number' || !isFinite(v) || v < 0) return undefined;
+    return Math.min(Math.floor(v), 100000);
+  }
+  function adotaCaidos(lista, de) {
+    var g = S.guerra, jd = jogadorGuerra(de);
+    if (!g || !jd || !lista || typeof lista !== 'object') return false;
+    var mapa = lista;
+    if (Object.prototype.toString.call(lista) === '[object Array]') {       // a página velha ainda manda a lista
+      mapa = {};
+      for (var q = 0; q < lista.length && q < 4; q++) if (typeof lista[q] === 'string') mapa[lista[q]] = null;
+    }
+    var mudou = false, n = 0;
+    for (var id in mapa) {
+      if (!Object.prototype.hasOwnProperty.call(mapa, id) || ++n > 4) continue;
+      var v = sincValido(mapa[id]);
+      if (v === undefined) continue;
+      if (id === g.meuId) {
+        if (jd.lado !== g.lado) continue;                                   // só o meu parceiro fala por mim
+        if (!g.euCai) { g.euCai = true; mudou = true; }
+        if (g.euSincT === undefined) g.euSincT = null;
+        continue;
+      }
+      var j = g.js[id];
+      if (!j) continue;
+      if (id === de) {
+        if (!j.caiuAlgumaVez || j.sincT !== v) mudou = true;
+        j.caiuAlgumaVez = true; j.sincT = v; j.sincTEm = agora();
+      } else if (jd.lado === j.lado) {
+        if (!j.caiuAlgumaVez) { j.caiuAlgumaVez = true; j.sincT = null; j.sincTEm = 0; mudou = true; }
+        else if (j.sincT != null && j.sincTEm < (S.religouEm || 0)) { j.sincT = null; j.sincTEm = 0; mudou = true; }
+      }
+    }
+    if (mudou) muda();
+    return mudou;
+  }
+  /* ele caiu (ou foi marcado) na MINHA conta: não manda mais, e só volta à linha depois de se acertar por uma foto */
+  function anotaQuedaGuerra(j) {
+    if (!j) return;
+    j.caiuAlgumaVez = true;
+    j.sincT = null; j.sincTEm = 0;
+  }
+  function anotaMinhaQuedaGuerra(g) {
+    if (!g) return;
+    g.euCai = true;
+    g.euSincT = null;
+    g.voltas = (g.voltas || 0) + 1;       // a minha memória dos outros é velha: o tique só me solta depois de ouvir todos
+  }
+  function ouviTodosDesdeVoltaGuerra() {
+    var g = S.guerra, lista = outrosGuerra();
+    for (var i = 0; i < lista.length; i++) {
+      var j = lista[i];
+      if (!foraGuerra(j) && j.ouvidoNaVolta !== (g.voltas || 0)) return false;
+    }
+    return true;
+  }
+  /* A MARCA `ia` ESPERA A VEZ DO HERÓI (19/09). A passagem de vez de um herói marcado NÃO é lance: cada motor a faz
+   * sozinho quando o herói fica ativo e está marcado. Marcar ou desmarcar "na hora" chegava em cada motor num ponto
+   * diferente do turno (quem marcava podia estar turnos ATRÁS ou À FRENTE de quem recebia), e `u.ia` entra no hash:
+   * uma divergência e uma foto a cada marca. Ancorar a marca no turno de quem falou não bastava — quem já estava à
+   * frente aplicava no meio de outro turno. O único ponto que os quatro têm em comum é a VEZ do herói marcado: a
+   * marca fica guardada e entra na virada para o turno em que ele é o ativo (Coop.aoTurno, depois do hash da virada)
+   * — ou na hora, se ele já é o ativo aqui (o motor está parado esperando o lance dele, e nada muda até entrar). */
+  function aplicaIaGuerra(u, v) {
+    if (!u || !!u.ia === !!v) return false;
+    u.ia = !!v;
+    marcaSrv('ia', u.uid, !!v);
+    return true;
+  }
+  function agendaIaGuerra(st, u, v) {
+    if (!u) return false;
+    var pend = (S.iaPendentes || []).filter(function (p) { return p.uid === u.uid; });
+    var depois = pend.length ? !!pend[pend.length - 1].v : !!u.ia;    // o que vale quando a fila dele esvaziar
+    if (depois === !!v) return false;
+    var at = (st && st.phase === 'playing') ? E().activeUnit(st) : null;
+    if (at && at.uid === u.uid && !pend.length) return aplicaIaGuerra(u, v);
+    S.iaPendentes.push({ uid: u.uid, v: !!v });
+    return true;
+  }
+  function aplicaIaPendentes(st) {
+    if (S.tipo !== 'guerra' || !S.iaPendentes || !S.iaPendentes.length || !st || st.phase !== 'playing') return;
+    var at = E().activeUnit(st);
+    if (!at) return;
+    var fica = [];
+    for (var i = 0; i < S.iaPendentes.length; i++) {
+      var p = S.iaPendentes[i];
+      if (p.uid !== at.uid) { fica.push(p); continue; }
+      aplicaIaGuerra(at, p.v);
+    }
+    S.iaPendentes = fica;
+  }
+  /* a marca de um herói como ela VAI ficar (a aplicada, ou a última guardada para a vez dele) */
+  function iaEfetiva(u) {
+    var pend = (S.iaPendentes || []).filter(function (p) { return p.uid === u.uid; });
+    return pend.length ? !!pend[pend.length - 1].v : !!u.ia;
+  }
+  /* depois de uma foto: a marca dos meus e o `marcado` dos outros são o que a foto disse (a verdade inteira) */
+  function sincronizaMarcasGuerra() {
+    var st = (G() || {}).state, g = S.guerra;
+    if (!st || !g) return;
+    var fora = {};
+    unidadesDe(st, null, true).forEach(function (u) { if (iaEfetiva(u)) fora[u.dono] = true; });
+    if (fora[g.meuId]) { g.euFora = true; g.euCai = true; }
+    else g.euFora = false;
+    outrosGuerra().forEach(function (j) {
+      j.marcado = !!fora[j.id];
+      if (j.marcado) j.caiuAlgumaVez = true;
+    });
   }
   function parceiroDeGuilda() {
     var g = S.guerra;
@@ -2222,13 +2479,21 @@ var JOGO = (typeof window !== 'undefined')
     outrosGuerra().forEach(function (x) { if (x.turnoDele > m) m = x.turnoDele; });
     return m;
   }
-  function enviaGuerra(acao, dados) {
+  // as vozes que levam a memória da queda (`caidos`) — as periódicas e as que decidem quem manda
+  var COM_CAIDOS = { vivo: 1, dentro: 1, 'foto-pede': 1, foto: 1, ia: 1 };
+  function comCaidos(acao, dados) {
+    if (dados && typeof dados === 'object' && COM_CAIDOS[acao]) dados.caidos = caidosGuerra();
+    return dados;
+  }
+  /* semCx (19/09): a voz vai a QUALQUER conexão do id — a de quem religou, que não sabe mais o cx dos outros */
+  function enviaGuerra(acao, dados, semCx) {
     var r = R(), ok = false;
     if (!r || !r.dirige) return false;
     if (acao === 'vivo' && dados) S.vivoT = num(+dados.T, 0);
+    comCaidos(acao, dados);
     outrosGuerra().forEach(function (j) {
       if (j.saiu) return;
-      try { if (r.dirige('batalha', j.id, acao, dados, j.cx ? { cx: j.cx } : {})) ok = true; } catch (e) {}
+      try { if (r.dirige('batalha', j.id, acao, dados, (j.cx && !semCx) ? { cx: j.cx } : {})) ok = true; } catch (e) {}
     });
     if (!ok) {
       try { S.ultimaRecusa = r.ultimaRecusa ? r.ultimaRecusa() : 'falhou'; } catch (e2) { S.ultimaRecusa = 'falhou'; }
@@ -2237,15 +2502,21 @@ var JOGO = (typeof window !== 'undefined')
   }
   function enviaA(j, acao, dados) {
     var r = R();
+    comCaidos(acao, dados);
     try { return !!(r && r.dirige && j && r.dirige('batalha', j.id, acao, dados, j.cx ? { cx: j.cx } : {})); }
     catch (e) { return false; }
   }
-  /* o cx carimbado barra quem copia o `de`; um cx NOVO só vale de quem eu dava por caído (voltou por outra conexão) */
+  /* o cx carimbado barra quem copia o `de`; um cx NOVO só vale de quem eu dava por caído (voltou por outra conexão)
+   * — ou, 19/09, num `dentro {religou: true}`: a conexão nova se apresenta, e isso É a prova de que a velha caiu
+   * (o relé carimba o `de` e o `cx`). Sem isso o relé reiniciando no meio da guerra deixava cada um recusando a
+   * conexão nova de quem não viu cair, até os dois lados "vencerem" por W.O. */
   function aceitaGuerra(ev) {
     var j = jogadorGuerra(ev && ev.de);
     if (!j) return false;
     if (j.cx && ev.cx && ev.cx !== j.cx) {
-      if (!j.sumidoDesde) return false;
+      var religou = ev.acao === 'dentro' && !!ev.dados && ev.dados.religou === true;
+      if (!j.sumidoDesde && !religou) return false;
+      if (!j.sumidoDesde) j.sumidoDesde = agora() - 1;      // caiu e voltou: o `recebe` o dá por de volta (cx novo)
       j.cx = ev.cx;
     } else if (!j.cx && ev.cx) j.cx = ev.cx;
     return true;
@@ -2259,7 +2530,8 @@ var JOGO = (typeof window !== 'undefined')
     var out = [];
     for (var i = 0; st && st.units && i < st.units.length; i++) {
       var u = st.units[i];
-      if ((u.kind === 'hero' || u.kind === 'fusion') && u.dono === dono && (!soVivas || (u.alive && !u.offBoard))) out.push(u);
+      if ((u.kind === 'hero' || u.kind === 'fusion') && (dono == null ? !!u.dono : u.dono === dono) &&
+          (!soVivas || (u.alive && !u.offBoard))) out.push(u);
     }
     return out;
   }
@@ -2306,18 +2578,23 @@ var JOGO = (typeof window !== 'undefined')
     S.bid = d.gid;
     S.fase = 'batalha';
     var g = S.guerra = { gid: d.gid, meuId: me, lado: porDono[me].lado, ordem: ordenados.map(function (x) { return x.dono; }),
-                         js: {}, nomes: {}, guildas: clone(d.guildas || null), euFora: false, resultado: null, fechou: false };
+                         js: {}, nomes: {}, guildas: clone(d.guildas || null), euFora: false, resultado: null, fechou: false,
+                         // 19/09: caí (ou entrei atrasado) alguma vez: não mando mais; `tarde` = a guerra já estava solta;
+                         // `euReligou` = a minha conexão é outra desde que a guerra abriu (todo `dentro` meu diz)
+                         euCai: false, tarde: false, tardePediu: false, saiSrv: false, euReligou: false };
     ordenados.forEach(function (x) {
       g.nomes[x.dono] = String(x.nome || nomeDe(x.dono)).slice(0, 24);
       if (x.dono === me) return;
       g.js[x.dono] = { id: x.dono, cx: null, nome: g.nomes[x.dono], lado: x.lado, conta: x.conta, ordem: num(x.ordem, 0),
                        sumidoDesde: 0, ultimoSinal: agora(), turnoDele: 0, turnoDeleEm: 0, bk: 0,
-                       marcado: false, saiu: false, saiuEm: 0, dentro: false };
+                       marcado: false, saiu: false, saiuEm: 0, dentro: false,
+                       caiuAlgumaVez: false, saiuTudo: false };     // 19/09: a memória da queda; o `sai` sem estado
     });
     S.cargaTeto = agora() + Coop.CARGA_MS;
     S.cargaProx = 0;
     S.dentroPrazo = 0;
     S.ultimoSinal = agora();
+    S.iaSeq = agora();                    // 19/09: o contador das minhas marcas `ia` nasce do relógio (uma página nova não repete)
     ligaTique();
     var r = R();
     outrosGuerra().forEach(function (x) { try { if (r && r.vigia) r.vigia(x.id, null); } catch (e) {} });
@@ -2335,6 +2612,7 @@ var JOGO = (typeof window !== 'undefined')
       muda();
     }));
     if (!ok) { S = nova(null); S.n = n0; muda(); return false; }
+    anotaLutaGuerra();                    // 19/09: a guerra pronta é luta aberta desde já (o servidor a considera viva)
     avisa('Guerra de Guilda no ' + ar.nome + '.', 'info');
     muda();
     return true;
@@ -2342,10 +2620,28 @@ var JOGO = (typeof window !== 'undefined')
   function rDentroGuerra(d, de) {
     var j = jogadorGuerra(de);
     if (!j || d.bid !== S.bid) return;
+    // 19/09: eu já tinha soltado a guerra sem ele (o prazo do `dentro` passou): ele entra ATRASADO — a resposta diz
+    var tarde = !!(S.dentroLiberado && !j.dentro);
+    if (tarde) j.caiuAlgumaVez = true;    // 19/09: quem entra atrasado não manda — e EU também o tiro da linha (não só quem o marca)
     j.dentro = true;
     j.ultimoSinal = agora();
-    if (S.dentroEu && d.viu !== true) enviaA(j, 'dentro', { bid: S.bid, viu: true });
+    if (S.dentroEu && d.viu !== true) enviaA(j, 'dentro', { bid: S.bid, viu: true, tarde: tarde, religou: !!S.guerra.euReligou });
+    // e o contrário: quem me responde diz que a guerra já estava solta quando cheguei — não mando até o fim e pego a foto
+    if (d.tarde === true && S.guerra) { S.guerra.tarde = true; S.guerra.euCai = true; }
+    pedeFotoTarde();                      // já aqui, antes de o motor dar um passo que fosse (o tique só repete)
     muda();
+  }
+  /* 19/09: entrei atrasado (os três já jogavam): assim que os três me respondem, a foto de quem manda me põe no
+   * turno deles — o meu placing nunca acabaria sozinho, e sem a foto eu mandaria `dessinc` do turno 0 aos três
+   * (a `volta` do parceiro costuma chegar antes das respostas de `dentro` e já traz a foto: aí não se pede outra —
+   * o freio de quem manda ignoraria o pedido e a repetição de 3 s traria uma segunda foto à toa). O pedido sai na
+   * própria resposta que solta a batalha (rDentroGuerra): entre ela e o tique o motor dava um passo, jogava um lance
+   * do turno 0 aos três e a foto o rebobinava. */
+  function pedeFotoTarde() {
+    var g = S.guerra;
+    if (!g || !g.tarde || g.tardePediu || !dentroGuerra() || !emBatalha()) return;
+    g.tardePediu = true;
+    if (!S.restauradaEm) pedeFoto();
   }
   function tiqueGuerra(ag) {
     var g = S.guerra;
@@ -2356,29 +2652,45 @@ var JOGO = (typeof window !== 'undefined')
     } else if (!dentroGuerra()) {
       if (S.dentroPrazo && ag > S.dentroPrazo) {
         // quem não entrou a tempo conta como caído desde o começo: a carência e o W.O. correm — a guerra não espera
+        // (19/09: e sai da linha de quem manda já aqui, não só quando o parceiro dele o marcar)
         var ini = S.dentroPrazo - Coop.DENTRO_MS;
-        outrosGuerra().forEach(function (j) { if (!j.dentro && !j.sumidoDesde) j.sumidoDesde = ini; });
+        outrosGuerra().forEach(function (j) { if (!j.dentro && !j.sumidoDesde) { j.sumidoDesde = ini; j.caiuAlgumaVez = true; } });
         S.dentroLiberado = true;
         muda();
       } else if (ag >= S.dentroRepProx) {
         S.dentroRepProx = ag + Coop.DENTRO_REP_MS;
-        outrosGuerra().forEach(function (j) { if (!j.dentro) enviaA(j, 'dentro', { bid: S.bid, viu: false }); });
+        outrosGuerra().forEach(function (j) { if (!j.dentro) enviaA(j, 'dentro', { bid: S.bid, viu: false, religou: !!g.euReligou }); });
       }
+    }
+    // 19/09: pedi a foto e, pela memória que chegou depois, quem manda sou EU (os quatro já caíram alguma vez e sou o
+    // primeiro presente): ninguém responde a quem manda — o meu estado é a referência, o motor solta
+    if (S.sincronizando && !S.fimFotoPedidaEm && souAutoridade()) {
+      S.sincronizando = false; S.fotoDepois = false;
+      drenaIaGuerra();
+      muda();
     }
     // voltei com os heróis marcados fora e o meu parceiro de guilda também está fora: ninguém me desmarca
     if (g.euFora && !S.sincronizando && emBatalha()) {
       var par = parceiroDeGuilda();
       if (!par || foraGuerra(par)) desmarcaGuerra(g.meuId);
     }
+    pedeFotoTarde();                      // entrei atrasado: a foto de quem manda (o pedido normalmente já saiu no `dentro`)
     return true;
   }
-  function sumiuGuerra(id, t0) {
+  function sumiuGuerra(id, t0, cx) {
     var j = jogadorGuerra(id);
     if (!j) return;
+    if (cx && j.cx && cx !== j.cx) return;      // 19/09: o `ausente` de uma conexão VELHA dele não o derruba
     var t = num(+t0, 0) || agora();
     var novo = !j.sumidoDesde;
     if (!j.sumidoDesde || t < j.sumidoDesde) j.sumidoDesde = t;
-    if (novo && emBatalha() && !S.fim) avisa(j.nome + ' caiu — esperando voltar…', 'aviso');
+    j.caiuAlgumaVez = true;               // 19/09: não volta a mandar até o fim da guerra (todos viram o mesmo `caiu`)
+    if (novo && emBatalha() && !S.fim) {
+      // 19/09: o prazo no aviso, como no duelo — do meu lado é a carência até o parceiro marcar; do lado deles a
+      // guerra só para se os DOIS caírem, e aí a contagem do W.O. aparece no topo (confereSumicoGuerra)
+      var meuLado = S.guerra && j.lado === S.guerra.lado;
+      avisa(j.nome + ' caiu — esperando voltar' + (meuLado ? ' (' + Math.round(Coop.GRACA_MS / 1000) + ' s)' : '') + '…', 'aviso');
+    }
     muda();
   }
   function voltouGuerra(id, cx) {
@@ -2409,9 +2721,10 @@ var JOGO = (typeof window !== 'undefined')
       try { visto = (r && r.visto) ? num(+r.visto(j.id), 0) : 0; } catch (e) { visto = 0; }
       var ultimo = Math.max(visto, j.ultimoSinal || 0);
       if (ultimo && ag - ultimo >= Coop.SILENCIO_MS && (!t0 || ultimo < t0)) t0 = ultimo;
-      // o turno dele estourou no MEU relógio (com a folga da animação dele)
+      // o turno dele estourou no MEU relógio (com a folga da animação dele) — 19/09: nunca com o motor congelado
+      // (sincronizando): esse relógio parou junto com ele, e estourava a vez de quem estava ali o tempo todo
       var es = S.esperando;
-      if (es && es.dono === j.id && es.prazo > 0) {
+      if (es && es.dono === j.id && es.prazo > 0 && !S.sincronizando) {
         var ini = es.desde;
         if (j.turnoDele === es.T && j.turnoDeleEm > es.desde) ini = Math.min(j.turnoDeleEm, es.desde + Coop.FOLGA_MS);
         var estouro = ini + es.prazo;
@@ -2422,18 +2735,24 @@ var JOGO = (typeof window !== 'undefined')
       if (t0 && j.lado === g.lado && !j.marcado && ag - t0 >= Coop.GRACA_MS) assumeGuerra(j, mot);
     });
     var inim = outrosGuerra().filter(function (j) { return j.lado !== g.lado; });
-    if (inim.length === 2 && t0s[inim[0].id] && t0s[inim[1].id] &&
-        ag - Math.max(t0s[inim[0].id], t0s[inim[1].id]) >= Coop.WO_MS) venceWOGuerra();
+    var ambos = inim.length === 2 && t0s[inim[0].id] && t0s[inim[1].id];
+    // 19/09: os DOIS adversários fora — a tela mostra "o lado deles tem N s para voltar" (o topo lê S.woDesde)
+    var woDesde = ambos ? Math.max(t0s[inim[0].id], t0s[inim[1].id]) : 0;
+    if (woDesde !== S.woDesde) {
+      S.woDesde = woDesde;
+      if (woDesde) avisa('Os dois adversários caíram — o lado deles tem ' + Math.round(Coop.WO_MS / 1000) + ' s para voltar.', 'aviso');
+      muda();
+    }
+    if (ambos && ag - woDesde >= Coop.WO_MS) venceWOGuerra();
   }
   function assumeGuerra(j, mot) {
     var st = (G() || {}).state;
     if (!st) return;
     j.marcado = true;
+    j.caiuAlgumaVez = true;               // 19/09: marcado (queda ou prazo) = não manda mais nesta guerra
     unidadesDe(st, j.id, true).forEach(function (u) {
-      if (u.ia) return;
-      u.ia = true;
-      marcaSrv('ia', u.uid, true);
-      enviaGuerra('ia', { b: S.bid, u: u.uid, mot: mot });
+      if (!agendaIaGuerra(st, u, true)) return;
+      enviaGuerra('ia', { b: S.bid, u: u.uid, mot: mot, T: st.turno || 0, n: ++S.iaSeq });   // (o `T` é só o turno de quem falou)
     });
     avisa(j.nome + ' caiu — o turno dele passa até voltar.', 'aviso');
     muda();
@@ -2442,10 +2761,10 @@ var JOGO = (typeof window !== 'undefined')
     var st = (G() || {}).state, g = S.guerra;
     if (!st || !g) return;
     unidadesDe(st, dono, false).forEach(function (u) {
-      if (!u.ia) return;
-      u.ia = false;
-      marcaSrv('ia', u.uid, false);
-      if (u.alive && !u.offBoard) enviaGuerra('ia', { b: S.bid, u: u.uid, mot: 'volta' });
+      if (!agendaIaGuerra(st, u, false)) return;
+      // 19/09: o herói que MORREU marcado também se desmarca nos outros dois motores — `u.ia` entra no hash, e
+      // desmarcá-lo só aqui deixava os adversários com outro hash (uma divergência e uma foto a mais a cada volta)
+      if (!u.offBoard) enviaGuerra('ia', { b: S.bid, u: u.uid, mot: 'volta', T: st.turno || 0, n: ++S.iaSeq });
     });
     if (dono === g.meuId) g.euFora = false;
     else if (g.js[dono]) g.js[dono].marcado = false;
@@ -2455,50 +2774,109 @@ var JOGO = (typeof window !== 'undefined')
     var gm = G();
     if (!gm || !gm.state || S.fim) return;
     S.fimMotivo = 'wo';
-    avisa('Os dois adversários saíram da guerra — vitória por W.O. (sem XP para a guilda).', 'ok');
+    // 19/09: o W.O. rende XP quando o servidor confirma a queda dos dois no relé (antes o aviso dizia "sem XP" e a
+    // tela de fim mostrava o XP dois segundos depois)
+    avisa('Os dois adversários saíram da guerra — vitória por W.O.: o servidor confere a queda deles para valer o XP.', 'ok');
     if (gm._encerra) gm._encerra(gm.meuLado(), 'wo');
   }
   /* a marca `ia` só vale do PARCEIRO DE GUILDA do dono da unidade; desmarcar (a volta), também do próprio dono */
-  function rIaGuerra(d, de) {
+  /* A MARCA QUE CHEGA ENQUANTO ESPERO A FOTO (19/09) fica guardada e entra DEPOIS dela: uma `volta` que chegava antes
+   * da foto (o parceiro dele a mandou antes de quem manda a processar) era um "nada a fazer" no meu estado velho, a
+   * foto trazia o herói ainda marcado, e eu ficava com a marca que os outros tiraram — o motor deles esperava o lance
+   * dele, o meu passava a vez: a guerra parava. Cada marca leva `n` (o contador de quem falou); a foto diz até que `n`
+   * de cada um quem manda já aplicou (`iaVisto`): o guardado com `n` maior entra, o resto a foto já traz. */
+  function drenaIaGuerra() {
+    var fila = S.iaBuffer || [];
+    S.iaBuffer = [];
+    for (var i = 0; i < fila.length; i++) {
+      var it = fila[i];
+      if (typeof it.d.n === 'number' && it.d.n <= num(+(S.iaVisto || {})[it.de], 0)) continue;
+      rIaGuerra(it.d, it.de, true);
+    }
+  }
+  function rIaGuerra(d, de, replay) {
     var g = S.guerra, gm = G(), st = gm && gm.state, jd = jogadorGuerra(de);
     if (!d || d.b !== S.bid || !st || !jd) return;
+    if (!replay && S.sincronizando) {
+      if ((S.iaBuffer || (S.iaBuffer = [])).length < 64) S.iaBuffer.push({ d: d, de: de });
+      return;
+    }
     var u = E().findUnit(st, d.u);
     if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || !u.dono) return;
     var volta = d.mot === 'volta';
     var ladoDono = u.dono === g.meuId ? g.lado : ((g.js[u.dono] || {}).lado || null);
     if (!ladoDono || ladoDono !== jd.lado || (u.dono === de && !volta)) return;
-    if (!!u.ia === !volta) return;
-    u.ia = !volta;
-    marcaSrv('ia', u.uid, !volta);
-    if (u.dono === g.meuId) {
-      // o meu parceiro me deu por fora (ou me devolveu os heróis): o meu motor se acerta pela foto de quem manda
+    if (typeof d.n === 'number') { S.iaVisto = S.iaVisto || {}; S.iaVisto[de] = Math.max(num(+S.iaVisto[de], 0), d.n); }
+    // 19/09: a marca entra na VEZ do herói (na hora, se ele já é o ativo aqui) — o mesmo ponto nos quatro motores
+    agendaIaGuerra(st, u, !volta);
+    if (u.dono === g.meuId && replay) {
+      // depois da foto: só o que a marca diz de mim — a foto acabou de vir, não se pede outra
       g.euFora = !volta;
+      g.euCai = true;
+      S.meAssumiu = !volta;
+    } else if (u.dono === g.meuId) {
+      /* o meu parceiro me deu por fora (ou me devolveu os heróis): o meu motor se acerta pela foto de quem manda.
+       * 19/09: a `volta` vale MESMO com os meus heróis sem marca aqui — quem caiu não recebeu a marca (foi ao cx
+       * velho), e sair cedo aqui era o que deixava a A1 de volta sem pedir foto e se achando autoridade. Caí alguma
+       * vez (a marca só vem de queda ou prazo): não mando mais até o fim. A foto só se ainda não veio desde a minha
+       * volta (a `volta` do parceiro chega logo depois dela, e já vem aplicada). */
+      g.euFora = !volta;
+      g.euCai = true;
       S.meAssumiu = !volta;
       if (volta && gm._voltouDaQueda) { try { gm._voltouDaQueda(); } catch (eV) {} }
       S.fotoPendente = false;
-      pedeFoto();
-    } else if (g.js[u.dono]) g.js[u.dono].marcado = !volta;
+      // (quem entrou atrasado nunca "religou": a foto que já veio desde que a guerra abriu aqui conta do mesmo jeito)
+      var jaRestaurou = !!(volta && S.restauradaEm && S.restauradaEm >= (S.religouEm || 0));
+      if (!jaRestaurou) pedeFoto();
+    } else if (g.js[u.dono]) {
+      g.js[u.dono].marcado = !volta;
+      if (!volta) g.js[u.dono].caiuAlgumaVez = true;   // 19/09: o parceiro dele o marcou: todos o tiram da linha
+    }
     muda();
   }
   function rSaiGuerra(d, de) {
     var st = (G() || {}).state, j = jogadorGuerra(de);
-    if (!d || d.b !== S.bid || !st || !j) return;
-    var u = E().findUnit(st, d.u);
-    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || u.dono !== de) return;
+    if (!d || d.b !== S.bid || !j) return;
     if (!j.saiu) { j.saiu = true; j.saiuEm = agora(); }
     S.saiuNome = j.nome;
+    // 19/09: o `sai` SEM unidade (`todos`) é de quem saiu antes de o salão dele abrir (a carga estourou): todos os
+    // heróis dele caem — mesmo que o meu salão ainda esteja carregando (mataQuemSaiu lê `saiuTudo` quando puder)
+    if (d.todos === true) { j.saiuTudo = true; mataQuemSaiu(); muda(); return; }
+    if (!st) return;
+    var u = E().findUnit(st, d.u);
+    if (!u || (u.kind !== 'hero' && u.kind !== 'fusion') || u.dono !== de) return;
     S.mortePendente[d.u] = true;
     mataQuemSaiu();
     muda();
   }
-  /* sair da guerra (o menu, ou a arena que não carregou a tempo): os meus heróis caem nos motores dos outros */
+  /* sair da guerra (o menu, ou a arena que não carregou a tempo): os meus heróis caem nos motores dos outros.
+   * 19/09: e caem AQUI e no SERVIDOR na hora — Vida.fim com os meus a 0 e o POST /api/guerra/sair {gid} (keepalive e a
+   * fila de retentativa da Autoridade, pelo JOGO.Guerra). Antes quem saía não fechava nada: a vida só chegava ao
+   * servidor quando um dos três fechasse com a marca `morte`, minutos depois, e dava para abrir outra luta antes. */
   Coop.sairDaGuerra = function (mot) {
     if (S.tipo !== 'guerra') return false;
-    var gm = G(), st = gm && gm.state;
-    if (st && S.bid && st.phase === 'playing') {
-      unidadesDe(st, S.guerra.meuId, true).forEach(function (u) { enviaGuerra('sai', { b: S.bid, u: u.uid, mot: mot || 'saiu' }); });
+    var gm = G(), st = gm && gm.state, g = S.guerra, gid = S.bid;
+    if (st && gid && st.phase === 'playing') {
+      unidadesDe(st, g.meuId, true).forEach(function (u) { enviaGuerra('sai', { b: gid, u: u.uid, mot: mot || 'saiu' }); });
+    } else if (gid) enviaGuerra('sai', { b: gid, todos: true, mot: mot || 'saiu' });
+    // a vida dos meus a 0 já (o servidor grava o mesmo no `sair`)
+    if (st && gm && gm._vidaDoDono && JOGO.Vida && JOGO.Vida.fim) {
+      try {
+        var vd = gm._vidaDoDono(st, g.meuId), zeros = {};
+        Object.keys(vd.fim).forEach(function (hid) { zeros[hid] = 0; });
+        if (Object.keys(zeros).length) JOGO.Vida.fim(zeros, vd.maximos);
+      } catch (eV) {}
     }
-    if (mot === 'carga') avisa('A guerra não começou para você — o salão demorou demais para carregar.', 'aviso');
+    if (gid && !g.saiSrv && !S.fim) {
+      g.saiSrv = true;
+      anotaLutaGuerra(false, null);
+      var A = autoridadeLigada(), Gu = JOGO.Guerra;
+      var sincroniza = function () { try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (e) {} };
+      if (A && A.saiDaGuerra) { try { Promise.resolve(A.saiDaGuerra(gid)).then(sincroniza, function () {}); } catch (eS) {} }
+      else if (Gu && Gu.sairDaPartida) { try { Gu.sairDaPartida(gid); } catch (eS2) {} }
+    }
+    // 19/09: sair é sair — os dois heróis ficam sem vida no servidor também por carga (o jogador precisa saber)
+    if (mot === 'carga') avisa('A guerra não começou para você — o salão demorou demais para carregar; os seus dois heróis ficam sem vida.', 'aviso');
     var n = S.n;
     S = nova(null);
     S.n = n;
@@ -2516,23 +2894,30 @@ var JOGO = (typeof window !== 'undefined')
              }) };
   }
   function sessaoGuerra() {
-    var g = S.guerra;
-    return { gid: g.gid, lado: g.lado, autoridade: autoridadeGuerra(), guildas: clone(g.guildas), resultado: g.resultado,
+    var g = S.guerra, aut = autoridadeGuerra();
+    return { gid: g.gid, lado: g.lado, autoridade: aut, autoridadeNome: nomeGuerra(aut), guildas: clone(g.guildas), resultado: g.resultado,
              entrando: !!(S.bid && !S.fim && !dentroGuerra()),
+             euCai: !!g.euCai, tarde: !!g.tarde,
+             // 19/09: os dois adversários fora — desde quando, e o prazo do W.O. (a contagem no topo da batalha)
+             wo: S.woDesde ? { desde: S.woDesde, prazo: Coop.WO_MS } : null,
              jogadores: g.ordem.map(function (id) {
-               if (id === g.meuId) return { id: id, nome: nomeGuerra(id), lado: g.lado, eu: true, on: true, fora: g.euFora, saiu: false };
+               if (id === g.meuId) return { id: id, nome: nomeGuerra(id), lado: g.lado, eu: true, on: true, fora: g.euFora, saiu: false, caiu: !!g.euCai };
                var j = g.js[id];
-               return { id: id, nome: j.nome, lado: j.lado, eu: false, on: !j.sumidoDesde && !j.saiu, fora: j.marcado, saiu: j.saiu };
+               return { id: id, nome: j.nome, lado: j.lado, eu: false, on: !j.sumidoDesde && !j.saiu, fora: j.marcado, saiu: j.saiu, caiu: !!j.caiuAlgumaVez };
              }) };
   }
   /* o fechamento no servidor: o registro deste motor (lances dos quatro e as marcas); o W.O. vai sem o hash do fim
-   * (o encerra não é fim do motor: o servidor refaz até onde houve lance e não vê vencedor) */
+   * (o encerra não é fim do motor: o servidor refaz até onde houve lance e não vê vencedor) e, 19/09, com `wo: true`
+   * — o servidor só o confirma com a queda dos DOIS anotada pelo relé. O corpo fica na luta aberta da conta antes de
+   * sair (quem não manda fecha GUERRA_FECHA_MS depois: a página que for embora nesse meio reenvia ao abrir). */
   function fechaGuerraNoServidor() {
     var Gu = JOGO.Guerra, g = S.guerra;
     if (!Gu || !Gu.fechar || !g || g.fechou) return;
     g.fechou = true;
     var corpo = { gid: g.gid, lances: (S.logSrv || []).slice(), hashFinal: (S.fim && S.fimMotivo !== 'wo') ? S.fim.h : null,
                   fotografada: !!S.fotografada };
+    if (S.fimMotivo === 'wo') corpo.wo = true;
+    anotaLutaGuerra(true, corpo);
     var vai = function () {
       try {
         Promise.resolve(Gu.fechar(corpo)).then(function (r) {
@@ -2584,6 +2969,9 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------ ganchos de prova
   Coop._log = function () { return clone(S.log); };
   Coop._hashes = function () { return clone(S.hashes); };
+  /* 19/09: as marcas `ia` que esperam a vez do herói (a marca entra na vez dele para o hash não divergir com
+   * quem já está à frente) — as provas leem a marca EFETIVA: a aplicada mais a que está na fila */
+  Coop._iaPendentes = function () { return clone(S.iaPendentes || []); };
   Coop._fila = function () { return clone(S.fila); };
   Coop._estraga = function (uid, dPv) {
     var g = G(), st = g && g.state;
@@ -2620,6 +3008,7 @@ var JOGO = (typeof window !== 'undefined')
       var jg = jogadorGuerra(ev.de);
       jg.ultimoSinal = agora();
       if (jg.sumidoDesde) Coop.parceiroVoltou(jg.id, ev.cx || null);
+      adotaCaidos(d.caidos, ev.de);       // 19/09: a memória da queda que viaja — só acrescenta
     }
     // ele falou pela conexão que eu conheço: não sumiu (um `saiu` de outra aba
     // dele, ou um `ausente` que se cruzou com a volta, não o tira mais)
@@ -2692,7 +3081,24 @@ var JOGO = (typeof window !== 'undefined')
     if (emBatalha() && g._voltouDaQueda) { try { g._voltouDaQueda(); } catch (eV) {} }
     // (se a foto já veio depois da volta — o `ia` do outro chegou antes —, não pede outra)
     var jaRestaurou = !!(S.restauradaEm && S.restauradaEm >= S.religouEm);
-    if ((S.tipo === 'grupo' || S.tipo === 'guerra') && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();
+    /* 19/09, A GUERRA: quem caiu NÃO volta a mandar até o fim (euCai) e pede a foto SEMPRE. Antes, a A1 que voltava se
+     * via como autoridade (no motor dela ninguém a marcou: a voz `ia` foi ao cx velho), não pedia foto, reaplicava os
+     * lances pedidos e — divergindo — mandava `dessinc` aos três, que pediam a foto DELA, do turno em que caiu: a
+     * guerra dos outros três rebobinava 45 turnos. Os três a mantêm fora da linha de autoridade pelo `caiu` que todos
+     * viram (caiuAlgumaVez), então a decisão é igual nos quatro. O `pede` sai só se a foto já veio (o que se perdeu no
+     * cx velho a foto traz inteiro; pedir os lances de 45 turnos aos três era a enxurrada). */
+    if (S.tipo === 'guerra' && S.guerra) {
+      S.guerra.euCai = true;
+      // 19/09: a conexão nova se apresenta aos três SEM cx (não sei mais o cx deles, nem eles o meu): um `dentro`
+      // com `religou` vindo de um cx novo vale como "caiu e voltou" — mesmo sem o `caiu` do relé (o relé reiniciou)
+      S.guerra.euReligou = true;
+      enviaGuerra('dentro', { bid: S.bid, viu: false, religou: true }, true);
+      if (emBatalha() && !jaRestaurou) { pedeFoto(); return; }
+      if (emBatalha()) envia('pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
+      muda();
+      return;
+    }
+    if (S.tipo === 'grupo' && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();
     if (emBatalha()) envia('pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
   }
   var desligas = [];

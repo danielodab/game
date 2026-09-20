@@ -10,6 +10,11 @@ anota aqui dois eventos por conta:
   'voltou'  a conta ganhou de novo a primeira conexão identificada
 e a API (servidor/grupo.py, duelo_fechar) lê para confirmar o W.O. que o cliente que ficou declara:
 existe um 'caiu' da conta ausente DEPOIS de o duelo abrir e nenhum 'voltou' dela nos WO_MS seguintes.
+19/09: a guerra de guilda (servidor/guerra.py, guerra_fechar e _guerra_wo_provado) usa a MESMA prova_de_queda para o
+W.O. dos dois adversários desde a CASADA (criada_ms — a queda anotada entre a casada e a pronta, de quem confirmou pelo
+HTTP com o Relé já caído e nunca voltou, também prova; o 'voltou' dentro da janela anula a queda velha). A marca `ia`
+do registro não passa por aqui: o parceiro marca também por prazo, sem queda nenhuma, e o juiz a aceita de quem for —
+só a marca `morte` pede a saída declarada, guerra_saidas.
 
 O BANCO É O MESMO DA API. No Coolify os dois sobem com --banco /dados/soterra.db (servidor/coolify/
 entrada.sh); no VPS, /var/lib/soterra/soterra.db (soterra-api.service e soterra-rele.service), os dois

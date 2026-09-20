@@ -127,10 +127,15 @@
         /* 14/09: A ENTRADA DO CAMPO DE PVP ("um portal de pedra com brilho vermelho perto da
          * Arena") não encosta em nada: nem na caixa de uma obra ou portal, nem no raio de
          * conversa de outro lugar (o painel errado abriria), nem numa calçada que não é a
-         * dela, nem no disco da Árvore. A luz vermelha pintada no chão não conta. */
+         * dela, nem no disco da Árvore. A luz vermelha pintada no chão não conta.
+         * 19/09: a entrada é o portão do arco dos portais (r 43,5, a oeste), com corredor e
+         * raio de conversa 6,4 — as mesmas réguas seguem valendo (medido: caixa do arco a
+         * 14,6 m da obra mais perto; conversa sobra 6,19 m até o portal 0 e 8,84 até a Arena). */
         var H = w.JOGO.Hub;
         var campo = L.filter(function (l) { return l.tipo === 'campo'; })[0];
         check('a praça tem a entrada do Campo de PvP, sem parede', !!campo && !campo.solido);
+        check('a entrada é o portão do arco: tem corredor e o raio de conversa de portal aberto',
+              !!campo && !!campo.portao && campo.raio === 6.4, campo && JSON.stringify({ portao: campo.portao, raio: campo.raio }));
         if (campo) {
           var cxC = H._caixaDoLugar('campo');
           var rB = Math.max(cxC.x1 - cxC.x0, cxC.z1 - cxC.z0) / 2;

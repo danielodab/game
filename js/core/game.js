@@ -1116,11 +1116,16 @@ var JOGO = (typeof window !== 'undefined')
     var antesUid = timerUid, antesT = timerTurno, antesIni = turnoIniMs;
     var st;
     try { st = E().restaura(foto.estado); } catch (e) { return false; }
-    // o `ia` que entrou depois da foto do começo do turno (a autoridade manda a lista)
-    var iaFoto = foto.ia || [];
-    for (var q = 0; q < iaFoto.length; q++) {
-      var ui = E().findUnit(st, iaFoto[q]);
-      if (ui && (ui.kind === 'hero' || ui.kind === 'fusion')) ui.ia = true;
+    // o `ia` que entrou depois da foto do começo do turno (a autoridade manda a lista).
+    // 19/09: a lista é a VERDADE INTEIRA de quem está fora agora — herói de gente que não está nela sai da marca
+    // (a foto do começo do turno ainda tinha quem voltou como fora, e a vez dele passava sozinha no motor dele).
+    // Sem lista (a foto do fim) nada muda.
+    var iaFoto = Object.prototype.toString.call(foto.ia) === '[object Array]' ? foto.ia : null;
+    if (iaFoto) {
+      for (var q = 0; q < st.units.length; q++) {
+        var ui = st.units[q];
+        if ((ui.kind === 'hero' || ui.kind === 'fusion') && ui.dono) ui.ia = iaFoto.indexOf(ui.uid) >= 0;
+      }
     }
     Game.state = st;
     resetAiState();

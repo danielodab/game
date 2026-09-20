@@ -17,7 +17,9 @@ tests/autoridade_api.py (herda a montagem e os ajudantes; só as provas `prova_*
   - a sala em grupo: só os heróis da conta que largou; a sala segue aberta e o fechamento da parceira grava a vida
     dela sem regravar a de quem largou;
   - o `largou` da sala em grupo (a parte de quem saiu, pelo registro): só os heróis dele, a sala segue aberta;
-  - o duelo, a Arena e a guerra também largam a luta pendente antes de abrir.
+  - o duelo, a Arena e a guerra também largam a luta pendente antes de abrir;
+  - 19/09: a GUERRA pronta é uma luta aberta (luta_aberta_guerra): abrir uma sala com ela pendente larga a guerra —
+    os heróis da conta a 0, a saída declarada (guerra_saidas), o evento e `largada` na resposta.
 Os processos rodam com prioridade abaixo do normal (a máquina é dividida).
 """
 import json
@@ -199,6 +201,57 @@ class ProvaDaLargada(A.ProvaDaAutoridade):
                                                              'dono': 'guerreira'})
         self.assertEqual(r.get('largada'), {'herois': ['sumo']}, r)
         self.assertEqual(self.linha(c3)['hp_fim'], 0)
+
+    # -- a guerra pronta (19/09) ------------------------------------------------------------------------------------
+    def prova_06_guerra_pronta_largada(self):
+        """19/09 (a revisão da guerra): a guerra PRONTA é uma luta aberta (luta_aberta_guerra) — quem abre uma sala
+        com ela pendente larga a guerra: os heróis dela a 0 com o máximo de verdade, a saída declarada em
+        guerra_saidas, o evento, e a resposta com `largada`; a guerra segue para os outros três."""
+        js = [self.conta(n) for n in ('Ana Guerra', 'Bia Guerra', 'Cris Guerra', 'Duda Guerra')]
+        a1, a2, b1, b2 = js
+        for c, d in zip(js, ('ana', 'bia', 'cris', 'duda')):
+            c.dono = d
+        for lider, parceiro in ((a1, a2), (b1, b2)):
+            status, r = lider.pede('POST', '/api/guilda/criar', {'nome': 'Clã ' + self.serie('g'), 'emblema': '⚔'})
+            self.assertEqual(status, 200, r)
+            status, r = parceiro.pede('POST', '/api/guilda/entrar', {'gid': r['guilda']['id']})
+            self.assertEqual(status, 200, r)
+        for lider, parceiro in ((a1, a2), (b1, b2)):
+            status, r = lider.pede('POST', '/api/guerra/inscrever', {'parceiro': parceiro.conta['id'],
+                                                                    'herois': ['sumo', 'curandeiro'], 'dono': lider.dono})
+            self.assertEqual(status, 200, r)
+            status, r = parceiro.pede('POST', '/api/guerra/juntar', {'herois': ['sumo', 'curandeiro'], 'dono': parceiro.dono})
+            self.assertEqual(status, 200, r)
+        self.assertEqual(r['fase'], 'casada', r)
+        for c in js:
+            status, r = c.pede('POST', '/api/guerra/confirmar', {})
+            self.assertEqual(status, 200, r)
+        for _ in range(25):
+            status, e = a1.pede('GET', '/api/guerra/estado')
+            if e.get('ata'):
+                break
+            time.sleep(0.2)
+        self.assertEqual((e['fase'], bool(e.get('ata'))), ('pronta', True), e)
+        gid = e['gid']
+        self.assertEqual([x['estado'] for x in self.sql("SELECT estado FROM luta_aberta_guerra WHERE gid = ?", gid)], ['aberta'] * 4)
+        # a Ana abre um calabouço no meio da guerra: larga a guerra (409 vida-zero da própria largada)
+        status, r = self.abre_corpo(a1)
+        self.assertEqual((status, r.get('motivo'), r.get('largada')), (409, 'vida-zero', {'herois': ['sumo', 'curandeiro']}), r)
+        for h in ('sumo', 'curandeiro'):
+            linha = self.linha(a1, h)
+            self.assertEqual(linha['hp_fim'], 0, h)
+            self.assertGreater(linha['hp_max'], 60, 'o máximo de verdade (o juiz refez a guerra sem lance)')
+        self.assertEqual(self.sql("SELECT estado FROM luta_aberta_guerra WHERE conta_id = ?", a1.conta['id'])[0]['estado'], 'largada')
+        self.assertEqual([x['motivo'] for x in self.sql("SELECT motivo FROM guerra_saidas WHERE gid = ?", gid)], ['largada'])
+        self.assertEqual(json.loads(self.eventos(a1, 'luta-largada')[0]['dados'])['tipo'], 'guerra')
+        self.assertEqual(a1.pede('GET', '/api/guerra/estado')[1]['fase'], 'livre')
+        self.assertEqual(a2.pede('GET', '/api/guerra/estado')[1]['fase'], 'pronta', 'a guerra segue para os outros')
+        self.assertIsNone(self.linha(a2), 'os heróis dos outros não são tocados')
+        # abrir de novo depois não larga nada (a saída já está declarada)
+        self.sql("UPDATE vida_heroi SET desde_ms = desde_ms - 10000 WHERE conta_id = ?", a1.conta['id'])
+        status, r = self.abre_corpo(a1)
+        self.assertEqual(status, 200, r)
+        self.assertNotIn('largada', r)
 
 
 if __name__ == '__main__':

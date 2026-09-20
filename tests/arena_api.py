@@ -26,7 +26,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
 sys.path.insert(0, AQUI)
 from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402
-from autoridade_api import BAIXA, ESTADO_JS, JUIZ, NODE, espera_url, roda_node  # noqa: E402
+from autoridade_api import BAIXA, ESTADO_JS, JUIZ, NODE, adota_regras, espera_url, roda_node  # noqa: E402
 
 
 class ProvaDaArena(unittest.TestCase):
@@ -45,6 +45,7 @@ class ProvaDaArena(unittest.TestCase):
             pj = cls._processo('juiz', [NODE, JUIZ, '--porta', str(porta_juiz)])
             if not espera_url(cls.juiz + '/saude', pj):
                 raise RuntimeError('o juiz não subiu; veja ' + cls.pasta)
+            adota_regras(cls.juiz)              # 19/09: as provas são a página nova (versaoRegras nas aberturas)
             codigo = ("const est = require(process.argv[1]); const w = est.mundoEconomico({}); est.poeEstado(w, null, null);"
                       "const s = est.tiraEstado(w);"
                       "process.stdout.write(JSON.stringify({progress: s.progress, db: s.db, xp: w.J.DATA.leveling.xpTable}));")

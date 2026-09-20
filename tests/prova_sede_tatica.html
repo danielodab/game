@@ -23,6 +23,18 @@
      peça, o contorno inteiro virou parede, as peças altas são altas e as baixas são baixas, as
      lareiras têm fogo e luz (e o fogo MEXE), a parede do lado da câmera corta e volta quando a
      câmera gira, e da câmera padrão nenhum dos oito heróis fica atrás do cenário.
+       19/09 (o dono: "melhore o mapa e deixe bem estratégico" — o mapa virou "A Arena do Trono"):
+     a RÉGUA TÁTICA refeita no motor DENTRO da página, lendo o layout que o jogo carregou — nenhum
+     par nascimento×nascimento com visão (Engine.los nos dois sentidos), nenhuma reta acima de 9
+     (visão e corredor), todo chão alcançável, fluxo ≥ 5 entre os lados, obstáculo 14–24%, as duplas
+     adjacentes nos dois lados, cobertura a 2 de cada nascimento, o espelho — e a ROBUSTEZ A MURO
+     INVOCADO, com TODOS os muros do jogo (DATA.spells E as formas de fusão por Fusion.spellsFor, as
+     casas pelo Engine.aoeTiles): nenhuma conjuração de nível < 30 derruba o fluxo abaixo de 3, só o
+     círculo r3 de nível 30 sela sozinho, NENHUM par de nível ≤ 10 sela um lado — varredura inteira
+     dos pares, não amostra — e todo par que sela leva um anel r2, uma cruz 2 ou um círculo r3, como
+     o cabeçalho do mapa documenta. E a CÂMERA PADRÃO: raio a todo o chão em três alturas — nenhuma
+     casa com a cabeça tapada, nascimentos e primeiro passo inteiros à vista, as tapadas até o peito
+     listadas. Se o mapa mudar, esta prova cobra de novo.
        ?foto=1        esconde o painel e não gira a câmera (para a foto)
      window.__vista('padrao' | 'cima' | 'lado') enquadra a foto. -->
 <iframe id="tela" src="../index.html?sandbox=1"></iframe>
@@ -96,6 +108,232 @@
       .then(function () { f.style.width = ''; f.style.height = ''; }, function (e) { f.style.width = ''; f.style.height = ''; check('área útil em ' + tamW + '×' + tamH, false, e && e.message); });
   }
   window.__heroisNaAreaUtil = heroisNaAreaUtil;
+
+  /* A RÉGUA TÁTICA (19/09), medida no MOTOR do jogo dentro da página, sobre o layout que ele
+   * carregou (nada é repetido aqui em número): é a mesma conta que o motor do juiz fez para
+   * escolher o desenho, e que tem de continuar valendo se alguém mexer no mapa. O fluxo é o
+   * número de caminhos disjuntos (em casas) entre os nascimentos de um lado e os do outro, com
+   * os nascimentos sem capacidade (a régua dos juízes). A robustez a muro tapa, uma por uma,
+   * cada conjuração de muro que existe no jogo — os feitiços de classe (DATA.spells com efeito
+   * 'wall') E os de fusão (Fusion.spellsFor por dupla de DATA.fusionForms), uma forma por
+   * (shape, size), as casas pelo Engine.aoeTiles no estado da sala — fora dos nascimentos, e
+   * mede o fluxo que sobra; depois varre TODOS os pares, com o BFS só onde pode selar (ver o
+   * comentário na varredura). Rodada de conserto (19/09): antes o laço olhava só as 40 piores e
+   * parava no primeiro par com fluxo 0 — a garantia passava pela ordem, não pela propriedade.
+   * Conserto 2: a rodada anterior lia só a classe e afirmava "nenhum par de nível ≤ 15 sela";
+   * com as 24 formas de fusão (Redoma Abissal nível 12, Vulcão Abissal nível 30) isso era falso. */
+  function reguaTatica(w, st, check) {
+    var E = w.JOGO.Engine, L = w.JOGO.DATA.arena('sede').rooms[0].layout, W = L[0].length, H = L.length;
+    function at(x, y) { return (y < 0 || y >= H || x < 0 || x >= W) ? '#' : L[y].charAt(x); }
+    function chao(c) { return c === '.' || c === ',' || c === 'P' || (c >= 'a' && c <= 'z'); }
+    var Ps = [], As = [], covers = [], nChao = 0, inner = 0, obst = 0, x, y, c, i, j;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      c = at(x, y);
+      if (chao(c)) nChao++;
+      if (c === 'P') Ps.push({ x: x, y: y }); else if (c === 'a') As.push({ x: x, y: y }); else if (c === '=') covers.push({ x: x, y: y });
+      if (x > 0 && y > 0 && x < W - 1 && y < H - 1) { inner++; if (c === '#' || c === '=') obst++; }
+    }
+    var man = function (a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); };
+    function ehNasc(x, y) {
+      for (var k = 0; k < Ps.length; k++) if (Ps[k].x === x && Ps[k].y === y) return true;
+      for (k = 0; k < As.length; k++) if (As[k].x === x && As[k].y === y) return true;
+      return false;
+    }
+    // as casas de chão indexadas (a régua anda por índice e Uint8Array: é o que deixa a varredura dos pares barata)
+    var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]], cels = [], idx = {}, k;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (chao(at(x, y))) { idx[x + ',' + y] = cels.length; cels.push({ x: x, y: y, nasc: ehNasc(x, y), P: at(x, y) === 'P' }); }
+    var nCel = cels.length, vizI = [];
+    for (k = 0; k < nCel; k++) { var vv = []; for (i = 0; i < 4; i++) { var jj = idx[(cels[k].x + dirs[i][0]) + ',' + (cels[k].y + dirs[i][1])]; if (jj !== undefined) vv.push(jj); } vizI.push(vv); }
+    // fluxo máximo (Edmonds-Karp) com vértice dividido: cada casa passa 1; nascimentos passam tudo. `bloq`: Uint8Array por casa (1 = muro).
+    // Devolve { f, caminhos }: os caminhos disjuntos que o fluxo achou (Uint8Array das casas não-nascimento de cada um) — é o
+    // filtro barato da varredura dos pares de muro
+    function fluxo(bloq) {
+      var N = 2 * nCel + 2, S = 2 * nCel, T = 2 * nCel + 1, adj = [], INF = 1e9, kk, e, u, v, ed;
+      for (kk = 0; kk < N; kk++) adj.push([]);
+      function edge(u2, v2, cap) { adj[u2].push({ v: v2, c: cap, cap: cap, r: adj[v2].length }); adj[v2].push({ v: u2, c: 0, cap: 0, r: adj[u2].length - 1 }); }
+      for (kk = 0; kk < nCel; kk++) {
+        if (bloq && bloq[kk]) continue;
+        edge(2 * kk, 2 * kk + 1, cels[kk].nasc ? INF : 1);
+        if (cels[kk].nasc && cels[kk].P) edge(S, 2 * kk, INF);
+        if (cels[kk].nasc && !cels[kk].P) edge(2 * kk + 1, T, INF);
+        for (e = 0; e < vizI[kk].length; e++) if (!(bloq && bloq[vizI[kk][e]])) edge(2 * kk + 1, 2 * vizI[kk][e], INF);
+      }
+      var flow = 0;
+      for (;;) {
+        var prev = new Array(N), q = [S], qi = 0; prev[S] = { u: S };
+        while (qi < q.length && !prev[T]) { u = q[qi++]; for (e = 0; e < adj[u].length; e++) { ed = adj[u][e]; if (ed.c > 0 && !prev[ed.v]) { prev[ed.v] = { u: u, e: ed }; q.push(ed.v); } } }
+        if (!prev[T]) break;
+        var f = INF; v = T;
+        while (v !== S) { f = Math.min(f, prev[v].e.c); v = prev[v].u; }
+        v = T;
+        while (v !== S) { prev[v].e.c -= f; adj[v][prev[v].e.r].c += f; v = prev[v].u; }
+        flow += f;
+        if (flow >= 50) break;
+      }
+      // os caminhos: anda de S a T por arestas com fluxo (cap − c > 0), desfazendo ciclos de fluxo; cada volta tira 1
+      var caminhos = [], volta, j2, seg;
+      for (volta = 0; volta < flow && flow < 50; volta++) {
+        var pilha = [S], pos = {}, ares = []; pos[S] = 0; u = S; seg = 0;
+        while (u !== T && seg++ < 100000) {
+          var esc = null;
+          for (e = 0; e < adj[u].length; e++) { ed = adj[u][e]; if (ed.cap > 0 && ed.cap - ed.c > 0) { esc = ed; break; } }
+          if (!esc) break;
+          v = esc.v;
+          if (pos[v] !== undefined) {
+            var de = pos[v];
+            for (j2 = de; j2 < ares.length; j2++) { ares[j2].c += 1; adj[ares[j2].v][ares[j2].r].c -= 1; delete pos[pilha[j2 + 1]]; }
+            ares.length = de; pilha.length = de + 1; u = v; continue;
+          }
+          ares.push(esc); pilha.push(v); pos[v] = pilha.length - 1; u = v;
+        }
+        if (u !== T) break;
+        for (j2 = 0; j2 < ares.length; j2++) { ares[j2].c += 1; adj[ares[j2].v][ares[j2].r].c -= 1; }
+        var cam = new Uint8Array(nCel);
+        for (j2 = 1; j2 < pilha.length - 1; j2++) if (pilha[j2] % 2 === 0) { kk = pilha[j2] / 2; if (!cels[kk].nasc) cam[kk] = 1; }
+        caminhos.push(cam);
+      }
+      return { f: flow, caminhos: caminhos };
+    }
+    // ligação P→a por BFS (bem mais barata que o fluxo: é o que a varredura dos pares de muro usa)
+    function ligados(bloq) {
+      var vis = new Uint8Array(nCel), q = [], qi = 0, kk, e, j2;
+      for (kk = 0; kk < nCel; kk++) if (cels[kk].nasc && cels[kk].P && !bloq[kk]) { vis[kk] = 1; q.push(kk); }
+      while (qi < q.length) { kk = q[qi++]; for (e = 0; e < vizI[kk].length; e++) { j2 = vizI[kk][e]; if (!vis[j2] && !bloq[j2]) { vis[j2] = 1; q.push(j2); } } }
+      for (kk = 0; kk < nCel; kk++) if (cels[kk].nasc && !cels[kk].P && vis[kk]) return true;
+      return false;
+    }
+    // --- visão entre nascimentos, no motor
+    var losPares = [];
+    for (i = 0; i < Ps.length; i++) for (j = 0; j < As.length; j++) {
+      if (E.los(st, Ps[i].x, Ps[i].y, As[j].x, As[j].y) || E.los(st, As[j].x, As[j].y, Ps[i].x, Ps[i].y)) losPares.push(Ps[i].x + ',' + Ps[i].y + '>' + As[j].x + ',' + As[j].y);
+    }
+    check('régua · nenhum dos ' + (Ps.length * As.length) + ' pares nascimento×nascimento tem visão direta (Engine.los, os dois sentidos)', Ps.length === 4 && As.length === 4 && losPares.length === 0, losPares.join(' ') || '0');
+    // --- retas: visão (só # quebra) e corredor de chão
+    function maior(cabe) {
+      var m = 0, onde = '', run;
+      for (y = 1; y < H - 1; y++) { run = 0; for (x = 1; x < W; x++) { if (x < W - 1 && cabe(at(x, y))) { run++; if (run > m) { m = run; onde = 'y=' + y; } } else run = 0; } }
+      for (x = 1; x < W - 1; x++) { run = 0; for (y = 1; y < H; y++) { if (y < H - 1 && cabe(at(x, y))) { run++; if (run > m) { m = run; onde = 'x=' + x; } } else run = 0; } }
+      return { m: m, onde: onde };
+    }
+    var rv = maior(function (ch) { return ch !== '#'; }), rc = maior(chao);
+    check('régua · a maior reta de VISÃO (só "#" quebra) tem no máximo 9 casas', rv.m <= 9, rv.m + ' em ' + rv.onde);
+    check('régua · o maior CORREDOR reto de chão tem no máximo 9 casas', rc.m <= 9, rc.m + ' em ' + rc.onde);
+    // --- todo chão alcançável
+    var vis = {}, fila = [Ps[0]], nVis = 1; vis[Ps[0].x + ',' + Ps[0].y] = true;
+    while (fila.length) {
+      var cur = fila.shift(), vz = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (i = 0; i < 4; i++) { var kx = cur.x + vz[i][0], ky = cur.y + vz[i][1]; if (!vis[kx + ',' + ky] && chao(at(kx, ky))) { vis[kx + ',' + ky] = true; nVis++; fila.push({ x: kx, y: ky }); } }
+    }
+    check('régua · todo o chão é alcançável a partir do primeiro nascimento', nVis === nChao, nVis + ' de ' + nChao);
+    // --- fluxo, obstáculo, espelho, cobertura, duplas
+    var f0 = fluxo(null).f;
+    check('régua · pelo menos 5 caminhos disjuntos entre os lados (fluxo)', f0 >= 5, f0);
+    var frac = obst / inner;
+    check('régua · obstáculo entre 14% e 24% do interior', frac >= 0.14 && frac <= 0.24, (frac * 100).toFixed(1) + '% (' + obst + ' de ' + inner + ')');
+    var esp = true;
+    for (y = 0; y < H && esp; y++) for (x = 0; x < W; x++) { c = at(x, y); var e2 = c === 'P' ? 'a' : c === 'a' ? 'P' : c; if (e2 !== at(W - 1 - x, y)) { esp = false; break; } }
+    check('régua · o salão é espelhado oeste/leste (P ↔ a)', esp);
+    var dCob = Ps.concat(As).map(function (s) { var d = 99; for (var k = 0; k < covers.length; k++) d = Math.min(d, man(s, covers[k])); return d; });
+    check('régua · cada nascimento fica a exatamente 2 casas de uma cobertura baixa', dCob.every(function (d) { return d === 2; }), dCob.join(','));
+    var pl = st.units.filter(function (u) { return u.kind === 'hero' && u.side === 'player'; });
+    var en = st.units.filter(function (u) { return u.kind === 'hero' && u.side === 'enemy'; });
+    check('régua · as duplas nascem adjacentes nos dois lados (o desempate do createDuelSala)',
+          pl.length === 4 && en.length === 4 && man(pl[0], pl[1]) === 1 && man(pl[2], pl[3]) === 1 && man(en[0], en[1]) === 1 && man(en[2], en[3]) === 1,
+          pl.map(function (u) { return u.x + ',' + u.y; }).join(' ') + ' | ' + en.map(function (u) { return u.x + ',' + u.y; }).join(' '));
+    check('régua · o lado A nasce nos P e o lado B nas letras',
+          pl.every(function (u) { return at(u.x, u.y) === 'P'; }) && en.every(function (u) { return at(u.x, u.y) === 'a'; }));
+    // --- robustez a muro invocado: TODOS os muros do jogo — os feitiços de classe (DATA.spells com efeito
+    //     'wall') E os de FUSÃO (Fusion.spellsFor por dupla de DATA.fusionForms: a forma da área não depende
+    //     da mistura, então uma mistura qualquer no nível da forma mais alta basta) — uma forma por (shape,
+    //     size) com o menor nível que a abre, e as casas pelo Engine.aoeTiles no estado da sala (a linha
+    //     para no muro; anel, cruz e círculo só onde o centro enxerga), fora dos nascimentos
+    var Fu = w.JOGO.Fusion, formas = {}, nClasse = 0, nFusao = 0, sid, fk, par;
+    function muroDe(s) { if (!s || !s.effects) return null; for (var q = 0; q < s.effects.length; q++) if (s.effects[q].type === 'wall') return s.effects[q]; return null; }
+    function registra(s, origem) {
+      var ef = muroDe(s); if (!ef) return;
+      var a = s.aoe || { shape: 'single', size: 0 }, k2 = a.shape + (a.size || 0), nv = s.unlockLevel || 0;
+      if (!formas[k2]) formas[k2] = { forma: k2, spell: s, nivel: nv, nomes: [], turnos: [] };
+      if (nv < formas[k2].nivel) { formas[k2].nivel = nv; formas[k2].spell = s; }
+      formas[k2].nomes.push(s.name + ' (' + origem + ' n' + nv + ', ' + (ef.duration || 0) + 't)'); formas[k2].turnos.push(ef.duration || 0);
+      if (origem === 'classe') nClasse++; else nFusao++;
+    }
+    for (sid in w.JOGO.DATA.spells) registra(w.JOGO.DATA.spells[sid], 'classe');
+    var mist = Object.keys(w.JOGO.DATA.fusionBlends || {})[0], nivelTopo = 0;
+    for (par in w.JOGO.DATA.fusionForms) (w.JOGO.DATA.fusionForms[par] || []).forEach(function (fm) { nivelTopo = Math.max(nivelTopo, fm.tier || 0); });
+    if (Fu && mist) for (par in w.JOGO.DATA.fusionForms) Fu.spellsFor(par, mist, nivelTopo).forEach(function (s) { registra(s, par); });
+    var casts = [], vistos = {};
+    function guarda(F, tiles, onde) {
+      var bl = new Uint8Array(nCel), ks = [], t, kk;
+      for (t = 0; t < tiles.length; t++) { kk = idx[tiles[t].x + ',' + tiles[t].y]; if (kk !== undefined && !cels[kk].nasc && !bl[kk]) { bl[kk] = 1; ks.push(kk); } }
+      if (!ks.length) return;
+      ks.sort(function (a, b) { return a - b; }); var key = ks.join(','), c2 = vistos[key];
+      if (c2) { if (F.nivel < c2.nivel) { c2.nivel = F.nivel; c2.forma = F.forma; c2.tipo = F.forma + ' ' + onde; } return; }
+      c2 = { tipo: F.forma + ' ' + onde, forma: F.forma, nivel: F.nivel, n: ks.length, ks: ks, bl: bl };
+      vistos[key] = c2; casts.push(c2);
+    }
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      if (!chao(at(x, y))) continue;
+      for (fk in formas) {
+        var shp = formas[fk].spell.aoe.shape;
+        if (shp === 'line' || shp === 'cone') { for (i = 0; i < 4; i++) guarda(formas[fk], E.aoeTiles(st, formas[fk].spell, x - dirs[i][0], y - dirs[i][1], x, y), x + ',' + y + ' dir ' + dirs[i][0] + ',' + dirs[i][1]); }
+        else guarda(formas[fk], E.aoeTiles(st, formas[fk].spell, x, y, x, y), x + ',' + y);
+      }
+    }
+    for (i = 0; i < casts.length; i++) { var rf = fluxo(casts[i].bl); casts[i].f = rf.f; casts[i].cam = rf.caminhos; }
+    casts.sort(function (a, b) { return (a.f - b.f) || (a.nivel - b.nivel) || (a.n - b.n); });
+    var hist = {}; casts.forEach(function (c2) { hist['f' + c2.f] = (hist['f' + c2.f] || 0) + 1; });
+    var fkeys = Object.keys(formas).sort(function (a, b) { return formas[a].nivel - formas[b].nivel; });
+    check('robustez a muro · a prova leu TODAS as formas de muro do jogo, classe (DATA.spells) e fusão (Fusion.spellsFor por dupla): 1 casa, círculo r1, anel r1, 3 em linha, anel r2, cruz 1, cruz 2, círculo r3',
+          nClasse > 0 && nFusao > 0 && ['single0', 'circle1', 'ring1', 'line3', 'ring2', 'cross1', 'cross2', 'circle3'].every(function (q) { return !!formas[q]; }),
+          nClasse + ' feitiços de classe + ' + nFusao + ' de fusão (mistura ' + mist + ', nível ' + nivelTopo + '): ' + fkeys.map(function (q) { return q + ' n' + formas[q].nivel; }).join(', '));
+    var abaixo30 = casts.filter(function (c2) { return c2.nivel < 30; });
+    check('robustez a muro · nenhuma conjuração de nível < 30 derruba o fluxo abaixo de 3',
+          abaixo30.length > 0 && abaixo30[0].f >= 3,
+          casts.length + ' conjurações, fluxo depois de uma ' + JSON.stringify(hist) + '; a pior abaixo do 30: ' + abaixo30[0].tipo + ' (nível ' + abaixo30[0].nivel + ') deixa ' + abaixo30[0].f);
+    var unicos = casts.filter(function (c2) { return c2.f === 0; });
+    check('robustez a muro · só o círculo r3 de nível 30 (Vulcão Abissal, bruxo+minotauro) sela sozinho — centrado no meio do berço, como o cabeçalho documenta',
+          unicos.every(function (c2) { return c2.nivel >= 30 && c2.forma === 'circle3'; }),
+          unicos.length + ' conjurações únicas selam: ' + unicos.map(function (c2) { return c2.tipo + ' n' + c2.nivel; }).join('; '));
+    /* A VARREDURA INTEIRA DOS PARES, barata. (A,B) só sela se B tem pelo menos f(A) casas (um muro de k casas
+     * tira no máximo k do fluxo: cada casa passa 1 caminho) e, mais fino, se B toca TODOS os f(A) caminhos
+     * disjuntos que o fluxo de G\A achou — e A os de B. É condição necessária (se a união desliga os lados, todo
+     * caminho P→a de G\A passa por B), então nada escapa; só poupa o BFS, que decide. Na Sede: 2,77 milhões de
+     * pares, ~2.600 BFS. */
+    function toca(B, caminhos) { for (var p = 0; p < caminhos.length; p++) { var cm = caminhos[p], ok = false; for (var q = 0; q < B.ks.length; q++) if (cm[B.ks[q]]) { ok = true; break; } if (!ok) return false; } return true; }
+    function uniao(A, B) { var u = new Uint8Array(nCel), kk; for (kk = 0; kk < nCel; kk++) u[kk] = A.bl[kk] | B.bl[kk]; return u; }
+    function nomePar(p) { return p[0].tipo + ' (nível ' + p[0].nivel + ') + ' + p[1].tipo + ' (nível ' + p[1].nivel + ')'; }
+    var selos = [], nBfs = 0, nPares = 0, ate10 = 0, semForte = 0, porMax = {}, tipos = {}, A, B;
+    for (i = 0; i < casts.length; i++) {
+      A = casts[i]; if (A.f === 0) continue;
+      for (j = i + 1; j < casts.length; j++) {
+        B = casts[j]; if (B.f === 0) continue; nPares++;
+        if (A.f > B.n || B.f > A.n) continue;
+        if (!toca(B, A.cam) || !toca(A, B.cam)) continue;
+        nBfs++;
+        if (ligados(uniao(A, B))) continue;
+        selos.push([A, B]);
+        var mx = Math.max(A.nivel, B.nivel); porMax['máx ' + mx] = (porMax['máx ' + mx] || 0) + 1;
+        var tk = [A.forma + ' n' + A.nivel, B.forma + ' n' + B.nivel].sort().join('+'); tipos[tk] = (tipos[tk] || 0) + 1;
+        if (mx <= 10) ate10++;
+        if (!/ring2|cross2|circle3/.test(A.forma) && !/ring2|cross2|circle3/.test(B.forma)) semForte++;
+      }
+    }
+    selos.sort(function (p, q) { return (Math.max(p[0].nivel, p[1].nivel) - Math.max(q[0].nivel, q[1].nivel)) || ((p[0].nivel + p[1].nivel) - (q[0].nivel + q[1].nivel)) || ((p[0].n + p[1].n) - (q[0].n + q[1].n)); });
+    check('robustez a muro · NENHUM par de nível ≤ 10 (1 casa, círculo r1, anel r1, 3 em linha) sela um lado — varredura inteira dos pares, classe e fusão',
+          nPares > 0 && ate10 === 0, nPares + ' pares, ' + nBfs + ' foram ao BFS; ' + selos.length + ' selam');
+    /* o cabeçalho do mapa documenta o selo: todo par que fecha um lado leva um anel r2 (a Redoma Abissal, fusão
+     * nível 12, em si mesmo; ou a classe, nível 30), uma cruz 2 ou um círculo r3 (nível 30). Se um dia dois muros
+     * de nível ≤ 10 bastarem, a linha de cima cai; se o selo mudar de forma, esta muda de texto */
+    check('robustez a muro · todo par que sela leva um anel r2 (fusão nível ≥ 12 ou classe 30), uma cruz 2 ou um círculo r3 — como o cabeçalho do mapa documenta',
+          semForte === 0 && selos.every(function (p) { return Math.max(p[0].nivel, p[1].nivel) >= 12; }),
+          'por nível máximo ' + JSON.stringify(porMax) + '; ' + JSON.stringify(tipos) + '; o mais barato: ' + (selos.length ? nomePar(selos[0]) : 'nenhum'));
+    window.__regua = { losPares: losPares, retaVisao: rv, retaChao: rc, alcancavel: nVis + '/' + nChao, fluxo: f0, obstaculo: frac,
+                       formas: fkeys.map(function (q) { return q + ' n' + formas[q].nivel; }), conjuracoes: casts.length, hist: hist,
+                       piorAbaixo30: { tipo: abaixo30[0].tipo, nivel: abaixo30[0].nivel, f: abaixo30[0].f },
+                       unicos: unicos.map(function (c2) { return c2.tipo; }), pares: nPares, bfs: nBfs, selos: selos.length, ate10: ate10,
+                       porMax: porMax, tipos: tipos, seloMaisBarato: selos.length ? nomePar(selos[0]) : null };
+  }
+
   // espera por TENTATIVAS, não por relógio: no headless o tempo é virtual
   function espera(cond, voltas, passo) {
     return new Promise(function (ok, nao) {
@@ -186,6 +424,9 @@
         R.scene().traverse(function (o) { if (o.isPointLight) luzesCena++; });
         check('a cena inteira fica em até 9 luzes pontuais (6 do FX + as lareiras + folga)', luzesCena <= 9, luzesCena);
 
+        // A RÉGUA TÁTICA E A ROBUSTEZ A MURO, no motor, sobre o mapa carregado (19/09)
+        try { reguaTatica(w, st, check); } catch (eR) { check('a régua tática rodou', false, eR && eR.message); }
+
         // O RECORTE NA CÂMERA PADRÃO: sul e oeste cortados, norte e leste inteiros
         R.recentrar();
         var fogo0 = null;
@@ -202,7 +443,12 @@
                   errados.length === 0 && paredes.length >= 4 && (ladoCam.sul || ladoCam.norte || ladoCam.leste || ladoCam.oeste),
                   'ang ' + angP.toFixed(2) + (errados.length ? ' errados: ' + errados.join(',') : ''));
 
-            // OS OITO HERÓIS À VISTA: raio da câmera ao peito de cada um contra o cenário visível
+            // TODO O CHÃO À VISTA (rodada de conserto 2, 19/09): raio da câmera a cada casa de chão em três
+            // alturas — pés 0,3 m, peito 1,3 m, cabeça 2,0 m — contra o cenário visível. A câmera padrão olha do
+            // sudoeste, então a sombra das peças cai a NORDESTE; o revisor achou (20,3), (9,1) e (18,1) tapadas
+            // até a cabeça por armadura e estandarte, e a prova só olhava o peito dos oito nascimentos. Cobra-se:
+            // nenhuma casa com a cabeça tapada; os oito nascimentos e o primeiro passo de cada um (as casas
+            // vizinhas) inteiros à vista; nenhum peito atrás de estandarte; as tapadas até o peito, listadas.
             var cam = R.camera(), board = null;
             R.scene().traverse(function (o) { if (o.name === 'board') board = o; });
             function visivel(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
@@ -210,24 +456,36 @@
             if (board) board.traverse(function (o) {
               if (o.isMesh && !o.isInstancedMesh && visivel(o) && o.material && !o.material.transparent && !(o.userData && o.userData.outline)) solidos.push(o);
             });
-            var ray = new THREE.Raycaster(), escondidos = [];
-            herois.forEach(function (u) {
-              var alvo = R.world(u.x, u.y, 1.3);
-              var dir = alvo.clone().sub(cam.position);
-              var dist = dir.length();
-              ray.set(cam.position, dir.normalize());
-              ray.far = dist - 0.6;
+            var ray = new THREE.Raycaster(), tapadas = { pes: [], peito: [], cabeca: [] }, escondidos = [], primeiroPasso = [], peitoAlto = [];
+            function bate(x, y, hh) {
+              var alvo = R.world(x, y, hh), dir = alvo.clone().sub(cam.position), dist = dir.length();
+              ray.set(cam.position, dir.normalize()); ray.far = dist - 0.6;
               var hits = ray.intersectObjects(solidos, false);
-              if (hits.length) {
-                // onde bateu, em casas e altura (diz QUAL peça tapa)
-                var pt = hits[0].point;
-                escondidos.push(u.classId + '@' + u.x + ',' + u.y + ' bate em ' +
-                  (pt.x / 2 + (st.grid.w - 1) / 2).toFixed(1) + ',' + (pt.z / 2 + (st.grid.h - 1) / 2).toFixed(1) + ' h' + pt.y.toFixed(2));
-              }
-            });
-            check('da câmera padrão nenhum dos oito heróis fica atrás do cenário', escondidos.length === 0,
+              if (!hits.length) return null;
+              var pt = hits[0].point;   // onde bateu, em casas e altura (diz QUAL peça tapa)
+              return { h: pt.y, s: x + ',' + y + ' em ' + (pt.x / 2 + (st.grid.w - 1) / 2).toFixed(1) + ',' + (pt.z / 2 + (st.grid.h - 1) / 2).toFixed(1) + ' h' + pt.y.toFixed(2) };
+            }
+            var ehHeroi = {}, vizinhaDeHeroi = {};
+            herois.forEach(function (u) { ehHeroi[u.x + ',' + u.y] = u.classId; [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) { vizinhaDeHeroi[(u.x + d[0]) + ',' + (u.y + d[1])] = true; }); });
+            for (var yy = 1; yy < st.grid.h - 1; yy++) for (var xx = 1; xx < st.grid.w - 1; xx++) {
+              if (st.grid.tiles[yy][xx].type !== 'floor') continue;
+              [[0.3, 'pes'], [1.3, 'peito'], [2.0, 'cabeca']].forEach(function (alt) {
+                var b = bate(xx, yy, alt[0]); if (!b) return;
+                tapadas[alt[1]].push(b.s);
+                if (alt[1] === 'peito' && b.h > 4.0) peitoAlto.push(b.s);
+                if (ehHeroi[xx + ',' + yy]) escondidos.push(ehHeroi[xx + ',' + yy] + ' ' + alt[0] + 'm ' + b.s);
+                else if (vizinhaDeHeroi[xx + ',' + yy]) primeiroPasso.push(alt[0] + 'm ' + b.s);
+              });
+            }
+            check('da câmera padrão nenhum dos oito heróis fica atrás do cenário (pés, peito e cabeça)', escondidos.length === 0,
                   escondidos.join(' ') + ' (' + solidos.length + ' malhas)');
+            check('da câmera padrão nenhuma casa de chão fica com a CABEÇA tapada (a sombra das peças cai a nordeste)', tapadas.cabeca.length === 0,
+                  tapadas.cabeca.length ? tapadas.cabeca.join('; ') : 'peito tapado em ' + tapadas.peito.length + ' casas, pés em ' + tapadas.pes.length);
+            check('o primeiro passo de cada nascimento (as casas vizinhas) fica inteiro à vista', primeiroPasso.length === 0, primeiroPasso.join('; '));
+            check('nenhuma casa fica com o peito atrás de um estandarte (raio acima de 4 m) — só pilar ou armadura tapam peito', peitoAlto.length === 0,
+                  peitoAlto.length ? peitoAlto.join('; ') : 'peito tapado: ' + tapadas.peito.join('; '));
             window.__escondidos = escondidos;
+            window.__tapadas = tapadas;
 
             // O FOGO MEXE (o laço de render anima; espera uns quadros)
             return espera(function () { var v = R._sedeVivo(); return v.fogo != null && Math.abs(v.fogo - fogo0) > 0.002; }, 40, 150)
@@ -264,8 +522,9 @@
   // o enquadramento das fotos (a câmera do jogador não é tocada pela prova)
   window.__vista = function (qual) {
     var R = f.contentWindow.JOGO.Renderer;
-    // de cima e mais longe: a 50 a guilda do oeste ficava debaixo da barra de feitiços
-    if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 62, ang: -Math.PI / 4 + 0.0001, panX: 0, panZ: 0 });
+    // de cima e mais longe, com o NORTE PARA CIMA (ang 0): a 50 a guilda do oeste ficava debaixo da
+    // barra de feitiços, e com o azimute da câmera padrão (−π/4) ela caía debaixo do cartão da fusão
+    if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 62, ang: 0.0001, panX: 0, panZ: 0 });
     else if (qual === 'lado') R.setCamera({ tilt: 1.15, dist: 26, ang: Math.PI * 0.75 });
     else { R.setCamera({ rot: 0, animate: false }); R.recentrar(); }
     return R.getCamera();

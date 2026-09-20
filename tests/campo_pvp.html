@@ -23,7 +23,8 @@
      reentra não o tira de lá; a saída de volta no lugar do desenho; os muros barram (o
      empurrão sai na face, e andando através de um pilar ninguém entra na pedra); o
      fantasma de OUTRA zona some e não responde ao toque, o da mesma zona aparece e
-     responde; o teto de 20 conta só a zona; Hub.saiCampo volta à praça ao lado da entrada
+     responde; o teto de 20 conta só a zona; Hub.saiCampo volta à praça à frente da entrada
+     (19/09: pelo eixo do corredor do portão, que virou o sétimo dente do arco dos portais)
      com o corpo do avatar.
      19/09 (dono, com foto: "o mapa pvp está muito ruim"): a cena ganhou a arte do dono, e a
      prova cobra a VESTIMENTA (Hub._campoMontagem, o relatório da obra — as instâncias
@@ -324,8 +325,21 @@
         var ent = lugares('campo')[0];
         var dEnt = ent ? Math.hypot(e2.pos.x - ent.x, e2.pos.z - ent.z) : 99;
         check('Hub.saiCampo devolve true e naCampo() desliga', ok === true && H.naCampo() === false && H.zona() === 'praca');
-        check('volta à praça AO LADO da entrada, fora do raio de conversa dela',
+        check('volta à praça À FRENTE da entrada, fora do raio de conversa dela',
               ent && dEnt > ent.raio && dEnt < ent.raio + 2.5, dEnt.toFixed(2) + ' (raio ' + (ent && ent.raio) + ')');
+        /* 19/09: a entrada é o portão do arco, com corredor — o herói volta PELO EIXO, rumo à
+         * boca (no meio da pista: t ≈ 0), e não de través (7,6 m de través caía do lado de
+         * fora do muro da câmara). A entrada fica no arco dos portais (r 0,75 do meio-lado). */
+        if (ent) {
+          var rE = Math.hypot(ent.x, ent.z) || 1, uxE = ent.x / rE, uzE = ent.z / rE;
+          var dE = (e2.pos.x - ent.x) * uxE + (e2.pos.z - ent.z) * uzE;           // ao longo do eixo (negativo = rumo à praça)
+          var tE = (e2.pos.x - ent.x) * (-uzE) + (e2.pos.z - ent.z) * uxE;        // de través
+          check('... pelo EIXO do corredor do portão, rumo à boca (t ≈ 0, d < 0)', dE < -(ent.raio) && Math.abs(tE) < 0.6,
+                'd ' + dE.toFixed(2) + ' · t ' + tE.toFixed(2));
+          check('a entrada mora no arco dos portais (r = 0,75 do meio-lado, a oeste)', Math.abs(rE / 0.75 - 58) < 0.5 && ent.x < -35 && Math.abs(ent.z) < 4,
+                JSON.stringify({ x: +ent.x.toFixed(2), z: +ent.z.toFixed(2) }));
+          check('a entrada tem corredor (portão) e o raio de conversa de portal aberto', !!ent.portao && ent.raio === 6.4, JSON.stringify(ent));
+        }
         check('com o corpo do avatar de sempre', e2.corpo === ctx.corpoAvatar && !e2.aparencia, e2.corpo);
         check('a praça voltou inteira (portais e obras)', lugares('portal').length === 6 && lugares('arena').length === 1);
         check('na praça de novo: o da praça com corpo, o do Campo sem',

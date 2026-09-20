@@ -55,10 +55,60 @@ dele com o do servidor a cada resposta; diferente = adota o do servidor.
 Todas com sessão (Bearer). Erros no formato de sempre `{ok:false, erro, ...}`.
 
 ### 4.1 `POST /api/sala/abrir`
-Corpo: `{dungeonId, roomIndex, dificuldade, herois: [heroId, heroId?], versaoRegras}`.
+Corpo: `{dungeonId, roomIndex, dificuldade, herois: [heroId, heroId?], versaoRegras?}`.
 - Confere: calabouço e sala existem (o juiz sabe: `/regras`), `dificuldade ∈
   {facil, normal, dificil}`, heróis são da conta e liberados, teto de bilhetes por
   hora (`SALAS_POR_HORA = 240`).
+- **A versão das regras** (19/09). Até 18/09 `versaoRegras` era só uma palavra neste documento: a
+  única versão que existia era o hash dos arquivos que o juiz carrega (`GET /saude` e `/regras`,
+  `versao`), que muda a cada deploy, que o navegador não sabe calcular e que ninguém guardava no
+  bilhete — um deploy que mudasse uma regra no meio de uma sala fazia o replay cair como `divergiu`,
+  isto é, como fraude. Agora o engine.js declara um NÚMERO, `Engine.VERSAO_REGRAS`, que sobe só
+  quando uma regra muda o fim de uma sala refeita (a lista está no próprio engine.js; a 2 é a visão
+  de 19/09). O juiz o anuncia em `GET /regras` e `GET /saude` (`regras`); a API:
+  - `versaoRegras` (o `JOGO.Engine.VERSAO_REGRAS` da página) diferente do do juiz → 409
+    `{motivo: 'regras-velhas', regras}`: a página está com um engine.js de antes do deploy e
+    refaria a sala com outro resultado — recarregue (o `erro` já diz). **Sem o campo = versão
+    1**: a única página que não manda é a de antes do número (18/09), e ela jogaria com o
+    engine.js e o ai.js velhos para cair como `divergiu` (fraude) no fim — a revisão mediu 22%
+    das salas dela divergindo só com a IA dos monstros. Só passa sem o campo quando o juiz
+    também não anuncia número (juiz de antes). Torto, 400. Antes de recusar, a API pergunta ao
+    juiz de novo (o `GET /regras` fica guardado 5 min e pode ser de antes do deploy se a API subiu
+    primeiro; no máximo uma reconferência a cada 2 s) e só recusa se ele confirmar.
+    `js/core/autoridade.js` manda o campo em toda abertura (A.prepara, A.abreGrupo, A.abreDuelo)
+    e `grupo.js` na confirmação da guerra: a aba que ficou aberta através do deploy é pega na
+    ABERTURA da luta seguinte, e não só no fechamento. O mesmo 409 vale em `/api/grupo/abrir`
+    (quem lidera), `/api/duelo/abrir` (cada lado) e `/api/guerra/confirmar` (cada um dos quatro);
+  - guarda o número do juiz em `salas_regras(bilhete, regras, versao)` (tabela nova, nunca
+    ALTER) e o manda no `bilhete` do `POST /sala/fecha` (§4.2): o juiz confere contra o seu
+    ANTES de refazer e recusa com `regras-mudaram`; a API então VENCE o bilhete (410, sala
+    `vencida`, evento `sala-vencida` com o motivo) em vez de marcá-lo `recusada`. O jogador abre
+    a sala de novo com as regras de agora, e a trilha diz por que a anterior não pagou.
+    **Linha ausente = versão 1**: o bilhete aberto antes do deploy que trouxe a tabela não tem
+    linha, e é justamente o que o deploy da visão põe em risco — a revisão mediu 12 de 54 salas
+    de antes caindo como `divergiu` (fraude) quando o juiz novo as refazia sem conferir nada. A
+    API manda `regras: 1` por ele (a versão implícita do engine.js) e o juiz o vence.
+  - as salas em grupo, o duelo e a guerra (`servidor/grupo.py`, `guerra.py`) seguem o mesmo
+    desenho desde 19/09: `salas_grupo_regras(gid, regras, versao)` gravada no `/grupo/abrir`,
+    `duelos_regras(did, regras, versao)` gravada no primeiro `/duelo/abrir` do did, e a chave
+    `regras` dentro da própria ata da guerra (`guerra_partidas.ata` — o número vem na resposta do
+    `POST /guerra/ata` do juiz que montou a ata, sem segunda consulta). O fechamento manda o número
+    na ata/pedido, o juiz confere antes de refazer, e sob outra versão: a sala em grupo VENCE para
+    os dois (410 `regras-mudaram`, estado `vencida`, evento `grupo-vencida`); o duelo fica
+    guardado como `fase: 'vencido'`, `motivo: 'regras-mudaram'` para os dois lados (200, sem vida
+    gravada, sem coroa, evento `duelo-vencido`); a guerra fecha `vencida` na hora para os quatro
+    (sem os 120 s de espera, sem XP, evento `guerra-fim` com o motivo). Linha ou chave ausente =
+    1; só o duelo SEM abertura nenhuma (a página de antes do `/duelo/abrir`) não confere.
+    Prova: `tests/regras_versao_api.py` (API + juiz, 8 provas) e `tests/visao_mapas.js`.
+  - **no deploy, o juiz e a API sobem juntos (ou a API depois)**: a API guarda o `GET /regras` do
+    juiz por 5 min (`REGRAS_CACHE`), e uma API que subiu antes do juiz novo abriria lutas com o
+    número velho até lá — elas venceriam ao fechar (`regras-mudaram`), sem prêmio. A API esquece o
+    guardado ao ver um `regras-mudaram` do juiz e reconfere antes de um 409 `regras-velhas`
+    (`_regras_esquece`, `_confere_versao_cliente` em `servidor/salas.py`), então a janela é curta,
+    mas não é zero: suba o juiz primeiro.
+  - a HUD ainda mostra `regras-mudaram` com o texto genérico de luta vencida/recusada (o
+    `motivo` viaja na resposta e na trilha; a frase própria "as regras mudaram: recarregue a
+    página" é da frente da HUD).
 - Uma conta tem **um** bilhete aberto: abrir outro vence o anterior. 15/09: antes, a luta que a conta
   deixou aberta no servidor é LARGADA (os heróis dela a 0; ver §5.2.1, "As falhas conhecidas") — o jogo
   honesto fecha a dele antes de abrir outra — e a resposta leva `largada: {herois}`.
@@ -314,19 +364,110 @@ guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiên
   o cliente não escolhe com que números luta; `carry` = `{dono:heroId: PV}` (a chave heroId colide entre os dois do
   mesmo lado). O prazo: quem não confirmou sai e o lado que confirmou inteiro volta à fila com o lugar;
   `POST /api/guerra/recusar` devolve o outro lado; `POST /api/guerra/sair` desfaz a inscrição (a dupla de jogadores
-  inteira) ou recusa. `GET /api/guerra/estado` = `livre | aguardando | convite | inscrito | casada | pronta` (a consulta
-  é o "ainda estou aqui": 20 s sem ela, a inscrição sai). Teto de 120 pedidos (inscrever + juntar) por conta por hora.
-- `POST /api/guerra/fechar {gid, lances, hashFinal, fotografada}` (qualquer um dos quatro; idempotente por gid): o juiz
-  (`POST /guerra/fecha`) refaz com a ata GUARDADA (`createDuelSala` com até 4 por lado — o `refazEm` do sala.js aceita 4
-  no modo duelo desde 15/09 — e a vida pela chave `dono:heroId`) e devolve `fase`, `venc` e a vida do fim POR DONO. Vitória:
-  `guildas.xp += 40` para a guilda vencedora (decisão do coordenador), dividido em `guilda_contrib` entre os dois que
-  lutaram por ela (quem ainda é membro); a perdedora não perde; empate (`motivo: 'empate'`) e W.O./desistência (o replay
-  sem fim, `'sem-fim'`) não rendem. A COROA NÃO MUDA (a Brasa é do PvP individual). Tetos anti-combinação: 3 guerras com
-  XP por par de guildas e 10 por guilda (vencendo ou perdendo) em 24 h — acima vale sem XP (`'teto'`). A vida dos oito grava
-  na conta de cada um em todo fim refeito. Tempo mínimo de 0,35 s por turno de gente desde a pronta (422 `rapido-demais`,
-  guardado). Fotografado espera 120 s um registro limpo de outro dos quatro, senão `nao-conferida` (sem XP e sem vida).
-  Replay que não bate (422): `recusada`, guardado, sem XP e sem vida.
-  Resposta `{ok, gid, fase, venc, lado, venceu, xp, guilda, guildas, motivo?, vida}`.
+  inteira) ou recusa. `GET /api/guerra/estado` = `livre | aguardando | convite | inscrito | casada | pronta | em-luta |
+  fechada` (a consulta é o "ainda estou aqui": 20 s sem ela, a inscrição sai; 19/09: ela só ESCREVE quando há o que
+  arrumar ou a cada 5 s por inscrição — era uma transação de escrita a cada 2,5 s por jogador). Teto de 120 pedidos
+  (inscrever + juntar) por conta por hora. 19/09: a partida viva da conta é a `pronta` SEM linha em `guerra_resultados`
+  e sem a saída dela (não some em 3 min — provado a conta 'livre' inscrevendo de novo com a guerra em curso; o teto é
+  `LARGADA_JANELA_MS`, 2 h); a pronta cuja ata nunca saiu cai depois de 3 min (`guerra-caiu` motivo `ata`); `em-luta` =
+  esta conta já fechou a parte dela (o registro sem fim, o recusado ou o fotografado) e espera os outros (`esperaAte`) —
+  o jogo não abre outra luta; `fechada` = a última guerra da conta, fechada há
+  menos de 60 s (`gid, venc, lado, venceu, xp, guilda, motivo, fim`), para quem perdeu a resposta do fechar — não prende.
+  `casada`/`pronta` levam `semXp: true` quando os tetos já estouraram (a HUD avisa ANTES de confirmar). Quem sai da
+  guilda (ou é expulso) sai da fila (`guerra-saiu` motivo `guilda`), o par com um `dono` repetido entre as duplas não
+  casa, e confirmar já fora da guilda = 409 `outra-guilda` (a partida cai, o outro lado volta à fila com o lugar).
+- `POST /api/guerra/fechar {gid, lances, hashFinal, fotografada, desistiu?, lado?, wo?}` (qualquer um dos quatro;
+  idempotente por gid): o juiz (`POST /guerra/fecha`) refaz com a ata GUARDADA (`createDuelSala` com até 4 por lado — o
+  `refazEm` do sala.js aceita 4 no modo duelo desde 15/09 — e a vida pela chave `dono:heroId`) e devolve `fase`, `venc`
+  e a vida do fim POR DONO. Vitória: `guildas.xp += 40` para a guilda vencedora (decisão do coordenador), dividido em
+  `guilda_contrib` entre os dois que lutaram por ela (quem ainda é membro); a perdedora não perde; empate
+  (`motivo: 'empate'`) não rende. A COROA NÃO MUDA (a Brasa é do PvP individual). Tetos anti-combinação: 3 guerras com
+  XP por par de guildas e 10 por guilda (vencendo ou perdendo) em 24 h — acima vale sem XP (`'teto'`). A vida dos oito
+  grava na conta de cada um em todo fim refeito. Tempo mínimo de 0,35 s por turno de gente desde a pronta (422
+  `rapido-demais`). Resposta final `{ok, gid, fase, venc, lado, venceu, xp, guilda, guildas, motivo?, fim?, vida,
+  fechada: true}`; em espera `{ok, gid, fase: 'aguardando', motivo, esperaAte (ms do servidor), esperaMs}` — o jogo
+  pergunta de novo a cada 5 s até `fechada`.
+- **A revisão de 19/09 (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário").**
+  Estava provado: qualquer um dos quatro fechava com `lances: []` e o servidor guardava `sem-fim` como final, com a vida
+  dos oito cheia e o registro do vencedor no guardado (o lado que perdia anulava a guerra do console); o primeiro
+  registro recusado (422) fechava tudo como `recusada`; sair ou cair não custava nada; e o juiz aceitava marcas
+  `morte`/`ia` forjadas contra o adversário (quatro marcas, sem lance, 4 s depois da pronta = +40 XP e o outro lado a 0).
+  O contrato servidor↔jogo agora:
+  1. **Só um registro COM FIM fecha a guerra na hora** (venc A/B/empate no replay, ou o fim forçado abaixo). O registro
+     SEM fim (hashFinal null, fase `playing`) vai para `guerra_espera(gid, conta_id, lances, primeiro_ms, motivo,
+     turnos, resultado)` (tabela nova), responde `aguardando` e grava a vida SÓ dos heróis de quem fechou. O recusado
+     pelo juiz (422 `vez`, `divergiu`, `marca-sem-prova`…) e o rápido demais também entram na espera, sem gravar nada, e
+     respondem 422 com `fase: 'aguardando'`. O fotografado idem (`fotografadas`, e o estado dele é `em-luta`). Um registro
+     com fim de qualquer dos quatro dentro de `GUERRA_ESPERA` (120 s desde `primeiro_fecho`) vence — o limpo tardio
+     também. Passado o prazo sem fim (pelo fechar — também o recusado e o rápido demais repetidos, 2ª rodada: o 422
+     seguia 'aguardando' com esperaMs 0 para sempre, e o jogo repete o fechar a cada 5 s sem consultar o estado — ou
+     pela consulta do estado, `_guerra_arruma`): `sem-fim` com a vida do replay mais LONGO para todos (menos quem saiu),
+     sem XP; só recusados = `recusada`; só fotografados = `nao-conferida` (sem vida). O fechamento sem fim NÃO fecha a
+     luta aberta de quem fechou (2ª rodada: fechava, e quem perdia fechava vazio do console, saía com a vida do começo
+     e abria outra luta no meio da guerra): a luta aberta da guerra só fecha no resultado final ou pela saída declarada
+     — quem fechou vazio e abre outra luta antes do fim é largado (heróis a 0, sem regravação). A vida de quem fechou
+     sem fim decide com as saídas RELIDAS dentro da escrita (3ª rodada: o `saidas` lido antes da ida ao juiz deixava o
+     `sair {gid}` — ou a largada de outra aba — que entrava nesse meio ser sobrescrito pela vida do replay, com
+     `lances: []` a do começo, e a conta ficava 'livre' com a saída declarada e a vida cheia; provado 2 em 3 corridas).
+     A regra do arquivo: nenhuma escrita de `vida_heroi` decide com uma leitura de antes da ida ao juiz.
+  2. **A saída declarada**: `POST /api/guerra/sair {gid}` da partida pronta (ou `desistiu: true` no fechar — só da própria
+     conta: `lado` de outro = 403 `desistencia-alheia`) = `guerra_saidas(gid, conta_id, em_ms, motivo)` (tabela nova), os
+     dois heróis da conta a 0 NA HORA (o máximo vem do juiz refazendo a guerra sem lance), a luta aberta dela fechada,
+     `guerra-saiu` para os outros três; a guerra segue para eles. Os DOIS de um lado fora = o outro lado vence (`fim:
+     'saida'`, XP nos tetos) assim que qualquer um fechar. Quem saiu nunca é regravado pelo fim dos outros. Sair da
+     pronta cuja ata ainda não saiu (o juiz lento) derruba a guerra que não começou, sem custo, e o outro lado volta à
+     fila (`guerra-caiu` motivo `saiu`; 2ª rodada — respondia 'pronta' sem declarar nada) — e abrir outra luta
+     (sala/grupo/duelo/Arena/guerra) com a pronta sem ata faz o mesmo (3ª rodada: `_guerra_larga` punha a linha da
+     luta aberta como 'fechada' sem derrubar nada, a sala abria e, quando a ata saía, a conta lutava em duas frentes
+     sem a régua da largada; se a ata sai nesse meio, 409 `mudou` e o pedido repetido larga a guerra).
+  3. **O W.O. com prova**: `wo: true` = quem ficou declara que os DOIS adversários sumiram; o servidor confere
+     `presenca.prova_de_queda` dos dois (menos quem já saiu) desde a CASADA (`criada_ms`; 3ª rodada — contava de
+     `pronta_ms`, e quem confirmou pelo HTTP com o Relé já caído e nunca voltou ficava 'nada'; o 'voltou' dentro da
+     janela já anula a queda velha) — 'caiu' sem 'voltou' em 60 s nos dois = W.O. confirmado: o lado ausente a 0
+     (`perdeu` no juiz, `forcado`), `fim: 'wo'`, XP nos tetos (decisão do coordenador: sem consequência para quem some,
+     o W.O. vira a saída barata de quem perde); queda há menos de 60 s, ou nenhuma ainda (até `WO_ESPERA_MS` do
+     PRIMEIRO pedido de W.O. da partida, `guerra_wo(gid, pedido_ms)`, tabela nova — 2ª rodada: contava do
+     `primeiro_fecho`, e o vazio de outro dois minutos antes pulava a espera do Relé) = o registro vai ao juiz e fica
+     na ESPERA com motivo `wo` (`aguardando` com o prazo da prova; o estado de quem declarou é `em-luta`; 3ª rodada — o
+     pedido não ficava em lugar nenhum: o estado era 'pronta', a consulta nunca lia a prova madura, quem ficou e
+     declarou era largado a 0 ao abrir outra luta e a partida ficava pronta para sempre); a prova madura fecha o W.O.
+     também pela CONSULTA de qualquer um dos quatro (`_guerra_wo_provado` → `_guerra_fecha_forcado`, com a vida do
+     replay mais longo guardado na espera, sem ir ao juiz) e no fim da espera (`_guerra_encerra_espera`); sem prova (a
+     volta em 60 s, ou nada anotado depois da espera) = `wo-sem-prova`: o replay entra na espera como um registro sem
+     fim, e a espera vencida guarda `motivo: 'wo-sem-prova'` (não 'sem-fim'). O fim FORÇADO — os dois de um lado fora,
+     o W.O. provado — é fato do servidor e vale também para quem foi restaurado por foto (3ª rodada: o ramo do
+     fotografado vinha antes e o engolia em 'aguardando fotografada' → 'nao-conferida'): o juiz recebe o registro VAZIO
+     com `perdeu` (o lado ausente a 0, o presente com a vida do começo); e o registro recusado pelo juiz (422) com um
+     fim forçado decidido volta ao juiz com o vazio pelo mesmo motivo.
+  4. **As marcas de rede** `{a:'x', ev:'ia'|'morte', u}` no registro: o juiz (`sala.js`, o gancho `confereMarca`;
+     `guerra.js`, `confereMarcaDaGuerra`) só aceita a marca `morte` sobre o herói de uma conta X se X está no MESMO lado
+     de quem fecha (o parceiro de guilda marca, por desenho), ou com a prova do servidor: a saída declarada de X em
+     `guerra_saidas` (a API passa `{fechou, contas, saidas}`). Sem prova, 422 `marca-sem-prova` (na espera: o registro do
+     parceiro dele vence). A marca `ia` passa de quem for (2ª rodada da revisão): o parceiro marca também por PRAZO
+     (`coop.js`, `assumeGuerra` 'prazo' — sem queda nenhuma no Relé) e a voz `ia` entra nos QUATRO registros; exigir o
+     'caiu' do Relé recusava o registro limpo dos dois adversários e o lado que perdia vetava a guerra de graça (provado
+     pelo revisor: 'sem-fim' com a vida do começo, sem XP). E a prova não comprava segurança: marcar `ia` só faz a vez
+     de X passar, o mesmo que o lance `{a:'e', de: X}` que o juiz já aceita de quem for (o risco aceito do replay).
+  5. **A luta aberta da guerra**: `luta_aberta_guerra(conta_id, gid, desde_ms, estado)` (tabela nova; o CHECK da
+     `luta_aberta` só aceita sala/grupo), uma linha por conta desde a pronta. Abrir sala/grupo/duelo/Arena/guerra com uma
+     guerra pronta pendente (`_larga_pendentes` → `_guerra_larga`) = largada: a saída declarada com motivo `largada`, os
+     heróis a 0, `luta-largada` tipo `guerra`, e `largada: {herois}` na resposta (ou no 409 `vida-zero` que ela provoca).
+     O jogo guarda o gid em `soterra-luta-aberta-v1` e fecha a guerra pendente ao reabrir (`Autoridade.fechaPendente`).
+  6. **Os motivos 4xx**: `sem-guilda`, `outra-guilda`, `dois`, `mestre`, `vida-zero`, `casada`, `inscrito`, `sem-convite`,
+     `sem-estado-parceiro`, `sem-estado-lider`, `mesmo-dono`, `parceiro`, `sem-partida`, `gid`, `desistencia-alheia`,
+     `desistiu-e-wo`, `marca-sem-prova`, `rapido-demais`, `mudou` — a HUD tem a tabela de textos.
+  Também: uma ata por gid de cada vez por processo (`_atas_em_curso`); o fechamento concorrente dos quatro paga o XP
+  uma vez (a checagem dentro de `BEGIN IMMEDIATE`); a ata só grava COM a versão das regras — o número vem na própria
+  resposta do `/guerra/ata` (`regras`), e se nem ela nem o `/regras` o dão a ata fica para a consulta seguinte (3ª
+  rodada: a ata gravada sem a chave era lida no fechar como a versão 1 e o juiz vencia a guerra inteira dos quatro).
+  Provas: `tests/guerra_api.py` (24), `tests/juiz_guerra.js` (26), `tests/luta_largada_api.py` (a guerra largada). **Riscos que continuam aceitos**: um cliente mexido ainda pode escrever
+  lances do adversário num registro com fim (o replay é o juiz dos lances; os tetos e o tempo mínimo seguram — e a
+  marca `ia` livre é o mesmo atalho); o `sai` que viaja pelo relé sem o `POST /api/guerra/sair` chegar (só um cliente
+  mexido: o jogo declara com keepalive, guarda `saiu` na luta aberta e repete ao reabrir, e o fechar dos outros repete a
+  cada 5 s até a saída entrar) deixa a marca `morte` do adversário sem prova — só o lado do que saiu fecha, e sem
+  ninguém dele a espera acaba `recusada` (um veto sem ganho para quem veta); quem fica conectado e parado não é W.O.
+  (a vez passa pelo prazo do parceiro, e a guerra acaba pelo teto de rodadas); `dono` segue palavra do cliente (a
+  colisão agora só custa o casamento).
 - **O lockstep de 4 (cliente, `js/core/coop.js`).** Os lances vão pelo dirigido `batalha` aos três outros (um envelope
   por destino, com `para` e o limite de 6.000 bytes por fatia do `R.dirige` — o relé não mudou). Lance só do dono da vez;
   hash no fim de cada turno. Quem MANDA (a foto de resgate) é o primeiro presente da ordem A1, A2, B1, B2 (A = a dupla de

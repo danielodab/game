@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS salas_grupo_pago(
   recompensa  TEXT,
   PRIMARY KEY (gid, conta_id)
 );
+-- 19/09: a versão das regras (Engine.VERSAO_REGRAS, a que o juiz anuncia em GET /regras) com que a sala em grupo
+-- abriu e com que o duelo abriu (o primeiro duelo/abrir do did), mais o hash dos dados do juiz. O fechamento manda
+-- o número na ata/pedido e o juiz confere ANTES de refazer (servidor/juiz/sala.js): sob outra versão a luta VENCE
+-- ('regras-mudaram') em vez de cair como fraude ('divergiu'). Linha ausente com a luta aberta = de antes do
+-- número = versão 1 (docs/SEGURANCA.md §4.1). Tabelas novas, nunca ALTER
+CREATE TABLE IF NOT EXISTS salas_grupo_regras(
+  gid       TEXT PRIMARY KEY REFERENCES salas_grupo(gid) ON DELETE CASCADE,
+  regras    INTEGER NOT NULL,
+  versao    TEXT
+);
+CREATE TABLE IF NOT EXISTS duelos_regras(
+  did       TEXT PRIMARY KEY,
+  regras    INTEGER NOT NULL,
+  versao    TEXT
+);
 -- o duelo ranqueado (13/09): uma linha por did, com o resultado guardado (idempotente)
 CREATE TABLE IF NOT EXISTS duelos(
   did        TEXT PRIMARY KEY,
@@ -244,6 +259,9 @@ class GrupoMixin:
         if dono_p == dono:
             raise Recusa(400, 'os dois membros com o mesmo dono')
         regras = self._regras()                                   # sem juiz: 503
+        # 19/09 (a 2ª rodada de conserto): a versão das regras da página de quem lidera contra a do juiz — a página
+        # de antes do deploy não abre a sala em grupo para os dois caírem como fraude no fim (salas.py)
+        regras = self._confere_versao_cliente(corpo, regras)
         n = regras['calaboucos'].get(dungeon)
         if not _inteiro_puro(n):
             raise Recusa(400, 'calabouço desconhecido ou fechado')
@@ -282,6 +300,10 @@ class GrupoMixin:
                 "aberta_em, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
                 (gid, cid, pid, dungeon, sala, dificuldade, semente, json.dumps(party),
                  json.dumps(carry) if carry is not None else None, t))
+            # 19/09: a versão das regras com que a sala abriu (o juiz confere ao fechar; sob outra, a sala vence)
+            if _inteiro_puro(regras.get('regras')):
+                self.con.execute("INSERT OR REPLACE INTO salas_grupo_regras(gid, regras, versao) VALUES (?, ?, ?)",
+                                 (gid, regras['regras'], regras.get('versao') if isinstance(regras.get('versao'), str) else None))
             # 15/09: a luta aberta de CADA conta, com os heróis dela (a largada zera só os de quem largou)
             for conta_id, hs in ((cid, herois), (pid, herois_p)):
                 self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
@@ -289,6 +311,21 @@ class GrupoMixin:
         return 200, {'ok': True, 'gid': gid, 'semente': semente, 'carry': carry}
 
     # -- POST /api/grupo/fechar ------------------------------------------------------------------
+    def _regras_da_luta(self, tabela, coluna, ref):
+        """Dentro da tranca (19/09): o número das regras guardado na abertura da luta, ou 1 — a linha ausente é a
+        luta aberta antes de existir o número (a versão implícita do engine.js), e o juiz a vence em vez de a
+        recusar como fraude (o mesmo que salas.py faz com o bilhete)."""
+        r = self.con.execute("SELECT regras FROM %s WHERE %s = ?" % (tabela, coluna), (ref,)).fetchone()
+        return r['regras'] if r is not None and _inteiro_puro(r['regras']) else 1
+
+    def _grupo_vence_por_regras(self, gid, t, erro):
+        """19/09: o deploy trocou uma regra no meio da sala em grupo — a sala VENCE para os dois (não é fraude: o
+        juiz novo refaria a sala de antes com outro fim), a trilha diz o porquê, e cada um abre de novo."""
+        self._regras_esquece()                                  # o juiz é outro: o /regras guardado pode ser velho
+        self._grupo_marca(gid, 'vencida', 'regras-mudaram', t, 'grupo-vencida')
+        log.info("sala em grupo vencida por regras novas: %s — %.200s", gid, erro)
+        raise Recusa(410, 'as regras do jogo mudaram no meio da sala — abram a sala de novo', motivo='regras-mudaram')
+
     def _grupo_marca(self, gid, estado, motivo, t, evento=None):
         with self._escrita():
             linha = self.con.execute("SELECT lider_id, membro_id FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
@@ -364,6 +401,7 @@ class GrupoMixin:
                         membros.append({'p': p, 'conta': dict(linha), 'estado': self._estado_exige(p['conta']),
                                         'guilda': self._guilda_contexto(p['conta'], t)})
                     fatores = self._fatores_no_ar(t)
+                    regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
                     acao = 'juiz'
             if acao == 'fechada':
                 return self._grupo_fechada(cid, gid)
@@ -381,12 +419,15 @@ class GrupoMixin:
                              'herois': m['p']['herois'], 'progress': m['estado']['progress'], 'db': m['estado']['db'],
                              'guilda': m['guilda']} for m in membros],
                 'ata': {'dungeonId': g['dungeon'], 'roomIndex': g['sala'], 'dificuldade': g['dificuldade'],
-                        'semente': g['semente'], 'carry': _objeto(g['carry'])},
+                        'semente': g['semente'], 'carry': _objeto(g['carry']),
+                        'regras': regras_ata},                  # 19/09: o juiz confere contra a versão dele
                 'lances': lances, 'hashFinal': hash_final,
                 'contexto': {'agoraMs': int(instante * 1000), 'fatores': fatores}}
             try:
                 saida = self.juiz.pede('POST', '/grupo/fecha', pedido)
             except Recusa as e:
+                if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                    self._grupo_vence_por_regras(gid, t, e.erro)            # 19/09: vence, não é fraude (410)
                 if e.status == 422:
                     self._grupo_marca(gid, 'recusada', e.extra.get('motivo') or 'juiz', t, 'grupo-recusada')
                 raise
@@ -471,12 +512,20 @@ class GrupoMixin:
             return self._grupo_fechada(cid, gid)
         if acao == 'ja':
             return 200, {'ok': True, 'fase': 'largou', 'recompensa': None}
+        with self.tranca:
+            regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
         pedido = {'membros': membros,
                   'ata': {'dungeonId': g['dungeon'], 'roomIndex': g['sala'], 'dificuldade': g['dificuldade'],
-                          'semente': g['semente'], 'carry': _objeto(g['carry'])},
+                          'semente': g['semente'], 'carry': _objeto(g['carry']),
+                          'regras': regras_ata},                # 19/09: o juiz confere contra a versão dele
                   'lances': lances, 'hashFinal': None,
                   'contexto': {'agoraMs': int(time.time() * 1000), 'fatores': {}}}
-        saida = self.juiz.pede('POST', '/grupo/fecha', pedido)     # 422: nada gravado (a largada ainda vale depois)
+        try:
+            saida = self.juiz.pede('POST', '/grupo/fecha', pedido)     # 422: nada gravado (a largada ainda vale depois)
+        except Recusa as e:
+            if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                self._grupo_vence_por_regras(gid, agora(), e.erro)     # 19/09: a sala de antes do deploy vence (410)
+            raise
         if not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str):
             raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
         if saida['fase'] in ('won', 'lost'):
@@ -517,6 +566,10 @@ class GrupoMixin:
         herois = _herois(corpo.get('herois'), 'herois')
         if not self._autoridade_ligada():
             raise Recusa(503, 'o juiz do servidor não está configurado')
+        regras = self._regras()                                   # 19/09: a versão das regras do juiz (sem juiz: 503)
+        # 19/09 (a 2ª rodada de conserto): a versão das regras desta página contra a do juiz — a página de antes do
+        # deploy não abre o duelo para os dois lados caírem como fraude no fim (salas.py, _confere_versao_cliente)
+        regras = self._confere_versao_cliente(corpo, regras)
         t = agora()
         chave = 'duelo-abrir:%d' % cid
         with self._escrita():
@@ -537,7 +590,20 @@ class GrupoMixin:
             self.con.execute("DELETE FROM limites WHERE chave = ? AND em < ?", (chave, t - 3600))
             self.con.execute("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES (?, ?, ?, ?, ?)",
                              (did, cid, json.dumps(herois), json.dumps(carry) if carry is not None else None, t))
+            # 19/09: a versão das regras com que o duelo abriu — a do PRIMEIRO lado a abrir (o juiz confere ao fechar)
+            if _inteiro_puro(regras.get('regras')):
+                self.con.execute("INSERT OR IGNORE INTO duelos_regras(did, regras, versao) VALUES (?, ?, ?)",
+                                 (did, regras['regras'], regras.get('versao') if isinstance(regras.get('versao'), str) else None))
         return 200, {'ok': True, 'carry': carry}
+
+    def _duelo_regras(self, did):
+        """Dentro da tranca (19/09): o número das regras da abertura do duelo (duelos_regras); 1 quando a abertura
+        (duelo_vida) existe sem número — o duelo aberto antes de existir o número —; None sem abertura nenhuma (a
+        página de antes do duelo/abrir, as provas que só fecham): aí não há o que conferir."""
+        r = self.con.execute("SELECT regras FROM duelos_regras WHERE did = ?", (did,)).fetchone()
+        if r is not None and _inteiro_puro(r['regras']):
+            return r['regras']
+        return 1 if self.con.execute("SELECT 1 FROM duelo_vida WHERE did = ?", (did,)).fetchone() else None
 
     def _duelo_vida_guardada(self, did, lado):
         """Dentro da tranca: {heroId: PV} que o lado guardou no duelo/abrir, só dos heróis dele. Sem linha (a
@@ -786,6 +852,7 @@ class GrupoMixin:
                                     if abs(niveis[0] - niveis[1]) > PARIDADE[modo]:
                                         amistoso, teto = 'paridade', None
                                 vidas = {k: self._duelo_vida_guardada(did, lados[k]) for k in lados}
+                                regras_duelo = self._duelo_regras(did)          # 19/09
                                 acao = 'juiz'
             if acao == 'guardado':
                 return self._duelo_guardado(cid, did)
@@ -796,12 +863,26 @@ class GrupoMixin:
                           'vida': vidas[k]}
                       for k in lados}
             pedido.update(dungeonId=dungeon, roomIndex=sala, semente=semente, lances=lances, hashFinal=hash_final,
-                          contexto={'agoraMs': int(time.time() * 1000)})
+                          contexto={'agoraMs': int(time.time() * 1000)},
+                          regras=regras_duelo)              # 19/09: o juiz confere contra a versão dele (None: não confere)
             if perdeu:
                 pedido['perdeu'] = perdeu                   # 15/09: quem desistiu, ou quem sumiu com a queda provada
             try:
                 saida = self.juiz.pede('POST', '/duelo/fecha', pedido)
             except Recusa as e:
+                if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                    # 19/09: o deploy trocou uma regra no meio do duelo — ele VENCE (não é fraude): sem vida gravada,
+                    # sem coroa, e a trilha dos dois diz o porquê. Os dois lados leem o mesmo guardado (fase 'vencido')
+                    self._regras_esquece()                  # o juiz é outro: o /regras guardado pode ser velho
+                    with self._escrita():
+                        if not self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
+                            self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
+                            self._duelo_guarda(did, a_id, b_id, {'fase': 'vencido', 'venc': None, 'ranqueado': False,
+                                                                 'motivo': 'regras-mudaram', 'modo': modo}, t, herois_de)
+                            for quem in (a_id, b_id):
+                                self._evento(quem, 'duelo-vencido', {'did': did, 'motivo': 'regras-mudaram', 'erro': e.erro})
+                    log.info("duelo vencido por regras novas: %s — %.200s", did, e.erro)
+                    return self._duelo_guardado(cid, did)
                 if e.status == 422:
                     with self._escrita():
                         if not self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():

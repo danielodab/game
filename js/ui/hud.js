@@ -10540,7 +10540,9 @@ var JOGO = (typeof window !== 'undefined')
       var nome = (ses.parceiro && ses.parceiro.nome) || nomeParceiro();
       if (!a.parceiroIA && ses.parceiroIA) toast(nome + ' caiu — o turno dele passa até voltar.');
       if (!a.sincronizando && ses.sincronizando) {
-        toast(ses.tipo === 'duelo' ? 'Sincronizando com ' + nome + '…' : 'Sincronizando com quem lidera…');
+        // 19/09: na guerra a foto vem de quem MANDA, que tem nome (A1, A2, B1, B2 pela ordem — pode ser da outra guilda)
+        var quem = ses.tipo === 'duelo' ? nome : (ses.tipo === 'guerra' && ses.guerra ? ses.guerra.autoridadeNome : null);
+        toast(quem ? 'Sincronizando com ' + quem + '…' : 'Sincronizando com quem lidera…');
       }
     }
     if (current === 'battle') battleSig = '';
@@ -11004,6 +11006,11 @@ var JOGO = (typeof window !== 'undefined')
       x.textContent = x.classList.contains('arena-confirma') ? 'Confirmar (' + sg + ' s)' : sg + ' s';
     });
     if (sheetName === 'arenaQuadro' && Date.now() - quadroArena.t > 4000) atualizaQuadro();
+    // 19/09: a contagem do W.O. no topo da guerra anda a cada segundo (o paintBattle só repinta quando o estado muda)
+    if (current === 'battle' && bt && bt.guerra) {
+      var gq = safe(function () { return (Cp().sessao() || {}).guerra; }, null);
+      if (gq && gq.wo && gq.wo.desde) pintaGuerraTopo();
+    }
   }
 
   // ---- a guerra de guilda 2×2 (15/09): o bloco da Sede, a escolha das duplas, os adversários, o topo e o fim
@@ -11026,7 +11033,20 @@ var JOGO = (typeof window !== 'undefined')
       'casada': 'Já há uma guerra em andamento para vocês.',
       'inscrito': 'Um de vocês já está noutra inscrição da guerra.',
       'sem-partida': 'O prazo da guerra passou.',
-      'vida-zero': 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.'
+      'vida-zero': 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.',
+      // 19/09: os motivos curtos do contrato servidor↔jogo da guerra
+      'dois': 'Escolha os dois heróis que vão à guerra, em ordem.',
+      'mestre': 'O Mestre não vai à guerra de guilda.',
+      'sem-estado-parceiro': 'O servidor ainda não tem o estado do seu parceiro — ele precisa entrar na conta e recarregar a página.',
+      'sem-estado-lider': 'O servidor ainda não tem o estado de quem lidera — ele precisa entrar na conta e recarregar a página.',
+      'mesmo-dono': 'Vocês dois estão com o mesmo nome na Rede — um de vocês precisa recarregar a página.',
+      'parceiro': 'O parceiro não é o do seu grupo — forme o grupo de novo.',
+      'desistencia-alheia': 'Só quem sai declara a própria saída.',
+      'marca-sem-prova': 'O servidor não viu a queda ou a saída marcada no registro — a guerra espera o registro de outro jogador.',
+      'wo-sem-prova': 'O servidor não viu a queda do outro lado: o W.O. valeu só a vida da luta, sem XP.',
+      'paridade': 'A diferença de nível entre as duplas passou do limite da guerra.',
+      'teto': 'O teto de guerras de hoje já foi — esta não rende XP.',
+      'largada': 'Você saiu da última luta sem terminar: os heróis dela voltam do zero.'
     };
     if (T[m]) return T[m];
     if (r.erro && ['sem-sessao', 'arquivo', 'servidor', 'rede'].indexOf(m) >= 0) return r.erro;
@@ -11043,7 +11063,14 @@ var JOGO = (typeof window !== 'undefined')
       'oito heróis no Salão da Sede. A guilda que vence ganha <b>+' + W.XP + ' XP</b>; a coroa não muda.'));
     if (e.desligada) { caixa.appendChild(el('p', 'hub-nota guerra-off', '⚔ ' + esc(e.desligada))); return; }
     var nomePar = esc(nomeParceiro());
-    if (e.fase === 'livre') {
+    // 19/09: a partida 'pronta'/'em-luta' já entregue ao Coop (a guerra acabou aqui e o servidor ainda assenta os
+    // fechamentos) não é "abre em instantes" nem prende a fila: diz o que é, e a inscrição volta quando ela assentar
+    var esperandoServidor = (e.fase === 'pronta' || e.fase === 'em-luta') && e.entregue;
+    if (esperandoServidor) {
+      caixa.appendChild(el('p', 'hub-nota guerra-conferindo', 'A última guerra ainda está sendo conferida pelo servidor — a inscrição volta em instantes…'));
+      return;
+    }
+    if (e.fase === 'livre' || e.fase === 'fechada') {
       if (!emGrupo()) caixa.appendChild(el('p', 'hub-nota guerra-sem-grupo', 'Forme um grupo de 2 com alguém da sua guilda para entrar na fila.'));
       else if (souLider()) caixa.appendChild(btn('Inscrever o grupo na guerra', 'btn-gold btn-block guerra-inscrever', pedeGuerraInscricao));
       else caixa.appendChild(el('p', 'hub-nota guerra-espera-lider', 'Quem lidera o grupo (<b>' + nomePar + '</b>) inscreve; aí você escolhe a sua dupla.'));
@@ -11065,6 +11092,8 @@ var JOGO = (typeof window !== 'undefined')
       pintaGuerraCasada(caixa, e);
     } else if (e.fase === 'pronta') {
       caixa.appendChild(el('p', 'hub-nota guerra-pronta', 'Os quatro confirmaram — a guerra abre em instantes…'));
+    } else if (e.fase === 'em-luta') {
+      caixa.appendChild(el('p', 'hub-nota guerra-em-luta', 'Há uma guerra desta conta em andamento noutra página — ela fecha sozinha ao terminar.'));
     }
   }
   function nomesConfirma(lista) {
@@ -11077,6 +11106,8 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(el('p', 'hub-nota guerra-nomes', nomesConfirma(e.adversarios) + ' — as duplas deles só aparecem na batalha.'));
     box.appendChild(el('p', 'hub-nota guerra-aliados', 'Do seu lado: ' + nomesConfirma(e.aliados) + '.'));
     box.appendChild(barraPrazo(e.prazoMs, agoraGuerra));
+    // 19/09: os tetos de hoje já estouraram (o servidor manda `semXp`): quem confirma sabe ANTES que não rende XP
+    if (e.semXp) box.appendChild(el('p', 'hub-nota guerra-sem-xp', '⚠ Esta guerra <b>não vai render XP</b>: o teto de guerras de hoje (entre essas guildas, ou da sua guilda) já foi. A vida dos heróis vale do mesmo jeito.'));
     var resta = Math.max(0, Math.ceil((e.prazoMs - agoraGuerra()) / 1000));
     if (e.confirmei) {
       box.appendChild(el('p', 'du-espera', 'Você confirmou. Esperando os outros… <b class="arena-relogio" data-prazo="' + e.prazoMs + '">' +
@@ -11162,16 +11193,25 @@ var JOGO = (typeof window !== 'undefined')
       return { id: j.dono, nome: j.nome, lado: j.lado, eu: j.dono === info.eu, on: true };
     });
     var meu = info.lado === 'B' ? 'B' : 'A';
+    var aut = gq ? gq.autoridade : null;
     function lado(L) {
       var g = guildas[L] || {};
       var nomes = jog.filter(function (j) { return j.lado === L; }).map(function (j) {
-        var cls = 'bg-nome' + (j.eu ? ' is-eu' : '') + (j.saiu ? ' is-saiu' : ((j.on === false || j.fora) ? ' is-fora' : ''));
-        return '<span class="' + cls + '">' + esc(j.nome) + '</span>';
+        var cls = 'bg-nome' + (j.eu ? ' is-eu' : '') + (j.saiu ? ' is-saiu' : ((j.on === false || j.fora) ? ' is-fora' : '')) +
+                  (aut && j.id === aut ? ' is-manda' : '');    // 19/09: quem manda (a foto de resgate) leva a coroa
+        return '<span class="' + cls + '"' + (aut && j.id === aut ? ' title="quem manda na guerra"' : '') + '>' + esc(j.nome) + '</span>';
       }).join('<i>·</i>');
       return '<div class="bg-lado ' + (L === meu ? 'is-meu' : 'is-inimigo') + '"><b class="bg-emblema">' + esc(g.emblema || '⚑') +
         '</b><span class="bg-guilda">' + esc(g.nome || ('Guilda ' + L)) + '</span><span class="bg-nomes">' + nomes + '</span></div>';
     }
     var html = lado(meu) + '<i class="bg-vs">×</i>' + lado(meu === 'A' ? 'B' : 'A');
+    // 19/09: quem manda (a foto de resgate) marcado com a coroa, e os DOIS adversários fora = a contagem do W.O.
+    // ("o lado deles tem N s para voltar") — antes era um minuto de tela parada sem dizer quanto faltava
+    if (gq && gq.wo && gq.wo.desde) {
+      var ag = safe(function () { return Cp()._agora(); }, Date.now());
+      var sg = Math.max(0, Math.ceil((gq.wo.desde + gq.wo.prazo - ag) / 1000));
+      html += '<span class="bg-wo">o lado deles tem <b>' + sg + ' s</b> para voltar</span>';
+    }
     if (bt.guerra.__html !== html) { bt.guerra.innerHTML = html; bt.guerra.__html = html; }
   }
   function porqueSemXp(res) {
@@ -11179,7 +11219,8 @@ var JOGO = (typeof window !== 'undefined')
     if (res.fase === 'recusada') return 'A luta não bateu com a conferência do servidor — a guerra não rendeu XP.';
     if (res.fase === 'nao-conferida') return 'A batalha sincronizou por foto e ninguém mandou um registro limpo — a guerra não rendeu XP.';
     if (m === 'empate') return 'Empate — nenhuma guilda ganha XP.';
-    if (m === 'sem-fim') return 'W.O. ou desistência não rende XP para a guilda.';
+    if (m === 'sem-fim') return 'A guerra ficou sem fim conferido (ninguém mandou um registro com o fim em 2 min): vale a vida do ponto em que parou, sem XP.';
+    if (m === 'wo-sem-prova') return 'O servidor não viu a queda do outro lado: o W.O. valeu só a vida da luta, sem XP.';
     if (m === 'teto') return 'A guerra valeu, mas sem XP: o teto de guerras de hoje (entre essas guildas, ou da guilda) já foi.';
     if (m === 'sem-guilda') return 'A guilda vencedora não existe mais — sem XP.';
     return 'Sem XP desta vez.';
@@ -11198,8 +11239,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     var linha;
     if (!res) linha = 'O servidor está conferindo a guerra…';
+    else if (res.fase === 'aguardando') {
+      // 19/09: a espera do servidor tem três caras — o W.O. sem a prova de queda ainda, o registro sem fim (ou
+      // fotografado, ou recusado) esperando o de outro dos quatro; a Autoridade pergunta de novo a cada 5 s
+      linha = (data.wo || res.motivo === 'wo') ? 'Esperando o servidor confirmar a queda do outro lado (a prova do relé)…'
+            : 'Esperando o registro de outro jogador para conferir a guerra…';
+    }
     else if (!res.ok) linha = 'O servidor não conferiu a guerra: ' + (res.erro || 'sem resposta') + '.';
-    else if (res.fase === 'aguardando') linha = 'A sua batalha sincronizou por foto: esperando o registro de outro jogador para conferir…';
     else if (res.xp > 0 && res.guilda) linha = 'A guilda ' + res.guilda.nome + ' venceu — +' + res.xp + ' XP para a guilda.';
     else linha = porqueSemXp(res);
     box.appendChild(el('p', 'du-valeria guerra-xp', esc(linha)));
@@ -11213,7 +11259,12 @@ var JOGO = (typeof window !== 'undefined')
     });
     box.appendChild(el('p', 'game-sub', 'Salão da Sede · clima: ' + esc(nomeClima(data.clima)) + ' · a coroa não muda na guerra de guilda.'));
     box.appendChild(vidaBloco('fim'));
-    box.appendChild(btn('Voltar à Sede', 'btn-primary btn-block', function () { navTo('hub'); }));
+    box.appendChild(btn('Voltar à Sede', 'btn-primary btn-block', function () {
+      // 19/09: fecha a sessão como os outros fins fazem — só trocar de tela deixava o Game em modo 'guerra', o Coop
+      // com o gid e a fila da Sede presa em "abre em instantes", sem botão para inscrever de novo até recarregar
+      safe(function () { G().restart('hub'); return true; }, null);
+      navTo('hub');
+    }));
     s.appendChild(box);
   }
 

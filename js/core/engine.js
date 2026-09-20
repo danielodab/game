@@ -150,6 +150,28 @@ var JOGO = (typeof window !== 'undefined')
   Engine.MARK_DEFAULT_MAX = 5;   // pilhas máximas quando o dado omite
   Engine.PET_FOLLOW_DEFAULT = 2; // followDistance padrão
 
+  /* A VERSÃO DAS REGRAS (19/09). O juiz (servidor/juiz) refaz a sala com ESTE
+   * arquivo; quando uma regra muda o resultado de uma sala já jogada (visão,
+   * área, dano), um cliente com o engine.js velho e um juiz novo chegam a fins
+   * diferentes da mesma semente — e a divergência viraria "cliente mentiu".
+   * Este número sobe a cada mudança dessas: o juiz o anuncia em /saude e
+   * /regras, o bilhete guarda o do juiz na abertura, o cliente pode mandar o
+   * dele em versaoRegras (docs/SEGURANCA.md §4.1) e a sala aberta sob outra
+   * versão vence em vez de ser recusada como fraude.
+   *   1 — tudo até 18/09 (implícito: não havia número — o bilhete sem número
+   *       guardado É desta versão, e a API o trata assim)
+   *   2 — 19/09: visão simétrica e estrita, fresta de canto fechada, área que
+   *       não atravessa muro, cobertura baixa −25% (cortada depois da escala da
+   *       dificuldade e medida da MESMA casa de onde a visão do golpe é
+   *       exigida: o conjurador para o alvo, o centro do impacto para as
+   *       outras casas da área, a vítima anterior para cada salto do raio), o
+   *       raio em cadeia não salta por cima de muro, a explosão de morte não
+   *       fere quem está atrás de um, IA mirando o chão
+   *   3 — 19/09: o Salão da Sede redesenhado ("A Arena do Trono", js/core/data/arenas.js):
+   *       a guerra de guilda refeita no salão antigo não bate — o juiz recusa como
+   *       'regras-mudaram' (vencida limpa), não como 'divergiu' */
+  Engine.VERSAO_REGRAS = 3;
+
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
     calmo:     { id: 'calmo',     name: 'Calmo',     favors: null,    harms: null },
@@ -357,7 +379,16 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // acessores tolerantes (os dados podem estar incompletos durante o desenvolvimento)
-  function sRange(sp) { return sp.range || { min: 0, max: 1, line: false, los: false }; }
+  // 19/09: o padrão é los:TRUE, o mesmo do fusion.js — um feitiço sintético sem
+  // `range` atirava através de tudo (era los:false aqui e true lá; o mais seguro
+  // vale para os dois). Quem quer atravessar muro diz `los:false` por escrito.
+  /* 19/09: o alcance do feitiço SEM `range` (as armadilhas e os eventos de chão
+   * conjuram feitiços sintéticos). Exposto para as provas cobrarem o `los:true`
+   * de verdade: com max 1 ele não decide nada hoje (casas encostadas sempre se
+   * veem) — é o cinto de segurança para um `range` futuro sem `los`. A IA
+   * (ai.js) e a fusão (fusion.js) usam o mesmo padrão. Ninguém o altera. */
+  Engine.RANGE_PADRAO = { min: 0, max: 1, line: false, los: true };
+  function sRange(sp) { return sp.range || Engine.RANGE_PADRAO; }
   function sAoe(sp) { return sp.aoe || { shape: 'single', size: 0 }; }
   function sEffects(sp) { return sp.effects || []; }
   function sPaCost(sp) { return sp.paCost || 0; }
@@ -1137,22 +1168,77 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------------- visão
-  Engine.los = function (state, x0, y0, x1, y1) {
+  /* O TRAÇADO de uma casa à outra (Bresenham, centro a centro). Devolve null
+   * quando nada bloqueia, ou a primeira casa de muro que o traçado encontra.
+   *
+   * A FRESTA DE CANTO (19/09, o dono: "obstáculos atrapalham"). Quando o
+   * traçado dá um passo DIAGONAL entre dois muros encostados só pelo canto,
+   * ele não pisa em nenhum dos dois e a visão "espremia" pela fresta — medido
+   * em 325 pares nas 20 salas (greenhouse#0 118, quakemine#2 88…). Agora o
+   * passo diagonal com muro nos DOIS vizinhos ortogonais bloqueia. Não é o
+   * supercover (toda casa que o segmento toca): esse fecharia o mesmo canto
+   * mas tiraria 8,9% da visão do jogo inteiro. */
+  function traco(state, x0, y0, x1, y1) {
     var dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     var dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     var err = dx + dy;
     var x = x0, y = y0;
     for (;;) {
-      if (!(x === x0 && y === y0) && !(x === x1 && y === y1)) {
-        if (blocksSight(state, x, y)) return false;
+      if (x === x1 && y === y1) return null;
+      var px = x, py = y;
+      var e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x += sx; }
+      if (e2 <= dx) { err += dx; y += sy; }
+      if (x !== px && y !== py && blocksSight(state, x, py) && blocksSight(state, px, y)) {
+        return { x: x, y: py };                       // a fresta de canto
       }
+      if (!(x === x1 && y === y1) && blocksSight(state, x, y)) return { x: x, y: y };
+    }
+  }
+  /* O primeiro muro entre duas casas, ou null quando se veem. Simétrico como a
+   * visão: o traçado de ida e o de volta. */
+  Engine.muroNaLinha = function (state, x0, y0, x1, y1) {
+    return traco(state, x0, y0, x1, y1) || traco(state, x1, y1, x0, y0);
+  };
+  /* A LINHA DE VISÃO É SIMÉTRICA E ESTRITA (19/09). O Bresenham escolhe para
+   * que lado arredondar no meio-passo e a escolha depende do sentido: medido
+   * nas 20 salas, 5.768 pares em 210.113 (2,7%) em que A via B e B não via A
+   * — o arqueiro acertava o monstro e o monstro, da mesma casa, não acertava
+   * o arqueiro. Agora os dois sentidos têm de passar: muro nunca fica mais
+   * fraco, e quem vê é visto. O juiz (servidor/juiz) usa esta mesma função,
+   * por isso a mudança sobe Engine.VERSAO_REGRAS. */
+  Engine.los = function (state, x0, y0, x1, y1) {
+    return !traco(state, x0, y0, x1, y1) && !traco(state, x1, y1, x0, y0);
+  };
+
+  /* A COBERTURA BAIXA (19/09). A doc prometia "atrás de um obstáculo baixo
+   * você é atingível mas tem cobertura", e o motor só usava o '=' para barrar
+   * o passo (4.791 pares ortogonais cruzavam um '=' e nenhum sentia nada).
+   * Agora vale o que a doc diz: quando o ALVO está encostado (ortogonal) numa
+   * casa de cobertura E o traçado de onde o golpe SAI até ele entra pela
+   * cobertura (a última casa antes do alvo é o '='), o dano dos efeitos de dano
+   * perde 25% (applyEffects; `cobre` diz de onde cada golpe sai). Corpo a
+   * corpo encostado nunca é coberto: o traçado não cruza casa nenhuma. Cura,
+   * controle, invocação e auto-alvo não mudam. */
+  Engine.coberto = function (state, x0, y0, x1, y1) {
+    if (x0 === x1 && y0 === y1) return false;
+    var dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    var dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    var err = dx + dy;
+    var x = x0, y = y0, px = x0, py = y0;
+    for (;;) {
       if (x === x1 && y === y1) break;
+      px = x; py = y;
       var e2 = 2 * err;
       if (e2 >= dy) { err += dy; x += sx; }
       if (e2 <= dx) { err += dx; y += sy; }
     }
-    return true;
+    if (px === x0 && py === y0) return false;         // encostado: nada no meio
+    if (manhattan(px, py, x1, y1) !== 1) return false; // a cobertura tem de ser ortogonal ao alvo
+    var t = tileAt(state, px, py);
+    return !!t && t.type === 'cover';
   };
+  Engine.COBERTURA_PCT = 25;   // o quanto a cobertura baixa tira do dano
 
   // ------------------------------------------------------------------- duelo
   /* A ARENA (PvP hotseat). Uma sala propria, montada a mao: bordas de muro,
@@ -1677,6 +1763,32 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   };
 
+  /* AS CASAS NO ALCANCE MAS SEM VISÃO (19/09), para a tela pintar com cor
+   * própria e dizer o porquê. `spellRange` já filtra pela visão, então a casa
+   * atrás do muro simplesmente não era pintada e o jogador não sabia se era
+   * distância, linha ou parede ("eu não consigo mas ele consegue"). Devolve
+   * cada casa de chão que passa por distância e linha e cai só pela visão,
+   * com o primeiro muro que a bloqueia. Feitiço sem `los` devolve vazio. */
+  Engine.casasSemVisao = function (state, uid, spellId) {
+    var u = Engine.findUnit(state, uid);
+    var spell = spellDef(spellId);
+    if (!u || !spell) return [];
+    var rg = sRange(spell);
+    var out = [];
+    if (!rg.los) return out;
+    for (var y = 0; y < state.grid.h; y++) {
+      for (var x = 0; x < state.grid.w; x++) {
+        if (!isFloor(state, x, y)) continue;
+        var d = manhattan(u.x, u.y, x, y);
+        if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
+        if (rg.line && !(x === u.x || y === u.y)) continue;
+        var muro = Engine.muroNaLinha(state, u.x, u.y, x, y);
+        if (muro) out.push({ x: x, y: y, muro: muro });
+      }
+    }
+    return out;
+  };
+
   Engine.castTargets = function (state, uid, spellId) {
     var u = Engine.findUnit(state, uid);
     var spell = spellDef(spellId);
@@ -1690,6 +1802,17 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   };
 
+  /* A ÁREA NÃO ATRAVESSA MURO (19/09, o dono: "obstáculos atrapalham").
+   * A visão era exigida do conjurador até o CENTRO do impacto, e daí a área
+   * seguia para o outro lado da parede: medido, 4,1% das casas de círculo 3 e
+   * 5,1% das de linha 5 ficavam atrás de um '#' (emberlock#1: 14,6%) — o alvo
+   * escondido levava a explosão sem que ninguém o visse. Agora toda casa da
+   * área precisa de Engine.los do centro do impacto até ela, em todas as
+   * formas; a casa do centro entra sempre. A linha para no primeiro muro. A
+   * única exceção nomeada é o Julgamento do Mestre (gm.js), global de
+   * propósito e fora do jogo em rede. */
+  var AREA_ATRAVESSA = { 'gm-julgamento': true };
+
   // Aceita id de feitiço OU o objeto do feitiço (armadilhas e eventos de
   // terreno conjuram feitiços sintéticos que não existem em DATA).
   Engine.aoeTiles = function (state, spellOrId, casterX, casterY, tx, ty) {
@@ -1697,11 +1820,13 @@ var JOGO = (typeof window !== 'undefined')
     if (!spell) return [];
     var aoe = sAoe(spell);
     var shape = aoe.shape, size = aoe.size || 0;
+    var atravessa = !!(spell.id && AREA_ATRAVESSA[spell.id]);
     var out = [];
     function add(x, y) {
-      if (inBounds(state, x, y) && state.grid.tiles[y][x].type !== 'wall') {
-        out.push({ x: x, y: y });
-      }
+      if (!inBounds(state, x, y) || state.grid.tiles[y][x].type === 'wall') return false;
+      if (!atravessa && !(x === tx && y === ty) && !Engine.los(state, tx, ty, x, y)) return false;
+      out.push({ x: x, y: y });
+      return true;
     }
     var dx, dy, i, s;
     if (shape === 'single') {
@@ -1718,12 +1843,16 @@ var JOGO = (typeof window !== 'undefined')
         }
       }
     } else if (shape === 'line') {
-      // linha de comprimento `size` a partir do alvo, afastando-se do conjurador
+      // linha de comprimento `size` a partir do alvo, afastando-se do conjurador;
+      // 19/09: para no primeiro muro (o que vem depois dele não existe para a linha)
       var ddx = tx - casterX, ddy = ty - casterY;
       var sx = 0, sy = 0;
       if (Math.abs(ddx) >= Math.abs(ddy)) sx = ddx === 0 ? 1 : (ddx > 0 ? 1 : -1);
       else sy = ddy > 0 ? 1 : -1;
-      for (i = 0; i < Math.max(1, size); i++) add(tx + i * sx, ty + i * sy);
+      for (i = 0; i < Math.max(1, size); i++) {
+        if (!atravessa && i > 0 && blocksSight(state, tx + i * sx, ty + i * sy)) break;
+        add(tx + i * sx, ty + i * sy);
+      }
     } else if (shape === 'cone') {
       // v2: triângulo a partir do alvo, abrindo no sentido oposto ao conjurador.
       // linha i (0..size-1) tem 2i+1 células; total = size².
@@ -1759,8 +1888,30 @@ var JOGO = (typeof window !== 'undefined')
     return Math.max(0, amt);
   }
 
+  /* A COBERTURA NO DANO (19/09). Vale para os efeitos de dano direto (damage,
+   * chain, detonateMarks) e é decidida da casa de onde o golpe SAI até a
+   * VÍTIMA — e "de onde sai" é a MESMA casa de onde a visão daquele golpe é
+   * exigida: o conjurador para o alvo (a casa do centro), o centro do impacto
+   * para as outras casas da área (aoeTiles exige a visão dali), a vítima
+   * anterior para cada salto do raio (chainDamage exige a visão dela). A
+   * revisão de 19/09 pegou o contrário: uma mureta atrás de um '#' que o
+   * conjurador nem via dando −25% a quem a explosão alcançava por outro lado,
+   * e o salto do raio em linha reta "coberto" por uma mureta que só estava na
+   * linha do conjurador. `cobre` só diz SE há cobertura; o corte de 25% mora
+   * em dealDamage, DEPOIS da escala da dificuldade: a revisão pegou o log
+   * dizendo "−3" num tiro de inimigo no difícil que perdera 5 — a cobertura
+   * cortava o dano cru e o 1,35× vinha depois, arredondando duas vezes. Um
+   * lugar só, com o número de verdade. */
+  function cobre(state, cx, cy, target) {
+    return Engine.coberto(state, cx, cy, target.x, target.y);
+  }
+
   // Aplica dano já calculado: escudo absorve antes do PV. Retorna a perda de PV.
-  function dealDamage(state, target, amount, element, sourceUid, noReflect) {
+  // 19/09: `cob` (de `cobre`) diz que a vítima tem cobertura: o corte entra
+  // aqui, depois da dificuldade, arredonda para baixo e nunca zera o golpe
+  // (mínimo 1: a mureta ameniza, não anula). O evento de dano leva
+  // `coberto: true` e a `reducao` de verdade, para a tela dizer "cobertura −25%".
+  function dealDamage(state, target, amount, element, sourceUid, noReflect, cob) {
     /* DANO VEZES A DIFICULDADE, e so quando quem bate e INIMIGO.
      *
      * Aqui, e nao no calculo de cada feitico, porque `dealDamage` e o funil por
@@ -1774,6 +1925,15 @@ var JOGO = (typeof window !== 'undefined')
       var quem = Engine.findUnit(state, sourceUid);
       if (quem && quem.side === 'enemy') {
         amount = Math.max(1, Math.round(amount * (Engine.dif(state).dano || 1)));
+      }
+    }
+    var cobertura = null;                       // 19/09: a cobertura baixa, sobre o dano já escalado
+    if (cob && amount > 0) {
+      var comCobertura = Math.max(1, Math.floor(amount * (100 - Engine.COBERTURA_PCT) / 100));
+      if (comCobertura < amount) {
+        cobertura = { reducao: amount - comCobertura };
+        log(target.name + ' tem cobertura −' + Engine.COBERTURA_PCT + '% (−' + cobertura.reducao + ').');
+        amount = comCobertura;
       }
     }
     if (!target.alive || amount <= 0) {
@@ -1809,8 +1969,10 @@ var JOGO = (typeof window !== 'undefined')
       if (qd2 && qd2.side === 'enemy') desafioFalha(state, target.name + ' foi ferido');
     }
     target.hp = Math.max(0, target.hp - hpLoss);
-    emit({ type: 'damage', uid: target.uid, amount: amount, element: element,
-           absorbed: absorbed, hpLoss: hpLoss, sourceUid: sourceUid || null });
+    var evDano = { type: 'damage', uid: target.uid, amount: amount, element: element,
+                   absorbed: absorbed, hpLoss: hpLoss, sourceUid: sourceUid || null };
+    if (cobertura) { evDano.coberto = true; evDano.reducao = cobertura.reducao; }
+    emit(evDano);
 
     // v2: reflect — devolve % do dano RECEBIDO ao agressor (não re-reflete)
     if (!noReflect && sourceUid && sourceUid !== target.uid) {
@@ -1950,7 +2112,11 @@ var JOGO = (typeof window !== 'undefined')
       var victims = [];
       for (var i = 0; i < state.units.length; i++) {
         var v = state.units[i];
-        if (v.alive && !v.offBoard && manhattan(unit.x, unit.y, v.x, v.y) <= explode.radius) victims.push(v);
+        // 19/09: "obstáculos atrapalham" vale para a explosão também — quem
+        // está atrás de um muro não é ferido (a revisão pegou a bomba ferindo
+        // através de um '#'). A mesma Engine.los da área dos feitiços.
+        if (v.alive && !v.offBoard && manhattan(unit.x, unit.y, v.x, v.y) <= explode.radius &&
+            Engine.los(state, unit.x, unit.y, v.x, v.y)) victims.push(v);
       }
       for (var j = 0; j < victims.length; j++) {
         var resist = Engine.effResist(victims[j], explode.element);
@@ -2261,6 +2427,25 @@ var JOGO = (typeof window !== 'undefined')
     opts = opts || {};
     var cx = opts.casterX != null ? opts.casterX : caster.x;
     var cy = opts.casterY != null ? opts.casterY : caster.y;
+    /* 19/09: DE ONDE O GOLPE SAI, para a cobertura. A armadilha e o evento de
+     * chão mandam casterX/Y (a casa da vítima) e valem como vieram; o feitiço
+     * que se move ANTES de bater (o Salto de Brasa: teleport > damage) fere de
+     * onde o conjurador ESTÁ na hora do dano, não de onde partiu — a revisão
+     * pegou o golpe de contato saindo com −25% porque a linha do ponto de
+     * partida entrava por uma mureta ao lado do alvo. */
+    function deOnde() {
+      return opts.casterX != null ? { x: cx, y: cy } : { x: caster.x, y: caster.y };
+    }
+    /* 19/09 (a rodada de conserto): a cobertura de cada vítima é medida DA
+     * MESMA casa de onde a visão daquele golpe é exigida. Quem está na casa do
+     * centro leva o golpe do conjurador (deOnde); quem está nas outras casas
+     * da área leva a explosão do CENTRO do impacto (aoeTiles só as inclui com
+     * visão dali) — a revisão pegou uma mureta atrás de um '#' que o
+     * conjurador nem via dando −25% a quem a explosão alcançava por outro lado. */
+    function cobreDe(u) {
+      var o = (u.x === x && u.y === y) ? deOnde() : { x: x, y: y };
+      return cobre(state, o.x, o.y, u);
+    }
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
     // v2.2/v2.3: calculado UMA vez por conjuração — depende do conjurador e do
@@ -2297,7 +2482,7 @@ var JOGO = (typeof window !== 'undefined')
               castPower,                                       // v2.2/v2.3
               Engine.effResist(u, eff.element),
               Engine.markMultiplier(u));                       // v2: marcas
-            var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid);
+            var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid, false, cobreDe(u));   // 19/09: a cobertura baixa
             if (eff.lifesteal && hpLoss > 0 && caster.alive) {
               var stolen = Math.round(hpLoss / 2);
               if (stolen > 0) {
@@ -2496,7 +2681,7 @@ var JOGO = (typeof window !== 'undefined')
             emit({ type: 'markStack', uid: u.uid, stacks: 0 });
             var dmg = Math.round(stacks * (eff.mult || 0));
             log(u.name + ': ' + stacks + ' marcas detonam (' + dmg + ').');
-            dealDamage(state, u, dmg, eff.element || spell.element || 'neutro', caster.uid);
+            dealDamage(state, u, dmg, eff.element || spell.element || 'neutro', caster.uid, false, cobreDe(u));   // 19/09: a cobertura baixa
           }
           break;
 
@@ -2648,7 +2833,8 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'chain':
-          chainDamage(state, caster, eff, spell, x, y, castPower);
+          var oC = deOnde();
+          chainDamage(state, caster, eff, spell, x, y, castPower, oC.x, oC.y);
           break;
       }
     }
@@ -2673,8 +2859,12 @@ var JOGO = (typeof window !== 'undefined')
     if (path.length) emit({ type: 'move', uid: caster.uid, path: path, forced: true });
   }
 
-  // v2: raio em cadeia
-  function chainDamage(state, caster, eff, spell, x, y, castPower) {
+  // v2: raio em cadeia. 19/09: `cx, cy` é de onde o raio sai (o conjurador, ou
+  // a casa da armadilha): a cobertura do PRIMEIRO golpe é medida de lá; a de
+  // cada salto, da vítima anterior — a mesma casa de onde o salto exige a
+  // visão (a revisão pegou um salto em linha reta "coberto" por uma mureta que
+  // só estava na linha do conjurador).
+  function chainDamage(state, caster, eff, spell, x, y, castPower, cx, cy) {
     var cur = Engine.unitAt(state, x, y);
     if (!cur || !cur.alive || cur.side === caster.side) return;
     var hit = {};
@@ -2682,6 +2872,7 @@ var JOGO = (typeof window !== 'undefined')
     var falloff = eff.falloff != null ? eff.falloff : 0.7;
     var jumps = eff.jumps || 0;
     var element = eff.element || spell.element || 'neutro';
+    var de = { x: cx != null ? cx : caster.x, y: cy != null ? cy : caster.y };   // de onde ESTE golpe sai
     for (var j = 0; j <= jumps; j++) {
       if (!cur || !cur.alive) break;
       hit[cur.uid] = true;
@@ -2689,17 +2880,21 @@ var JOGO = (typeof window !== 'undefined')
         castPower != null ? castPower : Engine.effPower(caster),   // v2.2/v2.3
         Engine.effResist(cur, element), Engine.markMultiplier(cur) * mult);
       emit({ type: 'chainHop', uid: cur.uid, index: j });
-      dealDamage(state, cur, amt, element, caster.uid);
+      dealDamage(state, cur, amt, element, caster.uid, false, cobre(state, de.x, de.y, cur));   // 19/09: a cobertura baixa
       if (state.phase !== 'playing') break;
       mult *= falloff;
-      // próximo salto: inimigo vivo mais próximo ainda não atingido
+      de = { x: cur.x, y: cur.y };                        // o próximo salto sai desta vítima
+      // próximo salto: inimigo vivo mais próximo ainda não atingido — e que a
+      // vítima de agora VÊ (19/09: o raio não salta por cima de muro; a revisão
+      // pegou o salto ferindo quem estava atrás de um '#' cheio. A IA valora o
+      // raio com a mesma régua, ai.js chainValue).
       var next = null, bestD = 999;
       for (var i = 0; i < state.units.length; i++) {
         var u = state.units[i];
         if (!u.alive || u.offBoard || hit[u.uid]) continue;
         if (u.side === caster.side) continue;
         var d = manhattan(cur.x, cur.y, u.x, u.y);
-        if (d <= Engine.CHAIN_JUMP_RANGE && d < bestD) { bestD = d; next = u; }
+        if (d <= Engine.CHAIN_JUMP_RANGE && d < bestD && Engine.los(state, cur.x, cur.y, u.x, u.y)) { bestD = d; next = u; }
       }
       cur = next;
     }

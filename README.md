@@ -5,7 +5,7 @@ Roda no navegador, **abrindo `index.html` direto do disco** — sem servidor, se
 build, sem instalação.
 
 > **Leia antes de mexer:** este arquivo é o mapa **técnico**. Os SISTEMAS do jogo
-> — as 6 classes, fusão, feitiços, calabouços, chefes, itens, forja, inventário —
+> — as 7 classes, fusão, feitiços, visão, calabouços, chefes, itens, forja, inventário —
 > estão em [`docs/SISTEMAS.md`](docs/SISTEMAS.md). As regras de quem-manda-em-quê
 > estão em [`docs/CONTRACT_V2.md`](docs/CONTRACT_V2.md); a intenção de design em
 > [`docs/GDD.md`](docs/GDD.md). Se os dois discordarem do código, **o código
@@ -75,9 +75,9 @@ js/
   core/
     data/               DADOS — sem lógica, sem DOM, sem Three.js
       elements.js       5 elementos: fogo, água, terra, ar, neutro
-      classes.js        6 classes e os 4 caminhos elementais de cada
-      spells.js         171 feitiços (162 de caminho + 9 cargas de armadilha)
-      fusions.js        105 formas × 16 misturas → 2.625 feitiços compostos
+      classes.js        7 classes e os 4 caminhos elementais de cada
+      spells.js         198 feitiços de classe (medido 19/09)
+      fusions.js        147 formas × 25 misturas → 3.675 feitiços compostos (21 duplas)
       monsters.js       bestiário, chefes, invocações
       items.js          itens e conjuntos
       items_extra.js    ADITIVO: 3º conjunto por calabouço + avulsos
@@ -132,7 +132,20 @@ pega ao chegar. Formas de área: `single`, `circle`, `cross`, `cone`, `line`,
 célula-alvo é um **lugar**: basta estar no alcance, e a área pega quem estiver
 dentro — ou ninguém. Só feitiço de alvo único exige criatura na célula. Isso
 permite largar a explosão *entre* dois inimigos ou chutar onde o outro vai
-estar.
+estar — e a IA também faz isso.
+
+**Visão (19/09).** Só `#` bloqueia; `=`, buraco e armadilha não. `Engine.los` é
+**simétrica e estrita** (traça nos dois sentidos; quem vê é visto), a fresta
+entre dois `#` encostados pelo canto está fechada, a **área não atravessa muro**
+(toda casa precisa de visão do centro do impacto; a linha para no primeiro
+muro), o raio em cadeia não salta por cima de muro nem a explosão de morte fere
+através dele, e quem está encostado numa mureta `=` e é atingido por cima dela
+tem **cobertura −25%** no dano (sobre o dano já escalado pela dificuldade,
+medida da mesma casa de onde a visão do golpe é exigida: o conjurador para o
+alvo, o centro do impacto para as outras casas da área, a vítima anterior para
+cada salto do raio). Todo feitiço com alcance > 0
+exige `los`. A régua completa está em `docs/SISTEMAS.md` ("A visão") e a prova em
+`tests/visao_mapas.js`.
 
 **Elementos.** Cada classe escolhe **um** dos quatro caminhos elementais no
 nível 5, e a escolha é **permanente**. Os outros três galhos ficam visíveis mas
@@ -183,10 +196,12 @@ jogador. Página nova sem essa linha é bug.
 
 | bateria | resultado |
 |---|---|
-| `test_engine_v2.html` | 209 passaram / 0 falharam |
+| `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
 | `test_progress_v2.html` | 174 passaram / 0 falharam |
 | `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |
-| `validate_world.html` | 6.719 checagens, 0 falhas |
+| `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
+| **`visao_mapas.js`** (Node) | 210 passaram / 0 falharam — 20 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
+| **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1 |
 | `validate_classes.html` | 6.204 checagens, 0 falhas |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
@@ -327,7 +342,7 @@ renderizador e a interface **não atravessam**.
 **O que atravessa:**
 
 - **Os dados.** `js/core/data/*.js` são objetos literais — viram JSON numa
-  tarde. É a maior parte do valor: 171 feitiços, 105 formas de fusão, o
+  tarde. É a maior parte do valor: 198 feitiços, 147 formas de fusão, o
   bestiário, os itens, os 6 calabouços.
 - **A regra**, como especificação. `engine.js` é puro e legível; reescrever em
   C# é trabalho mecânico, não invenção.

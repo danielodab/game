@@ -74,12 +74,15 @@ function servidor(inicial) {
   return s;
 }
 
-function cliente(inicial, srv, registro) {
+/* `comRelogio` (19/09): o mundo do juiz tem um setTimeout que nunca dispara; a fila de retentativa do fechar da guerra
+ * precisa de um de verdade (encurtado a 20 ms) — só nos clientes que a exercitam */
+function cliente(inicial, srv, registro, comRelogio) {
   const arqs = ['js/core/economia.js', 'js/core/progress.js', 'js/core/db.js', 'js/core/missoes.js',
                 'js/core/diario.js', 'js/core/game.js', 'js/core/autoridade.js'];
   const ctx = mundo(arqs, (c) => {
     c.window = c;
     c.crypto = nodeCrypto.webcrypto;
+    if (comRelogio) { c.setTimeout = (fn, ms) => setTimeout(fn, Math.min(ms || 0, 20)); c.clearTimeout = clearTimeout; }
     c.addEventListener = () => {};
     c.JOGO = {
       Sessao: { ativa: () => true, conta: () => ({ id: 1 }), api: (rota, op) => srv.rota(rota, op) },
@@ -206,6 +209,80 @@ async function algunsLances(c) {
   check('o keepalive vai só no primeiro pedido (a página ainda estava ali)',
         fechares.length === 3 && fechares[0].keepalive === true && !fechares[1].keepalive && !fechares[2].keepalive,
         JSON.stringify(fechares.map((p) => p.keepalive)));
+
+  // ---- 6. A GUERRA DE GUILDA NA LUTA ABERTA (19/09, o dono: "dê uma revisada na guerra de guild"): o corpo do fechar
+  //         guardado reenvia ao abrir o jogo; 'aguardando' pergunta de novo; o servidor fora por instantes tenta de
+  //         novo; o 422 do juiz com fase 'aguardando' não é final; quem SAIU declara a saída (keepalive) — e ao abrir
+  const G1 = 'guerra-0000000000000000cafe', G2 = 'guerra-0000000000000000beef';
+  A.abreLuta('guerra', G1);
+  A.anotaLuta(G1, [{ a: 'e', ok: true, de: 'ana' }], true, { gid: G1, lances: [{ a: 'e', ok: true, de: 'ana' }], hashFinal: 4242, fotografada: false });
+  reg = registroDe(dois);
+  check('a guerra pronta entra no registro da conta como luta aberta, com o corpo do fechar (o hash do fim)',
+        !!reg && reg.tipo === 'guerra' && reg.ref === G1 && reg.fim === true && reg.corpo && reg.corpo.hashFinal === 4242, JSON.stringify(reg));
+  let vezG = 0;
+  srv.respostas['/api/guerra/fechar'] = (corpo) => (++vezG < 3
+    ? { ok: true, status: 200, gid: corpo.gid, fase: 'aguardando', esperaAte: Date.now() + 5 }
+    : { ok: true, status: 200, gid: corpo.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 40, guilda: { id: 1, nome: 'Lanças do Norte' }, vida: {} });
+  const tres = cliente(inicial, srv, dois.ctx.localStorage.getItem(CHAVE), true);   // a página foi embora nos 2,5 s de quem não manda
+  tres.J.Autoridade._espera = (ms, fn) => setTimeout(fn, 1);
+  const antesG = srv.pedidos.length;
+  tres.J.Game.dificuldade = 'normal';
+  tres.J.Game.startRun(['sumo'], 'cistern', {});
+  await espera(20);
+  tres.J.Game.entrarNaSala();
+  for (let i = 0; i < 300 && tres.J.Game.screen !== 'battle'; i++) await espera(5);
+  const doG = srv.pedidos.slice(antesG).map((p) => p.rota);
+  const fechG = srv.pedidos.slice(antesG).filter((p) => p.rota === '/api/guerra/fechar');
+  check('o jogo reaberto fecha a guerra guardada ANTES do bilhete novo, com o corpo guardado',
+        doG.indexOf('/api/guerra/fechar') >= 0 && doG.indexOf('/api/sala/abrir') > doG.lastIndexOf('/api/guerra/fechar') &&
+        fechG[0].corpo.gid === G1 && fechG[0].corpo.hashFinal === 4242 && fechG[0].corpo.lances.length === 1, doG.join(' '));
+  reg = registroDe(tres);
+  check('"aguardando" pergunta de novo até a resposta de vez (3 pedidos) e o registro passa a ser o da sala nova',
+        fechG.length === 3 && tres.J.Game.screen === 'battle' && !!reg && reg.tipo === 'sala', fechG.length + ' · ' + JSON.stringify(reg));
+  // o servidor fora por instantes: status 0 duas vezes, ok na terceira (a fila de retentativa; o keepalive só na primeira)
+  let vez0 = 0;
+  srv.respostas['/api/guerra/fechar'] = (corpo) => (++vez0 < 3 ? { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' }
+                                                                : { ok: true, status: 200, gid: corpo.gid, fase: 'won', xp: 40 });
+  tres.J.Autoridade.RETENTA_MS = 1;
+  const antes0 = srv.pedidos.length;
+  const r0 = await tres.J.Autoridade.fechaGuerra({ gid: G2, lances: [], hashFinal: null, fotografada: false }, { keepalive: true });
+  const f0 = srv.pedidos.slice(antes0).filter((p) => p.rota === '/api/guerra/fechar');
+  check('o servidor fora por instantes: o fechar da guerra tenta de novo até responder (status 0 duas vezes, ok na terceira)',
+        r0 && r0.ok && r0.fase === 'won' && f0.length === 3 && f0[0].keepalive === true && !f0[1].keepalive && !f0[2].keepalive,
+        JSON.stringify({ r0, n: f0.length, ka: f0.map((p) => p.keepalive) }));
+  check('e a tela é avisada uma vez ("Conferindo a guerra com o servidor…")', tres.J.UI.toasts.filter((t) => /Conferindo a guerra/.test(t)).length === 1,
+        JSON.stringify(tres.J.UI.toasts.slice(-2)));
+  // o 422 do juiz (registro recusado) com fase 'aguardando' NÃO é final: o limpo de outro vence, e cada volta avisa a tela
+  let vez4 = 0; const aguardos = [];
+  srv.respostas['/api/guerra/fechar'] = (corpo) => (++vez4 < 2
+    ? { ok: false, status: 422, erro: 'registro recusado', motivo: 'recusada', fase: 'aguardando', esperaAte: Date.now() + 5 }
+    : { ok: true, status: 200, gid: corpo.gid, fase: 'won', xp: 40 });
+  const r4 = await tres.J.Autoridade.fechaGuerra({ gid: G2, lances: [], hashFinal: null, fotografada: false }, null, (r) => aguardos.push(r));
+  check('o 422 do juiz com fase "aguardando" não é final: pergunta de novo, e cada volta avisa a tela',
+        r4 && r4.ok && r4.fase === 'won' && aguardos.length === 1 && aguardos[0].recusada === true && aguardos[0].fase === 'aguardando',
+        JSON.stringify({ r4, aguardos }));
+  // quem SAI da guerra pronta declara (POST /api/guerra/sair {gid}, keepalive): o registro guarda `saiu` até a resposta
+  tres.J.Autoridade.abreLuta('guerra', G2);
+  let vezS = 0;
+  srv.respostas['/api/guerra/sair'] = (corpo) => (++vezS < 2 ? { ok: false, status: 0 } : { ok: true, status: 200, gid: corpo.gid, herois: ['sumo'] });
+  const pS = tres.J.Autoridade.saiDaGuerra(G2);
+  const regS = registroDe(tres);
+  check('quem sai: o registro guarda `saiu` enquanto o servidor não responde', !!regS && regS.tipo === 'guerra' && regS.ref === G2 && regS.saiu === true, JSON.stringify(regS));
+  const rS = await pS;
+  const fS = srv.pedidos.filter((p) => p.rota === '/api/guerra/sair');
+  check('a saída vai com keepalive e o gid, tenta de novo, e o registro some com a resposta',
+        rS && rS.ok && fS.length === 2 && fS[0].keepalive === true && fS[0].corpo.gid === G2 && !registroDe(tres), JSON.stringify({ rS, n: fS.length, ka: fS[0] && fS[0].keepalive }));
+  // a página que foi embora antes de a saída sair: o jogo reaberto declara a saída (não o fechar)
+  tres.J.Autoridade.abreLuta('guerra', G2);
+  const regRaw = JSON.parse(tres.ctx.localStorage.getItem(CHAVE)); regRaw.saiu = true;
+  tres.ctx.localStorage.setItem(CHAVE, JSON.stringify(regRaw));
+  srv.respostas['/api/guerra/sair'] = (corpo) => ({ ok: true, status: 200, gid: corpo.gid });
+  const cinco = cliente(inicial, srv, tres.ctx.localStorage.getItem(CHAVE), true);
+  const antes5 = srv.pedidos.length;
+  await cinco.J.Autoridade.fechaPendente();
+  const do5 = srv.pedidos.slice(antes5);
+  check('o jogo reaberto com a saída pendente declara a saída (POST /api/guerra/sair {gid}), não o fechar, e esquece o registro',
+        do5.length === 1 && do5[0].rota === '/api/guerra/sair' && do5[0].corpo.gid === G2 && !registroDe(cinco), JSON.stringify(do5.map((p) => p.rota)));
 
   console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);

@@ -19,7 +19,12 @@
      portal, e ao lado dele o Boss parado"). Esta prova abre o jogo de verdade
      e mede o corredor por NÚMERO, não por olho: a pista tem de estar livre de
      ponta a ponta (senão ninguém chega ao portal), os lados têm de barrar, a
-     boca tem de estar aberta e o fundo fechado. Só os portais ABERTOS. -->
+     boca tem de estar aberta e o fundo fechado. Só os portais ABERTOS.
+     19/09: o PORTÃO DO CAMPO DE PVP virou o sétimo dente do arco, com o mesmo corredor
+     (dono: "os portais de calabouços e muros preciso manter nesse padrão"). A prova cobra
+     do portão o que cobra dos portais — pista, muros, degrau, boca, fundo, alcance e a
+     vizinhança com o portal 0 — menos o chefe (no lugar dele há braseiros e bandeiras),
+     e ao medir a folga da base do arco ignora os sólidos do próprio corredor. -->
 <iframe id="tela" src="../index.html?sandbox=1"></iframe>
 <div id="saida"><div id="summary">abrindo a praça…</div><div id="linhas"></div></div>
 <script>
@@ -68,10 +73,11 @@
       })
       .then(function () {
         botao(/Confirmar/).click();
-        // o corredor só nasce com as peças do calabouço na mão (sob demanda)
+        // o corredor só nasce com as peças do calabouço na mão (sob demanda):
+        // os dois portais abertos e, desde 19/09, o portão do Campo
         return espera(function () {
           var H = w.JOGO.Hub;
-          return (H._corredores && H._corredores().length >= 2) ? H : false;
+          return (H._corredores && H._corredores().length >= 3) ? H : false;
         }, 120000, 800);
       })
       .then(function (H) {
@@ -79,13 +85,22 @@
         var abertos = L.filter(function (l) { return !l.fechado; });
         var fechados = L.filter(function (l) { return l.fechado; });
         var S = H._solidos();
+        // 19/09: o portão do Campo (tipo 'campo', com `portao`) tem corredor como um portal aberto
+        var portao = H._lugares().filter(function (l) { return l.tipo === 'campo' && l.portao; })[0] || null;
+        var corredores = H._corredores();
 
         check('os DOIS portais abertos ganharam corredor',
-              H._corredores().length === abertos.length && abertos.length === 2,
-              H._corredores().join(','));
-        check('cada portal aberto tem o chefe dele parado ao lado',
+              abertos.length === 2 && abertos.every(function (l) { return corredores.indexOf(l.id) >= 0; }),
+              corredores.join(','));
+        check('o portão do Campo existe e ganhou corredor (e mais ninguém)',
+              !!portao && corredores.indexOf('campo') >= 0 && corredores.length === abertos.length + 1,
+              corredores.join(','));
+        check('cada portal aberto tem o chefe dele parado ao lado (o portão não tem chefe)',
               H._chefesParados() === abertos.length, H._chefesParados() + ' chefes');
         check('a praça ganhou muros de verdade (sólidos avulsos)', S.length > 20, S.length);
+        var doPortao = S.filter(function (s) { return s.dono === 'campo'; });
+        check('os sólidos do corredor do portão levam o dono (muros, pilares, braseiros, bandeiras)',
+              doPortao.length >= 20, doPortao.length);
 
         // um ponto do MUNDO a partir de coordenadas do corredor
         function ponto(l, dd, lado) {
@@ -102,7 +117,8 @@
               M && M.larg > 0 && M.camLarg > M.larg && M.fundo > 0,
               JSON.stringify(M));
 
-        abertos.forEach(function (l) {
+        // 19/09: o portão do Campo responde às mesmas réguas dos portais abertos
+        abertos.concat(portao ? [portao] : []).forEach(function (l) {
           var nome = l.id;
           // 1) a PISTA livre da boca até o fundo: é por ela que se anda, e
           //    agora ela segue livre DENTRO da câmara, atrás do portal
@@ -140,16 +156,18 @@
                 livre(ponto(l, -1, 0)) && l.raio >= 4);
         });
 
-        /* 5b) AS DUAS CÂMARAS NÃO SE ENCOSTAM. Os portais vizinhos do arco
-         *     estão a 16,4 m um do outro, e uma câmara larga demais fazia as
-         *     saletas virarem uma parede corrida (medido: 2,87 m entre muros
-         *     com meia-largura 6,6). Cobra-se a folga entre o muro de um e o
-         *     do vizinho na profundidade da câmara. */
-        if (abertos.length >= 2) {
+        /* 5b) AS CÂMARAS NÃO SE ENCOSTAM. Os portais vizinhos do arco estão a
+         *     19 m um do outro (19/09, R 58; eram 16,4 em R 50), e uma câmara
+         *     larga demais fazia as saletas virarem uma parede corrida (medido:
+         *     2,87 m entre muros com meia-largura 6,6). Cobra-se a folga entre
+         *     o muro de um e o do vizinho na profundidade da câmara — o portão
+         *     do Campo entra na conta (é o vizinho de arco do portal 0; mede 8,23). */
+        var comCorredor = abertos.concat(portao ? [portao] : []);
+        if (comCorredor.length >= 2) {
           function muroDe(l, dd, lado) { return ponto(l, dd, lado); }
           var pior = 99;
-          abertos.forEach(function (a2, i2) {
-            abertos.forEach(function (b2, j2) {
+          comCorredor.forEach(function (a2, i2) {
+            comCorredor.forEach(function (b2, j2) {
               if (j2 <= i2) return;
               [-1.4, 2, M.fundo].forEach(function (dd) {
                 [M.camLarg, -M.camLarg].forEach(function (la) {
@@ -197,9 +215,11 @@
           check('portal fechado (' + l.id + ') segue pelado', !temMuro);
         });
 
-        /* 14/09: a ENTRADA DO CAMPO DE PVP (perto da Arena, dentro do anel) não encosta
-         * em muro de corredor, pilar de boca nem chefe: a base dela fica a 0,5 m ou mais
-         * de todo sólido avulso, e o meio dela está livre. */
+        /* 14/09: a ENTRADA DO CAMPO DE PVP não encosta em muro de corredor, pilar de boca
+         * nem chefe: a base dela fica a 0,5 m ou mais de todo sólido avulso, e o meio dela
+         * está livre. 19/09: a entrada virou o portão do arco com corredor próprio, então
+         * a régua ignora os sólidos DELE (dono 'campo': o muro da câmara em d=1,1 fica a
+         * 0,55 m da base do arco, como em qualquer portal) e mede só os alheios. */
         var campo = H._lugares().filter(function (l) { return l.tipo === 'campo'; })[0];
         check('a entrada do Campo existe', !!campo);
         if (campo) {
@@ -207,12 +227,21 @@
           var rB = Math.max(cxC.x1 - cxC.x0, cxC.z1 - cxC.z0) / 2;
           var piorS = 99, quem = '';
           S.forEach(function (s) {
+            if (s.dono === 'campo') return;
             var v = Math.hypot(s.x - campo.x, s.z - campo.z) - s.r - rB;
             if (v < piorS) { piorS = v; quem = s.x.toFixed(1) + ',' + s.z.toFixed(1); }
           });
-          check('a entrada do Campo fica a 0,5 m ou mais de todo muro de corredor', piorS >= 0.5,
+          check('a entrada do Campo fica a 0,5 m ou mais de todo muro de corredor alheio', piorS >= 0.5,
                 'mais perto: ' + piorS.toFixed(2) + ' m (' + quem + ')');
           check('o meio da entrada do Campo está livre', livre({ x: campo.x, z: campo.z }));
+          // o portão é um dente do arco: um passo a oeste do portal 0, no mesmo raio
+          var p0 = L.filter(function (l) { return Math.atan2(l.x, -l.z) < -1.0; })
+                    .sort(function (a, b) { return Math.atan2(a.x, -a.z) - Math.atan2(b.x, -b.z); })[0];
+          var rC = Math.hypot(campo.x, campo.z), r0 = p0 ? Math.hypot(p0.x, p0.z) : 0;
+          var passo = p0 ? Math.atan2(p0.x, -p0.z) - Math.atan2(campo.x, -campo.z) : 0;
+          check('o portão do Campo está no arco dos portais: mesmo raio do portal 0 e um passo (0,44 rad) a oeste',
+                !!p0 && Math.abs(rC - r0) < 0.05 && Math.abs(passo - 0.44) < 0.005,
+                'r ' + rC.toFixed(2) + ' / ' + r0.toFixed(2) + ' · passo ' + passo.toFixed(3));
         }
         fecha();
       })

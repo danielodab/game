@@ -2862,6 +2862,10 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .bt-guerra .bg-nome.is-eu { color: #fff; font-weight: 700; }
 .bt-guerra .bg-nome.is-fora { opacity: .45; }
 .bt-guerra .bg-nome.is-saiu { opacity: .35; text-decoration: line-through; }
+/* 19/09: quem manda (a foto de resgate) leva a coroa; os dois adversários fora = a contagem do W.O. */
+.bt-guerra .bg-nome.is-manda::before { content: '♛ '; color: var(--gold, #e8c25a); font-size: 10px; }
+.bt-guerra .bg-wo { color: #ffd27a; font-weight: 400; white-space: nowrap; }
+.bt-guerra .bg-wo b { color: #fff; }
 .bt-guerra .bg-vs { font-style: normal; color: var(--gold, #e8c25a); }
 @media (max-width: 520px) {
   .bt-guerra { flex-direction: column; gap: 0; border-radius: 10px; padding: 3px 8px; }

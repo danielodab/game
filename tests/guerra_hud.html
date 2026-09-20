@@ -27,7 +27,13 @@
        - confirmado: a ata vai ao Coop, a batalha abre com as duas guildas e os quatro nomes no topo (dentro da tela do
          celular), o menu tem "Sair da guerra";
        - o fim: "A guilda <nome> venceu!", "conferindo…" e, com a resposta do servidor, "+40 XP para a guilda" — ou o
-         porquê de não render (o teto). -->
+         porquê de não render (o teto).
+     19/09 (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário"):
+       - a partida casada com `semXp` avisa ANTES de confirmar que não vai render XP;
+       - o fechar passa pela Autoridade: /api/guerra/fechar respondendo status 0 duas vezes e ok na terceira ainda
+         chega a "+40 XP" (a fila de retentativa);
+       - "Voltar à Sede" fecha a sessão (sem modo de rede, sem sessão de guerra) e a Sede volta a oferecer "Inscrever
+         o grupo na guerra": a segunda inscrição sai (antes a fila ficava presa em "abre em instantes"). -->
 <iframe id="tela"></iframe>
 <div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
 
@@ -115,7 +121,7 @@
       var r = respostas[rota];
       return Promise.resolve(typeof r === 'function' ? r(op) : (r || { ok: false, status: 404, erro: 'rota de mentira' }));
     };
-    if (J.Autoridade) J.Autoridade.ligada = function () { return true; };
+    if (J.Autoridade) { J.Autoridade.ligada = function () { return true; }; J.Autoridade.RETENTA_MS = 300; }   // 19/09: a retentativa do fechar, encurtada
     J.Guerra.CONSULTA_MS = 300;
     J.Guerra.CONSULTA_GRUPO_MS = 300;
     respostas['/api/guerra/estado'] = function () { return { ok: true, status: 200, agoraMs: agora(), fase: 'livre' }; };
@@ -166,7 +172,7 @@
     }).then(function (ok) {
       check('(a praça abriu)', ok);
       return semSessaoESemGrupo();
-    }).then(quemSegue).then(quemLidera).then(casada).then(batalha).then(fimDaGuerra)
+    }).then(quemSegue).then(quemLidera).then(casada).then(batalha).then(fimDaGuerra).then(voltaESegundaInscricao)
       .then(function () { fim(); }, function (e) { fim('erro: ' + (e && e.stack || e)); });
   })();
 
@@ -270,7 +276,7 @@
     J.Hub.aoAproximar(null);
     respostas['/api/guerra/estado'] = function () {
       return { ok: true, status: 200, agoraMs: agora(), fase: 'casada', lado: 'A', prazoMs: agora() + 30000, confirmei: false,
-               herois: [ids[0], ids[1]], guildas: GUILDAS,
+               herois: [ids[0], ids[1]], guildas: GUILDAS, semXp: true,       // 19/09: os tetos de hoje já estouraram
                aliados: [{ conta: 1, nome: 'Ana', confirmou: false, eu: true }, { conta: 22, nome: 'Bia', confirmou: true, eu: false }],
                adversarios: [{ conta: 33, nome: 'Cris', confirmou: false }, { conta: 44, nome: 'Duda', confirmou: true }] };
     };
@@ -280,6 +286,8 @@
             ok && /Adversários encontrados: ☘ Raízes Fundas/.test(t) && /Confirmar \((29|30) s\)/.test(t) && !!botao(painelAberto(), /Recusar/), t.slice(0, 260));
       check('casada · os NOMES dos dois (quem já confirmou marcado) e nenhuma dupla deles',
             /Cris e Duda ✓/.test(t) && /as duplas deles só aparecem na batalha/.test(t) && /Do seu lado: Ana e Bia ✓/.test(t), t.slice(0, 260));
+      check('casada · com `semXp` o painel avisa ANTES de confirmar que a guerra não vai render XP (o teto de hoje)',
+            /não vai render XP/.test(t) && /teto de guerras de hoje/.test(t) && t.indexOf('não vai render XP') < t.indexOf('Confirmar ('), t.slice(0, 400));
       var P = J.Progress;
       var meus = J.Coop.payloadMeus([ids[0], ids[1]]);
       var copia = function (dono) { return meus.map(function (p) { var c = JSON.parse(JSON.stringify(p)); c.dono = dono; return c; }); };
@@ -327,7 +335,12 @@
   function fimDaGuerra() {
     var resolve;
     var espera = new Promise(function (r) { resolve = r; });
+    // 19/09: o servidor fora por instantes — status 0 duas vezes, ok na terceira (o fechar passa pela fila de
+    // retentativa da Autoridade; antes ninguém tentava de novo e a guerra ficava sem XP e sem vida)
+    var vezesFechar = 0;
     respostas['/api/guerra/fechar'] = function (op) {
+      vezesFechar++;
+      if (vezesFechar <= 2) return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
       return espera.then(function () {
         return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 40,
                  guilda: GUILDAS.A, guildas: GUILDAS, vida: {} };
@@ -341,6 +354,9 @@
       var p = ultPedido('/api/guerra/fechar');
       check('fim · quem manda fecha no servidor na hora, com o gid, o registro e o hash do fim',
             p && p.corpo.gid === 'guerra-0000000000000000abcd' && Array.isArray(p.corpo.lances) && typeof p.corpo.hashFinal === 'number', JSON.stringify(p && { g: p.corpo.gid, h: p.corpo.hashFinal }));
+      return ate(function () { return vezesFechar >= 3; }, 4000);
+    }).then(function (ok) {
+      check('fim · o servidor fora (status 0) duas vezes: o fechar tenta de novo sozinho até responder (3 pedidos)', ok && vezesFechar === 3, String(vezesFechar));
       resolve();
       return ate(function () { var s2 = telaAberta(); return s2 && /\+40 XP para a guilda/.test(s2.textContent); }, 4000);
     }).then(function (ok) {
@@ -356,6 +372,41 @@
       return ate(function () { var s2 = telaAberta(); return s2 && /teto de guerras/.test(s2.textContent); }, 4000);
     }).then(function (ok) {
       check('fim · sem XP, a tela diz o porquê (o teto de guerras de hoje)', ok, ((telaAberta() || {}).textContent || '').slice(0, 300));
+    });
+  }
+
+  // ---------------------------------------------------------------- 19/09: "Voltar à Sede" e a segunda inscrição
+  /* Antes, "Voltar à Sede" só trocava de tela: o Game ficava em modo 'guerra', o Coop com a sessão (o mesmo gid) e a
+   * fila da Sede presa em "abre em instantes" — sem botão para inscrever de novo até recarregar a página. */
+  function voltaESegundaInscricao() {
+    respostas['/api/guerra/estado'] = function () { return { ok: true, status: 200, agoraMs: agora(), fase: 'livre' }; };
+    var b = botao(telaAberta(), /Voltar à Sede/);
+    check('volta · a tela de fim tem "Voltar à Sede"', !!b);
+    if (b) b.click();
+    return ate(function () { return J.Game.screen === 'hub' && J.Game.modoRede() === null; }, 5000).then(function (ok) {
+      var ses = J.Coop.sessao();
+      check('volta · "Voltar à Sede" fecha a sessão: sem modo de rede, sem sessão de guerra no Coop, sem gid',
+            ok && ses.tipo !== 'guerra' && !ses.bid && !J.Coop.ativo(), J.Game.screen + ' · ' + J.Game.modoRede() + ' · ' + ses.tipo + ' · ' + ses.bid);
+      injetaGrupo('ana');
+      J.Hub.aoAproximar(SEDE);
+      return ate(function () { return !!botao(painelAberto(), /Inscrever o grupo na guerra/); }, 8000);
+    }).then(function (ok) {
+      check('volta · a Sede volta a oferecer "Inscrever o grupo na guerra" (a fila não fica presa em "abre em instantes")',
+            ok && !/abre em instantes/.test(painelTxt()), painelTxt().slice(0, 260));
+      if (!ok) return;
+      var n0 = pedidos.filter(function (p) { return p.rota === '/api/guerra/inscrever'; }).length;
+      respostas['/api/guerra/inscrever'] = function (op) {
+        return { ok: true, status: 200, agoraMs: agora(), fase: 'aguardando', parceiro: { conta: 22, nome: 'Bia' }, herois: op.body.herois,
+                 prazoMs: agora() + 60000, nivel: 10 };
+      };
+      respostas['/api/guerra/estado'] = respostas['/api/guerra/inscrever'];
+      botao(painelAberto(), /Inscrever o grupo na guerra/).click();
+      escolheNaFicha([ids[0], ids[1]], /Entrar na fila/);
+      return ate(function () { return pedidos.filter(function (p) { return p.rota === '/api/guerra/inscrever'; }).length > n0; }, 4000).then(function (ok2) {
+        var p = ultPedido('/api/guerra/inscrever');
+        check('volta · a segunda inscrição sai (um novo POST /api/guerra/inscrever com a dupla e o parceiro)',
+              ok2 && p && p.corpo.parceiro === 22 && p.corpo.herois.length === 2, JSON.stringify(p && p.corpo));
+      });
     });
   }
 })();

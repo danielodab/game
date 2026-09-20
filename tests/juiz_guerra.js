@@ -14,7 +14,11 @@
  *     é refeita com o mesmo fim e o mesmo hash, e a vida do fim vem POR DONO;
  *   - quem sai da guerra morre (a marca `morte`) e o replay acompanha;
  *   - lance do Cris na vez da Ana cai (422 vez); a vida trocada na ata diverge;
- *   - a guerra largada no meio (W.O.) é refeita sem vencedor, e a vida sai assim mesmo. */
+ *   - a guerra largada no meio (W.O.) é refeita sem vencedor, e a vida sai assim mesmo;
+ *   - 19/09: o `perdeu` da API força o fim (o lado que perdeu a 0, `forcado`) e é ignorado quando o replay acabou;
+ *   - 19/09: a marca `morte` sobre o adversário só com a prova do servidor (a saída declarada); o parceiro de guilda
+ *     marca sem prova; sem `fechou` nada se confere. A marca `ia` (queda OU prazo — o jogo marca o parceiro parado
+ *     sem queda nenhuma no Relé, e a voz chega aos quatro registros) passa de quem for, como passar a vez. */
 const path = require('path');
 const est = require(path.join(__dirname, '..', 'servidor', 'juiz', 'estado.js'));
 const { mundo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'motor.js'));
@@ -84,7 +88,10 @@ function jogaGuerra(ata, op) {
     E.events.length = 0;
   }
   const FIM = { won: 'A', lost: 'B', empate: 'empate' };
-  return { lances: log, hashFinal: largou ? null : E.hash(st), fase: st.phase, venc: FIM[st.phase] || null, estado: st };
+  // 19/09: os uids dos heróis por dono (a prova da API forja marcas contra o adversário com eles)
+  const uids = {};
+  st.units.forEach((u) => { if (u.kind === 'hero' && u.dono) (uids[u.dono] = uids[u.dono] || []).push(u.uid); });
+  return { lances: log, hashFinal: largou ? null : E.hash(st), fase: st.phase, venc: FIM[st.phase] || null, estado: st, uids };
 }
 
 if (require.main === module && process.argv.indexOf('--joga') >= 0) {
@@ -134,6 +141,9 @@ function prova() {
         JSON.stringify([saida.A.map((p) => p.dono), saida.B.map((p) => p.dono)]));
   check('o payload sai do estado do servidor (o nível da conta) e sem as peças', saida.A[0].level === 18 && saida.A[2].level === 17 &&
         saida.A[0].items === undefined, saida.A[0].level + '/' + saida.A[2].level);
+  // 19/09 (3ª rodada da revisão): a versão das regras vem na própria ata — a API não precisa do GET /regras
+  check('a ata traz a versão das regras do engine (Engine.VERSAO_REGRAS)',
+        typeof saida.regras === 'number' && saida.regras === mundo().JOGO.Engine.VERSAO_REGRAS, String(saida.regras));
   let e = cai(() => ataGuerra({ jogadores: js.slice(0, 3) }));
   check('a ata com três jogadores cai', e && e.juiz && e.motivo === 'entrada', e && e.message);
   e = cai(() => ataGuerra({ jogadores: [js[0], Object.assign({}, js[1], { herois: ['inexistente'] }), js[2], js[3]] }));
@@ -186,7 +196,55 @@ function prova() {
   const wo = jogaGuerra(ata, { para: 6 });
   const rw = fechaGuerra({ ata, lances: wo.lances, hashFinal: null });
   check('a guerra largada no meio (W.O.) é refeita sem vencedor, com a vida', rw.ok && rw.venc === null && rw.fase === 'playing' &&
-        rw.vida.cris && typeof rw.vida.cris.sumo === 'number', rw.fase + ' ' + rw.venc);
+        rw.vida.cris && typeof rw.vida.cris.sumo === 'number' && rw.forcado === false, rw.fase + ' ' + rw.venc);
+
+  /* 19/09, A REVISÃO: o `perdeu` da API (os dois de um lado saíram, ou o W.O. provado pelo Relé) força o fim de
+   * um replay sem fim — o lado que perdeu inteiro a 0, o outro com a vida em que o replay parou */
+  const rp = fechaGuerra({ ata, lances: wo.lances, hashFinal: null, perdeu: 'B' });
+  check('perdeu: B num replay sem fim → won/A forçado, os quatro heróis de B a 0 e os de A com a vida do replay',
+        rp.ok && rp.fase === 'won' && rp.venc === 'A' && rp.forcado === true &&
+        rp.vida.cris.sumo === 0 && rp.vida.cris.curandeiro === 0 && rp.vida.duda.sumo === 0 && rp.vida.duda.curandeiro === 0 &&
+        rp.vida.ana.sumo === rw.vida.ana.sumo && rp.vida.bia.curandeiro === rw.vida.bia.curandeiro,
+        JSON.stringify({ fase: rp.fase, venc: rp.venc, forcado: rp.forcado, B: [rp.vida.cris, rp.vida.duda] }));
+  const rpFim = fechaGuerra({ ata, lances: jogo.lances, hashFinal: jogo.hashFinal, perdeu: jogo.venc === 'A' ? 'A' : 'B' });
+  check('a guerra que acabou de verdade no replay ignora o perdeu', rpFim.venc === jogo.venc && rpFim.forcado === false,
+        rpFim.venc + ' ' + rpFim.forcado);
+
+  /* 19/09: AS MARCAS FORJADAS. Quem fecha é a Ana (lado A); as marcas `morte` sobre os heróis do Cris e da Duda
+   * (lado B), sem lance nenhum, eram aceitas — 'won' 4 s depois da pronta. Agora só com a prova do servidor */
+  const fechou = { conta: 1, dono: 'ana', lado: 'A' };
+  const contas = { ana: 1, bia: 2, cris: 3, duda: 4 };
+  const uidsB = wo.uids.cris.concat(wo.uids.duda);
+  const forjaMorte = uidsB.map((u) => ({ a: 'x', ev: 'morte', u, ok: true }));
+  e = cai(() => fechaGuerra({ ata, lances: forjaMorte, hashFinal: null, fechou, contas, saidas: {} }));
+  check('quatro marcas morte contra o adversário sem prova caem (422 marca-sem-prova)', e && e.juiz && e.motivo === 'marca-sem-prova',
+        e ? (e.motivo + ' ' + e.message) : 'ACEITOU');
+  /* 2ª rodada da revisão: a marca `ia` passa de quem for — o parceiro marca o companheiro parado por PRAZO (sem
+   * queda no Relé) e a voz entra nos quatro registros; exigir prova recusava o registro limpo do adversário (o
+   * lado que perdia vetava a guerra). Marcar `ia` só passa a vez, o mesmo que o lance {a:'e', de: X} já aceito */
+  const forjaIa = uidsB.map((u) => ({ a: 'x', ev: 'ia', u, v: true, ok: true }));
+  const rIa = fechaGuerra({ ata, lances: forjaIa, hashFinal: null, fechou, contas, saidas: {} });
+  check('marca ia (v: true) sobre o adversário sem prova PASSA (é só passar a vez; o prazo marca sem queda)',
+        rIa.ok && rIa.venc === null, JSON.stringify({ fase: rIa.fase }));
+  const prazo = jogaGuerra(ata, { cai: { dono: 'bia', depois: 1 } });         // a Ana marca a Bia por prazo, sem 'caiu'
+  const rPrazo = fechaGuerra({ ata, lances: prazo.lances, hashFinal: prazo.hashFinal, fechou: { conta: 3, dono: 'cris', lado: 'B' },
+                               contas, saidas: {} });
+  check('o registro limpo do Cris com a Bia marcada por prazo pelo parceiro dela vale (mesmo fim e hash)',
+        rPrazo.ok && rPrazo.venc === prazo.venc && rPrazo.hash === prazo.hashFinal && !!prazo.venc, rPrazo.fase + ' ' + prazo.fase);
+  const desmarca = uidsB.map((u) => ({ a: 'x', ev: 'ia', u, v: false, ok: true }));
+  e = cai(() => fechaGuerra({ ata, lances: desmarca, hashFinal: null, fechou, contas, saidas: {} }));
+  check('desmarcar (ia com v: false) o adversário não precisa de prova', !e, e && e.motivo);
+  const saiu2 = jogaGuerra(ata, { sai: { dono: 'duda', depois: 3 } });
+  e = cai(() => fechaGuerra({ ata, lances: saiu2.lances, hashFinal: saiu2.hashFinal, fechou, contas, saidas: {} }));
+  check('a morte da Duda no registro da Ana sem a saída declarada cai', e && e.juiz && e.motivo === 'marca-sem-prova', e && e.motivo);
+  const rs2 = fechaGuerra({ ata, lances: saiu2.lances, hashFinal: saiu2.hashFinal, fechou, contas, saidas: { 4: 123 } });
+  check('com a saída declarada da Duda (guerra_saidas) a mesma marca passa e a Duda sai a 0',
+        rs2.ok && rs2.hash === saiu2.hashFinal && rs2.vida.duda.sumo === 0, JSON.stringify(rs2.vida && rs2.vida.duda));
+  const rs3 = fechaGuerra({ ata, lances: saiu2.lances, hashFinal: saiu2.hashFinal, fechou: { conta: 3, dono: 'cris', lado: 'B' },
+                            contas, saidas: {} });
+  check('o parceiro de guilda (o Cris fechando) marca a Duda sem prova nenhuma', rs3.ok && rs3.vida.duda.sumo === 0, rs3.fase);
+  const rsSem = fechaGuerra({ ata, lances: saiu2.lances, hashFinal: saiu2.hashFinal });
+  check('sem `fechou` (uma API de antes) nada se confere', rsSem.ok && rsSem.vida.duda.sumo === 0, rsSem.fase);
 
   console.log((falhas ? 'FALHOU — ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exitCode = falhas ? 1 : 0;

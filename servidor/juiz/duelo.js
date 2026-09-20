@@ -46,7 +46,8 @@ function fechaDuelo(corpo) {
     modo: 'duelo', dungeonId: c.dungeonId, roomIndex: c.roomIndex, semente: c.semente,
     duplaA: JSON.parse(JSON.stringify(lados[0].dupla)), duplaB: JSON.parse(JSON.stringify(lados[1].dupla)),
     vidaA: lados[0].m.vida || null, vidaB: lados[1].m.vida || null,
-    escolhePosicao: false, lances: c.lances, hashFinal: c.hashFinal
+    escolhePosicao: false, lances: c.lances, hashFinal: c.hashFinal,
+    regras: c.regras            // 19/09: a versão das regras da abertura, quando a API a guardar (sala.js confere)
   });
   const E = lados[0].w.J.Engine;
   const vida = {

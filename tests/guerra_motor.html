@@ -25,7 +25,26 @@
        G4 a marca `ia` forjada por um adversário é ignorada;
        G5 um motor estragado diverge: quem manda (a Ana) manda a foto, e só ela vale;
        G6 a Duda sai da guerra: os heróis dela caem nos três motores, e o lockstep segue;
-       G7 os DOIS adversários caem: W.O. para a guilda que ficou, sem o hash do fim no fechamento (não rende XP). -->
+       G7 os DOIS adversários caem: W.O. para a guilda que ficou, sem o hash do fim no fechamento (não rende XP);
+     19/09 (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário"):
+       G8 a Ana (A1, QUEM MANDA) cai e volta por outra conexão: o turno nunca diminui em ninguém, nenhum dos três
+          restaura, a foto vem de quem ficou (a Bia) e a Ana não volta a mandar até o fim (antes a foto velha dela
+          rebobinava a guerra dos outros três);
+       G9 a Ana entra ATRASADA (a ata chegou com ela fora da praça): idem — pega a foto da Bia e não manda;
+       G10 a Duda SAI: Vida.fim com os dois heróis dela a 0, a saída declarada ao servidor (POST /api/guerra/sair {gid}
+          pela Autoridade), a marca `morte` nos três, e o corpo do fechar guardado na luta aberta antes de sair.
+     A rodada de conserto de 19/09 (o correio passou a entregar o `caiu` só a quem está LIGADO, como o relé; a segurar
+     os envelopes de um destino — latência; e a aceitar DENTRO_MS diferente por cliente):
+       G11 a Ana entra atrasada com os prazos do `dentro` DESENCONTRADOS (depois do prazo do Cris e da Duda, antes do
+          da Bia): a memória da queda viaja (`caidos`), a Bia responde a foto em segundos, ninguém é marcado por prazo;
+       G12 queda cruzada: o Cris cai, a Ana (A1) cai enquanto ele está fora, o Cris volta sem ter visto o `caiu` dela:
+          aceita a foto da Bia em segundos e a guerra anda, sem marca por prazo;
+       G13 a marca `ia` com quem recebe À FRENTE de quem marcou (a entrada da Bia segurada): entra na vez do herói nos
+          quatro — zero `dessinc`, zero restauração;
+       G14 o relé reinicia (os quatro voltam por conexões novas sem `caiu` nenhum): o `dentro {religou}` apresenta a
+          conexão nova, os quatro sincronizam em segundos e ninguém "vence" por W.O.;
+       G15 a Ana religa ANTES de o relé anunciar o `caiu` da conexão velha: se acerta pela Bia, e o `caiu` velho que
+          chega depois não a derruba de novo. -->
 <div id="summary">rodando…</div>
 <ul id="lista"></ul>
 <div id="palco"></div>
@@ -59,6 +78,7 @@
   var correio = window.__correio = [];
   var erros = window.__erros = [];
   var cli = {}, registro = [];
+  var segurados = [], segura = {};       // 19/09: latência de mentira — os envelopes de um destino ficam segurados
   var IDS = ['ana', 'bia', 'cris', 'duda'];
   function entrega() {
     var n = 0;
@@ -68,10 +88,19 @@
       var alvo = cli[env.para], de = cli[env.de];
       if (!alvo || !alvo.vivo || (de && !de.vivo)) continue;
       if (env.paraCx && env.paraCx !== alvo.cx) continue;
-      if (env.t === 'batalha') registro.push({ de: env.de, para: env.para, acao: env.acao, cx: env.cx, dados: env.dados });
+      if (segura[env.para]) { segurados.push({ para: env.para, s: it.s }); continue; }
+      if (env.t === 'batalha') registro.push({ t: relogio.t, de: env.de, para: env.para, acao: env.acao, cx: env.cx, dados: env.dados });
       alvo.J.Rede._recebe(env);
     }
   }
+  function solta(para) {
+    delete segura[para];
+    var fica = [];
+    segurados.forEach(function (it) { if (it.para === para) correio.push({ de: JSON.parse(it.s).de, s: it.s }); else fica.push(it); });
+    segurados = fica;
+    entrega();
+  }
+  var turnoMax = {}, diminuiu = [];      // 19/09: o turno de cada um nunca pode DIMINUIR (a foto velha de quem voltava rebobinava)
   function passo(ms, quem) {
     relogio.t += (ms || 50);
     entrega();
@@ -81,6 +110,9 @@
       try { c.J.Game.update(0.05); c.J.Coop._tique(); }
       catch (e) { erros.push(id + ': ' + e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' ')); }
       c.J.Engine.events.length = 0;
+      var T = c.J.Game.state ? c.J.Game.state.turno : -1;
+      if (turnoMax[id] != null && T >= 0 && T < turnoMax[id]) diminuiu.push(id + ':' + turnoMax[id] + '>' + T);
+      if (T >= 0) turnoMax[id] = Math.max(turnoMax[id] || 0, T);
       entrega();
     });
   }
@@ -134,27 +166,50 @@
     P.save();
     var cx = 'cx' + id;
     J.Rede._ident(id, cx);
-    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, fechou: [], avisos: [] };
-    J.Guerra = { fechar: function (corpo) { cli[id].fechou.push(JSON.parse(JSON.stringify(corpo))); return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 }); } };
+    cli[id] = { w: w, J: J, id: id, cx: cx, vivo: true, fechou: [], avisos: [], vidaFim: [], saidas: [], lutas: [] };
+    J.Guerra = { fechar: function (corpo) { cli[id].fechou.push(JSON.parse(JSON.stringify(corpo))); return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 }); },
+                 sairDaPartida: function (gid) { cli[id].saidas.push({ via: 'guerra', gid: gid }); return Promise.resolve({ ok: true }); } };
+    // 19/09: o que a guerra toca fora do Coop — a vida única (quem sai fica a 0) e a autoridade do servidor (a luta
+    // aberta da conta; a saída declarada com keepalive) — como dublês que só anotam
+    J.Vida = { fim: function (m, mx) { cli[id].vidaFim.push({ fim: JSON.parse(JSON.stringify(m)), max: JSON.parse(JSON.stringify(mx || {})) }); return true; },
+               sincroniza: function () {} };
+    J.Autoridade = {
+      ligada: function () { return true; },
+      abreLuta: function (tipo, ref) { cli[id].lutas.push({ op: 'abre', tipo: tipo, ref: ref }); },
+      anotaLuta: function (ref, lances, fim, corpo) { cli[id].lutas.push({ op: 'anota', ref: ref, n: (lances || []).length, fim: !!fim, corpo: corpo ? JSON.parse(JSON.stringify(corpo)) : null }); },
+      esqueceLuta: function () {}, lutaAberta: function () { return null; },
+      saiDaGuerra: function (gid) { cli[id].saidas.push({ via: 'autoridade', gid: gid }); return Promise.resolve({ ok: true }); },
+      fechaGuerra: function (corpo) { return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 }); }
+    };
   }
   var nGuerra = 0;
+  var PADRAO = { GRACA_MS: 15000, WO_MS: 60000, SILENCIO_MS: 30000, DENTRO_MS: 15000 };
+  /* 19/09: um cliente de cada vez (a Ana entra atrasada no G9) — e os prazos do Coop voltam ao padrão quando a
+   * seção não pede outros (antes o GRACA de 1,5 s do G3 vazava para as seções seguintes) */
+  function abreUm(id, g, op) {
+    op = op || {};
+    var c = cli[id];
+    c.vivo = true; c.cx = 'cx' + id; c.fechou = []; c.avisos = []; c.vidaFim = []; c.saidas = []; c.lutas = [];
+    delete turnoMax[id];
+    c.J.Rede._ident(id, c.cx);
+    c.J.Coop._reset();
+    c.J.Coop._semIntervalo = true;
+    c.J.Coop._agora = function () { return relogio.t; };
+    ['GRACA_MS', 'WO_MS', 'SILENCIO_MS', 'DENTRO_MS'].forEach(function (k) { c.J.Coop[k] = op[k] || PADRAO[k]; });
+    // 19/09: prazos diferentes por cliente (o salão de cada um carrega num tempo)
+    if (op.porCliente && op.porCliente[id]) Object.keys(op.porCliente[id]).forEach(function (k) { c.J.Coop[k] = op.porCliente[id][k]; });
+    c.J.Coop.aoAviso = function (t) { c.avisos.push(t); };
+    c.J.Game.init();
+    return c.J.Coop.iniciaGuerra({ gid: g.gid, ata: JSON.parse(JSON.stringify(g.ata)), jogadores: g.jogadores, guildas: g.guildas, eu: id });
+  }
   function abreGuerra(op) {
     op = op || {};
     nGuerra++;
     registro.length = 0;
     correio.length = 0;
+    diminuiu.length = 0;
+    segurados = []; Object.keys(segura).forEach(function (k) { delete segura[k]; });
     var gid = 'guerra-' + ('00000000000000000000' + (1234567 + nGuerra).toString(16)).slice(-20);
-    IDS.forEach(function (id) {
-      var c = cli[id];
-      c.vivo = true; c.cx = 'cx' + id; c.fechou = []; c.avisos = [];
-      c.J.Rede._ident(id, c.cx);
-      c.J.Coop._reset();
-      c.J.Coop._semIntervalo = true;
-      c.J.Coop._agora = function () { return relogio.t; };
-      ['GRACA_MS', 'WO_MS', 'SILENCIO_MS', 'DENTRO_MS'].forEach(function (k) { if (op[k]) c.J.Coop[k] = op[k]; });
-      c.J.Coop.aoAviso = function (t) { c.avisos.push(t); };
-      c.J.Game.init();
-    });
     var A = [], B = [];
     IDS.forEach(function (id) {
       var ps = cli[id].J.Coop.payloadMeus(DUPLA[id].map(function (h) { return h[0]; }));
@@ -165,10 +220,9 @@
       return { conta: 100 + i, nome: id.charAt(0).toUpperCase() + id.slice(1), dono: id, lado: LADO[id], ordem: (id === 'ana' || id === 'cris') ? 0 : 1 };
     });
     var guildas = { A: { id: 1, nome: 'Lanças do Norte', emblema: '⚔' }, B: { id: 2, nome: 'Raízes Fundas', emblema: '☘' } };
-    var oks = IDS.map(function (id) {
-      return cli[id].J.Coop.iniciaGuerra({ gid: gid, ata: JSON.parse(JSON.stringify(ata)), jogadores: jogadores, guildas: guildas, eu: id });
-    });
-    return { gid: gid, ata: ata, oks: oks };
+    var g = { gid: gid, ata: ata, jogadores: jogadores, guildas: guildas };
+    g.oks = IDS.filter(function (id) { return !op.menos || op.menos.indexOf(id) < 0; }).map(function (id) { return abreUm(id, g, op); });
+    return g;
   }
   function pilota(quem) { IDS.forEach(function (id) { cli[id].J.Coop._piloto((!quem || quem.indexOf(id) >= 0) ? { joga: true } : null); }); }
   function unid(id, dono, heroId) {
@@ -324,15 +378,301 @@
     ['ana', 'bia', 'duda'].forEach(function (id) { cli[id].J.Rede._sinal({ tipo: 'caiu', id: 'cris', cx: 'cxcris' }); });
     ate(function () { return false; }, 80, 100, ['ana', 'bia', 'duda']);
     check('com UM adversário fora não há W.O. (a Duda marca o Cris e a guerra segue)',
-          tela('ana') === 'battle' && unid('ana', 'cris').some(function (u) { return u.ia; }), tela('ana'));
+          tela('ana') === 'battle' && iaEfetivaDe('ana', 'cris'), tela('ana') + ' · ia ' + iaDe('ana', 'cris'));
     cli.duda.vivo = false;
     ['ana', 'bia'].forEach(function (id) { cli[id].J.Rede._sinal({ tipo: 'caiu', id: 'duda', cx: 'cxduda' }); });
     ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 400, 100, ['ana', 'bia']);
     var d = (cli.ana.w.__telas.filter(function (t) { return t.n === 'duelFim'; }).pop() || {}).d || {};
     check('com os DOIS fora há 4 s, a guilda que ficou vence por W.O.', d.guerra === true && d.wo === true && d.venci === true, JSON.stringify({ wo: d.wo, venci: d.venci }));
     var f = cli.ana.fechou[0];
-    check('o W.O. vai ao servidor sem o hash do fim (o replay não vê vencedor: não rende XP)', f && f.hashFinal === null, f && String(f.hashFinal));
+    check('o W.O. vai ao servidor sem o hash do fim e com `wo: true` (o servidor confere a queda dos dois no relé)', f && f.hashFinal === null && f.wo === true, f && JSON.stringify({ h: f.hashFinal, wo: f.wo }));
     check('a Ana nunca marcou os heróis dos adversários', !registro.some(function (m) { return m.acao === 'ia' && (m.de === 'ana' || m.de === 'bia') && m.dados.mot !== 'volta'; }));
+    // 19/09: o aviso não diz mais "sem XP" — o servidor confere a queda no relé e o W.O. rende (o toast contradizia a tela de fim)
+    check('o aviso do W.O. diz que o servidor confere a queda para valer o XP (e não "sem XP")',
+          cli.ana.avisos.some(function (t) { return /vitória por W\.O\.: o servidor confere a queda deles para valer o XP/.test(t); }) && !cli.ana.avisos.some(function (t) { return /sem XP/.test(t); }),
+          cli.ana.avisos.slice(-2).join(' | '));
+  }
+
+  // ------------------------------------------------------------ 19/09: quem manda cai, quem chega atrasado, quem sai
+  function turno(id) { return cli[id].J.Game.state ? cli[id].J.Game.state.turno : -1; }
+  function ses(id) { return cli[id].J.Coop.sessao(); }
+  /* 19/09: a marca de quem caiu entra na VEZ do herói (senão o hash diverge de quem já está à frente), então a
+   * prova lê a marca EFETIVA: a que já está no motor MAIS a que espera na fila (Coop._iaPendentes). */
+  function iaEfetivaDe(id, dono) {
+    var pend = cli[id].J.Coop._iaPendentes ? cli[id].J.Coop._iaPendentes() : [];
+    return unid(id, dono).some(function (u) {
+      var fila = pend.filter(function (p) { return p.uid === u.uid; });
+      return fila.length ? !!fila[fila.length - 1].v : !!u.ia;
+    });
+  }
+  function iaDe(id, dono) { return unid(id, dono).map(function (u) { return u.alive ? (u.ia ? 'i' : 'v') : 'x'; }).join(''); }
+  function outros(id) { return IDS.filter(function (x) { return x !== id; }); }
+  /* 19/09: o `caiu` do relé só chega a quem está LIGADO naquele instante (o relé de verdade avisa os vigias vivos) —
+   * quem estava fora quando outro caiu volta sem essa memória, e é isso que a união dos `caidos` cobre */
+  function cai(id) {
+    cli[id].vivo = false;
+    outros(id).forEach(function (x) { if (cli[x].vivo) cli[x].J.Rede._sinal({ tipo: 'caiu', id: id, cx: cli[id].cx }); });
+  }
+  function autoridades() { return IDS.map(function (id) { return id + '→' + (ses(id).guerra ? ses(id).guerra.autoridade : '-'); }).join(' '); }
+  function marcasPrazo() {
+    var donoDe = function (uid) { var st = cli.bia.J.Game.state, u = st && st.units.filter(function (x) { return x.uid === uid; })[0]; return u ? u.dono : '?'; };
+    var out = [];
+    registro.filter(function (m) { return m.acao === 'ia' && m.dados.mot === 'prazo'; }).forEach(function (m) { var s = m.de + '→' + donoDe(m.dados.u); if (out.indexOf(s) < 0) out.push(s); });
+    return out;
+  }
+  function volta(id) {
+    var c = cli[id];
+    c.vivo = true; c.cx = 'cx' + id + '2';
+    c.J.Rede._ident(id, c.cx);
+    c.J.Rede._sinal({ tipo: 'religou', cx: c.cx });
+  }
+  function G8() {
+    secao('G8 · a Ana (A1, quem manda) cai e volta: ninguém rebobina, e quem manda passa a ser a Bia até o fim');
+    abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 6; }); }, 3000);
+    registro.length = 0;
+    cai('ana');
+    ate(function () { return unid('bia', 'ana').every(function (u) { return u.ia || !u.alive; }) && unid('cris', 'ana').some(function (u) { return u.ia; }); }, 3000, 100, outros('ana'));
+    var marcas = registro.filter(function (m) { return m.acao === 'ia'; });
+    check('a Bia (o parceiro de guilda) marca a Ana, e os três passam a ver a Bia como quem manda',
+          marcas.length > 0 && marcas.every(function (m) { return m.de === 'bia'; }) && outros('ana').every(function (id) { return ses(id).autoridade === 'bia'; }),
+          outros('ana').map(function (id) { return ses(id).autoridade; }).join(','));
+    ate(function () { return false; }, 60, 100, outros('ana'));
+    var tTres = Math.max.apply(null, outros('ana').map(turno)), tAna = turno('ana');
+    check('com a Ana fora a guerra anda (os três bem à frente dela)', tTres > tAna + 10, tTres + ' contra ' + tAna);
+    if (tela('bia') !== 'battle') { notas.push('G8: a guerra acabou antes da volta'); return; }
+    registro.length = 0; diminuiu.length = 0;
+    var restA = {}; IDS.forEach(function (id) { restA[id] = ses(id).restauracoes; });
+    volta('ana');
+    ate(function () { return ses('ana').restauracoes > 0; }, 400);
+    ate(function () { return false; }, 40, 100);
+    check('a Ana volta e se acerta pela foto (uma restauração só); nenhum dos três restaura',
+          ses('ana').restauracoes === 1 && outros('ana').every(function (id) { return ses(id).restauracoes === restA[id]; }),
+          IDS.map(function (id) { return id + '=' + (ses(id).restauracoes - restA[id]); }).join(' '));
+    var fotos = registro.filter(function (m) { return m.acao === 'foto'; }), dess = registro.filter(function (m) { return m.acao === 'dessinc'; });
+    check('a foto veio de quem ficou (a Bia), nunca da Ana, e ninguém mandou `dessinc`',
+          fotos.length > 0 && fotos.every(function (m) { return m.de === 'bia'; }) && !dess.length,
+          fotos.map(function (m) { return m.de + '@T' + m.dados.T; }).join(' ') + ' · dessinc ' + dess.length);
+    check('o turno NUNCA diminuiu em ninguém', !diminuiu.length, diminuiu.slice(0, 4).join(' '));
+    check('a Ana não volta a mandar até o fim (euCai): quem manda segue a Bia na conta dos quatro',
+          IDS.every(function (id) { return ses(id).autoridade === 'bia'; }) && ses('ana').guerra.euCai === true, IDS.map(function (id) { return ses(id).autoridade; }).join(','));
+    check('a marca da Ana é igual nos quatro motores', IDS.every(function (id) { return iaDe(id, 'ana') === iaDe('bia', 'ana'); }), IDS.map(function (id) { return iaDe(id, 'ana'); }).join(' '));
+    check('o aviso da Ana diz com quem ela sincronizou (quem manda, pelo nome)', cli.ana.avisos.some(function (t) { return /Sincronizando com Bia/.test(t); }), cli.ana.avisos.slice(-3).join(' | '));
+    var tV = Math.max.apply(null, IDS.map(turno));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle' || turno(id) >= tV + 16; }); }, 20000);
+    var hs = hashesIguais(IDS, tV + 1);
+    var acabou = IDS.every(function (id) { return tela(id) !== 'battle'; });
+    if (acabou && !hs.n) notas.push('a guerra acabou logo depois da volta — sem turno novo para comparar');
+    check('daí em diante o hash bate nos quatro', !hs.dif.length && (hs.n > 0 || acabou),
+          hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + (acabou ? ' · a guerra acabou' : ''));
+  }
+  function G9() {
+    secao('G9 · a Ana (A1) entra atrasada (a ata chegou com ela fora da praça): pega a foto da Bia e não manda');
+    var g = abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000, menos: ['ana'] });
+    cli.ana.vivo = false;
+    pilota(outros('ana'));
+    ate(function () { return outros('ana').every(function (id) { return !cli[id].J.Coop.bloqueado(); }); }, 600, 100, outros('ana'));
+    ate(function () { return turno('bia') >= 8; }, 3000, 100, outros('ana'));
+    check('os três soltam a guerra sem ela (o prazo do `dentro`): a Ana é dada por caída, a Bia a marca e manda',
+          outros('ana').every(function (id) { return !cli[id].J.Coop.bloqueado() && unid(id, 'ana').some(function (u) { return u.ia; }) && ses(id).autoridade === 'bia'; }),
+          outros('ana').map(function (id) { return ses(id).autoridade + ':' + iaDe(id, 'ana'); }).join(' '));
+    registro.length = 0; diminuiu.length = 0;
+    var restA = {}; outros('ana').forEach(function (id) { restA[id] = ses(id).restauracoes; });
+    abreUm('ana', g, { GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    cli.ana.J.Coop._piloto({ joga: true });
+    ate(function () { return ses('ana').restauracoes > 0; }, 600);
+    ate(function () { return false; }, 40, 100);
+    check('a Ana entra, sabe que chegou atrasada (tarde) e se acerta pela foto da Bia (uma só); os três não restauram',
+          ses('ana').guerra.tarde === true && ses('ana').restauracoes === 1 && outros('ana').every(function (id) { return ses(id).restauracoes === restA[id]; }),
+          'tarde=' + (ses('ana').guerra && ses('ana').guerra.tarde) + ' · ' + IDS.map(function (id) { return id + '=' + ses(id).restauracoes; }).join(' '));
+    var fotos = registro.filter(function (m) { return m.acao === 'foto'; }), dess = registro.filter(function (m) { return m.acao === 'dessinc'; });
+    check('a foto veio da Bia e ninguém mandou `dessinc`; o turno nunca diminuiu em ninguém',
+          fotos.length > 0 && fotos.every(function (m) { return m.de === 'bia'; }) && !dess.length && !diminuiu.length,
+          fotos.map(function (m) { return m.de + '@T' + m.dados.T; }).join(' ') + ' · dessinc ' + dess.length + ' · ' + diminuiu.slice(0, 3).join(' '));
+    check('a Ana não manda até o fim; a marca dela é igual nos quatro', IDS.every(function (id) { return ses(id).autoridade === 'bia' && iaDe(id, 'ana') === iaDe('bia', 'ana'); }),
+          IDS.map(function (id) { return ses(id).autoridade + ':' + iaDe(id, 'ana'); }).join(' '));
+    var tV = Math.max.apply(null, IDS.map(turno));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle' || turno(id) >= tV + 16; }); }, 20000);
+    var hs = hashesIguais(IDS, tV + 1);
+    var acabou = IDS.every(function (id) { return tela(id) !== 'battle'; });
+    if (acabou && !hs.n) notas.push('a guerra acabou logo depois da volta — sem turno novo para comparar');
+    check('daí em diante o hash bate nos quatro', !hs.dif.length && (hs.n > 0 || acabou),
+          hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + (acabou ? ' · a guerra acabou' : ''));
+  }
+  function G10() {
+    secao('G10 · a Duda sai: a vida dela a 0 aqui, a saída declarada ao servidor, a morte nos três');
+    var g = abreGuerra();
+    check('a guerra entra na luta aberta da conta assim que abre (Autoridade.abreLuta guerra)',
+          IDS.every(function (id) { return cli[id].lutas.some(function (l) { return l.op === 'abre' && l.tipo === 'guerra' && l.ref === g.gid; }); }));
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 4; }); }, 3000);
+    cli.duda.J.Coop.sairDaGuerra('saiu');
+    entrega();
+    cli.duda.vivo = false;
+    var vf = cli.duda.vidaFim[0];
+    check('Vida.fim com os DOIS heróis dela a 0 (e o máximo de cada um)',
+          !!vf && Object.keys(vf.fim).length === 2 && Object.keys(vf.fim).every(function (k) { return vf.fim[k] === 0 && vf.max[k] > 0; }), JSON.stringify(vf));
+    check('a saída vai ao servidor pela Autoridade (POST /api/guerra/sair {gid}) e ela não fecha a guerra',
+          cli.duda.saidas.length === 1 && cli.duda.saidas[0].via === 'autoridade' && cli.duda.saidas[0].gid === g.gid && cli.duda.fechou.length === 0, JSON.stringify(cli.duda.saidas));
+    check('quem saiu volta à praça sem sessão de guerra', tela('duda') === 'hub' && cli.duda.J.Game.modoRede() === null && !cli.duda.J.Coop.ativo(), tela('duda'));
+    ate(function () { return outros('duda').every(function (id) { return unid(id, 'duda').every(function (u) { return !u.alive; }); }); }, 400, 50, outros('duda'));
+    check('os dois heróis dela caem nos três, com a marca `morte` no registro (a prova é a saída declarada)',
+          outros('duda').every(function (id) {
+            return unid(id, 'duda').length === 2 && unid(id, 'duda').every(function (u) { return !u.alive; }) &&
+                   cli[id].J.Coop.logServidor().lances.filter(function (l) { return l.a === 'x' && l.ev === 'morte'; }).length === 2;
+          }), outros('duda').map(function (id) { return iaDe(id, 'duda'); }).join(' '));
+    ate(function () { return outros('duda').every(function (id) { return tela(id) !== 'battle'; }); }, 60000, 50, outros('duda'));
+    check('os três fecham com o mesmo gid e o corpo guardado na luta aberta antes de sair (anotaLuta com fim e o corpo)',
+          outros('duda').every(function (id) {
+            return cli[id].fechou[0] && cli[id].fechou[0].gid === g.gid &&
+                   cli[id].lutas.some(function (l) { return l.op === 'anota' && l.fim && l.corpo && l.corpo.gid === g.gid; });
+          }), outros('duda').map(function (id) { return cli[id].fechou.length; }).join(','));
+  }
+
+  // ------------------------------------------------------------ a rodada de conserto de 19/09 (a revisão adversarial)
+  function G11() {
+    secao('G11 · a Ana entra atrasada com os prazos do `dentro` DESENCONTRADOS (depois do prazo do Cris/Duda, antes do da Bia)');
+    var g = abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000, menos: ['ana'], porCliente: { bia: { DENTRO_MS: 30000 } } });
+    cli.ana.vivo = false;
+    pilota(outros('ana'));
+    var t0 = relogio.t;
+    ate(function () { return relogio.t - t0 >= 20000; }, 400, 100, outros('ana'));
+    check('(cenário) aos 20 s o Cris e a Duda já soltaram a guerra e a Bia (30 s) ainda não',
+          !cli.cris.J.Coop.bloqueado() && !cli.duda.J.Coop.bloqueado() && cli.bia.J.Coop.bloqueado());
+    registro.length = 0; diminuiu.length = 0;
+    abreUm('ana', g, { GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    cli.ana.J.Coop._piloto({ joga: true });
+    var tEntrou = relogio.t;
+    ate(function () { return ses('ana').restauracoes > 0; }, 50, 100);
+    var respostas = registro.filter(function (m) { return m.acao === 'dentro' && m.para === 'ana' && m.dados.viu === true; }).map(function (m) { return m.de + ':' + m.dados.tarde; });
+    check('(cenário) a Ana é "tarde" para o Cris e a Duda e não para a Bia', respostas.indexOf('cris:true') >= 0 && respostas.indexOf('duda:true') >= 0 && respostas.indexOf('bia:false') >= 0, respostas.join(' '));
+    check('a Ana se acerta pela foto da Bia em menos de 5 s (a Bia soube pelos `caidos` que a Ana chegou atrasada)',
+          ses('ana').restauracoes === 1 && relogio.t - tEntrou < 5000 && !cli.ana.J.Coop.bloqueado(),
+          'restaurações ' + ses('ana').restauracoes + ' · ' + Math.round((relogio.t - tEntrou) / 1000) + ' s · bloqueado ' + cli.ana.J.Coop.bloqueado());
+    check('quem manda é a Bia na conta dos quatro', IDS.every(function (id) { return ses(id).guerra.autoridade === 'bia'; }), autoridades());
+    ate(function () { return false; }, 60, 100);
+    check('ninguém marca ninguém por PRAZO (o relógio do motor congelado não estoura a vez de quem está ali); os três não restauram',
+          !marcasPrazo().length && outros('ana').every(function (id) { return ses(id).restauracoes === 0; }), marcasPrazo().join(' '));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle'; }); }, 60000, 100);
+    var lancesBia = registro.filter(function (m) { return m.acao === 'lance' && m.de === 'bia' && m.t > tEntrou; }).length;
+    check('a Bia (presente o tempo todo) segue jogando depois da entrada da Ana, a guerra acaba nos quatro e ninguém foi marcado por prazo',
+          lancesBia > 0 && IDS.every(function (id) { return tela(id) === 'duelFim'; }) && !marcasPrazo().length,
+          'lances da Bia ' + lancesBia + ' · telas ' + IDS.map(tela).join(',') + ' · prazo ' + marcasPrazo().join(' '));
+    check('o turno nunca diminuiu em ninguém (a foto sai antes de o motor da Ana dar um passo)', !diminuiu.length, diminuiu.slice(0, 3).join(' '));
+  }
+  function G12() {
+    secao('G12 · queda cruzada: o Cris cai; a Ana (A1) cai enquanto ele está fora; o Cris volta sem ter visto o `caiu` dela');
+    abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 6; }); }, 3000);
+    cai('cris');
+    ate(function () { return false; }, 10, 100, outros('cris'));
+    cai('ana');
+    ate(function () { return unid('bia', 'ana').every(function (u) { return u.ia || !u.alive; }); }, 3000, 100, ['bia', 'duda']);
+    ate(function () { return false; }, 5, 100, ['bia', 'duda']);
+    if (tela('bia') !== 'battle') { notas.push('G12: a guerra acabou antes da volta'); return; }
+    registro.length = 0; diminuiu.length = 0;
+    volta('cris');
+    var tC = relogio.t;
+    ate(function () { return ses('cris').restauracoes > 0; }, 50, 100, ['bia', 'cris', 'duda']);
+    check('o Cris volta e aceita a foto da Bia em menos de 5 s (os `caidos` dela dizem que a Ana caiu: quem manda é a Bia)',
+          ses('cris').restauracoes === 1 && relogio.t - tC < 5000 && !cli.cris.J.Coop.bloqueado() && ses('cris').guerra.autoridade === 'bia',
+          'restaurações ' + ses('cris').restauracoes + ' · ' + Math.round((relogio.t - tC) / 1000) + ' s · ' + autoridades());
+    volta('ana');
+    ate(function () { return ses('ana').restauracoes > 0; }, 50, 100);
+    check('a Ana volta (euCai) e se acerta pela Bia', ses('ana').restauracoes === 1 && ses('ana').guerra.autoridade === 'bia', autoridades());
+    var tA = relogio.t, T0 = Math.max.apply(null, IDS.map(turno));
+    ate(function () { return IDS.some(function (id) { return tela(id) !== 'battle'; }) || relogio.t - tA > 60000; }, 600, 100);
+    check('a guerra anda para os quatro (ninguém travado, o turno sobe)',
+          IDS.every(function (id) { return tela(id) !== 'battle' || (!cli[id].J.Coop.bloqueado() && turno(id) > T0 + 6); }),
+          'turnos ' + IDS.map(function (id) { return id + '=' + turno(id); }).join(' ') + ' · telas ' + IDS.map(tela).join(','));
+    check('a marca do Cris e a da Duda são iguais nos quatro (a `volta` que chegou antes da foto entrou depois dela)',
+          IDS.every(function (id) { return iaDe(id, 'cris') === iaDe('bia', 'cris') && iaDe(id, 'duda') === iaDe('bia', 'duda'); }),
+          'cris ' + IDS.map(function (id) { return iaDe(id, 'cris'); }).join(' ') + ' · duda ' + IDS.map(function (id) { return iaDe(id, 'duda'); }).join(' '));
+    check('ninguém marcou ninguém por PRAZO; uma restauração só em cada um que voltou, nenhuma na Bia e na Duda',
+          !marcasPrazo().length && ses('cris').restauracoes === 1 && ses('ana').restauracoes === 1 && ses('bia').restauracoes === 0 && ses('duda').restauracoes === 0,
+          marcasPrazo().join(' ') + ' · ' + IDS.map(function (id) { return id + '=' + ses(id).restauracoes; }).join(' '));
+    check('o turno nunca diminuiu em ninguém', !diminuiu.length, diminuiu.slice(0, 3).join(' '));
+  }
+  function G13() {
+    secao('G13 · a marca `ia` com quem recebe À FRENTE de quem marcou (a entrada da Bia segurada)');
+    abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 6; }); }, 3000);
+    cai('ana');
+    segura.bia = true;                                   // a Bia deixa de RECEBER (o que ela manda segue)
+    var tB = turno('bia');
+    ate(function () { return turno('cris') > tB + 1 && registro.some(function (m) { return m.acao === 'ia' && m.de === 'bia'; }); }, 60, 100, outros('ana'));
+    var marca = registro.filter(function (m) { return m.acao === 'ia' && m.de === 'bia' && m.dados.mot !== 'volta'; });
+    check('(cenário) quando a marca da Bia saiu, o Cris e a Duda já estavam num turno À FRENTE do dela',
+          marca.length > 0 && outros('ana').some(function (id) { return turno(id) > marca[0].dados.T; }),
+          'marca em T' + (marca[0] && marca[0].dados.T) + ' · turnos ' + outros('ana').map(function (id) { return id + '=' + turno(id); }).join(' '));
+    var rest0 = {}; IDS.forEach(function (id) { rest0[id] = ses(id).restauracoes; });
+    registro.length = 0;
+    solta('bia');
+    ate(function () { return false; }, 60, 100, outros('ana'));
+    var dess = registro.filter(function (m) { return m.acao === 'dessinc'; });
+    check('a marca fora de ordem não custa divergência: zero `dessinc`, zero restauração (ela entra na VEZ do herói nos três)',
+          !dess.length && outros('ana').every(function (id) { return ses(id).restauracoes === rest0[id]; }),
+          'dessinc ' + dess.map(function (m) { return m.de + '@T' + m.dados.T; }).join(' ') + ' · restaurações ' + outros('ana').map(function (id) { return id + '=' + (ses(id).restauracoes - rest0[id]); }).join(' '));
+    var hs = hashesIguais(outros('ana'), tB);
+    check('o hash bate nos três desde o turno da marca, e a marca da Ana é igual nos três',
+          !hs.dif.length && hs.n > 4 && outros('ana').every(function (id) { return iaDe(id, 'ana') === iaDe('bia', 'ana'); }),
+          hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + ' · ia ' + outros('ana').map(function (id) { return iaDe(id, 'ana'); }).join(' '));
+  }
+  function G14() {
+    secao('G14 · o relé reinicia: os quatro caem e voltam por conexões novas, sem `caiu` nenhum');
+    abreGuerra({ GRACA_MS: 1500 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 6; }); }, 3000);
+    var t0 = relogio.t, T0 = Math.max.apply(null, IDS.map(turno));
+    IDS.forEach(function (id) { cli[id].vivo = false; });
+    relogio.t += 3000;
+    registro.length = 0;
+    IDS.forEach(volta);
+    ate(function () { return outros('ana').every(function (id) { return ses(id).restauracoes > 0; }) && IDS.every(function (id) { return !cli[id].J.Coop.bloqueado(); }); }, 100, 100);
+    check('cada conexão nova se apresenta aos três com `dentro {religou}` sem cx',
+          IDS.every(function (id) { return registro.filter(function (m) { return m.acao === 'dentro' && m.de === id && m.dados.religou === true && m.dados.viu === false; }).length >= 3; }));
+    check('em menos de 10 s os quatro estão sincronizados e jogando; quem manda volta a ser a Ana (os quatro caíram) na conta de todos',
+          IDS.every(function (id) { return !cli[id].J.Coop.bloqueado() && ses(id).guerra.autoridade === 'ana'; }) && relogio.t - t0 < 13000,
+          autoridades() + ' · ' + Math.round((relogio.t - t0) / 1000) + ' s');
+    check('quem manda não restaura; os outros três, uma vez cada', ses('ana').restauracoes === 0 && outros('ana').every(function (id) { return ses(id).restauracoes === 1; }),
+          IDS.map(function (id) { return id + '=' + ses(id).restauracoes; }).join(' '));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle'; }) || relogio.t - t0 > 130000; }, 1300, 100);
+    var fins = IDS.map(function (id) { return (cli[id].w.__telas.filter(function (t) { return t.n === 'duelFim'; }).pop() || {}).d || null; });
+    check('a guerra segue até o fim para os quatro, sem W.O., e os quatro fecham com o mesmo hash do fim',
+          IDS.every(function (id) { return tela(id) === 'duelFim' && turno(id) > T0 + 6; }) && fins.every(function (f) { return f && !f.wo; }) &&
+          IDS.every(function (id) { return cli[id].fechou[0] && !cli[id].fechou[0].wo && cli[id].fechou[0].hashFinal === cli.ana.fechou[0].hashFinal; }),
+          'telas ' + IDS.map(tela).join(',') + ' · fins ' + fins.map(function (f) { return f ? (f.wo ? 'wo' : (f.venci ? 'venci' : 'perdi')) : '-'; }).join(','));
+  }
+  function G15() {
+    secao('G15 · a Ana religa ANTES de o relé anunciar o `caiu` da conexão velha (o `caiu` velho chega depois)');
+    abreGuerra({ GRACA_MS: 1500, SILENCIO_MS: 60000 });
+    pilota();
+    ate(function () { return IDS.every(function (id) { return turno(id) >= 6; }); }, 3000);
+    var cxVelho = cli.ana.cx;
+    cli.ana.vivo = false;
+    ate(function () { return false; }, 20, 100, outros('ana'));
+    registro.length = 0;
+    volta('ana');
+    var tV = relogio.t;
+    ate(function () { return ses('ana').restauracoes > 0; }, 50, 100);
+    check('sem o `caiu`, a conexão nova se apresenta (`dentro {religou}`) e a Ana se acerta pela Bia em menos de 5 s',
+          ses('ana').restauracoes === 1 && relogio.t - tV < 5000 && !cli.ana.J.Coop.bloqueado() && IDS.every(function (id) { return ses(id).guerra.autoridade === 'bia'; }),
+          'restaurações ' + ses('ana').restauracoes + ' · ' + Math.round((relogio.t - tV) / 1000) + ' s · ' + autoridades());
+    outros('ana').forEach(function (x) { cli[x].J.Rede._sinal({ tipo: 'caiu', id: 'ana', cx: cxVelho }); });
+    ate(function () { return false; }, 30, 100);
+    var on = outros('ana').map(function (id) { return ses(id).guerra.jogadores.filter(function (j) { return j.id === 'ana'; })[0].on; });
+    check('o `caiu` atrasado da conexão VELHA não a derruba de novo: sem segunda foto, sem marca por prazo, ninguém a dá por fora',
+          ses('ana').restauracoes === 1 && !marcasPrazo().length && on.every(Boolean), 'restaurações ' + ses('ana').restauracoes + ' · on ' + on.join(','));
+    var tA = Math.max.apply(null, IDS.map(turno));
+    ate(function () { return IDS.every(function (id) { return tela(id) !== 'battle' || turno(id) >= tA + 12; }); }, 20000);
+    var hs = hashesIguais(IDS, tA + 1);
+    var acabou = IDS.every(function (id) { return tela(id) !== 'battle'; });
+    if (acabou && !hs.n) notas.push('a guerra acabou logo depois da volta — sem turno novo para comparar');
+    check('daí em diante o hash bate nos quatro', !hs.dif.length && (hs.n > 0 || acabou),
+          hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + (acabou ? ' · a guerra acabou' : ''));
   }
 
   function etapa(fn) {
@@ -355,6 +695,14 @@
         if (quer('4')) fila.push(etapa(G4e5));
         if (quer('6')) fila.push(etapa(G6));
         if (quer('7')) fila.push(etapa(G7));
+        if (quer('8')) fila.push(etapa(G8));
+        if (quer('9')) fila.push(etapa(G9));
+        if (quer('10')) fila.push(etapa(G10));
+        if (quer('11')) fila.push(etapa(G11));
+        if (quer('12')) fila.push(etapa(G12));
+        if (quer('13')) fila.push(etapa(G13));
+        if (quer('14')) fila.push(etapa(G14));
+        if (quer('15')) fila.push(etapa(G15));
         fila.push(etapa(function () { check('nenhum erro de script nos quatro clientes', !erros.length, erros.slice(0, 4).join(' | ')); }));
         return (function roda(j) { if (j >= fila.length) return fim(); fila[j](function () { roda(j + 1); }); })(0);
       }
