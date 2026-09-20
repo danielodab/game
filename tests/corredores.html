@@ -73,11 +73,17 @@
       })
       .then(function () {
         botao(/Confirmar/).click();
-        // o corredor só nasce com as peças do calabouço na mão (sob demanda):
-        // os dois portais abertos e, desde 19/09, o portão do Campo
+        /* o corredor só nasce com as peças do calabouço na mão (sob demanda): cada portal ABERTO e, desde
+         * 19/09, o portão do Campo. 20/09: o número de abertos não é mais dois — o Fecho de Brasa e os
+         * Andaimes do Vento entraram —, então a sonda espera TODOS (parar em três pegava o mapa pela metade
+         * e as réguas dos calabouços novos corriam antes do corredor deles existir). */
         return espera(function () {
           var H = w.JOGO.Hub;
-          return (H._corredores && H._corredores().length >= 3) ? H : false;
+          if (!H._corredores || !H._lugares) return false;
+          var lugares = H._lugares();
+          var ab = lugares.filter(function (l) { return l.tipo === 'portal' && !l.fechado; }).length;
+          var pt = lugares.filter(function (l) { return l.tipo === 'campo' && l.portao; }).length;
+          return (ab > 0 && H._corredores().length >= ab + pt) ? H : false;
         }, 120000, 800);
       })
       .then(function (H) {
@@ -89,8 +95,8 @@
         var portao = H._lugares().filter(function (l) { return l.tipo === 'campo' && l.portao; })[0] || null;
         var corredores = H._corredores();
 
-        check('os DOIS portais abertos ganharam corredor',
-              abertos.length === 2 && abertos.every(function (l) { return corredores.indexOf(l.id) >= 0; }),
+        check('todo portal ABERTO ganhou corredor (hoje são ' + abertos.length + ')',
+              abertos.length >= 2 && abertos.every(function (l) { return corredores.indexOf(l.id) >= 0; }),
               corredores.join(','));
         check('o portão do Campo existe e ganhou corredor (e mais ninguém)',
               !!portao && corredores.indexOf('campo') >= 0 && corredores.length === abertos.length + 1,
