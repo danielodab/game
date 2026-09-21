@@ -23,7 +23,7 @@
      19/09: o PORTÃO DO CAMPO DE PVP virou o sétimo dente do arco, com o mesmo corredor
      (dono: "os portais de calabouços e muros preciso manter nesse padrão"). A prova cobra
      do portão o que cobra dos portais — pista, muros, degrau, boca, fundo, alcance e a
-     vizinhança com o portal 0 — menos o chefe (no lugar dele há braseiros e bandeiras),
+     vizinhança com o portal 0 — menos o chefe (no lugar dele, bandeiras vermelhas na boca),
      e ao medir a folga da base do arco ignora os sólidos do próprio corredor. -->
 <iframe id="tela" src="../index.html?sandbox=1"></iframe>
 <div id="saida"><div id="summary">abrindo a praça…</div><div id="linhas"></div></div>
@@ -112,7 +112,7 @@
               H._chefesParados() === abertos.length, H._chefesParados() + ' chefes');
         check('a praça ganhou muros de verdade (sólidos avulsos)', S.length > 20, S.length);
         var doPortao = S.filter(function (s) { return s.dono === 'campo'; });
-        check('os sólidos do corredor do portão levam o dono (muros, pilares, barreiras, braseiros, bandeiras)',
+        check('os sólidos do corredor do portão levam o dono (muros, pilares, barreiras, bandeiras)',
               doPortao.length >= 14 && !entrada.solido, doPortao.length + ' sólidos · solido ' + (entrada && entrada.solido));
 
         // um ponto do MUNDO a partir de coordenadas do corredor

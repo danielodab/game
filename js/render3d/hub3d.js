@@ -1012,8 +1012,9 @@ var JOGO = (typeof window !== 'undefined')
    * o lugar pelo `portao` e pelo `tema`: os muros do catálogo do Campo, campoCfg().tema —
    * desde 20/09 o lote de PvP do próprio dono). Duas diferenças para um portal de
    * calabouço: o corredor é RETO E ABERTO no fim (sem câmara, sem fundo — o portal de
-   * espadas é mais largo que a pista e o caminho entra nele), e no fim não há chefe, e sim
-   * dois braseiros e duas bandeiras vermelhas. O arco continua vermelho e sem parede
+   * espadas é mais largo que a pista e o caminho entra nele), e não há chefe — o que marca
+   * o lugar são duas bandeiras vermelhas na boca (21/09, o dono: os dois braseiros do fim
+   * saíram, "tire essas duas luminárias"). O arco continua vermelho e sem parede
    * (entra-se nele); o raio de conversa é 6,4, o de portal aberto, porque com 4,6 o painel
    * ficava mudo atrás do arco. Folgas (R 58, medidas): conversa 6,4 ↔ 6,4 do portal 0
    * sobra 6,19; ↔ Arena (13) sobra 8,84; pegada do corredor ↔ caixa da Arena 11,64
@@ -2725,24 +2726,13 @@ var JOGO = (typeof window !== 'undefined')
         var q = pt(c[0], c[1]);
         plantaTema(chaoP, 0.55, 2.2, q.x, q.z, kc * 0.9);
       });
-      /* ---- O PORTÃO DO CAMPO não tem chefe. No lugar dele, DOIS BRASEIROS do kit com a
-       * luz pintada no chão — 20/09 eles desceram do fundo (onde o chefe de um portal
-       * fica, atrás do arco) para o FIM DA FILEIRA, 1,5 m adiante do último muro e 1,3 m
-       * antes do arco: é o trecho que o dono vê ao subir o caminho, e agora ele é o fim
-       * do corredor, não o meio de uma saleta. E na boca, por dentro dos pilares, DUAS
-       * BANDEIRAS VERMELHAS (bandeiraDoCampo, t ±3, o pano encarando quem chega). Lê-se
-       * de longe como o lugar da luta entre jogadores, não como a boca de um Fecho. */
+      /* ---- O PORTÃO DO CAMPO não tem chefe, e desde 21/09 também não tem braseiro: eram
+       * DOIS, do kit, no fim da fileira ("no mapa principal no portal pvp quero que tire
+       * essas duas luminárias"). Com o portal de espadas aceso no vão e o brilho no chão,
+       * o fogo emprestado do jardim só sujava o fim do caminho. Ficam as DUAS BANDEIRAS
+       * VERMELHAS na boca, por dentro dos pilares (bandeiraDoCampo, t ±3, o pano
+       * encarando quem chega): é o que diz "luta entre jogadores" à distância. */
       if (portao) {
-        [3.0, -3.0].forEach(function (lado, kb) {
-          var q = pt(P.fim + 1.3, lado);
-          var b = braseiroComLuz(lg.tema, kb);
-          b.br.position.set(q.x, 0, q.z);
-          b.br.rotation.y = kb * 0.7;
-          scene.add(b.br);
-          b.luz.position.set(q.x, 0.04, q.z);
-          scene.add(b.luz);
-          marcaSolido(q.x, q.z, 0.8, lg.id);
-        });
         [3.0, -3.0].forEach(function (lado, kb) {
           var q = pt(dIni + 0.3, lado);
           var bd = bandeiraDoCampo(kb);
