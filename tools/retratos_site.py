@@ -87,7 +87,8 @@ IMG = os.path.join(RAIZ, 'site', 'img')
 PAGINA = 'tools/retratos_site.html'
 NOME_OK = re.compile(r'^(classe|fusao|obra|equipe|monstro|pet)-[a-z0-9-]+(-busto)?\.(webp|png)$')
 # 11/09: os bichos da wiki — monstros dos portais abertos, invocações do Xamã e pets
-LOTES_BICHOS = ['bichos-estufa', 'bichos-cisterna', 'bichos-fecho', 'bichos-andaimes', 'bichos-mina', 'bichos-invocacoes', 'pets']
+LOTES_BICHOS = ['bichos-estufa', 'bichos-cisterna', 'bichos-fecho', 'bichos-andaimes', 'bichos-mina',
+                'bichos-coracao', 'bichos-invocacoes', 'pets']
 LOTES = ['classes', 'fus-sumo', 'fus-minotauro', 'fus-cacador', 'fus-curandeira', 'fus-bruxo-ladino', 'fus-xama'] + LOTES_BICHOS
 LOTE_OBRAS = 'obras'
 LOTE_EQUIPE = 'equipe'           # o Cavaleiro Negro (meshy_gm): a caixa da equipe no ranking
@@ -174,6 +175,7 @@ def esperados_bichos():
     donos = (chaves_modelo('models-meshy-jardim.js') + chaves_modelo('models-meshy-cisterna.js') +
              chaves_modelo('models-meshy-emberlock.js') + chaves_modelo('models-meshy-windscaffold.js') +
              chaves_modelo('models-meshy-quakemine.js') +
+             chaves_modelo('models-meshy-brokenheart.js') +
              # os dois da Mina que vestem corpo emprestado nao tem chave propria
              # em nenhum arquivo: a wiki pede o retrato pelo ID DO MONSTRO
              ['ore-chip', 'crystal-chanter'])

@@ -1,14 +1,18 @@
 # Receber o lote de um portal fechado (monstros, cenário, arte)
 
-> **21/09 — não há mais portal fechado.** Os seis abriram: Estufa, Cisterna,
-> **Fecho de Brasa** (19/09), **Andaimes do Vento** (noite de 19/09), **Mina
-> Trêmula** e **Coração Partido** (21/09). `JOGO.DATA.portaisFechados` está
-> VAZIA e cada calabouço solta só as peças dele — o vazamento acabou junto.
-> A única coisa que o Coração ainda não tem é o **catálogo de cenário**
-> (`JOGO.CENARIO['heart']`, o `assets/embedded/cenario-coracao.js`): até ele
-> entrar, a sala usa os blocos procedurais de sempre, como os outros cinco
-> usavam antes do lote deles. Esta página continua valendo como o caminho
-> para esse lote — e para qualquer calabouço novo que entre fechado.
+> **21/09 — não há mais portal fechado, e o último lote entrou inteiro.** Os
+> seis abriram: Estufa, Cisterna, **Fecho de Brasa** (19/09), **Andaimes do
+> Vento** (noite de 19/09), **Mina Trêmula** (21/09 de manhã) e **Coração
+> Partido** (21/09 de noite). `JOGO.DATA.portaisFechados` está VAZIA e cada
+> calabouço solta só as peças dele — o vazamento acabou junto. O Coração
+> também já tem o **catálogo de cenário** (`JOGO.CENARIO['heart']`, em
+> `assets/embedded/cenario-coracao.js`) e as três salas dele foram
+> redesenhadas para serem o mapa mais duro do jogo.
+>
+> Este documento deixou de ser lista de pendências e virou o **caminho para o
+> próximo calabouço**: o que entrar depois nasce trancado e sai daqui pelo
+> mesmo passo a passo. O que os seis lotes ensinaram está no fim, em *O que os
+> seis lotes ensinaram*.
 
 Este é o caminho do lote, do mesmo jeito que os cinco anteriores entraram, só
 que agora com ferramenta genérica em vez de script copiado.
@@ -103,6 +107,13 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    nova — ajuste a contagem no teste) e uma foto da praça
    (`tests/prova_praca.html?dist=26&tilt=1.1&ang=0`).
 
+   Desde 21/09 o `tests/portais_fechados.html` tem DUAS partes, porque a lista
+   ficou vazia: a primeira cobra o estado de hoje (nada fechado, os seis
+   descíveis, nada vazando) e a segunda **simula** um portal fechado —
+   injeta `D.portaisFechados`, cobra a recusa da descida, o Dia, o Poço e o
+   vazamento de peça como antes, e devolve a lista no fim. É assim que o
+   mecanismo continua coberto sem fingir que há portal trancado.
+
 ## O que NÃO precisa mudar
 
 - Itens: as 91 peças dos seis calabouços já caem, e 90 delas já têm ícone —
@@ -110,3 +121,33 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
   Coração deixar de ter 0% de terra) ainda usa o ícone procedural.
 - Pets: as cartas do pet de cada calabouço já caem do chefe dele.
 - Salas, layouts, feitiços e IA dos monstros: já existem para os seis.
+
+## O que os seis lotes ensinaram
+
+- **Imagem→3D (Gemini → Meshy) é o caminho desde a Mina.** O prompt passa a
+  ser de IMAGEM: câmera, fundo branco liso, sem sombra projetada, bases
+  alinhadas e vão claro entre as peças. Peça rasteira pede câmera mais alta
+  (~40°), senão sai com 7 cm; muro pede vista frontal reta, senão a ponta não
+  emenda em fileira.
+- **NADA SOLTO na folha.** As três argolas do silo da Mina viraram "peça",
+  contaram na separação e fizeram o separador fundir pares reais. No Coração o
+  prompt fechou com *no free-floating rings, no loose chain links* e as quatro
+  folhas saíram limpas no `separa_pecas.py --conta 3` e `--conta 4,4,4`, na
+  ordem exata do briefing.
+- **Papel pode ser reaproveitado quando o saldo aperta.** No Coração só
+  couberam quatro folhas, então a `borda` são as MESMAS três peças do
+  `sotaque_alto` (arco, escadaria, coluna). O que não se reaproveita é o
+  `marco`: ele é a peça de uma vez por sala, e repeti-lo fora da arena desfaz
+  a regra do aquário.
+- **O enfeite por sala é DENSIDADE, não número cru** (8% das casas, piso 36) —
+  e quem o estoura é o LAYOUT, não o catálogo: sala com muitos trechos curtos
+  de parede ganha um `sotaque_alto` em cada um. Quando uma sala reprovar aí, o
+  conserto é no desenho da sala.
+- **O raio-X sempre teve razão:** nos seis lotes o Meshy entregou `attack.glb`
+  com a reação e `hit.glb` com o golpe. Rodar `--raio-x` antes da fusão não é
+  zelo, é o passo.
+- **Lote completo é o normal; lote curto é decisão.** Só a Mina veio 8-para-10,
+  e os dois faltantes foram declarados em `EMPRESTADOS` (bestiário), em
+  `MONSTER_LOOK` e no lote de retratos. O Coração veio 10-de-10 e não tem
+  nenhuma dessas declarações — se um dia vier curto de novo, o caminho está
+  no passo 5.

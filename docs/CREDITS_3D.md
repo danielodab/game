@@ -101,6 +101,16 @@ escolhido entra como emissivo, não como cor de corpo.
 
 ### Monstros (66) e chefes (6)
 
+> **DESATUALIZADO desde 21/09/2026 para os SEIS calabouços.** O que está
+> descrito abaixo era o empréstimo de acervo CC0 que segurou o jogo até a
+> arte própria chegar. Hoje a Estufa, a Cisterna, o Fecho de Brasa, os
+> Andaimes do Vento, a Mina Trêmula e o Coração Partido têm **kit próprio
+> gerado no Meshy pelo dono** (`assets/embedded/models-meshy-*.js`), com os
+> seis clipes por bicho. Sobrou emprestado: os dois da Mina que não couberam
+> no saldo (Lasca de Veio e Cantor de Cristal, que vestem corpo de outro
+> lote, declarado) e o Esporinho do Rebanho do Invocador. O mapa que vale é
+> o `MONSTER_LOOK` de `js/render3d/models3d_v2.js`.
+
 Sem correspondência exata em acervo CC0 para um bestiário autoral. A regra usada:
 
 - **humanoides** (Corte Afogada, Prole da Fornalha, Guarda do Coração, Coro dos

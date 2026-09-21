@@ -528,6 +528,28 @@ Modele a armadura uma vez em cinza-claro e varie só o recheio. Os neutros
 | Raiz-do-Coração | `heartroot` | terra | distância · ancorada | 2,40 m | 1,33 |
 | O Coração Partido | `boss-riftheart` | neutro | CHEFE | 3,60 m | 1,22 |
 
+**ENTREGUE em 21/09/2026, de noite — e com isso não falta mais nenhum
+monstro no jogo.** Os DEZ saíram do Meshy (o único 10-de-10 desde os
+Andaimes): `models-meshy-brokenheart.js`, 16,9 MB, seis clipes em cada um,
+1,18 a 1,38 MB por kit. O raio-X achou `attack.glb` com a reação e `hit.glb`
+com o golpe **nos dez**, como em todos os lotes anteriores. `MONSTER_LOOK`
+recebeu a escada de porte abaixo (0,90 m a 3,60 m, o Coração o maior bicho do
+jogo) e nenhum deles veste corpo emprestado — `tests/bestiario.html?calabouco=brokenheart`
+fecha 8/8 com `EMPRESTADOS` e `ARRASTA` vazios.
+
+O texto abaixo fica como registro do que foi pedido. Os prompts abaixo são de **texto→3D no Meshy**, que é como os dez
+lotes anteriores foram feitos. Se quiser passar um deles pelo Gemini antes
+(imagem→3D), acrescente ao fim do prompt: *Single character seen from a
+straight-on front view at eye level, plain solid white background, completely
+empty, no floor, no shadow on the background, nothing cropped at the edges, no
+text, no watermark.* — e lembre que imagem→3D só vê um lado: as costas são
+chute.
+
+**Duas correções de 21/09, já aplicadas abaixo:** o Vendaval tinha as placas
+"flutuando soltas" (peça solta arruína o auto-rig — agora elas se ligam por
+fios de vento) e o chefe tinha estilhaços "orbitando" os ombros (agora presos
+por correntes curtas).
+
 **A armadura dos Arautos** (base comum aos quatro prompts): armadura de placas
 antiga, cerimonial, vazia — elmo fechado sem rosto, peitoral com uma fresta em
 forma de coração no meio, ombreiras largas, manoplas, grevas, uma capa curta
@@ -572,7 +594,7 @@ Animação: idle (as placas oscilam) · run · attack (corte duplo) · hit · de
 (as placas caem soltas).
 
 ```
-An empty ceremonial suit of ancient plate armor standing on its own as a humanoid herald, closed faceless helmet, breastplate with a heart-shaped crack in the center, wide pauldrons, gauntlets, greaves. This one is truly hollow: the plates float slightly apart from each other with visible gaps of air between helmet, chest, arms and legs, nothing inside, a long cape and ribbons streaming as if in strong wind, wisps of air swirling through the gaps. Each hand holds a thin curved blade. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game creature, clean readable silhouette, hand-painted look. Near-monochrome light grey materials, all detail in light-and-dark contrast, no saturated colors. Single character, no base, no pedestal, no ground, nothing else in the scene.
+An empty ceremonial suit of ancient plate armor standing on its own as a humanoid herald, closed faceless helmet, breastplate with a heart-shaped crack in the center, wide pauldrons, gauntlets, greaves. This one is truly hollow: the plates sit slightly apart from each other with visible gaps of air between helmet, chest, arms and legs and nothing inside, but every plate is joined to its neighbour by thick twisting streams of wind so the whole figure is one connected body, a long cape and ribbons streaming as if in strong wind. Each hand holds a thin curved blade. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game creature, clean readable silhouette, hand-painted look. Near-monochrome light grey materials, all detail in light-and-dark contrast, no saturated colors. Single character, no base, no pedestal, no ground, nothing else in the scene.
 ```
 
 ### Zelador Nulo · `null-warden`
@@ -642,7 +664,7 @@ attack (batida de um quarto) · cast (tempestade de estilhaços) · hit · death
 (os quatro quartos se separam).
 
 ```
-A colossal broken-heart boss: a giant humanoid whose entire torso is an enormous stone heart cracked into four quarters held together by heavy chains and roots, each quarter of a different nature — one quarter glowing with ember cracks, one streaming with dark water, one of rough packed rock, one hollow and carved by wind with air gaps — the cracks between quarters glowing, no head, just an empty gap of light above the shoulders, thick arms of layered stone wrapped in chain, legs of cracked basalt, small floating shards of stone orbiting the shoulders. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game boss creature, clean readable silhouette, hand-painted look. Mostly grey stone with subtle muted tints on the four quarters: dim orange, dim blue, dim green, dim lilac, the cracks painted almost white, all detail in light-and-dark contrast. Single character, no base, no pedestal, no ground, nothing else in the scene.
+A colossal broken-heart boss: a giant humanoid whose entire torso is an enormous stone heart cracked into four quarters held together by heavy chains and roots, each quarter of a different nature — one quarter glowing with ember cracks, one streaming with dark water, one of rough packed rock, one hollow and carved by wind with air gaps — the cracks between quarters glowing, no head, just an empty gap of light above the shoulders, thick arms of layered stone wrapped in chain, legs of cracked basalt, small stone shards held out from the shoulders by short taut chains, every shard attached. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game boss creature, clean readable silhouette, hand-painted look. Mostly grey stone with subtle muted tints on the four quarters: dim orange, dim blue, dim green, dim lilac, the cracks painted almost white, all detail in light-and-dark contrast. Single character, no base, no pedestal, no ground, nothing else in the scene.
 ```
 
 ---
@@ -1009,63 +1031,160 @@ roda) é a armadilha desta rodada — o aro vira "peça" e desarruma a contagem
 inteira. Ou peça ao Gemini que os aros sejam colados ao corpo, ou já entre de
 `--bruto` com a contagem real (peças + aros) e escreva o mapa.
 
-## 6.4 · Coração Partido (`heart`) — prefixo sugerido `cp_`
+## 6.4 · Coração Partido (`heart`) — prefixo `cp_` — **ENTREGUE em 21/09** (`cenario-coracao.js`)
 
 Paleta: violeta (`#8f6ad0`), índigo profundo (`#2a2440`), ouro velho
 (`#ffd166`), basalto e mármore partido. Cada peça cita os quatro elementos sem
-copiar nenhum calabouço.
+copiar nenhum calabouço. Lembre que **o cenário NÃO é tingido pelo jogo**: a
+cor que você assar é a cor final.
 
-**Muro inteiro: mureta que muda de material** · `cp_muro_inteiro`
+> **O caminho é o da Mina:** a folha sai primeiro do **Gemini** (imagem) e é
+> essa imagem que entra no **Meshy** (imagem→3D). Os prompts abaixo são
+> **prompts de imagem** — por isso falam de câmera, fundo, luz e enquadramento.
+>
+> **São QUATRO arquivos, 15 peças** (a Mina teve 19 em quatro). O dono avisou
+> em 21/09 que só dava para **a parede + 3 folhas**, então o lote foi apertado
+> em cima dos papéis, não das folhas: a **folha de borda deixou de existir** e
+> as três peças de `borda` saem por **reaproveitamento** das monumentais — que
+> é o que a tabela de papéis já permitia ("borda: pode reaproveitar sotaques").
+> Fora da arena o renderizador cresce a peça para 2,2–4,6 m, e arco, escadaria
+> e coluna aguentam esse porte. O **marco** entrou na folha das monumentais em
+> vez de sair sozinho: sem ele o tema cai no sotaque comum e o Coração fica
+> sendo o único dos quatro portais sem peça monumental.
+>
+> **O que ficou de fora, e onde foi parar:** o relógio parado das estações, a
+> lasca de céu petrificado, a armadura vazia em suporte, a fileira de braseiros
+> e a estátua caída. O tema das quatro estações fica com a **coluna dos
+> elementos** e com o **coração rachado do marco**; a ruína fica com o **arco
+> partido** e a **escadaria que acaba no ar**.
+>
+> As regras que decidem se o lote presta:
+> 1. **Vão claro entre as peças, nenhuma encostada** — a mais importante.
+> 2. **Fundo branco liso, sem chão, sem sombra projetada, sem degradê.**
+> 3. **Mesma câmera na folha inteira, bases alinhadas.** A folha do chão sobe
+>    para 40° de propósito: peça rasteira vista de frente sai com 7 cm.
+> 4. **NADA SOLTO.** Foi o que custou a folha 2 da Mina: as três argolas do
+>    silo viraram "peça" e desarrumaram a contagem. Aqui o risco tem nome —
+>    corrente, argola, engrenagem, lanterna pendurada. Todo prompt fecha com
+>    *no free-floating rings, no loose chain links*, e as correntes vão
+>    esticadas e coladas na pedra. (Foi por isso que a **barreira de
+>    engrenagens** saiu do kit: dente de engrenagem solto é aro por outro nome.)
+> 5. **Imagem→3D só vê um lado.** Os muros vão em **vista frontal reta**, que é
+>    o que dá ponta reta para as cópias emendarem em fileira.
+
+### Folha 1 — a parede (3 peças) · vista frontal reta
+
+`cp_muro_inteiro` · `cp_muro_balaustrada` (os dois **muro**: o renderizador usa
+a 0,95 m como divisória e estica a 3,10 m como parede — o segundo já traz a
+brecha) · `cp_pilar` (**pilar**).
+
 ```
-A modular low wall of ancient carved stone that changes material along its length in four sections: one section of scorched cracked stone with faint ember lines, one of smooth wet dark stone with water-like veins, one of rough packed rock, one of pale wind-carved stone with hollow openings, the sections joined by thin gold seams, a flat straight top edge, straight flush ends so copies join seamlessly, about twice as wide as it is tall. Colors: violet-grey stone, deep indigo shadows, old gold seams. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
+A game asset reference sheet: three separate stylized fantasy stone structures arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. From left to right: (1) a modular low wall of ancient carved stone that changes material along its length in four sections — scorched cracked stone with faint ember lines, smooth dark wet-looking stone with flowing veins, rough packed brown rock, pale wind-hollowed stone with small round openings — the four sections joined by thin gold seams, a flat straight top edge, straight vertical flush ends, about twice as wide as it is tall; (2) a modular low broken balustrade, a flat straight top rail carried by a row of turned stone balusters, each baluster of a different stone (scorched black, smooth blue-grey, rough brown, pale hollowed), two balusters missing in the middle leaving a gap with broken stumps, a thin gold inlay line along the rail, straight vertical flush ends, about twice as wide as it is tall; (3) a tall narrow ancient pillar split vertically into four quarters that still stand together, each quarter a different material (scorched cracked stone, smooth dark wet stone, rough packed rock, pale wind-hollowed stone), thin glowing cracks between the quarters, a carved gold band near the top, much taller than it is wide. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top. All three seen from a straight-on front view at eye level, flat orthographic framing with no perspective distortion, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey carved stone, deep indigo shadows, old gold seams, a faint pale glow in the cracks. Soft even frontal studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Muro com brecha** · `cp_muro_brecha`
+### Folha 2 — sotaques (4 peças) · três-quartos, 30° acima
+
+`cp_bacia` · `cp_caco_espelho` · `cp_raiz` · `cp_lampioes` — os quatro
+**sotaque** (0,85 a 1,60 m, no miolo das muretas; todos volume vertical,
+nenhum com tampo plano — foi por isso que o banco de pedra do plano antigo
+caiu fora).
+
 ```
-A modular low wall of ancient carved stone with a jagged split in the middle as if torn apart, the broken faces glowing faintly from within, the two halves of different material — one scorched and cracked, one smooth and wet-looking — joined by a thin gold seam at the top, flat straight top on the remaining sections, straight flush ends so copies join seamlessly, about twice as wide as it is tall. Colors: violet-grey stone, deep indigo, old gold, faint pale glow in the crack. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
+A game asset reference sheet: four separate stylized fantasy environment props arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. From left to right: (1) a carved stone elemental basin on a short thick pedestal, the bowl overflowing with dark water that crusts into ice down one side and steams on the other, gold rim; (2) a large jagged shard of mirror glass standing upright, driven deep into a block of cracked violet-grey stone, the silvered face reflecting nothing, smaller splinters fused to the block at its foot; (3) a thick knotted tree root bursting out of a carved stone block and curling back down into it, bark, moss and a gold band nailed around the root; (4) a short stone post carrying four iron lanterns of different shapes, each lantern bolted and welded directly to the post with rigid iron brackets and none hanging from a ring, one lantern glowing with embers, one filled with water light, one dark and empty, one with a pale swirl of wind. All four are about waist to chest height, all taller than they are wide, none with a flat empty tabletop. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top. All four seen from the same three-quarter view about thirty degrees above eye level, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey stone, deep indigo shadows, tarnished old gold, silver glass, dark water, muted pale glows. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Balaustrada partida** · `cp_muro_balaustrada` (variante)
+### Folha 3 — as monumentais (4 peças) · três-quartos, 30° acima
+
+`cp_marco_estatua` (**marco**, uma vez por sala) · `cp_arco` · `cp_escadaria` ·
+`cp_coluna_elementos` (os três **sotaque_alto**, ~3,10 m, no meio das paredes,
+e os mesmos três entram de novo como **borda**, fora da arena, onde o
+renderizador os cresce para 2,2–4,6 m). O marco fica na **ponta esquerda** da
+folha porque é o mais largo: é o que garante o vão até o vizinho.
+
 ```
-A modular low broken stone balustrade: a flat straight top rail on a row of turned balusters, each baluster of a different stone — scorched black, smooth blue-grey, rough brown, pale hollowed — two balusters missing leaving a gap, straight flush ends so copies join seamlessly, gold inlay on the rail, about twice as wide as it is tall. Colors: violet-grey marble, deep indigo, old gold. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
+A game asset reference sheet: four separate stylized fantasy stone monuments arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. From left to right: (1) a monumental headless statue of a robed figure on a wide square plinth, both hands raised holding a large stone heart cracked into four quarters in front of its chest, faint light glowing in the cracks of the heart, the neck broken off cleanly, the robes carved with flame, wave, rock and wind, chains carved around the plinth with every link touching the stone, a few fallen fragments fused to the base, about as wide as it is tall; (2) a monumental stone arch broken at the top, the two halves not meeting, gold trim along the edges, the fallen keystone fused to the ground at the foot of one leg, tall and narrow; (3) a spiral stone staircase winding up around a solid central column and ending abruptly in broken steps in mid-air, a carved gold handrail following the curve, tall and narrow; (4) a column of the four elements: four stacked carved stone drums — flame, wave, rock, wind — each separated by a solid gold ring carved as part of the column, a cracked capital on top, tall and narrow. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top. All four seen from the same three-quarter view about thirty degrees above eye level, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey stone and marble, deep indigo shadows, tarnished old gold trim, pale glow in the cracks. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Barreira de engrenagens** · `cp_muro_engrenagens` (variante)
+### Folha 4 — o chão (4 peças) · três-quartos, 40° acima
+
+`cp_mosaico` · `cp_rachadura_estrela` · `cp_veio_luz` · `cp_cinza_gelo` — os
+quatro **chao** (rasteiros, sem colisão, `chao_alt` baixo). A câmera desta folha
+é mais alta **de propósito**: peça rasteira vista de frente vira um risco no
+papel e sai do Meshy com sete centímetros.
+
 ```
-A modular low barrier of giant bronze gears half buried in the floor in a row, teeth pointing up, overlapping and meshed, worn and tarnished, a flat straight top line across the gear tops, straight flush ends so copies join seamlessly, about twice as wide as it is tall. Colors: tarnished old gold bronze, deep indigo shadows, violet-grey stone at the base. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
+A game asset reference sheet: four separate stylized fantasy floor props arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping, all four very low and lying flat on the ground. From left to right: (1) a square broken floor mosaic of the four seasons, four quadrants of coloured tiles around a gold centre medallion, several tiles missing and the edge chipped; (2) a star-shaped crack in stone floor slabs radiating from one point, the slabs slightly tilted, a faint pale glow deep inside the crack; (3) a thin vein of pale light running diagonally across a worn stone slab like a glowing fissure, gold flecks along its edges; (4) a low patch of grey ash with a crust of white ice frozen over half of it and a few scorched pebbles. Every part of every object is solidly attached to it: no free-floating rings, no loose pieces resting on top. All four seen from the same elevated three-quarter view about forty degrees above the ground, high enough that the flat floor pieces read clearly as shapes and not as thin lines, the same camera for every object, all resting on the same invisible ground line. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey stone, deep indigo shadows, old gold tiles, pale glow, white ice, grey ash. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor plane, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Pilar: pilar rachado em quatro** · `cp_pilar`
+### O catálogo que estas 15 peças dão
+
+| papel | peças |
+|---|---|
+| `baixo` (muro) | `cp_muro_inteiro`, `cp_muro_balaustrada` |
+| `pilar` | `cp_pilar` |
+| `marco` | `cp_marco_estatua` |
+| `sotaque` | `cp_bacia`, `cp_caco_espelho`, `cp_raiz`, `cp_lampioes` |
+| `sotaque_alto` | `cp_arco`, `cp_escadaria`, `cp_coluna_elementos` |
+| `chao` | `cp_mosaico`, `cp_rachadura_estrela`, `cp_veio_luz`, `cp_cinza_gelo` |
+| `borda` | `cp_arco`, `cp_escadaria`, `cp_coluna_elementos` (as mesmas malhas) |
+
+O marco **não** entra em `borda`: ele é a peça de uma vez por sala, e repeti-lo
+do lado de fora desfaz a regra do aquário.
+
+### Como salvar, para o separador não errar
+
+Pasta: `...\assets_ok\mapa\O Coracao Partido\muros\` (a parede) e
+`...\assets_ok\mapa\O Coracao Partido\itens mapa\` (as três folhas de enfeite).
+**O nome do arquivo é a contagem**: peças separadas por `-`, na ordem da
+esquerda para a direita, que é como `tools/separa_pecas.py` sabe quantas
+recortar e já sai com os nomes certos.
+
 ```
-A tall narrow ancient stone pillar split vertically into four quarters that still stand together, each quarter a different material — scorched cracked stone, smooth wet dark stone, rough packed rock, pale wind-hollowed stone — with faint light glowing in the cracks between them, a carved gold band near the top, much taller than wide. Colors: violet-grey stone, deep indigo, old gold, pale glow. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
+muros\muro inteiro-balaustrada-pilar.glb
+itens mapa\bacia-caco de espelho-raiz-lampioes.glb
+itens mapa\marco estatua-arco-escadaria-coluna dos elementos.glb
+itens mapa\mosaico-rachadura estrela-veio de luz-cinza e gelo.glb
 ```
 
-**Marco: estátua sem cabeça segurando um coração de pedra** · `cp_marco_estatua` (1× por sala)
-```
-A monumental headless stone statue of a robed figure on a wide square plinth, both hands raised holding a large stone heart cracked into four quarters in front of its chest, the cracks glowing faintly, the neck broken off cleanly, robes carved with the four elements, chains wrapped around the plinth, a few fallen stone fragments at the base, about as wide as it is tall. Colors: violet-grey marble, deep indigo shadows, old gold trim, pale glow in the cracks. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
-
-**Folha de sotaques** (5 peças) · `cp_bacia`, `cp_caco_espelho`, `cp_raiz`, `cp_banco`, `cp_lampioes`
-```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them: (1) a stone elemental basin on a short pedestal overflowing with dark water that freezes into ice on one side and steams on the other, (2) a large jagged shard of mirror glass embedded upright in a block of cracked stone, (3) a thick knotted root emerging from a stone block and curling back into it, bark and moss, (4) a stone bench carved with four seasons on its backrest, one end broken off, (5) a cluster of four iron lanterns of different shapes on a short post, one lit with ember, one with a water glow, one dark, one with a pale wind glow. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: violet-grey stone, deep indigo, old gold, silver glass, muted glows. No ground plane, no background, nothing else in the scene.
-```
-
-**Folha de sotaques altos** (3 peças) · `cp_relogio`, `cp_lasca_ceu`, `cp_coluna_elementos`
-```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them, all tall and narrow: (1) a tall stopped clock of the seasons on a stone pedestal, a round bronze dial with four season symbols instead of numbers and the hands frozen, gears exposed on the side, (2) a jagged shard of petrified sky, a tall flat crystal-like slab with clouds frozen inside it, floating a hand above a stone base and held down by two chains, (3) a tall column of the four elements, four stacked carved drums — flame, wave, rock, wind — with a gold ring between each. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: violet-grey stone, deep indigo, tarnished old gold, pale sky-blue crystal. No ground plane, no background, nothing else in the scene.
-```
-
-**Folha de chão** (4 peças baixas) · `cp_mosaico`, `cp_rachadura_estrela`, `cp_veio_luz`, `cp_cinza_gelo`
-```
-Several separate flat low game-ready floor props arranged in a single row side by side with clear empty gaps between them, all very low and lying on the floor: (1) a square broken floor mosaic of the four seasons in four colored quadrants with missing tiles, (2) a star-shaped crack in stone floor slabs radiating from a center point with a faint glow inside, (3) a thin vein of pale light running across a stone slab like a glowing fissure, (4) a low patch of grey ash with a crust of ice frozen over half of it. Each lying on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: violet-grey stone, deep indigo, old gold tiles, pale glow, white ice. No ground plane, no background, nothing else in the scene.
-```
-
-**Folha de borda** (3 peças) · `cp_arco`, `cp_escadaria`, `cp_braseiros`
-```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them: (1) a monumental stone arch broken at the top, the two halves not meeting, gold trim, fallen keystone at the foot, (2) a spiral stone staircase that winds up around a central column and ends abruptly in broken steps in mid-air, (3) a row of four braziers on stone pedestals, each a different element — one with embers, one with a bowl of water, one with a heap of stones, one empty with a swirl of wind. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: violet-grey stone, deep indigo, old gold, muted glows. No ground plane, no background, nothing else in the scene.
-```
+Se o Meshy soltar objeto a mais (é o que as argolas fizeram na Mina), o
+caminho já documentado: `--bruto 0.0035`, folha de contato do
+`contato_cenario.py` e mapa à mão.
 
 ---
+
+### O que de fato chegou — 21/09/2026, **ENTREGUE**
+
+Vieram **quatro** arquivos, em `...\assets_ok\mapa\O Coração partido\` (o
+dono salvou a pasta com acento e com "partido" em minúscula — o
+`NOMES_CALABOUCO` do `embute_monstros.py` foi corrigido para essa grafia, e o
+`embute_cenario_coracao.py` acha a pasta por glob para não depender mais
+disso):
+
+| arquivo | peças |
+|---|---|
+| `muros\muros e pilar.glb` | pilar, balaustrada partida, mureta de quatro materiais |
+| `itens mapa\folha2.glb` | bacia, caco de espelho, raiz, lampiões |
+| `itens mapa\folha3.glb` | estátua-marco, arco, escadaria, coluna dos elementos |
+| `itens mapa\folha4.glb` | mosaico, rachadura, veio de luz, cinza e gelo |
+
+**AS QUATRO SAÍRAM LIMPAS** no `separa_pecas.py --recortar --conta 3` e
+`--conta 4,4,4`: o separador por vértice achou o patamar sozinho em todas
+(0,028 · 0,040 · 0,020 · 0,020) e as peças vieram na **ordem exata do
+briefing**, da esquerda para a direita — o `contato_cenario.py` só confirmou.
+Nenhum aro solto, nenhuma folha partida em dois, nenhum mapa à mão: a regra
+*no free-floating rings, no loose chain links*, escrita por causa das três
+argolas do silo da Mina, pagou o preço dela. As 15 peças estão em
+`...\O Coração partido\_pecas\`, já com o nome, e
+`tools/embute_cenario_coracao.py` as transforma em `cenario-coracao.js`
+(4,73 MB de binário, 6,31 MB de arquivo).
+
+A única surpresa foi na medição: com a borda reaproveitando as três
+monumentais, `tests/cenario_coracao.html` acusou **enfeite demais em duas
+salas** (43 numa sala de teto 42, e 61 numa de teto 45). A culpa não é do
+catálogo — é do LAYOUT: sala com muitos trechos curtos de parede ganha um
+`sotaque_alto` em cada um, e A Sala dos Espelhos era um tabuleiro de blocos
+pequenos. Entrou no mesmo lote a reforma tática das três salas, e a densidade
+voltou para a faixa.
 
 ## Se for fazer em ordem
 

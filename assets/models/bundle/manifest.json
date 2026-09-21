@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-21T10:15:16",
+ "gerado": "2026-09-21T20:25:06",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -258,6 +258,126 @@
    "bytes": 547356,
    "hash": "c1b32d167c1e",
    "grupo": "calabouco:cistern"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_muro_inteiro",
+   "arquivo": "cenario-coracao/cp_muro_inteiro.glb",
+   "bytes": 303400,
+   "hash": "a38386d59568",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_muro_balaustrada",
+   "arquivo": "cenario-coracao/cp_muro_balaustrada.glb",
+   "bytes": 394240,
+   "hash": "7cbf4f7f577b",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_pilar",
+   "arquivo": "cenario-coracao/cp_pilar.glb",
+   "bytes": 311476,
+   "hash": "40960cafdf06",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_marco_estatua",
+   "arquivo": "cenario-coracao/cp_marco_estatua.glb",
+   "bytes": 377580,
+   "hash": "4c590c05ebc5",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_arco",
+   "arquivo": "cenario-coracao/cp_arco.glb",
+   "bytes": 309932,
+   "hash": "0bb014cd97f1",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_escadaria",
+   "arquivo": "cenario-coracao/cp_escadaria.glb",
+   "bytes": 342408,
+   "hash": "6688879658a0",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_coluna_elementos",
+   "arquivo": "cenario-coracao/cp_coluna_elementos.glb",
+   "bytes": 326744,
+   "hash": "c16d6b29f2e4",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_bacia",
+   "arquivo": "cenario-coracao/cp_bacia.glb",
+   "bytes": 333332,
+   "hash": "1397adeb1f13",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_caco_espelho",
+   "arquivo": "cenario-coracao/cp_caco_espelho.glb",
+   "bytes": 303232,
+   "hash": "249b7ed6e10b",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_raiz",
+   "arquivo": "cenario-coracao/cp_raiz.glb",
+   "bytes": 364180,
+   "hash": "2f6a5094b580",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_lampioes",
+   "arquivo": "cenario-coracao/cp_lampioes.glb",
+   "bytes": 339560,
+   "hash": "12756d06d266",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_mosaico",
+   "arquivo": "cenario-coracao/cp_mosaico.glb",
+   "bytes": 322528,
+   "hash": "5fd8cc2cc1b3",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_rachadura_estrela",
+   "arquivo": "cenario-coracao/cp_rachadura_estrela.glb",
+   "bytes": 294844,
+   "hash": "beeeb5e6e195",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_veio_luz",
+   "arquivo": "cenario-coracao/cp_veio_luz.glb",
+   "bytes": 294268,
+   "hash": "40494cf365b1",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cp_cinza_gelo",
+   "arquivo": "cenario-coracao/cp_cinza_gelo.glb",
+   "bytes": 342176,
+   "hash": "b549c07590a4",
+   "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
@@ -1693,6 +1813,86 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "cinder-herald",
+   "arquivo": "models-meshy-brokenheart/cinder-herald.glb",
+   "bytes": 1269956,
+   "hash": "1fe56b4e11a7",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "tide-herald",
+   "arquivo": "models-meshy-brokenheart/tide-herald.glb",
+   "bytes": 1353448,
+   "hash": "d8625e738096",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "stone-herald",
+   "arquivo": "models-meshy-brokenheart/stone-herald.glb",
+   "bytes": 1281268,
+   "hash": "579ac360ceaa",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "gale-herald",
+   "arquivo": "models-meshy-brokenheart/gale-herald.glb",
+   "bytes": 1282272,
+   "hash": "2a8de14177fe",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "null-warden",
+   "arquivo": "models-meshy-brokenheart/null-warden.glb",
+   "bytes": 1339524,
+   "hash": "c798c89e695f",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mirror-twin",
+   "arquivo": "models-meshy-brokenheart/mirror-twin.glb",
+   "bytes": 1244480,
+   "hash": "34411eb281c1",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mirror-sliver",
+   "arquivo": "models-meshy-brokenheart/mirror-sliver.glb",
+   "bytes": 1232644,
+   "hash": "e7e0bc7e7f1c",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "weather-mote",
+   "arquivo": "models-meshy-brokenheart/weather-mote.glb",
+   "bytes": 808168,
+   "hash": "d87fbd63687e",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "heartroot",
+   "arquivo": "models-meshy-brokenheart/heartroot.glb",
+   "bytes": 1445616,
+   "hash": "07a7c53ab289",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "boss-riftheart",
+   "arquivo": "models-meshy-brokenheart/boss-riftheart.glb",
+   "bytes": 1397860,
+   "hash": "523497c8d27f",
+   "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "drowned-porter",
    "arquivo": "models-meshy-cisterna/drowned-porter.glb",
    "bytes": 1360600,
@@ -2686,6 +2886,16 @@
    "run",
    "walk"
   ],
+  "cinder-herald": [],
+  "tide-herald": [],
+  "stone-herald": [],
+  "gale-herald": [],
+  "null-warden": [],
+  "mirror-twin": [],
+  "mirror-sliver": [],
+  "weather-mote": [],
+  "heartroot": [],
+  "boss-riftheart": [],
   "drowned-porter": [
    "HitReact",
    "attack",
@@ -3032,17 +3242,22 @@
  "tabelas": {
   "cenario-andaimes.js": "tabelas/cenario-andaimes.js",
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
+  "cenario-coracao.js": "tabelas/cenario-coracao.js",
   "cenario-fecho.js": "tabelas/cenario-fecho.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js",
   "cenario-mina.js": "tabelas/cenario-mina.js",
   "cenario-pvp.js": "tabelas/cenario-pvp.js"
  },
- "totalBytes": 211466376,
- "totalBase64": 281955576,
+ "totalBytes": 229081512,
+ "totalBase64": 305442468,
  "grupos": {
   "base": {
    "itens": 92,
    "bytes": 38530188
+  },
+  "calabouco:brokenheart": {
+   "itens": 25,
+   "bytes": 17615136
   },
   "calabouco:cistern": {
    "itens": 23,

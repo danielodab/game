@@ -302,10 +302,16 @@ def escondida(tag):
 
 
 def limpo(nome, h):
+    # 21/09: o \b sozinho acusava id LEGÍTIMO. O Zelador Nulo é `null-warden`,
+    # e o hífen conta como fronteira de palavra, então `data-monstro="null-warden"`
+    # caía como buraco de dado assim que o Coração Partido abriu. A borda agora
+    # exclui letra, dígito, _ e hífen dos dois lados — `src="undefined"` e
+    # `data-x="null"` seguem reprovando.
+    SUJO = r'(?<![\w-])(undefined|NaN|null)(?![\w-])'
     t = texto(h)
-    ruins = sorted(set(re.findall(r'\b(undefined|NaN|null)\b', t)))
+    ruins = sorted(set(re.findall(SUJO, t)))
     check(nome + ': nenhum undefined/NaN/null no texto', not ruins, ', '.join(ruins))
-    attrs = re.findall(r'="[^"]*\b(undefined|NaN|null)\b[^"]*"', sem_codigo(h))
+    attrs = re.findall(r'="[^"]*' + SUJO + r'[^"]*"', sem_codigo(h))
     check(nome + ': nem nos atributos (src, style, data-…)', not attrs, ', '.join(sorted(set(attrs))))
 
 
@@ -537,12 +543,26 @@ def prova_wiki(abre):
           '%d mapas' % len(mapas))
     check('wiki: nenhuma chance de saque à vista (MOSTRA_CHANCES desligado)', 'peso no sorteio' not in t)
     limpo('wiki (Estufa)', h)
-    h = pega('#/calabouco/' + FECHADOS[0])
-    check('wiki: calabouço de portal fechado sai "Em breve", sem salas', 'Em breve' in texto(h) and 'data-mapa=' not in sem_codigo(h))
+    # 21/09: com o Coração Partido aberto NÃO SOBROU portal fechado, e a régua
+    # vira do avesso — em vez de cobrar o "Em breve" de um trancado, cobra que
+    # o último a abrir desenhe as três salas como os outros cinco. Se um
+    # calabouço novo entrar trancado, o ramo de cima volta a valer sozinho.
+    if FECHADOS:
+        h = pega('#/calabouco/' + FECHADOS[0])
+        check('wiki: calabouço de portal fechado sai "Em breve", sem salas', 'Em breve' in texto(h) and 'data-mapa=' not in sem_codigo(h))
+    else:
+        h = pega('#/calabouco/brokenheart')
+        mapas_cp = re.findall(r'<div class="wk-mapa" data-mapa="', h)
+        check('wiki: sem portal fechado, o Coração Partido abre com as 3 salas e o chefe',
+              len(mapas_cp) == 3 and 'Em breve' not in texto(h) and 'O Coração Partido' in texto(h),
+              '%d mapas' % len(mapas_cp))
 
     h = pega('#/bestiario')
     grupos = set(re.findall(r'<h2><a href="#/calabouco/([a-z]+)"', h))
     check('wiki: o bestiário só abre os calabouços abertos', bool(grupos) and not (grupos & set(FECHADOS)), ' '.join(sorted(grupos)))
+    if not FECHADOS:
+        check('wiki: com tudo aberto, os SEIS calabouços aparecem no bestiário',
+              len(grupos) == 6, ' '.join(sorted(grupos)))
     limpo('wiki (bestiário)', h)
     # 11/09: o retrato de cada bicho vem do 3D do jogo (tools/retratos_site.py);
     # a invocação de fusão usa a foto da obra. Todo arquivo pedido existe.
