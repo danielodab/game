@@ -49,8 +49,20 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    na lista de modelos do `index.html` (ao lado de `models-meshy-cisterna.js`)
    e rode `python tools/extrai_assets.py` para o bundle servido.
 5. **A régua**: abra `tests/bestiario.html?calabouco=emberlock`. Ela cobra kit
-   próprio para todos, clipe por papel, porte entre 0,8 e 3,6 m e o chefe
-   como o maior. Sem linha no `MONSTER_LOOK` o kit já veste sozinho em
+   próprio para todo monstro **gerado**, clipe por papel, porte entre 0,8 e
+   3,6 m e o chefe como o maior.
+   *Se o lote vier incompleto por saldo* (a Mina Trêmula, 21/09, foi o
+   primeiro 8-para-10): declare cada faltante em `window.EMPRESTADOS` no topo
+   da página — id do monstro, o corpo que ele veste e o pacote onde esse corpo
+   mora. A régua então cobra que o emprestado vista **exatamente** o corpo
+   declarado e que o conjunto dos emprestados seja **exatamente** o dos sem
+   kit, de modo que gerar um deles depois e esquecer de tirar da tabela
+   reprova. Monstro sem pernas cujo `walk` é o próprio `idle` de propósito
+   (ele se arrasta) vai em `window.ARRASTA`.
+   Declare os mesmos empréstimos em `tools/monstros/<id>.json` (chave
+   `emprestados`), em `MONSTER_LOOK` e no lote de retratos
+   (`tools/retratos_site.html` precisa carregar também o pacote do doador,
+   senão o emprestado fica sem foto na wiki). Sem linha no `MONSTER_LOOK` o kit já veste sozinho em
    escala 1; o porte se acerta depois em `js/render3d/models3d_v2.js`
    (`MONSTER_LOOK`, campo `scale`), como foi feito na Cisterna.
 6. **O cenário** (muros e enfeites do tema, para a batalha e para o

@@ -1,5 +1,5 @@
 {
- "gerado": "2026-09-20T12:52:00",
+ "gerado": "2026-09-21T10:15:16",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -570,6 +570,158 @@
    "bytes": 900304,
    "hash": "83be8d3d0687",
    "grupo": "base"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_muro_inteiro",
+   "arquivo": "cenario-mina/mt_muro_inteiro.glb",
+   "bytes": 373268,
+   "hash": "97c2036350c4",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_muro_brecha",
+   "arquivo": "cenario-mina/mt_muro_brecha.glb",
+   "bytes": 439856,
+   "hash": "ac4e47ca8ba7",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_muro_entulho",
+   "arquivo": "cenario-mina/mt_muro_entulho.glb",
+   "bytes": 474176,
+   "hash": "4aa22b523940",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_muro_escora",
+   "arquivo": "cenario-mina/mt_muro_escora.glb",
+   "bytes": 299808,
+   "hash": "c6a79674b719",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_pilar",
+   "arquivo": "cenario-mina/mt_pilar.glb",
+   "bytes": 421096,
+   "hash": "8d6bb57e9332",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_marco_broca",
+   "arquivo": "cenario-mina/mt_marco_broca.glb",
+   "bytes": 721356,
+   "hash": "4d55ab6b54c9",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_estalagmite",
+   "arquivo": "cenario-mina/mt_estalagmite.glb",
+   "bytes": 381916,
+   "hash": "a92c0a3e05d3",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_silo",
+   "arquivo": "cenario-mina/mt_silo.glb",
+   "bytes": 384736,
+   "hash": "b115cc07b5cb",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_porta_lacrada",
+   "arquivo": "cenario-mina/mt_porta_lacrada.glb",
+   "bytes": 391972,
+   "hash": "c762294db7e5",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_vagonete",
+   "arquivo": "cenario-mina/mt_vagonete.glb",
+   "bytes": 400952,
+   "hash": "54eee81e3afc",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_dinamite",
+   "arquivo": "cenario-mina/mt_dinamite.glb",
+   "bytes": 381568,
+   "hash": "2b7d668f93ee",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_esteril",
+   "arquivo": "cenario-mina/mt_esteril.glb",
+   "bytes": 404060,
+   "hash": "1c40de60798a",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_gaiola_canario",
+   "arquivo": "cenario-mina/mt_gaiola_canario.glb",
+   "bytes": 428884,
+   "hash": "f965c286d57b",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_trilho",
+   "arquivo": "cenario-mina/mt_trilho.glb",
+   "bytes": 349360,
+   "hash": "e9d08d19080d",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_rachadura",
+   "arquivo": "cenario-mina/mt_rachadura.glb",
+   "bytes": 349232,
+   "hash": "35a54a2d0159",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_cristal_aflorando",
+   "arquivo": "cenario-mina/mt_cristal_aflorando.glb",
+   "bytes": 407892,
+   "hash": "da11d009f5e2",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_pegadas",
+   "arquivo": "cenario-mina/mt_pegadas.glb",
+   "bytes": 340764,
+   "hash": "b7e81b0af360",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_boca_galeria",
+   "arquivo": "cenario-mina/mt_boca_galeria.glb",
+   "bytes": 399512,
+   "hash": "8953b865ebf5",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "mt_guindaste_poco",
+   "arquivo": "cenario-mina/mt_guindaste_poco.glb",
+   "bytes": 568260,
+   "hash": "0de711ed6992",
+   "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
@@ -1765,6 +1917,70 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "pick-revenant",
+   "arquivo": "models-meshy-quakemine/pick-revenant.glb",
+   "bytes": 1262200,
+   "hash": "3b558386c248",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "firedamp-wisp",
+   "arquivo": "models-meshy-quakemine/firedamp-wisp.glb",
+   "bytes": 1128412,
+   "hash": "81cc5196cf64",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "cave-jaw",
+   "arquivo": "models-meshy-quakemine/cave-jaw.glb",
+   "bytes": 1306772,
+   "hash": "b4664086fd55",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sinkhole-worm",
+   "arquivo": "models-meshy-quakemine/sinkhole-worm.glb",
+   "bytes": 1252020,
+   "hash": "fad4bc31fd9d",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ore-tumbler",
+   "arquivo": "models-meshy-quakemine/ore-tumbler.glb",
+   "bytes": 1247520,
+   "hash": "423d08cdd7c2",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "shaft-bat",
+   "arquivo": "models-meshy-quakemine/shaft-bat.glb",
+   "bytes": 1300284,
+   "hash": "1d97f057d5ce",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "damp-seeper",
+   "arquivo": "models-meshy-quakemine/damp-seeper.glb",
+   "bytes": 1124508,
+   "hash": "24e3096e6052",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "boss-deepknock",
+   "arquivo": "models-meshy-quakemine/boss-deepknock.glb",
+   "bytes": 1261556,
+   "hash": "f3d2f42f0672",
+   "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "sum_familiar",
    "arquivo": "models-meshy-sum/sum_familiar.glb",
    "bytes": 1135152,
@@ -2613,6 +2829,14 @@
    "idle",
    "walk"
   ],
+  "pick-revenant": [],
+  "firedamp-wisp": [],
+  "cave-jaw": [],
+  "sinkhole-worm": [],
+  "ore-tumbler": [],
+  "shaft-bat": [],
+  "damp-seeper": [],
+  "boss-deepknock": [],
   "sum_familiar": [
    "HitReact",
    "attack",
@@ -2810,10 +3034,11 @@
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
   "cenario-fecho.js": "tabelas/cenario-fecho.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js",
+  "cenario-mina.js": "tabelas/cenario-mina.js",
   "cenario-pvp.js": "tabelas/cenario-pvp.js"
  },
- "totalBytes": 193664436,
- "totalBase64": 258219620,
+ "totalBytes": 211466376,
+ "totalBase64": 281955576,
  "grupos": {
   "base": {
    "itens": 92,
@@ -2830,6 +3055,10 @@
   "calabouco:greenhouse": {
    "itens": 21,
    "bytes": 18878112
+  },
+  "calabouco:quakemine": {
+   "itens": 27,
+   "bytes": 17801940
   },
   "calabouco:windscaffold": {
    "itens": 28,

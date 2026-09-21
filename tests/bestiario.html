@@ -26,7 +26,16 @@
 kit é o PRÓPRIO (o look aponta para o id, não para um esqueleto emprestado), cada papel de animação
 tem clipe próprio (idle, andar, ataque, reação, morte — correr é bem-vindo), o porte fica entre 0,7 e
 3,6 m e o chefe é o maior. É a régua dos lotes dos portais fechados: quando o lote chega e esta
-página fica verde, o portal pode abrir.</div>
+página fica verde, o portal pode abrir.
+<br><br><b>EMPRÉSTIMO DECLARADO (21/09):</b> a Mina Trêmula é o primeiro lote 8-para-10 da casa — o
+saldo do Meshy não deu para dez. Quem não foi gerado <i>veste</i> o corpo de outro lote, e isso é
+decisão, não esquecimento. A régua não afrouxa: ela cobra que o emprestado vista <b>exatamente</b> o
+corpo declarado em <code>EMPRESTADOS</code>, e que o conjunto dos emprestados seja <b>exatamente</b> o
+conjunto dos que não têm kit próprio — gerar um deles depois e esquecer de tirar daqui reprova.
+<br><b>QUEM SE ARRASTA:</b> monstro sem pernas (a Escorrência é uma coluna d'água, o Verme sai de um
+funil de cascalho) anda arrastando, então o <code>walk</code> é o mesmo clipe do <code>idle</code> de
+propósito, a pedido do dono. Esses estão em <code>ARRASTA</code> e só eles podem repetir o idle no
+andar.</div>
 <div id="summary">montando…</div>
 <ul id="lista"></ul>
 <table id="tab"></table>
@@ -35,6 +44,17 @@ página fica verde, o portal pode abrir.</div>
 <script>
   var CAL = (/[?&]calabouco=([a-z]+)/.exec(location.search) || [])[1] || 'cistern';
   window.__V = '?v=' + Date.now();
+  // EMPRESTADOS: monstro que NAO foi gerado e veste o corpo de outro lote, por
+  // decisao de saldo. id do monstro -> id do modelo que ele veste, e o pacote
+  // onde esse modelo mora (a pagina precisa carregar o pacote do doador).
+  window.EMPRESTADOS = {
+    quakemine: {
+      'ore-chip':        { veste: 'slag-bit',      pacote: 'models-meshy-emberlock' },
+      'crystal-chanter': { veste: 'whistle-choir', pacote: 'models-meshy-windscaffold' }
+    }
+  }[CAL] || {};
+  // ARRASTA: monstro sem pernas cujo `walk` e o proprio `idle`, de proposito.
+  window.ARRASTA = { quakemine: ['damp-seeper', 'sinkhole-worm'] }[CAL] || [];
   var arquivos = [
     'vendor/three.min.js','vendor/GLTFLoader.js',
     'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
@@ -49,6 +69,11 @@ página fica verde, o portal pode abrir.</div>
     'assets/embedded/models-monsters.js','assets/embedded/models-bosses.js',
     'assets/embedded/models-summons.js',
     'js/render3d/models3d_v2.js'];
+  // os pacotes dos doadores entram antes do models3d_v2.js
+  Object.keys(window.EMPRESTADOS).forEach(function (id) {
+    var pac = 'assets/embedded/' + window.EMPRESTADOS[id].pacote + '.js';
+    if (arquivos.indexOf(pac) < 0) arquivos.splice(arquivos.length - 1, 0, pac);
+  });
   for (var i = 0; i < arquivos.length; i++)
     document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
 </script>
@@ -81,9 +106,22 @@ página fica verde, o portal pode abrir.</div>
     var ids = Object.keys(D.monsters || {}).filter(function (id) { return D.monsters[id].dungeonId === CAL; });
     check('o calabouço existe e tem monstros no catálogo', !!dg && ids.length > 0, ids.length + ' monstros');
     // no servido os base64 não vêm: o manifesto do bundle enche JOGO.MESHY_CLIPS
+    var EMP = window.EMPRESTADOS || {};
+    var emprestados = Object.keys(EMP);
     var kit = ids.filter(function (id) { return !!((JOGO.MODELS || {})[id] || (JOGO.MESHY_CLIPS || {})[id]); });
-    check('o kit do lote está embutido para TODOS (' + kit.length + '/' + ids.length + ')', kit.length === ids.length,
-          ids.filter(function (id) { return kit.indexOf(id) < 0; }).join(','));
+    var semKitIds = ids.filter(function (id) { return kit.indexOf(id) < 0; });
+    var gerados = ids.filter(function (id) { return emprestados.indexOf(id) < 0; });
+    check('o kit do lote está embutido para todo GERADO (' + kit.length + '/' + gerados.length + ')',
+          gerados.every(function (id) { return kit.indexOf(id) >= 0; }),
+          gerados.filter(function (id) { return kit.indexOf(id) < 0; }).join(','));
+    // quem não tem kit tem de ser EXATAMENTE quem foi declarado emprestado:
+    // gerar um deles depois e esquecer de tirar da tabela reprova aqui
+    var sobra = semKitIds.filter(function (id) { return emprestados.indexOf(id) < 0; });
+    var falta = emprestados.filter(function (id) { return semKitIds.indexOf(id) < 0; });
+    check('os sem kit são exatamente os emprestados declarados (' + emprestados.length + ')',
+          sobra.length === 0 && falta.length === 0,
+          (sobra.length ? 'sem kit e não declarado: ' + sobra.join(',') + ' ' : '') +
+          (falta.length ? 'declarado mas TEM kit: ' + falta.join(',') : ''));
     try { M.load(function () {}); } catch (e) {}
     try { JOGO.Models3D.load(function () {}); } catch (e) {}
     var voltas = 0;
@@ -101,7 +139,9 @@ página fica verde, o portal pode abrir.</div>
         try { look = M.lookFor(id); } catch (e) {}
         try { obj = M.unit(id); } catch (e) {}
         if (!obj) { semKit.push(id + ' (não montou)'); return; }
-        if (!look || look.model !== id) semKit.push(id + ' → ' + (look && look.model));
+        var deveVestir = (EMP[id] && EMP[id].veste) || id;
+        if (!look || look.model !== deveVestir)
+          semKit.push(id + ' → ' + (look && look.model) + (EMP[id] ? ' (devia vestir ' + deveVestir + ')' : ''));
         try { obj.userData.play('idle', { fade: 0 }); obj.userData.mixer.update(0.6); } catch (e) {}
         var doIdle = null; try { doIdle = obj.userData.clipFor('idle'); } catch (e) {}
         var mapa = {}, quais = [];
@@ -116,8 +156,16 @@ página fica verde, o portal pode abrir.</div>
         if (md.boss) chefeH = Math.max(chefeH, h); else outrosH = Math.max(outrosH, h);
         linhas.push({ id: id, nome: md.name, boss: !!md.boss, h: h, mapa: mapa, cai: quais });
       });
-      check('todos usam o kit PRÓPRIO (nenhum esqueleto emprestado)', semKit.length === 0, semKit.join(' · '));
-      check('nenhum papel cai no idle', caem.length === 0, caem.join(' · '));
+      check('cada um veste o corpo certo (próprio, ou o declarado em EMPRESTADOS)',
+            semKit.length === 0, semKit.join(' · '));
+      // quem se arrasta pode repetir o idle no andar; os outros, não
+      var ARR = window.ARRASTA || [];
+      var caemDeVerdade = caem.filter(function (c) {
+        var id = c.split(':')[0], papeis = c.split(': ')[1] || '';
+        return !(ARR.indexOf(id) >= 0 && papeis === 'walk');
+      });
+      check('nenhum papel cai no idle (fora o andar de quem se arrasta)',
+            caemDeVerdade.length === 0, caemDeVerdade.join(' · '));
       check('todo porte entre 0,7 e 3,6 m', fora.length === 0, fora.join(' · '));
       check('o chefe é o maior da sala', chefeH > 0 && chefeH >= outrosH, chefeH.toFixed(2) + ' vs ' + outrosH.toFixed(2));
       var t = document.getElementById('tab');

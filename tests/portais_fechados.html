@@ -41,15 +41,16 @@
   }
   var D = JOGO.DATA, P = JOGO.Progress, G = JOGO.Game, Dd = JOGO.Diario, Po = JOGO.Poco;
   var FECHADOS = D.portaisFechados || [];
-  check('dois portais estão fechados: Mina e Coração (19/09: o Fecho de Brasa e os Andaimes do Vento abriram com os lotes deles)',
-        FECHADOS.length === 2 && !D.portalFechado('emberlock') && !D.portalFechado('windscaffold') &&
-        D.portalFechado('quakemine') && D.portalFechado('brokenheart'));
-  check('a Estufa, a Cisterna e o Fecho seguem abertos',
-        !D.portalFechado('greenhouse') && !D.portalFechado('cistern') && !D.portalFechado('emberlock'));
+  check('só um portal está fechado: o Coração (21/09: a Mina Trêmula abriu com o lote dela; o Fecho e os Andaimes abriram em 19/09)',
+        FECHADOS.length === 1 && !D.portalFechado('emberlock') && !D.portalFechado('windscaffold') &&
+        !D.portalFechado('quakemine') && D.portalFechado('brokenheart'));
+  check('a Estufa, a Cisterna, o Fecho, os Andaimes e a Mina seguem abertos',
+        !D.portalFechado('greenhouse') && !D.portalFechado('cistern') && !D.portalFechado('emberlock') &&
+        !D.portalFechado('windscaffold') && !D.portalFechado('quakemine'));
 
   // ---- a descida
   G.init();
-  check('descer num portal fechado é recusado', G.startRun(['sumo'], 'quakemine') === false && G.screen === 'menu');
+  check('descer num portal fechado é recusado', G.startRun(['sumo'], 'brokenheart') === false && G.screen === 'menu');
   check('descer num portal aberto segue normal', G.startRun(['sumo'], 'greenhouse') === true && G.screen === 'antessala');
   G.init();
 
@@ -94,7 +95,7 @@
   var comumV = vazados.filter(function (e) { return (D.items[e.id] || {}).rarity === 'comum' && D.items[e.id].dropWeight === 1000; })[0];
   check('a peça vazada pesa metade da própria', !!comumP && !!comumV && Math.abs(comumV.w * 2 - comumP.w) < 1e-6,
         comumP && comumV ? comumP.w + ' vs ' + comumV.w : 'sem par');
-  var infoFechado = P.lootPoolInfo('quakemine', 2, 1);
+  var infoFechado = P.lootPoolInfo('brokenheart', 2, 1);
   check('num calabouço fechado nada vaza para dentro (só as próprias)', infoFechado.itens.every(function (e) { return !e.vazado; }));
   var salaComum = P.lootPoolInfo('greenhouse', 0, 1);
   check('o vazamento respeita a sala: épico/lendário vazado só no chefe',

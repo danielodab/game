@@ -408,18 +408,25 @@ var JOGO = (typeof window !== 'undefined')
     'kite-serpent':   { model: 'kite-serpent',   scale: 1.28 },  // 2,30 m — a pipa que virou serpente
     'ballast-golem':  { model: 'ballast-golem',  scale: 1.44 },  // 2,59 m — armacao cheia de brita
     'boss-windwright':{ model: 'boss-windwright', scale: 1.15 }, // 3,39 m — o capataz de vigas, o maior da obra
-    // --- Turno da Noite (Mina Tremula)
-    'pick-revenant':  { model: 'skeleton_warrior', show: ['Skeleton_Axe'], scale: 1.00 },
-    'firedamp-wisp':  { model: 'q_wasp',         scale: 0.70 },
-    'cave-jaw':       { model: 'q_velociraptor', scale: 0.90 },
-    'crystal-chanter':{ model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.05 },
-    'sinkhole-worm':  { model: 'q_snake',        scale: 1.30 },
-    'ore-tumbler':    { model: 'q_frog',         scale: 0.90 },
-    'ore-chip':       { model: 'q_frog',         scale: 0.55 },
-    'shaft-bat':      { model: 'q_wasp',         scale: 0.75 },
-    'damp-seeper':    { model: 'q_frog',         scale: 0.80 },
-    'boss-deepknock': { model: 'q_yeti',        scale: 1.75 },   // era triceratops DEITADO: dizia 3,84 m e media 1,81 m de pe.
-                                                                //  o golem que eu tinha escolhido reprovou: largo e baixo
+    // --- Turno da Noite (Mina Tremula) — A ARTE E DO USUARIO (21/09).
+    //
+    // OITO sairam do Meshy, Batepedra incluso (tools/embute_monstros.py, lote
+    // quakemine). Nao foram dez: o saldo do Meshy dava para oito, entao a
+    // Lasca de Veio e o Cantor de Cristal NAO foram gerados e VESTEM corpo de
+    // lote ja embutido. Nao se apaga monstro do motor: aponta-se a arte.
+    // A escolha dos dois esta em docs/PROMPTS_PORTAIS_FECHADOS.md secao 3.
+    // A escala sai da ESCADA DE PORTE do briefing. Conta de sempre:
+    // altura = 1,80 m x escala (chefe: 2,95 m x escala).
+    'ore-chip':       { model: 'slag-bit',       scale: 0.44 },  // 0,79 m — EMPRESTADO: a Escorinha do Fecho, caco anguloso de split. terra sobre modelo de fogo: sai verde, nao laranja
+    'firedamp-wisp':  { model: 'firedamp-wisp',  scale: 0.72 },  // 1,30 m — a chama de grisu, cabeca de fogo e saia de vapor
+    'shaft-bat':      { model: 'shaft-bat',      scale: 0.83 },  // 1,49 m — asas no lugar dos bracos
+    'ore-tumbler':    { model: 'ore-tumbler',    scale: 0.89 },  // 1,60 m — a bola de minerio que racha em duas
+    'damp-seeper':    { model: 'damp-seeper',    scale: 0.94 },  // 1,69 m — a agua que sobe; anda arrastando (walk = idle, de proposito)
+    'pick-revenant':  { model: 'pick-revenant',  scale: 1.03 },  // 1,85 m — o mineiro de po prensado
+    'crystal-chanter':{ model: 'whistle-choir',  scale: 1.06 },  // 1,91 m — EMPRESTADO: o Coro-Assobio dos Andaimes, mesmo papel de apoio. terra sobre modelo de ar: sai verde, nao lilas
+    'sinkhole-worm':  { model: 'sinkhole-worm',  scale: 1.17 },  // 2,11 m — o funil de cascalho; tambem se arrasta
+    'cave-jaw':       { model: 'cave-jaw',       scale: 1.61 },  // 2,90 m — o peito e a boca do tunel
+    'boss-deepknock': { model: 'boss-deepknock', scale: 1.19 },  // 3,51 m — a rocha-mae sem rosto, o maior da mina
     // --- Guarda do Coracao (Coracao Partido)
     'cinder-herald':  { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.10 },
     'tide-herald':    { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.10 },

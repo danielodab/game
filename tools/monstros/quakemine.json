@@ -1,7 +1,24 @@
 {
   "calabouco": "quakemine",
-  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\A Mina Tremula\\monstros",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Mina Trêmula\\Monstros",
   "saida": "assets/embedded/models-meshy-quakemine.js",
+  "emprestados": {
+    "_nota": "20/09/2026: o lote da Mina sao OITO geracoes (saldo do Meshy). Estes dois NAO tem pasta e NAO sao fundidos: vestem corpo de lote ja embutido, declarado em MONSTER_LOOK (js/render3d/models3d_v2.js). Nao se apaga monstro do motor.",
+    "ore-chip": {
+      "nome": "Lasca de Veio",
+      "veste": "slag-bit",
+      "pacote": "models-meshy-emberlock.js",
+      "scale": 0.44,
+      "altura_m": 0.79
+    },
+    "crystal-chanter": {
+      "nome": "Cantor de Cristal",
+      "veste": "whistle-choir",
+      "pacote": "models-meshy-windscaffold.js",
+      "scale": 1.06,
+      "altura_m": 1.91
+    }
+  },
   "monstros": [
     {
       "id": "pick-revenant",
@@ -13,8 +30,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -28,8 +45,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -43,23 +60,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
-        "death": "death"
-      }
-    },
-    {
-      "id": "crystal-chanter",
-      "nome": "Cantor de Cristal",
-      "boss": false,
-      "pasta": "Cantor de Cristal",
-      "prefixo": "Cantor de Cristal",
-      "mapa": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -72,9 +74,9 @@
       "mapa": {
         "idle": "idle",
         "walk": "walk",
-        "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "idle  run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -88,23 +90,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
-        "death": "death"
-      }
-    },
-    {
-      "id": "ore-chip",
-      "nome": "Lasca de Veio",
-      "boss": false,
-      "pasta": "Lasca de Veio",
-      "prefixo": "Lasca de Veio",
-      "mapa": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -118,8 +105,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -133,8 +120,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     },
@@ -148,8 +135,8 @@
         "idle": "idle",
         "walk": "walk",
         "run": "run",
-        "attack": "attack",
-        "hit": "hit",
+        "attack": "HitReact",
+        "hit": "attack",
         "death": "death"
       }
     }

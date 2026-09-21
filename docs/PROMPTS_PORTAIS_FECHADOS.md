@@ -346,15 +346,45 @@ Pasta: `...\assets_ok\mapa\A Mina Tremula\monstros\` (sem acento). Tinta verde
 Escorrência (água). Vocabulário: **rocha bruta, poeira compactada, ferramenta
 de mineiro abandonada no meio da tarefa.**
 
+> **20/09/2026 — o lote da Mina são OITO gerações, não dez** (saldo do Meshy).
+> O Assombro de Picareta já está feito; faltam **sete**. Dois monstros ficam
+> sem 3D próprio e **vestem corpo emprestado de lote já embutido** — não se
+> apaga monstro do motor, só se aponta a arte para outro corpo. Os dois foram
+> escolhidos por aparecerem menos no mapa e por terem o doador mais bem
+> casado. Os prompts deles ficam aqui caso o saldo volte.
+>
+> | não gerado | veste | de onde | por que fecha |
+> |---|---|---|---|
+> | Lasca de Veio `ore-chip` | `slag-bit` (Escorinha) a `0.44` = 0,79 m | Fecho de Brasa | a ficha dos dois é quase a mesma palavra por palavra (caco anguloso de crosta, veio quase branco, membros curtos), os dois são o caco que sai de um corpão que racha, e a tinta difere: **laranja lá, verde aqui**. Encolher o Rolo NÃO serve: a ficha do Rolo é "esfera lisa de tanto rolar", e meia esfera lisa lê como bolinha, não como caco — fora que amarraria dois bichos a um modelo ainda não gerado |
+> | Cantor de Cristal `crystal-chanter` | `whistle-choir` (Coro-Assobio) a `1.06` = 1,91 m | Andaimes do Vento | mesmo papel (o único curandeiro da casa, aura de cura nos dois), altura quase igual (1,91 contra 1,90 m), feixe vertical com domo no alto nos dois, e a tinta difere: **lilás lá, verde aqui**. O jogador aprendeu nos Andaimes que feixe-de-tubos cura, e lê o curandeiro na hora na sala do chefe |
+>
+> As duas linhas de `MONSTER_LOOK` (`js/render3d/models3d_v2.js`), para entrar
+> junto com o lote:
+>
+> ```js
+> 'ore-chip':       { model: 'slag-bit',      scale: 0.44 },  // 0,79 m — a Escorinha do Fecho: caco anguloso de split. terra sobre modelo de fogo: sai verde
+> 'crystal-chanter':{ model: 'whistle-choir', scale: 1.06 },  // 1,91 m — o Coro-Assobio dos Andaimes: mesmo papel de apoio. terra sobre modelo de ar: sai verde
+> ```
+>
+> O que isso cobra quando o lote chegar, e que os lotes anteriores não cobraram
+> (este é o primeiro 8-para-10 da casa): `tests/bestiario.html` reprova nas duas
+> checagens que exigem kit próprio para TODOS, e precisa de uma lista de
+> empréstimo declarada — a régua passa a cobrar que os emprestados vistam
+> exatamente o corpo declarado, e que os emprestados sejam exatamente os sem
+> kit. `tools/retratos_site.html` precisa carregar também os pacotes do Fecho e
+> dos Andaimes no lote `bichos-mina`, senão esses dois ficam sem retrato e a
+> wiki mostra duas letras no meio de oito fotos. O manifesto
+> `tools/monstros/quakemine.json` já foi cortado para oito.
+
 | monstro | id | elem | papel | altura | scale |
 |---|---|---|---|---|---|
-| Lasca de Veio | `ore-chip` | terra | metade do Rolo | 0,80 m | 0,44 |
+| ~~Lasca de Veio~~ | `ore-chip` | terra | **NÃO GERAR** · veste `slag-bit` | 0,80 m | 0,44 |
 | Fogaréu de Grisu | `firedamp-wisp` | fogo | distância · explode | 1,30 m | 0,72 |
 | Morcego-de-Poço | `shaft-bat` | ar | corpo a corpo · mergulha | 1,50 m | 0,83 |
 | Rolo de Minério | `ore-tumbler` | terra | corpo a corpo · racha em dois | 1,60 m | 0,89 |
 | Escorrência | `damp-seeper` | água | distância · dissolve escudo | 1,70 m | 0,94 |
 | Assombro de Picareta | `pick-revenant` | terra | corpo a corpo · marca e cobra | 1,85 m | 1,03 |
-| Cantor de Cristal | `crystal-chanter` | terra | APOIO · cura em aura | 1,90 m | 1,06 |
+| ~~Cantor de Cristal~~ | `crystal-chanter` | terra | **NÃO GERAR** · veste `whistle-choir` | 1,90 m | 1,06 |
 | Verme de Abatimento | `sinkhole-worm` | terra | distância · ancorado | 2,10 m | 1,17 |
 | Bocarra | `cave-jaw` | terra | tanque · imune a empurrão | 2,90 m | 1,61 |
 | Batepedra, o Que Bate Embaixo | `boss-deepknock` | terra | CHEFE | 3,50 m | 1,19 |
@@ -395,7 +425,7 @@ hit (nem recua) · death.
 A cave-jaw brute: a hulking humanoid of raw grey rock whose entire chest is a gaping tunnel mouth, an arched opening ringed with stalactite and stalagmite teeth, dark inside, no head above the shoulders — the mouth is the face, with two small glinting mineral eyes on the upper edge of the arch, massive boulder arms with cracked knuckles, short thick legs of stone, an old miner's helmet and pick stuck between the teeth. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game creature, clean readable silhouette, hand-painted look. Near-monochrome light grey materials, all detail in light-and-dark contrast, no saturated colors. Single character, no base, no pedestal, no ground, nothing else in the scene.
 ```
 
-### Cantor de Cristal · `crystal-chanter`
+### ~~Cantor de Cristal~~ · `crystal-chanter` — **NÃO GERAR: veste o Coro-Assobio**
 Aglomerado de quartzo do tamanho de um homem, crescido dentro de um capacete
 abandonado. Vibra numa nota baixa que costura a pedra dos companheiros. É o
 **apoio** da Mina: a silhueta que denuncia é o **capacete** no alto de um corpo
@@ -430,10 +460,11 @@ brancos. Animação: idle · run (rola/corre) · attack (investida) · hit · de
 An ore tumbler: a big round boulder of raw ore as a humanoid body, a smooth polished sphere with veins of bright metal running across it and a few rough chipped patches, two small eyes and a crack for a mouth on the front, short stubby arms and legs of stone stuck into the sphere with no neck and no waist. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game creature, clean readable silhouette, hand-painted look. Near-monochrome light grey materials with the metal veins painted almost white, all detail in light-and-dark contrast, no saturated colors. Single character, no base, no pedestal, no ground, nothing else in the scene.
 ```
 
-### Lasca de Veio · `ore-chip`
+### ~~Lasca de Veio~~ · `ore-chip` — **NÃO GERAR: veste a Escorinha**
 Caco de minério com uma veia de metal brilhando no meio, rolando com
-propósito. Pequeno, denso, sem freio. Mesmo vocabulário do Rolo, **anguloso**.
-Animação: idle · run · attack · hit · death.
+propósito. Pequeno, denso, sem freio. Nasce de dois jeitos: quando o Rolo
+racha e quando Batepedra "chama o veio" — por isso aparece muito. Mesmo
+vocabulário do Rolo, **anguloso**. Animação: idle · run · attack · hit · death.
 
 ```
 An ore chip: a small angular chunk of raw ore as a tiny humanoid, jagged faceted stone body with one bright vein of metal running through the middle, two small eyes, short stubby stone arms and legs, no neck. Full-body humanoid biped standing upright in a relaxed A-pose, two arms and two legs, symmetrical, arms slightly away from the body, feet apart, facing forward. Stylized fantasy game creature, clean readable silhouette, hand-painted look. Near-monochrome light grey materials with the metal vein painted almost white, all detail in light-and-dark contrast, no saturated colors. Single character, no base, no pedestal, no ground, nothing else in the scene.
@@ -867,60 +898,116 @@ Several separate flat low game-ready floor props arranged in a single row side b
 Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them: (1) a dead smelting furnace, a round brick tower with a dark arched mouth at the base and a tapping spout, iron bands, (2) an iron ingot cart on a short piece of rail track heaped with dull ingots, (3) an end-of-shift bell hanging in a wrought iron arch on a stone base, rope hanging from the clapper. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: burnt orange brick, dark iron, rust, dull bronze. No ground plane, no background, nothing else in the scene.
 ```
 
-## 6.3 · Mina Trêmula (`mine`) — prefixo sugerido `mt_`
+## 6.3 · Mina Trêmula (`mine`) — prefixo `mt_` — **ENTREGUE em 21/09** (`cenario-mina.js`)
 
-Paleta: ocre (`#8a7043`), marrom-escuro (`#3b3228`), latão dourado
-(`#c9a227`), rocha cinza-parda. Tudo abandonado no meio de uma tarefa.
+Paleta: ocre (`#8a7043`), marrom-escuro (`#3b3228`), latão dourado (`#c9a227`),
+rocha cinza-parda. Tudo abandonado no meio de uma tarefa. Lembre que **o
+cenário NÃO é tingido pelo jogo**: a cor que você assar é a cor final.
 
-**Muro inteiro: mureta de pedra bruta** · `mt_muro_inteiro`
-```
-A modular low wall of rough dry-stacked quarry stone, irregular blocks fitted without mortar, a flat straight top course of flatter stones, straight flush ends so copies join seamlessly, small chips and dust at the base, about twice as wide as it is tall. Colors: ochre-brown and grey stone, dark shadows in the joints. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
+> **21/09/2026 — o caminho mudou.** O cenário da Mina não vai por texto no
+> Meshy: o dono gera primeiro **uma imagem no Gemini** com as peças lado a
+> lado, e essa imagem é que entra no Meshy (imagem→3D). São **três arquivos**,
+> 19 peças no total. Os prompts abaixo são **prompts de imagem**, não de
+> modelo: por isso falam de câmera, fundo, luz e enquadramento, que é o que o
+> Meshy lê depois.
+>
+> Três regras que valem para as três folhas, e que decidem se o lote presta:
+> 1. **Vão claro entre as peças, nenhuma encostada.** Peça encostada na
+>    vizinha não se separa por distância nenhuma — foi o que custou caro no
+>    Fecho de Brasa. É a regra mais importante das três.
+> 2. **Fundo branco liso, sem chão, sem sombra projetada, sem degradê.** O
+>    Meshy reconstrói o que vê; sombra no fundo vira geometria.
+> 3. **Mesma câmera para todas as peças da folha, bases alinhadas na mesma
+>    linha.** Na folha 3 a câmera é mais alta de propósito, porque peça
+>    rasteira vista de frente vira um risco no papel.
+>
+> E uma coisa que o texto→3D não tinha: **imagem→3D só vê um lado**. As costas
+> são chute do Meshy. Por isso os muros vão na folha 1 em **vista frontal
+> reta** — é o que dá ponta reta para as cópias emendarem em fileira.
 
-**Muro com brecha** · `mt_muro_brecha`
-```
-A modular low wall of rough dry-stacked quarry stone with a collapsed section in the middle, blocks tumbled into a low heap leaving a jagged gap, flat straight top on the remaining sections, straight flush ends so copies join seamlessly, rubble and dust at the foot, about twice as wide as it is tall. Colors: ochre-brown and grey stone. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
+### Folha 1 — a parede (6 peças) · vista frontal reta
 
-**Muro de entulho contido por tábuas** · `mt_muro_entulho` (variante)
-```
-A modular low retaining wall of mine rubble held back by vertical wooden boards staked into the ground and a horizontal timber rail along the top, loose rock and gravel heaped behind and spilling through gaps between boards, flat straight top rail, straight flush ends so copies join seamlessly, about twice as wide as it is tall. Colors: dark brown timber, ochre and grey rubble. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
+`mt_muro_inteiro` · `mt_muro_brecha` · `mt_muro_entulho` · `mt_muro_escora` ·
+`mt_pilar` · `mt_marco_broca`
 
-**Escora baixa de galeria** · `mt_muro_escora` (variante)
-```
-A modular low mine shoring barrier: two thick square timber posts at the ends with a heavy horizontal timber beam across the top at waist height, diagonal wooden braces, a wooden plank cross-tie, wedges hammered in, flat straight top beam, straight flush ends so copies join seamlessly, about twice as wide as it is tall. Colors: dark brown aged timber, iron nails, dust. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
+Papéis: os quatro primeiros são **muro** (o renderizador usa a 0,95 m como
+divisória e estica a 3,10 m como parede); `mt_pilar` é **pilar**; a broca é o
+**marco**, a peça monumental que aparece uma vez por sala.
 
-**Pilar: escoramento de galeria** · `mt_pilar`
 ```
-A tall narrow mine shoring post: a thick squared timber column with a short cap beam stub on top and wooden wedges, rope-bound splits in the wood, a rusty iron bracket, a dead carbide lantern hanging from a nail, dust at the base, much taller than wide. Colors: dark brown timber, rust, brass lantern. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
-
-**Marco: broca de perfuração presa na rocha** · `mt_marco_broca` (1× por sala)
-```
-A large mining drill rig jammed into a boulder: a heavy iron machine on a timber sled base with a long steel drill bit driven halfway into a big rough rock outcrop, a flywheel and crank on the side, pipes and a pressure gauge, chains tied to the sled, ore chips and dust around the bit, about as wide as it is tall. Colors: dark iron, rust, ochre rock, brass gauge, dark brown timber. Game-ready environment prop, stylized hand-painted look, clean readable silhouette, standing on the ground with its base flat at floor level, single object, no ground plane, no background, nothing else in the scene.
-```
-
-**Folha de sotaques** (5 peças) · `mt_vagonete`, `mt_dinamite`, `mt_esteril`, `mt_britagem`, `mt_lampiao_capacete`
-```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them: (1) a small iron mine cart tipped over on its side with ore spilling out and one wheel off, (2) a wooden crate of damp dynamite sticks with the lid half open and a coil of fuse, (3) a tall conical pile of waste rock and gravel with a shovel stuck in it, (4) a broken ore-crushing bench, a heavy wooden table frame with a stone slab, hammer heads and cracked ore on top and one leg splintered, (5) a mining helmet with a carbide lamp resting on a small rock next to an empty bird cage. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: dark iron, rust, dark brown timber, ochre rock, brass. No ground plane, no background, nothing else in the scene.
-```
-
-**Folha de sotaques altos** (3 peças) · `mt_estalagmite`, `mt_silo`, `mt_porta_lacrada`
-```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them, all tall and narrow: (1) a thick tall stalagmite of layered rock with a ring of small crystals growing at its base, (2) a tall wooden ore silo, a narrow cylindrical tower of planks with iron hoops and a chute at the bottom, ore spilling from the chute, (3) a sealed mine gallery door, a tall arched timber door frame boarded shut with crossed planks nailed over it and a chain and padlock. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: ochre and grey rock, dark brown timber, rust iron, pale crystal. No ground plane, no background, nothing else in the scene.
+A game asset reference sheet: six separate stylized fantasy mine structures arranged in one horizontal row, evenly spaced, with a clear empty gap between every object, none touching and none overlapping. From left to right: (1) a modular low wall of rough dry-stacked quarry stone, irregular blocks fitted without mortar, a flat straight top course of flatter stones, straight vertical flush ends, about twice as wide as it is tall; (2) the same modular low wall with a collapsed section in the middle, blocks tumbled into a low heap leaving a jagged gap, flat straight top on the remaining sections, straight vertical flush ends; (3) a modular low retaining wall of mine rubble held back by vertical wooden boards staked into the ground with a horizontal timber rail along the top, loose rock and gravel heaped behind and spilling through the gaps between boards, straight vertical flush ends; (4) a modular low mine shoring barrier, two thick square timber posts at the ends with a heavy horizontal timber beam across the top at waist height, diagonal wooden braces and hammered wedges, straight vertical flush ends; (5) a tall narrow mine shoring post, a thick squared timber column with a short cap beam stub on top and wooden wedges, rope-bound splits in the wood, a rusty iron bracket and a dead carbide lantern hanging from a nail, much taller than it is wide; (6) a large mining drill rig jammed into a boulder, a heavy iron machine on a timber sled base with a long steel drill bit driven halfway into a big rough rock outcrop, a flywheel and crank on the side, pipes and a pressure gauge, chains tied to the sled, ore chips around the bit. All six seen from a straight-on front view at eye level, flat orthographic framing with no perspective distortion, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: ochre-brown and grey quarry stone, dark aged brown timber, rusty iron, a little brass. Soft even frontal studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Folha de chão** (4 peças baixas) · `mt_trilho`, `mt_rachadura`, `mt_cristal_aflorando`, `mt_pegadas`
+### Folha 2 — o que fica de pé (7 peças) · três-quartos, 30° acima
+
+`mt_estalagmite` · `mt_silo` · `mt_porta_lacrada` (os três **sotaque_alto**,
+~3,10 m, no meio das paredes) · `mt_vagonete` · `mt_dinamite` · `mt_esteril` ·
+`mt_gaiola_canario` (os quatro **sotaque**, 0,85 a 1,60 m, no miolo das
+muretas — todos volume vertical, nenhum com tampo plano).
+
 ```
-Several separate flat low game-ready floor props arranged in a single row side by side with clear empty gaps between them, all very low and lying on the floor: (1) a straight section of narrow mine cart rail track on wooden sleepers with gravel ballast, (2) a deep jagged floor crack with a faint glow coming from inside, (3) a low cluster of quartz crystals breaking up through the floor stone, (4) a patch of thick dust with a trail of boot prints pressed into it. Each lying on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: rust iron, dark brown timber, ochre rock, pale crystal, brass glow. No ground plane, no background, nothing else in the scene.
+A game asset reference sheet: seven separate stylized fantasy mine props arranged in one horizontal row, evenly spaced, with a clear empty gap between every object, none touching and none overlapping. From left to right: (1) a thick tall stalagmite of layered rock with a ring of small pale crystals growing at its base; (2) a tall wooden ore silo, a narrow cylindrical tower of planks bound with iron hoops, a chute at the bottom with ore spilling out of it; (3) a sealed mine gallery door, a tall arched timber door frame boarded shut with crossed planks nailed over it, a heavy chain and a padlock; (4) a small iron mine cart tipped over on its side with ore spilling out and one wheel off; (5) a wooden crate of dynamite sticks standing upright, the lid half open, a coil of fuse hanging over the edge; (6) a tall conical pile of waste rock and gravel with a shovel stuck into it; (7) a canary cage on a tall wooden stand, an empty domed bird cage hanging from a hook at the top of the post, a mining helmet with a dead carbide lamp hung on the same post below it. The first three are tall and narrow, the last four are about waist to chest height. All seven seen from the same three-quarter view about thirty degrees above eye level, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: ochre and grey rock, dark aged brown timber, rusty iron, brass, pale crystal. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
-**Folha de borda** (3 peças) · `mt_boca_galeria`, `mt_guindaste_poco`, `mt_cavalete`
+### Folha 3 — o chão e a borda (6 peças) · três-quartos, 40° acima
+
+`mt_trilho` · `mt_rachadura` · `mt_cristal_aflorando` · `mt_pegadas` (os quatro
+**chao**, rasteiros, sem colisão) · `mt_boca_galeria` · `mt_guindaste_poco`
+(as duas **borda**, fora da arena).
+
+A câmera desta folha é mais alta que a da folha 2 **de propósito**: peça
+rasteira vista de frente vira um risco no papel, e sai do Meshy com sete
+centímetros de altura. Foi o que aconteceu com a grade e as tábuas dos
+Andaimes.
+
 ```
-Several separate game-ready environment props arranged in a single row side by side with clear empty gaps between them: (1) a dark mine gallery entrance, a short tunnel mouth in rough rock framed by heavy timber posts and a lintel beam, blackness inside, (2) a mine shaft hoist, a timber A-frame with a hand winch and a rope going down to an iron bucket, (3) a broken wooden rail trestle, a short elevated section of track on splintered posts, one end collapsed. Each standing on the ground with its base flat at the same floor level, front three-quarter view, stylized hand-painted look, clean readable silhouettes. Colors: ochre and grey rock, dark brown timber, rust iron. No ground plane, no background, nothing else in the scene.
+A game asset reference sheet: six separate stylized fantasy mine props arranged in one horizontal row, evenly spaced, with a clear empty gap between every object, none touching and none overlapping. From left to right: (1) a straight section of narrow mine cart rail track on wooden sleepers with gravel ballast, lying flat on the ground; (2) a deep jagged crack in the rock floor with a faint pale glow coming from inside, lying flat on the ground; (3) a low cluster of pale quartz crystals breaking up through the floor stone; (4) a patch of thick dust with a trail of boot prints pressed into it, lying flat on the ground; (5) a dark mine gallery entrance, a short tunnel mouth in rough rock framed by heavy timber posts and a lintel beam, pure blackness inside; (6) a mine shaft hoist, a timber A-frame with a hand winch and a rope going down to an iron bucket. The first four are very low and flat against the floor, the last two stand tall. All six seen from the same elevated three-quarter view about forty degrees above the ground, high enough that the four flat floor pieces read clearly as shapes and not as thin lines, the same camera for every object, all resting on the same invisible ground line. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: ochre and grey rock, dark aged brown timber, rusty iron, pale crystal, a faint brass glow inside the crack. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor plane, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
+
+### O que de fato chegou — 21/09/2026, **ENTREGUE**
+
+Vieram **quatro** arquivos, não três, em `...\assets_ok\mapa\Mina Trêmula\`
+(o dono salvou a pasta sem o "A", e com acento — o `NOMES_CALABOUCO` do
+`embute_monstros.py` foi corrigido):
+
+| arquivo | peças |
+|---|---|
+| `muros\muros e pilar.glb` | mureta inteira, mureta com brecha, pilar |
+| `muros\cercas e entulho.glb` | broca na rocha (o marco), escora, muro de entulho |
+| `itens mapa\folha2.glb` | os sete que ficam de pé |
+| `itens mapa\folha3.glb` | as quatro rasteiras e as duas de borda |
+
+A folha 1 do briefing veio partida em dois arquivos, e o marco caiu no segundo.
+As 19 peças finais ficaram em `...\Mina Trêmula\_pecas\`, já com o nome, e
+`tools/embute_cenario_mina.py` as transforma em `cenario-mina.js`.
+
+**Três arquivos saíram limpos** no `separa_pecas.py --recortar --conta 3,3` e
+`--conta 7,6`: o separador por vértice achou o patamar sozinho.
+
+**A folha 2 não.** O Meshy soltou as **três argolas de ferro do silo** como
+objetos independentes, e cada uma é grande demais para o filtro de caco (0,115
+da folha, acima do corte de 0,08). Com elas contando como peça, o separador
+fundiu pares reais para fechar em sete: silo com estalagmite, porta com
+vagonete, estéril com gaiola. **Cortar pelos vãos do eixo X também não
+resolveu** — nesta folha as peças se sobrepõem em X (o vagonete fica na frente
+da porta), e só apareceram 2 vãos internos para 6 necessários. O que resolveu
+foi o caminho já documentado: `--bruto 0.0035` (11 grupos), olhar a folha de
+contato do `contato_cenario.py`, e escrever o mapa à mão:
+
+```
+1a → estalagmite        1b+2+3+4 → silo (as argolas voltam para ele)
+5+6+7 → porta lacrada   8 → vagonete      10 → dinamite
+11a → estéril           11b → gaiola do canário
+```
+
+O grupo 9 é uma chapa chata avulsa entre o vagonete e o caixote — não é peça
+de nada, e incluí-la na porta a deixava com 0,43 m de largura para 0,32 m de
+altura. Ficou de fora.
+
+**Para o Coração Partido:** peça com anel, aro ou cinta solta (silo, barril,
+roda) é a armadilha desta rodada — o aro vira "peça" e desarruma a contagem
+inteira. Ou peça ao Gemini que os aros sejam colados ao corpo, ou já entre de
+`--bruto` com a contagem real (peças + aros) e escreva o mapa.
 
 ## 6.4 · Coração Partido (`heart`) — prefixo sugerido `cp_`
 

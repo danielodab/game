@@ -1209,7 +1209,7 @@ JOGO.DATA = JOGO.DATA || {};
 // quinze enfeites) entrou; à noite os Andaimes do Vento abriram também (dez
 // monstros, muro, muro quebrado, viga, guindaste e quinze enfeites). Sobram
 // a Mina e o Coração.
-JOGO.DATA.portaisFechados = ['quakemine', 'brokenheart'];
+JOGO.DATA.portaisFechados = ['brokenheart'];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
 };
