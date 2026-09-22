@@ -656,6 +656,21 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     for (var i = 0; i < (max || 4000); i++) { if (cond()) return true; passo(ms, quem); }
     return cond();
   }
+  /* A PREPARAÇÃO (21/09). Marcar a casa deixou de começar a luta: cada uma
+   * marca a DELA (as listas são disjuntas) e a rodada 1 vem do PRONTO das duas
+   * — ou dos 30 s. Só a líder manda o lance `p`, com as casas das duas dentro. */
+  function preparacao(ids) {
+    ids = ids || ['ana', 'bia'];
+    ids.forEach(function (id) {
+      var g = cli[id].J.Game, op = g.minhasOpcoes ? g.minhasOpcoes() : [];
+      if (op.length) g.onTileClicked(op[0].x, op[0].y);
+    });
+    entrega();
+    ids.forEach(function (id) { cli[id].J.Game.prontoPrep(true); });
+    entrega();
+    passo(50);
+    entrega();
+  }
   function tela(id) { return cli[id].J.Game.screen; }
   function ultimaTela(id, nome) {
     var t = cli[id].w.__telas;
@@ -932,16 +947,42 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     ana.J.Coop._piloto(null); bia.J.Coop._piloto(null);
     ana.J.Coop.entrar();
     ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
-    var op = ana.J.Engine.placementOptions(ana.J.Game.state)[0];
-    check('K2 · na colocação a parceira não toca (Game.podeColocar)', bia.J.Game.podeColocar() === false && ana.J.Game.podeColocar() === true);
-    bia.J.Game.onTileClicked(op.x, op.y);
-    check('K2 · o toque da parceira na casa dourada não vira lance', bia.J.Game.state.phase === 'placing');
-    ana.J.Game.onTileClicked(op.x, op.y);
+    /* 21/09, a PREPARAÇÃO. Mudou o que cada uma faz aqui: a parceira agora marca
+       a casa DELA (antes só a líder escolhia), e nenhuma das duas começa a luta
+       ao tocar — o que continua sendo só da líder é MANDAR o lance `p`. */
+    var opA = ana.J.Game.minhasOpcoes(), opB = bia.J.Game.minhasOpcoes();
+    var chaves = {}, colidiu = false;
+    opA.concat(opB).forEach(function (c) { if (chaves[c.x + ',' + c.y]) colidiu = true; chaves[c.x + ',' + c.y] = 1; });
+    check('K2 · cada uma tem quatro casas e as listas são DISJUNTAS',
+          opA.length === 4 && opB.length === 4 && !colidiu,
+          JSON.stringify(opA) + ' vs ' + JSON.stringify(opB));
+    check('K2 · só a líder manda o `p` (Game.podeColocar)', bia.J.Game.podeColocar() === false && ana.J.Game.podeColocar() === true);
+    check('K2 · a casa da líder não vale para a parceira',
+          bia.J.Game.marcaCasa(opA[0].x, opA[0].y) === false && !bia.J.Game.minhaEscolha());
+    bia.J.Game.onTileClicked(opB[0].x, opB[0].y);
+    check('K2 · a parceira marcando a casa DELA não vira lance nem começa a luta',
+          bia.J.Game.state.phase === 'placing' && !!bia.J.Game.minhaEscolha() &&
+          contaLances('bia').p === 0);
+    ana.J.Game.onTileClicked(opA[0].x, opA[0].y);
+    check('K2 · nem o toque da LÍDER começa: a luta espera o PRONTO das duas',
+          ana.J.Game.state.phase === 'placing' && bia.J.Game.state.phase === 'placing');
     entrega();
+    ana.J.Game.prontoPrep(true);
+    entrega();
+    passo(50);
+    check('K2 · com SÓ a líder pronta a luta ainda não começa (faltava a parceira)',
+          ana.J.Game.state.phase === 'placing', ana.J.Game.state.phase);
+    preparacao();
     bia.J.Game.update(0.05);
     var sa = ana.J.Game.state, sb = bia.J.Game.state;
     check('K2 · o `p` da líder chegou: os dois em playing no turno 1 com o mesmo hash', sa.phase === 'playing' && sb.phase === 'playing' &&
           sa.turno === 1 && ana.J.Engine.hash(sa) === bia.J.Engine.hash(sb));
+    check('K2 · cada uma nasceu na casa que ELA marcou', (function () {
+      var da = opA[0], db = opB[0];
+      var naA = sa.units.some(function (u) { return u.kind === 'hero' && u.dono === 'ana' && u.x === da.x && u.y === da.y; });
+      var naB = sa.units.some(function (u) { return u.kind === 'hero' && u.dono === 'bia' && u.x === db.x && u.y === db.y; });
+      return naA && naB;
+    })(), JSON.stringify(opA[0]) + ' e ' + JSON.stringify(opB[0]));
     check('K2 · a sala em dupla nasce com QUATRO heróis de gente, dois de cada dono',
           sa.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'ana'; }).length === 2 &&
           sa.units.filter(function (u) { return u.kind === 'hero' && u.dono === 'bia'; }).length === 2 &&
@@ -1422,8 +1463,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     entraNaBatalha('greenhouse', null, null);
     var perdeuP = false;
     escuta(function (env) { if (!perdeuP && env.de === 'ana' && env.acao === 'lance' && env.dados && env.dados.a === 'p') { perdeuP = true; return 'perde'; } return 'entrega'; });
-    var opsP = ana.J.Engine.placementOptions(ana.J.Game.state);
-    ana.J.Game.onTileClicked(opsP[1].x, opsP[1].y);
+    preparacao();                       // 21/09: as duas marcam e apertam PRONTO; o `p` da líder é que se perde
     var tP = relogio.t;
     ate(function () { return bia.J.Game.state && bia.J.Game.state.phase === 'playing'; }, 600);
     var h3 = hashesIguais('ana', 'bia');
