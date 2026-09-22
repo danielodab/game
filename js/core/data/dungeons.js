@@ -1068,93 +1068,125 @@ JOGO.DATA = JOGO.DATA || {};
     defaultWeather: 'calmo',
     weatherShiftEveryRounds: 3,
     tileEventRate: 0.45,
+    // AS TRÊS SALAS, REDESENHADAS EM 21/09 — "os mapas devem ser mais difíceis
+    // taticamente, pois é o último mapa" (pedido do dono, na entrega do lote de
+    // arte). O que mudou, e por quê:
+    //
+    // 1. O PACOTE DEIXOU DE CHEGAR JUNTO. Antes os oito bichos vinham em pares
+    //    simétricos e à mesma distância — a sala era uma só briga. Agora cada
+    //    sala tem TRÊS grupos a distâncias diferentes, e a decisão é para qual
+    //    ir primeiro. Quem cura fica no fundo, do outro lado de um gargalo: o
+    //    Arauto de Maré tem aura de raio 2, e os dois nascem um dentro do raio
+    //    do outro, então deixá-los para o fim custa a sala inteira.
+    // 2. A FENDA VIROU REGRA, NÃO ENFEITE. O Átrio está rachado ao meio com
+    //    três pontes de uma casa; a Sala dos Espelhos tem quatro galerias com
+    //    as passagens desencontradas; a sala do chefe é uma ilha com DUAS
+    //    pontes. Empurrão passou a ser mortal de verdade — e lembre que o
+    //    Alicerce, a Raiz e o Coração são `pushImmune`: o fosso pune o HERÓI.
+    // 3. O CLIMA FICOU LONGE. Os quatro Motes do Tempo da sala do chefe nascem
+    //    em bolsos de parede nos quatro cantos: para calar o clima é preciso
+    //    ENTRAR no bolso, e enquanto isso o Coração troca a estação a cada
+    //    batida dele.
+    //
+    // A trava que o desenho novo respeita, e que a anterior estourava: o enfeite
+    // de cenário nasce nos TRECHOS DE PAREDE, um alto por trecho. A Sala dos
+    // Espelhos velha era um tabuleiro de blocos curtos — 46 trechos — e punha
+    // 61 enfeites numa sala de teto 45 (tests/cenario_coracao.html). Parede
+    // LONGA, e poucas, dá a mesma estrutura tática sem sujar a sala: as três
+    // ficaram entre 16 e 18 trechos.
     rooms: [
       {
         name: 'O Átrio das Quatro Estações',
         weather: 'chuva',
         sceneryTheme: 'heart',
         layout: [
-          '~~####~~~~~~~~~~~~~####~~',
-          '~~#..#~~#~~~~~~~~~~#..#~~',
-          '~~#..#~~==#####==~~#..#~~',
-          '##...#..a...b..#..~#...##',
-          '#....#.........#..~#....#',
-          '#...==.......==.........#',
-          '#....c.........d........#',
-          '#..###.........###....###',
-          '#PP#.............#....~~~',
-          '~...............=....#~~~',
-          '~~~....,......,......#~~~',
-          '~...............=.....###',
-          '#PP#.............#......#',
-          '#..###.........###......#',
-          '#....c.........d........#',
-          '#...==.......==.........#',
-          '#....#.........#..~#....#',
-          '##...#..b...a..#..~#...##',
-          '~~#..#~~==#####==~~#..#~~',
-          '~~#..#~~#~~~~~~~~~~#..#~~',
-          '~~####~~~~~~~~~~~~~####~~'
+          '~~~~########~########~~~~',
+          '~~~.........~.........~~~',
+          '~~..........~...=......~~',
+          '~...........~#.######...~',
+          '#.............a.=..#....#',
+          '#..#######..~#..=..#....#',
+          '#........#..~...=.......#',
+          '#..====..#..~.====......#',
+          '#P....c.....~...........#',
+          '#P.....=....~#.######b..#',
+          '#.P.......a....d........#',
+          '#P.....=....~#.######b..#',
+          '#P....c.....~...........#',
+          '#..====..#..~.====......#',
+          '#........#..~...=.......#',
+          '#..#######..~#..=..#....#',
+          '#.............d.=..#....#',
+          '~...........~#.######...~',
+          '~~..........~...=......~~',
+          '~~~.........~.........~~~',
+          '~~~~########~########~~~~'
         ],
-        monsters: { a: 'cinder-herald', b: 'tide-herald', c: 'gale-herald', d: 'stone-herald' }
+        monsters: {
+          a: 'cinder-herald', b: 'tide-herald',
+          c: 'gale-herald', d: 'stone-herald'
+        }
       },
       {
         name: 'A Sala dos Espelhos',
         weather: 'estiagem',
         sceneryTheme: 'heart',
         layout: [
-          '#####~~#####~~~#####~~#####',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#...#~~#..,.....,..#~~#...#',
-          '#...#~~.=#######=..#~~#...#',
-          '#...a...........a.........#',
-          '#..###...###...###........#',
-          '#..#=#...#=#...#=#.......##',
-          '#PP..#...#.#...#........#~~',
-          '#PP...c...d.c...d.......#~~',
-          '#PP..#...#.#...#........#~~',
-          '#..#=#...#=#...#=#.......##',
-          '#..###...###...###........#',
-          '#...b...........b.........#',
-          '#...#~~.=#######=..#~~#...#',
-          '#...#~~#..,.....,..#~~#...#',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#...#~~#...#~~~#...#~~#...#',
-          '#####~~#####~~~#####~~#####'
+          '~~####~######~######~####~~',
+          '~~....~......~......~....~~',
+          '#.......#.....#.....#.....#',
+          '#.......#.....#.....#.====#',
+          '#.............#..c..#.....#',
+          '#........d....#.....#.....#',
+          '#.....c.#.....#.....#.....#',
+          '#.......#====.#.....#.....#',
+          '#P......#.....#..~..#.~...#',
+          '#P......#.....#........b..#',
+          '#.P==a=.#.....#...........#',
+          '#P......#.....#.....#..b..#',
+          '#P......#..a..#==~=.#.~...#',
+          '#.P.....#.....#.....#.....#',
+          '#.......#...........#.....#',
+          '#.......#......d....#.....#',
+          '#.......#.....#.....#.....#',
+          '#.......#.....#.....#.====#',
+          '#.......#.....#.....#.....#',
+          '~~....~......~......~....~~',
+          '~~####~######~######~####~~'
         ],
-        monsters: { a: 'mirror-twin', b: 'weather-mote', c: 'null-warden', d: 'heartroot' }
+        monsters: {
+          a: 'mirror-twin', b: 'weather-mote',
+          c: 'null-warden', d: 'heartroot'
+        }
       },
       {
         name: 'O Coração Partido',
         weather: 'calmo',
         sceneryTheme: 'heart',
         layout: [
-          '######~~~~~~~~~~~~~~~######',
-          '#....#~~~~~~~~~~~~~~~#....#',
-          '#....#~~#~~~~~~~~~~~~#....#',
-          '#....#~~=#######=~~~~#....#',
-          '#....##.........##~~~#....#',
-          '#....#....a....#..#~~#....#',
-          '#....==.......==..........#',
-          '#....d.........e..........#',
-          '#..###....~....###........#',
-          '#PP#..~~~~~~~~~..#......###',
-          '~.....e..~~~....d......#~~~',
-          '~PP....~..z..~.........#~~~',
-          '~.....d..~~~....e......#~~~',
-          '#PP#..~~~~~~~~~..#......###',
-          '#..###....~....###........#',
-          '#....e.........d..........#',
-          '#....==.......==..........#',
-          '#....#....b....#..#~~#....#',
-          '#....##.........##~~~#....#',
-          '#....#~~=#######=~~~~#....#',
-          '#....#~~#~~~~~~~~~~~~#....#',
-          '#....#~~~~~~~~~~~~~~~#....#',
-          '######~~~~~~~~~~~~~~~######'
+          '~~~~#########~#########~~~~',
+          '~~~~.........~.........~~~~',
+          '~~~~.........d.........~~~~',
+          '#.....=......=......=.....#',
+          '#...######...=...######...#',
+          '#...#e...#...~...#...e#...#',
+          '#...#....#.......#....#...#',
+          '#...#....~~~~.~~~~....#...#',
+          '#........~...d...~........#',
+          '#.P..===.~.......~.===....#',
+          '#P.......~.......~........#',
+          '#P....a~.~...z...~.~b.....#',
+          '#.P......~.......~........#',
+          '#P...===.~.......~.===....#',
+          '#P.......~...d...~........#',
+          '#...#....~~~~.~~~~....#...#',
+          '#...#....#.......#....#...#',
+          '#...#e...#...~...#...e#...#',
+          '#...######...=...######...#',
+          '#.....=......=......=.....#',
+          '~~~~.........d.........~~~~',
+          '~~~~.........~.........~~~~',
+          '~~~~#########~#########~~~~'
         ],
         monsters: {
           z: 'boss-riftheart', a: 'stone-herald', b: 'gale-herald',
@@ -1219,6 +1251,11 @@ JOGO.DATA = JOGO.DATA || {};
 // da Estufa, do nível 3, eram peças de nível 26 a 30, e o chefe da Estufa
 // chegava a soltar as LENDÁRIAS do fim do jogo (0,10% por descida). Agora
 // cada calabouço só solta o que é dele.
+// 21/09, de noite: entrou também o LOTE DE ARTE do Coração (dez monstros,
+// quinze peças de cenário) e as três salas dele foram redesenhadas — é o
+// último mapa, e o dono pediu que fosse o mais duro. A lista e o
+// `portalFechado` ficam aqui de propósito: é o caminho por onde um calabouço
+// NOVO entra trancado até a arte dele chegar.
 JOGO.DATA.portaisFechados = [];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;

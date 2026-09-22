@@ -227,7 +227,11 @@ os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
 | Quaternius Ultimate Monsters | bestiário, 6 chefes, 7 invocações | CC0 1.0 |
 | Kenney Particle Pack | atlas de partícula e placas de efeito | CC0 1.0 |
 
-Créditos completos em [`docs/CREDITS_3D.md`](docs/CREDITS_3D.md).
+**Desde 21/09 o bestiário não é mais emprestado.** Os monstros dos SEIS
+calabouços são arte própria do dono, gerada no Meshy e embutida em
+`assets/embedded/models-meshy-<calabouço>.js` — a linha do Quaternius acima
+vale hoje para as invocações, os pets e os dois monstros da Mina que não
+couberam no saldo. Créditos completos em [`docs/CREDITS_3D.md`](docs/CREDITS_3D.md).
 
 **A regra do `.gitignore` é por LICENÇA, não por nome de arquivo.** Isso já deu
 problema: a regra `assets/embedded/fx-*.js` era por prefixo e deixava de fora o

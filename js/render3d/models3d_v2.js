@@ -427,17 +427,26 @@ var JOGO = (typeof window !== 'undefined')
     'sinkhole-worm':  { model: 'sinkhole-worm',  scale: 1.17 },  // 2,11 m — o funil de cascalho; tambem se arrasta
     'cave-jaw':       { model: 'cave-jaw',       scale: 1.61 },  // 2,90 m — o peito e a boca do tunel
     'boss-deepknock': { model: 'boss-deepknock', scale: 1.19 },  // 3,51 m — a rocha-mae sem rosto, o maior da mina
-    // --- Guarda do Coracao (Coracao Partido)
-    'cinder-herald':  { model: 'skeleton_warrior', show: ['Skeleton_Blade'], scale: 1.10 },
-    'tide-herald':    { model: 'skeleton_mage',  show: ['Skeleton_Staff'], scale: 1.10 },
-    'stone-herald':   { model: 'skeleton_warrior', show: ['Skeleton_Shield_Large_A'], scale: 1.15 },
-    'gale-herald':    { model: 'skeleton_rogue', show: ['Skeleton_Crossbow'], scale: 1.05 },
-    'null-warden':    { model: 'skeleton_warrior', show: ['Skeleton_Shield_Small_A', 'Skeleton_Blade'], scale: 1.20 },
-    'mirror-twin':    { model: 'skeleton_rogue', scale: 1.00 },
-    'mirror-sliver':  { model: 'skeleton_rogue', scale: 0.70 },
-    'weather-mote':   { model: 'q_wasp',         scale: 0.60 },
-    'heartroot':      { model: 'q_snake',        scale: 1.00 },
-    'boss-riftheart': { model: 'q_ghostskull',  scale: 1.75 },   // era o MESMO T-Rex do heartforge
+    // --- Guarda do Coracao (Coracao Partido) — A ARTE E DO USUARIO (21/09).
+    //
+    // OS DEZ sairam do Meshy, o Coracao incluso (tools/embute_monstros.py, lote
+    // brokenheart): e o unico lote 10-de-10 desde os Andaimes, entao aqui nao
+    // ha emprestimo nenhum — todo monstro veste o corpo dele.
+    // A escala sai da ESCADA DE PORTE do briefing (secao 4 de
+    // docs/PROMPTS_PORTAIS_FECHADOS.md). Conta de sempre:
+    // altura = 1,80 m x escala (chefe: 2,95 m x escala).
+    // Os QUATRO ARAUTOS sao a mesma armadura com recheio diferente, e o jogo os
+    // tinge de laranja, azul, verde e lilas: o porte e que os separa na tela.
+    'weather-mote':   { model: 'weather-mote',   scale: 0.50 },  // 0,90 m — a bolinha de ceu velho que vira o clima
+    'mirror-sliver':  { model: 'mirror-sliver',  scale: 0.61 },  // 1,10 m — o caco menor, invocado pelo Gemeo
+    'null-warden':    { model: 'null-warden',    scale: 1.03 },  // 1,85 m — o zelador de avental, sem elemento
+    'mirror-twin':    { model: 'mirror-twin',    scale: 1.08 },  // 1,94 m — a placa de espelho que racha em dois
+    'gale-herald':    { model: 'gale-herald',    scale: 1.11 },  // 2,00 m — a armadura que so o vento segura
+    'cinder-herald':  { model: 'cinder-herald',  scale: 1.17 },  // 2,11 m — a armadura com a fresta acesa
+    'tide-herald':    { model: 'tide-herald',    scale: 1.17 },  // 2,11 m — a armadura cheia d'agua; o apoio
+    'stone-herald':   { model: 'stone-herald',   scale: 1.28 },  // 2,30 m — a armadura cheia de alicerce; o tanque
+    'heartroot':      { model: 'heartroot',      scale: 1.33 },  // 2,39 m — a raiz que veio abracar o Coracao
+    'boss-riftheart': { model: 'boss-riftheart', scale: 1.22 },  // 3,60 m — o maior bicho do jogo, o teto da regua
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
     // Seis das sete estavam erradas no CONCEITO — cao de brasa era um lobo,

@@ -132,6 +132,7 @@ GRUPO_DA_PASTA = {
     'cenario-fecho': 'calabouco:emberlock', 'models-meshy-emberlock': 'calabouco:emberlock',
     'cenario-andaimes': 'calabouco:windscaffold', 'models-meshy-windscaffold': 'calabouco:windscaffold',
     'cenario-mina': 'calabouco:quakemine', 'models-meshy-quakemine': 'calabouco:quakemine',
+    'cenario-coracao': 'calabouco:brokenheart', 'models-meshy-brokenheart': 'calabouco:brokenheart',
     'coroas-pvp-3d': 'coroas', 'models-meshy-sum': 'classe:invocador',
     'models-monsters': 'fechados', 'models-bosses': 'fechados', 'models-summons': 'fechados',
 }

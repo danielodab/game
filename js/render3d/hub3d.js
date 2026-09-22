@@ -3326,15 +3326,28 @@ var JOGO = (typeof window !== 'undefined')
       }
     } catch (eM) {}
     var limite = largCamara - 0.35 - (folga || 0.4);           // a face interna do muro
+    var raioCh = Math.max(1.0, meiaT * 0.75);
     var t = limite - meiaT;
-    if (t < meiaT * 0.5) t = 0;                // corpo largo demais: vai para o eixo
+    /* O CHEFE NUNCA VAI PARA O EIXO DA PISTA (21/09). A linha de 12/09 dizia
+     * "corpo largo demais: vai para o eixo" (t = 0) e nunca tinha disparado:
+     * o corpo mais largo do acervo media 4,9 m, e 4,4 − 2,45 ainda cabia de
+     * lado. O Coração Partido, que entrou com o lote do último portal, é o
+     * maior bicho do jogo — com ele o desvio disparou, o chefe parou em cima
+     * da pista e o corredor daquele portal deixou de ser caminhável:
+     * `tests/corredores.html` cobra que a pista esteja livre da boca ao fundo,
+     * e é por ela que se anda até falar com o portal.
+     * Agora quem cede é a PAREDE, não a pista: o corpo fica sempre de lado, a
+     * pelo menos o raio sólido dele mais 0,75 m do eixo. Um chefe muito largo
+     * encosta no muro da câmara (e, no limite, atravessa um palmo dele) — é
+     * feio de perto e correto de jogar; o contrário travava o caminho. */
+    if (t < raioCh + 0.75) t = raioCh + 0.75;
     var px = lg.pos.x + ux * d + tx * t;
     var pz = lg.pos.z + uz * d + tz * t;
     no.position.set(px, 0, pz);
     scene.add(no);
     chefesParados.push(no);
     // o corpo do chefe barra o passo como o muro barra
-    marcaSolido(px, pz, Math.max(1.0, meiaT * 0.75), lg.id);
+    marcaSolido(px, pz, raioCh, lg.id);
     chefesFicha.push({ portal: lg.id, chefe: bossId, x: px, z: pz,
                        d: d, t: t, meiaT: meiaT, limite: limite });
     return no;
