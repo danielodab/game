@@ -470,7 +470,22 @@ JOGO.DATA = JOGO.DATA || {};
     //  Coração, o Arauto de Vendaval e o Mote do Tempo. NÃO é lendário: o
     //  lendário continua sendo um só, o Traje do Coração.
     //  Avulsos: manopla do Arauto de Brasa (fogo), turíbulo (fogo),
-    //           tornozeleiras do Arauto de Maré (água).
+    //           tornozeleiras do Arauto de Maré (água) e — desde 21/09 — a
+    //           couraça do Arauto de Pedra (terra).
+    //
+    //  POR QUE A COURAÇA ENTROU (pedido do dono: os drops de cada mapa "de
+    //  acordo com a dificuldade, elemento"). O Átrio das Quatro Estações põe
+    //  os QUATRO arautos em campo — brasa, maré, vendaval e pedra — e o
+    //  Coração é o único calabouço cuja ficção promete todos os elementos.
+    //  Só que o quarto de pedra não deixava NADA: as quinze peças do Coração
+    //  eram fogo, ar, água e neutro, e terra ficava em 0%. Quem escolheu o
+    //  caminho de terra no nível 5 chegava ao fim da Descida — o lugar das
+    //  peças mais fortes do jogo — e não achava uma peça do próprio elemento,
+    //  mesmo matando o Arauto de Pedra e o Coração-Raiz e saindo de lá com
+    //  onze Grãos de Rocha-Mãe no bolso para forjar coisa nenhuma. É comum
+    //  (como as Tornozeleiras de Maré, a avulsa do outro arauto sem conjunto)
+    //  e copia o orçamento da Couraça Oca trocando o ar por terra — não é
+    //  peça nova de poder, é o buraco de elemento fechado.
   // =========================================================================
 
   item({ id: 'cp-gale-fist', name: 'Manopla de Vendaval', slot: 'punho', rarity: 'comum',
@@ -515,6 +530,12 @@ JOGO.DATA = JOGO.DATA || {};
     description: 'Duas argolas cheias da água escura do Arauto de Maré, sempre em movimento por dentro do metal. Puxam o pé para o lado certo meio tempo antes do golpe chegar. +13 de esquiva, +10 de iniciativa.',
     flavor: 'A água decide primeiro. Você só não discorda.',
     iconKey: 'tide-anklets' });
+
+  loose({ id: 'cp-herald-stone', name: 'Couraça do Arauto de Pedra', slot: 'casca', rarity: 'comum',
+    dungeonId: 'brokenheart', element: 'terra', bonuses: { hp: 50, resists: { terra: 16, neutro: 6 } },
+    description: 'O tronco do Arauto de Pedra, arrancado inteiro e ainda em pé: um bloco do quarto de pedra do Coração com veios claros correndo por dentro, oco na medida exata de um peito humano. Pesa como se estivesse descendo. +50 PV, +16% terra, +6% neutro.',
+    flavor: 'O arauto não caiu quando morreu. Foi preciso empurrar.',
+    iconKey: 'herald-stone' });
 
   // =========================================================================
   // OS 6 CONJUNTOS NOVOS — o terceiro de cada calabouço.

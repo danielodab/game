@@ -1,10 +1,17 @@
 # Receber o lote de um portal fechado (monstros, cenário, arte)
 
-Os portais fechados — **Mina Trêmula** (`quakemine`) e **Coração Partido**
-(`brokenheart`) — abrem quando o lote deles entra. Este é o caminho, do mesmo
-jeito que a Estufa, a Cisterna, o **Fecho de Brasa** (`emberlock`, aberto em
-19/09) e os **Andaimes do Vento** (`windscaffold`, abertos na noite de 19/09)
-entraram, só que agora com ferramenta genérica em vez de script copiado.
+> **21/09 — não há mais portal fechado.** Os seis abriram: Estufa, Cisterna,
+> **Fecho de Brasa** (19/09), **Andaimes do Vento** (noite de 19/09), **Mina
+> Trêmula** e **Coração Partido** (21/09). `JOGO.DATA.portaisFechados` está
+> VAZIA e cada calabouço solta só as peças dele — o vazamento acabou junto.
+> A única coisa que o Coração ainda não tem é o **catálogo de cenário**
+> (`JOGO.CENARIO['heart']`, o `assets/embedded/cenario-coracao.js`): até ele
+> entrar, a sala usa os blocos procedurais de sempre, como os outros cinco
+> usavam antes do lote deles. Esta página continua valendo como o caminho
+> para esse lote — e para qualquer calabouço novo que entre fechado.
+
+Este é o caminho do lote, do mesmo jeito que os cinco anteriores entraram, só
+que agora com ferramenta genérica em vez de script copiado.
 
 Os Andaimes foram o segundo lote pela ferramenta genérica e não precisaram de
 mapa: as três folhas ("itens 1/2/3.glb", sem o nome das peças) vieram com vão
@@ -87,14 +94,19 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
 7. **Abrir o portal**: tire o id de `JOGO.DATA.portaisFechados` em
    `js/core/data/dungeons.js`. O X vermelho some, a descida volta, o
    Calabouço do Dia e o Poço passam a contar com ele, e as peças dele
-   deixam de vazar para os outros calabouços.
+   deixam de vazar para os outros calabouços. Repare no que mais volta
+   junto: o **pet** daquele calabouço (`dropDungeon` é o id dele, então sem
+   descida ele era inalcançável) e o **selo** do elemento do chefe dele — foi
+   o que segurou o Traje do Colecionador enquanto o Coração esteve trancado,
+   porque o `boss-riftheart` é o ÚNICO chefe neutro do jogo.
 8. **Conferir**: `tests/bateria.html` (portais_fechados vai cobrar a lista
    nova — ajuste a contagem no teste) e uma foto da praça
    (`tests/prova_praca.html?dist=26&tilt=1.1&ang=0`).
 
 ## O que NÃO precisa mudar
 
-- Itens: as 90 peças dos seis calabouços já têm ícone e já caem (as dos
-  fechados vazam para os abertos até o portal abrir).
+- Itens: as 91 peças dos seis calabouços já caem, e 90 delas já têm ícone —
+  a Couraça do Arauto de Pedra (`cp-herald-stone`, entrou em 21/09 para o
+  Coração deixar de ter 0% de terra) ainda usa o ícone procedural.
 - Pets: as cartas do pet de cada calabouço já caem do chefe dele.
 - Salas, layouts, feitiços e IA dos monstros: já existem para os seis.

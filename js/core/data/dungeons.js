@@ -1175,6 +1175,7 @@ JOGO.DATA = JOGO.DATA || {};
       { itemId: 'cp-gale-steps', weight: 14, minRoom: 0 },
       { itemId: 'cp-gale-plate', weight: 14, minRoom: 0 },
       { itemId: 'cp-tide-anklets', weight: 14, minRoom: 0 },
+      { itemId: 'cp-herald-stone', weight: 14, minRoom: 0 },
       { itemId: 'cp-gale-lamp', weight: 12, minRoom: 1 },
       { itemId: 'cp-herald-ember', weight: 12, minRoom: 1 },
       { itemId: 'cp-ember-censer', weight: 12, minRoom: 1 }
@@ -1208,8 +1209,17 @@ JOGO.DATA = JOGO.DATA || {};
 // 19/09: o Fecho de Brasa abriu — o lote dele (dez monstros, muros, forno e
 // quinze enfeites) entrou; à noite os Andaimes do Vento abriram também (dez
 // monstros, muro, muro quebrado, viga, guindaste e quinze enfeites). Sobram
-// a Mina e o Coração.
-JOGO.DATA.portaisFechados = ['brokenheart'];
+// a Mina e o Coração. A Mina Trêmula abriu em seguida, com os oito monstros,
+// as muretas, a broca e os enfeites dela.
+// 21/09 (pedido do dono: "os drops estavam nos mapas que estavam liberados —
+// coloque os drops respectivamente em seus mapas"): o Coração Partido abriu e
+// a lista ficou VAZIA. Com ela vazia o vazamento acaba por conta própria, e
+// era ele o problema: enquanto o Coração estava trancado, as QUINZE peças
+// dele caíam nos cinco mapas abertos com metade do peso — ~7% de todo o saque
+// da Estufa, do nível 3, eram peças de nível 26 a 30, e o chefe da Estufa
+// chegava a soltar as LENDÁRIAS do fim do jogo (0,10% por descida). Agora
+// cada calabouço só solta o que é dele.
+JOGO.DATA.portaisFechados = [];
 JOGO.DATA.portalFechado = function (id) {
   return (JOGO.DATA.portaisFechados || []).indexOf(id) >= 0;
 };

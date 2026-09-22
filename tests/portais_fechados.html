@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>SOTERRA 3.0 — os portais fechados e o vazamento das peças</title>
+<title>SOTERRA 3.0 — os seis portais abertos e o saque de volta em casa</title>
 <style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
 #summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
 .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
@@ -11,9 +11,17 @@
 <!-- Pedido do dono (08/09): "colocar nos 3 portais que ainda não tenho os
      itens e monstros criados para ficarem fechados — existirem, mas com um X
      vermelho no meio, impedindo o acesso" e "itens mais neutros para dropar
-     em qualquer um dos locais até liberar os outros mapas". A resposta: o
+     em qualquer um dos locais até liberar os outros mapas". A resposta foi o
      portal trancado (sem descida, fora do Dia e do Poço) e as PEÇAS dele
-     vazando para os abertos, com metade do peso, sem mudar a chance de saque. -->
+     vazando para os abertos, com metade do peso, sem mudar a chance de saque.
+
+     Pedido do dono (21/09): "agora vou ter todos os mapas prontos; os drops
+     estavam nos mapas que estavam liberados — coloque os drops
+     respectivamente em seus mapas". O último portal (o Coração Partido)
+     abriu, a lista ficou VAZIA e com ela o vazamento acabou sozinho: nenhuma
+     peça cai fora do calabouço dela. Esta página passou a cobrar as DUAS
+     coisas — que hoje nada vaza, e que a máquina do vazamento continua de pé
+     para o dia em que entrar um calabouço novo ainda sem arte. -->
 <div id="summary">rodando…</div>
 <div id="log"></div>
 <script src="save_sandbox.js"></script>
@@ -40,57 +48,135 @@
     log.appendChild(d);
   }
   var D = JOGO.DATA, P = JOGO.Progress, G = JOGO.Game, Dd = JOGO.Diario, Po = JOGO.Poco;
-  var FECHADOS = D.portaisFechados || [];
-  check('só um portal está fechado: o Coração (21/09: a Mina Trêmula abriu com o lote dela; o Fecho e os Andaimes abriram em 19/09)',
-        FECHADOS.length === 1 && !D.portalFechado('emberlock') && !D.portalFechado('windscaffold') &&
-        !D.portalFechado('quakemine') && D.portalFechado('brokenheart'));
-  check('a Estufa, a Cisterna, o Fecho, os Andaimes e a Mina seguem abertos',
-        !D.portalFechado('greenhouse') && !D.portalFechado('cistern') && !D.portalFechado('emberlock') &&
-        !D.portalFechado('windscaffold') && !D.portalFechado('quakemine'));
+  var IDS = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
 
-  // ---- a descida
-  G.init();
-  check('descer num portal fechado é recusado', G.startRun(['sumo'], 'brokenheart') === false && G.screen === 'menu');
-  check('descer num portal aberto segue normal', G.startRun(['sumo'], 'greenhouse') === true && G.screen === 'antessala');
-  G.init();
+  // ---- 1. a lista
+  check('a lista de portais fechados está VAZIA (21/09: o Coração Partido foi o último a abrir)',
+        Array.isArray(D.portaisFechados) && D.portaisFechados.length === 0,
+        JSON.stringify(D.portaisFechados));
+  check('nenhum dos seis calabouços está fechado',
+        IDS.every(function (id) { return !D.portalFechado(id); }));
 
-  // ---- o Calabouço do Dia nunca é um fechado (60 dias seguidos)
-  var diaRuim = null;
-  for (var d = 0; d < 60; d++) {
-    var id = Dd.hoje(Date.now() + d * 86400000);
-    if (D.portalFechado(id)) diaRuim = id;
+  // ---- 2. a descida
+  var recusou = [];
+  IDS.forEach(function (id) {
+    G.init();
+    if (G.startRun(['sumo'], id) !== true || G.screen !== 'antessala') recusou.push(id);
+  });
+  G.init();
+  check('os seis descem', recusou.length === 0, recusou.join(', '));
+
+  // ---- 3. o saque mora em casa: nada vaza para lugar nenhum
+  var piscinas = {}, forasteiras = [], vazadas = 0, totalPecas = 0;
+  IDS.forEach(function (id) {
+    var info = P.lootPoolInfo(id, 2, 1);          // sala do chefe: a piscina inteira
+    piscinas[id] = info;
+    totalPecas += info.itens.length;
+    info.itens.forEach(function (e) {
+      if (e.vazado) vazadas++;
+      var dono = (D.items[e.id] || {}).dungeonId;
+      if (dono !== id) forasteiras.push(e.id + ' (de ' + dono + ') na piscina de ' + id);
+    });
+  });
+  check('nenhuma peça VAZADA em nenhum dos seis', vazadas === 0, vazadas + ' vazadas');
+  check('cada calabouço só solta as peças DELE', forasteiras.length === 0, forasteiras.slice(0, 4).join(' · '));
+  // o número é cru de propósito: grita quando uma peça some ou entra sem querer
+  check('as 91 peças que caem estão repartidas entre os seis (15+15+15+15+15+16)',
+        totalPecas === 91, totalPecas + ' peças');
+  var semCasa = Object.keys(D.items).filter(function (id) {
+    var it = D.items[id];
+    return it && it.dropWeight > 0 && IDS.indexOf(it.dungeonId) < 0;
+  });
+  check('nenhuma peça que cai ficou sem calabouço', semCasa.length === 0, semCasa.join(', '));
+
+  // ---- 4. elemento: o que cada mapa entrega
+  function elementosDe(id) {
+    var e = {};
+    piscinas[id].itens.forEach(function (x) { e[(D.items[x.id] || {}).element] = true; });
+    return Object.keys(e).sort();
   }
-  check('o Calabouço do Dia nunca cai num portal fechado (60 dias)', diaRuim === null, diaRuim || '');
+  // o Coração Partido é o único cuja ficção promete TODOS os elementos: o
+  // Átrio das Quatro Estações põe os quatro arautos em campo (brasa, maré,
+  // vendaval e pedra) e o clima vira a cada 3 rodadas. Até 21/09 o quarto de
+  // pedra não deixava nada e terra ficava em 0% — a Couraça do Arauto de
+  // Pedra fechou o buraco.
+  var cp = elementosDe('brokenheart');
+  check('o Coração Partido entrega os QUATRO elementos (+ neutro)',
+        ['fogo', 'agua', 'terra', 'ar', 'neutro'].every(function (el) { return cp.indexOf(el) >= 0; }),
+        cp.join(' '));
+  check('a Couraça do Arauto de Pedra é a peça de terra do Coração, comum e sem conjunto',
+        !!D.items['cp-herald-stone'] && D.items['cp-herald-stone'].element === 'terra' &&
+        D.items['cp-herald-stone'].rarity === 'comum' && D.items['cp-herald-stone'].setId === null &&
+        D.items['cp-herald-stone'].dungeonId === 'brokenheart');
+  // e cada mapa entrega pelo menos o elemento do TEMA dele
+  var tema = { greenhouse: 'terra', cistern: 'agua', emberlock: 'fogo',
+               windscaffold: 'ar', quakemine: 'terra', brokenheart: 'terra' };
+  var semTema = IDS.filter(function (id) { return elementosDe(id).indexOf(tema[id]) < 0; });
+  check('cada calabouço solta peça do próprio elemento de tema', semTema.length === 0, semTema.join(', '));
 
-  // ---- o Poço não empresta palco (nem monstro) de calabouço fechado
-  var ruim = 0, salas = 0;
+  // ---- 5. dificuldade: épico e lendário só no chefe, em todo mapa
+  var cedoDemais = [];
+  IDS.forEach(function (id) {
+    P.lootPoolInfo(id, 0, 1).itens.forEach(function (e) {
+      var r = (D.items[e.id] || {}).rarity;
+      if (r === 'epico' || r === 'lendario') cedoDemais.push(id + '/' + e.id);
+    });
+  });
+  check('épico e lendário continuam só na sala do chefe', cedoDemais.length === 0, cedoDemais.join(', '));
+  // o troféu é do fundo: as quatro lendárias são todas do Coração
+  var lend = Object.keys(D.items).filter(function (id) { return D.items[id].rarity === 'lendario' && D.items[id].dropWeight > 0; });
+  check('as lendárias que caem são as quatro do Coração Partido',
+        lend.length === 4 && lend.every(function (id) { return D.items[id].dungeonId === 'brokenheart'; }),
+        lend.join(', '));
+
+  // ---- 6. o Calabouço do Dia e o Poço passam a contar com os seis
+  // `Dd.hoje` devolve {dungeonId, bonusDrop} — o id está DENTRO. O teste
+  // antigo passava o objeto inteiro para `portalFechado` e por isso nunca
+  // acusava nada: a prova era vazia.
+  var diaRuim = null, vistos = {};
+  // 90 dias, e não 60: o xorshift do Diário é enviesado o bastante para que
+  // alguma janela de 60 dias deixe um dos seis de fora (medido em três anos
+  // de datas); com 90 o pior caso ainda passa pelos seis.
+  for (var d = 0; d < 90; d++) {
+    var id2 = (Dd.hoje(Date.now() + d * 86400000) || {}).dungeonId;
+    vistos[id2] = true;
+    if (D.portalFechado(id2)) diaRuim = id2;
+  }
+  check('o Calabouço do Dia nunca cai num portal fechado (90 dias)', diaRuim === null, diaRuim || '');
+  check('e em 90 dias ele passa pelos seis', IDS.every(function (id) { return vistos[id]; }),
+        Object.keys(vistos).join(' '));
+
+  var salasPoco = 0, elencoCp = 0;
   if (Po && Po.preparar) {
     Po.preparar(40);
-    var dp = null;
-    (D.dungeons || []).forEach(function (dg) { if (dg && dg.id === Po.ID) dp = dg; });
-    var layoutsFechados = {};
-    FECHADOS.forEach(function (fid) {
-      (D.dungeons || []).forEach(function (dg) {
-        if (dg && dg.id === fid) (dg.rooms || []).forEach(function (r) { layoutsFechados[r.layout.join('\n')] = fid; });
-      });
+    // o Poço empresta palco de TODA sala real: 6 calabouços × 3 salas = 18
+    var vistasPorLayout = {};
+    (D.dungeons || []).forEach(function (dg) {
+      if (!dg || dg.id === Po.ID) return;
+      (dg.rooms || []).forEach(function (r) { if (r && r.layout && r.monsters) vistasPorLayout[dg.id + '#' + r.name] = true; });
     });
-    (dp && dp.rooms || []).forEach(function (r) {
-      salas++;
-      if (layoutsFechados[(r.layout || []).join('\n')]) ruim++;
-    });
+    salasPoco = Object.keys(vistasPorLayout).length;
+    elencoCp = Object.keys(D.monsters).filter(function (mid) {
+      var m = D.monsters[mid];
+      return m && m.dungeonId === 'brokenheart' && !m.summonOnly;
+    }).length;
   }
-  check('os palcos do Poço nunca vêm de calabouço fechado (' + salas + ' andares)', salas > 0 && ruim === 0, ruim + ' ruins');
+  check('o Poço tem as 18 salas dos seis calabouços para emprestar', salasPoco === 18, salasPoco + ' salas');
+  check('e o elenco do Coração Partido entrou no Poço', elencoCp > 0, elencoCp + ' monstros');
 
-  // ---- o vazamento das peças
+  // ---- 7. a MÁQUINA do vazamento continua de pé (para o próximo calabouço
+  //         que entrar sem arte). Fecha o Coração só durante esta prova.
+  var guardado = D.portaisFechados;
+  D.portaisFechados = ['brokenheart'];
   var infoEstufa = P.lootPoolInfo('greenhouse', 2, 1);
   var vazados = infoEstufa.itens.filter(function (e) { return e.vazado; });
   var proprios = infoEstufa.itens.filter(function (e) { return !e.vazado; });
-  check('na sala do chefe da Estufa entram peças VAZADAS dos fechados', vazados.length > 0 && proprios.length > 0,
+  check('fechando um portal, as peças dele voltam a vazar para os abertos',
+        vazados.length > 0 && proprios.length > 0,
         vazados.length + ' vazadas · ' + proprios.length + ' próprias');
   var soFechados = vazados.every(function (e) { return D.portalFechado((D.items[e.id] || {}).dungeonId); });
   var nadaDaCisterna = !infoEstufa.itens.some(function (e) { return (D.items[e.id] || {}).dungeonId === 'cistern'; });
   check('só peças de calabouço FECHADO vazam — a Cisterna (aberta) não entra na Estufa', soFechados && nadaDaCisterna);
-  // metade do peso: uma comum vazada pesa a metade de uma comum própria de mesmo dropWeight
   var comumP = proprios.filter(function (e) { return (D.items[e.id] || {}).rarity === 'comum' && D.items[e.id].dropWeight === 1000; })[0];
   var comumV = vazados.filter(function (e) { return (D.items[e.id] || {}).rarity === 'comum' && D.items[e.id].dropWeight === 1000; })[0];
   check('a peça vazada pesa metade da própria', !!comumP && !!comumV && Math.abs(comumV.w * 2 - comumP.w) < 1e-6,
@@ -100,27 +186,33 @@
   var salaComum = P.lootPoolInfo('greenhouse', 0, 1);
   check('o vazamento respeita a sala: épico/lendário vazado só no chefe',
         salaComum.itens.filter(function (e) { return e.vazado; }).every(function (e) { return (D.items[e.id] || {}).minRoom <= 0; }));
+  check('e a descida no portal fechado é recusada', (G.init(), G.startRun(['sumo'], 'brokenheart') === false && G.screen === 'menu'));
+  G.init();
 
-  // ---- a chance de sair peça não muda com o vazamento (Monte Carlo)
+  // ---- 8. abrir o último portal NÃO mexeu na chance de sair peça (Monte Carlo).
+  //         É a garantia do modelo: o vazamento engorda o "nada" na mesma
+  //         proporção, então fechar/abrir muda A VARIEDADE, nunca a torneira.
   P.reset();
-  var N = 20000, com = 0, semV = 0;
-  for (var k = 0; k < N; k++) { P.reset(); if (P.rollDrops('greenhouse', 0, 1, 1).length) com++; }
-  var guardado = D.portaisFechados;
-  D.portaisFechados = [];
-  for (k = 0; k < N; k++) { P.reset(); if (P.rollDrops('greenhouse', 0, 1, 1).length) semV++; }
-  D.portaisFechados = guardado;
-  var pc = 100 * com / N, ps = 100 * semV / N;
+  var N = 20000, com = 0, sem = 0, k;
+  for (k = 0; k < N; k++) { P.reset(); if (P.rollDrops('greenhouse', 0, 1, 1).length) com++; }
+  D.portaisFechados = guardado;                         // volta ao mundo de verdade: nada fechado
+  for (k = 0; k < N; k++) { P.reset(); if (P.rollDrops('greenhouse', 0, 1, 1).length) sem++; }
+  var pc = 100 * com / N, ps = 100 * sem / N;
   check('a chance de sair peça é a mesma com e sem vazamento (±2 pontos)', Math.abs(pc - ps) < 2,
         pc.toFixed(1) + '% com · ' + ps.toFixed(1) + '% sem');
-  // e as peças vazadas de fato caem
+  check('a lista voltou vazia depois da prova', D.portaisFechados.length === 0);
+
+  // ---- 9. e no mundo de verdade a Estufa NÃO solta mais nada do fim do jogo
   P.reset();
-  var caiuVazada = false;
-  for (k = 0; k < 4000 && !caiuVazada; k++) {
+  var intruso = null;
+  for (k = 0; k < 6000 && !intruso; k++) {
     P.reset();
     var ds = P.rollDrops('greenhouse', 2, 1, 1);
-    for (var j = 0; j < ds.length; j++) if (D.portalFechado((D.items[ds[j]] || {}).dungeonId)) caiuVazada = true;
+    for (var j = 0; j < ds.length; j++) {
+      if ((D.items[ds[j]] || {}).dungeonId !== 'greenhouse') intruso = ds[j];
+    }
   }
-  check('uma peça de portal fechado cai de verdade no chefe da Estufa', caiuVazada);
+  check('6 000 descidas no chefe da Estufa e nenhuma peça de outro calabouço saiu', intruso === null, intruso || '');
 
   var sum = document.getElementById('summary');
   sum.className = falhas ? 'fail' : 'allpass';
