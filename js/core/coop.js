@@ -142,6 +142,8 @@ var JOGO = (typeof window !== 'undefined')
       tipo: tipo, bid: null, fase: null, n: 0,
       ata: null, ataEnvios: 0, ataProx: 0, chamando: false, ataFalhou: false,
       prontoParceiro: null, prontoProx: 0,
+      prepUlt: null, prepProx: 0,        // 21/09: o último `prep` que mandei e quando repito
+
       fila: {}, log: {}, hashes: {}, foto: null, antes: {}, buracoDesde: 0,
       logSrv: [], fotografada: false,  // 13/09: o registro que o servidor refaz (lances + marcas, em ordem)
       sincronizando: false, fotoPedidaEm: 0, fotoPendente: false, fotoDepois: false, dessinc: 0, restauracoes: 0, ultimaDessinc: null,
@@ -253,6 +255,10 @@ var JOGO = (typeof window !== 'undefined')
     if (l.x != null) o.x = l.x;
     if (l.y != null) o.y = l.y;
     if (l.s != null) o.s = l.s;
+    // 21/09: as casas marcadas na preparação viajam DENTRO do `p` — é delas que
+    // o outro cliente (e o juíz do servidor) refaz a colocação
+    if (l.e != null) o.e = l.e;
+    if (l.eu != null) o.eu = l.eu;
     if (l.alvo != null) o.alvo = l.alvo;
     if (l.T2 != null) { o.T2 = l.T2; o.h = l.h; }
     if (l.bk != null) o.bk = l.bk;
@@ -711,6 +717,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     // o parceiro na antessala repete o `pronto` até a ata chegar
     if (S.tipo === 'grupo' && !souLider() && g && g.screen === 'antessala' && !S.bid && ag >= S.prontoProx) mandaPronto();
+    // 21/09: e na PREPARAÇÃO o `prep` se repete a cada 2 s — o relé é burro e um
+    // pacote perdido deixaria o parceiro esperando um PRONTO que já foi dado
+    repetePrep(ag);
     // a parceira que já montou a batalha da ata repete o `dentro` até ouvir a líder
     // (um lance, um `vivo` ou a `cancela`): senão a ata que falhou deixava as duas paradas
     if (S.tipo === 'grupo' && !souLider() && S.bid && emBatalha() && !S.dentroConfirmado &&
@@ -956,6 +965,46 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------ antessala, pronto, ata, dentro
   function salaAtual() { var g = G(); return g ? (g.dungeonId + ':' + g.roomIndex) : ''; }
   function prontoValido() { return !!(S.prontoParceiro && S.prontoParceiro.sala === salaAtual()); }
+  /* ===================================================== A PREPARAÇÃO (21/09)
+   * O PRONTO da preparação viaja na voz `prep` — NUNCA como lance: fora do
+   * `S.log`, fora do `anotaSrv`, fora do hash. Tinha de ser assim porque dois
+   * jogadores marcando a casa ao mesmo tempo disputariam a MESMA chave (T=0,
+   * k=0) da fila do lockstep. O nome `pronto` já é da antessala (`rPronto`),
+   * daí o nome novo.
+   *
+   * É repetido a cada 2 s enquanto a preparação corre: o relé é burro e um
+   * pacote perdido deixaria o parceiro esperando um PRONTO que já foi dado. */
+  Coop.PREP_REP_MS = 2000;
+  function zeraPrepCoop() { S.prepUlt = null; S.prepProx = 0; }
+  Coop.zeraPrep = zeraPrepCoop;
+  Coop.mandaPrep = function (d) {
+    if (S.tipo !== 'grupo' || !S.bid || !d) return false;
+    S.prepUlt = { x: d.x == null ? null : +d.x, y: d.y == null ? null : +d.y, v: !!d.v };
+    S.prepProx = agora() + Coop.PREP_REP_MS;
+    return envia('prep', { b: S.bid, x: S.prepUlt.x, y: S.prepUlt.y, v: S.prepUlt.v });
+  };
+  function rPrep(d) {
+    if (!d || d.b !== S.bid) return;              // o PRONTO da sala anterior não vale
+    var g = G();
+    if (!g || !g._prepDoParceiro) return;
+    try {
+      g._prepDoParceiro({
+        x: (typeof d.x === 'number' && isFinite(d.x)) ? d.x : null,
+        y: (typeof d.y === 'number' && isFinite(d.y)) ? d.y : null,
+        v: !!d.v
+      });
+    } catch (e) {}
+  }
+  /* o reenvio: chamado do tique enquanto a sala está em `placing` */
+  function repetePrep(ag) {
+    if (S.tipo !== 'grupo' || !S.bid || !S.prepUlt) return;
+    var g = G(), st = g && g.state;
+    if (!st || st.phase !== 'placing') return;
+    if (ag < num(S.prepProx, 0)) return;
+    S.prepProx = ag + Coop.PREP_REP_MS;
+    envia('prep', { b: S.bid, x: S.prepUlt.x, y: S.prepUlt.y, v: S.prepUlt.v });
+  }
+
   function mandaPronto() {
     var g = G();
     if (!g || !g.party || !g.party.length || !Coop.emGrupo()) return false;
@@ -1277,6 +1326,9 @@ var JOGO = (typeof window !== 'undefined')
     if (l.x != null) c.x = l.x;
     if (l.y != null) c.y = l.y;
     if (l.s != null) c.s = l.s;
+    // 21/09: sem o `e` o juiz refaria a colocação com todo mundo ao acaso
+    if (l.e != null) c.e = l.e;
+    if (l.eu != null) c.eu = l.eu;
     if (l.alvo != null) c.alvo = l.alvo;
     if (l.de != null) c.de = l.de;
     if (l.ev != null) c.ev = l.ev;
@@ -3016,6 +3068,7 @@ var JOGO = (typeof window !== 'undefined')
     if (S.sumidoDesde && p && p.cx && ev.cx === p.cx) Coop.parceiroVoltou(p.id, p.cx);
     switch (ev.acao) {
       case 'pronto': rPronto(d); break;
+      case 'prep': rPrep(d); break;
       case 'ata': rAta(d); break;
       case 'dentro': rDentro(d, ev.de); break;
       case 'lance': rLance(d, ev.de); break;

@@ -112,13 +112,47 @@
       return ate(function () { return U.telaAtual() === 'battle' && G.state && !!doc.querySelector('.screen-battle .bt-bottom'); }, 30000);
     }).then(function (naLuta) {
       if (!naLuta) throw new Error('a batalha não abriu');
-      var st = G.state;
-      var opc = (J.Engine.placementOptions ? J.Engine.placementOptions(st) : (st.placement && st.placement.options)) || [];
-      if (opc[0]) G.onTileClicked(opc[0].x, opc[0].y);
-      return ate(function () { return G.state.phase === 'playing'; }, 15000);
+      return provaPreparacao();
     }).then(function (jogando) {
-      if (!jogando) throw new Error('a batalha não saiu da colocação');
+      if (!jogando) throw new Error('a batalha não saiu da preparação');
       provas();
+    });
+  }
+
+  /* A PREPARAÇÃO (21/09, pedido do dono: "quando eu seleciono o quadrado que
+   * quero iniciar a batalha já inicia... isso não pode acontecer"). A faixa, o
+   * botão apagado antes de escolher, e o dedo no botão começando a luta. */
+  function provaPreparacao() {
+    var st = G.state;
+    check('a batalha abre na PREPARAÇÃO, não jogando', st.phase === 'placing', st.phase);
+    var faixa = doc.querySelector('.screen-battle .bt-placing');
+    var botao = faixa && faixa.querySelector('.bt-prep-pronto');
+    var relogio = faixa && faixa.querySelector('.bt-prep-relogio');
+    check('a faixa da preparação está na tela, com relógio e botão', !!faixa && !!botao && !!relogio);
+    check('o relógio começa nos ' + G.PREP_SEGUNDOS + ' s',
+          Math.round(G.prepRestante()) === G.PREP_SEGUNDOS, String(Math.round(G.prepRestante())));
+    check('o botão PRONTO nasce APAGADO (ninguém marcou casa ainda)', !!botao && botao.disabled === true);
+    var opc = G.minhasOpcoes();
+    check('as minhas quatro casas estão de pé', opc.length === 4, JSON.stringify(opc));
+    G.onTileClicked(opc[0].x, opc[0].y);
+    U.update(0.016);
+    check('tocar na casa MARCA e a luta NÃO começa',
+          G.state.phase === 'placing' && !!G.minhaEscolha() && G.minhaEscolha().x === opc[0].x,
+          G.state.phase);
+    check('marcada a casa, o botão PRONTO acende', botao.disabled === false);
+    G.onTileClicked(opc[2].x, opc[2].y);
+    check('tocar noutra casa TROCA a marca, e continua sem começar',
+          G.state.phase === 'placing' && G.minhaEscolha().x === opc[2].x && G.minhaEscolha().y === opc[2].y);
+    var esperado = { x: opc[2].x, y: opc[2].y };
+    botao.click();                                  // o dedo no botão
+    return ate(function () { return G.state.phase === 'playing'; }, 15000).then(function (jogando) {
+      check('o dedo no PRONTO é que começa a luta', !!jogando, G.state.phase);
+      var meu = G.state.units.filter(function (u) { return u.side === 'player' && u.kind === 'hero'; })[0];
+      check('e o herói nasceu na casa que eu tinha marcado',
+            !!meu && meu.x === esperado.x && meu.y === esperado.y,
+            meu ? meu.x + ',' + meu.y + ' vs ' + esperado.x + ',' + esperado.y : 'sem herói');
+      check('a faixa da preparação sai da tela depois', !doc.querySelector('.screen-battle .bt-placing'));
+      return jogando;
     });
   }
 

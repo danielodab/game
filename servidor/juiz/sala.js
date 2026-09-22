@@ -89,7 +89,9 @@ function vidaMaxDoLado(st, side) {
 /* Um lance como o Game.executa aplica (sem rede). */
 function executa(J, st, l) {
   const E = J.Engine;
-  if (l.a === 'p') return !!E.place(st, l.x, l.y);
+  // 21/09: o `p` carrega as casas marcadas na preparação (l.e) — sem elas o juiz
+  // refaria a sala com todo mundo nascendo ao acaso e acusaria divergência
+  if (l.a === 'p') return !!E.place(st, l.x, l.y, { escolhas: l.e || {}, uid: l.eu || null });
   if (l.a === 'm') return !!E.move(st, l.u, l.x, l.y);
   if (l.a === 'c') return !!E.cast(st, l.u, l.s, l.x, l.y);
   if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }

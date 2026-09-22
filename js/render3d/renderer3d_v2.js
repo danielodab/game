@@ -3646,14 +3646,20 @@ var JOGO = (typeof window !== 'undefined')
     // A ESCOLHA DA POSIÇÃO (03/09): as quatro casas douradas antes da rodada 1.
     // ANTES da guarda de fase/turno — em placing não é turno de ninguém, e a
     // guarda apagava as casas (o dono clicava às cegas e nada nascia).
-    if (st && st.phase === 'placing' && st.placement && st.placement.options) {
-      // 11/09: em grupo só o líder escolhe a casa — o parceiro não vê as douradas
-      if (g && g.podeColocar && !g.podeColocar()) { hideRestOverlay(); return; }
+    if (st && st.phase === 'placing' && st.placement) {
+      /* 21/09: cada jogador vê as CASAS DELE (listas disjuntas) e marca a sua.
+       * Antes só quem liderava via as douradas, e o toque começava a luta na
+       * hora; agora a casa marcada fica cravada, mais forte que as outras, e a
+       * rodada 1 só vem dos 30 s ou do PRONTO dos dois. */
+      var opc = (g && g.minhasOpcoes) ? g.minhasOpcoes() : (st.placement.options || []);
+      if (!opc.length) { hideRestOverlay(); return; }
+      var marcada = (g && g.minhaEscolha) ? g.minhaEscolha() : null;
       var hv0 = g && g.hoverTile;
-      var opc = st.placement.options;
       for (var oi = 0; oi < opc.length; oi++) {
+        var ehMarcada = !!(marcada && marcada.x === opc[oi].x && marcada.y === opc[oi].y);
         var sobre = !!(hv0 && hv0.x === opc[oi].x && hv0.y === opc[oi].y);
-        ovTile(opc[oi].x, opc[oi].y, '#ffc44d', sobre ? 0.85 : 0.62, 0.16, sobre ? 1.0 : 0.94);
+        if (ehMarcada) ovTile(opc[oi].x, opc[oi].y, '#8fe08a', 0.92, 0.22, 1.0);
+        else ovTile(opc[oi].x, opc[oi].y, '#ffc44d', sobre ? 0.85 : 0.48, 0.16, sobre ? 1.0 : 0.88);
       }
       hideRestOverlay();
       return;

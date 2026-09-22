@@ -138,6 +138,19 @@ var JOGO = (typeof window !== 'undefined')
   var rede = null;          // { tipo:'grupo'|'duelo'|'guerra', eu, lado:'A'|'B'|null, colocador }
   var ultimoTurno = null;   // o state.turno visto por último (o gancho chama Coop.aoTurno quando muda)
   var timerTurno = null, turnoIniMs = 0;   // o relógio de PAREDE do meu turno em rede
+  /* A PREPARAÇÃO (21/09, pedido do dono: "quando um ou dois jogadores entram na
+   * batalha e um escolhe o quadrado, a luta já inicia automaticamente. Isso não
+   * pode acontecer... só quando o tempo de preparação terminar ou ele colocar
+   * pronto (quando for 2 jogadores, os dois colocarem prontos)"). São 30 s,
+   * iguais sozinho e em dupla. O relógio é de PAREDE e CONGELA enquanto o relé
+   * está calado: quem perdeu o sinal e continuasse contando largaria o `p` dele
+   * aos 30 s ao mesmo tempo que o outro lado, que já assumiu a colocação, larga
+   * o dele — dois `p` no mesmo (T,k) racham a sala. */
+  var prepIniMs = 0, prepVistoMs = 0;   // começo e último instante contado
+  var prepPronto = false;               // eu apertei PRONTO
+  var prepEle = false;                  // o parceiro apertou (voz `prep` do Coop)
+  var prepEleCasa = null;               // e a casa que ele marcou
+  var prepFechada = false;              // o `p` já saiu desta sala: não sai outro
   // tela para onde voltar depois de 'elementChoice' [G6]
   var returnScreen = 'menu';
 
@@ -499,6 +512,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     // 13/09: a vida da porta entra como está (era "vivos curam 50%, mortos voltam com 30%")
     aplicaCarry(Game.state, carryPorta, false);
+    zeraPrep();                                    // 21/09: 30 s limpos nesta sala
     setScreen('battle');
     return true;
   };
@@ -659,6 +673,155 @@ var JOGO = (typeof window !== 'undefined')
   // na colocação em grupo só o líder toca (o herói do parceiro nasce pela semente)
   Game.podeColocar = function () { return !rede || !!rede.colocador; };
 
+  // ------------------------------------------------------- a preparação
+  Game.PREP_SEGUNDOS = 30;
+  /* O PRONTO É DESTA SALA. Sem zerar aqui, o reenvio do tique mandava o PRONTO
+   * da sala anterior já com o `bid` novo, e o parceiro nascia pronto na sala
+   * seguinte — a preparação dele acabava antes de ele ver o mapa. */
+  function zeraPrep() {
+    prepIniMs = agoraMs();
+    prepVistoMs = prepIniMs;
+    prepPronto = false;
+    prepEle = false;
+    prepEleCasa = null;
+    prepFechada = false;
+    prepUltSec = -1;
+    var c = C();
+    if (c && c.zeraPrep) { try { c.zeraPrep(); } catch (e) {} }
+  }
+  Game._zeraPrep = zeraPrep;                       // provas
+  /* o herói por quem EU escolho: o primeiro meu que tem lista de opções */
+  function meuEscolhedor() {
+    var st = Game.state;
+    if (!st || st.phase !== 'placing' || !st.placement) return null;
+    var uids = E().quemEscolhe(st), i;
+    for (i = 0; i < uids.length; i++) {
+      var u = E().findUnit(st, uids[i]);
+      if (!u) continue;
+      if (!rede) { if (u.side === 'player' && u.kind === 'hero') return u; continue; }
+      if (Game.donoDe(u) === 'eu') return u;
+    }
+    return null;
+  }
+  Game.meuEscolhedor = meuEscolhedor;
+  Game.minhasOpcoes = function () {
+    var u = meuEscolhedor();
+    return u ? E().opcoesDe(Game.state, u.uid) : [];
+  };
+  Game.minhaEscolha = function () {
+    var u = meuEscolhedor();
+    return u ? E().escolhaDe(Game.state, u.uid) : null;
+  };
+  /* MARCAR A CASA. Não começa nada: só grava, avisa o parceiro e redesenha. */
+  Game.marcaCasa = function (x, y) {
+    var u = meuEscolhedor();
+    if (!u || prepFechada) return false;
+    if (!E().escolhe(Game.state, u.uid, x, y)) return false;
+    avisaPrep();
+    return true;
+  };
+  /* O PRONTO. Só vale depois de marcar a casa — quem não escolheu ainda não
+   * tem o que confirmar (a HUD deixa o botão apagado até lá). */
+  Game.prontoPrep = function (v) {
+    if (!Game.state || Game.state.phase !== 'placing' || prepFechada) return false;
+    if (!Game.minhaEscolha()) return false;
+    prepPronto = v === undefined ? true : !!v;
+    avisaPrep();
+    return true;
+  };
+  function avisaPrep() {
+    var c = C();
+    var e = Game.minhaEscolha();
+    if (c && c.mandaPrep) { try { c.mandaPrep({ x: e ? e.x : null, y: e ? e.y : null, v: prepPronto }); } catch (err) {} }
+    emitePrepTick(true);
+  }
+  Game._prepDoParceiro = function (d) {           // o Coop entrega o que chegou
+    if (!d) return;
+    prepEle = !!d.v;
+    prepEleCasa = (typeof d.x === 'number' && typeof d.y === 'number') ? { x: d.x, y: d.y } : null;
+    emitePrepTick(true);
+  };
+  function parceiroEhIA() {
+    var c = C();
+    try { return !!(c && c.parceiroIA && c.parceiroIA()); } catch (e) { return false; }
+  }
+  function emDupla() { return !!(rede && rede.tipo === 'grupo' && !parceiroEhIA()); }
+  Game.prepRestante = function () {
+    if (!Game.state || Game.state.phase !== 'placing') return 0;
+    if (!prepIniMs) return Game.PREP_SEGUNDOS;
+    return Math.max(0, Game.PREP_SEGUNDOS - (prepVistoMs - prepIniMs) / 1000);
+  };
+  Game.prepEstado = function () {
+    return {
+      restante: Game.prepRestante(),
+      pronto: prepPronto,
+      prontoEle: prepEle,
+      escolhi: !!Game.minhaEscolha(),
+      dupla: emDupla(),
+      colocador: Game.podeColocar(),
+      fechada: prepFechada
+    };
+  };
+  var prepUltSec = -1;
+  function emitePrepTick(forca) {
+    var eng = E(), sec = Math.ceil(Game.prepRestante());
+    if (!forca && sec === prepUltSec) return;
+    prepUltSec = sec;
+    if (!eng || !eng.events) return;
+    try { eng.events.push({ type: 'prepTick', remaining: sec, pronto: prepPronto, prontoEle: prepEle }); } catch (e) {}
+  }
+  /* O TIQUE DA PREPARAÇÃO: anda o relógio de parede e, quando dá a hora (ou
+   * todo mundo está pronto), manda o ÚNICO lance `p`. Quem manda é o colocador
+   * — os dois relógios podem zerar em instantes diferentes sem risco, porque
+   * só um lado larga o lance. */
+  function tickPrep() {
+    var st = Game.state;
+    if (!st || st.phase !== 'placing') return;
+    if (!prepIniMs) zeraPrep();
+    if (travadoRede()) { prepIniMs += Math.max(0, agoraMs() - prepVistoMs); prepVistoMs = agoraMs(); return; }
+    prepVistoMs = agoraMs();
+    emitePrepTick(false);
+    if (prepFechada) return;
+    var acabou = Game.prepRestante() <= 0;
+    var todosProntos = emDupla() ? (prepPronto && prepEle) : prepPronto;
+    if (!acabou && !todosProntos) return;
+    if (!Game.podeColocar()) return;             // quem não coloca só espera o `p` chegar
+    comecaBatalha();
+  }
+  Game._tickPrep = tickPrep;                     // provas
+  /* AS CASAS DE TODOS, dentro do lance. `Engine.place` NUNCA lê o
+   * `placement.escolhas` local (é de cada ponta e não viaja): o que vale é o
+   * que está aqui, e é isto que o juiz do servidor refaz. */
+  function escolhasDoLance() {
+    var st = Game.state, e = {};
+    if (!st || !st.placement) return e;
+    var locais = st.placement.escolhas || {}, uid;
+    for (uid in locais) if (Object.prototype.hasOwnProperty.call(locais, uid)) e[uid] = locais[uid];
+    // a casa que o parceiro marcou chegou pela voz `prep`, não pelo estado
+    if (prepEleCasa) {
+      var uids = E().quemEscolhe(st), i;
+      for (i = 0; i < uids.length; i++) {
+        var u = E().findUnit(st, uids[i]);
+        if (u && Game.donoDe(u) === 'parceiro') e[u.uid] = { x: prepEleCasa.x, y: prepEleCasa.y };
+      }
+    }
+    return e;
+  }
+  function comecaBatalha() {
+    var st = Game.state;
+    if (!st || st.phase !== 'placing') return false;
+    prepFechada = true;
+    var e = escolhasDoLance();
+    if (!rede) {
+      var okp = !!E().place(st, null, null, { escolhas: e });
+      anotaSolo({ a: 'p', x: null, y: null, e: e, ok: okp });
+      posMotor();
+      return okp;
+    }
+    return !!aplicaLocal({ a: 'p', x: null, y: null, e: e });
+  }
+  Game._comecaBatalha = comecaBatalha;            // provas
+
   function donoIdDe(u, fundo) {
     if (!u || fundo > 4) return null;
     if (u.kind === 'hero' || u.kind === 'fusion') return u.dono || null;
@@ -700,7 +863,7 @@ var JOGO = (typeof window !== 'undefined')
     var st = Game.state, ok = false;
     if (!st || !l) return false;
     try {
-      if (l.a === 'p') ok = !!E().place(st, l.x, l.y);
+      if (l.a === 'p') ok = !!E().place(st, l.x, l.y, { escolhas: l.e || {}, uid: l.eu || null });
       else if (l.a === 'm') ok = !!E().move(st, l.u, l.x, l.y);
       else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
       else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
@@ -820,6 +983,7 @@ var JOGO = (typeof window !== 'undefined')
     var st = Game.state, c = C();
     if (travadoRede()) { congelaRelogio(); return; }
     if (st.phase === 'placing') {
+      tickPrep();                                  // 21/09: a preparação corre dos DOIS lados
       if (rede.colocador) { if (c && c._pilotoPasso) { try { c._pilotoPasso(); } catch (e) {} } }
       else aplicaFila(semTela);
       return;
@@ -984,6 +1148,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.state = st;
     rede.colocador = !!(ata.party && ata.party[0] && ata.party[0].dono === rede.eu);
     ultimoTurno = st.turno || 0;
+    zeraPrep();                                    // 21/09: o PRONTO é DESTA sala
     setScreen('battle');
     return true;
   };
@@ -1095,7 +1260,9 @@ var JOGO = (typeof window !== 'undefined')
   Game._local = function (l) {
     if (!rede || !Game.state || !l) return false;
     if (l.a === 'e') { Game.endTurn(); return true; }
-    if (l.a === 'p') { Game.onTileClicked(l.x, l.y); return true; }
+    // 21/09: o `p` guardado refaz a COLOCAÇÃO inteira (as casas vêm em `l.e`),
+    // e não o toque — tocar de novo só marcaria a casa
+    if (l.a === 'p') return !!E().place(Game.state, l.x, l.y, { escolhas: l.e || {}, uid: l.eu || null });
     if (!Game.isPlayerTurn()) return false;
     return aplicaLocal({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo });
   };
@@ -1418,16 +1585,12 @@ var JOGO = (typeof window !== 'undefined')
 
   Game.onTileClicked = function (x, y) {
     if (Game.screen !== 'battle' || !Game.state) return;
-    // 03/09: na escolha da posição, o toque numa casa dourada nasce ali
+    /* 21/09: na preparação o toque na casa dourada só MARCA. Começar a luta é
+     * do relógio (30 s) ou do PRONTO de todo mundo — antes o toque do líder
+     * derrubava a rodada 1 na hora, e o parceiro nem via o mapa. Em dupla cada
+     * um marca a SUA casa, das opções dele: não é mais coisa só de quem lidera. */
     if (Game.state.phase === 'placing') {
-      if (!rede) {
-        var okp = !!E().place(Game.state, x, y);
-        anotaSolo({ a: 'p', x: x, y: y, ok: okp });
-        return;
-      }
-      // [G11] em grupo só o líder escolhe (o herói do parceiro nasce pela semente)
-      if (!rede.colocador || travadoRede()) return;
-      aplicaLocal({ a: 'p', x: x, y: y });
+      Game.marcaCasa(x, y);
       return;
     }
     if (Game.state.phase !== 'playing' || !Game.isPlayerTurn()) return;
@@ -2545,7 +2708,7 @@ var JOGO = (typeof window !== 'undefined')
     // [G11] em rede a vez tem TRÊS donos (eu, o parceiro, a IA) e a colocação
     // é do líder; `semTela` = aba escondida (o setInterval do Coop)
     if (rede) { updateRede(d, !!semTela); return; }
-    if (Game.state.phase === 'placing') return;   // 03/09: esperando o toque na casa
+    if (Game.state.phase === 'placing') { tickPrep(); return; }   // 21/09: o relógio da preparação
 
     if (Game.state.phase !== 'playing') { handleBattleOver(); return; }
 

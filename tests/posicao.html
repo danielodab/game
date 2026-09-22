@@ -70,8 +70,28 @@
   check('tocar fora das opções não faz nada', E.place(st, 0, 0) === false && st.phase === 'placing');
   var principal = herois(st)[0], segundo = herois(st)[1];
   var escolha = op[2];
-  var okP = E.place(st, escolha.x, escolha.y);
-  check('tocar numa opção nasce ali e a rodada 1 começa', okP === true && st.phase === 'playing' &&
+
+  // ---- 21/09: MARCAR A CASA NÃO COMEÇA A LUTA
+  check('marcar a casa NÃO começa a rodada 1 (o pedido do dono)',
+        E.escolhe(st, principal.uid, escolha.x, escolha.y) === true &&
+        st.phase === 'placing' && eventos('roundStart').length === 0 && !!st.placement);
+  check('a marca fica guardada e dá para ler de volta',
+        JSON.stringify(E.escolhaDe(st, principal.uid)) === JSON.stringify({ x: escolha.x, y: escolha.y }));
+  check('marcar fora das opções é recusado', E.escolhe(st, principal.uid, 0, 0) === false &&
+        E.escolhaDe(st, principal.uid).x === escolha.x);
+  var trocada = op[0];
+  check('marcar de novo TROCA a casa', E.escolhe(st, principal.uid, trocada.x, trocada.y) === true &&
+        E.escolhaDe(st, principal.uid).x === trocada.x && E.escolhaDe(st, principal.uid).y === trocada.y);
+  E.escolhe(st, principal.uid, escolha.x, escolha.y);
+  check('marcar não gastou o RNG da sala nem mexeu em ninguém',
+        herois(st).every(function (h) { return h.x !== escolha.x || h.y !== escolha.y; }) ||
+        (principal.x === escolha.x && principal.y === escolha.y) === false);
+
+  // ---- e só o `p` (o fim dos 30 s, ou o PRONTO) começa
+  var esc = {};
+  esc[principal.uid] = { x: escolha.x, y: escolha.y };
+  var okP = E.place(st, null, null, { escolhas: esc });
+  check('o lance `p` com as casas marcadas nasce ali e AÍ começa a rodada 1', okP === true && st.phase === 'playing' &&
         principal.x === escolha.x && principal.y === escolha.y && eventos('roundStart').length === 1 && !st.placement);
   var naZona = st.placement === null && !(segundo.x === escolha.x && segundo.y === escolha.y) &&
                st.grid.tiles[segundo.y][segundo.x].type === 'floor';
@@ -83,6 +103,50 @@
   check('o evento placed lista quem mudou de casa', !!placed && placed.uid === principal.uid &&
         placed.moves.some(function (m) { return m.uid === principal.uid; }));
   check('depois de nascer, place recusa', E.place(st, escolha.x, escolha.y) === false);
+  check('e escolhe também recusa fora de placing', E.escolhe(st, principal.uid, escolha.x, escolha.y) === false);
+
+  // ---- LISTAS DISJUNTAS por dono (a dupla marca ao mesmo tempo, sem brigar)
+  var pd = P.battleParty(['sumo', 'curandeiro']);
+  pd[0].dono = 'ana'; pd[1].dono = 'bia';
+  var sd = E.createBattle('greenhouse', 0, pd, { escolhePosicao: true });
+  var quem = E.quemEscolhe(sd);
+  check('em dupla, UM escolhedor por dono', quem.length === 2, quem.join(' '));
+  var oa = E.opcoesDe(sd, quem[0]), ob = E.opcoesDe(sd, quem[1]);
+  var chaves = {}, colidiu = false;
+  oa.concat(ob).forEach(function (c) { if (chaves[c.x + ',' + c.y]) colidiu = true; chaves[c.x + ',' + c.y] = 1; });
+  check('as listas dos dois são DISJUNTAS (ninguém marca a casa do outro)',
+        oa.length === 4 && ob.length === 4 && !colidiu, JSON.stringify(oa) + ' vs ' + JSON.stringify(ob));
+  check('a casa do outro não vale para mim', E.escolhe(sd, quem[0], ob[0].x, ob[0].y) === false);
+  E.escolhe(sd, quem[0], oa[1].x, oa[1].y);
+  E.escolhe(sd, quem[1], ob[3].x, ob[3].y);
+  var escD = {};
+  escD[quem[0]] = { x: oa[1].x, y: oa[1].y };
+  escD[quem[1]] = { x: ob[3].x, y: ob[3].y };
+  E.place(sd, null, null, { escolhas: escD });
+  var ua = E.findUnit(sd, quem[0]), ub = E.findUnit(sd, quem[1]);
+  check('os DOIS nascem nas casas que marcaram',
+        ua.x === oa[1].x && ua.y === oa[1].y && ub.x === ob[3].x && ub.y === ob[3].y,
+        ua.x + ',' + ua.y + ' e ' + ub.x + ',' + ub.y);
+  // quem marcou entra ANTES de quem nasce ao acaso: na ordem inversa o sorteio
+  // do segundo herói roubava a casa escolhida pelo parceiro
+  var sd2 = E.createBattle('greenhouse', 0, (function () {
+    var q = P.battleParty(['sumo', 'curandeiro']); q[0].dono = 'ana'; q[1].dono = 'bia'; return q;
+  })(), { escolhePosicao: true });
+  var q2 = E.quemEscolhe(sd2), so = {};
+  so[q2[1]] = E.opcoesDe(sd2, q2[1])[0];
+  E.place(sd2, null, null, { escolhas: so });
+  var sóUm = E.findUnit(sd2, q2[1]);
+  check('quem marcou é posto antes de quem nasce ao acaso',
+        sóUm.x === so[q2[1]].x && sóUm.y === so[q2[1]].y);
+  check('e quem NÃO marcou nasce mesmo assim, em chão livre', (function () {
+    var outro = E.findUnit(sd2, q2[0]);
+    return sd2.grid.tiles[outro.y][outro.x].type === 'floor' &&
+           !(outro.x === sóUm.x && outro.y === sóUm.y);
+  })());
+  check('ninguém marcando, o `p` ainda começa a sala (o fim dos 30 s)', (function () {
+    var sv = E.createBattle('greenhouse', 0, P.battleParty(['sumo']), { escolhePosicao: true });
+    return E.place(sv, null, null, {}) === true && sv.phase === 'playing';
+  })());
   // determinismo: a mesma sala e o mesmo grupo dão as mesmas quatro
   var st2 = E.createBattle('greenhouse', 0, P.battleParty(['sumo', 'curandeiro']), { escolhePosicao: true });
   check('as quatro opções são determinísticas (RNG da sala)',
@@ -103,12 +167,26 @@
   check('a sala do chefe lista o chefe como chefe', chefe.some(function (m) { return m.boss; }));
   check('entrar na batalha só a partir da antessala (toque na casa depois)',
         G.entrarNaSala() === true && G.screen === 'battle' && G.state.phase === 'placing');
-  check('update em placing não faz nada (nem IA, nem cronômetro)',
-        (function () { G.update(5); return G.state.phase === 'placing'; })());
-  var opG = E.placementOptions(G.state);
-  G.onTileClicked(opG[0].x, opG[0].y);
-  check('o toque na casa dourada pelo game.js nasce e começa', G.state.phase === 'playing' &&
-        herois(G.state)[0].x === opG[0].x && herois(G.state)[0].y === opG[0].y);
+  check('update em placing não roda IA nem o cronômetro do turno',
+        (function () { G.update(1); return G.state.phase === 'placing'; })());
+
+  // ---- 21/09: A PREPARAÇÃO pelo game.js
+  var opG = G.minhasOpcoes();
+  check('o game.js oferece as MINHAS casas', opG.length === 4, JSON.stringify(opG));
+  check('o PRONTO não vale antes de marcar', G.prontoPrep(true) === false && G.prepEstado().pronto === false);
+  check('o toque na casa dourada só MARCA — a luta NÃO começa', (function () {
+    G.onTileClicked(opG[0].x, opG[0].y);
+    return G.state.phase === 'placing' && !!G.minhaEscolha() &&
+           G.minhaEscolha().x === opG[0].x && G.minhaEscolha().y === opG[0].y;
+  })());
+  check('e o relógio começa nos 30 s', Math.round(G.prepRestante()) === G.PREP_SEGUNDOS,
+        String(G.prepRestante()));
+  check('sozinho, o PRONTO começa a luta na hora', (function () {
+    G.prontoPrep(true);
+    G.update(0.016);
+    return G.state.phase === 'playing' &&
+           herois(G.state)[0].x === opG[0].x && herois(G.state)[0].y === opG[0].y;
+  })());
   check('entrarNaSala fora da antessala é recusado', G.entrarNaSala() === false);
   // vitória → roomClear → nextRoom → antessala da sala 2
   monstros(G.state).forEach(function (m) { m.hp = 0; m.alive = false; });
@@ -117,8 +195,11 @@
   check('a vitória vai para a sala limpa', G.screen === 'roomClear');
   check('Próxima sala abre a ANTESSALA da sala 2, sem batalha',
         G.nextRoom() === true && G.screen === 'antessala' && G.roomIndex === 1 && G.state === null);
-  check('sair da antessala zera a descida (começa do zero)',
-        G.abandonar() === true && G.screen === 'menu' && G.state === null && G.dungeonId === null);
+  // 12/09, pedido do dono: "quando eu abandonar partida deve ir para a praça e
+  // não para o menu" — a prova ainda cobrava o 'menu' e estava vermelha desde então
+  check('sair da antessala zera a descida e leva à PRAÇA',
+        G.abandonar() === true && G.screen === 'hub' && G.state === null && G.dungeonId === null,
+        G.screen);
   check('abandonar fora da antessala é recusado', G.abandonar() === false);
   check('o caminho direto (bancadas antigas) continua: startRun direto = batalha',
         G.startRun(['sumo'], 'greenhouse', { direto: true }) === true && G.screen === 'battle' && G.state.phase === 'playing');

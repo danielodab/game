@@ -2726,19 +2726,64 @@ var JOGO = (typeof window !== 'undefined')
     pintaGuerraTopo();                    // 15/09: quem está fora na guerra de guilda
   }
 
-  /* A ESCOLHA DA POSIÇÃO (03/09): em `placing` a batalha mostra a faixa e
-   * apaga a barra de ações — o toque numa casa dourada é a única entrada. */
+  /* A PREPARAÇÃO (03/09 a escolha da casa, 21/09 o relógio e o PRONTO): em
+   * `placing` a batalha mostra a faixa e apaga a barra de ações — o toque numa
+   * casa dourada MARCA onde nascer, e a luta só começa quando os 30 s acabam ou
+   * todo mundo aperta PRONTO. O botão fica apagado enquanto ninguém marcou: sem
+   * casa escolhida não há o que confirmar. */
   function paintPlacement(s) {
     var placing = s.phase === 'placing';
     screens.battle.classList.toggle('is-placing', placing);
-    if (placing && !bt.placing) {
-      bt.placing = el('div', 'bt-placing', textoColocacao());
+    if (!placing) {
+      if (bt.placing) { bt.placing.remove(); bt.placing = null; }
+      bt.prepBotao = null; bt.prepRelogio = null; bt.prepTexto = null; bt.prepEle = null;
+      return;
+    }
+    if (!bt.placing) {
+      bt.placing = el('div', 'bt-placing');
+      bt.prepTexto = el('div', 'bt-prep-tx', textoColocacao());
+      bt.prepRelogio = el('div', 'bt-prep-relogio', '');
+      bt.prepEle = el('div', 'bt-prep-ele', '');
+      bt.prepBotao = el('button', 'bt-prep-pronto', 'PRONTO');
+      bt.prepBotao.type = 'button';
+      bt.prepBotao.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var g = G();
+        if (g && g.prontoPrep) g.prontoPrep(true);
+        pintaPrep();
+      });
+      bt.placing.appendChild(bt.prepTexto);
+      bt.placing.appendChild(bt.prepRelogio);
+      bt.placing.appendChild(bt.prepEle);
+      bt.placing.appendChild(bt.prepBotao);
       screens.battle.appendChild(bt.placing);
-    } else if (!placing && bt.placing) {
-      bt.placing.remove();
-      bt.placing = null;
+    }
+    pintaPrep();
+  }
+  function pintaPrep() {
+    var g = G();
+    if (!bt.placing || !g || !g.prepEstado) return;
+    var e = g.prepEstado();
+    var seg = Math.ceil(e.restante);
+    if (bt.prepRelogio) {
+      bt.prepRelogio.textContent = 'A luta começa em ' + seg + ' s';
+      bt.prepRelogio.classList.toggle('urgente', seg <= 5);
+    }
+    if (bt.prepEle) {
+      bt.prepEle.textContent = e.dupla
+        ? (e.prontoEle ? nomeParceiro() + ' está pronto.' : 'Esperando ' + nomeParceiro() + '…')
+        : '';
+      bt.prepEle.style.display = e.dupla ? '' : 'none';
+    }
+    if (bt.prepBotao) {
+      bt.prepBotao.disabled = !e.escolhi || e.pronto || e.fechada;
+      bt.prepBotao.textContent = e.pronto ? 'PRONTO ✓' : 'PRONTO';
+      bt.prepBotao.classList.toggle('feito', e.pronto);
+      bt.prepBotao.title = e.escolhi ? '' : 'Marque antes onde nascer';
     }
   }
+  UI._pintaPrep = pintaPrep;               // provas
 
   /* Diz ao renderizador quanto da tela a HUD está tapando.
    *
@@ -10133,7 +10178,8 @@ var JOGO = (typeof window !== 'undefined')
     // cartões voltam a ser tocáveis (o menu deles é a "Mensagem particular").
     var passa = vis && current === 'battle' && !!safe(function () {
       var g = G();
-      return g.isPlayerTurn() || (g.state && g.state.phase === 'placing' && (!g.podeColocar || g.podeColocar()));
+      // 21/09: na preparação TODO jogador marca a sua casa — não é mais só de quem lidera
+      return g.isPlayerTurn() || (g.state && g.state.phase === 'placing' && !!(g.minhasOpcoes && g.minhasOpcoes().length));
     }, false);
     if (passa !== grupoLadoEl.classList.contains('is-passa')) {
       grupoLadoEl.classList.toggle('is-passa', passa);
@@ -10457,11 +10503,8 @@ var JOGO = (typeof window !== 'undefined')
   /* a faixa da colocação (4.7): em grupo, quem lidera toca a casa; quem segue assiste */
   function textoColocacao() {
     if (modoRede() === 'grupo') {
-      var nome = esc(nomeParceiro());
-      return souLider()
-        ? '<b>Escolha onde o grupo nasce</b> — toque numa das quatro casas douradas. O herói de ' + nome +
-          ' nasce ao acaso perto do seu.'
-        : 'Quem lidera (<b>' + nome + '</b>) escolhe onde o grupo nasce. O seu herói aparece ao lado.';
+      return '<b>Escolha onde nascer</b> — toque numa das suas casas douradas. ' +
+             esc(nomeParceiro()) + ' escolhe as dele ao mesmo tempo, de casas diferentes.';
     }
     return '<b>Escolha onde nascer</b> — toque numa das quatro casas douradas. ' +
            'O segundo herói nasce ao acaso perto de você.';
@@ -11614,6 +11657,7 @@ var JOGO = (typeof window !== 'undefined')
   UI.handleEvent = function (ev) {
     if (!ev || !ev.type) return;
     if (ev.type === 'timerTick') { paintTimer(); return; }
+    if (ev.type === 'prepTick') { pintaPrep(); return; }      // 21/09: o relógio da preparação
     if (current !== 'battle') return;
     if (ev.type === 'log') { pushLog(esc(ev.text)); return; }
     var f = EV_TEXT[ev.type];

@@ -169,8 +169,12 @@ var JOGO = (typeof window !== 'undefined')
    *       fere quem está atrás de um, IA mirando o chão
    *   3 — 19/09: o Salão da Sede redesenhado ("A Arena do Trono", js/core/data/arenas.js):
    *       a guerra de guilda refeita no salão antigo não bate — o juiz recusa como
-   *       'regras-mudaram' (vencida limpa), não como 'divergiu' */
-  Engine.VERSAO_REGRAS = 3;
+   *       'regras-mudaram' (vencida limpa), não como 'divergiu'
+   *   4 — 21/09: a PREPARAÇÃO. O lance `p` passou a levar as casas escolhidas de
+   *       TODOS em `l.e`, e quem tem casa marcada é posto antes de quem nasce ao
+   *       acaso — uma sala aberta antes do deploy termina diferente se refeita
+   *       aqui, então ela cai como 'regras-mudaram' e não como 'divergiu' */
+  Engine.VERSAO_REGRAS = 4;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -876,6 +880,16 @@ var JOGO = (typeof window !== 'undefined')
     }
     return true;
   }
+  /* CADA JOGADOR ESCOLHE A SUA CASA (21/09, pedido do dono: "quando um ou dois
+   * jogadores entram na batalha e um escolhe o quadrado, a luta já inicia
+   * automaticamente. Isso não pode acontecer"). Antes só o líder escolhia, e o
+   * toque dele começava a rodada 1 na hora.
+   *
+   * As listas são DISJUNTAS e saem do MESMO saco embaralhado: fatias de quatro,
+   * uma por DONO (o `dono` da unidade em rede; sozinho há um dono só). Precisam
+   * ser disjuntas porque os dois escolhem ao mesmo tempo, sem falar um com o
+   * outro — duas listas com a mesma casa dariam dois heróis no mesmo lugar, e o
+   * desempate teria de viajar pela rede no meio da preparação. */
   function montaEscolha(state, heroSpawns, pets) {
     var herois = [], i;
     for (i = 0; i < state.units.length; i++) {
@@ -883,51 +897,137 @@ var JOGO = (typeof window !== 'undefined')
     }
     var principal = herois[0];
     var zona = zonaDoJogador(state, heroSpawns);
-    // embaralha pelo RNG da sala e tira quatro (a casa atual do principal
-    // conta como livre; a zona nunca deixa a lista vazia)
-    var bolsa = zona.filter(function (c) { return casaLivre(state, c.x, c.y, principal.uid); });
+    // embaralha pelo RNG da sala (determinístico e testável); a casa atual de
+    // cada herói conta como livre, e a zona nunca deixa a lista vazia
+    var meus = {};
+    for (i = 0; i < herois.length; i++) meus[herois[i].uid] = true;
+    var bolsa = zona.filter(function (c) {
+      for (var j = 0; j < state.units.length; j++) {
+        var u = state.units[j];
+        if (!u.alive || u.offBoard || meus[u.uid]) continue;
+        if (u.x === c.x && u.y === c.y) return false;
+      }
+      return true;
+    });
     for (var k = bolsa.length - 1; k > 0; k--) {
-      var j = Math.floor(nextRand(state) * (k + 1));
-      var tmp = bolsa[k]; bolsa[k] = bolsa[j]; bolsa[j] = tmp;
+      var j2 = Math.floor(nextRand(state) * (k + 1));
+      var tmp = bolsa[k]; bolsa[k] = bolsa[j2]; bolsa[j2] = tmp;
     }
-    var options = bolsa.slice(0, 4);
-    if (!options.length) options = [{ x: principal.x, y: principal.y }];
+    // um DONO, uma lista: quem escolhe é o PRIMEIRO herói de cada dono
+    var donos = [], vistos = {};
+    for (i = 0; i < herois.length; i++) {
+      var d = herois[i].dono || '';
+      if (own(vistos, d)) continue;
+      vistos[d] = true;
+      donos.push(herois[i]);
+    }
+    var opcoes = {}, n = 0;
+    for (i = 0; i < donos.length; i++) {
+      var lista = bolsa.slice(n, n + OPCOES_POR_DONO);
+      n += OPCOES_POR_DONO;
+      if (!lista.length) lista = [{ x: donos[i].x, y: donos[i].y }];
+      opcoes[donos[i].uid] = lista;
+    }
     return {
       uid: principal.uid,
-      options: options,
+      options: opcoes[principal.uid] || opcoes[donos[0].uid],
+      opcoes: opcoes,
+      escolhas: {},                 // uid -> {x,y}: NUNCA entra no hash (ver Engine.escolhe)
       zona: zona,
       pets: pets.map(function (p) { return { ownerUid: p.ownerUnit.uid, petId: p.petId, extra: p }; })
     };
   }
+  var OPCOES_POR_DONO = 4;
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function naLista(lista, x, y) {
+    for (var i = 0; lista && i < lista.length; i++) if (lista[i].x === x && lista[i].y === y) return true;
+    return false;
+  }
+  /* MARCAR A CASA NÃO É LANCE. `escolhe` só grava em `placement.escolhas`: não
+   * move ninguém, não gasta `nextRand`, não entra no `Engine.hash` e não começa
+   * a rodada. Tinha de ser assim — dois jogadores marcando ao mesmo tempo
+   * disputariam a MESMA chave (T=0, k=0) da fila do lockstep e rachariam a sala.
+   * O que viaja é o PRONTO (voz `prep` do Coop) e, no fim, o lance `p` único do
+   * colocador, com as casas dos dois dentro. Marcar de novo TROCA a casa. */
+  Engine.escolhe = function (state, uid, x, y) {
+    if (!state || state.phase !== 'placing' || !state.placement) return false;
+    var lista = state.placement.opcoes && state.placement.opcoes[uid];
+    if (!naLista(lista, x, y)) return false;
+    state.placement.escolhas[uid] = { x: x, y: y };
+    return true;
+  };
+  Engine.escolhaDe = function (state, uid) {
+    var e = state && state.placement && state.placement.escolhas;
+    return (e && own(e, uid)) ? { x: e[uid].x, y: e[uid].y } : null;
+  };
+  Engine.opcoesDe = function (state, uid) {
+    var o = state && state.placement && state.placement.opcoes;
+    return (o && o[uid]) ? o[uid].slice() : [];
+  };
+  /* quem de fato pode marcar uma casa (o primeiro herói de cada dono) */
+  Engine.quemEscolhe = function (state) {
+    var o = state && state.placement && state.placement.opcoes;
+    if (!o) return [];
+    var out = [];
+    for (var uid in o) if (own(o, uid)) out.push(uid);
+    return out;
+  };
   Engine.placementOptions = function (state) {
     return (state && state.placement && state.placement.options) ? state.placement.options.slice() : [];
   };
-  /* O toque numa das quatro casas: o principal vai para lá, o segundo herói
-   * nasce ao acaso na zona (nunca na mesma casa), os pets renascem colados
-   * aos donos, e SÓ ENTÃO a rodada 1 começa. Devolve false se a casa não é
-   * uma das opções. */
-  Engine.place = function (state, x, y) {
+  /* O FIM DA PREPARAÇÃO: cada herói com casa marcada vai para a dele, quem
+   * sobrou nasce ao acaso na zona, os pets renascem colados aos donos, e SÓ
+   * ENTÃO a rodada 1 começa.
+   *
+   * QUEM CHAMA ISTO É O LANCE `p`, não o toque na casa. `opts.escolhas` é um
+   * mapa {uid: {x,y}} com as casas de TODOS, e vem DENTRO do lance — nunca do
+   * `placement.escolhas` local, que é de cada ponta e não viaja. Se lêssemos o
+   * local, dois clientes do mesmo lockstep refariam a sala de jeitos diferentes.
+   * `x`/`y` continuam valendo como a casa de quem manda (`opts.uid`, ou o
+   * principal), para as bancadas antigas e para o solo de uma linha só.
+   *
+   * ORDEM: quem tem casa MARCADA é posto ANTES de quem nasce ao acaso. Na ordem
+   * inversa o sorteio do herói sem marca roubava a casa que o parceiro tinha
+   * escolhido e o parceiro caía noutro lugar. */
+  Engine.place = function (state, x, y, opts) {
     if (!state || state.phase !== 'placing' || !state.placement) return false;
-    var pl = state.placement, ok = false, i;
-    for (i = 0; i < pl.options.length; i++) if (pl.options[i].x === x && pl.options[i].y === y) ok = true;
-    if (!ok) return false;
-    var principal = Engine.findUnit(state, pl.uid);
-    if (!principal) return false;
+    var pl = state.placement, i, uid;
+    opts = opts || {};
+    var quem = opts.uid || pl.uid;
+    var marcadas = {};
+    var vindas = opts.escolhas || {};
+    for (uid in vindas) {
+      if (!own(vindas, uid) || !vindas[uid]) continue;
+      if (!naLista(pl.opcoes && pl.opcoes[uid], vindas[uid].x, vindas[uid].y)) continue;   // casa do outro não vale
+      marcadas[uid] = { x: vindas[uid].x, y: vindas[uid].y };
+    }
+    if (typeof x === 'number' && typeof y === 'number') {
+      if (!naLista(pl.opcoes && pl.opcoes[quem], x, y)) return false;
+      marcadas[quem] = { x: x, y: y };
+    }
     var moves = [];
     // os pets saem antes: ocupam casas e renascem no fim, colados aos donos
     for (i = state.units.length - 1; i >= 0; i--) {
       if (state.units[i].kind === 'pet') state.units.splice(i, 1);
     }
-    if (principal.x !== x || principal.y !== y) {
-      moves.push({ uid: principal.uid, fromX: principal.x, fromY: principal.y, toX: x, toY: y });
-      principal.x = x; principal.y = y;
+    // 1ª volta: os MARCADOS, na ordem das unidades (a mesma nos dois clientes)
+    var jaPosto = {};
+    for (i = 0; i < state.units.length; i++) {
+      var um = state.units[i];
+      if (um.kind !== 'hero' || um.side !== 'player') continue;
+      if (!own(marcadas, um.uid)) continue;
+      var c1 = marcadas[um.uid];
+      jaPosto[um.uid] = true;
+      if (um.x !== c1.x || um.y !== c1.y) {
+        moves.push({ uid: um.uid, fromX: um.x, fromY: um.y, toX: c1.x, toY: c1.y });
+        um.x = c1.x; um.y = c1.y;
+      }
     }
+    // 2ª volta: quem não marcou nasce ao acaso, longe das casas já tomadas
     for (i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.kind !== 'hero' || u.side !== 'player' || u.uid === principal.uid) continue;
-      var casas = pl.zona.filter(function (c) {
-        return !(c.x === x && c.y === y) && casaLivre(state, c.x, c.y, u.uid);
-      });
+      if (u.kind !== 'hero' || u.side !== 'player' || jaPosto[u.uid]) continue;
+      var casas = pl.zona.filter(function (c) { return casaLivre(state, c.x, c.y, u.uid); });
       if (!casas.length) continue;
       var c2 = casas[Math.floor(nextRand(state) * casas.length)];
       if (c2.x !== u.x || c2.y !== u.y) {
@@ -939,9 +1039,10 @@ var JOGO = (typeof window !== 'undefined')
       var dono = Engine.findUnit(state, pl.pets[i].ownerUid);
       if (dono) spawnPet(state, dono, pl.pets[i].petId, pl.pets[i].extra);
     }
+    var minha = marcadas[pl.uid] || null;
     state.placement = null;
     state.phase = 'playing';
-    emit({ type: 'placed', uid: pl.uid, x: x, y: y, moves: moves });
+    emit({ type: 'placed', uid: pl.uid, x: minha ? minha.x : null, y: minha ? minha.y : null, moves: moves });
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return true;

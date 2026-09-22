@@ -2516,6 +2516,19 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   background: rgba(20,16,8,.86); border: 1px solid var(--gold, #ffc44d); color: #f0e6c8;
   font: 400 14px var(--ui-sans); box-shadow: 0 6px 20px rgba(0,0,0,.45); }
 .bt-placing b { color: var(--gold, #ffc44d); }
+/* 21/09 — A PREPARAÇÃO: o relógio dos 30 s e o botão PRONTO dentro da faixa.
+   O botão nasce apagado: só acende depois que o jogador marca a casa dele. */
+.bt-prep-tx { margin-bottom: 7px; }
+.bt-prep-relogio { font: 600 15px var(--ui-sans); color: var(--gold, #ffc44d); letter-spacing: .01em; }
+.bt-prep-relogio.urgente { color: #ff8a6a; }
+.bt-prep-ele { font-size: 12.5px; color: #cdc3a6; margin-top: 3px; }
+.bt-prep-pronto {
+  margin-top: 9px; padding: 8px 26px; border-radius: 8px; cursor: pointer;
+  font: 700 14px var(--ui-sans); letter-spacing: .06em;
+  background: var(--gold, #ffc44d); color: #1a1408; border: 1px solid var(--gold, #ffc44d);
+}
+.bt-prep-pronto:disabled { opacity: .38; cursor: default; }
+.bt-prep-pronto.feito { background: transparent; color: var(--gold, #ffc44d); }
 .screen-battle.is-placing .bt-bottom { opacity: .22; pointer-events: none; }
 .screen-battle.is-placing .bt-timer { opacity: .22; }
 .hub-canvas { width: 100%; height: 100%; display: block; }
