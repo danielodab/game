@@ -65,6 +65,12 @@
   var DGS = (Array.isArray(D.dungeons) ? D.dungeons : valores(D.dungeons)).filter(Boolean).slice()
     .sort(function (a, b) { return num(a.order) - num(b.order); });
   var FECHADO = typeof D.portalFechado === 'function' ? D.portalFechado : function () { return false; };
+  /* OS TABULEIROS QUE NÃO SÃO CALABOUÇO (21/09). `DATA.arenas` tem o MESMO formato de
+   * `rooms[].layout` de um calabouço — a Praça (desafio amistoso) e o Salão da Sede
+   * (guerra de guilda 2×2). A wiki nem carregava o arquivo, então os dois mapas mais
+   * jogados do PvP eram os únicos lugares de luta sem mapinha. Ali `P` é o lado A e a
+   * letra minúscula é o lado B, não monstro. */
+  var ARENAS = (Array.isArray(D.arenas) ? D.arenas : valores(D.arenas)).filter(Boolean);
 
   /* ---- VOCABULÁRIO (o dono confere) ----------------------------------------- */
   var PAPEL = { tanque: 'Tanque', atirador: 'Atirador', mago: 'Mago', assassino: 'Assassino',
@@ -146,6 +152,7 @@
   function nomeClasse(id) { return (CLASSES[id] && CLASSES[id].name) || String(id); }
   function corClasse(id) { return corOk(CLASSES[id] && CLASSES[id].palette && CLASSES[id].palette.primary); }
   function nomeClima(id) { return (CLIMAS[id] && CLIMAS[id].name) || 'Calmo'; }
+  function arena(id) { for (var i = 0; i < ARENAS.length; i++) if (ARENAS[i].id === id) return ARENAS[i]; return null; }
   function pedraDe(el) { return valores(PEDRAS).filter(function (p) { return p.element === el; })[0] || null; }
   function diaHoje() {
     try { return SITE.diaDoCalabouco ? SITE.diaDoCalabouco(SITE.agora()) : null; } catch (e) { return null; }
@@ -612,7 +619,9 @@
     });
     return ordem.map(function (mid) { return { id: mid, n: conta[mid] }; });
   }
-  function mapa(sala) {
+  /* O MAPINHA DA SALA. `duelo` troca a leitura das letras: num tabuleiro de PvP
+   * (DATA.arenas) a minúscula não é monstro, é o nascimento do lado B. */
+  function mapa(sala, duelo) {
     var L = sala.layout || [], mons = sala.monsters || {};
     var larg = L.reduce(function (a, l) { return Math.max(a, l.length); }, 0);
     var cel = [];
@@ -622,7 +631,8 @@
         if (ch === '#') cls = 'alto';
         else if (ch === '=') cls = 'baixo';
         else if (ch === '~') cls = 'vazio';
-        else if (ch === 'P') cls = 'heroi';
+        else if (ch === 'P') cls = duelo ? 'heroi' : 'heroi';
+        else if (duelo && ch >= 'a' && ch <= 'z') cls = 'ladob';
         else if (own.call(mons, ch)) {
           var m = MONSTROS[mons[ch]];
           cls = 'bicho' + (m && m.boss ? ' chefe' : '');
@@ -631,12 +641,48 @@
         cel.push('<i class="' + cls + '"' + extra + '></i>');
       }
     });
-    return '<div class="wk-mapa" data-mapa="' + E(sala.name) + '" style="--larg:' + larg + '" role="img" aria-label="Mapa da sala ' +
-      E(sala.name) + '">' + cel.join('') + '</div>';
+    return '<div class="wk-mapa" data-mapa="' + E(sala.name) + '" style="--larg:' + larg + '" role="img" aria-label="Mapa ' +
+      (duelo ? 'do tabuleiro ' : 'da sala ') + E(sala.name) + '">' + cel.join('') + '</div>';
   }
-  var LEGENDA = '<p class="wk-legenda"><span><i style="background:#2a3139"></i>chão</span><span><i style="background:#5b4a36"></i>parede (tapa a visão)</span>' +
-    '<span><i style="background:#8a6f45"></i>mureta (não passa, mas dá para mirar por cima)</span><span><i style="background:transparent;border:1px dashed #555"></i>buraco</span>' +
-    '<span><i style="background:#ffc44d"></i>onde os heróis nascem</span><span><i style="background:#e05a4f;border-radius:50%"></i>monstro</span></p>';
+  function legendaCel(cor, txt) {
+    return '<span><i style="' + cor + '"></i>' + txt + '</span>';
+  }
+  /* A legenda entra UMA vez por página, junto do primeiro mapinha — e a linha de
+   * quem nasce muda conforme o tabuleiro seja de monstro ou de duelo. */
+  function legenda(duelo) {
+    return '<p class="wk-legenda">' +
+      legendaCel('background:#2a3139', 'chão') +
+      legendaCel('background:#5b4a36', 'parede (tapa a visão)') +
+      legendaCel('background:#8a6f45', 'mureta (não passa, mas dá para mirar por cima)') +
+      legendaCel('background:transparent;border:1px dashed #555', 'buraco') +
+      (duelo
+        ? legendaCel('background:#ffc44d', 'nasce o lado de quem chama') +
+          legendaCel('background:#6fb1ff', 'nasce o lado de quem aceita')
+        : legendaCel('background:#ffc44d', 'onde os heróis nascem') +
+          legendaCel('background:#e05a4f;border-radius:50%', 'monstro')) +
+      '</p>';
+  }
+  var LEGENDA = legenda(false);
+  /* O BLOCO DE SALA — o padrão da wiki, um só, para TODO lugar onde se luta:
+   * título, mapinha, clima e quem está lá dentro. As salas dos calabouços, a
+   * Praça e o Salão da Sede usam este mesmo bloco (21/09, pedido do dono:
+   * "mantenha o padrão das salas com os mapinhas... nem todos têm"). */
+  function blocoSala(sala, o) {
+    o = o || {};
+    var elenco = o.elenco != null ? o.elenco : contaBichos(sala).map(function (b) {
+      var m = MONSTROS[b.id];
+      return '<li>' + (m ? link('monstro', b.id, m.name) + ' ' + elem(m.element) + (m.boss ? ' <span class="wk-selo chefe">chefe</span>' : '') : E(b.id)) +
+        (b.n > 1 ? ' ×' + b.n : '') + '</li>';
+    }).join('');
+    return '<section class="wk-sala">' +
+      (o.titulo ? '<h3>' + o.titulo + '</h3>' : '') +
+      '<div class="wk-sala-corpo">' + mapa(sala, o.duelo) +
+      '<div><p class="apoio">Clima: ' + E(nomeClima(sala.weather)) + '</p>' +
+      (o.antes || '') +
+      (elenco ? '<ul class="wk-bichos">' + elenco + '</ul>' : '') +
+      (o.depois || '') + '</div></div>' +
+      (o.legenda ? legenda(o.duelo) : '') + '</section>';
+  }
   function cartaoDg(d, dia) {
     var fechado = FECHADO(d.id);
     return '<a class="wk-cartao grande" href="' + rota('calabouco', d.id) + '" data-calabouco="' + E(d.id) + '">' +
@@ -645,17 +691,84 @@
       '<span class="wk-selo">nível ' + num(d.recommendedLevel) + '</span></span>' +
       '<span class="apoio">' + E(d.description) + '</span></a>';
   }
+  /* OS OUTROS TABULEIROS (21/09): tudo onde se luta e que não é calabouço. Cada um
+   * tem a MESMA anatomia de página de calabouço — cabeça, mapinha da sala, legenda —
+   * porque era o que faltava: a Praça e o Salão da Sede não apareciam em lugar nenhum
+   * da wiki, e o Poço aparecia só como parágrafo de regra. */
+  function tabuleiros() {
+    var Po = JG.Poco, out = [];
+    var pr = arena('praca'), se = arena('sede');
+    if (pr) out.push({ id: 'praca', nome: pr.name, selo: 'desafio amistoso',
+      resumo: 'A praça da Árvore-Mundo virada em tabuleiro: é aqui que acontece o desafio entre dois jogadores que se encontram no Acampamento. Não vale coroa.' });
+    if (se) out.push({ id: 'sede', nome: se.name, selo: 'guerra de guilda',
+      resumo: 'O salão do trono da Sede, onde duas guildas medem forças 2×2 — quatro heróis de cada lado, as duplas por fila.' });
+    if (Po) out.push({ id: 'poco', nome: 'O Poço sem Fundo', selo: 'na praça',
+      resumo: 'A torre infinita: cada andar é uma sala emprestada de um calabouço, andar após andar, cada vez mais dura.' });
+    return out;
+  }
   function calaboucos() {
-    var dia = diaHoje(), Po = JG.Poco;
+    var dia = diaHoje();
     var h = '<h1>Calabouços</h1><p class="wk-sub">Os portais do Acampamento levam aos calabouços. Cada descida é uma fila de salas; a última tem o chefe. O nível recomendado é onde a experiência rende inteira.</p>' +
-      '<div class="wk-grade">' + DGS.map(function (d) { return cartaoDg(d, dia); }).join('');
-    if (Po) {
-      h += '<a class="wk-cartao grande" href="#/sistemas/poco"><b>O Poço sem Fundo</b><span class="wk-chips"><span class="wk-selo">na praça</span></span>' +
-        '<span class="apoio">A torre infinita: salas emprestadas dos calabouços, andar após andar, cada vez mais duras.</span></a>';
-    }
-    h += '</div>';
+      '<div class="wk-grade">' + DGS.map(function (d) { return cartaoDg(d, dia); }).join('') + '</div>';
     if (dia) h += '<p class="apoio">Todo dia um calabouço aberto é o <b>Calabouço do Dia</b> e paga +' + dia.bonus + '% de saque. Hoje: ' + link('calabouco', dia.id, dia.nome) + '.</p>';
+    var outros = tabuleiros();
+    if (outros.length) {
+      h += '<h2>Os outros tabuleiros</h2><p class="wk-sub">Nem tudo o que se joga é calabouço. Estes são os outros lugares com mapa próprio.</p><div class="wk-grade">' +
+        outros.map(function (t) {
+          return '<a class="wk-cartao grande" href="' + rota('tabuleiro', t.id) + '" data-tabuleiro="' + E(t.id) + '"><b>' + E(t.nome) + '</b>' +
+            '<span class="wk-chips"><span class="wk-selo">' + E(t.selo) + '</span></span><span class="apoio">' + E(t.resumo) + '</span></a>';
+        }).join('') + '</div>';
+    }
     return { titulo: 'Calabouços', html: h };
+  }
+  /* A página de um tabuleiro que não é calabouço. Mesmo esqueleto do calabouço:
+   * trilha, cabeça com selos, e o bloco de sala com o mapinha e a legenda. */
+  function tabuleiro(id) {
+    var t = null, lista = tabuleiros(), i;
+    for (i = 0; i < lista.length; i++) if (lista[i].id === id) t = lista[i];
+    if (!t) return naoAchou();
+    var h = trilha([['#/calaboucos', 'Calabouços']], t.nome) +
+      '<header class="wk-cabeca"><div class="wk-cabeca-tx"><h1>' + E(t.nome) + '</h1><p class="wk-chips">' +
+      '<span class="wk-selo aberto">' + E(t.selo) + '</span>';
+
+    if (id === 'poco') {
+      var Po = JG.Po || JG.Poco;
+      h += '<span class="wk-selo">sozinho</span><span class="wk-selo">+' + pct(Po.FATOR_POR_ANDAR) + ' por andar</span></p><p>' + E(t.resumo) + '</p></div></header>';
+      // O Poço não tem mapa PRÓPRIO: ele empresta as salas dos calabouços abertos.
+      // Mostrar um mapa inventado mentiria — o que a página mostra é de onde vêm.
+      h += '<div class="wk-nota">O Poço não tem sala própria: cada andar é sorteado entre as salas dos calabouços <b>abertos</b>, ' +
+        'com o elenco remontado e mais duro. Os mapas são os mesmos das páginas dos calabouços.</div>';
+      var abertas = DGS.filter(function (d) { return !FECHADO(d.id); });
+      h += '<p>Hoje o Poço pode sortear <b>' + abertas.reduce(function (a, d) { return a + (d.rooms || []).length; }, 0) +
+        ' salas</b>, de ' + abertas.length + ' calabouços:</p><ul class="wk-defs">' +
+        abertas.map(function (d) {
+          return '<li>' + link('calabouco', d.id, d.name) + ' — ' + (d.rooms || []).map(function (r) { return E(r.name); }).join(' · ') + '</li>';
+        }).join('') + '</ul>';
+      h += '<p class="apoio">Cada andar a mais deixa os monstros ' + pct(Po.FATOR_POR_ANDAR) + ' mais duros, e a cada ' +
+        num(Po.CHEFE_A_CADA) + ' andares vem um chefe. O recorde da semana fica anotado. Mais em ' +
+        '<a href="' + rota('sistemas', 'poco') + '">Regras → O Poço sem Fundo</a>.</p>';
+      return { titulo: t.nome, html: h };
+    }
+
+    var a = arena(id);
+    var sala = (a.rooms || [])[0];
+    h += '<span class="wk-selo">clima: ' + E(nomeClima(a.defaultWeather)) + '</span>' +
+      (sala ? '<span class="wk-selo">' + (sala.layout[0] || '').length + '×' + sala.layout.length + ' casas</span>' : '') +
+      '</p><p>' + E(t.resumo) + '</p></div></header>';
+    if (sala) {
+      h += '<h2>O tabuleiro</h2>' + blocoSala(sala, {
+        titulo: E(sala.name),
+        duelo: true,
+        legenda: true,
+        elenco: '',
+        depois: '<p class="apoio">' + (id === 'sede'
+          ? 'Quatro nascimentos de cada lado: as duas duplas de cada guilda entram pela sua ponta do salão.'
+          : 'Sem monstros: quem está no tabuleiro são os heróis dos dois jogadores. A Árvore-Mundo no centro tapa a visão, e as barracas e os bancos servem de cobertura baixa.') + '</p>'
+      });
+    }
+    h += '<p class="apoio">Como se chega até aqui: <a href="' + rota('sistemas', id === 'sede' ? 'guilda' : 'arena') + '">Regras → ' +
+      (id === 'sede' ? 'Guilda' : 'Arena e Brasa') + '</a>.</p>';
+    return { titulo: t.nome, html: h };
   }
   function calabouco(id) {
     var d = dg(id);
@@ -673,13 +786,10 @@
       h += '<h2>As salas</h2>';
       (d.rooms || []).forEach(function (s, i) {
         var ult = i === d.rooms.length - 1;
-        h += '<section class="wk-sala"><h3>Sala ' + (i + 1) + ' — ' + E(s.name) + (ult ? ' <span class="wk-selo chefe">chefe</span>' : '') + '</h3>' +
-          '<div class="wk-sala-corpo">' + mapa(s) + '<div><p class="apoio">Clima: ' + E(nomeClima(s.weather)) + '</p><ul class="wk-bichos">' +
-          contaBichos(s).map(function (b) {
-            var m = MONSTROS[b.id];
-            return '<li>' + (m ? link('monstro', b.id, m.name) + ' ' + elem(m.element) + (m.boss ? ' <span class="wk-selo chefe">chefe</span>' : '') : E(b.id)) +
-              (b.n > 1 ? ' ×' + b.n : '') + '</li>';
-          }).join('') + '</ul></div></div>' + (i === 0 ? LEGENDA : '') + '</section>';
+        h += blocoSala(s, {
+          titulo: 'Sala ' + (i + 1) + ' — ' + E(s.name) + (ult ? ' <span class="wk-selo chefe">chefe</span>' : ''),
+          legenda: i === 0
+        });
       });
     }
     // o saque
@@ -1129,7 +1239,8 @@
         '<li><b>Guerra de Guilda 2×2</b>, na Sede: dois jogadores da mesma guilda, em grupo, cada um com os seus dois heróis, entram na fila; ' +
         'o jogo acha dois de outra guilda (até ' + num((JG.Guerra && JG.Guerra.PARIDADE) || 10) + ' níveis de diferença entre os heróis mais fortes) e os quatro confirmam em 30 s. ' +
         'As duplas dos adversários só aparecem na luta, no Salão da Sede. A guilda que vence ganha ' + num((JG.Guerra && JG.Guerra.XP) || 40) +
-        ' de experiência; quem perde não perde nada, e a coroa não muda. Empate e W.O. não rendem, e o servidor segura quantas guerras valem por dia entre as mesmas guildas.</li></ul>' : ''),
+        ' de experiência; quem perde não perde nada, e a coroa não muda. Empate e W.O. não rendem, e o servidor segura quantas guerras valem por dia entre as mesmas guildas.</li></ul>' +
+        '<p class="apoio">O tabuleiro da guerra tem mapa próprio: ' + link('tabuleiro', 'sede', 'O Salão da Sede') + '.</p>' : ''),
       'guilda insignia cofre banco oferenda dizimo guerra sede 2x2');
 
     var M = JG.Mercado;
@@ -1184,6 +1295,7 @@
         'inscritos (todos veem as classes) e espere um desafio, ou desafie um inscrito com até 5 níveis de diferença; os dois confirmam em 30 s ' +
         'e a luta é numa sala sorteada dos calabouços — vale coroa. O <b>Campo de PvP</b>: só se entra com a coroa ligada, escolhendo dois ' +
         'heróis em ordem (o 1º é a aparência, o 2º é a surpresa); lá dentro qualquer um ataca sem aviso quem estiver a até 10 níveis — também vale coroa.</p>' +
+        '<p class="apoio">O tabuleiro do desafio amistoso tem mapa próprio: ' + link('tabuleiro', 'praca', 'A Praça') + '.</p>' +
         '<p>A pontuação é a Brasa: todo mundo começa com ' + SITE.num(Br.INICIAL) +
         ', ganhar de quem vale menos paga pouco, perder devolve o que se subiu, e ninguém cai abaixo de ' + SITE.num(Br.PISO) + '. A cada ' + num(Br.TEMPORADA_DIAS) +
         ' dias a temporada fecha e os pontos voltam para perto do meio.</p><div class="wk-rolagem"><table class="wk-tabela"><thead><tr><th>coroa</th><th class="n">a partir de</th></tr></thead><tbody>' +
@@ -1197,7 +1309,8 @@
     if (Po) {
       sec('poco', 'O Poço sem Fundo',
         '<p>A torre infinita, com entrada pelo poço da praça, a leste da Árvore-Mundo, para quem desce sozinho. Cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros ' +
-        pct(Po.FATOR_POR_ANDAR) + ' mais duros. A cada ' + num(Po.CHEFE_A_CADA) + ' andares, um chefe. O recorde da semana fica anotado.</p>', 'poco torre infinita andar');
+        pct(Po.FATOR_POR_ANDAR) + ' mais duros. A cada ' + num(Po.CHEFE_A_CADA) + ' andares, um chefe. O recorde da semana fica anotado.</p>' +
+        '<p class="apoio">De quais salas ele empresta: ' + link('tabuleiro', 'poco', 'O Poço sem Fundo') + '.</p>', 'poco torre infinita andar');
     }
 
     sec('dupla', 'Em dupla',
@@ -1255,6 +1368,11 @@
       add('Calabouço', d.name, d.description, rota('calabouco', d.id));
       if (aberto(d.id)) (d.rooms || []).forEach(function (s) { add('Sala', s.name, d.name, rota('calabouco', d.id)); });
     });
+    tabuleiros().forEach(function (t) {
+      add('Tabuleiro', t.nome, [t.selo, t.resumo].join(' '), rota('tabuleiro', t.id));
+      var a = arena(t.id);
+      if (a) (a.rooms || []).forEach(function (s) { add('Tabuleiro', s.name, t.nome + ' ' + t.selo, rota('tabuleiro', t.id)); });
+    });
     valores(PEDRAS).forEach(function (p) { add('Pedra de forja', p.name, p.description, rota('sistemas', 'forja')); });
     valores(CLIMAS).forEach(function (w) { add('Clima', w.name, w.description, rota('sistemas', 'climas')); });
     secoesRegras().forEach(function (s) { add('Regra', s.titulo, s.busca, rota('sistemas', s.id)); });
@@ -1292,11 +1410,11 @@
    * ====================================================================== */
   var PAGINAS = {
     '': inicio, inicio: inicio, classes: classes, classe: classe, feiticos: feiticos, feitico: feiticoPag,
-    calaboucos: calaboucos, calabouco: calabouco, bestiario: bestiario, monstro: monstro, itens: itens,
+    calaboucos: calaboucos, calabouco: calabouco, tabuleiro: tabuleiro, bestiario: bestiario, monstro: monstro, itens: itens,
     item: itemPag, conjuntos: conjuntos, conjunto: conjunto, pets: pets, pet: petPag, sistemas: sistemas, busca: busca
   };
   var MENU_DE = { '': 'inicio', inicio: 'inicio', classe: 'classes', feitico: 'feiticos', calabouco: 'calaboucos',
-                  monstro: 'bestiario', item: 'itens', conjunto: 'conjuntos', pet: 'pets' };
+                  tabuleiro: 'calaboucos', monstro: 'bestiario', item: 'itens', conjunto: 'conjuntos', pet: 'pets' };
   function dec(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
   function leRota() {
     var h = location.hash.replace(/^#\/?/, ''), q = '', i = h.indexOf('?');

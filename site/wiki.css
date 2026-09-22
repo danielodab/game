@@ -125,6 +125,9 @@ details.wk-caminho > .wk-feiticos { padding: 0 12px 12px; margin: 0; }
 .wk-mapa .baixo { background: #8a6f45; }
 .wk-mapa .vazio { background: transparent; }
 .wk-mapa .heroi { background: var(--ouro); }
+/* 21/09: nos tabuleiros de PvP (a Praça, o Salão da Sede) a letra minúscula é o
+   nascimento do LADO B, não monstro — o azul separa os dois lados a olho */
+.wk-mapa .ladob { background: #6fb1ff; }
 .wk-mapa .bicho { background: var(--cor, #e05a4f); border-radius: 50%; }
 .wk-mapa .chefe { background: var(--cor, #e05a4f); border-radius: 2px; box-shadow: 0 0 0 1px #fff; }
 .wk-legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--texto-2); margin: 6px 0 0; }
