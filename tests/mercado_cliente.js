@@ -11,7 +11,10 @@
  *   - o vigia: pergunta na entrada da praça, não pergunta na batalha, a confirmação
  *     só na praça e uma por vez, as notícias viram avisos e são marcadas como vistas,
  *     a confirmação fechada sem resposta é adiada e a volta à praça a traz de novo;
- *   - a taxa inteira (60 → 3, não 4). */
+ *   - a taxa inteira (60 → 3, não 4);
+ *   - o lote de pedras (22/09): o corpo {tipo, stoneId, qtd, preco} na mesma rota, o
+ *     corpo da peça igual ao de antes, a régua do preço e os avisos com o nome da
+ *     pedra ("50× Brasa Coagulada") — e sem DATA.stones o texto não quebra. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -24,7 +27,8 @@ function check(nome, ok, extra) {
 }
 const espera = (ms) => new Promise((r) => setTimeout(r, ms || 0));
 
-function mundo() {
+/* `extraData` (opcional) entra no DATA de mentira — o lote de pedras quer DATA.stones */
+function mundo(extraData) {
   const log = { pedidos: [], descarregou: 0, adotou: [], avisos: [], confirmou: [], mudou: 0 };
   const estado = { tela: 'menu', screen: 'menu', ligada: true, mostrando: false, respostas: {} };
   const ctx = {
@@ -34,7 +38,8 @@ function mundo() {
   ctx.globalThis = ctx;
   ctx.window = ctx;
   ctx.JOGO = {
-    DATA: { items: { 'gh-wasp-sting': { name: 'Ferrão de Vespa', rarity: 'comum', slot: 'punho' } } },
+    DATA: Object.assign({ items: { 'gh-wasp-sting': { name: 'Ferrão de Vespa', rarity: 'comum', slot: 'punho' } } },
+                        extraData || {}),
     Sessao: {
       api(rota, op) {
         log.pedidos.push({ rota, op, descarregouAntes: log.descarregou });
@@ -161,6 +166,67 @@ function mundo() {
     Srv._tique();
     await espera(5);
     check('sem a autoridade ligada o vigia não pergunta', pediuAvisos() === n);
+  }
+
+  // ---- o LOTE de pedras (22/09): a rota, a régua e os textos
+  {
+    const PEDRAS = { stones: {
+      'stone-ember': { id: 'stone-ember', name: 'Brasa Coagulada', element: 'fogo' },
+      'stone-tear': { id: 'stone-tear', name: 'Lágrima de Cisterna', element: 'agua' }
+    } };
+    const { M, Srv, log, estado } = mundo(PEDRAS);
+    estado.respostas['/api/mercado/anunciar'] = () => ({ ok: true, status: 200, versao: 3, hash: 'h', progress: { p: 1 }, db: { d: 1 } });
+    const r = await Srv.anunciarPedras('stone-ember', 50.9, 240.7);
+    const p = log.pedidos[0];
+    check('o lote vai à MESMA rota, com tipo pedra, a pedra, o tamanho e o preço inteiros',
+          p.rota === '/api/mercado/anunciar' && p.op.method === 'POST' && p.descarregouAntes === 1 &&
+          JSON.stringify(p.op.body) === JSON.stringify({ tipo: 'pedra', stoneId: 'stone-ember', qtd: 50, preco: 240 }),
+          p.op.body);
+    check('... e o estado que volta é adotado', log.adotou.length === 1 && log.adotou[0] === r);
+    await Srv.anunciar({ itemId: 'gh-wasp-sting', iid: 'jxyz' }, 12.2, 5);
+    await Srv.anunciar({ itemId: 'gh-wasp-sting' }, 10, 3);
+    check('o corpo da PEÇA segue o de antes, sem tipo: {preco, iid} ou {preco, invIndex}',
+          JSON.stringify(log.pedidos[1].op.body) === JSON.stringify({ preco: 12, iid: 'jxyz' }) &&
+          JSON.stringify(log.pedidos[2].op.body) === JSON.stringify({ preco: 10, invIndex: 3 }),
+          [log.pedidos[1].op.body, log.pedidos[2].op.body]);
+
+    check('a régua dos lotes é 1, 10, 50 e 100', JSON.stringify(M.LOTES_PEDRA) === '[1,10,50,100]', M.LOTES_PEDRA);
+    const sug = [M.precoSugeridoPedra('stone-tear', 1), M.precoSugeridoPedra('stone-ember', 50),
+                 M.precoSugeridoPedra('stone-anchor', 1), M.precoSugeridoPedra('stone-anchor', 100),
+                 M.precoSugeridoPedra('pedra-nova', 10)];
+    check('o preço sugerido: 3, 250, 150, o teto 9999 e 40 para a pedra que a régua não conhece',
+          JSON.stringify(sug) === '[3,250,150,9999,40]', sug);
+    check('ehLote e nomePedra', M.ehLote({ tipo: 'pedra' }) && !M.ehLote({ itemId: 'gh-wasp-sting' }) && !M.ehLote(null) &&
+          M.nomePedra('stone-ember') === 'Brasa Coagulada' && M.nomePedra('stone-x') === 'stone-x');
+
+    const venda = { id: 3, tipo: 'pedra', qtd: 50, itemId: 'stone-ember', level: 0, stars: 0, valor: 240, taxa: 12,
+                    recebeu: 228, comprador: 'Beltrano' };
+    const tv = Srv.textoVenda(venda);
+    const tp = Srv.textoDesfecho({ estado: 'perdida', tipo: 'pedra', qtd: 10, itemId: 'stone-ember', valor: 30 });
+    const tr = Srv.textoDesfecho({ estado: 'recusada', tipo: 'pedra', qtd: 10, itemId: 'stone-ember', valor: 30, vendedor: 'Fulano' });
+    const tc = Srv.textoDesfecho({ estado: 'cancelada', tipo: 'pedra', qtd: 1, itemId: 'stone-tear', valor: 2 });
+    const tb = Srv.textoRecebida({ tipo: 'pedra', qtd: 100, itemId: 'stone-tear', valor: 250, preco: 300, comprador: 'Ciclano' });
+    check('os avisos chamam o lote pelo nome: "50× Brasa Coagulada", "o lote de 10× …"',
+          /^Vendido: 50× Brasa Coagulada para Beltrano por 240 vinténs/.test(tv) &&
+          /^O lote de 10× Brasa Coagulada foi vendido a outro jogador/.test(tp) &&
+          /pelo lote de 10× Brasa Coagulada\.$/.test(tr) &&
+          /^O anúncio do lote de 1× Lágrima de Cisterna saiu do balcão/.test(tc) &&
+          /pelo seu lote de 100× Lágrima de Cisterna \(à venda por 300\)/.test(tb), [tv, tp, tr, tc, tb]);
+    check('a peça segue com o texto de antes',
+          Srv.textoVenda({ itemId: 'gh-wasp-sting', level: 1, stars: 0, valor: 100, taxa: 5, recebeu: 95, comprador: 'B' }) ===
+          'Vendido: Ferrão de Vespa +1 para B por 100 vinténs — taxa de 5, +95 no saco.');
+  }
+  {
+    // sem DATA.stones (o dado de mentira do começo): o texto não quebra, usa o id
+    const { M, Srv } = mundo();
+    let t = null, erro = null;
+    try {
+      t = Srv.textoVenda({ tipo: 'pedra', qtd: 50, itemId: 'stone-ember', valor: 9, taxa: 1, recebeu: 8 }) + ' | ' +
+          Srv.textoDesfecho({ estado: 'perdida', tipo: 'pedra', qtd: 10, itemId: 'stone-ember', valor: 3 }) + ' | ' +
+          Srv.textoRecebida({ tipo: 'pedra', qtd: 1, itemId: 'stone-ember', valor: 1, preco: 2 });
+    } catch (e) { erro = e.message; }
+    check('sem DATA.stones o texto do lote não quebra (usa o id da pedra)',
+          !erro && /50× stone-ember/.test(t) && M.nomePedra('stone-ember') === 'stone-ember', erro || t);
   }
 
   console.log(falhas ? 'FALHOU — ' + falhas + ' de ' + total : 'tudo passou (' + total + ')');

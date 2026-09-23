@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — a quebra na forja (HUD)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  html, body { overflow: auto; height: auto; }
+  body { margin: 0; background: #0f1216; color: #e8eef6; }
+  #topo { padding: 10px; font: 12px monospace; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  /* a PROVA roda numa coluna de celular (390); a FOTO (?foto=) usa a janela
+     inteira e esconde o placar */
+  html.prova #app { position: relative; width: 390px; height: 844px; }
+  html.foto #topo { position: fixed; left: -9999px; top: 0; }
+</style>
+</head>
+<body>
+<!-- A QUEBRA NA FORJA (22/09, pedido do dono: "na forja o jogador poderá quebrar
+     os itens, que darão pedras daquele elemento"). tests/quebra.html cobra a
+     REGRA (Progress + juiz); esta cobra a FICHA. Página LEVE — sem index.html,
+     sem WebGL: o CSS, os dados, o miolo, o Art, os ícones e a HUD de verdade
+     num #app de 390 px. Semeia um saco com uma épica, uma rara ★1 +5, três
+     cópias iguais, uma peça do Mestre (de mentira, noDrop) e uma peça vestida,
+     e cobra:
+       · os dois modos redondos no alto (data-modo), o título do aberto, e o
+         Forjar exatamente como antes (encaixe da pedra, martelo, a Estrela);
+       · o Quebrar: a bancada de dois encaixes, a grade só do saco com o "→N"
+         de cada célula, a pedra de destino acesa na prateleira, a Estrela fora;
+       · a bancada diz EXATAMENTE o total e a pedra do Progress.quebraInfo, e
+         a conta por partes;
+       · o golpe pergunta, o Cancelar volta à forja, o Quebrar tira a peça do
+         saco, soma as pedras (um save só) e avisa no toast;
+       · uma cópia ou todas (a que sobra fica na bancada);
+       · a vestida explica e não tem botão; a do Mestre recusa;
+       · com sessão (Autoridade de mentira) quem quebra é o servidor: a op
+         'quebrarPeca' {invIndex, n}, o botão esperando, a recusa 'emprestada';
+       · a barra do inventário leva à forja já no Quebrar; a porta da forja
+         abre sempre no Forjar;
+       · os botões redondos no contrato da casa, nada vazando dos 390 px,
+         nenhum erro e o save de verdade intocado.
+     ?foto=vazia|peca|copias|estrela|vestida|barra -> semeia, abre a forja no Quebrar
+     com a bancada assim e marca __pronto (para as fotos de 1280 e de 390);
+     &pergunta=1 abre a confirmação, &rola=<seletor> rola a ficha até ele.
+     Uso: python <roda.py> resumo tests/quebra_hud.html 30000 -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script>
+  (function () {
+    var foto = /[?&]foto=/.test(location.search);
+    document.documentElement.className += foto ? ' foto' : ' prova';
+  })();
+</script>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
+    'js/core/contas.js','js/core/nomes.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
+    'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
+    'js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    erros.push('promessa: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  function qa(s, raiz) { return [].slice.call((raiz || document).querySelectorAll(s)); }
+  function q1(s, raiz) { return (raiz || document).querySelector(s); }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ficha() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function txt(n) { return n ? n.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function fim() {
+    check('nenhum erro na página', erros.length === 0, erros.slice(0, 4).join(' | '));
+    var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check();
+    check('o save de verdade continua intocado', !!sb && sb.ok, sb ? JSON.stringify(sb.disco).slice(0, 120) : 'sem sandbox');
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__done = true;
+    window.__pronto = true;
+  }
+
+  var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI;
+  function nomeDe(id) { return (D.items[id] || {}).name || id; }
+  function pedraNome(sid) { return (D.stones[sid] || {}).name || sid; }
+
+  // ------------------------------------------------------------ a semente
+  var EPICA = 'cp-eclipse-lens';      // épica de fogo, Nv. 30: 8 × 3 = 24 Brasa
+  var RARA = 'av-glider-cloak';       // rara de ar, Nv. 18, vai a ★1 +5: 29 Sopro
+  var TRIO = 'gh-sap-apron';          // rara de água, Nv. 5: 3 Lágrimas cada
+  var OUTRA = 'gh-widow-shears';      // épica de terra — a da recusa 'emprestada'
+  var VESTE = 'gh-firefly-crown';     // comum de água, vai vestida
+  var MESTRE = 'gm-prova-quebra';     // a Panóplia de mentira (noDrop)
+  var hid;
+  function semeia() {
+    D.items[MESTRE] = { id: MESTRE, name: 'Coroa do Mestre de prova', slot: D.items[EPICA].slot,
+      rarity: 'lendario', element: 'neutro', bonuses: { power: 1 }, noDrop: true };
+    P.load(); P.reset();
+    hid = P.heroIds()[0];
+    var XP = D.leveling.xpTable;
+    P.addXp(hid, XP[Math.min(29, XP.length - 1)]);          // nível 30: nada trancado
+    function poe(id, lv, st) { P.state.inventory.push(P.novaCopia(id, 'prova', lv || 0, st || 0)); }
+    poe(EPICA); poe(RARA, 5, 1); poe(TRIO); poe(TRIO); poe(TRIO); poe(OUTRA); poe(MESTRE);
+    P.addItem(VESTE);
+    P.equip(hid, VESTE);
+    Object.keys(D.stones).forEach(function (sid, i) { P.addStones(sid, [10, 4, 7, 2, 12, 1][i] || 3); });
+    P.save();
+    UI.init();
+    UI.selection([hid]);
+  }
+  function indiceDe(id, lv, st) {
+    for (var i = 0; i < P.state.inventory.length; i++) {
+      var e = P.state.inventory[i];
+      if (e.itemId === id && (e.level || 0) === (lv || 0) && (e.stars || 0) === (st || 0)) return i;
+    }
+    return -1;
+  }
+  function copiasNoSaco(id) { return P.state.inventory.filter(function (e) { return e.itemId === id; }).length; }
+  function celula(id) {
+    return qa('.fg-cel', ficha()).filter(function (c) { return txt(q1('.ig-nm', c)) === nomeDe(id); })[0] || null;
+  }
+  function toca(sel) { var b = typeof sel === 'string' ? q1(sel, ficha()) : sel; if (b) b.click(); return !!b; }
+  function botaoTexto(re, raiz) {
+    return qa('button', raiz || ficha()).filter(function (b) { return re.test(txt(b)); })[0] || null;
+  }
+  function toastTxt() { var t = q1('.ui-toast'); return t ? txt(t) : ''; }
+  function toastBom() { var t = q1('.ui-toast'); return !!t && t.classList.contains('t-good'); }
+  function limpaToast() { var t = q1('.ui-toast'); if (t) { t.innerHTML = ''; t.className = 'ui-toast'; } }
+  function modoAceso() { var b = q1('.fg-modos [data-modo].is-on', ficha()); return b ? b.getAttribute('data-modo') : null; }
+  function banco() { return q1('.fg-slot-pedras', ficha()); }
+  function botaoQuebrar() { return q1('.fg-quebrar-go', ficha()); }
+
+  // o contrato de TODO botão redondo da ficha aberta (o mesmo da prova_icones_menus)
+  function contratoDosBotoes(onde) {
+    var bs = qa('.btn-ico', ficha());
+    var ruins = [];
+    bs.forEach(function (b) {
+      var r = b.getBoundingClientRect();
+      if (r.width < 2) return;
+      var rot = b.getAttribute('data-rot');
+      if (r.width < 44 || r.height < 44) ruins.push(rot + ' ' + Math.round(r.width) + '×' + Math.round(r.height));
+      if (b.textContent !== rot) ruins.push(rot + ' textContent="' + b.textContent + '"');
+      var contaA = b.getAttribute('data-conta');
+      if (b.getAttribute('aria-label') !== (contaA ? rot + ' (' + contaA + ')' : rot)) ruins.push(rot + ' sem aria-label');
+      if (!b.querySelector('svg.ico-svg') || !b.querySelector('.rot-oculto')) ruins.push(rot + ' sem svg/rot-oculto');
+    });
+    check(onde + ': ' + bs.length + ' botões redondos no contrato (>= 44 px, nome escondido = data-rot = aria-label)',
+          bs.length > 0 && ruins.length === 0, ruins.slice(0, 5).join(' | '));
+  }
+  // nada vaza da ficha (a coluna de 390 px da prova)
+  function cabe(onde) {
+    var f = ficha(), fora = [];
+    if (f) {
+      var lim = f.getBoundingClientRect();
+      qa('*', f).forEach(function (n) {
+        var r = n.getBoundingClientRect();
+        if (!r.width) return;
+        if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+          var p = n.parentNode, rola = false;
+          while (p && p !== f) {
+            var ov = getComputedStyle(p).overflowX;
+            if (ov === 'auto' || ov === 'scroll') { rola = true; break; }
+            p = p.parentNode;
+          }
+          if (!rola) fora.push(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className || n.tagName));
+        }
+      });
+    }
+    check(onde + ': nada vaza da coluna de 390 px', !!f && fora.length === 0, fora.slice(0, 4).join(' | '));
+  }
+
+  // ------------------------------------------------------------ o modo FOTO
+  function foto() {
+    if (Q.foto === 'barra') {                             // a barra do inventário, com "Quebrar na forja"
+      UI.openSheet('inventory');
+      toca(qa('.ig-cell', ficha()).filter(function (c) { return txt(q1('.ig-nm', c)) === nomeDe(OUTRA); })[0]);
+      var corpoB = q1('.sheet-body', ficha()), barra = q1('.inv-pick', ficha());
+      if (corpoB && barra) corpoB.scrollTop += barra.getBoundingClientRect().top - corpoB.getBoundingClientRect().top - 8;
+      window.__pronto = true;
+      return;
+    }
+    UI.openSheet('forge');
+    toca('.fg-modos [data-modo="quebrar"]');
+    if (Q.foto === 'peca') toca(celula(EPICA));
+    if (Q.foto === 'copias') { toca(celula(TRIO)); toca('.fg-qtd [data-n="todas"]'); }
+    if (Q.foto === 'estrela') toca(celula(RARA));
+    if (Q.foto === 'vestida') {
+      toca('.fg-modos [data-modo="forjar"]');
+      var cv = qa('.fg-cel', ficha()).filter(function (c) { return !!q1('.fg-worn', c); })[0];
+      toca(cv);
+      toca('.fg-modos [data-modo="quebrar"]');
+    }
+    if (Q.pergunta) toca(botaoQuebrar());                  // ?pergunta=1: a confirmação aberta
+    if (Q.rola) {
+      var alvo = q1(Q.rola, ficha()), corpo = q1('.sheet-body', ficha());
+      if (alvo && corpo) corpo.scrollTop += alvo.getBoundingClientRect().top - corpo.getBoundingClientRect().top - 8;
+    }
+    document.getElementById('summary').textContent = 'foto: ' + Q.foto + ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
+    window.__pronto = true;
+  }
+
+  // ------------------------------------------------------------ a PROVA
+  function prova() {
+    var passos = [];
+    function p(fn) { passos.push(fn); }
+
+    // ---- 1) os dois modos; o Forjar como antes
+    p(function () {
+      UI.openSheet('forge');
+      var modos = qa('.fg-modos [data-modo]', ficha());
+      check('a forja abre com os dois modos redondos no alto (Forjar, Quebrar)',
+            modos.length === 2 && modos[0].getAttribute('data-modo') === 'forjar' && modos[1].getAttribute('data-modo') === 'quebrar' &&
+            txt(modos[0]) === 'Forjar' && txt(modos[1]) === 'Quebrar' &&
+            !!q1('.ico-fg-forjar', modos[0]) && !!q1('.ico-fg-quebrar', modos[1]),
+            modos.map(function (b) { return b.getAttribute('data-modo') + ':' + txt(b); }).join(','));
+      var fila = q1('.fg-modos', ficha()), bancada = q1('.forge-banca2', ficha());
+      check('a fileira dos modos vem ANTES da bancada',
+            !!fila && !!bancada && !!(fila.compareDocumentPosition(bancada) & Node.DOCUMENT_POSITION_FOLLOWING));
+      check('abre no Forjar, com o título "Forjar a peça"',
+            modoAceso() === 'forjar' && /^Forjar a peça/.test(txt(q1('.fg-modo-tit', ficha()))), txt(q1('.fg-modo-tit', ficha())));
+      check('o subtítulo da ficha fala da quebra', /quebre a peça em pedras/.test(txt(q1('.sheet-head', ficha()))));
+      toca(celula(EPICA));
+      check('Forjar: a bancada de sempre — peça, encaixe da pedra, resultado, o martelo e a Estrela',
+            !!q1('.fg-slot-peca.has', ficha()) && !!q1('.fg-slot-pedra', ficha()) && !!q1('.fg-slot-res', ficha()) &&
+            !!botaoTexto(/Bater o martelo/) && !!q1('.fc-estrela', ficha()) && !q1('.fg-banca-quebra', ficha()) &&
+            !q1('.fg-rende', ficha()));
+      var certa = q1('.stone-chip.is-certa', ficha());
+      check('Forjar: a pedra certa segue acesa (is-certa) com o nome dela',
+            !!certa && txt(certa).indexOf(pedraNome('stone-ember')) >= 0, txt(certa));
+      check('Forjar: as vestidas seguem num grupo, com a marca do herói', !!q1('.fg-cel .fg-worn', ficha()));
+      contratoDosBotoes('forja · Forjar');
+    });
+
+    // ---- 2) o Quebrar: bancada de dois encaixes, grade só do saco
+    p(function () {
+      toca('.fg-modos [data-modo="quebrar"]');
+      check('o toque em Quebrar acende o modo e troca o título',
+            modoAceso() === 'quebrar' && /^Quebrar a peça em pedras/.test(txt(q1('.fg-modo-tit', ficha()))),
+            txt(q1('.fg-modo-tit', ficha())));
+      check('Quebrar: a bancada de dois encaixes, sem pedra a escolher, sem martelo, sem Estrela',
+            !!q1('.fg-banca-quebra', ficha()) && !!banco() && !q1('.fg-slot-pedra', ficha()) &&
+            !q1('.fg-slot-res', ficha()) && !botaoTexto(/Bater o martelo/) && !q1('.fc-estrela', ficha()));
+      check('a peça que estava na bancada continua nela', !!q1('.fg-slot-peca.has', ficha()) &&
+            txt(q1('.fg-slot-peca', ficha())).indexOf(nomeDe(EPICA)) >= 0);
+      check('Quebrar: a grade é só do saco (nenhuma vestida) e uma linha diz como trazê-la',
+            !q1('.fg-cel .fg-worn', ficha()) && /1 peça vestida não aparece aqui: tire do herói para quebrar/.test(txt(q1('.fg-vestidas-fora', ficha()))));
+      var cels = qa('.fg-cel', ficha());
+      check('Quebrar: toda célula tem o "→N" (quanto UMA cópia rende)', cels.length > 0 &&
+            cels.every(function (c) { return !!q1('.fg-rende', c); }), cels.length + ' células');
+      var ce = celula(EPICA), rende = ce && q1('.fg-rende', ce);
+      var qe = P.quebraInfo(indiceDe(EPICA), 1);
+      check('a épica rende "→' + qe.pedras + '", na cor da pedra dela (--ec, data-pedra)',
+            !!rende && txt(rende) === '→' + qe.pedras && rende.getAttribute('data-pedra') === qe.stoneId &&
+            !!rende.style.getPropertyValue('--ec'), rende ? txt(rende) + ' ' + rende.getAttribute('data-pedra') : 'sem');
+      var cm = celula(MESTRE);
+      check('a peça do Mestre fica apagada, com ✕', !!cm && cm.classList.contains('is-nao-quebra') && txt(q1('.fg-rende', cm)) === '✕');
+      check('a prateleira segue à vista, sem pedra a escolher: a de destino acesa (is-destino), nenhuma is-certa',
+            qa('.stone-chip', ficha()).length === Object.keys(D.stones).length &&
+            qa('.stone-chip.is-destino', ficha()).length === 1 &&
+            txt(q1('.stone-chip.is-destino', ficha())).indexOf(pedraNome(qe.stoneId)) >= 0 &&
+            !q1('.stone-chip.is-certa', ficha()) && !q1('.stone-chip[draggable="true"]', ficha()));
+      contratoDosBotoes('forja · Quebrar');
+      cabe('forja · Quebrar com a épica');
+    });
+
+    // ---- 3) a bancada diz EXATAMENTE o que o Progress diz
+    p(function () {
+      var idx = indiceDe(EPICA);
+      var qe = P.quebraInfo(idx, 1);
+      var b = banco();
+      check('a bancada mostra o total e a pedra do Progress.quebraInfo (' + qe.total + ' ' + qe.stoneId + ')',
+            !!b && b.getAttribute('data-total') === String(qe.total) && b.getAttribute('data-pedra') === qe.stoneId &&
+            txt(q1('b', b)) === '×' + qe.total && txt(b).indexOf(pedraNome(qe.stoneId)) >= 0 && !!q1('canvas, .art-missing', b),
+            b ? b.getAttribute('data-total') + ' ' + b.getAttribute('data-pedra') + ' "' + txt(b) + '"' : 'sem encaixe');
+      var conta = txt(q1('.fg-conta', ficha()));
+      check('a conta por partes: "Épico 8 × Nv. 30 (×3) = 24 → 24 Brasa Coagulada"',
+            conta === 'Épico 8 × Nv. 30 (×3) = 24 → 24 ' + pedraNome('stone-ember'), conta);
+      var go = botaoQuebrar();
+      check('o golpe: largo, de perigo, "Quebrar — vira 24 Brasa Coagulada"',
+            !!go && go.classList.contains('btn-warn') && go.classList.contains('btn-block') &&
+            txt(go) === 'Quebrar — vira ' + qe.total + ' ' + pedraNome(qe.stoneId), txt(go));
+      check('com uma cópia só, nada de "quantas"', !q1('.fg-qtd', ficha()));
+    });
+
+    // ---- 4) pergunta; Cancelar volta; Quebrar quebra (um save só)
+    p(function () {
+      var antesPedra = P.stoneCount('stone-ember');
+      toca(botaoQuebrar());
+      var conf = ficha();
+      check('o golpe pergunta antes: "Quebrar a peça?", a peça some para sempre e vira 24 Brasa',
+            txt(q1('.sheet-head h2', conf)) === 'Quebrar a peça?' &&
+            /some para sempre e vira 24 Brasa Coagulada/.test(txt(q1('.confirm-txt', conf))) &&
+            /Não tem volta/.test(txt(q1('.confirm-txt', conf))), txt(q1('.confirm-txt', conf)));
+      var sim = botaoTexto(/^Quebrar$/, q1('.confirm-acts', conf));
+      check('o botão que confirma diz "Quebrar" e é vermelho', !!sim && sim.classList.contains('btn-warn'));
+      toca(botaoTexto(/^Cancelar$/, q1('.confirm-acts', conf)));
+      check('Cancelar volta à forja, no Quebrar, com a peça na bancada e nada quebrado',
+            !!ficha() && modoAceso() === 'quebrar' && !!q1('.fg-slot-peca.has', ficha()) &&
+            copiasNoSaco(EPICA) === 1 && P.stoneCount('stone-ember') === antesPedra);
+      var saves = 0, save0 = P.save;
+      P.save = function () { saves++; return save0.apply(P, arguments); };
+      limpaToast();
+      toca(botaoQuebrar());
+      toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+      P.save = save0;
+      check('Quebrar: a peça sai do saco', copiasNoSaco(EPICA) === 0, copiasNoSaco(EPICA) + ' no saco');
+      check('Quebrar: +24 Brasa Coagulada na prateleira do Progress', P.stoneCount('stone-ember') === antesPedra + 24,
+            antesPedra + ' → ' + P.stoneCount('stone-ember'));
+      check('Quebrar: grava UMA vez', saves === 1, saves + ' saves');
+      check('o toast: "+24 Brasa Coagulada — a peça virou pedra." (bom)',
+            toastTxt() === '+24 ' + pedraNome('stone-ember') + ' — a peça virou pedra.' && toastBom(), toastTxt());
+      check('a forja volta no Quebrar, com a bancada vazia (não sobrou cópia)',
+            modoAceso() === 'quebrar' && !q1('.fg-slot-peca.has', ficha()) && !celula(EPICA));
+      var chipBrasa = qa('.stone-chip', ficha()).filter(function (c) { return txt(c).indexOf(pedraNome('stone-ember')) >= 0; })[0];
+      check('a prateleira já mostra o monte novo', !!chipBrasa && txt(q1('.stone-n', chipBrasa)) === String(antesPedra + 24),
+            chipBrasa ? txt(q1('.stone-n', chipBrasa)) : 'sem chip');
+    });
+
+    // ---- 5) as cópias iguais: uma (a que sobra fica) ou todas
+    p(function () {
+      toca(celula(TRIO));
+      var qtd = q1('.fg-qtd', ficha());
+      var um = qtd && q1('[data-n="1"]', qtd), todas = qtd && q1('[data-n="todas"]', qtd);
+      check('três cópias iguais: "1" (aceso) e "todas (×3)", em texto',
+            !!um && !!todas && txt(um) === '1' && txt(todas) === 'todas (×3)' && um.classList.contains('is-on') &&
+            !todas.classList.contains('is-on') && !um.classList.contains('btn-ico'), qtd ? txt(qtd) : 'sem fileira');
+      var idx = indiceDe(TRIO);
+      check('com "1": a bancada mostra o de UMA cópia', banco().getAttribute('data-total') === String(P.quebraInfo(idx, 1).total));
+      var antes = P.stoneCount('stone-tear');
+      toca(botaoQuebrar());
+      toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+      check('quebrou UMA: sobram 2, +3 Lágrimas', copiasNoSaco(TRIO) === 2 && P.stoneCount('stone-tear') === antes + 3,
+            copiasNoSaco(TRIO) + ' cópias, ' + (P.stoneCount('stone-tear') - antes) + ' pedras');
+      check('a cópia que sobrou continua na bancada (×2)', !!q1('.fg-slot-peca.has', ficha()) &&
+            /no saco ×2/.test(txt(q1('.fg-slot-peca', ficha()))), txt(q1('.fg-slot-peca', ficha())));
+      toca('.fg-qtd [data-n="todas"]');
+      idx = indiceDe(TRIO);
+      var q2 = P.quebraInfo(idx, 2);
+      check('"todas (×2)": a bancada, a conta e o botão falam das 2 (' + q2.total + ')',
+            banco().getAttribute('data-total') === String(q2.total) &&
+            /× 2 cópias = 6$/.test(txt(q1('.fg-conta', ficha()))) &&
+            txt(botaoQuebrar()) === 'Quebrar — vira 6 ' + pedraNome('stone-tear') &&
+            q1('.fg-qtd [data-n="todas"]', ficha()).classList.contains('is-on'), txt(q1('.fg-conta', ficha())));
+      toca(botaoQuebrar());
+      check('a pergunta diz as 2 cópias', txt(q1('.sheet-head h2', ficha())) === 'Quebrar 2 cópias?' &&
+            /As 2 cópias de Avental de Seiva somem para sempre e viram 6 /.test(txt(q1('.confirm-txt', ficha()))),
+            txt(q1('.confirm-txt', ficha())));
+      limpaToast();
+      toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+      check('quebrou as 2: nenhuma sobra, +6 Lágrimas, o toast conta as peças',
+            copiasNoSaco(TRIO) === 0 && P.stoneCount('stone-tear') === antes + 9 &&
+            toastTxt() === '+6 ' + pedraNome('stone-tear') + ' — as 2 peças viraram pedra.', toastTxt());
+      check('e a bancada esvazia', !q1('.fg-slot-peca.has', ficha()) && !q1('.fg-qtd', ficha()));
+    });
+
+    // ---- 6) a ★1 +5: a conta com estrela e forja
+    p(function () {
+      toca(celula(RARA));
+      var q = P.quebraInfo(indiceDe(RARA, 5, 1), 1);
+      var conta = txt(q1('.fg-conta', ficha()));
+      check('★1 +5: "Raro 3 × Nv. 18 (×2) × ★1 (×3) = 18 · forja +5 devolve 11 → 29 Sopro Engarrafado"',
+            q.total === 29 && conta === 'Raro 3 × Nv. 18 (×2) × ★1 (×3) = 18 · forja +5 devolve 11 → 29 ' + pedraNome('stone-breath'),
+            conta + ' (Progress: ' + q.total + ')');
+    });
+
+    // ---- 7) a vestida explica e não tem botão; a do Mestre recusa
+    p(function () {
+      toca('.fg-modos [data-modo="forjar"]');
+      var cv = qa('.fg-cel', ficha()).filter(function (c) { return !!q1('.fg-worn', c); })[0];
+      toca(cv);
+      toca('.fg-modos [data-modo="quebrar"]');
+      var qv = P.quebraInfoDe(VESTE, 0, 0);
+      check('a vestida na bancada: "Vestida — tire do herói para quebrar", e nenhum botão de quebrar',
+            /Vestida — tire do herói para quebrar/.test(txt(q1('.fg-estado', ficha()))) && !botaoQuebrar() &&
+            q1('.fg-slot-peca', ficha()).classList.contains('is-errada'), txt(q1('.fg-estado', ficha())));
+      check('a vestida mostra, apagado, o que daria no saco (' + qv.pedras + ')',
+            banco().classList.contains('is-errada') && banco().getAttribute('data-total') === String(qv.pedras) &&
+            /se estivesse no saco/.test(txt(banco())));
+      var itens = P.hero(hid).items || {};
+      check('a vestida continua vestida', Object.keys(itens).some(function (k) { return itens[k] === VESTE; }));
+      toca(celula(MESTRE));
+      check('a do Mestre: "Peça do Mestre não se quebra.", o encaixe diz "Não quebra" e não há botão',
+            txt(q1('.fg-estado', ficha())) === 'Peça do Mestre não se quebra.' && !botaoQuebrar() &&
+            /Não quebra/.test(txt(banco())) && copiasNoSaco(MESTRE) === 1, txt(q1('.fg-estado', ficha())));
+    });
+
+    // ---- 8) com sessão: quem quebra é o servidor
+    p(function () {
+      var chamadas = [], solta = null;
+      var AUT_ANTES = JOGO.Autoridade;
+      JOGO.Autoridade = {
+        ligada: function () { return true; },
+        opAgora: function (nome, args) {
+          chamadas.push([nome, JSON.parse(JSON.stringify(args))]);
+          // o "servidor": quebra no estado (é o que a adoção faria) quando soltarem
+          return new Promise(function (r) {
+            solta = function (resposta) {
+              r(resposta || { ok: true, resultado: P.quebraPeca(args.invIndex, args.n) });
+            };
+          });
+        }
+      };
+      toca(celula(RARA));
+      var idx = indiceDe(RARA, 5, 1);
+      var antes = P.stoneCount('stone-breath');
+      toca(botaoQuebrar());
+      toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+      check('com sessão: Autoridade.opAgora("quebrarPeca", {invIndex, n, iid}) — uma chamada, com o índice e a SÉRIE da peça',
+            chamadas.length === 1 && chamadas[0][0] === 'quebrarPeca' &&
+            JSON.stringify(chamadas[0][1]) === JSON.stringify({ invIndex: idx, n: 1, iid: P.state.inventory[idx].iid }) &&
+            !!P.state.inventory[idx].iid, JSON.stringify(chamadas));
+      check('enquanto o servidor pensa: nada muda aqui e o botão espera ("Quebrando…", apagado)',
+            copiasNoSaco(RARA) === 1 && P.stoneCount('stone-breath') === antes && !!botaoQuebrar() &&
+            botaoQuebrar().classList.contains('is-off') && txt(botaoQuebrar()) === 'Quebrando…', txt(botaoQuebrar()));
+      toca(botaoQuebrar());
+      check('o botão esperando não pergunta de novo', chamadas.length === 1 && !q1('.confirm-acts', ficha()));
+      limpaToast();
+      solta();
+      return espera(60).then(function () {
+        check('o servidor quebrou: o toast "+29 Sopro Engarrafado — a peça virou pedra." e a peça saiu',
+              toastTxt() === '+29 ' + pedraNome('stone-breath') + ' — a peça virou pedra.' && toastBom() &&
+              copiasNoSaco(RARA) === 0 && P.stoneCount('stone-breath') === antes + 29, toastTxt());
+        check('a forja volta ao normal, no Quebrar', modoAceso() === 'quebrar' && !q1('.fg-quebrar-go.is-off', ficha()));
+        // a recusa 'emprestada' do juiz
+        toca(celula(OUTRA));
+        toca(botaoQuebrar());
+        toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+        limpaToast();
+        solta({ ok: false, erro: 'peça emprestada do banco da guilda não sai do saco: devolva primeiro' });
+        return espera(60);
+      }).then(function () {
+        check('recusa "emprestada": "Peça emprestada do banco da guilda: devolva antes de quebrar." e nada sai',
+              toastTxt() === 'Peça emprestada do banco da guilda: devolva antes de quebrar.' && copiasNoSaco(OUTRA) === 1 &&
+              chamadas.length === 2 && chamadas[1][0] === 'quebrarPeca', toastTxt());
+        check('depois da recusa o botão volta a valer', !!botaoQuebrar() && !botaoQuebrar().classList.contains('is-off'));
+        // a resposta que chega com a forja já fechada não a reabre
+        toca(botaoQuebrar());
+        toca(botaoTexto(/^Quebrar$/, q1('.confirm-acts', ficha())));
+        UI.closeSheet();
+        solta({ ok: false, erro: 'o servidor recusou' });
+        return espera(60);
+      }).then(function () {
+        check('a resposta que chega com a ficha fechada não a reabre', !ficha());
+        JOGO.Autoridade = AUT_ANTES;
+      });
+    });
+
+    // ---- 9) a barra do inventário leva ao Quebrar; a porta da forja abre no Forjar
+    p(function () {
+      UI.openSheet('inventory');
+      var cel = qa('.ig-cell', ficha()).filter(function (c) { return txt(q1('.ig-nm', c)) === nomeDe(OUTRA); })[0];
+      toca(cel);
+      var bq = botaoTexto(/^Quebrar na forja$/, q1('.inv-pick', ficha()));
+      check('a barra da peça tem "Quebrar na forja" ao lado de "Levar à forja"',
+            !!bq && !!botaoTexto(/Levar à forja/, q1('.inv-pick', ficha())));
+      toca(bq);
+      check('"Quebrar na forja" abre a forja no Quebrar com a peça na bancada',
+            modoAceso() === 'quebrar' && txt(q1('.fg-slot-peca', ficha())).indexOf(nomeDe(OUTRA)) >= 0 &&
+            !!botaoQuebrar(), txt(q1('.fg-slot-peca', ficha())));
+      UI.openSheet('inventory');
+      var cm = qa('.ig-cell', ficha()).filter(function (c) { return txt(q1('.ig-nm', c)) === nomeDe(MESTRE); })[0];
+      toca(cm);
+      check('a peça do Mestre não ganha "Quebrar na forja"', !!q1('.inv-pick .inv-pick-nm', ficha()) &&
+            !botaoTexto(/Quebrar na forja/, q1('.inv-pick', ficha())));
+      UI.openSheet('forge');
+      check('a porta da forja abre SEMPRE no Forjar', modoAceso() === 'forjar');
+      toca('.fg-modos [data-modo="quebrar"]');
+      UI.openSheet('inventory');
+      toca(qa('.ig-cell', ficha()).filter(function (c) { return txt(q1('.ig-nm', c)) === nomeDe(OUTRA); })[0]);
+      toca(botaoTexto(/Levar à forja/, q1('.inv-pick', ficha())));
+      check('"Levar à forja" leva ao Forjar, mesmo vindo do Quebrar', modoAceso() === 'forjar' && !!botaoTexto(/Bater o martelo/));
+    });
+
+    // ---- 10) sem o icones_ui.js: os modos voltam a ser texto e seguem trocando
+    p(function () {
+      var IU = JOGO.IconesUI;
+      JOGO.IconesUI = undefined;
+      UI.openSheet('forge');
+      var modos = qa('.fg-modos [data-modo]', ficha());
+      check('sem ícones: "Forjar" e "Quebrar" em texto (btn-tab)', modos.length === 2 &&
+            modos.every(function (b) { return b.classList.contains('btn-tab') && !b.classList.contains('btn-ico'); }) &&
+            txt(modos[1]) === 'Quebrar');
+      toca(modos[1]);
+      check('sem ícones: o texto troca de modo', modoAceso() === 'quebrar' && !!q1('.fg-banca-quebra', ficha()));
+      JOGO.IconesUI = IU;
+      UI.openSheet('forge');
+    });
+
+    return passos.reduce(function (pr, fn) {
+      return pr.then(function () { return fn(); }).catch(function (e) {
+        check('passo sem exceção', false, (e && e.message) + ' ' + ((e && e.stack) || '').split('\n')[1]);
+      });
+    }, Promise.resolve());
+  }
+
+  try {
+    semeia();
+    if (Q.foto) foto();
+    else prova().then(fim);
+  } catch (e) {
+    check('a página montou', false, e && e.message);
+    fim();
+  }
+})();
+</script>
+</body>
+</html>

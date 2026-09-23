@@ -83,6 +83,26 @@ const OPS = {
   forjarPeca: (J, a) => J.Progress.upgradeItem(int(a, 'invIndex', 0, 9999), bool(a, 'usarGuarda')),
   forjarVestida: (J, a) => J.Progress.upgradeWorn(txt(a, 'heroId'), slot(a), bool(a, 'usarGuarda')),
   fundirPeca: (J, a) => J.Progress.fuseItem(int(a, 'invIndex', 0, 9999)),
+  // a QUEBRA (22/09): n cópias idênticas viram pedras do elemento, sem sorteio. `n` ausente
+  // vale 1; a regra que recusa (Panóplia, cópias a menos) devolve false e o estado fica igual
+  /* a quebra leva a SÉRIE que o jogador viu (índice sozinho aponta outra peça depois de
+   * uma adoção) e deixa de fora as cópias emprestadas da guilda. Sem cópia livre que
+   * baste por causa delas, a recusa diz o porquê em vez de um false mudo. */
+  quebrarPeca: (J, a, x) => {
+    const idx = int(a, 'invIndex', 0, 9999);
+    const n = int(a, 'n', 1, 99, true) || 1;
+    const evita = ((x && x.contexto && x.contexto.bloqueados) || []).filter((s) => typeof s === 'string');
+    const r = J.Progress.quebraPeca(idx, n, { iid: txt(a, 'iid', true), evita });
+    if (r === false && evita.length) {
+      const inv = J.Progress.state.inventory, alvo = inv[idx];
+      const presa = alvo && inv.some((e) => e && evita.indexOf(e.iid) >= 0 && e.itemId === alvo.itemId &&
+        (e.level || 0) === (alvo.level || 0) && (e.stars || 0) === (alvo.stars || 0));
+      if (presa && (!a.iid || alvo.iid === a.iid)) {
+        throw recusa('peça emprestada do banco da guilda não se quebra: devolva primeiro', 'emprestada');
+      }
+    }
+    return r;
+  },
   girarRoleta: (J) => J.Progress.giraRoleta(),
 
   // ---- o cofre (o mesmo passo a passo da HUD: hud.js, sheetBanco)
@@ -301,17 +321,58 @@ const INTERNAS = {
   },
   // o vendedor recebe o valor menos a taxa, no saco
   mercadoRecebe: (J, a) => J.DB.ganharMoedas(int(a, 'valor', 1, 1e12)).then((r) => ({ ok: !!(r && r.ok) })),
-  // a migração: as ofertas do jogador que ainda moram no db saem (viram anúncios na API)
+  /* O LOTE DE PEDRAS (22/09, servidor/mercado.py): anunciar tira `qtd` pedras do estoque do
+   * vendedor (tudo ou nada, pelo Progress.gastaPedras); comprar e retirar as põem no estoque
+   * de quem leva (addStones — pedra não ocupa o saco). Pedra fora de DATA.stones ou lote fora
+   * da régua é argumento torto; estoque curto é 'falta', que a API traduz para 'pedras'. */
+  mercadoTiraPedras: (J, a) => {
+    const { stoneId, qtd } = lotePedra(J, a);
+    if (J.Progress.stoneCount(stoneId) < qtd || !J.Progress.gastaPedras(stoneId, qtd)) {
+      throw recusa('pedras insuficientes: o lote pede ' + qtd + ' e há ' + J.Progress.stoneCount(stoneId), 'falta');
+    }
+    return { stoneId, qtd };
+  },
+  mercadoPoePedras: (J, a) => {
+    const { stoneId, qtd } = lotePedra(J, a);
+    if (!J.Progress.addStones(stoneId, qtd)) throw falha('lote inválido');
+    return { ok: true, stoneId, qtd };
+  },
+  /* a migração: as ofertas do jogador que ainda moram no db saem (viram anúncios na API).
+   * 22/09: o LOTE de pedras local não vira anúncio (o balcão do servidor anuncia pela op
+   * acima, com as pedras em custódia na linha do anúncio) e não pode sumir: as pedras voltam
+   * ao estoque do vendedor aqui mesmo. O lote torto (pedra que o dado não conhece, tamanho
+   * fora da régua) o JOGO.Mercado.abrir já jogava fora — aqui também não volta nem anuncia. */
   mercadoLegadoTira: (J) => J.DB.mercadoLer().then((mc) => {
     const ofertas = (mc && Array.isArray(mc.ofertas)) ? mc.ofertas : [];
-    const saem = ofertas.filter((o) => o && o.vendedor === 'jogador').map((o) => ({
+    const doJogador = ofertas.filter((o) => o && o.vendedor === 'jogador');
+    const pedras = [];
+    doJogador.forEach((o) => {
+      if (o.tipo !== 'pedra') return;
+      let lote = null;
+      try { lote = lotePedra(J, o); } catch (e) { lote = null; }
+      if (lote && J.Progress.addStones(lote.stoneId, lote.qtd)) pedras.push(lote);
+    });
+    const saem = doJogador.filter((o) => o.tipo !== 'pedra').map((o) => ({
       itemId: o.itemId, level: o.level || 0, stars: o.stars || 0,
       iid: (typeof o.iid === 'string' && o.iid) ? o.iid : null, preco: o.preco
     }));
     // a banca velha do mercador-fantasma sai junto (o JOGO.Mercado.abrir já a limpava)
-    return J.DB.mercadoGravar({ dia: (mc && mc.dia) || null, ofertas: [] }).then(() => ({ ofertas: saem }));
+    return J.DB.mercadoGravar({ dia: (mc && mc.dia) || null, ofertas: [] }).then(() => ({ ofertas: saem, pedras }));
   })
 };
+
+/* O lote de pedras conferido: a pedra existe no dado e o tamanho é um dos da régua
+ * (JOGO.Mercado.LOTES_PEDRA; servidor/mercado.py tem a mesma lista em LOTES_PEDRA). */
+const LOTES_PEDRA = [1, 10, 50, 100];
+function lotePedra(J, a) {
+  const stoneId = txt(a, 'stoneId');
+  const pedras = (J.DATA && J.DATA.stones) || {};
+  if (!Object.prototype.hasOwnProperty.call(pedras, stoneId)) throw falha('stoneId: pedra desconhecida');
+  const qtd = int(a, 'qtd', 1, 100);
+  const lotes = (J.Mercado && Array.isArray(J.Mercado.LOTES_PEDRA)) ? J.Mercado.LOTES_PEDRA : LOTES_PEDRA;
+  if (lotes.indexOf(qtd) < 0) throw falha('qtd: o lote é de ' + lotes.join(', ') + ' pedras');
+  return { stoneId, qtd };
+}
 
 /* As do MESTRE: a Caixa, só com a marca da conta vinda do banco. */
 const MESTRE = {

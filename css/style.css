@@ -2887,3 +2887,265 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .guerra-fim .guerra-xp { font-weight: 600; }
 .guerra-fim .guerra-lado-fim b { color: var(--gold, #e8c25a); }
+
+/* ===== ÍCONES DOS MENUS (js/ui/icones_ui.js) ===== */
+/* O BOTÃO REDONDO (22/09, pedido do dono): as abas e os chips de filtro dos
+   menus de item — inventário, forja, banco, mercado, troca, caixa do GM —
+   trocam o texto por um ícone num botão redondo. O contrato:
+     <button class="btn btn-ico [is-on] [ico-cor]" data-rot="Pedras"
+             style="--ec:#ff8c3a">  <svg class="ico-svg …">  <span class="rot-oculto">Pedras</span>
+   · o NOME continua no botão, escondido (.rot-oculto): leitor de tela e as
+     provas que leem button.textContent seguem vendo "Pedras";
+   · o nome VISÍVEL é o balão do data-rot, embaixo do botão: no mouse aparece
+     no :hover, no toque o hud põe .is-legenda no toque longo (a regra da casa:
+     nada de informação só atrás de :hover);
+   · .btn.btn-ico vence .btn-tab, .mc-chip e .btn-mini (medida, raio, recheio)
+     porque mora no fim do arquivo com dois nomes de classe — quem combina não
+     precisa tirar as outras;
+   · a aba acesa é .is-on (a .btn-gold dos mercados vale igual, que era como
+     eles marcavam a aba aberta).
+   Seis botões de 44 com folga de 6 somam 294 px: cabem numa linha da coluna de
+   362 px do celular. */
+.rot-oculto {
+  position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.ico-fila { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ico-svg { display: inline-block; width: 1.3em; height: 1.3em; vertical-align: middle; flex: none; }
+
+.btn.btn-ico {
+  position: relative; flex: 0 0 auto;
+  width: var(--tap); height: var(--tap); min-width: var(--tap); min-height: var(--tap);
+  padding: 0; margin: 0; gap: 0;
+  display: inline-grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line2);
+  background: radial-gradient(circle at 50% 32%, var(--panel3), var(--panel2) 72%);
+  box-shadow: var(--relevo);
+  color: var(--dim);
+  font: 600 13px/1 var(--ui-sans);
+  transition: color .12s ease, border-color .12s ease, box-shadow .12s ease, transform .08s ease, filter .12s ease;
+}
+.btn.btn-ico .ico-svg { display: block; width: 22px; height: 22px; pointer-events: none; }
+.btn.btn-ico:focus-visible { outline: 2px solid var(--gold-3); outline-offset: 2px; }
+/* ACESA: anel de ouro e um halo baixo — a mesma rampa da .btn-tab.is-on */
+.btn.btn-ico.is-on, .btn.btn-ico.btn-gold {
+  color: var(--gold-2);
+  border-color: var(--gold-3);
+  background: radial-gradient(circle at 50% 32%, var(--gold-a22), var(--gold-a08) 72%), var(--panel2);
+  box-shadow: 0 0 0 2px var(--gold-a22), 0 0 12px var(--gold-a22), var(--relevo);
+}
+/* NA COR DELE: o elemento põe --ec, a raridade põe --rc. Apagado, o ícone fica
+   a meia força e o aro quase cinza; aceso, a cor inteira com anel e halo dela. */
+.btn.btn-ico.ico-cor { --ic: var(--ec, var(--rc, var(--gold-2))); color: var(--ic); border-color: var(--line2);
+  border-color: color-mix(in srgb, var(--ic) 22%, var(--line2)); }
+.btn.btn-ico.ico-cor .ico-svg { opacity: .55; filter: saturate(.7); }
+.btn.btn-ico.ico-cor.is-on {
+  color: var(--ic); border-color: var(--ic);
+  background: var(--panel2);
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ic) 24%, transparent),
+              color-mix(in srgb, var(--ic) 7%, transparent) 72%), var(--panel2);
+  box-shadow: 0 0 0 2px var(--line2), var(--relevo);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ic) 32%, transparent),
+              0 0 12px color-mix(in srgb, var(--ic) 38%, transparent), var(--relevo);
+}
+.btn.btn-ico.ico-cor.is-on .ico-svg { opacity: 1; filter: none; }
+/* os dois "todos" (o anel dos elementos, a gema das raridades) já vêm pintados:
+   apagados, descem a meia força como os de cor */
+.btn.btn-ico:not(.is-on):not(.btn-gold) .ico-el-todos,
+.btn.btn-ico:not(.is-on):not(.btn-gold) .ico-rar-todas { opacity: .6; filter: saturate(.6); }
+@media (hover: hover) {
+  .btn.btn-ico:hover { color: var(--text); border-color: #56626f; filter: brightness(1.12); }
+  .btn.btn-ico.is-on:hover, .btn.btn-ico.btn-gold:hover { color: #f4d77e; border-color: var(--gold-2); }
+  .btn.btn-ico.ico-cor:hover { color: var(--ic); }
+  .btn.btn-ico.ico-cor:not(.is-on):hover .ico-svg { opacity: .85; }
+}
+.btn.btn-ico.is-off, .btn.btn-ico:disabled {
+  opacity: .38; filter: grayscale(.8); box-shadow: none; cursor: default;
+}
+
+/* a CONTA ("Comprar (3)"): a pílula no canto de cima à direita. Duas formas:
+   um <span class="ico-conta">3</span> dentro do botão, ou data-conta="3" no
+   próprio botão — esta não soma letra nenhuma ao textContent. */
+.btn-ico .ico-conta, .btn-ico[data-conta]::before {
+  position: absolute; top: -4px; right: -5px; z-index: 2;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--gold-2); color: #241a06;
+  font: 700 10.5px/18px var(--ui-sans); text-align: center; font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--panel); pointer-events: none;
+}
+.btn-ico[data-conta]::before { content: attr(data-conta); }
+.btn-ico[data-conta=""]::before, .btn-ico[data-conta="0"]::before { display: none; }
+
+/* O BALÃO DO NOME, embaixo do botão. Fora do fluxo (absolute) e display:none
+   quando apagado — nem escondido ele alarga a rolagem da ficha. */
+.btn-ico[data-rot]::after {
+  content: attr(data-rot); display: none;
+  position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); z-index: 60;
+  padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  background: rgba(8, 10, 13, .94); border: 1px solid var(--line2); color: var(--text);
+  font: 600 11.5px/1.25 var(--ui-sans); letter-spacing: .01em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .45); pointer-events: none;
+}
+.btn-ico.is-legenda[data-rot]::after,
+.btn-ico[data-rot]:focus-visible::after { display: block; }
+@media (hover: hover) {
+  .btn-ico[data-rot]:hover::after { display: block; }
+}
+/* o botão do balão sobe acima dos vizinhos: o filter/transform do :hover e do
+   :active faz dele um contexto de empilhamento, e sem isto o z-index do balão
+   só valia DENTRO dele — a fileira de baixo pintava por cima do nome */
+.btn.btn-ico:hover, .btn.btn-ico:active, .btn.btn-ico:focus-visible,
+.btn.btn-ico.is-legenda { z-index: 61; }
+
+/* AS FILEIRAS NAS FICHAS (22/09, hud.js: icoBotao / icoFila / slotTabs /
+   elemTabs / filtrosDeItem). Três jeitos de fileira, um desenho só:
+   · a de ABA (a categoria do saco, as abas dos mercados e da caixa do GM)
+     escreve o nome da aberta no fim — .ico-fila-nome, o ouro do título da
+     ficha —, que no celular não há mouse para perguntar "onde estou?";
+   · as de FILTRO (espaço | elemento) andam juntas em .ico-filtros: na tela
+     larga dividem uma linha, no celular a de elementos desce sozinha
+     (5 + 6 botões = 554 px; a coluna do celular tem 362);
+   · a do mercadinho mora numa .mc-filtros, com a legenda de sempre na frente. */
+.ico-fila-nome {
+  margin-left: 6px; white-space: nowrap;
+  font: 600 15px/1.2 var(--ui-serif); color: var(--gold-2); letter-spacing: .01em;
+}
+.inv-tabs-container { display: flex; flex-direction: column; gap: 8px; }
+/* a fileira das categorias é a ABA do saco: um filete a separa dos filtros */
+.inv-tabs-container > .inv-tabs-main { padding-bottom: 8px; border-bottom: 1px solid var(--line2); }
+.inv-tabs-container > .inv-tabs-main:last-child { padding-bottom: 0; border-bottom: 0; }
+.ico-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.ico-filtros > .elem-tabs { margin-top: 0; }
+.mc-filtros.ico-fila { gap: 6px; }
+.mc-abas.ico-fila { gap: 6px; margin: 4px 0 8px; }
+.gm-abas { margin-bottom: 8px; }
+/* o toque longo acende o balão: sem o menu do sistema nem o clarão azul */
+.btn.btn-ico { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+/* o balão do PRIMEIRO botão da fileira encosta à esquerda e o do ÚLTIMO à
+   direita — centrado, o nome comprido ("Meus anúncios") sairia da ficha */
+.ico-fila > .btn-ico:first-of-type[data-rot]::after { left: 0; transform: none; }
+.ico-fila > .btn-ico:last-of-type[data-rot]::after { left: auto; right: 0; transform: none; }
+/* a barra da peça GRUDA no topo ao rolar o saco (.inv-pick, sticky) e, sem peça
+   escolhida, era quase transparente: os botões redondos (position: relative)
+   passavam por baixo dela à vista. O fundo agora é cheio — o mesmo tom, sem furo. */
+.inv-pick.is-idle {
+  background: linear-gradient(rgba(255,255,255,.03), rgba(255,255,255,.03)), #161b22;
+}
+/* A LINHA DO MERCADINHO NO CELULAR (22/09, visto na foto de 390 px): a linha
+   que leva um campo de quantidade (Vender, Poções) tinha seis peças numa fila
+   só — o nome virava uma coluna de uma palavra por linha e, nas poções, o
+   Comprar saía pela borda da ficha. No estreito ela QUEBRA: ícone e nome em
+   cima (na poção, o preço junto), campo, conta e botão embaixo, à direita.
+   A linha sem campo (Comprar, Meus anúncios) cabe numa fila e não muda. */
+@media (max-width: 560px) {
+  .mc-linha:has(> .mc-qtd) { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+  .mc-linha:has(> .mc-qtd) > .ms-tx { flex: 1 1 calc(100% - 56px); }
+  .mc-linha.mc-pocao > .ms-tx { flex-basis: calc(100% - 116px); }
+  .mc-linha:has(> .mc-qtd) > .mc-taxa { min-width: 0; }
+}
+
+/* ===== A QUEBRA NA FORJA (22/09, hud.js: forjaModos / quebraBancada) ===== */
+/* Pedido do dono: "na forja o jogador poderá quebrar os itens, que darão
+   pedras daquele elemento". A forja ganhou dois modos no alto (os botões
+   redondos de sempre, com o nome do modo aberto ao lado), e o modo Quebrar
+   troca a bancada de três encaixes por uma de dois — a peça → as pedras.
+   A cor que manda aqui é a do ELEMENTO da pedra (--ec, posta pelo hud): no
+   encaixe das pedras, no fim da conta, no "→N" de cada célula e na pedra de
+   destino acesa na prateleira. O vermelho fica só no que destrói: a borda
+   da bancada e o botão do golpe. */
+.fg-modos { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px; }
+.fg-modo-tit { margin: 0; font: 600 15px/1.2 var(--ui-serif); color: var(--gold-2); letter-spacing: .01em; }
+.fg-modo-tit i { display: block; margin-top: 3px; font: 400 11.5px/1.3 var(--ui-sans); color: var(--dim); }
+/* a bancada de quebrar: a mesma, com a borda e o fundo tingidos de brasa */
+.forge-banca2.fg-banca-quebra {
+  border-color: rgba(224, 90, 106, .32);
+  background: linear-gradient(180deg, rgba(224, 90, 106, .07), rgba(0, 0, 0, .18));
+}
+.fg-slot-pedras.has { border-style: solid; border-color: color-mix(in srgb, var(--ec, var(--gold)) 50%, transparent); }
+.fg-slot-pedras.has b { color: var(--ec, var(--gold)); font: 800 17px/1.1 var(--ui-sans); }
+/* a vestida mostra o que DARIA, apagada; a que nunca quebra fica no vermelho de sempre */
+.fg-slot-pedras.has.is-errada { border-style: dashed; opacity: .55; }
+/* a conta por partes: os números em claro, o fim na cor da pedra */
+.fg-conta { margin: 0; font-size: 12.5px; line-height: 1.55; color: #aeb8c4; }
+.fg-conta b { color: var(--text); }
+.fg-conta b.fg-conta-fim { color: var(--ec, var(--gold)); }
+/* quantas cópias: 1 · todas (×N) — texto, como os atalhos das poções */
+.fg-qtd { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.fg-qtd-rot { font-size: 12px; color: var(--dim); margin-right: 2px; }
+.fg-qtd .btn.fg-qtd-b { min-width: 48px; }
+.fg-qtd .btn.fg-qtd-b.is-on { color: var(--gold-2); border-color: var(--gold-3); background: var(--gold-a14); }
+/* o golpe: vermelho de perigo, largo, com a peça rachada na frente do texto */
+.btn.fg-quebrar-go { display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; font-weight: 700; }
+.btn.fg-quebrar-go .ico-svg { width: 20px; height: 20px; }
+@media (hover: hover) {
+  .btn.fg-quebrar-go:not(.is-off):hover { background: rgba(224, 90, 106, .2); border-color: #a4414a; }
+}
+/* "→N" em cada célula da grade: quanto UMA cópia rende, na cor da pedra.
+   Mora no pé da célula (margin-top: auto), abaixo do nome */
+.fg-rende {
+  margin-top: auto; padding: 1px 7px; border-radius: 999px;
+  font: 800 11px/1.45 var(--ui-sans); font-variant-numeric: tabular-nums;
+  color: var(--ec, var(--dim)); background: rgba(6, 9, 13, .7);
+  border: 1px solid color-mix(in srgb, var(--ec, var(--line2)) 45%, transparent);
+}
+.fg-cel.is-nao-quebra { opacity: .5; filter: saturate(.5); }
+.fg-cel.is-nao-quebra .fg-rende { color: #ff9a8a; border-color: #7a2b28; }
+/* a pedra que a peça da bancada vira acende na prateleira, na cor dela */
+.stone-chip.is-destino {
+  border-color: var(--ec, var(--gold));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ec, var(--gold)) 40%, transparent);
+}
+.stone-chip.is-destino .stone-nm { color: var(--ec, var(--gold)); }
+
+/* ===== AS PEDRAS NO MERCADINHO (22/09, hud.js: mcCats / mcLinhaPedra / mcVendaPedra) ===== */
+/* Pedido do dono: "o jogador poderá colocar pedras para vender também, em
+   unidade ou lotes de 10, 50 e 100". Comprar e Vender ganham a fileira de
+   CATEGORIA (.mc-cats: o elmo e as pedras, com o nome da aberta ao lado) —
+   que NÃO é .mc-filtros, para a primeira .mc-filtros seguir sendo a do espaço.
+   A linha da pedra (.mc-pedra) pinta o nome na cor do elemento (--ec, posto
+   pelo hud); o preço do lote leva embaixo o preço POR PEDRA (small). */
+.mc-cats.ico-fila { gap: 6px; margin: 0 0 8px; }
+/* a busca do balcão entre contas mora na .mc-lista (bloco), não na .ms-caixa
+   (coluna flex): sem isto ela ficava com a largura de um campo solto */
+.mc-lista > .hub-input { display: block; width: 100%; box-sizing: border-box; }
+/* o campo "Fazer oferta" nasce escondido (hidden) — mas o display:flex da
+   .mc-oferta vencia o [hidden] do navegador e o campo de TODO anúncio ficava
+   aberto (visto na foto dos lotes, 22/09; valia para as peças também) */
+.mc-oferta[hidden] { display: none; }
+.mc-linha.mc-pedra { border-color: color-mix(in srgb, var(--ec, var(--line2)) 26%, var(--line2)); }
+.mc-linha.mc-pedra .ms-nome { color: var(--ec, var(--text)); }
+.mc-linha.mc-pedra .ms-prog b { color: var(--text); }
+.mc-preco small { display: block; margin-top: 1px; text-align: right; white-space: nowrap;
+  font: 400 10.5px/1.2 var(--ui-sans); color: var(--dim); }
+/* VENDER › PEDRAS: a linha quebra SEMPRE — ícone e nome em cima; embaixo, à
+   direita, os lotes (texto, como os atalhos das poções), o preço, a conta e o
+   botão. Com quatro lotes a fila não cabe ao lado do nome nem na tela larga. */
+.mc-linha.mc-pedra-venda { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+.mc-linha.mc-pedra-venda > .ms-tx { flex: 1 1 calc(100% - 56px); }
+.mc-lotes { display: inline-flex; gap: 4px; flex: 0 0 auto; margin-right: auto; }
+.mc-lotes .btn.mc-lote { min-width: 44px; font-variant-numeric: tabular-nums; }
+.mc-lotes .btn.mc-lote.is-on { color: var(--gold-2); border-color: var(--gold-3); background: var(--gold-a14); }
+/* o lote maior que o estoque: apagado mas tocável (o toque diz por quê) */
+.mc-lotes .btn.mc-lote.mc-falta { opacity: .45; filter: grayscale(.5); }
+.mc-pedra-venda .mc-lote-preco { width: 84px; }
+.mc-lote-conta { flex: 0 1 auto; min-width: 0; text-align: right; line-height: 1.3;
+  font: 400 11.5px/1.3 var(--ui-sans); color: var(--dim); }
+.mc-lote-conta b { color: var(--text); }
+.mc-lote-conta b.mc-recebe { color: #7fe08a; }
+.mc-lote-conta small { font-size: 10.5px; }
+@media (max-width: 560px) {
+  /* no celular: os lotes e o preço numa fila, a conta e o botão na de baixo
+     (4 lotes de 44 + o campo de 84 somam 282 px; a coluna tem 362) */
+  .mc-lote-conta { flex: 1 1 auto; }
+  /* a legenda e os SEIS elementos numa fila só: com a folga de 6 somavam 362,
+     um tico além da coluna, e o Neutro descia sozinho */
+  .mc-filtros.ico-fila[data-filtro="el"] { gap: 4px; }
+  /* MINHAS OFERTAS (visto na foto de 390): preço, estado, Conferir e Cancelar
+     ao lado do nome viravam uma coluna de uma palavra por linha e o Cancelar
+     saía da ficha — peça ou lote. A linha quebra como a de Vender: ícone e
+     nome em cima, o resto embaixo à direita */
+  .mc-linha:has(> .mc-estado) { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+  .mc-linha:has(> .mc-estado) > .ms-tx { flex: 1 1 calc(100% - 56px); }
+}

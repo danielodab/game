@@ -190,6 +190,22 @@ var JOGO = (typeof window !== 'undefined')
  *       um herói só desce se a xpTable mudar (a fusão é de BATALHA — a unidade
  *       fundida tem a média dos níveis, mas não veste nem guarda peça): é esse
  *       o caso que o saneamento cobre.
+ *
+ * [D20] A QUEBRA (22/09, pedido do dono: "na forja o jogador poderá quebrar
+ *       os itens, que darão pedras daquele elemento"). `quebraPeca(invIndex,
+ *       n)` desfaz n cópias IDÊNTICAS do saco (mesmo item, forja e ★) em
+ *       pedras do ELEMENTO da peça — por `stoneIdForElement`, nunca pelo
+ *       `stoneForItem` da forja (para a neutra ele escolhe a pilha maior, e a
+ *       pilha maior podia ser a Âncora). A régua e a conta moram no dado
+ *       (`DATA.quebra`, items.js, com a tabela de exemplos); `quebraCfg()` lê
+ *       campo a campo com `QUEBRA_DEFAULT`, então o mundo de prova sem a
+ *       tabela quebra com os números de fábrica. Só o SACO se quebra (a peça
+ *       vestida não está nele); a Panóplia do Mestre ('gm-*' / noDrop) nunca;
+ *       a Âncora nunca sai daqui. Recusa devolve false sem tocar em nada; o
+ *       golpe grava UMA vez. `quebraInfo`/`quebraInfoDe` dão a conta para a
+ *       tela antes do golpe; `gastaPedras` é a saída avulsa de pedra (o
+ *       mercado). O mesmo golpe corrigiu o `stoneForItem`: a Âncora saiu da
+ *       piscina da peça neutra.
  * ==========================================================================*/
 
 (function () {
@@ -311,6 +327,18 @@ var JOGO = (typeof window !== 'undefined')
     stoneCost: [2, 3, 4, 6, 8, 10, 13, 16, 20, 25],
     nonScalingKeys: ['pa', 'pp']
   };
+  // A QUEBRA [D20]: os mesmos números de DATA.quebra (items.js), para o mundo
+  // que não traz a tabela. Mudar a régua é lá; aqui é só a rede de segurança.
+  var QUEBRA_DEFAULT = {
+    base: { comum: 1, raro: 3, epico: 8, lendario: 15 },
+    degrauNivel: 10,
+    porEstrela: 3,
+    reembolsoForja: 0.5,
+    minimo: 1
+  };
+  var QUEBRA_MAX_N = 99;                 // cópias por golpe (o juiz cobra o mesmo teto)
+  // raridade em inglês (dado antigo das provas) cai na régua em português
+  var RARIDADE_PT = { common: 'comum', rare: 'raro', epic: 'epico', legendary: 'lendario' };
 
   Progress.SAVE_KEY = KEY;
   Progress.SLOTS = SLOTS;
@@ -457,6 +485,29 @@ var JOGO = (typeof window !== 'undefined')
     };
   }
   Progress.starCfg = starItemCfg;        // a UI lê o custo e a curva daqui
+
+  /* ---- a régua da QUEBRA [D20]. Cópia campo a campo com padrão — a mesma
+   * lição do upgradeCfg: campo novo em DATA.quebra precisa entrar AQUI, senão
+   * some calado. Raridade nova no dado entra junto (o laço de baixo copia
+   * qualquer chave numérica de `base`). */
+  function quebraCfg() {
+    var q = isObj(D().quebra) ? D().quebra : {};
+    var b = isObj(q.base) ? q.base : {};
+    var base = clone(QUEBRA_DEFAULT.base), r;
+    for (r in b) {
+      if (b.hasOwnProperty(r) && num(b[r], null) !== null) base[r] = Math.max(0, b[r]);
+    }
+    return {
+      base: base,
+      degrauNivel: Math.max(1, num(q.degrauNivel, QUEBRA_DEFAULT.degrauNivel)),
+      porEstrela: Math.max(1, num(q.porEstrela, QUEBRA_DEFAULT.porEstrela)),
+      // acima de 1 o reembolso pagaria mais do que a forja custou: vira laço
+      reembolsoForja: Math.max(0, Math.min(1, num(q.reembolsoForja, QUEBRA_DEFAULT.reembolsoForja))),
+      minimo: Math.max(0, Math.floor(num(q.minimo, QUEBRA_DEFAULT.minimo))),
+      maxN: QUEBRA_MAX_N
+    };
+  }
+  Progress.quebraCfg = quebraCfg;        // a tela da forja mostra a régua daqui
   function clampLevel(v) {
     return Math.max(0, Math.min(num(upgradeCfg().maxLevel, 10), Math.floor(num(v, 0))));
   }
@@ -1931,6 +1982,23 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !isObj(st.stones)) return 0;
     return Math.max(0, Math.floor(num(st.stones[stoneId], 0)));
   };
+  /* A SAÍDA AVULSA de pedra [D20] — o espelho do addStones, para quem paga
+   * com pedra fora da forja (o mercado). Tudo ou nada: `n` inteiro ≥ 1, a
+   * pedra tem de existir em DATA.stones (quando o dado as traz) e o estoque
+   * tem de cobrir. Recusa devolve false sem tocar em nada. */
+  Progress.gastaPedras = function (stoneId, n) {
+    var st = Progress.state;
+    if (!st || typeof stoneId !== 'string' || !stoneId) return false;
+    if (typeof n !== 'number' || !isFinite(n) || Math.floor(n) !== n || n < 1) return false;
+    var sd = stoneDefs();
+    if (keys(sd).length && !sd.hasOwnProperty(stoneId)) return false;
+    var tem = Progress.stoneCount(stoneId);
+    if (tem < n) return false;
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[stoneId] = tem - n;
+    Progress.save();
+    return true;
+  };
 
   // ========================================== os SELOS do Colecionador (25/08)
   /* A moeda dos chefes: uma por elemento, só chefe derruba (game.js rola a
@@ -2373,7 +2441,11 @@ var JOGO = (typeof window !== 'undefined')
     var best = stoneIdForElement(DEFAULT_ELEMENT), bestN = -1;
     var pool = keys(stoneDefs());
     if (!pool.length && st && isObj(st.stones)) pool = keys(st.stones);
+    // a ÂNCORA não é pedra de forjar (22/09, achado da quebra [D20]): quem
+    // juntasse mais âncoras que lascas via a peça neutra comê-las como pedra
+    var guarda = upgradeCfg().guardStone;
     for (var i = 0; i < pool.length; i++) {
+      if (guarda && pool[i] === guarda) continue;
       var n = Progress.stoneCount(pool[i]);
       if (n > bestN) { bestN = n; best = pool[i]; }
     }
@@ -2488,6 +2560,142 @@ var JOGO = (typeof window !== 'undefined')
     Progress.state.inventory[invIndex].level = fim.nivel;
     Progress.save();
     return fim;
+  };
+
+  // ============================================================ a QUEBRA [D20]
+  /* A pedra que a quebra PAGA: a do elemento, e só se ela existir de verdade.
+   * A Âncora nunca (é a guarda da forja, não matéria de peça); sem
+   * DATA.stones (mundo de prova) vale o próprio nome do elemento, que é o que
+   * o saneamento aceita como pedra. */
+  function pedraDaQuebra(stoneId) {
+    var guarda = upgradeCfg().guardStone;
+    if (!stoneId || (guarda && stoneId === guarda)) return false;
+    var sd = stoneDefs();
+    if (keys(sd).length) return sd.hasOwnProperty(stoneId) && isObj(sd[stoneId]);
+    return indexOf(elements(), stoneId) >= 0;
+  }
+  function ehDoMestre(itemId, def) {
+    return !!(def && def.noDrop) || /^gm-/.test(String(itemId));
+  }
+  function mesmaVariante(a, b) {
+    return isObj(a) && isObj(b) && a.itemId === b.itemId &&
+           num(a.level, 0) === num(b.level, 0) && num(a.stars, 0) === num(b.stars, 0);
+  }
+
+  /* A CONTA de uma peça, sem saco e sem estado — pura (a tela pode perguntar
+   * por qualquer variante). A régua e o porquê de cada andar: DATA.quebra.
+   *   pedras = max(minimo, floor(base × degrau × estrelas) + forja)
+   * com `partes.estrelas` já o MULTIPLICADOR (porEstrela^★) e `partes.forja`
+   * o reembolso em pedras. Devolve null para item desconhecido; `pode:false`
+   * vem com `motivo` 'mestre' (Panóplia) ou 'sem-pedra' (elemento sem pedra). */
+  function quebraInfoDe(itemId, level, stars) {
+    var def = itemDef(itemId);
+    if (!def) return null;
+    var cfg = quebraCfg(), up = upgradeCfg();
+    var lv = clampLevel(level), sr = clampStars(stars);
+    var rar = RARIDADE_PT[def.rarity] || def.rarity;
+    var base = cfg.base.hasOwnProperty(rar) ? cfg.base[rar] : num(cfg.base.comum, 1);
+    var nivelUso = nivelUsoDe(def);
+    // o "nível do item": 1 · 2 · 3 com a régua de 10; 0 (sem régua) vale 1
+    var degrau = Math.max(1, Math.ceil(nivelUso / cfg.degrauNivel));
+    var mult = Math.pow(cfg.porEstrela, sr);
+    var nominal = 0;
+    for (var i = 0; i < lv && i < up.stoneCost.length; i++) {
+      nominal += Math.max(0, Math.floor(num(up.stoneCost[i], 0)));
+    }
+    var forja = Math.floor(cfg.reembolsoForja * nominal);
+    var pedras = Math.max(cfg.minimo, Math.floor(base * degrau * mult) + forja);
+    var stoneId = stoneIdForElement(def.element || DEFAULT_ELEMENT);
+    var motivo = ehDoMestre(itemId, def) ? 'mestre'
+               : (!pedraDaQuebra(stoneId) ? 'sem-pedra' : null);
+    return {
+      itemId: itemId, level: lv, stars: sr, rarity: rar, nivelUso: nivelUso,
+      stoneId: stoneId, pedras: pedras,
+      partes: { base: base, degrau: degrau, estrelas: mult, forja: forja },
+      pode: motivo === null, motivo: motivo
+    };
+  }
+  Progress.quebraInfoDe = quebraInfoDe;
+
+  /* A conta de quebrar `n` cópias da variante que está em `invIndex` — a
+   * clicada e mais n-1 IDÊNTICAS a ela (mesmo item, forja e ★). Acrescenta ao
+   * `quebraInfoDe` a posição, a série, quantas cópias iguais há no saco e o
+   * total. Recusa própria: motivo 'n' (n fora de 1..99 ou não inteiro) e
+   * 'copias' (pediu mais do que tem). null sem estado ou sem entrada. */
+  Progress.quebraInfo = function (invIndex, n) {
+    var st = Progress.state;
+    if (!st || !isArray(st.inventory)) return null;
+    if (typeof invIndex !== 'number' || Math.floor(invIndex) !== invIndex) return null;
+    var alvo = st.inventory[invIndex];
+    if (!isObj(alvo)) return null;
+    var info = quebraInfoDe(alvo.itemId, alvo.level, alvo.stars);
+    if (!info) return null;
+    var qn = (n === undefined || n === null) ? 1 : n;
+    var nOk = typeof qn === 'number' && isFinite(qn) && Math.floor(qn) === qn &&
+              qn >= 1 && qn <= QUEBRA_MAX_N;
+    var copias = 0;
+    for (var i = 0; i < st.inventory.length; i++) {
+      if (mesmaVariante(st.inventory[i], alvo)) copias++;
+    }
+    info.index = invIndex;
+    info.iid = (typeof alvo.iid === 'string' && alvo.iid) ? alvo.iid : null;
+    info.n = qn;
+    info.copias = copias;
+    info.total = nOk ? info.pedras * qn : 0;
+    if (info.pode && !nOk) { info.pode = false; info.motivo = 'n'; }
+    else if (info.pode && qn > copias) { info.pode = false; info.motivo = 'copias'; }
+    return info;
+  };
+
+  /* O GOLPE: tira do saco a cópia de `invIndex` e mais n-1 idênticas (as de
+   * índice MAIS ALTO primeiro — as mais novas), soma as pedras e grava UMA
+   * vez. Os splices vão do índice maior para o menor para um não embaralhar
+   * o outro. Recusa (o mesmo veredito do quebraInfo) devolve false e não
+   * toca em nada. Peça vestida não está no saco: nunca é quebrada por aqui.
+   * Devolve { itemId, level, stars, n, stoneId, pedras (o total), iids }.
+   *
+   * A TRAVA (22/09, da revisão): `trava = { iid, evita }`, as duas opcionais.
+   *  · `iid` — a série da peça que o jogador VIU na bancada. Posição sozinha
+   *    não basta: se o estado do servidor for adotado entre a confirmação e a
+   *    op (a fila que sobe antes, um 409), o mesmo índice aponta para OUTRA
+   *    peça — e quebra não tem volta. Série diferente em `invIndex` = false.
+   *  · `evita` — séries que não podem sair do saco (as cópias emprestadas do
+   *    banco da guilda: o juiz passa `contexto.bloqueados`). Cópias iguais
+   *    são intercambiáveis para o jogador, então o golpe escolhe as dele e
+   *    deixa a emprestada — em vez de recusar tudo por causa dela. */
+  Progress.quebraPeca = function (invIndex, n, trava) {
+    var info = Progress.quebraInfo(invIndex, n);
+    if (!info || !info.pode) return false;
+    var st = Progress.state;
+    var alvo = st.inventory[invIndex];
+    var tv = isObj(trava) ? trava : {};
+    if (typeof tv.iid === 'string' && tv.iid && alvo.iid !== tv.iid) return false;
+    var evita = {};
+    if (isArray(tv.evita)) {
+      for (var e = 0; e < tv.evita.length; e++) {
+        if (typeof tv.evita[e] === 'string') evita[tv.evita[e]] = true;
+      }
+    }
+    function livre(k) {
+      var s = st.inventory[k] && st.inventory[k].iid;
+      return !(typeof s === 'string' && evita.hasOwnProperty(s));
+    }
+    var escolhidas = livre(invIndex) ? [invIndex] : [];
+    for (var i = st.inventory.length - 1; i >= 0 && escolhidas.length < info.n; i--) {
+      if (i !== invIndex && mesmaVariante(st.inventory[i], alvo) && livre(i)) escolhidas.push(i);
+    }
+    if (escolhidas.length < info.n) return false;          // faltou cópia livre
+    var iids = escolhidas.map(function (k) {
+      var s = st.inventory[k].iid;
+      return (typeof s === 'string' && s) ? s : null;
+    });
+    var ordem = escolhidas.slice().sort(function (a, b) { return b - a; });
+    for (var k = 0; k < ordem.length; k++) st.inventory.splice(ordem[k], 1);
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[info.stoneId] = Progress.stoneCount(info.stoneId) + info.total;
+    Progress.save();
+    return { itemId: info.itemId, level: info.level, stars: info.stars, n: info.n,
+             stoneId: info.stoneId, pedras: info.total, iids: iids };
   };
 
   // ======================================================== stats efetivos [D13]

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — os ícones redondos dos menus</title>
+<script>
+  window.__V = '?v=' + Date.now();
+  document.write('<link rel="stylesheet" href="../css/style.css' + window.__V + '">');
+</script>
+<style>
+  /* o style.css tranca a página (html/body sem rolagem, feitos para o jogo) */
+  html, body { height: auto; overflow: auto; }
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  h2{font:700 11px system-ui,sans-serif;margin:0 0 8px;color:#8895a6;text-transform:uppercase;letter-spacing:.06em}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:10px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+
+  /* a galeria: cada grupo é um painel da cor das fichas do jogo */
+  .grupos{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+  .grupo{background:#161b22;border:1px solid #2b333f;border-radius:12px;padding:10px 10px 6px}
+  .grupo.escuro{background:#1b222c}
+  .cels{display:flex;flex-wrap:wrap;gap:4px 6px}
+  .cel{margin:0;width:104px;display:flex;flex-direction:column;align-items:center;gap:5px;padding-bottom:4px}
+  .par{display:flex;gap:6px}
+  .cel figcaption{text-align:center;line-height:1.25}
+  .cel figcaption code{display:block;font-size:10.5px;background:none;padding:0;color:#aab4c0}
+  .cel figcaption span{font-size:10.5px;color:#6f7a88}
+  .demo{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-start}
+  .demo > div{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:10.5px;color:#8895a6;text-align:center;max-width:100%}
+  .coluna-cel{width:362px;max-width:100%;background:#161b22;border:1px dashed #3a4553;border-radius:10px;padding:8px 0}
+  .grande{display:flex;flex-wrap:wrap;gap:10px 8px}
+  .grande figure{margin:0;width:60px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;color:#6f7a88}
+  .grande .ico-svg{width:48px;height:48px;color:#d8dee4}
+  .grande .ico-svg.ouro{color:#e8c25a}
+  section{margin-bottom:12px}
+  /* ?celular=1: o corpo com a largura do celular de base (390). O Chrome sem
+     cabeça não abre janela mais estreita que ~500, então a foto de celular
+     precisa que a própria página se aperte */
+  html.celular body{width:390px}
+</style>
+<script>
+  if (/[?&]celular=1/.test(location.search)) document.documentElement.className += ' celular';
+</script>
+</head>
+<body>
+<h1>Os ícones redondos dos menus — js/ui/icones_ui.js</h1>
+<div class="sub">O dono pediu que as abas e os chips dos menus de item (inventário, forja, banco, mercado,
+troca, caixa do GM) virassem botões REDONDOS com ícone. Aqui está o jogo inteiro de ícones, cada um
+apagado e aceso (<code>.is-on</code>), os de elemento e raridade na cor deles (<code>.ico-cor</code> com
+<code>--ec</code>/<code>--rc</code>), o balão do nome, a conta, e as provas: todo id vira um
+<code>&lt;svg&gt;</code> sem texto, sem id e sem referência de fora; todo botão mede 44×44 e o seu
+<code>textContent</code> é o rótulo escondido, letra por letra.</div>
+<div id="summary">rodando…</div>
+
+<section><div class="grupos" id="galeria"></div></section>
+<section><div class="grupos" id="cores"></div></section>
+<section class="grupo escuro"><h2>Estados e combinações</h2><div class="demo" id="demo"></div></section>
+<section class="grupo"><h2>Em tamanho grande (48 px) — para conferir o traço</h2><div class="grande" id="grande"></div></section>
+<ul id="lista"></ul>
+
+<script>
+  document.write('<scr' + 'ipt src="../js/ui/icones_ui.js' + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra ? ' — <code>' + String(extra).replace(/</g, '&lt;') + '</code>' : '');
+    lista.appendChild(li);
+  }
+
+  // o catálogo que o hud vai pedir, com o rótulo de cada botão
+  var GRUPOS = [
+    ['Categorias do inventário', [['cat-equip', 'Equipamentos'], ['cat-pedras', 'Pedras'], ['cat-cons', 'Consumíveis'], ['cat-pets', 'Pets']]],
+    ['Espaços', [['slot-todos', 'Tudo'], ['slot-punho', 'Punho'], ['slot-passo', 'Passo'], ['slot-casca', 'Casca'], ['slot-lume', 'Lume']]],
+    ['Elementos', [['el-todos', 'Todos os elementos'], ['el-fogo', 'Fogo'], ['el-agua', 'Água'], ['el-terra', 'Terra'], ['el-ar', 'Ar'], ['el-neutro', 'Neutro']]],
+    ['Raridade', [['rar-todas', 'Todas'], ['rar-comum', 'Comum'], ['rar-raro', 'Raro'], ['rar-epico', 'Épico'], ['rar-lendario', 'Lendário']]],
+    ['Ordem', [['ord-preco-asc', 'Preço ↑'], ['ord-preco-desc', 'Preço ↓'], ['ord-nome', 'Nome'], ['ord-raridade', 'Raridade']]],
+    ['Mercado', [['mc-comprar', 'Comprar'], ['mc-vender', 'Vender'], ['mc-meus', 'Meus anúncios'], ['mc-ofertas', 'Minhas ofertas'], ['mc-pocoes', 'Poções']]],
+    ['Forja', [['fg-forjar', 'Forjar'], ['fg-quebrar', 'Quebrar']]],
+    ['Caixa do GM', [['gm-itens', 'Itens'], ['gm-sets', 'Conjuntos'], ['gm-bichos', 'Bichos'], ['gm-pedras', 'Pedras'], ['gm-selos', 'Selos e insígnias'], ['gm-cartas', 'Cartas'], ['gm-pergaminhos', 'Pergaminhos']]]
+  ];
+  // as cores do jogo: elementos = --e-* do style.css; raridades = art.js RARITY
+  var COR_ELEM = { fogo: '#ff8c3a', agua: '#57c8ec', terra: '#9bd06a', ar: '#c8b6ff', neutro: '#d8dee4' };
+  var COR_RAR = { comum: '#9aa4ae', raro: '#54a8e8', epico: '#ffc44d', lendario: '#ffe9a8' };
+
+  var ESPERADOS = [], ROTULO = {};
+  GRUPOS.forEach(function (g) { g[1].forEach(function (p) { ESPERADOS.push(p[0]); ROTULO[p[0]] = p[1]; }); });
+
+  var I = window.JOGO && JOGO.IconesUI;
+  check('JOGO.IconesUI existe com svg(), tem(), ids() e rotulado()',
+        !!I && typeof I.svg === 'function' && typeof I.tem === 'function' &&
+        typeof I.ids === 'function' && typeof I.rotulado === 'function');
+  if (!I) { fim(); return; }
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  var botoes = [];                                  // [botão, rótulo] de tudo que a página pinta
+  function botao(id, rotulo, classes, estilo) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-ico' + (classes ? ' ' + classes : '');
+    b.setAttribute('data-rot', rotulo);
+    if (estilo) b.setAttribute('style', estilo);
+    b.innerHTML = I.svg(id) + '<span class="rot-oculto">' + esc(rotulo) + '</span>';
+    botoes.push([b, rotulo, id]);
+    return b;
+  }
+  function celula(id, rotulo, classes, estilo, legenda) {
+    var f = document.createElement('figure');
+    f.className = 'cel';
+    var par = document.createElement('div');
+    par.className = 'par';
+    par.appendChild(botao(id, rotulo, classes, estilo));
+    par.appendChild(botao(id, rotulo, (classes ? classes + ' ' : '') + 'is-on', estilo));
+    f.appendChild(par);
+    var c = document.createElement('figcaption');
+    c.innerHTML = '<code>' + esc(legenda || id) + '</code><span>' + esc(rotulo) + '</span>';
+    f.appendChild(c);
+    return f;
+  }
+  function painel(pai, titulo, escuro) {
+    var s = document.createElement('div');
+    s.className = 'grupo' + (escuro ? ' escuro' : '');
+    s.innerHTML = '<h2>' + esc(titulo) + '</h2>';
+    var cels = document.createElement('div');
+    cels.className = 'cels';
+    s.appendChild(cels);
+    pai.appendChild(s);
+    return cels;
+  }
+
+  // ------------------------------------------------------------- a galeria
+  var gal = document.getElementById('galeria');
+  GRUPOS.forEach(function (g, gi) {
+    var cels = painel(gal, g[0] + ' — apagado · aceso', gi % 2);
+    g[1].forEach(function (p) { cels.appendChild(celula(p[0], p[1])); });
+  });
+  // na cor: elemento com --ec, raridade com --rc
+  var cores = document.getElementById('cores');
+  var celsE = painel(cores, 'Elementos na cor (.ico-cor, --ec)', true);
+  Object.keys(COR_ELEM).forEach(function (e) {
+    celsE.appendChild(celula('el-' + e, ROTULO['el-' + e], 'ico-cor', '--ec:' + COR_ELEM[e], 'el-' + e + ' ' + COR_ELEM[e]));
+  });
+  var celsR = painel(cores, 'Raridades na cor (.ico-cor, --rc)', false);
+  Object.keys(COR_RAR).forEach(function (r) {
+    celsR.appendChild(celula('rar-' + r, ROTULO['rar-' + r], 'ico-cor', '--rc:' + COR_RAR[r], 'rar-' + r + ' ' + COR_RAR[r]));
+  });
+
+  // ------------------------------------------------ estados e combinações
+  var demo = document.getElementById('demo');
+  function caso(txt, nos) {
+    var d = document.createElement('div');
+    var linha = document.createElement('div');
+    linha.className = 'ico-fila';
+    nos.forEach(function (x) { linha.appendChild(x); });
+    d.appendChild(linha);
+    var t = document.createElement('span');
+    t.innerHTML = txt;
+    d.appendChild(t);
+    demo.appendChild(d);
+    return linha;
+  }
+  var bLegenda = botao('cat-pedras', 'Pedras', 'is-legenda');
+  caso('.is-legenda<br>(toque longo)', [bLegenda]);
+  var bConta = botao('mc-comprar', 'Comprar (3)', 'is-on');
+  bConta.insertAdjacentHTML('beforeend', '<span class="ico-conta" aria-hidden="true">3</span>');
+  botoes[botoes.length - 1][1] = 'Comprar (3)3';    // o span da conta SOMA ao texto — a prova de baixo cobra
+  var bContaData = botao('mc-meus', 'Meus anúncios (12)', null);
+  bContaData.setAttribute('data-conta', '12');
+  var bContaZero = botao('mc-ofertas', 'Minhas ofertas', null);
+  bContaZero.setAttribute('data-conta', '0');
+  caso('.ico-conta · data-conta="12" · data-conta="0"', [bConta, bContaData, bContaZero]);
+  var bOff = botao('fg-quebrar', 'Quebrar', 'is-off');
+  var bDis = botao('fg-forjar', 'Forjar', null);
+  bDis.disabled = true;
+  caso('.is-off · :disabled', [bOff, bDis]);
+  var bTab = botao('cat-equip', 'Equipamentos', 'btn-tab is-on');
+  var bChip = botao('rar-raro', 'Raro', 'mc-chip ico-cor', '--rc:' + COR_RAR.raro);
+  var bChipOn = botao('rar-epico', 'Épico', 'mc-chip ico-cor is-on', '--rc:' + COR_RAR.epico);
+  var bMini = botao('gm-selos', 'Selos e insígnias', 'btn-mini btn-ghost');
+  var bGold = botao('mc-vender', 'Vender', 'btn-mini btn-gold');
+  var bElem = botao('el-agua', 'Água', 'btn-tab bt-elem ico-cor is-on', '--ec:' + COR_ELEM.agua);
+  var linhaElem = document.createElement('div');
+  linhaElem.className = 'elem-tabs';
+  caso('+ .btn-tab · .mc-chip · .btn-mini · .btn-gold · .elem-tabs .bt-elem', [bTab, bChip, bChipOn, bMini, bGold, linhaElem]);
+  linhaElem.appendChild(bElem);
+  var semCor = botao('el-fogo', 'Fogo', 'ico-cor is-on');
+  caso('.ico-cor sem --ec/--rc<br>(cai no ouro)', [semCor]);
+  // a coluna do celular: 362 px, seis botões numa linha só
+  var col = document.createElement('div');
+  var fila = document.createElement('div');
+  fila.className = 'ico-fila coluna-cel';
+  var seis = ['el-todos', 'el-fogo', 'el-agua', 'el-terra', 'el-ar', 'el-neutro'].map(function (id, i) {
+    var b = botao(id, ROTULO[id], i ? 'ico-cor' + (i === 2 ? ' is-on' : '') : 'is-on',
+                  i ? '--ec:' + COR_ELEM[id.slice(3)] : null);
+    fila.appendChild(b);
+    return b;
+  });
+  col.appendChild(fila);
+  col.insertAdjacentHTML('beforeend', '<span>.ico-fila numa coluna de 362 px (o celular de 390)</span>');
+  demo.appendChild(col);
+
+  // ------------------------------------------------------ o traço em 48 px
+  var grande = document.getElementById('grande');
+  I.ids().forEach(function (id) {
+    var f = document.createElement('figure');
+    f.innerHTML = I.svg(id) + '<figcaption>' + esc(id) + '</figcaption>';
+    grande.appendChild(f);
+  });
+  var fOuro = document.createElement('figure');
+  fOuro.innerHTML = I.svg('rar-lendario').replace('class="ico-svg', 'class="ouro ico-svg') + '<figcaption>no ouro</figcaption>';
+  grande.appendChild(fOuro);
+
+  // ================================================================ PROVAS
+  // --- o catálogo
+  var ids = I.ids();
+  var vistos = {}, dup = [];
+  ids.forEach(function (id) { if (vistos[id]) dup.push(id); vistos[id] = true; });
+  check('ids() sem repetição', dup.length === 0, dup.join(' '));
+  var faltam = ESPERADOS.filter(function (id) { return !vistos[id]; });
+  check('ids() tem os ' + ESPERADOS.length + ' ids pedidos', faltam.length === 0, faltam.join(' '));
+  var sobram = ids.filter(function (id) { return ESPERADOS.indexOf(id) < 0; });
+  check('ids() não tem id fora do catálogo (' + ids.length + ')', sobram.length === 0, sobram.join(' '));
+  ids.push('mexido');
+  check('ids() devolve uma cópia (mexer nela não mexe no catálogo)', I.ids().indexOf('mexido') < 0);
+
+  // --- cada ícone
+  var PROIBIDOS = 'title,text,tspan,textPath,defs,linearGradient,radialGradient,pattern,mask,clipPath,filter,use,image,foreignObject,script,style,a';
+  var ruins = { comeco: [], parse: [], xml: [], proibido: [], texto: [], idattr: [], viewbox: [], classe: [], aria: [],
+                externo: [], ascii: [], tem: [], caixa: [], tinta: [] };
+  ESPERADOS.forEach(function (id) {
+    var s = I.svg(id);
+    if (typeof s !== 'string' || s.indexOf('<svg') !== 0) ruins.comeco.push(id);
+    if (!I.tem(id)) ruins.tem.push(id);
+    var d = document.createElement('div');
+    d.innerHTML = s;
+    var el = d.firstChild;
+    if (!(d.childNodes.length === 1 && el instanceof SVGSVGElement)) { ruins.parse.push(id); return; }
+    var xml = new DOMParser().parseFromString(s, 'image/svg+xml');
+    if (xml.getElementsByTagName('parsererror').length || xml.documentElement.localName !== 'svg') ruins.xml.push(id);
+    if (el.querySelector(PROIBIDOS)) ruins.proibido.push(id);
+    if (el.textContent !== '') ruins.texto.push(id);
+    if (el.querySelector('[id]') || el.hasAttribute('id') || /\sid\s*=/.test(s)) ruins.idattr.push(id);
+    if (!/^0 0 \d+(\.\d+)? \d+(\.\d+)?$/.test(el.getAttribute('viewBox') || '')) ruins.viewbox.push(id);
+    if (!el.classList.contains('ico-svg') || !el.classList.contains('ico-' + id)) ruins.classe.push(id);
+    if (el.getAttribute('aria-hidden') !== 'true' || el.getAttribute('focusable') !== 'false') ruins.aria.push(id);
+    var semXmlns = s.replace(' xmlns="http://www.w3.org/2000/svg"', '');
+    if (/href|url\(|https?:|@import/i.test(semXmlns)) ruins.externo.push(id);
+    if (/[^\x20-\x7e]/.test(s)) ruins.ascii.push(id);
+  });
+  check('todo id devolve uma string que começa com &lt;svg', ruins.comeco.length === 0, ruins.comeco.join(' '));
+  check('tem(id) é verdade para todos', ruins.tem.length === 0, ruins.tem.join(' '));
+  check('toda string vira UM SVGSVGElement no innerHTML', ruins.parse.length === 0, ruins.parse.join(' '));
+  check('toda string é XML de SVG válido (DOMParser image/svg+xml)', ruins.xml.length === 0, ruins.xml.join(' '));
+  check('nenhum &lt;title&gt;/&lt;text&gt;/&lt;defs&gt;/gradiente/&lt;use&gt;/&lt;image&gt;', ruins.proibido.length === 0, ruins.proibido.join(' '));
+  check("textContent do svg é '' em todos", ruins.texto.length === 0, ruins.texto.join(' '));
+  check('nenhum atributo id=', ruins.idattr.length === 0, ruins.idattr.join(' '));
+  check('todos têm viewBox', ruins.viewbox.length === 0, ruins.viewbox.join(' '));
+  check('classe ico-svg e ico-&lt;id&gt; em todos', ruins.classe.length === 0, ruins.classe.join(' '));
+  check('aria-hidden="true" e focusable="false" em todos', ruins.aria.length === 0, ruins.aria.join(' '));
+  check('nenhuma referência de fora (href, url(), http)', ruins.externo.length === 0, ruins.externo.join(' '));
+  check('só ASCII na string (nada de emoji)', ruins.ascii.length === 0, ruins.ascii.join(' '));
+
+  // --- o id que não existe volta vazio, e o protótipo não conta como ícone
+  check("id desconhecido -> '' (e '', undefined, 'toString', '__proto__')",
+        I.svg('nao-existe') === '' && I.svg('') === '' && I.svg() === '' &&
+        I.svg('toString') === '' && I.svg('__proto__') === '' &&
+        !I.tem('nao-existe') && !I.tem('toString') && !I.tem('constructor'));
+
+  // --- o miolo pronto do botão
+  var bRot = document.createElement('button');
+  bRot.innerHTML = I.rotulado('cat-cons', 'Consumíveis & <poções>');
+  var bSem = document.createElement('button');
+  bSem.innerHTML = I.rotulado('nao-existe', 'Tudo <b>');
+  check('rotulado(id, rótulo): o svg + o span escondido, e o textContent é o rótulo',
+        bRot.querySelector('svg.ico-cat-cons') && bRot.querySelector('span.rot-oculto') &&
+        bRot.textContent === 'Consumíveis & <poções>', bRot.textContent);
+  check('rotulado() de id desconhecido devolve só o rótulo, visível e escapado',
+        !bSem.querySelector('svg') && !bSem.querySelector('.rot-oculto') && bSem.textContent === 'Tudo <b>', bSem.innerHTML);
+
+  // --- as pedrinhas da raridade: 1 · 2 · 3 · 4, como no ícone de item
+  function discos(id) { var d = document.createElement('div'); d.innerHTML = I.svg(id); return d.querySelectorAll('circle').length; }
+  check('raridade: comum 1 pedrinha, raro 2, épico 3, lendário 4',
+        discos('rar-comum') === 1 && discos('rar-raro') === 2 && discos('rar-epico') === 3 && discos('rar-lendario') === 4,
+        [discos('rar-comum'), discos('rar-raro'), discos('rar-epico'), discos('rar-lendario')].join(','));
+  var todos = I.svg('el-todos').toLowerCase();
+  var faltaCor = Object.keys(COR_ELEM).filter(function (e) { return todos.indexOf('stroke="' + COR_ELEM[e] + '"') < 0; });
+  check('"todos os elementos" leva as cinco tintas do jogo', faltaCor.length === 0, faltaCor.join(' '));
+  var todas = I.svg('rar-todas').toLowerCase();
+  var faltaRar = Object.keys(COR_RAR).filter(function (r) { return todas.indexOf('fill="' + COR_RAR[r] + '"') < 0; });
+  check('"todas as raridades" leva as quatro cores de Art.rarityColor, e nenhuma pedrinha',
+        faltaRar.length === 0 && discos('rar-todas') === 0, faltaRar.join(' '));
+
+  // --- a geometria: todo desenho cabe na caixa e tem tinta de verdade
+  var foraCaixa = [], semTinta = [];
+  document.querySelectorAll('#galeria .cel .btn-ico:not(.is-on) svg').forEach(function (sv) {
+    var id = (sv.getAttribute('class').match(/ico-([a-z]+-[a-z-]+)/) || [])[1];
+    var bb = sv.getBBox();
+    if (bb.x < -0.6 || bb.y < -0.6 || bb.x + bb.width > 24.6 || bb.y + bb.height > 24.6) foraCaixa.push(id + ' ' + [bb.x, bb.y, bb.width, bb.height].map(function (v) { return v.toFixed(1); }).join(','));
+    if (bb.width < 10 || bb.height < 10) semTinta.push(id);
+  });
+  check('todo desenho cabe na caixa 24×24', foraCaixa.length === 0, foraCaixa.join(' | '));
+  check('todo desenho ocupa ao menos 10×10 da caixa (o peso óptico)', semTinta.length === 0, semTinta.join(' '));
+
+  // --- os botões
+  var pequenos = [], naoRedondos = [], textoErrado = [];
+  botoes.forEach(function (p) {
+    var r = p[0].getBoundingClientRect();
+    if (r.width < 44 || r.height < 44) pequenos.push(p[2] + ' ' + r.width.toFixed(1) + '×' + r.height.toFixed(1));
+    var cs = getComputedStyle(p[0]);
+    if (Math.abs(r.width - r.height) > 0.5 || cs.borderTopLeftRadius !== '50%') naoRedondos.push(p[2] + ' ' + cs.borderTopLeftRadius);
+    if (p[0].textContent !== p[1]) textoErrado.push(p[2] + ': "' + p[0].textContent + '"');
+  });
+  check('todo botão pintado (' + botoes.length + ') mede ao menos 44×44', pequenos.length === 0, pequenos.join(' | '));
+  check('todo botão é redondo (largura = altura, raio 50%)', naoRedondos.length === 0, naoRedondos.join(' | '));
+  check('o textContent de todo botão é o rótulo escondido, letra por letra', textoErrado.length === 0, textoErrado.join(' | '));
+  var sp = bLegenda.querySelector('.rot-oculto').getBoundingClientRect();
+  check('.rot-oculto não ocupa espaço (1×1 no máximo)', sp.width <= 1 && sp.height <= 1, sp.width + '×' + sp.height);
+  var svR = bLegenda.querySelector('svg').getBoundingClientRect();
+  check('o ícone dentro do botão pinta a 22×22', Math.round(svR.width) === 22 && Math.round(svR.height) === 22, svR.width + '×' + svR.height);
+
+  // vence .btn-tab, .mc-chip e .btn-mini
+  var combinados = [bTab, bChip, bChipOn, bMini, bGold, bElem].filter(function (b) {
+    var r = b.getBoundingClientRect(), cs = getComputedStyle(b);
+    return !(Math.round(r.width) === 44 && Math.round(r.height) === 44 && cs.paddingLeft === '0px' && cs.paddingTop === '0px' && cs.borderTopLeftRadius === '50%');
+  });
+  check('com .btn-tab / .mc-chip / .btn-mini / .btn-gold / .elem-tabs .bt-elem continua 44×44, redondo, sem recheio',
+        combinados.length === 0, combinados.map(function (b) { return b.className; }).join(' | '));
+
+  // as cores
+  function cor(b) { return getComputedStyle(b).color; }
+  function opSvg(b) { return getComputedStyle(b.querySelector('svg')).opacity; }
+  var apagado = gal.querySelector('.cel .btn-ico:not(.is-on)'), aceso = gal.querySelector('.cel .btn-ico.is-on');
+  check('apagado pinta em --dim, aceso em --gold-2',
+        cor(apagado) === 'rgb(139, 147, 160)' && cor(aceso) === 'rgb(232, 194, 90)', cor(apagado) + ' / ' + cor(aceso));
+  check('.btn-gold dos mercados acende como .is-on', cor(bGold) === 'rgb(232, 194, 90)', cor(bGold));
+  var fogoOff = cores.querySelector('.btn-ico.ico-cor[style*="ff8c3a"]:not(.is-on)');
+  var fogoOn = cores.querySelector('.btn-ico.ico-cor.is-on[style*="ff8c3a"]');
+  check('elemento na cor (--ec): fogo pinta #ff8c3a',
+        cor(fogoOff) === 'rgb(255, 140, 58)' && cor(fogoOn) === 'rgb(255, 140, 58)', cor(fogoOff));
+  check('.ico-cor apagado fica a meia força (.55); aceso, inteiro',
+        Math.abs(parseFloat(opSvg(fogoOff)) - 0.55) < 0.01 && opSvg(fogoOn) === '1', opSvg(fogoOff) + ' / ' + opSvg(fogoOn));
+  var lendOn = cores.querySelector('.btn-ico.ico-cor.is-on[style*="ffe9a8"]');
+  check('raridade na cor (--rc): lendária pinta #ffe9a8', cor(lendOn) === 'rgb(255, 233, 168)', cor(lendOn));
+  check('.ico-cor dentro de .elem-tabs .bt-elem.is-on continua na cor dele', cor(bElem) === 'rgb(87, 200, 236)', cor(bElem));
+  check('.ico-cor sem --ec nem --rc cai no ouro', cor(semCor) === 'rgb(232, 194, 90)', cor(semCor));
+  var opOff = parseFloat(getComputedStyle(bOff).opacity), opDis = parseFloat(getComputedStyle(bDis).opacity);
+  check('.is-off e :disabled ficam apagados', opOff < 0.5 && opDis < 0.5, opOff + ' / ' + opDis);
+
+  // o balão do nome: sem ele não há leitura no toque, e ele não mexe no layout
+  var semBalao = botoes[0][0];
+  var ante = semBalao.getBoundingClientRect();
+  var dispOff = getComputedStyle(semBalao, '::after').display;
+  semBalao.classList.add('is-legenda');
+  var depois = semBalao.getBoundingClientRect();
+  var ps = getComputedStyle(semBalao, '::after');
+  check('balão: apagado é display:none; com .is-legenda aparece com o data-rot',
+        dispOff === 'none' && ps.display === 'block' && ps.content === '"' + botoes[0][1] + '"', dispOff + ' → ' + ps.display + ' ' + ps.content);
+  check('balão: absoluto, embaixo do botão, e o botão não muda de medida nem de lugar',
+        ps.position === 'absolute' && parseFloat(ps.top) >= 44 &&
+        ante.width === depois.width && ante.height === depois.height && ante.left === depois.left && ante.top === depois.top,
+        ps.position + ' top=' + ps.top);
+  semBalao.classList.remove('is-legenda');
+
+  // a conta
+  var conta = bConta.querySelector('.ico-conta').getBoundingClientRect(), rb = bConta.getBoundingClientRect();
+  check('.ico-conta mora no canto de cima à direita do botão',
+        conta.top < rb.top + 8 && conta.right > rb.right - 4 && conta.width >= 16, [conta.top - rb.top, conta.right - rb.right].join(','));
+  check('o span .ico-conta soma a conta ao textContent ("Comprar (3)3") — por isso o data-conta existe',
+        bConta.textContent === 'Comprar (3)3', bConta.textContent);
+  var antes = getComputedStyle(bContaData, '::before');
+  check('data-conta="12" desenha a pílula e não soma letra ao textContent',
+        antes.content === '"12"' && antes.position === 'absolute' && bContaData.textContent === 'Meus anúncios (12)', antes.content);
+  check('data-conta="0" some', getComputedStyle(bContaZero, '::before').display === 'none');
+
+  // a coluna do celular
+  var topos = seis.map(function (b) { return Math.round(b.getBoundingClientRect().top); });
+  var larg = fila.getBoundingClientRect().width;
+  check('seis botões cabem numa linha da coluna de 362 px (.ico-fila)',
+        topos.every(function (t) { return t === topos[0]; }) && Math.round(larg) <= 362, topos.join(',') + ' em ' + larg);
+
+  fim();
+  function fim() {
+    document.getElementById('summary').setAttribute('data-janela', window.innerWidth + '×' + window.innerHeight);
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                             : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  }
+})();
+</script>
+</body>
+</html>

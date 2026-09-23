@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — os ícones redondos nos menus de item</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  html, body { overflow: auto; height: auto; }
+  body { margin: 0; background: #0f1216; color: #e8eef6; }
+  #topo { padding: 10px; font: 12px monospace; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  /* a PROVA roda numa coluna de celular (390), como a ui_screens; a FOTO
+     (?sheet=) usa a janela inteira e esconde o placar */
+  html.prova #app { position: relative; width: 390px; height: 844px; }
+  html.foto #topo { position: fixed; left: -9999px; top: 0; }
+</style>
+</head>
+<body>
+<!-- OS ÍCONES NOS MENUS DE ITEM (22/09, pedido do dono: "assim fica mais bonito
+     e organizado"). Página LEVE — sem index.html, sem WebGL: carrega o CSS, os
+     dados, o miolo, o Art, os ícones e a HUD de verdade num #app, semeia um saco
+     variado (peças de todo espaço, elemento e raridade, forja e estrela), pedras
+     de todo tipo, poções, bicho, cofre do banco, balcão do mercadinho, guilda
+     local e uma mesa de troca de mentira, e abre as fichas.
+
+     Dois modos:
+       · sem ?sheet= — a PROVA: percorre inventário (as 4 categorias), forja,
+         banco, banco da guilda, mercadinho local e entre contas, troca, caixa
+         do GM e barraquinha, e cobra: botão redondo >= 44 px com o nome
+         escondido igual ao de antes (as provas antigas acham as abas pelo
+         texto), as classes-gancho de sempre, os data-* novos, o filtro de
+         pedra por elemento (a pedra caía toda em "neutro"), o toque longo
+         que mostra o nome sem trocar de aba, a reserva de TEXTO sem o
+         icones_ui.js, nada vazando da coluna de 390 px e nenhum erro;
+       · ?sheet=inventario|forja|banco|mercado|troca|guilda|gmcaixa|loteria —
+         a FOTO: semeia, abre a ficha e marca __pronto. Extras: ?cat= (aba do
+         saco), ?aba= (aba do mercadinho ou da caixa do GM), ?srv=1 (o
+         mercadinho entre contas, com o servidor de mentira), ?modo= (o modo
+         da forja: forjar|quebrar), ?slot=, ?el=,
+         ?rar= (acende um filtro), ?legenda=<nome> (acende o balão do botão)
+         e ?rola=<seletor> (rola a ficha até ele).
+     Uso: python <roda.py> resumo tests/prova_icones_menus.html 30000
+          python <roda.py> shot "tests/prova_icones_menus.html?sheet=inventario&cat=pedras" <png> 1280 900 8000 -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script>
+  (function () {
+    var foto = /[?&]sheet=/.test(location.search);
+    document.documentElement.className += foto ? ' foto' : ' prova';
+  })();
+</script>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
+    'js/core/contas.js','js/core/nomes.js','js/core/db.js','js/core/guilda.js','js/ui/brasao.js',
+    'js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
+    'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
+    'js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var FOTO = !!Q.sheet;
+
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    erros.push('promessa: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  function qa(s, raiz) { return [].slice.call((raiz || document).querySelectorAll(s)); }
+  function q1(s, raiz) { return (raiz || document).querySelector(s); }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    var t0 = 0;
+    return new Promise(function (r) {
+      (function olha() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok || t0 >= (ms || 4000)) { r(ok); return; }
+        t0 += 40;
+        setTimeout(olha, 40);
+      })();
+    });
+  }
+  function ficha() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function textos(bs) { return bs.map(function (b) { return b.textContent; }); }
+  function mesmo(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function fim() {
+    check('nenhum erro na página', erros.length === 0, erros.slice(0, 4).join(' | '));
+    var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check();
+    check('o save de verdade continua intocado', !!sb && sb.ok, sb ? JSON.stringify(sb.disco).slice(0, 120) : 'sem sandbox');
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+
+  var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI, DB = JOGO.DB, Mc = JOGO.Mercado, Gd = JOGO.Guilda;
+  var A = JOGO.Art;
+  function slotDe(id) { var s = (D.items[id] || {}).slot; return (A && A.slotKey) ? A.slotKey(s) : s; }
+  function elDe(id) { return (D.items[id] || {}).element || 'neutro'; }
+  function nomeDe(id) { return (D.items[id] || {}).name || id; }
+
+  // ------------------------------------------------------------ a semente
+  // uma peça de cada combinação pedida (espaço|elemento|raridade), na ordem
+  // do dado — a mesma escolha em toda máquina
+  var QUERO = ['punho|fogo|epico', 'passo|fogo|raro', 'casca|fogo|comum', 'lume|fogo|raro',
+               'punho|agua|comum', 'casca|agua|raro', 'lume|agua|raro',
+               'punho|terra|epico', 'passo|terra|raro', 'casca|ar|comum', 'lume|ar|raro',
+               'punho|neutro|lendario', 'casca|neutro|lendario'];
+  var SACO = [];
+  QUERO.forEach(function (k) {
+    var ids = Object.keys(D.items);
+    for (var i = 0; i < ids.length; i++) {
+      var it = D.items[ids[i]];
+      if (slotDe(ids[i]) + '|' + elDe(ids[i]) + '|' + it.rarity === k && SACO.indexOf(ids[i]) < 0) { SACO.push(ids[i]); return; }
+    }
+  });
+  var hid;
+  function semeia() {
+    P.load(); P.reset();
+    hid = P.heroIds()[0];
+    var XP = D.leveling.xpTable;
+    P.addXp(hid, XP[11]);                                 // nível 12: quase nada trancado
+    SACO.forEach(function (id, i) {
+      var lv = [0, 3, 0, 7, 1, 0, 5, 10, 0, 2, 0, 4, 0][i] || 0;
+      var st = [0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 1, 0, 0][i] || 0;
+      P.state.inventory.push(P.novaCopia ? P.novaCopia(id, 'prova', lv, st) : { itemId: id, level: lv, stars: st });
+    });
+    // uma pilha de três iguais (o ×3 da grade)
+    for (var r = 0; r < 2; r++) P.state.inventory.push(P.novaCopia ? P.novaCopia(SACO[4], 'prova', 1, 2) : { itemId: SACO[4], level: 1, stars: 2 });
+    P.save();
+    Object.keys(D.stones).forEach(function (sid, i) { P.addStones(sid, [24, 9, 31, 5, 60, 2][i] || 3); });
+    P.poeConsumivel('pocao-pequena', 3); P.poeConsumivel('pocao-media', 5); P.poeConsumivel('pocao-grande', 2);
+    Object.keys(D.pets).slice(0, 3).forEach(function (pid) { P.addPet(pid); });
+    P.state.insignias = 20; P.save();
+    UI.init();
+    UI.selection([hid]);
+    // o banco pessoal, o balcão e a guilda (tudo local: sem sessão, sem servidor)
+    var BANCO = [SACO[0], SACO[5], SACO[8], SACO[12]];
+    var outros = [SACO[1], SACO[3], SACO[6], SACO[7], SACO[9], SACO[11]];
+    Gd._servidor = false;
+    // conta e guilda do zero (a sombra do save_sandbox começa com o disco de
+    // verdade; zerar aqui mexe só na sombra)
+    try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+    return DB._zerar().then(function () {
+      return DB.batizar('Provador');
+    }).then(function () {
+      return DB.ganharMoedas(900);
+    }).then(function () {
+      return BANCO.reduce(function (pr, id, i) {
+        return pr.then(function () { return DB.depositarItem({ itemId: id, level: i, stars: i % 2 }); });
+      }, Promise.resolve());
+    }).then(function () {
+      return DB.mercadoGravar({ dia: null, ofertas: outros.map(function (id, i) {
+        return { id: 'pv-' + i, vendedor: 'c' + i, vendedorNome: ['Fulano', 'Beltrano', 'Ciclano'][i % 3],
+                 itemId: id, level: i % 4, stars: i % 2, preco: 40 + i * 35 };
+      }).concat([{ id: 'pv-meu', vendedor: 'jogador', itemId: SACO[10], level: 0, stars: 0, preco: 90 }]) });
+    }).then(function () {
+      return DB.jogador();
+    }).then(function (j) {
+      Gd.contaAtiva(j.id, j.nome || 'Provador');
+      return Gd.criar('Forja do Vale', '⚑');
+    }).then(function () {
+      return [SACO[2], SACO[7], SACO[11]].reduce(function (pr, id, i) {
+        return pr.then(function () { return Gd.bancoDepositar({ itemId: id, level: i * 2, stars: 0 }); });
+      }, Promise.resolve());
+    });
+  }
+
+  // ---- as mesas de mentira: a troca aberta, o Mestre e o balcão entre contas
+  var TROCA_FALSA = {
+    _est: null,
+    estado: function () { return this._est; },
+    descrevePet: function (of) { return { nome: ((D.pets[of.petId] || {}).name || of.petId), nivel: 3, estrelas: 1 }; },
+    jaTenhoPet: function () { return false; },
+    porItem: function () { return true; }, tiraItem: function () {}, porPet: function () { return true; },
+    tiraPet: function () {}, porMoedas: function () {}, travar: function () {}, confirmar: function () {},
+    cancelar: function () {}
+  };
+  function ligaTroca() {
+    if (!JOGO.Troca) JOGO.Troca = TROCA_FALSA;
+    TROCA_FALSA._est = { fase: 'aberta', nomePar: 'Beltrano', mesmaConta: false,
+      minha: { itens: [{ itemId: SACO[9], level: 2, stars: 0 }], moedas: 0, pets: [], travada: false, confirmada: false },
+      dele: { itens: [{ itemId: SACO[1], level: 3, stars: 1 }], moedas: 120,
+              pets: [{ petId: Object.keys(D.pets)[4] }], travada: true, confirmada: false } };
+  }
+  var GM_ANTES;
+  function ligaGM() { GM_ANTES = JOGO.GM; JOGO.GM = { ativo: function () { return true; } }; }
+  function desligaGM() { JOGO.GM = GM_ANTES; }
+  var SRV_ANTES = {};
+  function ligaSrv() {
+    var S = Mc.servidor;
+    ['ligado', 'resumo'].forEach(function (k) { SRV_ANTES[k] = S[k]; });
+    S.ligado = function () { return true; };
+    S.resumo = function () {
+      return Promise.resolve({ ok: true, itens: SACO.slice(0, 8).map(function (id, i) {
+        return { itemId: id, qtd: 1 + (i % 3), menor: 50 + i * 20, meus: i === 2 ? 1 : 0 };
+      }) });
+    };
+  }
+  function desligaSrv() { for (var k in SRV_ANTES) Mc.servidor[k] = SRV_ANTES[k]; }
+
+  function abre(nome, arg) {
+    UI.closeSheet();
+    if (nome === 'troca') ligaTroca();
+    UI.openSheet(nome, arg);
+  }
+  function toca(sel, raiz) { var b = q1(sel, raiz || ficha()); if (b) b.click(); return !!b; }
+
+  // ------------------------------------------------------------ o modo FOTO
+  function foto() {
+    var mapa = { inventario: 'inventory', forja: 'forge', banco: 'banco', mercado: 'mercado',
+                 troca: 'troca', guilda: 'guilda', gmcaixa: 'gmcaixa', loteria: 'loteria' };
+    var nome = mapa[Q.sheet] || Q.sheet;
+    if (nome === 'gmcaixa') ligaGM();
+    if (nome === 'mercado' && Q.srv) ligaSrv();
+    abre(nome);
+    return espera(500).then(function () {
+      if (Q.cat) toca('.inv-tabs-main [data-cat="' + Q.cat + '"]');
+      if (Q.aba) toca('.mc-abas [data-aba="' + Q.aba + '"], .gm-abas [data-aba="' + Q.aba + '"]');
+      return espera(500);
+    }).then(function () {
+      if (Q.modo) toca('.fg-modos [data-modo="' + Q.modo + '"]');   // a forja no Quebrar (22/09)
+      if (Q.slot) toca('[data-slot="' + Q.slot + '"]');
+      return espera(300);
+    }).then(function () {
+      if (Q.el) toca('[data-el="' + Q.el + '"]');
+      if (Q.rar) toca('[data-rar="' + Q.rar + '"]');
+      return espera(400);
+    }).then(function () {
+      if (Q.legenda) {
+        var b = qa('.btn-ico', ficha()).filter(function (x) { return x.getAttribute('data-rot') === Q.legenda; })[0];
+        if (b) b.classList.add('is-legenda');
+      }
+      // ?rola=<seletor>: a ficha rola até ele (no celular o saco mora abaixo do herói)
+      if (Q.rola) {
+        var alvo = q1(Q.rola, ficha()), corpo = q1('.sheet-body', ficha());
+        if (alvo && corpo) {
+          corpo.scrollTop += alvo.getBoundingClientRect().top - corpo.getBoundingClientRect().top - 8;
+        }
+      }
+      document.getElementById('summary').textContent = 'foto: ' + Q.sheet + ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
+      window.__pronto = true;
+    });
+  }
+
+  // ------------------------------------------------------------ a PROVA
+  // o contrato de TODO botão redondo que está na ficha aberta
+  function contratoDosBotoes(onde) {
+    var bs = qa('.btn-ico', ficha());
+    var ruins = [];
+    bs.forEach(function (b) {
+      var r = b.getBoundingClientRect();
+      if (r.width < 2) return;                                   // fileira escondida
+      var rot = b.getAttribute('data-rot');
+      if (r.width < 44 || r.height < 44) ruins.push(rot + ' ' + Math.round(r.width) + '×' + Math.round(r.height));
+      if (Math.abs(r.width - r.height) > 0.5) ruins.push(rot + ' não é redondo');
+      if (b.textContent !== rot) ruins.push(rot + ' textContent="' + b.textContent + '"');
+      var contaA = b.getAttribute('data-conta');
+      if (b.getAttribute('aria-label') !== (contaA ? rot + ' (' + contaA + ')' : rot)) ruins.push(rot + ' sem aria-label');
+      if (b.hasAttribute('title')) ruins.push(rot + ' com title (dois balões no mouse)');
+      if (!b.querySelector('svg.ico-svg') || !b.querySelector('.rot-oculto')) ruins.push(rot + ' sem svg/rot-oculto');
+    });
+    check(onde + ': ' + bs.length + ' botões redondos, >= 44 px, nome escondido = data-rot = aria-label, sem title',
+          bs.length > 0 && ruins.length === 0, ruins.slice(0, 5).join(' | '));
+  }
+  // nada vaza da ficha (a coluna de 390 px da prova)
+  function cabe(onde) {
+    var f = ficha();
+    var fora = [];
+    if (f) {
+      var lim = f.getBoundingClientRect();
+      qa('*', f).forEach(function (n) {
+        var r = n.getBoundingClientRect();
+        if (!r.width) return;
+        if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+          var p = n.parentNode, rola = false;
+          while (p && p !== f) {
+            var ov = getComputedStyle(p).overflowX;
+            if (ov === 'auto' || ov === 'scroll') { rola = true; break; }
+            p = p.parentNode;
+          }
+          if (!rola) fora.push(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className || n.tagName));
+        }
+      });
+    }
+    check(onde + ': nada vaza da coluna de 390 px', !!f && fora.length === 0, fora.slice(0, 4).join(' | '));
+  }
+  function celulasNomes(raiz) {
+    return qa('.ig-cell:not(.is-vazia) .ig-nm', raiz || ficha()).map(function (n) { return n.textContent; });
+  }
+
+  function prova() {
+    var passos = [];
+    function p(fn) { passos.push(fn); }
+
+    // ---- 1) INVENTÁRIO: a categoria redonda, com o nome da aberta escrito
+    p(function () {
+      abre('inventory');
+      var main = q1('.inv-tabs-main', ficha());
+      var cats = qa('.btn-ico', main);
+      check('inventário: 4 categorias redondas com o nome de sempre escondido',
+            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets']), textos(cats).join(','));
+      check('inventário: data-cat e ícone certos (elmo, pedras, poção, pata)',
+            mesmo(cats.map(function (b) { return b.getAttribute('data-cat'); }), ['equip', 'pedras', 'cons', 'pets']) &&
+            !!q1('.ico-cat-equip', cats[0]) && !!q1('.ico-cat-pedras', cats[1]) &&
+            !!q1('.ico-cat-cons', cats[2]) && !!q1('.ico-cat-pets', cats[3]));
+      check('inventário: as classes-gancho ficam (inv-tabs, btn-tab) e a aberta é is-on',
+            main.classList.contains('inv-tabs') && cats.every(function (b) { return b.classList.contains('btn-tab'); }) &&
+            cats[0].classList.contains('is-on') && !cats[1].classList.contains('is-on') &&
+            cats[0].getAttribute('aria-pressed') === 'true');
+      var nome = q1('.ico-fila-nome', main);
+      check('inventário: o nome da aba aberta fica escrito ao lado', !!nome && nome.textContent === 'Equipamentos',
+            nome ? nome.textContent : 'sem nome');
+      var sub = q1('.inv-tabs-sub', ficha()), el = q1('.elem-tabs', ficha());
+      check('Equipamentos: a fileira dos espaços (Tudo·Punho·Passo·Casca·Lume) redonda',
+            !!sub && mesmo(textos(qa('.btn-ico', sub)), ['Tudo', 'Punho', 'Passo', 'Casca', 'Lume']) &&
+            mesmo(qa('.btn-ico', sub).map(function (b) { return b.getAttribute('data-slot'); }), ['todos', 'punho', 'passo', 'casca', 'lume']));
+      var els = el ? qa('.btn-ico', el) : [];
+      check('Equipamentos: a fileira dos elementos redonda, com bt-elem e a cor (--ec) de cada um',
+            mesmo(textos(els), ['Todos', 'Fogo', 'Água', 'Terra', 'Ar', 'Neutro']) &&
+            els.every(function (b) { return b.classList.contains('bt-elem'); }) &&
+            els.slice(1).every(function (b) { return b.classList.contains('ico-cor') && !!b.style.getPropertyValue('--ec'); }) &&
+            !els[0].classList.contains('ico-cor'), textos(els).join(','));
+      contratoDosBotoes('inventário · Equipamentos');
+      cabe('inventário · Equipamentos');
+      // o espaço e o elemento filtram a grade
+      toca('.inv-tabs-sub [data-slot="punho"]');
+      var soPunho = celulasNomes();
+      var esperado = P.invStacks().filter(function (s) { return slotDe(s.itemId) === 'punho'; }).length;
+      check('Punho: a grade fica só com as peças de punho', soPunho.length === esperado && esperado > 0 &&
+            q1('.inv-tabs-sub [data-slot="punho"]', ficha()).classList.contains('is-on'), soPunho.join(',') + ' (esperava ' + esperado + ')');
+      toca('.elem-tabs [data-el="fogo"]');
+      var punhoFogo = P.invStacks().filter(function (s) { return slotDe(s.itemId) === 'punho' && elDe(s.itemId) === 'fogo'; });
+      check('Punho + Fogo: só as peças de punho de fogo', celulasNomes().length === punhoFogo.length &&
+            celulasNomes().every(function (n) { return punhoFogo.some(function (s) { return nomeDe(s.itemId) === n; }); }),
+            celulasNomes().join(','));
+      toca('.inv-tabs-sub [data-slot="todos"]');
+      toca('.elem-tabs [data-el="todos"]');
+    });
+
+    // ---- 2) PEDRAS: o elemento filtra pela PEDRA (antes toda pedra era "neutro")
+    p(function () {
+      toca('.inv-tabs-main [data-cat="pedras"]');
+      check('Pedras: sem a fileira dos espaços, com a dos elementos',
+            !q1('.inv-tabs-sub', ficha()) && !!q1('.elem-tabs', ficha()));
+      check('Pedras: "Todos" mostra as 6 pedras (a Âncora junto)', celulasNomes().length === Object.keys(D.stones).length,
+            celulasNomes().join(','));
+      var ruins = [];
+      ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e) {
+        toca('.elem-tabs [data-el="' + e + '"]');
+        var quer = Object.keys(D.stones).filter(function (s) { return D.stones[s].element === e; })
+                         .map(function (s) { return D.stones[s].name; });
+        if (!mesmo(celulasNomes().slice().sort(), quer.slice().sort())) ruins.push(e + ': ' + celulasNomes().join('/'));
+      });
+      check('Pedras: cada elemento mostra SÓ a pedra dele (Neutro = a Lasca, sem a Âncora)', ruins.length === 0, ruins.join(' | '));
+      toca('.elem-tabs [data-el="todos"]');
+      contratoDosBotoes('inventário · Pedras');
+    });
+
+    // ---- 3) CONSUMÍVEIS e PETS: sem fileira de filtro (poção e bicho não têm elemento)
+    p(function () {
+      toca('.inv-tabs-main [data-cat="cons"]');
+      check('Consumíveis: sem fileira de espaço nem de elemento, com as poções',
+            !q1('.elem-tabs', ficha()) && !q1('.inv-tabs-sub', ficha()) && qa('.ig-cell.is-pocao', ficha()).length === 3);
+      check('Consumíveis: o nome escrito ao lado segue a aba', (q1('.inv-tabs-main .ico-fila-nome', ficha()) || {}).textContent === 'Consumíveis');
+      toca('.inv-tabs-main [data-cat="pets"]');
+      check('Pets: sem fileira de elemento, com os bichos', !q1('.elem-tabs', ficha()) && qa('.ig-cell.is-pet', ficha()).length === 3);
+      cabe('inventário · Pets');
+      toca('.inv-tabs-main [data-cat="equip"]');
+    });
+
+    // ---- 4) O TOQUE LONGO mostra o nome e NÃO troca de aba; o toque curto e o mouse, sim
+    p(function () {
+      var b = q1('.inv-tabs-main [data-cat="pedras"]', ficha());
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', pointerId: 7, isPrimary: true }));
+      return espera(650).then(function () {
+        var balao = getComputedStyle(b, '::after');
+        check('toque longo (0,45 s): o balão acende com o nome (.is-legenda)',
+              b.classList.contains('is-legenda') && balao.display === 'block' && /Pedras/.test(balao.content), balao.display + ' ' + balao.content);
+        b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', pointerId: 7, isPrimary: true }));
+        b.click();
+        check('o clique que o toque longo solta é engolido: a aba não muda',
+              q1('.inv-tabs-main [data-cat="equip"]', ficha()).classList.contains('is-on') && document.body.contains(b));
+        return espera(1500);
+      }).then(function () {
+        check('o balão apaga sozinho (~1,4 s)', !b.classList.contains('is-legenda'));
+        // toque curto: troca
+        b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', pointerId: 8, isPrimary: true }));
+        return espera(120);
+      }).then(function () {
+        b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', pointerId: 8, isPrimary: true }));
+        b.click();
+        check('toque curto troca de aba como sempre', q1('.inv-tabs-main [data-cat="pedras"]', ficha()).classList.contains('is-on'));
+        var b2 = q1('.inv-tabs-main [data-cat="cons"]', ficha());
+        b2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', pointerId: 1, isPrimary: true }));
+        return espera(650).then(function () {
+          var semBalao = !b2.classList.contains('is-legenda');
+          b2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse', pointerId: 1, isPrimary: true }));
+          b2.click();
+          check('o mouse segurado não vira legenda e o clique troca de aba',
+                semBalao && q1('.inv-tabs-main [data-cat="cons"]', ficha()).classList.contains('is-on'));
+          toca('.inv-tabs-main [data-cat="equip"]');
+        });
+      });
+    });
+
+    // ---- 5) A RESERVA: sem o icones_ui.js, o botão de texto de antes
+    p(function () {
+      var IU = JOGO.IconesUI;
+      JOGO.IconesUI = undefined;
+      abre('inventory');
+      var cats = qa('.inv-tabs-main button', ficha());
+      var el = qa('.elem-tabs button', ficha());
+      check('sem icones_ui.js: as abas voltam a ser TEXTO (btn-tab, sem btn-ico, sem nome escrito ao lado)',
+            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets']) &&
+            cats.every(function (b) { return b.classList.contains('btn-tab') && !b.classList.contains('btn-ico'); }) &&
+            !q1('.ico-fila-nome', ficha()) && el.length === 6 && el[1].style.getPropertyValue('--ec') !== '');
+      JOGO.IconesUI = IU;
+      abre('inventory');
+    });
+
+    // ---- 6) FORJA: espaço + elemento, no saco e nas vestidas
+    p(function () {
+      abre('forge');
+      var fil = q1('.ico-filtros', ficha());
+      check('forja: as fileiras de espaço e de elemento', !!fil && !!q1('.slot-tabs', fil) && !!q1('.elem-tabs', fil));
+      // 22/09 (a quebra): os dois modos redondos no alto — a prova inteira da
+      // quebra mora em tests/quebra_hud.html; aqui só o contrato da fileira
+      var modos = qa('.fg-modos [data-modo]', ficha());
+      check('forja: os dois modos redondos (Forjar aceso, Quebrar) com data-modo e o ícone de cada um',
+            mesmo(textos(modos), ['Forjar', 'Quebrar']) && modos[0].classList.contains('is-on') &&
+            !!q1('.ico-fg-forjar', modos[0]) && !!q1('.ico-fg-quebrar', modos[1]), textos(modos).join(','));
+      contratoDosBotoes('forja');
+      cabe('forja');
+      toca('.slot-tabs [data-slot="casca"]');
+      var nomes = qa('.fg-cel .ig-nm', ficha()).map(function (n) { return n.textContent; });
+      var casca = SACO.filter(function (id) { return slotDe(id) === 'casca'; }).map(nomeDe);
+      check('forja · Casca: só as peças de casca', nomes.length > 0 && nomes.every(function (n) { return casca.indexOf(n) >= 0; }),
+            nomes.join(','));
+      toca('.elem-tabs [data-el="ar"]');
+      var ar = qa('.fg-cel .ig-nm', ficha()).map(function (n) { return n.textContent; });
+      check('forja · Casca + Ar: só a casca de ar', ar.length === 1 && ar[0] === nomeDe(SACO[9]), ar.join(','));
+      toca('.slot-tabs [data-slot="passo"]');
+      toca('.elem-tabs [data-el="agua"]');
+      check('forja · Passo + Água, sem peça: a grade some e a dica diz os dois filtros',
+            qa('.fg-cel', ficha()).length === 0 && /Nada de Passo de Água para forjar/.test(ficha().textContent),
+            qa('.fg-cel', ficha()).length + ' células');
+      toca('.slot-tabs [data-slot="todos"]');
+      toca('.elem-tabs [data-el="todos"]');
+    });
+
+    // ---- 7) BANCO: espaço + elemento nas DUAS grades
+    p(function () {
+      abre('banco');
+      return ate(function () { return !!q1('.bk2-duplo', ficha()); }, 4000).then(function () {
+        check('banco: as fileiras de espaço e de elemento', !!q1('.ico-filtros .slot-tabs', ficha()) && !!q1('.ico-filtros .elem-tabs', ficha()));
+        contratoDosBotoes('banco');
+        toca('.slot-tabs [data-slot="passo"]');
+        return ate(function () { return q1('.slot-tabs [data-slot="passo"].is-on', ficha()) && q1('.bk2-duplo', ficha()); }, 4000);
+      }).then(function () {
+        var saco = celulasNomes(q1('.bk2-col[data-lado="saco"]', ficha()));
+        var cofre = celulasNomes(q1('.bk2-col[data-lado="cofre"]', ficha()));
+        var passo = SACO.filter(function (id) { return slotDe(id) === 'passo'; }).map(nomeDe);
+        check('banco · Passo: o saco E o cofre só com peças de passo',
+              saco.length > 0 && cofre.length > 0 && saco.concat(cofre).every(function (n) { return passo.indexOf(n) >= 0; }),
+              saco.join(',') + ' | ' + cofre.join(','));
+        check('banco · Passo: os títulos contam TUDO (o filtro só esconde)',
+              /No cofre \(4\)/.test(ficha().textContent), (q1('.bk2-col[data-lado="cofre"] .bk-tit', ficha()) || {}).textContent);
+        toca('.slot-tabs [data-slot="todos"]');
+        return ate(function () { return q1('.slot-tabs [data-slot="todos"].is-on', ficha()); }, 4000);
+      });
+    });
+
+    // ---- 8) MERCADINHO LOCAL: as abas redondas com a conta na pílula; os três filtros
+    p(function () {
+      abre('mercado');
+      return ate(function () { return !!q1('.mc-abas', ficha()); }, 4000).then(function () {
+        var abas = qa('.mc-abas button', ficha());
+        check('mercadinho: 4 abas redondas com o nome exato de antes',
+              mesmo(textos(abas), ['Comprar', 'Vender', 'Meus anúncios', 'Poções']) &&
+              abas.every(function (b) { return b.classList.contains('btn-ico') && b.classList.contains('btn-mini'); }), textos(abas).join(','));
+        check('mercadinho: a aba aberta é is-on (sem btn-gold) e o nome dela fica escrito',
+              abas[0].classList.contains('is-on') && !abas.some(function (b) { return b.classList.contains('btn-gold'); }) &&
+              (q1('.mc-abas .ico-fila-nome', ficha()) || {}).textContent === 'Comprar');
+        check('mercadinho: a conta vai na pílula (data-conta) — Comprar 6, Meus anúncios 1',
+              abas[0].getAttribute('data-conta') === '6' && abas[2].getAttribute('data-conta') === '1' &&
+              getComputedStyle(abas[0], '::before').content === '"6"', abas[0].getAttribute('data-conta') + '/' + abas[2].getAttribute('data-conta'));
+        var filas = qa('.mc-filtros', ficha());
+        check('mercadinho: a PRIMEIRA .mc-filtros é a do espaço, com a legenda de sempre',
+              filas.length === 3 && filas[0].getAttribute('data-filtro') === 'slot' &&
+              (q1('.mc-filtro-rot', filas[0]) || {}).textContent === 'Espaço' &&
+              mesmo(textos(qa('.mc-chip', filas[0])), ['Tudo', 'Punho', 'Passo', 'Casca', 'Lume']));
+        // 22/09 (as pedras no mercado): a categoria em cima, fora da conta das .mc-filtros
+        var cats = qa('.mc-cats .btn-ico', ficha());
+        check('mercadinho: a fileira de categoria (Equipamentos | Pedras) é .mc-cats, não .mc-filtros, e abre em Equipamentos',
+              mesmo(textos(cats), ['Equipamentos', 'Pedras']) && !q1('.mc-cats.mc-filtros', ficha()) &&
+              cats[0].classList.contains('is-on') && cats[0].getAttribute('data-cat') === 'equip', textos(cats).join(','));
+        var rar = qa('.mc-chip', filas[1]);
+        check('mercadinho: Raridade redonda, na cor dela (--rc); "Todas" é a gema de quatro cores',
+              mesmo(textos(rar), ['Todas', 'Comum', 'Raro', 'Épico', 'Lendário']) &&
+              rar.slice(1).every(function (b) { return b.classList.contains('ico-cor') && !!b.style.getPropertyValue('--rc'); }) &&
+              !!q1('.ico-rar-todas', rar[0]));
+        check('mercadinho: Ordem redonda (Preço ↑, Preço ↓, Nome, Raridade)',
+              mesmo(textos(qa('.mc-chip', filas[2])), ['Preço ↑', 'Preço ↓', 'Nome', 'Raridade']) &&
+              q1('.mc-chip.is-on', filas[2]).getAttribute('data-ord') === 'preco');
+        contratoDosBotoes('mercadinho · Comprar');
+        cabe('mercadinho · Comprar');
+        // o jeito das provas antigas: o chip pelo texto exato
+        var punho = qa('.mc-chip', ficha()).filter(function (b) { return b.textContent.trim() === 'Punho'; })[0];
+        punho.click();
+        return ate(function () { var c = q1('.mc-chip[data-slot="punho"]', ficha()); return c && c.classList.contains('is-on'); }, 4000);
+      }).then(function () {
+        var linhas = qa('.mc-lista .mc-linha', ficha()).length;
+        var quer = [SACO[1], SACO[3], SACO[6], SACO[7], SACO[9], SACO[11]].filter(function (id) { return slotDe(id) === 'punho'; }).length;
+        check('mercadinho · Punho (achado pelo texto): o balcão só com punho', linhas === quer, linhas + ' de ' + quer);
+        toca('.mc-chip[data-slot="todos"]');
+        return ate(function () { var c = q1('.mc-chip[data-slot="todos"]', ficha()); return c && c.classList.contains('is-on'); }, 4000);
+      }).then(function () {
+        var pocoes = qa('.mc-abas button', ficha()).filter(function (b) { return /^Poções$/.test(b.textContent); })[0];
+        pocoes.click();
+        return ate(function () { return !!q1('.mc-banca', ficha()); }, 4000);
+      }).then(function (ok) {
+        var at = qa('.mc-atalhos button', ficha()).slice(0, 3);
+        check('mercadinho · Poções (achada por /^Poções$/): os atalhos 1/5/10 continuam TEXTO',
+              ok && mesmo(textos(at), ['1', '5', '10']) && at.every(function (b) { return !b.classList.contains('btn-ico'); }));
+        cabe('mercadinho · Poções');
+      });
+    });
+
+    // ---- 9) MERCADINHO ENTRE CONTAS: 5 abas; o filtro acende NO LUGAR
+    p(function () {
+      ligaSrv();
+      abre('mercado');                                    // abre na última aba (Poções)
+      toca('.mc-abas [data-aba="comprar"]');
+      return ate(function () { return qa('.mc-filtros', ficha()).length === 2; }, 4000).then(function () {
+        var abas = qa('.mc-abas button', ficha());
+        check('entre contas: 5 abas redondas (com Minhas ofertas)',
+              mesmo(textos(abas), ['Comprar', 'Vender', 'Meus anúncios', 'Minhas ofertas', 'Poções']) && !!q1('.ico-mc-ofertas', abas[3]));
+        var fila = qa('.mc-filtros', ficha())[0];
+        var ficha0 = ficha().querySelector('.mc-abas');
+        check('entre contas: a PRIMEIRA .mc-filtros é a do tipo', fila.getAttribute('data-filtro') === 'slot' &&
+              (q1('.mc-filtro-rot', fila) || {}).textContent === 'Tipo');
+        var b = q1('[data-slot="passo"]', fila);
+        b.click();
+        check('entre contas: o chip acende no lugar, sem redesenhar a ficha',
+              b.classList.contains('is-on') && document.body.contains(b) && ficha().querySelector('.mc-abas') === ficha0 &&
+              qa('.is-on', fila).length === 1 && b.getAttribute('aria-pressed') === 'true');
+        var quer = SACO.slice(0, 8).filter(function (id) { return slotDe(id) === 'passo'; }).length;
+        check('entre contas · Passo: a lista filtra', qa('.mc-lista .mc-linha', ficha()).length === quer,
+              qa('.mc-lista .mc-linha', ficha()).length + ' de ' + quer);
+        contratoDosBotoes('mercadinho entre contas');
+        desligaSrv();
+      });
+    });
+
+    // ---- 10) GUILDA: o banco ganha espaço, elemento e busca — nas duas colunas
+    p(function () {
+      abre('guilda');
+      return ate(function () { return !!q1('.guilda-banco .bk2-duplo', ficha()); }, 5000).then(function (ok) {
+        var gb = q1('.guilda-banco', ficha());
+        check('guilda: o banco tem espaço, elemento e busca', ok && !!q1('.slot-tabs', gb) && !!q1('.elem-tabs', gb) && !!q1('.inv-busca-campo', gb));
+        toca('.guilda-banco .slot-tabs [data-slot="punho"]');
+        return ate(function () { return q1('.guilda-banco .slot-tabs [data-slot="punho"].is-on', ficha()); }, 5000);
+      }).then(function () {
+        var banco = celulasNomes(q1('.guilda-banco .bk2-col[data-lado="cofre"]', ficha()));
+        var saco = celulasNomes(q1('.guilda-banco .bk2-col[data-lado="saco"]', ficha()));
+        var punho = SACO.filter(function (id) { return slotDe(id) === 'punho'; }).map(nomeDe);
+        check('guilda · Punho: as duas colunas só com punho, e o título conta o banco inteiro',
+              banco.length === 2 && saco.length > 0 && banco.concat(saco).every(function (n) { return punho.indexOf(n) >= 0; }) &&
+              /Banco da guilda \(3\)/.test(ficha().textContent), banco.join(',') + ' | ' + saco.join(','));
+        check('guilda: Sair da guilda continua no pé', /Sair da guilda/.test(ficha().textContent));
+        var busca = q1('.guilda-banco .inv-busca-campo', ficha());
+        busca.value = nomeDe(SACO[7]).slice(0, 6);
+        busca.dispatchEvent(new Event('input'));
+        var vistas = qa('.guilda-banco .bk2-col[data-lado="cofre"] .ig-cell:not(.is-vazia):not(.is-fora-busca) .ig-nm', ficha())
+                       .map(function (n) { return n.textContent; });
+        check('guilda: a busca por nome filtra ao vivo', vistas.length === 1 && vistas[0] === nomeDe(SACO[7]), vistas.join(','));
+        busca.value = ''; busca.dispatchEvent(new Event('input'));
+        toca('.guilda-banco .slot-tabs [data-slot="todos"]');
+        return ate(function () { return q1('.guilda-banco .slot-tabs [data-slot="todos"].is-on', ficha()); }, 5000);
+      }).then(function () { contratoDosBotoes('guilda'); });
+    });
+
+    // ---- 11) TROCA: o saco da mesa filtra por espaço e elemento
+    p(function () {
+      abre('troca');
+      var linhas = qa('.tr-itens', ficha());
+      var antes = qa('.tr-item', linhas[2]).length;
+      check('troca: as fileiras de espaço e de elemento acima do saco',
+            !!q1('.ico-filtros .slot-tabs', ficha()) && !!q1('.ico-filtros .elem-tabs', ficha()) && antes === P.invStacks().length,
+            antes + ' chips');
+      toca('.elem-tabs [data-el="agua"]');
+      var agua = qa('.tr-itens', ficha())[2];
+      var nomes = qa('.tr-item span', agua).map(function (s) { return s.textContent; });
+      var quer = P.invStacks().filter(function (s) { return elDe(s.itemId) === 'agua'; }).length;
+      check('troca · Água: só as peças de água no saco', nomes.length === quer && quer > 0, nomes.join(','));
+      contratoDosBotoes('troca');
+      toca('.elem-tabs [data-el="todos"]');
+    });
+
+    // ---- 12) CAIXA DO GM: 7 abas redondas com o nome exato
+    p(function () {
+      ligaGM();
+      abre('gmcaixa');
+      var fila = q1('.gm-abas', ficha());
+      var bs = fila ? qa('button', fila) : [];
+      check('caixa do GM: 7 abas redondas com o nome exato de antes',
+            mesmo(textos(bs), ['Itens', 'Conjuntos', 'Bichos', 'Pedras', 'Selos e insígnias', 'Cartas', 'Pergaminhos']) &&
+            bs.every(function (b) { return b.classList.contains('btn-ico'); }), textos(bs).join(','));
+      check('caixa do GM: a fileira tem classe própria (gm-abas) e nenhum estilo na linha', !!fila && !fila.getAttribute('style'));
+      // o jeito da prova_gm_caixa: o botão pelo texto exato
+      var ped = qa('.sheet-panel button', ficha().parentNode).filter(function (b) { return b.textContent.trim() === 'Pedras'; })[0];
+      if (ped) ped.click();
+      check('caixa do GM: a aba achada pelo texto exato abre', !!q1('.gm-abas [data-aba="pedras"].is-on', ficha()) &&
+            (q1('.gm-abas .ico-fila-nome', ficha()) || {}).textContent === 'Pedras');
+      contratoDosBotoes('caixa do GM');
+      cabe('caixa do GM');
+      desligaGM();
+    });
+
+    // ---- 13) BARRAQUINHA: a escolha do elemento do traje, redonda
+    p(function () {
+      abre('loteria');
+      var bs = qa('.colec-elem .btn-ico', ficha());
+      check('barraquinha: os 5 elementos redondos na cor de cada um, o escolhido aceso',
+            mesmo(textos(bs), ['Fogo', 'Água', 'Terra', 'Ar', 'Neutro']) && qa('.colec-elem .btn-ico.is-on', ficha()).length === 1 &&
+            bs.every(function (b) { return b.classList.contains('bt-elem') && b.classList.contains('ico-cor'); }), textos(bs).join(','));
+      contratoDosBotoes('barraquinha');
+      cabe('barraquinha');
+      UI.closeSheet();
+      abre('inventory');
+    });
+
+    return passos.reduce(function (pr, fn) {
+      return pr.then(function () {
+        return fn();
+      }).catch(function (e) {
+        check('passo sem exceção', false, (e && e.message) + ' ' + ((e && e.stack) || '').split('\n')[1]);
+      });
+    }, Promise.resolve());
+  }
+
+  try {
+    semeia().then(function () {
+      return FOTO ? foto() : prova().then(fim);
+    }).catch(function (e) {
+      check('a semente e as fichas sem exceção', false, e && e.message);
+      fim();
+    });
+  } catch (e) {
+    check('a página montou', false, e.message);
+    fim();
+  }
+})();
+</script>
+</body>
+</html>

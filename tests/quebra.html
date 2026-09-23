@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA 3.0 — a quebra de peças</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  li.sec{list-style:none;margin:12px 0 2px -18px;font-weight:700;color:#b9c4d2}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:920px}
+  #summary{font:12px monospace;padding:5px 9px;border-radius:5px;margin-bottom:8px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  li{margin:3px 0;font-size:12.5px}
+  .ok{color:#7fe08a} .no{color:#f77;font-weight:700}
+  code{background:#1a212b;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>A quebra — a peça do saco vira pedra do elemento dela</h1>
+<div class="sub">O pedido do dono (22/09): "na forja o jogador poderá quebrar os itens, que darão
+pedras daquele elemento; a depender do nível do item e poder dá mais pedras". A régua mora em
+<code>DATA.quebra</code> (items.js). Esta página refaz a conta POR FORA do Progress em todas as
+peças reais, crava números à mão, e cobra as travas: a Âncora nunca sai, a Panóplia do Mestre
+não se quebra, cópia a menos recusa sem tocar em nada, a peça vestida fica onde está e o golpe
+grava uma vez só.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/progress.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var lista = document.getElementById('lista');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="ok">PASSOU</span> · ' : '<span class="no">FALHOU</span> · ')
+      + nome + (extra !== undefined && extra !== '' ? ' — <code>' + String(extra) + '</code>' : '');
+    lista.appendChild(li);
+  }
+  function titulo(txt) {
+    var li = document.createElement('li');
+    li.className = 'sec';
+    li.textContent = txt;
+    lista.appendChild(li);
+  }
+
+  var DATA = JOGO.DATA, P = JOGO.Progress;
+  P.reset();
+
+  // o espião do disco: quantas vezes o golpe gravou
+  var saves = 0, saveOrig = P.save;
+  P.save = function () { saves++; return saveOrig.apply(this, arguments); };
+  function foto() { return JSON.stringify(P.state); }
+
+  // ================================================== a conta, refeita por fora
+  /* A conta independente: lê só o DADO (DATA.quebra, DATA.nivelUsoDe,
+   * DATA.upgrade.stoneCost, DATA.stones) — nada do Progress. */
+  function pedraDoElemento(el) {
+    for (var sid in DATA.stones) {
+      if (DATA.stones.hasOwnProperty(sid) && DATA.stones[sid].element === el) return sid;
+    }
+    return null;
+  }
+  function contaPorFora(itemId, level, stars) {
+    var def = DATA.items[itemId], Q = DATA.quebra;
+    var T = Math.max(1, Math.ceil(DATA.nivelUsoDe(def) / Q.degrauNivel));
+    var nominal = 0;
+    for (var i = 0; i < level; i++) nominal += DATA.upgrade.stoneCost[i];
+    var pedras = Math.max(Q.minimo, Math.floor(Q.base[def.rarity] * T * Math.pow(Q.porEstrela, stars)) +
+                                    Math.floor(Q.reembolsoForja * nominal));
+    return { pedras: pedras, stoneId: pedraDoElemento(def.element || 'neutro') };
+  }
+
+  titulo('a régua');
+  check('DATA.quebra existe com os números combinados',
+        DATA.quebra && DATA.quebra.base.comum === 1 && DATA.quebra.base.raro === 3 &&
+        DATA.quebra.base.epico === 8 && DATA.quebra.base.lendario === 15 &&
+        DATA.quebra.degrauNivel === 10 && DATA.quebra.porEstrela === 3 &&
+        DATA.quebra.reembolsoForja === 0.5 && DATA.quebra.minimo === 1,
+        JSON.stringify(DATA.quebra));
+  var cfg = P.quebraCfg();
+  check('o Progress lê a régua do dado (quebraCfg)',
+        cfg.base.epico === 8 && cfg.degrauNivel === 10 && cfg.porEstrela === 3 &&
+        cfg.reembolsoForja === 0.5 && cfg.minimo === 1 && cfg.maxN === 99, JSON.stringify(cfg));
+
+  // todas as peças reais × quatro variantes (cru, ★1 +5, ★3 +10, ★2 +3)
+  var variantes = [[0, 0], [5, 1], [10, 3], [3, 2]];
+  var ids = Object.keys(DATA.items), divergem = [], ancora = [], semPedra = [], conferidas = 0;
+  ids.forEach(function (id) {
+    variantes.forEach(function (v) {
+      var info = P.quebraInfoDe(id, v[0], v[1]);
+      var fora = contaPorFora(id, v[0], v[1]);
+      conferidas++;
+      if (!info || info.pedras !== fora.pedras || info.stoneId !== fora.stoneId) {
+        divergem.push(id + ' +' + v[0] + ' ★' + v[1] + ': ' + (info && info.pedras) + '/' + fora.pedras);
+      }
+      if (info && info.stoneId === 'stone-anchor') ancora.push(id);
+      if (info && !info.pode) semPedra.push(id + ':' + info.motivo);
+    });
+  });
+  check('a conta do Progress bate com a refeita por fora em TODAS as peças (' + ids.length +
+        ' × ' + variantes.length + ' variantes)', divergem.length === 0 && conferidas > 100,
+        divergem.slice(0, 6).join(' · '));
+  check('nenhuma peça real quebra em Âncora de Forja', ancora.length === 0, ancora.join(','));
+  check('toda peça real pode ser quebrada (tem pedra do elemento)', semPedra.length === 0,
+        semPedra.slice(0, 6).join(','));
+
+  // ============================================================ números cravados
+  titulo('números cravados à mão');
+  function crava(nome, itemId, level, stars, pedras, stoneId) {
+    var info = P.quebraInfoDe(itemId, level, stars);
+    check(nome, info && info.pedras === pedras && info.stoneId === stoneId && info.pode,
+          info ? (info.pedras + ' ' + info.stoneId + ' ' + JSON.stringify(info.partes)) : 'null');
+  }
+  crava('comum da Estufa +0 (Coroa de Vaga-lume, água, nv 3) → 1 Lágrima',
+        'gh-firefly-crown', 0, 0, 1, 'stone-tear');
+  crava('rara da Estufa +0 (nv 5) → 3 Lágrimas', 'gh-sap-apron', 0, 0, 3, 'stone-tear');
+  crava('épica do Coração Partido +0 (fogo, nv 30) → 8×3 = 24 Brasas',
+        'cp-eclipse-lens', 0, 0, 24, 'stone-ember');
+  crava('rara dos Andaimes ★1 +5 (ar, nv 18: T=2) → 3×2×3 + 11 = 29 Sopros',
+        'av-glider-cloak', 5, 1, 29, 'stone-breath');
+  crava('lendária nv 30 → 15×3 = 45 Lascas (neutra)', 'cp-heart-crown', 0, 0, 45, 'stone-slate');
+  crava('lendária +10 → 45 + metade de 107 (53) = 98', 'cp-heart-crown', 10, 0, 98, 'stone-slate');
+  crava('comum da Estufa ★3 → 27 (as 27 cópias que a fusão comeu)', 'gh-firefly-crown', 0, 3, 27, 'stone-tear');
+  crava('épica da Cisterna (neutra, nv 11: T=2) → 16 Lascas', 'ci-baroness-collar', 0, 0, 16, 'stone-slate');
+  var partes = P.quebraInfoDe('av-glider-cloak', 5, 1).partes;
+  check('as partes da conta vêm separadas para a tela (base, degrau, ×estrelas, forja)',
+        partes.base === 3 && partes.degrau === 2 && partes.estrelas === 3 && partes.forja === 11,
+        JSON.stringify(partes));
+  check('item desconhecido: quebraInfoDe devolve null', P.quebraInfoDe('nao-existe', 0, 0) === null);
+
+  /* A QUEBRA NÃO É LAÇO: fundir três e quebrar a ★1 nunca rende mais do que
+   * quebrar as três soltas (a média da fusão e o reembolso contado uma vez). */
+  var tresSoltas = 3 * P.quebraInfoDe('av-glider-cloak', 5, 0).pedras;
+  var fundida = P.quebraInfoDe('av-glider-cloak', 5, 1).pedras;
+  check('fundir antes de quebrar não rende mais (três +5 soltas ≥ a ★1 +5)',
+        fundida <= tresSoltas, fundida + ' ≤ ' + tresSoltas);
+  var custo5 = 2 + 3 + 4 + 6 + 8;
+  check('o reembolso da forja é no máximo metade do nominal (+5: ' + custo5 + ' pedras)',
+        P.quebraInfoDe('gh-firefly-crown', 5, 0).partes.forja * 2 <= custo5);
+
+  // ============================================================ travas do dado
+  titulo('travas');
+  DATA.items['gm-teste-quebra'] = { id: 'gm-teste-quebra', name: 'Peça do Mestre de prova', slot: 'punho',
+    rarity: 'lendario', element: 'neutro', bonuses: { power: 1 }, noDrop: true };
+  DATA.items['teste-nodrop'] = { id: 'teste-nodrop', name: 'Peça sem saque', slot: 'punho',
+    rarity: 'comum', element: 'fogo', bonuses: { power: 1 }, noDrop: true };
+  DATA.items['teste-forja'] = { id: 'teste-forja', name: 'Peça de elemento forja', slot: 'punho',
+    rarity: 'comum', element: 'forja', bonuses: { power: 1 } };
+  DATA.items['teste-luz'] = { id: 'teste-luz', name: 'Peça de elemento sem pedra', slot: 'punho',
+    rarity: 'comum', element: 'luz', bonuses: { power: 1 } };
+  var gm = P.quebraInfoDe('gm-teste-quebra', 0, 0);
+  var nd = P.quebraInfoDe('teste-nodrop', 0, 0);
+  check('a Panóplia do Mestre (gm-*) não se quebra: motivo mestre', gm && !gm.pode && gm.motivo === 'mestre',
+        JSON.stringify(gm));
+  check('peça noDrop sem o prefixo também não: motivo mestre', nd && !nd.pode && nd.motivo === 'mestre');
+  var fj = P.quebraInfoDe('teste-forja', 0, 0), lz = P.quebraInfoDe('teste-luz', 0, 0);
+  check('elemento que cairia na Âncora é recusado (sem-pedra)', fj && !fj.pode && fj.motivo === 'sem-pedra',
+        JSON.stringify(fj));
+  check('elemento sem pedra nenhuma é recusado (sem-pedra)', lz && !lz.pode && lz.motivo === 'sem-pedra');
+
+  P.state.inventory = [];
+  P.state.stones = {};
+  P.state.inventory.push(P.novaCopia ? P.novaCopia('gm-teste-quebra', 'caixa') :
+                         { itemId: 'gm-teste-quebra', level: 0, stars: 0, iid: 'gm-q-1' });
+  var antesGm = foto(); saves = 0;
+  check('quebrar a peça do Mestre devolve false e não toca em nada',
+        P.quebraPeca(0) === false && foto() === antesGm && saves === 0);
+  delete DATA.items['gm-teste-quebra'];
+  delete DATA.items['teste-nodrop'];
+  delete DATA.items['teste-forja'];
+  delete DATA.items['teste-luz'];
+
+  // ============================================================ o saco
+  titulo('o golpe no saco');
+  P.reset();
+  saves = 0;
+  var A = 'gh-firefly-crown';
+  // [A0, outra, A1, A2, A3, A+1 (forjada), A★1] — só A0..A3 são a mesma variante
+  P.addItem(A, 'saque');
+  P.addItem('gh-sap-apron', 'saque');
+  P.addItem(A, 'saque'); P.addItem(A, 'saque'); P.addItem(A, 'saque');
+  P.addItem(A, 'saque'); P.addItem(A, 'saque');
+  var inv = P.state.inventory;
+  inv[5].level = 1;
+  inv[6].stars = 1;
+  P.state.stones = { 'stone-tear': 5 };
+  P.save();
+  var iids = inv.map(function (e) { return e.iid; });
+  var qi = P.quebraInfo(2);
+  check('quebraInfo conta as cópias da MESMA variante (forja e ★ separam)',
+        qi && qi.copias === 4 && qi.n === 1 && qi.total === 1 && qi.index === 2 && qi.iid === iids[2] && qi.pode,
+        JSON.stringify(qi && { copias: qi.copias, total: qi.total, iid: qi.iid }));
+  var q5 = P.quebraInfo(2, 5);
+  check('pedir mais cópias do que tem: pode false, motivo copias', q5 && !q5.pode && q5.motivo === 'copias',
+        JSON.stringify(q5 && { pode: q5.pode, motivo: q5.motivo }));
+  var nRuins = [0, -1, 1.5, 100, '2', NaN], nMotivos = nRuins.map(function (n) {
+    var r = P.quebraInfo(2, n); return r ? r.motivo : 'null';
+  });
+  check('n fora de 1..99 ou não inteiro: motivo n', nMotivos.every(function (m) { return m === 'n'; }),
+        nMotivos.join(','));
+  check('índice sem peça ou torto: null', P.quebraInfo(99) === null && P.quebraInfo(-1) === null &&
+        P.quebraInfo(1.5) === null && P.quebraInfo('2') === null);
+
+  // recusas não tocam em nada
+  var antes = foto(); saves = 0;
+  var recusas = [P.quebraPeca(2, 5), P.quebraPeca(2, 0), P.quebraPeca(2, 1.5), P.quebraPeca(99), P.quebraPeca(2, '1')];
+  check('toda recusa devolve false, estado idêntico (JSON) e nenhuma gravação',
+        recusas.every(function (r) { return r === false; }) && foto() === antes && saves === 0,
+        JSON.stringify(recusas) + ' saves=' + saves);
+
+  // o golpe de verdade: a clicada (índice 2) + a de índice MAIS ALTO (4)
+  saves = 0;
+  var r = P.quebraPeca(2, 2);
+  check('quebrar 2: sai a clicada e a idêntica de índice mais alto',
+        r && r.n === 2 && r.iids.length === 2 && r.iids[0] === iids[2] && r.iids[1] === iids[4],
+        JSON.stringify(r));
+  var sobram = P.state.inventory.map(function (e) { return e.iid; });
+  check('... e o resto do saco fica intacto e na ordem',
+        sobram.join('|') === [iids[0], iids[1], iids[3], iids[5], iids[6]].join('|'), sobram.length);
+  check('... as pedras do elemento entram (5 + 2×1 = 7 Lágrimas) e nada mais muda de pedra',
+        P.stoneCount('stone-tear') === 7 && r.pedras === 2 && r.stoneId === 'stone-tear' &&
+        Object.keys(P.state.stones).length === 1, JSON.stringify(P.state.stones));
+  check('... e o golpe gravou UMA vez', saves === 1, saves);
+
+  // a forjada e a estrelada quebram pela conta delas
+  var iForj = P.state.inventory.map(function (e) { return e.iid; }).indexOf(iids[5]);
+  var rF = P.quebraPeca(iForj);
+  check('a +1 quebra sozinha: 1 + metade de 2 = 2', rF && rF.pedras === 2 && rF.level === 1 && rF.iids[0] === iids[5],
+        JSON.stringify(rF));
+  var iStar = P.state.inventory.map(function (e) { return e.iid; }).indexOf(iids[6]);
+  var rS = P.quebraPeca(iStar);
+  check('a ★1 quebra por 3 (as três cópias que ela custou)', rS && rS.pedras === 3 && rS.stars === 1,
+        JSON.stringify(rS));
+
+  // ============================================================ a peça vestida
+  titulo('a peça vestida');
+  P.reset();
+  var hid = P.heroIds()[0];
+  P.addXp(hid, 300);                               // nível 7: a Coroa pede o 3
+  P.addItem(A, 'saque'); P.addItem(A, 'saque'); P.addItem(A, 'saque');
+  var okEq = P.equip(hid, A, 0);
+  var h = P.hero(hid);
+  var vestidaIid = h.itemVar && h.itemVar[DATA.items[A].slot] && h.itemVar[DATA.items[A].slot].iid;
+  var qv = P.quebraInfo(0);
+  check('com uma vestida, o saco conta só as 2 livres', okEq && qv && qv.copias === 2, qv && qv.copias);
+  var antesV = foto();
+  check('pedir 3 (contando a vestida) é recusado sem tocar em nada',
+        P.quebraPeca(0, 3) === false && foto() === antesV);
+  var rv = P.quebraPeca(0, 2);
+  var slotA = DATA.items[A].slot;
+  check('quebrar todas as do saco não toca na vestida',
+        rv && rv.n === 2 && P.state.inventory.length === 0 && P.hero(hid).items[slotA] === A &&
+        P.hero(hid).itemVar[slotA].iid === vestidaIid && rv.iids.indexOf(vestidaIid) < 0,
+        JSON.stringify(rv));
+
+  // ============================================================ a trava (série e emprestadas)
+  titulo('a trava: a série vista na bancada e as cópias emprestadas');
+  P.reset();
+  P.addItem(A, 'saque'); P.addItem(A, 'saque'); P.addItem(A, 'saque');
+  var tIids = P.state.inventory.map(function (e) { return e.iid; });
+  var antesT = foto(); saves = 0;
+  check('série diferente da que está no índice: false, estado idêntico e nenhuma gravação',
+        P.quebraPeca(0, 1, { iid: tIids[1] }) === false && foto() === antesT && saves === 0);
+  var rT = P.quebraPeca(0, 1, { iid: tIids[0] });
+  check('série certa: quebra exatamente aquela', rT && rT.iids.length === 1 && rT.iids[0] === tIids[0], JSON.stringify(rT));
+  var rE = P.quebraPeca(0, 1, { evita: [tIids[1]] });
+  check('a emprestada na bancada: quebra a cópia LIVRE igual e a emprestada fica',
+        rE && rE.iids[0] === tIids[2] && P.state.inventory.length === 1 && P.state.inventory[0].iid === tIids[1],
+        JSON.stringify(rE));
+  var antesE = foto();
+  check('só sobrou a emprestada: false, sem tocar em nada',
+        P.quebraPeca(0, 1, { evita: [tIids[1]] }) === false && foto() === antesE);
+
+  // ============================================================ gastaPedras
+  titulo('gastaPedras (a saída avulsa)');
+  P.state.stones = { 'stone-ember': 10, 'stone-anchor': 2 };
+  P.save();
+  var antesG = foto(); saves = 0;
+  var gRuins = [P.gastaPedras('stone-ember', 0), P.gastaPedras('stone-ember', -2),
+                P.gastaPedras('stone-ember', 1.5), P.gastaPedras('stone-ember', '1'),
+                P.gastaPedras('stone-ember', 11), P.gastaPedras('pedra-fantasma', 1),
+                P.gastaPedras('stone-tear', 1), P.gastaPedras(null, 1)];
+  check('recusas: n torto, pedra desconhecida, estoque curto — false sem tocar em nada',
+        gRuins.every(function (x) { return x === false; }) && foto() === antesG && saves === 0,
+        JSON.stringify(gRuins));
+  var g1 = P.gastaPedras('stone-ember', 4);
+  check('gastar 4 de 10 Brasas: true, sobram 6, uma gravação',
+        g1 === true && P.stoneCount('stone-ember') === 6 && saves === 1);
+  check('gastar o estoque inteiro deixa 0 (e mais 1 é recusado)',
+        P.gastaPedras('stone-ember', 6) === true && P.stoneCount('stone-ember') === 0 &&
+        P.gastaPedras('stone-ember', 1) === false);
+
+  // ============================================================ a Âncora fora da forja neutra
+  titulo('a forja da peça neutra não come Âncora');
+  P.state.inventory = [];
+  P.addItem('ci-baroness-collar', 'saque');       // épica neutra da Cisterna
+  P.state.stones = { 'stone-anchor': 500, 'stone-slate': 3, 'stone-ember': 1 };
+  var ui = P.upgradeInfo(0);
+  check('com 500 âncoras e 3 lascas, a peça neutra forja com Lasca (não com a Âncora)',
+        ui && ui.stoneId === 'stone-slate', ui && ui.stoneId);
+
+  // ============================================================ mundo sem DATA.quebra
+  titulo('o dado sem a tabela');
+  var guardada = DATA.quebra;
+  delete DATA.quebra;
+  var semTab = P.quebraInfoDe('cp-eclipse-lens', 0, 0);
+  var cfg0 = P.quebraCfg();
+  check('sem DATA.quebra valem os números de fábrica (24 na épica do fundo)',
+        semTab && semTab.pedras === 24 && cfg0.base.lendario === 15 && cfg0.porEstrela === 3,
+        JSON.stringify(cfg0));
+  DATA.quebra = { base: { raro: 5, mitico: 40 }, reembolsoForja: 7 };
+  var cfgP = P.quebraCfg();
+  check('tabela parcial: o que veio manda, o resto é padrão, o reembolso trava em 1',
+        cfgP.base.raro === 5 && cfgP.base.comum === 1 && cfgP.base.mitico === 40 &&
+        cfgP.reembolsoForja === 1 && cfgP.degrauNivel === 10, JSON.stringify(cfgP));
+  DATA.quebra = guardada;
+  check('a tabela de volta, a conta de volta', P.quebraInfoDe('cp-eclipse-lens', 0, 0).pedras === 24);
+
+  // ============================================================ o disco
+  P.save = saveOrig;
+  var sb = JOGO.SaveSandbox.check();
+  check('o disco de verdade continua intocado', sb.ok, JSON.stringify(sb.disco));
+
+  var sum = document.getElementById('summary');
+  sum.className = falhas ? 'fail' : 'allpass';
+  sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total)
+                           : ('tudo passou (' + total + ')');
+  window.__pronto = true; window.__done = true; window.__fail = falhas;
+})();
+</script>
+</body>
+</html>

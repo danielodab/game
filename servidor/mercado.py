@@ -44,6 +44,19 @@ AS REGRAS:
              ralo da economia (js/core/mercado.js tem a mesma conta)
   o legado   as ofertas antigas que ainda estão em db.mercado.ofertas viram
              anúncios na primeira chamada de mercado da conta, com a série
+
+O LOTE DE PEDRAS DE FORJA (22/09, pedido do dono: vender pedra uma a uma ou em
+lotes de 10, 50 e 100). O lote é um anúncio como a peça — mesma linha em
+`mercado_anuncios`, com item_id = a pedra, level/stars 0 e iid NULL — mais uma
+linha em `mercado_lotes` com o tamanho (tabela NOVA: o anúncio de antes nunca
+ganha coluna). Tudo o que vale para a peça vale para o lote: teto de anúncios,
+compra saco-depois-banco, a taxa sobre o preço final, a proposta, o aceite, a
+confirmação e a retirada. O que muda: as pedras saem do estoque do vendedor
+(op interna mercadoTiraPedras) e entram no de quem leva (mercadoPoePedras) —
+sem série, sem registro de itens e sem saco cheio (pedra não ocupa o saco).
+Nas leituras, o resumo separa `itens` (só peças) de `pedras` (agregado por
+pedra, com o menor preço por unidade), e todo objeto com cara de anúncio leva
+`tipo` ('peca' | 'pedra') e `qtd` (1 na peça).
 """
 import json
 import logging
@@ -63,6 +76,7 @@ RECENTES = 20                     # vendas e propostas recentes nas leituras
 TENTATIVAS = 3                    # quantas vezes refazer quando o estado de uma conta muda no meio
 TENTATIVAS_VENDA = 5              # a venda mexe em DOIS estados, e o vendedor pode estar jogando
 RE_ITEM = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+LOTES_PEDRA = (1, 10, 50, 100)    # JOGO.Mercado.LOTES_PEDRA e o juiz (lotePedra) espelham; o CHECK da tabela também
 VIVAS = ('aberta', 'aceita')
 SEM_JUIZ = 'o mercadinho precisa do servidor conferindo — tente de novo em instantes'
 MUDOU = 'o estado de uma das contas mudou no meio — tente de novo'
@@ -108,6 +122,15 @@ CREATE TABLE IF NOT EXISTS mercado_propostas(
 );
 CREATE INDEX IF NOT EXISTS mercado_propostas_anuncio ON mercado_propostas(anuncio_id, estado);
 CREATE INDEX IF NOT EXISTS mercado_propostas_comprador ON mercado_propostas(comprador_id, estado);
+-- 22/09: o LOTE de pedras de forja. O anúncio é a linha de mercado_anuncios (item_id = a pedra,
+-- level/stars 0, iid NULL); o tamanho mora aqui, numa tabela NOVA (nunca ALTER, pelo mesmo motivo).
+-- O contêiner velho que ainda não conhece a tabela vê o lote como uma peça que o juiz dele não
+-- aceita (mercadoPoe: 'peça inválida'): a compra e a retirada lá caem sem mexer em nada
+CREATE TABLE IF NOT EXISTS mercado_lotes(
+  anuncio_id     INTEGER PRIMARY KEY REFERENCES mercado_anuncios(id) ON DELETE CASCADE,
+  tipo           TEXT NOT NULL CHECK (tipo IN ('pedra')),
+  qtd            INTEGER NOT NULL CHECK (qtd IN (1, 10, 50, 100))
+);
 """
 
 
@@ -155,6 +178,40 @@ def _peca(res):
     return item
 
 
+# ---- o lote de pedras (22/09) --------------------------------------------------------------
+# As leituras juntam `mercado_lotes` com LEFT JOIN e o apelido `lote_qtd`: NULL = peça.
+LOTE_JUNTA = "LEFT JOIN mercado_lotes l ON l.anuncio_id = a.id "
+
+
+def _tipo_qtd(qtd_lote):
+    """{'tipo', 'qtd'} de um anúncio: o lote diz o tamanho; a peça é 1."""
+    if qtd_lote is None:
+        return {'tipo': 'peca', 'qtd': 1}
+    return {'tipo': 'pedra', 'qtd': qtd_lote}
+
+
+def _duas_casas(x):
+    """Um preço por pedra com 2 casas; inteiro quando fecha (3.0 vira 3 no JSON)."""
+    u = round(x, 2)
+    return int(u) if u == int(u) else u
+
+
+def _unitario(preco, qtd):
+    """O preço por pedra do anúncio; a peça (qtd 1) fica igual ao preço."""
+    return _duas_casas(preco / max(1, qtd))
+
+
+def _pedras_no_estado(progress, stone_id):
+    """Quantas pedras `stone_id` a conta tem no estado do servidor (o Progress.stoneCount)."""
+    st = progress.get('stones') if isinstance(progress, dict) else None
+    return max(0, inteiro(st.get(stone_id))) if isinstance(st, dict) else 0
+
+
+def _item_do_lote(stone_id, qtd):
+    """O `item` das respostas de venda e retirada do lote: a forma da peça, com tipo e qtd."""
+    return {'itemId': stone_id, 'level': 0, 'stars': 0, 'qtd': qtd, 'tipo': 'pedra'}
+
+
 class MercadoMixin:
 
     # -- miudezas ------------------------------------------------------------------------------
@@ -189,6 +246,11 @@ class MercadoMixin:
             raise Recusa(404, 'esse anúncio não existe')
         return a
 
+    def _mc_lote(self, aid):
+        """Dentro da tranca: o tamanho do lote de pedras do anúncio `aid`, ou None (é peça)."""
+        r = self.con.execute("SELECT qtd FROM mercado_lotes WHERE anuncio_id = ? AND tipo = 'pedra'", (aid,)).fetchone()
+        return r['qtd'] if r is not None else None
+
     # -- a migração do mercadinho de antes (as ofertas no db da conta) --------------------------------
     def _mc_migra(self, conta):
         """Na primeira chamada de mercado da conta: as ofertas do jogador que ainda estão em
@@ -215,6 +277,9 @@ class MercadoMixin:
             ofertas = res.get('ofertas') if isinstance(res, dict) else None
             if not isinstance(ofertas, list):
                 raise Recusa(503, 'o juiz respondeu torto — nada foi mexido')
+            # 22/09: o lote de pedras local não vira anúncio — o juiz já pôs as pedras de volta no
+            # estoque do vendedor (o estado gravado abaixo as leva); aqui só entra na trilha
+            pedras = res.get('pedras') if isinstance(res.get('pedras'), list) else []
             t = agora()
             try:
                 with self._escrita():
@@ -248,10 +313,12 @@ class MercadoMixin:
                         "INSERT INTO mercado_anuncios(vendedor_id, iid, item_id, level, stars, preco, estado, criado_em, legado) "
                         "VALUES (?, ?, ?, ?, ?, ?, 'aberto', ?, 1)", lote)
                     self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES (?, ?)", (marca, t))
-                    self._evento(cid, 'mercado-legado', {'anuncios': len(lote), 'versao': nova})
+                    self._evento(cid, 'mercado-legado', {'anuncios': len(lote), 'lotesDevolvidos': pedras[:50],
+                                                         'versao': nova})
             except EstadoMudou:
                 continue
-            log.info("mercado: %d ofertas antigas da conta #%d viraram anúncios", len(lote), cid)
+            log.info("mercado: %d ofertas antigas da conta #%d viraram anúncios (%d lotes de pedra devolvidos)",
+                     len(lote), cid, len(pedras))
             return {'versao': nova, 'hash': saida['hash'], 'progress': saida['progress'], 'db': db}
         raise Recusa(409, MUDOU)
 
@@ -270,6 +337,11 @@ class MercadoMixin:
     def mercado_anunciar(self, conta, corpo):
         migrado = self._mc_abre(conta)
         cid = conta['id']
+        tipo = corpo.get('tipo')
+        if tipo == 'pedra':
+            return self._mc_anuncia_lote(conta, corpo)
+        if tipo is not None and tipo != 'peca':
+            raise Recusa(400, "tipo precisa ser 'peca' ou 'pedra'")
         preco = corpo.get('preco')
         if not _inteiro_puro(preco) or not 1 <= preco <= PRECO_MAX:
             raise Recusa(400, 'o preço vai de 1 a %d vinténs' % PRECO_MAX)
@@ -322,11 +394,65 @@ class MercadoMixin:
             raise Recusa(409, 'essa peça ainda não tem número de série: espere o jogo salvar e tente de novo')
         return e['iid']
 
-    def _mc_pode_anunciar(self, cid, iid):
+    def _mc_teto(self, cid):
+        """O teto de anúncios abertos por conta — peça e lote de pedras contam juntos."""
         n = self.con.execute("SELECT COUNT(*) FROM mercado_anuncios WHERE vendedor_id = ? AND estado = 'aberto'",
                              (cid,)).fetchone()[0]
         if n >= ANUNCIOS_MAX:
             raise Recusa(409, 'você já tem %d anúncios abertos (o máximo): retire algum antes' % ANUNCIOS_MAX)
+
+    def _mc_anuncia_lote(self, conta, corpo):
+        """O LOTE de pedras (22/09): {tipo: 'pedra', stoneId, qtd, preco}. As pedras saem do
+        estado do vendedor pelo juiz (mercadoTiraPedras, tudo ou nada) e ficam em custódia na
+        linha do anúncio; o anúncio e o lote entram na MESMA transação que grava o estado."""
+        cid = conta['id']
+        stone_id, qtd, preco = corpo.get('stoneId'), corpo.get('qtd'), corpo.get('preco')
+        if not isinstance(stone_id, str) or not RE_ITEM.match(stone_id):
+            raise Recusa(400, 'informe a pedra: stoneId')
+        if not _inteiro_puro(qtd) or qtd not in LOTES_PEDRA:
+            raise Recusa(400, 'o lote é de %s pedras' % ', '.join(str(n) for n in LOTES_PEDRA))
+        if not _inteiro_puro(preco) or not 1 <= preco <= PRECO_MAX:
+            raise Recusa(400, 'o preço vai de 1 a %d vinténs' % PRECO_MAX)
+        for _ in range(TENTATIVAS):
+            t = agora()
+            with self.tranca:
+                estado = self._estado_exige(cid)
+                self._mc_teto(cid)
+            # quem decide é o juiz (a pedra existe? o estoque cobre?); a API só traduz a recusa
+            try:
+                saida = self._juiz_op(conta, estado, [{'nome': 'mercadoTiraPedras',
+                                                       'args': {'stoneId': stone_id, 'qtd': qtd}}], interno=True)
+            except Recusa as e:
+                if e.status == 422 and e.extra.get('motivo') == 'falta':
+                    tem = min(_pedras_no_estado(estado['progress'], stone_id), qtd - 1)
+                    raise Recusa(409, 'pedras insuficientes: o lote pede %d e você tem %d' % (qtd, tem),
+                                 motivo='pedras', tem=tem, faltam=qtd - tem)
+                if e.status == 422 and e.extra.get('motivo') == 'argumento':
+                    raise Recusa(400, e.erro, motivo='argumento')         # a pedra que o dado não conhece
+                raise
+            res = (saida.get('resultados') or [None])[0]
+            if not isinstance(res, dict) or res.get('stoneId') != stone_id or res.get('qtd') != qtd:
+                raise Recusa(503, 'o juiz respondeu torto — nada foi anunciado')
+            try:
+                with self._escrita():
+                    self._mc_teto(cid)
+                    nova, db = self._estado_grava(conta, estado, saida, t)
+                    cur = self.con.execute(
+                        "INSERT INTO mercado_anuncios(vendedor_id, iid, item_id, level, stars, preco, estado, criado_em) "
+                        "VALUES (?, NULL, ?, 0, 0, ?, 'aberto', ?)", (cid, stone_id, preco, t))
+                    aid = cur.lastrowid
+                    self.con.execute("INSERT INTO mercado_lotes(anuncio_id, tipo, qtd) VALUES (?, 'pedra', ?)", (aid, qtd))
+                    self._evento(cid, 'mercado-anuncio', {'id': aid, 'tipo': 'pedra', 'itemId': stone_id, 'qtd': qtd,
+                                                          'preco': preco, 'versao': nova})
+            except EstadoMudou:
+                continue
+            anuncio = {'id': aid, 'tipo': 'pedra', 'itemId': stone_id, 'stoneId': stone_id, 'qtd': qtd,
+                       'preco': preco, 'taxa': taxa_de(preco)}
+            return 200, self._mc_estado_resposta({'ok': True, 'anuncio': anuncio}, nova, saida, db)
+        raise Recusa(409, MUDOU, **self._estado_publico(cid))
+
+    def _mc_pode_anunciar(self, cid, iid):
+        self._mc_teto(cid)
         r = self.con.execute("SELECT conta_id, estado FROM itens WHERE iid = ?", (iid,)).fetchone()
         if r is None:
             raise Recusa(409, 'essa peça ainda não chegou ao servidor — espere o jogo salvar e tente de novo')
@@ -343,12 +469,15 @@ class MercadoMixin:
         aceita `proposta_id`. O juiz debita o comprador (saco, depois banco) e põe a peça no
         saco dele; credita o vendedor (valor − taxa); a gravação dos DOIS estados, da série,
         do anúncio e das propostas é uma transação só. Um anúncio que já saiu levanta
-        Recusa 409 com motivo 'perdeu' (a proposta, se houver, vira 'perdida')."""
+        Recusa 409 com motivo 'perdeu' (a proposta, se houver, vira 'perdida').
+        22/09: o LOTE de pedras vende igual, mas as pedras entram no estoque do comprador
+        (mercadoPoePedras) — sem série a conferir nem registro de itens a mudar de dono."""
         cid = conta['id']
         for _ in range(TENTATIVAS_VENDA):
             t = agora()
             with self.tranca:
                 a = self._mc_anuncio(aid)
+                qtd_lote = self._mc_lote(aid)
                 p = None
                 if proposta_id is not None:
                     p = self.con.execute("SELECT * FROM mercado_propostas WHERE id = ?", (proposta_id,)).fetchone()
@@ -380,9 +509,12 @@ class MercadoMixin:
                 item['iid'] = a['iid']
             taxa = taxa_de(valor)
             repasse = valor - taxa
+            if qtd_lote is not None:
+                poe = {'nome': 'mercadoPoePedras', 'args': {'stoneId': a['item_id'], 'qtd': qtd_lote}}
+            else:
+                poe = {'nome': 'mercadoPoe', 'args': {'item': item}}
             try:
-                sb = self._juiz_op(conta, eb, [{'nome': 'mercadoPaga', 'args': {'valor': valor}},
-                                               {'nome': 'mercadoPoe', 'args': {'item': item}}], interno=True)
+                sb = self._juiz_op(conta, eb, [{'nome': 'mercadoPaga', 'args': {'valor': valor}}, poe], interno=True)
             except Recusa as e:
                 if e.status == 422 and e.extra.get('motivo') == 'saco':
                     raise Recusa(409, 'o seu saco está cheio — abra espaço e tente de novo', motivo='saco')
@@ -393,8 +525,11 @@ class MercadoMixin:
             pago = res[0] if len(res) > 0 and isinstance(res[0], dict) else {}
             posto = res[1] if len(res) > 1 and isinstance(res[1], dict) else {}
             serie = posto.get('iid')
-            if (not pago.get('ok') or inteiro(pago.get('deCarteira')) + inteiro(pago.get('deBanco')) != valor
-                    or not iid_valido(serie) or (a['iid'] and serie != a['iid'])):
+            if qtd_lote is not None:
+                posto_ok = posto.get('ok') is True and posto.get('stoneId') == a['item_id'] and posto.get('qtd') == qtd_lote
+            else:
+                posto_ok = iid_valido(serie) and not (a['iid'] and serie != a['iid'])
+            if not pago.get('ok') or inteiro(pago.get('deCarteira')) + inteiro(pago.get('deBanco')) != valor or not posto_ok:
                 raise Recusa(503, 'o juiz respondeu torto — nada foi vendido')
             sv = None
             if repasse > 0:
@@ -435,6 +570,8 @@ class MercadoMixin:
                                          "WHERE id = ?", (t, p['id']))
                     dados = {'anuncio': aid, 'iid': serie, 'itemId': a['item_id'], 'valor': valor, 'taxa': taxa,
                              'proposta': p['id'] if p is not None else None}
+                    if qtd_lote is not None:
+                        dados.update(tipo='pedra', qtd=qtd_lote)
                     self._evento(cid, 'mercado-compra', dict(dados, vendedor=a['vendedor_id'], versao=nb))
                     self._evento(a['vendedor_id'], 'mercado-venda', dict(dados, comprador=cid))
             except EstadoMudou:
@@ -443,8 +580,13 @@ class MercadoMixin:
                 continue
             log.info("mercado: anúncio #%d vendido #%d → #%d por %d (taxa %d)", aid, a['vendedor_id'], cid, valor, taxa)
             resposta = {'ok': True, 'comprou': True, 'anuncio': aid, 'valor': valor, 'preco': a['preco'],
-                        'deCarteira': inteiro(pago.get('deCarteira')), 'deBanco': inteiro(pago.get('deBanco')),
-                        'item': {'itemId': a['item_id'], 'level': a['level'], 'stars': a['stars'], 'iid': serie}}
+                        'deCarteira': inteiro(pago.get('deCarteira')), 'deBanco': inteiro(pago.get('deBanco'))}
+            if qtd_lote is not None:
+                resposta.update(tipo='pedra', qtd=qtd_lote, pedras={'stoneId': a['item_id'], 'qtd': qtd_lote},
+                                item=_item_do_lote(a['item_id'], qtd_lote))
+            else:
+                resposta.update(tipo='peca', qtd=1,
+                                item={'itemId': a['item_id'], 'level': a['level'], 'stars': a['stars'], 'iid': serie})
             return 200, self._mc_estado_resposta(resposta, nb, sb, dbb)
         raise Recusa(409, MUDOU, **self._estado_publico(cid))
 
@@ -576,18 +718,28 @@ class MercadoMixin:
                 if a['estado'] != 'aberto':
                     raise Recusa(409, 'esse anúncio já saiu do balcão (%s)' % a['estado'])
                 estado = self._estado_exige(cid)
+                qtd_lote = self._mc_lote(aid)
             item = {'itemId': a['item_id'], 'level': a['level'], 'stars': a['stars']}
             if a['iid']:
                 item['iid'] = a['iid']
+            if qtd_lote is not None:
+                # 22/09: o lote de pedras volta ao estoque do vendedor (sem série, sem saco cheio)
+                op = {'nome': 'mercadoPoePedras', 'args': {'stoneId': a['item_id'], 'qtd': qtd_lote}}
+            else:
+                op = {'nome': 'mercadoPoe', 'args': {'item': item}}
             try:
-                saida = self._juiz_op(conta, estado, [{'nome': 'mercadoPoe', 'args': {'item': item}}], interno=True)
+                saida = self._juiz_op(conta, estado, [op], interno=True)
             except Recusa as e:
                 if e.status == 422 and e.extra.get('motivo') == 'saco':
                     raise Recusa(409, 'o seu saco está cheio — abra espaço e tente de novo', motivo='saco')
                 raise
             res = (saida.get('resultados') or [None])[0]
             serie = res.get('iid') if isinstance(res, dict) else None
-            if not iid_valido(serie) or (a['iid'] and serie != a['iid']):
+            if qtd_lote is not None:
+                if (not isinstance(res, dict) or res.get('ok') is not True or res.get('stoneId') != a['item_id']
+                        or res.get('qtd') != qtd_lote):
+                    raise Recusa(503, 'o juiz respondeu torto — nada foi retirado')
+            elif not iid_valido(serie) or (a['iid'] and serie != a['iid']):
                 raise Recusa(503, 'o juiz respondeu torto — nada foi retirado')
             try:
                 with self._escrita():
@@ -599,10 +751,17 @@ class MercadoMixin:
                                      "WHERE id = ?", (t, aid))
                     self.con.execute("UPDATE mercado_propostas SET estado = 'cancelada', resolvida_em = ?, visto = 0 "
                                      "WHERE anuncio_id = ? AND estado IN ('aberta', 'aceita')", (t, aid))
-                    self._evento(cid, 'mercado-retira', {'anuncio': aid, 'iid': serie, 'versao': nova})
+                    trilha = {'anuncio': aid, 'iid': serie, 'versao': nova}
+                    if qtd_lote is not None:
+                        trilha.update(tipo='pedra', itemId=a['item_id'], qtd=qtd_lote)
+                    self._evento(cid, 'mercado-retira', trilha)
             except EstadoMudou:
                 continue
-            resposta = {'ok': True, 'item': dict(item, iid=serie)}
+            if qtd_lote is not None:
+                resposta = {'ok': True, 'tipo': 'pedra', 'pedras': {'stoneId': a['item_id'], 'qtd': qtd_lote},
+                            'item': _item_do_lote(a['item_id'], qtd_lote)}
+            else:
+                resposta = {'ok': True, 'tipo': 'peca', 'item': dict(item, iid=serie)}
             return 200, self._mc_estado_resposta(resposta, nova, saida, db)
         raise Recusa(409, MUDOU, **self._estado_publico(cid))
 
@@ -610,19 +769,35 @@ class MercadoMixin:
     def mercado_resumo(self, conta, corpo):
         """Por item à venda: quantos, o menor preço e quantos são meus. O cliente separa por tipo
         (o espaço da peça) e busca pelo nome com os dados do jogo (JOGO.DATA) — nenhum número
-        das peças é copiado para cá."""
+        das peças é copiado para cá.
+        22/09: `itens` é só de PEÇAS (o `qtd` dali é quantos anúncios); os lotes de pedra vêm em
+        `pedras`, um por pedra: quantos lotes, quantas pedras somadas, o menor preço de lote, o
+        menor preço POR PEDRA (2 casas) e quantos lotes são meus."""
         migrado = self._mc_abre(conta)
         with self.tranca:
             linhas = self.con.execute(
                 "SELECT item_id, COUNT(*) AS qtd, MIN(preco) AS menor, SUM(vendedor_id = ?) AS meus "
-                "FROM mercado_anuncios WHERE estado = 'aberto' GROUP BY item_id ORDER BY item_id", (conta['id'],)).fetchall()
+                "FROM mercado_anuncios a WHERE estado = 'aberto' "
+                "AND NOT EXISTS (SELECT 1 FROM mercado_lotes l WHERE l.anuncio_id = a.id) "
+                "GROUP BY item_id ORDER BY item_id", (conta['id'],)).fetchall()
+            lotes = self.con.execute(
+                "SELECT a.item_id, COUNT(*) AS lotes, SUM(l.qtd) AS pedras, MIN(a.preco) AS menor, "
+                "MIN(a.preco * 1.0 / l.qtd) AS menor_unit, SUM(a.vendedor_id = ?) AS meus "
+                "FROM mercado_anuncios a JOIN mercado_lotes l ON l.anuncio_id = a.id "
+                "WHERE a.estado = 'aberto' AND l.tipo = 'pedra' GROUP BY a.item_id ORDER BY a.item_id",
+                (conta['id'],)).fetchall()
         itens = [{'itemId': r['item_id'], 'qtd': r['qtd'], 'menor': r['menor'], 'meus': r['meus'] or 0} for r in linhas]
-        return 200, self._mc_com_migracao({'ok': True, 'itens': itens, 'taxaPct': TAXA_PCT, 'precoMax': PRECO_MAX},
-                                          migrado)
+        pedras = [{'stoneId': r['item_id'], 'lotes': r['lotes'], 'pedras': r['pedras'], 'menor': r['menor'],
+                   'menorUnit': _duas_casas(r['menor_unit']), 'meus': r['meus'] or 0} for r in lotes]
+        return 200, self._mc_com_migracao({'ok': True, 'itens': itens, 'pedras': pedras, 'taxaPct': TAXA_PCT,
+                                           'precoMax': PRECO_MAX, 'lotesPedra': list(LOTES_PEDRA)}, migrado)
 
     def mercado_item(self, conta, corpo):
         """TODOS os anúncios abertos de um item (o mesmo item pode estar à venda por vários
-        jogadores), do mais barato ao mais caro, com quem vende e a minha proposta viva."""
+        jogadores), do mais barato ao mais caro, com quem vende e a minha proposta viva.
+        22/09: o mesmo `?id=` serve à pedra (o id da pedra): cada anúncio leva `tipo`, `qtd` e
+        `unit` (o preço por pedra; na peça, o próprio preço), e a ordem é pelo preço POR PEDRA e
+        depois pelo preço do lote — para a peça (qtd 1) é a ordem de sempre."""
         migrado = self._mc_abre(conta)
         item_id = (corpo.get('_query') or {}).get('id')
         if not isinstance(item_id, str) or not RE_ITEM.match(item_id):
@@ -630,8 +805,9 @@ class MercadoMixin:
         cid = conta['id']
         with self.tranca:
             linhas = self.con.execute(
-                "SELECT * FROM mercado_anuncios WHERE estado = 'aberto' AND item_id = ? ORDER BY preco, level DESC, "
-                "stars DESC, criado_em LIMIT ?", (item_id, LISTA_MAX)).fetchall()
+                "SELECT a.*, l.qtd AS lote_qtd FROM mercado_anuncios a " + LOTE_JUNTA +
+                "WHERE a.estado = 'aberto' AND a.item_id = ? ORDER BY (a.preco * 1.0 / COALESCE(l.qtd, 1)), a.preco, "
+                "a.level DESC, a.stars DESC, a.criado_em LIMIT ?", (item_id, LISTA_MAX)).fetchall()
             ids = [r['id'] for r in linhas]
             minhas = {}
             for i in range(0, len(ids), 400):
@@ -642,9 +818,12 @@ class MercadoMixin:
                         [cid] + parte):
                     minhas[p['anuncio_id']] = {'id': p['id'], 'valor': p['valor'], 'estado': p['estado']}
             nomes = self._mc_nomes(r['vendedor_id'] for r in linhas)
-        anuncios = [{'id': r['id'], 'vendedor': nomes.get(r['vendedor_id']), 'level': r['level'], 'stars': r['stars'],
-                     'preco': r['preco'], 'meu': r['vendedor_id'] == cid, 'minhaProposta': minhas.get(r['id']),
-                     'criadoEm': r['criado_em']} for r in linhas]
+        anuncios = []
+        for r in linhas:
+            tq = _tipo_qtd(r['lote_qtd'])
+            anuncios.append(dict(tq, id=r['id'], vendedor=nomes.get(r['vendedor_id']), level=r['level'], stars=r['stars'],
+                                 preco=r['preco'], unit=_unitario(r['preco'], tq['qtd']), meu=r['vendedor_id'] == cid,
+                                 minhaProposta=minhas.get(r['id']), criadoEm=r['criado_em']))
         return 200, self._mc_com_migracao({'ok': True, 'itemId': item_id, 'anuncios': anuncios}, migrado)
 
     def mercado_meus(self, conta, corpo):
@@ -652,14 +831,16 @@ class MercadoMixin:
         migrado = self._mc_abre(conta)
         cid = conta['id']
         with self.tranca:
-            abertos = self.con.execute("SELECT * FROM mercado_anuncios WHERE vendedor_id = ? AND estado = 'aberto' "
-                                       "ORDER BY criado_em DESC", (cid,)).fetchall()
+            abertos = self.con.execute("SELECT a.*, l.qtd AS lote_qtd FROM mercado_anuncios a " + LOTE_JUNTA +
+                                       "WHERE a.vendedor_id = ? AND a.estado = 'aberto' "
+                                       "ORDER BY a.criado_em DESC", (cid,)).fetchall()
             ids = [r['id'] for r in abertos]
             props = self.con.execute(
                 "SELECT * FROM mercado_propostas WHERE anuncio_id IN (%s) ORDER BY valor DESC, criado_em"
                 % ','.join('?' * len(ids)), ids).fetchall() if ids else []
-            vendas = self.con.execute("SELECT * FROM mercado_anuncios WHERE vendedor_id = ? AND estado = 'vendido' "
-                                      "ORDER BY fechado_em DESC LIMIT ?", (cid, RECENTES)).fetchall()
+            vendas = self.con.execute("SELECT a.*, l.qtd AS lote_qtd FROM mercado_anuncios a " + LOTE_JUNTA +
+                                      "WHERE a.vendedor_id = ? AND a.estado = 'vendido' "
+                                      "ORDER BY a.fechado_em DESC LIMIT ?", (cid, RECENTES)).fetchall()
             nomes = self._mc_nomes([p['comprador_id'] for p in props] + [v['comprador_id'] for v in vendas])
         por_anuncio = {}
         for p in props:
@@ -669,13 +850,15 @@ class MercadoMixin:
             por_anuncio.setdefault(p['anuncio_id'], []).append({
                 'id': p['id'], 'comprador': nomes.get(p['comprador_id']), 'valor': p['valor'], 'estado': p['estado'],
                 'taxa': taxa_de(p['valor']), 'vistoVendedor': bool(p['visto_vendedor']), 'criadoEm': p['criado_em']})
-        anuncios = [{'id': a['id'], 'itemId': a['item_id'], 'level': a['level'], 'stars': a['stars'], 'preco': a['preco'],
-                     'taxa': taxa_de(a['preco']), 'criadoEm': a['criado_em'], 'propostas': por_anuncio.get(a['id'], [])}
+        anuncios = [dict(_tipo_qtd(a['lote_qtd']), id=a['id'], itemId=a['item_id'], level=a['level'], stars=a['stars'],
+                         preco=a['preco'], taxa=taxa_de(a['preco']), criadoEm=a['criado_em'],
+                         propostas=por_anuncio.get(a['id'], []))
                     for a in abertos]
-        recentes = [{'id': v['id'], 'itemId': v['item_id'], 'level': v['level'], 'stars': v['stars'], 'preco': v['preco'],
-                     'valor': v['valor_final'], 'taxa': v['taxa'], 'recebeu': (v['valor_final'] or 0) - (v['taxa'] or 0),
-                     'comprador': nomes.get(v['comprador_id']), 'viaProposta': v['proposta_id'] is not None,
-                     'fechadoEm': v['fechado_em']} for v in vendas]
+        recentes = [dict(_tipo_qtd(v['lote_qtd']), id=v['id'], itemId=v['item_id'], level=v['level'], stars=v['stars'],
+                         preco=v['preco'], valor=v['valor_final'], taxa=v['taxa'],
+                         recebeu=(v['valor_final'] or 0) - (v['taxa'] or 0), comprador=nomes.get(v['comprador_id']),
+                         viaProposta=v['proposta_id'] is not None, fechadoEm=v['fechado_em'])
+                    for v in vendas]
         return 200, self._mc_com_migracao({'ok': True, 'anuncios': anuncios, 'vendas': recentes,
                                            'max': ANUNCIOS_MAX}, migrado)
 
@@ -685,19 +868,20 @@ class MercadoMixin:
         cid = conta['id']
         with self.tranca:
             linhas = self.con.execute(
-                "SELECT p.*, a.item_id, a.level, a.stars, a.preco, a.vendedor_id, a.estado AS anuncio_estado "
-                "FROM mercado_propostas p JOIN mercado_anuncios a ON a.id = p.anuncio_id WHERE p.comprador_id = ? "
-                "ORDER BY (p.estado IN ('aberta', 'aceita')) DESC, p.criado_em DESC LIMIT ?", (cid, RECENTES * 2)).fetchall()
+                "SELECT p.*, a.item_id, a.level, a.stars, a.preco, a.vendedor_id, a.estado AS anuncio_estado, "
+                "l.qtd AS lote_qtd FROM mercado_propostas p JOIN mercado_anuncios a ON a.id = p.anuncio_id " + LOTE_JUNTA +
+                "WHERE p.comprador_id = ? ORDER BY (p.estado IN ('aberta', 'aceita')) DESC, p.criado_em DESC LIMIT ?", (cid, RECENTES * 2)).fetchall()
             nomes = self._mc_nomes(r['vendedor_id'] for r in linhas)
         return 200, self._mc_com_migracao({'ok': True, 'propostas': [self._mc_proposta_publica(r, nomes) for r in linhas]},
                                           migrado)
 
     @staticmethod
     def _mc_proposta_publica(r, nomes):
-        return {'id': r['id'], 'anuncioId': r['anuncio_id'], 'itemId': r['item_id'], 'level': r['level'],
-                'stars': r['stars'], 'preco': r['preco'], 'valor': r['valor'], 'estado': r['estado'],
-                'vendedor': nomes.get(r['vendedor_id']), 'anuncioAberto': r['anuncio_estado'] == 'aberto',
-                'criadoEm': r['criado_em'], 'aceitaEm': r['aceita_em'], 'resolvidaEm': r['resolvida_em']}
+        # a linha vem com `lote_qtd` (LOTE_JUNTA): o lote de pedras diz tipo 'pedra' e o tamanho
+        return dict(_tipo_qtd(r['lote_qtd']), id=r['id'], anuncioId=r['anuncio_id'], itemId=r['item_id'],
+                    level=r['level'], stars=r['stars'], preco=r['preco'], valor=r['valor'], estado=r['estado'],
+                    vendedor=nomes.get(r['vendedor_id']), anuncioAberto=r['anuncio_estado'] == 'aberto',
+                    criadoEm=r['criado_em'], aceitaEm=r['aceita_em'], resolvidaEm=r['resolvida_em'])
 
     def mercado_avisos(self, conta, corpo):
         """O que o cliente precisa mostrar agora:
@@ -708,8 +892,8 @@ class MercadoMixin:
         O POST /api/mercado/visto marca."""
         migrado = self._mc_abre(conta)
         cid = conta['id']
-        base = ("SELECT p.*, a.item_id, a.level, a.stars, a.preco, a.vendedor_id, a.estado AS anuncio_estado "
-                "FROM mercado_propostas p JOIN mercado_anuncios a ON a.id = p.anuncio_id ")
+        base = ("SELECT p.*, a.item_id, a.level, a.stars, a.preco, a.vendedor_id, a.estado AS anuncio_estado, "
+                "l.qtd AS lote_qtd FROM mercado_propostas p JOIN mercado_anuncios a ON a.id = p.anuncio_id " + LOTE_JUNTA)
         with self.tranca:
             confirmar = self.con.execute(base + "WHERE p.comprador_id = ? AND p.estado = 'aceita' AND a.estado = 'aberto' "
                                          "ORDER BY p.aceita_em LIMIT ?", (cid, RECENTES)).fetchall()
@@ -717,24 +901,26 @@ class MercadoMixin:
                                          "AND p.estado IN ('recusada', 'perdida', 'cancelada') "
                                          "ORDER BY p.resolvida_em LIMIT ?", (cid, RECENTES)).fetchall()
             recebidas = self.con.execute(
-                "SELECT p.*, a.item_id, a.level, a.stars, a.preco FROM mercado_propostas p "
-                "JOIN mercado_anuncios a ON a.id = p.anuncio_id WHERE a.vendedor_id = ? AND a.estado = 'aberto' "
+                "SELECT p.*, a.item_id, a.level, a.stars, a.preco, l.qtd AS lote_qtd FROM mercado_propostas p "
+                "JOIN mercado_anuncios a ON a.id = p.anuncio_id " + LOTE_JUNTA +
+                "WHERE a.vendedor_id = ? AND a.estado = 'aberto' "
                 "AND p.estado = 'aberta' AND p.visto_vendedor = 0 ORDER BY p.criado_em LIMIT ?", (cid, RECENTES)).fetchall()
-            vendas = self.con.execute("SELECT * FROM mercado_anuncios WHERE vendedor_id = ? AND estado = 'vendido' "
-                                      "AND visto_vendedor = 0 ORDER BY fechado_em LIMIT ?", (cid, RECENTES)).fetchall()
+            vendas = self.con.execute("SELECT a.*, l.qtd AS lote_qtd FROM mercado_anuncios a " + LOTE_JUNTA +
+                                      "WHERE a.vendedor_id = ? AND a.estado = 'vendido' "
+                                      "AND a.visto_vendedor = 0 ORDER BY a.fechado_em LIMIT ?", (cid, RECENTES)).fetchall()
             nomes = self._mc_nomes([r['vendedor_id'] for r in confirmar] + [r['vendedor_id'] for r in desfechos]
                                    + [r['comprador_id'] for r in recebidas] + [v['comprador_id'] for v in vendas])
         resposta = {
             'ok': True,
             'confirmar': [self._mc_proposta_publica(r, nomes) for r in confirmar],
             'desfechos': [self._mc_proposta_publica(r, nomes) for r in desfechos],
-            'recebidas': [{'id': r['id'], 'anuncioId': r['anuncio_id'], 'itemId': r['item_id'], 'level': r['level'],
-                           'stars': r['stars'], 'preco': r['preco'], 'valor': r['valor'],
-                           'comprador': nomes.get(r['comprador_id'])} for r in recebidas],
-            'vendas': [{'id': v['id'], 'itemId': v['item_id'], 'level': v['level'], 'stars': v['stars'],
-                        'preco': v['preco'], 'valor': v['valor_final'], 'taxa': v['taxa'],
-                        'recebeu': (v['valor_final'] or 0) - (v['taxa'] or 0), 'comprador': nomes.get(v['comprador_id']),
-                        'viaProposta': v['proposta_id'] is not None} for v in vendas],
+            'recebidas': [dict(_tipo_qtd(r['lote_qtd']), id=r['id'], anuncioId=r['anuncio_id'], itemId=r['item_id'],
+                               level=r['level'], stars=r['stars'], preco=r['preco'], valor=r['valor'],
+                               comprador=nomes.get(r['comprador_id'])) for r in recebidas],
+            'vendas': [dict(_tipo_qtd(v['lote_qtd']), id=v['id'], itemId=v['item_id'], level=v['level'], stars=v['stars'],
+                            preco=v['preco'], valor=v['valor_final'], taxa=v['taxa'],
+                            recebeu=(v['valor_final'] or 0) - (v['taxa'] or 0), comprador=nomes.get(v['comprador_id']),
+                            viaProposta=v['proposta_id'] is not None) for v in vendas],
         }
         return 200, self._mc_com_migracao(resposta, migrado)
 

@@ -536,7 +536,8 @@ var JOGO = (typeof window !== 'undefined')
       if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu' };
       anotaResposta(r);
       if (r && (r.progress || r.db)) A.adota(r.progress, r.db);
-      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor recusou' };
+      // o `motivo` da recusa vai junto (a quebra distingue 'emprestada' sem ler o texto)
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor recusou', motivo: (r && r.motivo) || null };
       return { ok: true, resultado: (r.resultados || [])[0] };
     });
   };

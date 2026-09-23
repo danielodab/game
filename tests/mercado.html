@@ -18,7 +18,9 @@
 <h1>O Mercadinho — o balcão vazio, a oferta do jogador e a taxa</h1>
 <div class="sub">Cobra a banca do dia semeada pela data (mesmo dia = mesma banca; dia novo troca
 as ofertas do MERCADOR e preserva as do JOGADOR), o anúncio, a compra que debita e repassa menos a
-taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</div>
+taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça. E o lote de pedras
+de forja (22/09): anunciar tira as pedras do estoque, a oferta não tem itemId, retirar e comprar
+põem as pedras de volta no estoque, o lote fora da régua e o estoque curto não tiram nada.</div>
 <div id="summary">rodando…</div>
 <ul id="lista"></ul>
 
@@ -28,7 +30,8 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
   var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
     'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
     'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
-    'js/core/data/items_extra.js','js/core/db.js','js/core/mercado.js'];
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/progress.js',
+    'js/core/db.js','js/core/mercado.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 
@@ -46,9 +49,9 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
     lista.appendChild(li);
   }
 
-  var DB = JOGO.DB, Mc = JOGO.Mercado;
+  var DB = JOGO.DB, Mc = JOGO.Mercado, P = JOGO.Progress, DATA = JOGO.DATA;
   var DIA1 = '2026-08-24', DIA2 = '2026-08-25';
-  var minhaOferta = null;
+  var minhaOferta = null, lote = null, moedas0 = 0;
 
   DB._zerar()
     .then(function () { return Mc.abrir(DIA1); })
@@ -173,6 +176,132 @@ taxa de 5%, o bolso curto que não compra, e a retirada que devolve a peça.</di
       check('mercado com ofertas tortas vira balcão vazio, não null',
             mc && Array.isArray(mc.ofertas) && mc.ofertas.length === 0,
             JSON.stringify(mc));
+    })
+    /* O LOTE DE PEDRAS DE FORJA (22/09, pedido do dono): uma a uma ou em lotes de
+     * 10, 50 e 100. Aqui, e não na ficha, as pedras saem do estoque ao anunciar. */
+    .then(function () {
+      P.reset();
+      P.state.stones = { 'stone-ember': 120 };
+      P.save();
+      return Mc.anunciarPedras('stone-ember', 50, 240, DIA2);
+    })
+    .then(function (r) {
+      check('anunciar um lote de 50 tira as 50 pedras do estoque (120 → 70)',
+            r.ok && P.stoneCount('stone-ember') === 70, JSON.stringify(r) + ' estoque=' + P.stoneCount('stone-ember'));
+      return Mc.abrir(DIA2);
+    })
+    .then(function (m) {
+      lote = m.ofertas.filter(function (o) { return o.tipo === 'pedra'; })[0];
+      check('a oferta do lote é {id, vendedor, tipo, stoneId, qtd, preco} — SEM itemId',
+            !!lote && lote.vendedor === 'jogador' && lote.stoneId === 'stone-ember' && lote.qtd === 50 &&
+            lote.preco === 240 && !('itemId' in lote) && Mc.ehLote(lote), JSON.stringify(lote));
+      return Mc.abrir('2026-08-26');
+    })
+    .then(function (m) {
+      check('abrir de novo (e virar o dia) mantém o lote no balcão',
+            m.ofertas.some(function (o) { return lote && o.id === lote.id && o.qtd === 50; }),
+            JSON.stringify(m.ofertas));
+      return Mc.anunciarPedras('stone-ember', 7, 30, DIA2);
+    })
+    .then(function (r) {
+      check('lote de 7 (fora da régua 1/10/50/100) é recusado sem tocar no estoque',
+            !r.ok && P.stoneCount('stone-ember') === 70, JSON.stringify(r));
+      return Mc.anunciarPedras('stone-ember', 100, 400, DIA2);
+    })
+    .then(function (r) {
+      check('lote de 100 com 70 no estoque: recusa e nada sai',
+            !r.ok && /insuficientes/.test(r.erro) && P.stoneCount('stone-ember') === 70, JSON.stringify(r));
+      return Promise.all([Mc.anunciarPedras('stone-de-mentira', 1, 5, DIA2), Mc.anunciarPedras('stone-ember', 10, 0, DIA2),
+                          Mc.anunciarPedras('stone-ember', 10, 10000, DIA2)]);
+    })
+    .then(function (rs) {
+      check('pedra que o dado não conhece, preço 0 ou acima do teto: recusa sem débito',
+            !rs[0].ok && !rs[1].ok && !rs[2].ok && P.stoneCount('stone-ember') === 70,
+            rs.map(function (x) { return x.erro; }).join(' | '));
+      return Mc.abrir(DIA2);
+    })
+    .then(function (m) {
+      check('as recusas não penduraram nada', m.ofertas.filter(function (o) { return o.tipo === 'pedra'; }).length === 1,
+            m.ofertas.length);
+      // o balcão que não grava: as pedras voltam
+      var gravarOrig = DB.mercadoGravar;
+      DB.mercadoGravar = function () { return Promise.reject(new Error('disco cheio')); };
+      return Mc.anunciarPedras('stone-ember', 10, 40, DIA2).then(function (r) {
+        DB.mercadoGravar = gravarOrig;
+        return r;
+      }, function (e) { DB.mercadoGravar = gravarOrig; throw e; });
+    })
+    .then(function (r) {
+      check('se o balcão não grava depois do débito, as pedras voltam ao estoque',
+            !r.ok && P.stoneCount('stone-ember') === 70, JSON.stringify(r) + ' estoque=' + P.stoneCount('stone-ember'));
+      return Mc.retirar(lote.id, DIA2);
+    })
+    .then(function (r) {
+      check('retirar o lote devolve as 50 pedras ao estoque (70 → 120), sem peça no retorno',
+            r.ok && r.pedras && r.pedras.stoneId === 'stone-ember' && r.pedras.qtd === 50 && !r.item &&
+            P.stoneCount('stone-ember') === 120, JSON.stringify(r) + ' estoque=' + P.stoneCount('stone-ember'));
+      return Mc.retirar(lote.id, DIA2);
+    })
+    .then(function (r) {
+      check('o lote retirado não se retira duas vezes', !r.ok && P.stoneCount('stone-ember') === 120, JSON.stringify(r));
+      // os lotes de OUTRO vendedor, escritos direto no balcão (sem débito aqui)
+      return DB.mercadoLer();
+    })
+    .then(function (mc) {
+      mc.ofertas.push({ id: 'jg-lote-1', vendedor: 'jogador', tipo: 'pedra', stoneId: 'stone-tear', qtd: 10, preco: 60 });
+      mc.ofertas.push({ id: 'ot-lote-1', vendedor: 'outra-conta', tipo: 'pedra', stoneId: 'stone-anchor', qtd: 1, preco: 150 });
+      // lixo e fantasma: o lote torto e o lote do mercador saem na abertura
+      mc.ofertas.push({ id: 'jg-torto-1', vendedor: 'jogador', tipo: 'pedra', stoneId: 'stone-tear', qtd: 7, preco: 9 });
+      mc.ofertas.push({ id: 'jg-torto-2', vendedor: 'jogador', tipo: 'pedra', stoneId: 42, qtd: 10, preco: 9 });
+      mc.ofertas.push({ id: 'mf-lote-1', vendedor: 'mercador', tipo: 'pedra', stoneId: 'stone-tear', qtd: 10, preco: 9 });
+      return DB.mercadoGravar(mc);
+    })
+    .then(function () { return Mc.abrir(DIA2); })
+    .then(function (m) {
+      var ids = m.ofertas.map(function (o) { return o.id; });
+      check('a abertura tira o lote torto e o do mercador, e mantém os lotes válidos',
+            ids.indexOf('jg-lote-1') >= 0 && ids.indexOf('ot-lote-1') >= 0 && ids.indexOf('jg-torto-1') < 0 &&
+            ids.indexOf('jg-torto-2') < 0 && ids.indexOf('mf-lote-1') < 0, ids.join(','));
+      return DB.ganharMoedas(500).then(function () { return DB.moedas(); });
+    })
+    .then(function (m0) {
+      moedas0 = m0;
+      return Mc.comprar('jg-lote-1', DIA2);
+    })
+    .then(function (r) {
+      check('comprar o lote põe as 10 pedras no estoque e não devolve peça',
+            r.ok && r.pedras && r.pedras.stoneId === 'stone-tear' && r.pedras.qtd === 10 && !r.item &&
+            P.stoneCount('stone-tear') === 10, JSON.stringify(r) + ' estoque=' + P.stoneCount('stone-tear'));
+      check('... paga 60 e a venda do jogador repassa 60 − 3 de taxa', r.ok && r.pagou === 60 && r.repasse === 57,
+            JSON.stringify(r));
+      return DB.moedas();
+    })
+    .then(function (m) {
+      check('o bolso: −60 + 57 (o ralo levou 3)', m === moedas0 - 3, moedas0 + ' → ' + m);
+      moedas0 = m;
+      return Mc.comprar('ot-lote-1', DIA2);
+    })
+    .then(function (r) {
+      check('o lote de outro vendedor: a âncora entra no estoque e ninguém aqui recebe repasse',
+            r.ok && r.pedras.stoneId === 'stone-anchor' && r.pedras.qtd === 1 && r.repasse === 0 &&
+            P.stoneCount('stone-anchor') === 1, JSON.stringify(r));
+      return DB.moedas();
+    })
+    .then(function (m) {
+      check('... e o bolso cai o preço inteiro (150)', m === moedas0 - 150, moedas0 + ' → ' + m);
+      return Mc.comprar('jg-lote-1', DIA2);
+    })
+    .then(function (r) {
+      check('o lote vendido não vende duas vezes', !r.ok && P.stoneCount('stone-tear') === 10, JSON.stringify(r));
+      var s = [Mc.precoSugeridoPedra('stone-tear', 1), Mc.precoSugeridoPedra('stone-root', 10),
+               Mc.precoSugeridoPedra('stone-breath', 50), Mc.precoSugeridoPedra('stone-slate', 100),
+               Mc.precoSugeridoPedra('stone-anchor', 10), Mc.precoSugeridoPedra('stone-anchor', 100),
+               Mc.precoSugeridoPedra('stone-nova', 1)];
+      check('o preço sugerido do lote: 3, 30, 200, 500, 1500, o teto 9999 e 4 para a pedra desconhecida',
+            JSON.stringify(s) === '[3,30,200,500,1500,9999,4]', JSON.stringify(s));
+      check('os nomes vêm de DATA.stones', Mc.nomePedra('stone-ember') === DATA.stones['stone-ember'].name &&
+            Mc.nomePedra('stone-x') === 'stone-x', Mc.nomePedra('stone-ember'));
+      check('o save de verdade não foi tocado', JOGO.SaveSandbox.check().ok, JSON.stringify(JOGO.SaveSandbox.check()));
     })
     .catch(function (e) {
       check('a corrente de promessas não estoura', false, e && (e.message || e));

@@ -83,6 +83,8 @@ DIFICULDADES = ('facil', 'normal', 'dificil')
 OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaTira', 'bancoGuildaPoe',
                           # 13/09: o mercadinho entre contas (mercado.py)
                           'mercadoTira', 'mercadoPoe', 'mercadoPaga', 'mercadoRecebe', 'mercadoLegadoTira',
+                          # 22/09: o lote de pedras de forja no mercadinho (mercado.py)
+                          'mercadoTiraPedras', 'mercadoPoePedras',
                           # 13/09: a poção bebida fora da batalha (14/09: vida_pocao, em qualquer lugar)
                           'beberPocao'})
 # os campos de dono CLIENTE do db (§3; a mesma lista de js/core/economia.js: DB_CLIENTE e JOGADOR_CLIENTE)

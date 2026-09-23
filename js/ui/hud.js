@@ -71,12 +71,29 @@ var JOGO = (typeof window !== 'undefined')
   var bancoElemFiltro = 'todos';
   var invBusca = '';               // busca por nome (25/08) — vive entre redesenhos
   var bancoBusca = '';
+  /* 22/09 (os menus de item ganharam ícones): o filtro por ESPAÇO chegou à
+   * forja, aos dois bancos e à troca; o banco da guilda e a troca ganharam
+   * também o de elemento, e a guilda a busca. Um estado por ficha, como os
+   * de cima — cada uma lembra a própria busca entre redesenhos. */
+  var forjaSlotFiltro = 'todos';
+  var bancoSlotFiltro = 'todos';
+  var guildaSlotFiltro = 'todos', guildaElemFiltro = 'todos', guildaBusca = '';
+  var trocaSlotFiltro = 'todos', trocaElemFiltro = 'todos';
   var elemChoiceHero = null;
   // ---- tela "Personagens" [U6]
   var partyTab = 'inventario';     // aba corrente: inventario | forja | colecao
   var partyHero = null;            // herói do carrossel (só classes liberadas)
   var invSel = null;               // peça escolhida na grade: {itemId, level, stars}
   var forgeTarget = null;          // alvo da forja: do saco ou vestido por alguém
+  /* A QUEBRA (22/09, pedido do dono: "na forja o jogador poderá quebrar os
+   * itens, que darão pedras daquele elemento"): a forja ganhou dois modos,
+   * 'forjar' (o de sempre) e 'quebrar'. `forjaQuebraN` é quantas cópias
+   * iguais a bancada quebra de uma vez — 1 ou 'todas'; `forjaQuebrando`
+   * segura o botão enquanto a quebra está no servidor (o índice da peça
+   * muda depois do golpe: um segundo toque quebraria a vizinha). */
+  var forjaModo = 'forjar';
+  var forjaQuebraN = 1;
+  var forjaQuebrando = false;
 
   var LUCK = { 1: 2.4, 2: 1.6 };
   var ELEM_PT = { neutro: 'Neutro', fogo: 'Fogo', agua: 'Água', terra: 'Terra', ar: 'Ar' };
@@ -3393,9 +3410,14 @@ var JOGO = (typeof window !== 'undefined')
         pilhasCofre.push(mapa2[ch]);
       });
 
-      // o filtro por elemento vale para AS DUAS grades de uma vez — quem
-      // procura a peça de água não quer caçá-la em dois lugares
-      caixa.appendChild(elemTabs(bancoElemFiltro, function (e2) {
+      // o filtro por elemento (e, desde 22/09, o por espaço) vale para AS
+      // DUAS grades de uma vez — quem procura a peça de água não quer caçá-la
+      // em dois lugares. Filtrar não mexe nos `indices` das pilhas: guardar e
+      // sacar continuam achando a posição real no saco e no cofre.
+      caixa.appendChild(filtrosDeItem(bancoSlotFiltro, function (s) {
+        bancoSlotFiltro = s;
+        sheetBanco();
+      }, bancoElemFiltro, function (e2) {
         bancoElemFiltro = e2;
         sheetBanco();
       }));
@@ -3405,10 +3427,11 @@ var JOGO = (typeof window !== 'undefined')
         bancoBusca = t;
         aplicaBusca(duplo, t);
       }));
-      if (bancoElemFiltro !== 'todos') {
-        pilhas = pilhas.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
-        pilhasCofre = pilhasCofre.filter(function (pi) { return passaElemento(pi.itemId, bancoElemFiltro); });
+      function passaBanco(pi) {
+        return passaSlot(pi.itemId, bancoSlotFiltro) && passaElemento(pi.itemId, bancoElemFiltro);
       }
+      pilhas = pilhas.filter(passaBanco);
+      pilhasCofre = pilhasCofre.filter(passaBanco);
       var duplo = el('div', 'bk2-duplo');
 
       var colSaco = el('div', 'bk2-col');
@@ -3534,13 +3557,254 @@ var JOGO = (typeof window !== 'undefined')
    * Meus anúncios (só o seu, com o que recebe depois da taxa) e o
    * Colecionador (selos e roleta). A taxa é a do módulo: 5%, mínimo 1. */
   var mcAba = 'comprar';
-  var mcFiltro = { q: '', slot: 'todos', rar: 'todas', origem: 'todos', ordem: 'preco' };
+  // 22/09: `cat` (equip | pedras) e `el` (o elemento do balcão de pedras)
+  var mcFiltro = { q: '', slot: 'todos', rar: 'todas', origem: 'todos', ordem: 'preco', cat: 'equip', el: 'todos' };
+
+  /* AS ABAS E OS FILTROS REDONDOS DOS DOIS MERCADINHOS (22/09, pedido do
+   * dono). O nome escondido de cada botão é a palavra de antes, sem a conta
+   * ("Comprar", "Meus anúncios", "Poções" — as provas acham as abas assim); a
+   * conta de anúncios foi para a pílula do canto (data-conta). A aba aberta
+   * acende com is-on; o texto dela fica escrito no fim da fileira. */
+  var MC_ABAS = {
+    comprar: { ico: 'mc-comprar', rot: 'Comprar' },
+    vender:  { ico: 'mc-vender',  rot: 'Vender' },
+    meus:    { ico: 'mc-meus',    rot: 'Meus anúncios' },
+    ofertas: { ico: 'mc-ofertas', rot: 'Minhas ofertas' },
+    pocoes:  { ico: 'mc-pocoes',  rot: 'Poções' }
+  };
+  // mcAbas([{id, conta?}], aoMudar) -> div.mc-abas; a acesa é a do `mcAba`
+  function mcAbas(lista, aoMudar) {
+    return icoFila('mc-abas', lista.map(function (a) {
+      var def = MC_ABAS[a.id];
+      return { id: a.id, ico: def.ico, rot: def.rot, conta: a.conta, cls: 'btn-mini',
+               clsTexto: mcAba === a.id ? 'btn-gold' : 'btn-ghost', data: { aba: a.id } };
+    }), mcAba, aoMudar, true);
+  }
+  // as opções de cada fileira de filtro: {id, ico, rot, rc?, data} (o espaço
+  // vem do slotOpcoes(), o mesmo do inventário)
+  function mcOpRar() {
+    return [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'],
+            ['lendario', 'Lendário']].map(function (par) {
+      return { id: par[0], ico: 'rar-' + par[0], rot: par[1],
+               rc: par[0] === 'todas' ? null : rarColor(par[0]), data: { rar: par[0] } };
+    });
+  }
+  function mcOpOrdem() {
+    return [['preco', 'ord-preco-asc', 'Preço ↑'], ['precoDesc', 'ord-preco-desc', 'Preço ↓'],
+            ['nome', 'ord-nome', 'Nome'], ['raridade', 'ord-raridade', 'Raridade']].map(function (t) {
+      return { id: t[0], ico: t[1], rot: t[2], data: { ord: t[0] } };
+    });
+  }
+  /* Uma fileira de filtro do mercadinho: a legenda (.mc-filtro-rot) e os
+   * botões redondos com a classe de sempre (.mc-chip). `noLugar` = acende o
+   * tocado ali mesmo, sem redesenhar (o mercadinho entre contas filtra a
+   * lista que já tem, e redesenhar pediria o balcão ao servidor de novo). */
+  function mcFiltroFila(rotulo, chave, opcoes, atual, aoMudar, noLugar) {
+    var linha = el('div', 'mc-filtros ico-fila');
+    linha.setAttribute('data-filtro', chave);
+    linha.appendChild(el('span', 'mc-filtro-rot', rotulo));
+    var botoes = [];
+    opcoes.forEach(function (o) {
+      var b = icoBotao(o.ico, o.rot, atual === o.id, function () {
+        if (noLugar) {
+          botoes.forEach(function (x) {
+            x.classList.toggle('is-on', x === b);
+            x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+          });
+        }
+        aoMudar(o.id);
+      }, { cls: 'btn-mini mc-chip', rc: o.rc, cor: o.cor, data: o.data });
+      botoes.push(b);
+      linha.appendChild(b);
+    });
+    return linha;
+  }
   function mcTaxa(preco) {
     var Mc = JOGO.Mercado;
     // 13/09: a conta inteira do módulo (a mesma do servidor); o ponto flutuante cobrava 4 de 60
     if (Mc && Mc.taxaDe) return Mc.taxaDe(preco);
     return Math.max(1, Math.ceil(preco * 5 / 100));
   }
+
+  /* AS PEDRAS NO MERCADINHO (22/09, pedido do dono: "o jogador poderá colocar
+   * pedras para vender também, em unidade ou lotes de 10, 50 e 100"). Nos dois
+   * balcões, Comprar e Vender ganham a fileira de CATEGORIA — Equipamentos (as
+   * fileiras de sempre: espaço, raridade, ordem) ou Pedras (o elemento e a busca
+   * pelo nome da pedra). A fileira é .mc-cats e NÃO .mc-filtros: a primeira
+   * .mc-filtros continua sendo a do espaço (tests/mercado_hud.html e a
+   * prova_mercado a acham assim). Cada categoria filtra a SUA coisa: peça nunca
+   * aparece em Pedras, lote nunca aparece em Equipamentos.
+   * O lote é a oferta com tipo 'pedra' (JOGO.Mercado.ehLote) — a local traz
+   * `stoneId`, a do servidor traz a pedra no `itemId` (e às vezes `stoneId`
+   * também). A linha dele mostra a pedra, o tamanho e o preço POR PEDRA; comprar
+   * e retirar não olham o saco: pedra vai direto ao estoque, não ocupa casa. */
+  var mcLoteQtd = {};              // o lote escolhido de cada pedra sobrevive ao redesenho
+  // as duas categorias do balcão: as mesmas do saco (o elmo e as pedras)
+  function mcCats(atual, aoMudar) {
+    return icoFila('mc-cats', INV_CATS.filter(function (c) { return c.id === 'equip' || c.id === 'pedras'; })
+      .map(function (c) {
+        return { id: c.id, ico: c.ico, rot: c.rot, cls: 'btn-mini',
+                 clsTexto: atual === c.id ? 'btn-gold' : 'btn-ghost', data: { cat: c.id } };
+      }), atual, aoMudar, true);
+  }
+  // a fileira dos elementos do balcão de pedras (a Âncora, do elemento 'forja', só no Todos)
+  function mcOpElem() {
+    return elemOpcoes().map(function (o) { return { id: o.id, ico: o.ico, rot: o.rot, cor: o.cor, data: o.data }; });
+  }
+  function mcEhLote(x) {
+    var Mc = JOGO.Mercado;
+    return Mc && Mc.ehLote ? Mc.ehLote(x) : !!(x && x.tipo === 'pedra');
+  }
+  // a pedra de um lote: a oferta local diz stoneId; o anúncio do servidor, itemId
+  function mcPedraDe(x) { return (x && (x.stoneId || x.itemId)) || ''; }
+  // o id é de PEDRA (e não de peça)? — o balcão entre contas abre os dois pelo mesmo ?id=
+  function ehPedraId(id) { return !!id && !itemDef(id) && stoneDefs().hasOwnProperty(id); }
+  function mcNomePedra(sid) { var d = stoneDefs()[sid]; return (d && d.name) || String(sid || ''); }
+  function mcCorPedra(sid) { return elemColor(elementoDe(sid)); }
+  /* "Lote de 50 × Brasa Coagulada" (`inicio` = começa a frase; no meio dela o
+   * "lote" vem minúsculo); a pedra avulsa é "1 × Brasa Coagulada". Texto puro:
+   * quem põe em HTML passa pelo esc(). */
+  function mcNomeLote(sid, qtd, inicio) {
+    qtd = Math.floor(Number(qtd)) || 1;
+    return (qtd === 1 ? '1 × ' : (inicio ? 'Lote de ' : 'lote de ') + qtd + ' × ') + mcNomePedra(sid);
+  }
+  // o número com vírgula e no máximo duas casas: 4,8 · 0,07 · 5
+  function mcNum(v) {
+    var n = Math.round((Number(v) || 0) * 100) / 100;
+    return String(n).replace('.', ',');
+  }
+  function mcUnit(preco, qtd) { return mcNum((Number(preco) || 0) / Math.max(1, Math.floor(Number(qtd)) || 1)); }
+  // a busca e o elemento do balcão de pedras (a pedra que o dado não conhece passa no Todos)
+  function passaPedra(sid, q, elFiltro) {
+    var tq = normaliza(q);
+    if (tq && normaliza(mcNomePedra(sid)).indexOf(tq) < 0) return false;
+    return passaElemento(sid, elFiltro || 'todos');
+  }
+  /* a linha de uma PEDRA: o ícone, o nome na cor do elemento (--ec) e a linha de
+   * baixo. `titulo` e `sub` já vêm em HTML (escapados por quem chama). */
+  function mcLinhaPedra(sid, titulo, sub) {
+    var row = el('div', 'mc-linha mc-pedra');
+    row.setAttribute('data-pedra', sid);
+    row.style.setProperty('--ec', mcCorPedra(sid));
+    var ic = el('span', 'mc-ic');
+    ic.appendChild(art('stoneIcon', [sid, 34], 34));
+    row.appendChild(ic);
+    var tx = el('div', 'ms-tx');
+    tx.appendChild(el('div', 'ms-nome', titulo));
+    if (sub) tx.appendChild(el('div', 'ms-prog', sub));
+    row.appendChild(tx);
+    return row;
+  }
+  // o preço do lote e, embaixo, o preço por pedra
+  function mcPrecoLote(preco, qtd, prefixo) {
+    return el('span', 'mc-preco', (prefixo || '') + preco + 'v' +
+      (qtd > 1 ? '<small>' + mcUnit(preco, qtd) + 'v cada</small>' : ''));
+  }
+  /* VENDER › PEDRAS: a linha de UMA pedra do estoque, igual nos dois balcões.
+   * Os lotes (1 · 10 · 50 · 100) são botões de texto, como os atalhos das
+   * poções; o que passa do estoque fica apagado (mc-falta) mas TOCÁVEL — no
+   * celular não há title, e o toque diz por que não dá. O preço começa vazio
+   * com a régua do lote no placeholder; a conta embaixo (o preço por pedra, o
+   * que recebe e a taxa) acompanha a digitação. Trocar de lote acende o botão
+   * NO LUGAR e limpa o preço (o digitado era do lote de antes).
+   * `anuncia(qtd, preco, botao)` é de quem chama: o balcão local chama o
+   * JOGO.Mercado.anunciarPedras, o entre contas o servidor.anunciarPedras. */
+  function mcVendaPedra(sid, anuncia) {
+    var Mc = JOGO.Mercado;
+    var tem = stoneCount(sid);
+    var nome = mcNomePedra(sid);
+    var lotes = (Mc && Mc.LOTES_PEDRA) || [1, 10, 50, 100];
+    var teto = (Mc && Mc.PRECO_MAX) || 9999;
+    var lote = mcLoteQtd[sid];
+    if (lotes.indexOf(lote) < 0 || lote > tem) lote = lotes[0];
+    function sugerido() {
+      return safe(function () { return Mc.precoSugeridoPedra(sid, lote); }, 0) || Math.max(2, 4 * lote);
+    }
+    var elP = elementoDe(sid);
+    var regua = safe(function () { return Mc.precoSugeridoPedra(sid, 1); }, 0);
+    var row = mcLinhaPedra(sid, esc(nome), esc(ELEM_PT[elP] || 'Forja') + ' · você tem <b class="mc-tem">' + tem + '</b>' +
+      (regua ? ' · a régua sugere ' + regua + 'v a pedra' : ''));
+    row.classList.add('mc-pedra-venda');
+    var fila = el('span', 'mc-lotes');
+    fila.setAttribute('role', 'group');
+    var campo = document.createElement('input');
+    campo.type = 'number'; campo.min = '1'; campo.max = String(teto); campo.step = '1';
+    campo.className = 'bk2-qtd mc-qtd mc-lote-preco';
+    campo.setAttribute('aria-label', 'preço do lote');
+    var conta = el('span', 'mc-lote-conta', '');
+    function preco() { return Math.floor(Number(campo.value || sugerido())) || 0; }
+    function mostra() {
+      campo.placeholder = String(sugerido());
+      var p = preco();
+      if (p <= 0) { conta.textContent = ''; return; }
+      var tx = mcTaxa(p);
+      conta.innerHTML = '<b>' + mcUnit(p, lote) + 'v</b> cada · recebe <b class="mc-recebe">' + (p - tx) +
+        'v</b> <small>(taxa ' + tx + 'v)</small>';
+    }
+    lotes.forEach(function (n) {
+      var falta = n > tem;
+      var b = btn(String(n), 'btn-mini mc-chip mc-lote' + (n === lote ? ' is-on' : '') + (falta ? ' mc-falta' : ''), function () {
+        if (n > tem) {
+          toast('Você tem ' + tem + ' ' + nome + ' — o lote de ' + n + ' pede ' + n + '.');
+          return;
+        }
+        lote = n;
+        mcLoteQtd[sid] = n;
+        [].forEach.call(fila.children, function (x) {
+          x.classList.toggle('is-on', x === b);
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+        });
+        campo.value = '';
+        mostra();
+      });
+      b.setAttribute('data-lote', String(n));
+      b.setAttribute('aria-pressed', n === lote ? 'true' : 'false');
+      if (falta) b.title = 'Você tem ' + tem + ' — o lote de ' + n + ' pede ' + n + '.';
+      fila.appendChild(b);
+    });
+    campo.addEventListener('input', mostra);
+    mostra();
+    var bA = btn('Anunciar lote', 'btn-mini btn-gold mc-lote-go', function () {
+      var p = preco();
+      if (lote > tem) { toast('Você tem ' + tem + ' ' + nome + ' — o lote de ' + lote + ' pede ' + lote + '.'); return; }
+      if (!(p >= 1 && p <= teto)) { toast('Preço entre 1 e ' + teto + '.'); return; }
+      anuncia(lote, p, bA);
+    });
+    row.appendChild(fila);
+    row.appendChild(campo);
+    row.appendChild(conta);
+    row.appendChild(bA);
+    return row;
+  }
+  // o toast do anúncio do lote, igual nos dois balcões
+  function mcTextoLoteAnunciado(sid, qtd, preco) {
+    return mcNomeLote(sid, qtd, true) + ' no balcão por ' + preco + 'v — você recebe ' + (preco - mcTaxa(preco)) + 'v na venda.';
+  }
+  // o resumo e a dica de Vender › Pedras (as pedras do estoque que passam no filtro)
+  function mcPedrasDoEstoque(q, elFiltro) {
+    var defs = stoneDefs();
+    var todas = Object.keys(defs).filter(function (k) { return stoneCount(k) > 0; });
+    var vistas = todas.filter(function (k) { return passaPedra(k, q, elFiltro); });
+    vistas.sort(function (a, b) { return mcNomePedra(a).localeCompare(mcNomePedra(b)); });
+    return { todas: todas, vistas: vistas };
+  }
+  function mcPintaVendaPedras(lista, q, elFiltro, anuncia) {
+    var pd = mcPedrasDoEstoque(q, elFiltro);
+    // o número é de PEDRAS de verdade (a soma do estoque); os tipos vão entre parênteses
+    var somaV = 0;
+    pd.vistas.forEach(function (sid) { somaV += stoneCount(sid); });
+    lista.appendChild(el('p', 'mc-resumo', '<b>' + somaV + '</b> ' + (somaV === 1 ? 'pedra' : 'pedras') +
+      ' no estoque (' + pd.vistas.length + ' ' + (pd.vistas.length === 1 ? 'tipo' : 'tipos') + ')' +
+      ' · em unidade ou lotes de 10, 50 e 100 · a taxa de 5% sai do preço do lote na venda'));
+    if (!pd.vistas.length) {
+      lista.appendChild(el('p', 'inv-dica', pd.todas.length ? 'Nenhuma pedra com esses filtros.'
+        : 'Você não tem pedra de forja. Elas caem dos monstros e saem da quebra de peças na forja.'));
+    }
+    pd.vistas.forEach(function (sid) {
+      lista.appendChild(mcVendaPedra(sid, function (qtd, preco, bA) { anuncia(sid, qtd, preco, bA); }));
+    });
+  }
+
   function sheetMercado() {
     sheetName = 'mercado';
     var Mc = JOGO.Mercado;
@@ -3566,52 +3830,62 @@ var JOGO = (typeof window !== 'undefined')
       pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
       caixa.appendChild(pBolso);
 
-      // ---- as abas
-      var abas = el('div', 'mc-abas');
-      [['comprar', 'Comprar (' + deOutros.length + ')'], ['vender', 'Vender'],
-       ['meus', 'Meus anúncios (' + minhas.length + ')'], ['pocoes', 'Poções']].forEach(function (par) {
-        abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
-          mcAba = par[0]; sheetMercado();
-        }));
-      });
-      caixa.appendChild(abas);
+      // ---- as abas (22/09: redondas; a conta vai na pílula do canto)
+      caixa.appendChild(mcAbas([
+        { id: 'comprar', conta: deOutros.length }, { id: 'vender' },
+        { id: 'meus', conta: minhas.length }, { id: 'pocoes' }], function (id) {
+        mcAba = id; sheetMercado();
+      }));
 
       // ---- a barra de filtros (Comprar e Vender)
       function chips(rotulo, chave, opcoes) {
-        var linha = el('div', 'mc-filtros');
-        linha.appendChild(el('span', 'mc-filtro-rot', rotulo));
-        opcoes.forEach(function (op) {
-          var b = btn(op[1], 'btn-mini mc-chip' + (mcFiltro[chave] === op[0] ? ' is-on' : ''), function () {
-            mcFiltro[chave] = op[0]; sheetMercado();
-          });
-          linha.appendChild(b);
+        return mcFiltroFila(rotulo, chave, opcoes, mcFiltro[chave], function (id) {
+          mcFiltro[chave] = id; sheetMercado();
         });
-        return linha;
       }
+      var pedras = mcFiltro.cat === 'pedras';
       function barraFiltros(comOrigem) {
+        // 22/09: a categoria em cima (.mc-cats, fora da conta das .mc-filtros);
+        // trocar de categoria limpa a busca — o nome de pedra não acha peça
+        caixa.appendChild(mcCats(mcFiltro.cat, function (id) {
+          if (id === mcFiltro.cat) return;
+          mcFiltro.cat = id; mcFiltro.q = ''; sheetMercado();
+        }));
         var busca = document.createElement('input');
         busca.className = 'hub-input';
-        busca.placeholder = 'buscar por nome...';
+        busca.placeholder = pedras ? 'buscar pedra por nome...' : 'buscar por nome...';
         busca.value = mcFiltro.q;
         busca.addEventListener('input', function () { mcFiltro.q = busca.value; pinta(); });
         caixa.appendChild(busca);
-        caixa.appendChild(chips('Espaço', 'slot', [['todos', 'Tudo'], ['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']]));
-        caixa.appendChild(chips('Raridade', 'rar', [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'], ['lendario', 'Lendário']]));
+        if (pedras) {
+          caixa.appendChild(chips('Elemento', 'el', mcOpElem()));
+          return;
+        }
+        // a PRIMEIRA .mc-filtros é sempre a do espaço (as provas a acham assim)
+        caixa.appendChild(chips('Espaço', 'slot', slotOpcoes()));
+        caixa.appendChild(chips('Raridade', 'rar', mcOpRar()));
         if (comOrigem) {
           // 12/09: o mercador-fantasma saiu — com um vendedor só, filtrar por
           // vendedor não separava nada
 
-          caixa.appendChild(chips('Ordem', 'ordem', [['preco', 'Preço ↑'], ['precoDesc', 'Preço ↓'], ['nome', 'Nome'], ['raridade', 'Raridade']]));
+          caixa.appendChild(chips('Ordem', 'ordem', mcOpOrdem()));
         }
       }
       var ORDEM_RAR = { comum: 0, raro: 1, epico: 2, lendario: 3 };
       function passaFiltro(itemId) {
+        // a pedra não é peça: não entra em Equipamentos (22/09)
+        if (!itemId || ehPedraId(itemId)) return false;
         var it = itemDef(itemId) || {};
         var tq = (mcFiltro.q || '').toLowerCase();
         if (tq && (it.name || itemId).toLowerCase().indexOf(tq) < 0) return false;
         if (mcFiltro.slot !== 'todos' && slotOf(itemId) !== mcFiltro.slot) return false;
         if (mcFiltro.rar !== 'todas' && (it.rarity || 'comum') !== mcFiltro.rar) return false;
         return true;
+      }
+      // a oferta passa na categoria aberta? o lote só em Pedras; a peça só em Equipamentos
+      function passaOferta(of) {
+        if (mcEhLote(of)) return pedras && passaPedra(mcPedraDe(of), mcFiltro.q, mcFiltro.el);
+        return !pedras && passaFiltro(of.itemId);
       }
       function linhaItem(itemId, level, stars, sub) {
         var it = itemDef(itemId) || {};
@@ -3639,11 +3913,13 @@ var JOGO = (typeof window !== 'undefined')
 
       // ---- COMPRAR: o balcão dos outros, filtrado e ordenado
       function pintaComprar() {
+        if (pedras) { pintaComprarPedras(); return; }
         var lista = deOutros.filter(function (of) {
-          if (!passaFiltro(of.itemId)) return false;
+          if (!passaOferta(of)) return false;
 
           return true;
         });
+        var pecas = deOutros.filter(function (of) { return !mcEhLote(of); });
         lista.sort(function (a, b) {
           var ia = itemDef(a.itemId) || {}, ib = itemDef(b.itemId) || {};
           if (mcFiltro.ordem === 'precoDesc') return b.preco - a.preco;
@@ -3652,11 +3928,11 @@ var JOGO = (typeof window !== 'undefined')
           return a.preco - b.preco;
         });
         listaEl.appendChild(el('p', 'mc-resumo', '<b>' + lista.length + '</b> à venda' +
-          (lista.length !== deOutros.length ? ' (de ' + deOutros.length + ')' : '')));
+          (lista.length !== pecas.length ? ' (de ' + pecas.length + ')' : '')));
         if (!lista.length) {
           // 12/09: balcão vazio é o estado NORMAL do mercadinho agora — a
           // frase tem de explicar isso, e não parecer filtro mal posto
-          listaEl.appendChild(el('p', 'inv-dica', deOutros.length
+          listaEl.appendChild(el('p', 'inv-dica', pecas.length
             ? 'Nada com esses filtros.'
             : 'O balcão está vazio. Ele só enche quando alguém anuncia uma peça — ' +
               'e a sua oferta fica aqui até vender.'));
@@ -3673,6 +3949,8 @@ var JOGO = (typeof window !== 'undefined')
             if (JOGO.Autoridade) JOGO.Autoridade.op('comprarMercado', { ofertaId: of.id });
             Mc.comprar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
+              // o lote de pedras não devolve peça (22/09): nada de empurrar undefined no saco
+              if (!res.item) { sheetMercado(); return; }
               /* A ORIGEM continua 'mercador' — é o nome que o servidor aceita
                * (ORIGENS em servidor/api.py) e trocá-lo faria o save novo ser
                * recusado na subida. O mercador-fantasma saiu do balcão; o
@@ -3689,8 +3967,59 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
 
+      /* ---- COMPRAR › PEDRAS: os lotes dos outros, do mais barato POR PEDRA.
+       * No balcão local o vendedor de fora quase nunca existe (sem servidor, quem
+       * anuncia é você) — a frase do vazio diz isso e aponta o Vender. A compra
+       * não olha o saco: o módulo põe as pedras direto no estoque. */
+      function pintaComprarPedras() {
+        var lotes = deOutros.filter(function (of) { return mcEhLote(of); });
+        var lista = lotes.filter(passaOferta);
+        lista.sort(function (a, b) { return a.preco / a.qtd - b.preco / b.qtd || a.preco - b.preco; });
+        listaEl.appendChild(el('p', 'mc-resumo', '<b>' + lista.length + '</b> ' + (lista.length === 1 ? 'lote' : 'lotes') +
+          ' de pedra à venda' + (lista.length !== lotes.length ? ' (de ' + lotes.length + ')' : '') +
+          ' · a pedra vai direto ao estoque, não ocupa o saco'));
+        if (!lista.length) {
+          listaEl.appendChild(el('p', 'inv-dica', lotes.length ? 'Nenhum lote com esses filtros.'
+            : 'Nenhum lote de pedra à venda. O balcão só enche quando alguém anuncia — para vender as suas, ' +
+              'vá em <b>Vender</b> › <b>Pedras</b> (em unidade ou lotes de 10, 50 e 100).'));
+        }
+        lista.forEach(function (of) {
+          var sid = mcPedraDe(of);
+          // o preço por pedra vai embaixo do preço do lote (mcPrecoLote)
+          var row = mcLinhaPedra(sid, esc(mcNomeLote(sid, of.qtd, true)), 'de ' + esc(of.vendedorNome || 'jogador'));
+          row.appendChild(mcPrecoLote(of.preco, of.qtd));
+          var bC = btn('Comprar', 'btn-mini btn-gold', function () {
+            // o lote local só existe com a autoridade desligada (o Progress não vai ao juiz)
+            if (Mc.servidor && Mc.servidor.ligado()) { sheetMercado(); return; }
+            bC.classList.add('is-off');
+            Mc.comprar(of.id).then(function (res) {
+              if (!res || !res.ok) { toast((res && res.erro) || 'não deu'); sheetMercado(); return; }
+              var pd = res.pedras || { stoneId: sid, qtd: of.qtd };
+              toast('−' + res.pagou + ' vinténs — +' + pd.qtd + ' ' + mcNomePedra(pd.stoneId) + ' no estoque.', 'good');
+              sheetMercado();
+            });
+          });
+          if (bolso < of.preco) { bC.classList.add('is-off'); bC.title = 'faltam ' + (of.preco - bolso) + ' vinténs'; }
+          row.appendChild(bC);
+          listaEl.appendChild(row);
+        });
+      }
+
       // ---- VENDER: o saco com a régua e a taxa antes de anunciar
       function pintaVender() {
+        if (pedras) {
+          // VENDER › PEDRAS: o lote sai do estoque no módulo (anunciarPedras), não aqui
+          mcPintaVendaPedras(listaEl, mcFiltro.q, mcFiltro.el, function (sid, qtd, preco, bA) {
+            if (Mc.servidor && Mc.servidor.ligado()) { sheetMercado(); return; }
+            bA.classList.add('is-off');
+            Mc.anunciarPedras(sid, qtd, preco).then(function (res) {
+              if (!res || !res.ok) { toast((res && res.erro) || 'não deu'); sheetMercado(); return; }
+              toast(mcTextoLoteAnunciado(sid, qtd, preco), 'good');
+              sheetMercado();
+            });
+          });
+          return;
+        }
         var pilhas = safe(function () { return P().invStacks(); }, [])
           .filter(function (s2) { return !!itemDef(s2.itemId) && passaFiltro(s2.itemId); });
         listaEl.appendChild(el('p', 'mc-resumo', '<b>' + pilhas.length + '</b> no saco · a taxa de 5% sai do preço na hora da venda'));
@@ -3739,13 +4068,33 @@ var JOGO = (typeof window !== 'undefined')
         listaEl.appendChild(el('p', 'mc-resumo', minhas.length
           ? '<b>' + minhas.length + '</b> anúncio(s) · ' + totalPreco + 'v anunciados · recebe <b>' +
             (totalPreco - totalTaxa) + 'v</b> depois da taxa (' + totalTaxa + 'v)'
-          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça no balcão.'));
+          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça ou um lote de pedras no balcão.'));
         minhas.forEach(function (of) {
-          var row = linhaItem(of.itemId, of.level, of.stars, 'sua oferta');
+          var lote = mcEhLote(of), sid = lote ? mcPedraDe(of) : null;
+          var row = lote
+            ? mcLinhaPedra(sid, esc(mcNomeLote(sid, of.qtd, true)), 'sua oferta' +
+                (of.qtd > 1 ? ' · <b>' + mcUnit(of.preco, of.qtd) + 'v</b> a pedra' : ''))
+            : linhaItem(of.itemId, of.level, of.stars, 'sua oferta');
           row.classList.add('is-minha');
           var pr = el('span', 'mc-preco', of.preco + 'v');
           row.appendChild(pr);
           row.appendChild(el('span', 'mc-taxa', 'recebe <b>' + (of.preco - mcTaxa(of.preco)) + 'v</b><small>taxa ' + mcTaxa(of.preco) + 'v</small>'));
+          if (lote) {
+            // o lote volta ao ESTOQUE (o módulo soma as pedras): o saco cheio não impede
+            var bR = btn('Retirar', 'btn-mini', function () {
+              if (Mc.servidor && Mc.servidor.ligado()) { sheetMercado(); return; }
+              bR.classList.add('is-off');
+              Mc.retirar(of.id).then(function (res) {
+                if (!res || !res.ok) { toast((res && res.erro) || 'não deu'); sheetMercado(); return; }
+                var pd = res.pedras || { stoneId: sid, qtd: of.qtd };
+                toast('O lote voltou: +' + pd.qtd + ' ' + mcNomePedra(pd.stoneId) + ' no estoque.', 'good');
+                sheetMercado();
+              });
+            });
+            row.appendChild(bR);
+            listaEl.appendChild(row);
+            return;
+          }
           row.appendChild(btn('Retirar', 'btn-mini', function () {
             if (!safe(function () { return P().bagFree(1); }, true)) {
               toast('O saco está cheio — não cabe mais nada.');
@@ -3754,6 +4103,7 @@ var JOGO = (typeof window !== 'undefined')
             if (JOGO.Autoridade) JOGO.Autoridade.op('retirarMercado', { ofertaId: of.id });
             Mc.retirar(of.id).then(function (res) {
               if (!res.ok) { toast(res.erro || 'não deu'); sheetMercado(); return; }
+              if (!res.item) { sheetMercado(); return; }
               P().state.inventory.push(P().carimba ? P().carimba(res.item, 'legado') : res.item);
               safe(function () { P().save(); }, null);
               toast('A peça voltou para o saco.', 'good');
@@ -3791,8 +4141,13 @@ var JOGO = (typeof window !== 'undefined')
    * "Comprar por X" e "Fazer oferta"), VENDER (o saco, como antes), MEUS ANÚNCIOS (as
    * propostas recebidas com Aceitar/Recusar) e MINHAS OFERTAS (o estado de cada uma).
    * Cada ação vai ao servidor (JOGO.Mercado.servidor) e o estado novo é ADOTADO — a
-   * repintura reabre esta ficha na mesma aba, com os filtros guardados aqui. */
-  var mcSrv = { q: '', slot: 'todos', rar: 'todas', item: null, oferta: null };
+   * repintura reabre esta ficha na mesma aba, com os filtros guardados aqui.
+   * 22/09: Comprar e Vender ganham a categoria Equipamentos | Pedras (AS PEDRAS NO
+   * MERCADINHO, junto do mcTaxa); o lote vem do servidor com tipo 'pedra' e a pedra
+   * no itemId, e Meus anúncios, Minhas ofertas e a confirmação o mostram como lote. */
+  // 22/09: `cat` (equip | pedras) e `el` (o elemento das pedras); `item` guarda o id
+  // aberto — de peça ou de pedra (ehPedraId diz qual)
+  var mcSrv = { q: '', slot: 'todos', rar: 'todas', item: null, oferta: null, cat: 'equip', el: 'todos' };
 
   /* A BANCA DO MERCADOR (13/09, pedido do dono: "no mercadinho do jogo deve ter poções à
    * venda por vinténs. poções que carregam a vida vão para consumíveis no inventário").
@@ -3920,14 +4275,10 @@ var JOGO = (typeof window !== 'undefined')
     pBolso.insertBefore(art('vintemIcon', [18], 18, 'moeda-inline'), pBolso.firstChild);
     caixa.appendChild(pBolso);
     if (['comprar', 'vender', 'meus', 'ofertas', 'pocoes'].indexOf(mcAba) < 0) mcAba = 'comprar';
-    var abas = el('div', 'mc-abas');
-    [['comprar', 'Comprar'], ['vender', 'Vender'], ['meus', 'Meus anúncios'], ['ofertas', 'Minhas ofertas'],
-     ['pocoes', 'Poções']].forEach(function (par) {
-      abas.appendChild(btn(par[1], 'btn-mini' + (mcAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
-        mcAba = par[0]; mcSrv.item = null; mcSrv.oferta = null; sheetMercado();
-      }));
-    });
-    caixa.appendChild(abas);
+    caixa.appendChild(mcAbas([{ id: 'comprar' }, { id: 'vender' }, { id: 'meus' }, { id: 'ofertas' },
+                              { id: 'pocoes' }], function (id) {
+      mcAba = id; mcSrv.item = null; mcSrv.oferta = null; sheetMercado();
+    }));
     var area = el('div', 'mc-lista');
     caixa.appendChild(area);
 
@@ -3943,31 +4294,38 @@ var JOGO = (typeof window !== 'undefined')
       else toast((r && r.erro) || 'não deu');
       if (!(r && (r.progress || r.db)) && sheetName === 'mercado') sheetMercado();
     }
+    // os filtros acendem NO LUGAR (sem redesenhar): a lista já veio do servidor
     function chipsSrv(rotulo, chave, opcoes, aoMudar) {
-      var linha = el('div', 'mc-filtros');
-      linha.appendChild(el('span', 'mc-filtro-rot', rotulo));
-      var botoes = [];
-      opcoes.forEach(function (op) {
-        var b = btn(op[1], 'btn-mini mc-chip' + (mcSrv[chave] === op[0] ? ' is-on' : ''), function () {
-          mcSrv[chave] = op[0];
-          botoes.forEach(function (x) { x.classList.toggle('is-on', x === b); });
-          aoMudar();
-        });
-        botoes.push(b);
-        linha.appendChild(b);
-      });
-      return linha;
+      return mcFiltroFila(rotulo, chave, opcoes, mcSrv[chave], function (id) {
+        mcSrv[chave] = id;
+        aoMudar();
+      }, true);
     }
-    function filtros(aoMudar) {
+    /* `aoMudar` repinta a lista que já veio; `aoCat` remonta a área na outra
+     * categoria (as fileiras de filtro são outras) — nenhum dos dois pede ao
+     * servidor de novo */
+    function filtros(aoMudar, aoCat) {
+      area.appendChild(mcCats(mcSrv.cat, function (id) {
+        if (id === mcSrv.cat) return;
+        mcSrv.cat = id; mcSrv.q = '';
+        aoCat();
+      }));
+      var pedras = mcSrv.cat === 'pedras';
       var busca = document.createElement('input');
       busca.className = 'hub-input';
-      busca.placeholder = 'buscar por nome...';
+      busca.placeholder = pedras ? 'buscar pedra por nome...' : 'buscar por nome...';
       busca.value = mcSrv.q;
       busca.addEventListener('input', function () { mcSrv.q = busca.value; aoMudar(); });
       area.appendChild(busca);
-      area.appendChild(chipsSrv('Tipo', 'slot', [['todos', 'Tudo'], ['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']], aoMudar));
-      area.appendChild(chipsSrv('Raridade', 'rar', [['todas', 'Todas'], ['comum', 'Comum'], ['raro', 'Raro'], ['epico', 'Épico'], ['lendario', 'Lendário']], aoMudar));
+      if (pedras) {
+        area.appendChild(chipsSrv('Elemento', 'el', mcOpElem(), aoMudar));
+        return;
+      }
+      // a PRIMEIRA .mc-filtros é sempre a do tipo (tests/mercado_hud.html a acha assim)
+      area.appendChild(chipsSrv('Tipo', 'slot', slotOpcoes(), aoMudar));
+      area.appendChild(chipsSrv('Raridade', 'rar', mcOpRar(), aoMudar));
     }
+    // a pedra não tem itemDef: nunca passa em Equipamentos (22/09)
     function passa(itemId) {
       var it = itemDef(itemId);
       if (!it) return false;
@@ -3985,11 +4343,54 @@ var JOGO = (typeof window !== 'undefined')
       Srv.resumo().then(function (r) {
         if (!ainda()) return;
         if (!r || !r.ok) { falhou(r); return; }
-        clear(area);
-        var lista = el('div', 'mc-lista');
-        function pintaLista() {
-          clear(lista);
-          var todos = r.itens || [];
+        monta();
+        // a categoria troca AQUI, com o resumo que já veio (sem pedir de novo)
+        function monta() {
+          clear(area);
+          var lista = el('div', 'mc-lista');
+          function pintaLista() {
+            clear(lista);
+            if (mcSrv.cat === 'pedras') pintaPedras(lista); else pintaItens(lista);
+          }
+          filtros(pintaLista, monta);
+          area.appendChild(lista);
+          pintaLista();
+        }
+        /* COMPRAR › PEDRAS: uma linha por PEDRA (o resumo.pedras do servidor):
+         * quantos lotes, quantas pedras somadas, o lote mais barato e o menor
+         * preço por pedra — os dois podem ser de lotes diferentes */
+        function pintaPedras(lista) {
+          var todas = r.pedras || [];
+          var vistas = todas.filter(function (x) { return passaPedra(x.stoneId, mcSrv.q, mcSrv.el); });
+          vistas.sort(function (a, b) { return mcNomePedra(a.stoneId).localeCompare(mcNomePedra(b.stoneId)); });
+          var nLotes = 0, nPedras = 0;
+          vistas.forEach(function (x) { nLotes += x.lotes; nPedras += x.pedras; });
+          // PEDRAS é a soma dos lotes; TIPOS, quantas pedras diferentes aparecem
+          lista.appendChild(el('p', 'mc-resumo', '<b>' + nPedras + '</b> ' + (nPedras === 1 ? 'pedra' : 'pedras') +
+            ' em ' + nLotes + ' ' + (nLotes === 1 ? 'lote' : 'lotes') + ' à venda · ' +
+            vistas.length + ' ' + (vistas.length === 1 ? 'tipo' : 'tipos') +
+            (vistas.length !== todas.length ? ' (de ' + todas.length + ')' : '') +
+            ' · a pedra vai direto ao estoque, não ocupa o saco'));
+          if (!vistas.length) {
+            lista.appendChild(el('p', 'inv-dica', todas.length ? 'Nenhuma pedra com esses filtros.'
+              : 'Nenhuma pedra à venda agora. Quem tem pedra sobrando anuncia em <b>Vender</b> › <b>Pedras</b> — ' +
+                'em unidade ou lotes de 10, 50 e 100.'));
+          }
+          vistas.forEach(function (x) {
+            var row = mcLinhaPedra(x.stoneId, esc(mcNomePedra(x.stoneId)), '<b>' + x.lotes + '</b> ' +
+              (x.lotes === 1 ? 'lote' : 'lotes') + ' · ' + x.pedras + ' ' + (x.pedras === 1 ? 'pedra' : 'pedras') +
+              (x.meus ? ' (' + x.meus + (x.meus === 1 ? ' seu' : ' seus') + ')' : ''));
+            row.appendChild(el('span', 'mc-preco', 'desde ' + x.menor + 'v' +
+              (x.menorUnit != null ? '<small>' + mcNum(x.menorUnit) + 'v cada</small>' : '')));
+            row.appendChild(btn('Ver lotes', 'btn-mini btn-gold', function () {
+              mcSrv.item = x.stoneId; mcSrv.oferta = null; pintaComprar();
+            }));
+            lista.appendChild(row);
+          });
+        }
+        function pintaItens(lista) {
+          // o servidor já tira os lotes de `itens`; a pedra que vier ali mesmo assim não é peça
+          var todos = (r.itens || []).filter(function (x) { return !ehPedraId(x.itemId); });
           var itens = todos.filter(function (x) { return passa(x.itemId); });
           itens.sort(function (a, b) {
             return ((itemDef(a.itemId) || {}).name || '').localeCompare((itemDef(b.itemId) || {}).name || '');
@@ -4012,40 +4413,52 @@ var JOGO = (typeof window !== 'undefined')
             lista.appendChild(row);
           });
         }
-        filtros(pintaLista);
-        area.appendChild(lista);
-        pintaLista();
       });
     }
 
-    // ---- COMPRAR: todos os anúncios de um item, com quem vende
+    /* ---- COMPRAR: todos os anúncios de um item, com quem vende. 22/09: o mesmo
+     * para uma PEDRA (o ?id= é o da pedra) — cada linha é um lote ("Lote de 50 ·
+     * vende Fulano"), com o preço do lote e o preço por pedra, e "Comprar por X"
+     * sem olhar o saco (a pedra vai ao estoque). A oferta vale igual para o lote. */
     function pintaItem(itemId) {
+      var pedra = ehPedraId(itemId);
       carregando();
       Srv.item(itemId).then(function (r) {
         if (!ainda()) return;
         if (!r || !r.ok) { falhou(r); return; }
         clear(area);
-        area.appendChild(btn('← Todos os itens', 'btn-mini btn-ghost mc-voltar', function () {
+        area.appendChild(btn(pedra ? '← Todas as pedras' : '← Todos os itens', 'btn-mini btn-ghost mc-voltar', function () {
           mcSrv.item = null; mcSrv.oferta = null; pintaComprar();
         }));
         var ans = r.anuncios || [];
-        area.appendChild(el('p', 'mc-resumo', '<b>' + ans.length + '</b> ' + (ans.length === 1 ? 'anúncio' : 'anúncios') +
-          ' de <b>' + mcPeca(itemId, 0, 0) + '</b> — do mais barato ao mais caro'));
-        if (!ans.length) area.appendChild(el('p', 'inv-dica', 'Esse item acabou de sair do balcão.'));
+        area.appendChild(el('p', 'mc-resumo', pedra
+          ? '<b>' + ans.length + '</b> ' + (ans.length === 1 ? 'lote' : 'lotes') + ' de <b>' + esc(mcNomePedra(itemId)) +
+            '</b> — do mais barato ao mais caro por pedra'
+          : '<b>' + ans.length + '</b> ' + (ans.length === 1 ? 'anúncio' : 'anúncios') +
+            ' de <b>' + mcPeca(itemId, 0, 0) + '</b> — do mais barato ao mais caro'));
+        if (!ans.length) area.appendChild(el('p', 'inv-dica', pedra ? 'Os lotes dessa pedra acabaram de sair do balcão.'
+          : 'Esse item acabou de sair do balcão.'));
         var tenho = bolso.saco + bolso.banco;
         ans.forEach(function (an) {
-          var row = mcLinhaSrv(itemId, an.level, an.stars,
-            an.meu ? 'seu anúncio' : 'vende <b>' + esc(an.vendedor || 'jogador') + '</b>', true);
+          var qtd = Math.max(1, Math.floor(Number(an.qtd)) || 1);
+          var quem = an.meu ? 'seu anúncio' : 'vende <b>' + esc(an.vendedor || 'jogador') + '</b>';
+          // o preço por pedra mora embaixo do preço do lote (mcPrecoLote), não na linha de quem vende
+          var row = pedra
+            ? mcLinhaPedra(itemId, qtd > 1 ? 'Lote de ' + qtd : '1 pedra', quem)
+            : mcLinhaSrv(itemId, an.level, an.stars, quem, true);
+          if (pedra) row.setAttribute('data-lote', String(qtd));
           if (an.meu) row.classList.add('is-minha');
-          row.appendChild(el('span', 'mc-preco', an.preco + 'v'));
+          row.appendChild(pedra ? mcPrecoLote(an.preco, qtd) : el('span', 'mc-preco', an.preco + 'v'));
           var form = null;
           if (!an.meu) {
             var bC = btn('Comprar por ' + an.preco, 'btn-mini btn-gold', function () {
-              if (!safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
+              if (!pedra && !safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
               bC.classList.add('is-off');
               Srv.comprar(an.id).then(function (res) {
-                depois(res, res && res.ok ? 'Comprado: ' + (itemDef(itemId) || {}).name + ' por ' + res.valor + ' vinténs' +
-                  (res.deBanco ? ' (' + res.deBanco + ' saíram do banco)' : '') + '.' : null);
+                var oque = pedra ? mcNomeLote(itemId, qtd) : (itemDef(itemId) || {}).name;
+                depois(res, res && res.ok ? 'Comprado: ' + oque + ' por ' + res.valor + ' vinténs' +
+                  (res.deBanco ? ' (' + res.deBanco + ' saíram do banco)' : '') +
+                  (pedra ? ' — as pedras já estão no estoque.' : '.') : null);
               });
             });
             if (tenho < an.preco) { bC.classList.add('is-off'); bC.title = 'faltam ' + (an.preco - tenho) + ' vinténs (saco + banco)'; }
@@ -4101,6 +4514,16 @@ var JOGO = (typeof window !== 'undefined')
       var lista = el('div', 'mc-lista');
       function pintaLista() {
         clear(lista);
+        if (mcSrv.cat === 'pedras') {
+          // VENDER › PEDRAS: o servidor tira as pedras do estado dele e devolve o estado novo
+          mcPintaVendaPedras(lista, mcSrv.q, mcSrv.el, function (sid, qtd, preco, bA) {
+            bA.classList.add('is-off');
+            Srv.anunciarPedras(sid, qtd, preco).then(function (res) {
+              depois(res, mcTextoLoteAnunciado(sid, qtd, preco));
+            });
+          });
+          return;
+        }
         var pilhas = safe(function () { return P().invStacks(); }, [])
           .filter(function (s2) { return passa(s2.itemId); });
         lista.appendChild(el('p', 'mc-resumo', '<b>' + pilhas.length + '</b> no saco · a taxa de 5% sai do preço final da venda'));
@@ -4137,7 +4560,7 @@ var JOGO = (typeof window !== 'undefined')
           lista.appendChild(row);
         });
       }
-      filtros(pintaLista);
+      filtros(pintaLista, pintaVender);
       area.appendChild(lista);
       pintaLista();
     }
@@ -4152,19 +4575,31 @@ var JOGO = (typeof window !== 'undefined')
         var ans = r.anuncios || [];
         area.appendChild(el('p', 'mc-resumo', ans.length
           ? '<b>' + ans.length + '</b> de ' + r.max + ' anúncios abertos · as propostas aparecem embaixo de cada um'
-          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça no balcão.'));
+          : 'Você não tem nada anunciado. Vá em <b>Vender</b> para pôr uma peça ou um lote de pedras no balcão.'));
         var novas = [];
         ans.forEach(function (an) {
-          var row = mcLinhaSrv(an.itemId, an.level, an.stars, 'sua oferta');
+          // 22/09: o lote de pedras (tipo 'pedra') mostra a pedra e o preço por pedra
+          var lote = mcEhLote(an), sid = lote ? mcPedraDe(an) : null;
+          var row = lote
+            ? mcLinhaPedra(sid, esc(mcNomeLote(sid, an.qtd, true)), 'sua oferta' +
+                (an.qtd > 1 ? ' · <b>' + mcUnit(an.preco, an.qtd) + 'v</b> a pedra' : ''))
+            : mcLinhaSrv(an.itemId, an.level, an.stars, 'sua oferta');
           row.classList.add('is-minha');
           row.appendChild(el('span', 'mc-preco', an.preco + 'v'));
           row.appendChild(el('span', 'mc-taxa', 'recebe <b>' + (an.preco - an.taxa) + 'v</b><small>taxa ' + an.taxa + 'v</small>'));
-          row.appendChild(btn('Retirar', 'btn-mini', function () {
-            if (!safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
-            Srv.retirar(an.id).then(function (res) { depois(res, 'A peça voltou para o saco.'); });
-          }));
+          var bR = btn('Retirar', 'btn-mini', function () {
+            // o lote volta ao estoque: o saco cheio não impede
+            if (!lote && !safe(function () { return P().bagFree(1); }, true)) { toast('O saco está cheio — não cabe mais nada.'); return; }
+            bR.classList.add('is-off');
+            Srv.retirar(an.id).then(function (res) {
+              var pd = (res && res.pedras) || { stoneId: sid, qtd: an.qtd };
+              depois(res, lote ? 'O lote voltou: +' + pd.qtd + ' ' + mcNomePedra(pd.stoneId) + ' no estoque.'
+                               : 'A peça voltou para o saco.');
+            });
+          });
+          row.appendChild(bR);
           area.appendChild(row);
-          if (!an.propostas.length) return;
+          if (!an.propostas || !an.propostas.length) return;
           var sub = el('div', 'mc-sub');
           an.propostas.forEach(function (p) {
             if (p.estado === 'aberta' && !p.vistoVendedor) novas.push(p.id);
@@ -4192,8 +4627,9 @@ var JOGO = (typeof window !== 'undefined')
         if (vendas.length) {
           area.appendChild(el('h3', 'bk-tit', 'Vendas recentes'));
           vendas.forEach(function (v) {
-            var row = mcLinhaSrv(v.itemId, v.level, v.stars, 'para <b>' + esc(v.comprador || 'jogador') + '</b>' +
-              (v.viaProposta ? ' · por proposta' : ''));
+            var quem = 'para <b>' + esc(v.comprador || 'jogador') + '</b>' + (v.viaProposta ? ' · por proposta' : '');
+            var row = mcEhLote(v) ? mcLinhaPedra(mcPedraDe(v), esc(mcNomeLote(mcPedraDe(v), v.qtd, true)), quem)
+                                  : mcLinhaSrv(v.itemId, v.level, v.stars, quem);
             row.appendChild(el('span', 'mc-preco', v.valor + 'v'));
             row.appendChild(el('span', 'mc-taxa', 'recebeu <b>' + v.recebeu + 'v</b><small>taxa ' + v.taxa + 'v</small>'));
             area.appendChild(row);
@@ -4213,7 +4649,9 @@ var JOGO = (typeof window !== 'undefined')
         area.appendChild(el('p', 'mc-resumo', ps.length ? '<b>' + ps.length + '</b> ofertas recentes'
           : 'Você não fez nenhuma oferta. Em <b>Comprar</b>, abra um item e toque em <b>Fazer oferta</b>.'));
         ps.forEach(function (p) {
-          var row = mcLinhaSrv(p.itemId, p.level, p.stars, 'de <b>' + esc(p.vendedor || 'jogador') + '</b> · à venda por ' + p.preco + 'v');
+          var deQuem = 'de <b>' + esc(p.vendedor || 'jogador') + '</b> · à venda por ' + p.preco + 'v';
+          var row = mcEhLote(p) ? mcLinhaPedra(mcPedraDe(p), esc(mcNomeLote(mcPedraDe(p), p.qtd, true)), deQuem)
+                                : mcLinhaSrv(p.itemId, p.level, p.stars, deQuem);
           row.appendChild(el('span', 'mc-preco', p.valor + 'v'));
           row.appendChild(mcEstadoChip(p.estado));
           if (p.estado === 'aceita' && p.anuncioAberto) {
@@ -4245,9 +4683,14 @@ var JOGO = (typeof window !== 'undefined')
     if (!p || !Srv) { closeSheet(); return; }
     var b = sheetShell('Proposta aceita no Mercadinho');
     sheetName = 'mercadoConfirma';
+    // 22/09: a proposta pode ser por um LOTE de pedras — o texto do dono diz "pelo lote"
+    var lote = mcEhLote(p), sid = lote ? mcPedraDe(p) : null;
     b.appendChild(el('p', 'confirm-txt', 'O vendedor <b>' + esc(p.vendedor || 'jogador') + '</b> aceitou sua oferta de <b>' +
-      p.valor + '</b> vinténs pelo item que estava à venda por <b>' + p.preco + '</b>.'));
-    var card = mcLinhaSrv(p.itemId, p.level, p.stars, null, true);
+      p.valor + '</b> vinténs pel' + (lote ? 'o lote' : 'o item') + ' que estava à venda por <b>' + p.preco + '</b>.'));
+    var card = lote
+      ? mcLinhaPedra(sid, esc(mcNomeLote(sid, p.qtd, true)), (p.qtd > 1 ? '<b>' + mcUnit(p.valor, p.qtd) + 'v</b> a pedra · ' : '') +
+          'as pedras vão direto ao estoque')
+      : mcLinhaSrv(p.itemId, p.level, p.stars, null, true);
     card.classList.add('mc-card');
     card.appendChild(el('span', 'mc-preco', p.valor + 'v'));
     b.appendChild(card);
@@ -4264,7 +4707,7 @@ var JOGO = (typeof window !== 'undefined')
     var bNeg = btn('Negar', 'btn-ghost', function () {
       bNeg.classList.add('is-off'); bSim.classList.add('is-off');
       Srv.confirmar(p.id, false).then(function (r) {
-        if (r && r.ok) { toast('Você recusou a negociação. O item segue à venda.'); fim('feito'); return; }
+        if (r && r.ok) { toast('Você recusou a negociação. O ' + (lote ? 'lote' : 'item') + ' segue à venda.'); fim('feito'); return; }
         toast((r && r.erro) || 'não deu');
         fim(r && r.status === 0 ? 'adiado' : 'feito');
       });
@@ -4273,11 +4716,12 @@ var JOGO = (typeof window !== 'undefined')
       bNeg.classList.add('is-off'); bSim.classList.add('is-off');
       Srv.confirmar(p.id, true).then(function (r) {
         if (r && r.ok) {
-          toast('Negócio fechado: ' + ((itemDef(p.itemId) || {}).name || p.itemId) + ' por ' + p.valor + ' vinténs' +
-            (r.deBanco ? ' (' + r.deBanco + ' saíram do banco)' : '') + '.', 'good');
+          toast('Negócio fechado: ' + (lote ? mcNomeLote(sid, p.qtd) : ((itemDef(p.itemId) || {}).name || p.itemId)) +
+            ' por ' + p.valor + ' vinténs' + (r.deBanco ? ' (' + r.deBanco + ' saíram do banco)' : '') + '.', 'good');
           fim('feito');
         } else if (r && r.motivo === 'perdeu') {
-          toast('Esse item já foi vendido — você perdeu essa negociação.');
+          toast(lote ? 'Esse lote já foi vendido — você perdeu essa negociação.'
+                     : 'Esse item já foi vendido — você perdeu essa negociação.');
           fim('feito');
         } else if (r && r.motivo === 'saldo') {
           toast('Saldo insuficiente: ' + (r.erro || 'faltam vinténs') + '.');
@@ -4356,18 +4800,18 @@ var JOGO = (typeof window !== 'undefined')
         // O ELEMENTO DO TRAJE é seu (pedido 25/08): escolha — e troque — aqui.
         // A escolha reescreve o traje inteiro: filtro, pedra de forja, resists.
         var elAtual = safe(function () { return P().seloElemento(); }, 'neutro');
+        // 22/09: os cinco elementos redondos, como nos filtros — aqui é ESCOLHA
+        // (grava no traje), então o nome do escolhido fica escrito no fim
         var filaEl = el('div', 'colec-elem');
         filaEl.appendChild(el('span', 'pt-trajes-rot', 'O traje responde por:'));
-        ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e4) {
-          var b4 = btn(ELEM_PT[e4] || e4,
-            'btn-tab bt-elem' + (elAtual === e4 ? ' is-on' : ''), function () {
-              safe(function () { return P().escolheSeloElemento(e4); }, false);
-              toast('O Traje do Colecionador agora responde por ' + (ELEM_PT[e4] || e4) + '.', 'good');
-              sheetLoteria();
-            });
-          b4.style.setProperty('--ec', elemColor(e4));
-          filaEl.appendChild(b4);
-        });
+        var escolhas = icoFila('colec-elem-fila', elemOpcoes('btn-tab bt-elem').filter(function (o) {
+          return o.id !== 'todos';
+        }), elAtual, function (e4) {
+          safe(function () { return P().escolheSeloElemento(e4); }, false);
+          toast('O Traje do Colecionador agora responde por ' + (ELEM_PT[e4] || e4) + '.', 'good');
+          sheetLoteria();
+        }, true);
+        filaEl.appendChild(escolhas);
         colec.appendChild(filaEl);
         var pronta = safe(function () { return P().roletaPronta(); }, false);
         colec.appendChild(btn('Girar a roleta', 'btn-gold btn-block' + (pronta ? '' : ' is-off'),
@@ -4511,10 +4955,25 @@ var JOGO = (typeof window !== 'undefined')
 
     // ---- o saco, para por itens
     caixa.appendChild(el('h3', 'bk-tit', 'Seu saco — toque para pôr na mesa'));
-    var pilhas = safe(function () { return P().invStacks(); }, [])
+    var todasPilhas = safe(function () { return P().invStacks(); }, [])
       .filter(function (s2) { return !!itemDef(s2.itemId); });
+    // 22/09: espaço e elemento, redondos como nos outros menus de item — só
+    // escolhem o que se mostra; a peça que vai à mesa é achada como sempre
+    if (todasPilhas.length) {
+      caixa.appendChild(filtrosDeItem(trocaSlotFiltro, function (s) {
+        trocaSlotFiltro = s;
+        sheetTroca();
+      }, trocaElemFiltro, function (e2) {
+        trocaElemFiltro = e2;
+        sheetTroca();
+      }));
+    }
+    var pilhas = todasPilhas.filter(function (pi) {
+      return passaSlot(pi.itemId, trocaSlotFiltro) && passaElemento(pi.itemId, trocaElemFiltro);
+    });
     var linhaS = el('div', 'tr-itens');
-    if (!pilhas.length) linhaS.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
+    if (!todasPilhas.length) linhaS.appendChild(el('p', 'inv-dica', 'O saco está vazio.'));
+    else if (!pilhas.length) linhaS.appendChild(el('p', 'inv-dica', 'Nada no saco com esses filtros.'));
     pilhas.forEach(function (pi) {
       var it = itemDef(pi.itemId) || {};
       var chip = el('button', 'tr-item');
@@ -5205,13 +5664,21 @@ var JOGO = (typeof window !== 'undefined')
     sheetEl.classList.add('is-on');
     return body;
   }
-  function confirmSheet(title, body, onYes) {
+  /* `op` (22/09, opcional — a quebra da forja é quem pede): {sim, simCls,
+   * aoCancelar}. O rótulo e a cor do botão que confirma (quebrar pede um
+   * "Quebrar" vermelho, não um "Confirmar" dourado) e para onde o Cancelar
+   * volta — sem `aoCancelar` ele só fecha, como sempre. */
+  function confirmSheet(title, body, onYes, op) {
+    op = op || {};
     var b = sheetShell(title);
     sheetName = 'confirm';
     b.appendChild(el('p', 'confirm-txt', body));
     var acts = el('div', 'confirm-acts');
-    acts.appendChild(btn('Cancelar', 'btn-ghost', closeSheet));
-    acts.appendChild(btn('Confirmar', 'btn-primary', function () { closeSheet(); onYes(); }));
+    acts.appendChild(btn('Cancelar', 'btn-ghost', function () {
+      closeSheet();
+      if (op.aoCancelar) op.aoCancelar();
+    }));
+    acts.appendChild(btn(op.sim || 'Confirmar', op.simCls || 'btn-primary', function () { closeSheet(); onYes(); }));
     b.appendChild(acts);
   }
 
@@ -5231,7 +5698,10 @@ var JOGO = (typeof window !== 'undefined')
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
-    else if (name === 'forge') sheetParty('forja', arg);
+    // a porta da forja (a barraca do ferreiro) abre SEMPRE no Forjar: quebrar
+    // é o modo que destrói, e não se chega nele sem escolher (22/09). Os
+    // redesenhos de dentro (sheetParty) guardam o modo.
+    else if (name === 'forge') { forjaModo = 'forjar'; sheetParty('forja', arg); }
     else if (name === 'spells') sheetParty('feiticos', arg);
     else if (name === 'avatar') sheetParty('avatar', arg);
     else if (name === 'heroSheet') sheetHero(arg);
@@ -5268,7 +5738,7 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'inventario', nome: 'Inventário',
       sub: 'Um saco só para o grupo. Toque numa peça para vestir no herói ao lado.' },
     { id: 'forja', nome: 'Forja',
-      sub: 'Arraste a peça para a bancada, escolha a pedra na prateleira e bata o martelo. Embaixo, a Estrela funde 3 cópias.' },
+      sub: 'Arraste a peça para a bancada e bata o martelo — ou quebre a peça em pedras do elemento dela. Embaixo, a Estrela funde 3 cópias.' },
     { id: 'feiticos', nome: 'Feitiços',
       sub: 'A árvore inteira da classe: o tronco que todos têm e os quatro galhos elementais.' },
     { id: 'colecao', nome: 'Coleção',
@@ -5865,11 +6335,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     var ladoSaco = el('div', 'pt-mmo-saco');
     ladoSaco.appendChild(pickBar(hid));
+    // as abas e os filtros redondos (a fileira dos elementos mora lá dentro
+    // desde 22/09: some nas abas sem elemento — Consumíveis e Pets)
     ladoSaco.appendChild(invFilterTabs());
-    ladoSaco.appendChild(elemTabs(invElemFiltro, function (e2) {
-      invElemFiltro = e2;
-      sheetParty('inventario');
-    }));
     // O FUNDO DO SACO à vista (25/08): unidades / limite, amarelando perto
     // do fim e avermelhando cheio — e a regra dita, para o limite não
     // parecer castigo: ele cresce com as classes.
@@ -6542,42 +7010,61 @@ var JOGO = (typeof window !== 'undefined')
       acts.appendChild(btn(
         fundePronto ? 'Levar à forja — dá ★' + fu.proxima + '!' : 'Levar à forja',
         'btn-mini' + (fundePronto ? ' btn-gold' : ''), function () {
+          forjaModo = 'forjar';
           forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
           sheetParty('forja');
         }));
+    }
+    // A QUEBRA (22/09): a outra porta da forja — já no modo Quebrar, com a
+    // peça na bancada. Só aparece para o que se quebra (a Panóplia do Mestre
+    // e a peça de elemento sem pedra não ganham o botão).
+    var qb = safe(function () { return P().quebraInfoDe(pilha.itemId, pilha.level, pilha.stars); }, null);
+    if (qb && qb.pode) {
+      acts.appendChild(btn('Quebrar na forja', 'btn-mini inv-pick-quebra', function () {
+        forjaModo = 'quebrar';
+        forjaQuebraN = 1;
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+        sheetParty('forja');
+      }));
     }
     wrap.appendChild(acts);
     return wrap;
   }
 
+  /* As abas do SACO (22/09: redondas, com ícone): a categoria em cima — o
+   * elmo, as pedras, a poção, a pata — e o nome da aberta escrito ao lado,
+   * que no celular não há mouse para perguntar. Embaixo os filtros: espaço
+   * (só nos equipamentos) e elemento (equipamentos e pedras — poção e bicho
+   * não têm elemento, a fileira ali só enganaria). */
+  var INV_CATS = [{ id: 'equip', ico: 'cat-equip', rot: 'Equipamentos' },
+                  { id: 'pedras', ico: 'cat-pedras', rot: 'Pedras' },
+                  { id: 'cons', ico: 'cat-cons', rot: 'Consumíveis' },
+                  { id: 'pets', ico: 'cat-pets', rot: 'Pets' }];
   function invFilterTabs() {
     var cont = el('div', 'inv-tabs-container');
-    
+
     // As abas principais (categorias)
-    var mTabs = el('div', 'inv-tabs inv-tabs-main');
-    [{ id: 'equip', rot: 'Equipamentos' },
-     { id: 'pedras', rot: 'Pedras' },
-     { id: 'cons', rot: 'Consumíveis' },
-     { id: 'pets', rot: 'Pets' }].forEach(function (t) {
-      mTabs.appendChild(btn(t.rot, 'btn-tab' + (invMainTab === t.id ? ' is-on' : ''), function () {
-        invMainTab = t.id;
-        invSel = null;
-        sheetParty('inventario');
-      }));
-    });
+    var mTabs = icoFila('inv-tabs-main', INV_CATS.map(function (t) {
+      return { id: t.id, ico: t.ico, rot: t.rot, cls: 'btn-tab', data: { cat: t.id } };
+    }), invMainTab, function (id) {
+      invMainTab = id;
+      invSel = null;
+      sheetParty('inventario');
+    }, true);
     cont.appendChild(mTabs);
 
-    // As sub-abas (espaços), apenas visíveis quando em Equipamentos
-    if (invMainTab === 'equip') {
-      var tabs = el('div', 'inv-tabs inv-tabs-sub');
-      ['todos'].concat(SLOTS).forEach(function (f) {
-        tabs.appendChild(btn(f === 'todos' ? 'Tudo' : SLOT_PT[f],
-          'btn-tab' + (invFilter === f ? ' is-on' : ''), function () {
-            invFilter = f;
-            sheetParty('inventario');
-          }));
+    // Os filtros: espaço só nos Equipamentos; elemento nos Equipamentos e nas Pedras
+    if (invMainTab === 'equip' || invMainTab === 'pedras') {
+      var filtros = filtrosDeItem(invFilter, invMainTab === 'equip' ? function (f) {
+        invFilter = f;
+        sheetParty('inventario');
+      } : null, invElemFiltro, function (e2) {
+        invElemFiltro = e2;
+        sheetParty('inventario');
       });
-      cont.appendChild(tabs);
+      var sub = filtros.querySelector('.slot-tabs');
+      if (sub) sub.classList.add('inv-tabs-sub');
+      cont.appendChild(filtros);
     }
     return cont;
   }
@@ -6659,25 +7146,178 @@ var JOGO = (typeof window !== 'undefined')
     return w;
   }
 
+  /* OS BOTÕES REDONDOS (22/09, pedido do dono: "assim fica mais bonito e
+   * organizado"): toda aba e todo chip de filtro dos menus de item —
+   * inventário, forja, banco, banco da guilda, mercado, troca, caixa do GM —
+   * trocou o TEXTO por um ícone redondo (o desenho mora em js/ui/icones_ui.js).
+   * O nome não saiu do botão: fica num span escondido (.rot-oculto), no
+   * aria-label e no data-rot, e o textContent do botão continua sendo o
+   * rótulo antigo letra por letra — as provas que acham "Pedras" ou /^Poções$/
+   * pelo texto seguem achando. O nome VISÍVEL é o balão do data-rot (CSS):
+   * no mouse aparece no :hover; no toque, no toque LONGO (legendaNoToque).
+   * Nada de `title`: no mouse ele abriria um segundo balão, o do sistema, por
+   * cima do nosso.
+   *
+   * icoBotao(icoId, rotulo, ligado, aoTocar, op) -> <button>
+   *   op.cls       classes de sempre, que ficam como gancho ('btn-tab', 'bt-elem',
+   *                'mc-chip', 'btn-mini')
+   *   op.clsTexto  classes SÓ do botão de texto da reserva (a aba acesa dos
+   *                mercados era 'btn-gold', a apagada 'btn-ghost')
+   *   op.cor       cor do elemento (--ec) · op.rc cor da raridade (--rc) — as
+   *                duas acendem o botão na cor dele (.ico-cor)
+   *   op.conta     número na pílula do canto (data-conta; "0" some). Vai no
+   *                ATRIBUTO e não num span: um span somaria "3" ao textContent
+   *                e "Comprar" viraria "Comprar3"
+   *   op.data      {chave: valor} -> data-chave="valor" (data-cat, data-slot,
+   *                data-el, data-rar, data-ord, data-aba)
+   * Sem o icones_ui.js carregado (página que só puxa o hud.js) ou sem desenho
+   * para o id, sai o botão de TEXTO de antes, com as mesmas classes menos a
+   * btn-ico — nenhum botão fica mudo. */
+  function icoBotao(icoId, rotulo, ligado, aoTocar, op) {
+    op = op || {};
+    var IU = JOGO.IconesUI;
+    var svg = safe(function () { return IU.svg(icoId); }, '') || '';
+    var temConta = op.conta != null && op.conta !== '';
+    var cls = (op.cls || '') + (ligado ? ' is-on' : '');
+    var b;
+    if (svg) {
+      b = btn(svg + '<span class="rot-oculto">' + esc(rotulo) + '</span>',
+        'btn-ico ' + cls + ((op.cor || op.rc) ? ' ico-cor' : ''), aoTocar);
+      b.setAttribute('data-rot', rotulo);
+      // o leitor de tela ouve a conta ("Comprar (3)"); o textContent segue só o rótulo
+      b.setAttribute('aria-label', temConta ? rotulo + ' (' + op.conta + ')' : rotulo);
+      if (temConta) b.setAttribute('data-conta', String(op.conta));
+      legendaNoToque(b);
+    } else {
+      b = btn(esc(rotulo) + (temConta ? ' (' + esc(op.conta) + ')' : ''),
+        cls + (op.clsTexto ? ' ' + op.clsTexto : ''), aoTocar);
+    }
+    b.setAttribute('aria-pressed', ligado ? 'true' : 'false');
+    if (op.cor) b.style.setProperty('--ec', op.cor);
+    if (op.rc) b.style.setProperty('--rc', op.rc);
+    var dd = op.data || {};
+    for (var k in dd) if (dd.hasOwnProperty(k)) b.setAttribute('data-' + k, String(dd[k]));
+    return b;
+  }
+
+  /* O NOME NO TOQUE LONGO: no celular não há :hover, então segurar o dedo
+   * ~0,45 s acende o balão (.is-legenda) por 1,4 s — e o clique que o soltar
+   * do dedo dispara é ENGOLIDO na captura, antes do tap() do botão: quem só
+   * queria ler o nome não troca de aba sem querer. Soltar antes do tempo é
+   * toque comum; o mouse nem entra aqui (ele tem o :hover). */
+  var LEGENDA_MS = 450, LEGENDA_FICA_MS = 1400;
+  function legendaNoToque(b) {
+    var relogio = 0, apaga = 0, engole = false;
+    function para() { if (relogio) { clearTimeout(relogio); relogio = 0; } }
+    b.addEventListener('pointerdown', function (ev) {
+      engole = false;
+      para();
+      if (ev.pointerType === 'mouse') return;
+      relogio = setTimeout(function () {
+        relogio = 0;
+        engole = true;
+        // um balão por vez: o do botão vizinho apaga
+        [].forEach.call(document.querySelectorAll('.btn-ico.is-legenda'), function (x) {
+          if (x !== b) x.classList.remove('is-legenda');
+        });
+        b.classList.add('is-legenda');
+        clearTimeout(apaga);
+        apaga = setTimeout(function () { b.classList.remove('is-legenda'); }, LEGENDA_FICA_MS);
+      }, LEGENDA_MS);
+    });
+    b.addEventListener('pointerup', para);
+    b.addEventListener('pointercancel', para);
+    b.addEventListener('pointerleave', para);
+    // o dedo que saiu do botão não solta clique; a tecla (Enter/espaço) não
+    // pode ser engolida por um toque longo de antes
+    b.addEventListener('keydown', function () { engole = false; });
+    b.addEventListener('click', function (ev) {
+      if (!engole) return;
+      engole = false;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }, true);
+    // o toque longo abriria o menu do sistema (copiar/abrir) por cima do balão
+    b.addEventListener('contextmenu', function (ev) {
+      if (engole || relogio) ev.preventDefault();
+    });
+  }
+
+  /* Uma FILEIRA de botões redondos, uma escolha acesa:
+   *   icoFila(clsExtra, opcoes, atual, aoMudar, comNome) -> div 'inv-tabs ico-fila <clsExtra>'
+   *   opcoes = [{id, ico, rot, cls?, clsTexto?, cor?, rc?, conta?, data?}]
+   * O toque chama aoMudar(id) — quem chamou guarda o estado e redesenha.
+   * `comNome`: as fileiras de ABA (categoria do saco, abas dos mercados e da
+   * caixa do GM) escrevem o nome da aberta no fim (span.ico-fila-nome) — no
+   * celular não há mouse para perguntar "onde estou?". Os filtros não: a
+   * grade e o resumo embaixo já dizem o que o filtro fez. */
+  function icoFila(clsExtra, opcoes, atual, aoMudar, comNome) {
+    var fila = el('div', 'inv-tabs ico-fila' + (clsExtra ? ' ' + clsExtra : ''));
+    fila.setAttribute('role', 'group');
+    var aberta = null;
+    opcoes.forEach(function (o) {
+      var b = icoBotao(o.ico, o.rot, atual === o.id, function () { aoMudar(o.id); }, o);
+      if (atual === o.id) aberta = { b: b, rot: o.rot };
+      fila.appendChild(b);
+    });
+    if (comNome && aberta && aberta.b.classList.contains('btn-ico')) {
+      fila.appendChild(el('span', 'ico-fila-nome', esc(aberta.rot)));
+    }
+    return fila;
+  }
+
+  /* A fileira dos ESPAÇOS (Tudo · Punho · Passo · Casca · Lume) — a mesma
+   * no inventário, na forja, nos dois bancos e na troca. */
+  var SLOT_FILTROS = ['todos'].concat(SLOTS);
+  function slotOpcoes(cls) {
+    return SLOT_FILTROS.map(function (s) {
+      return { id: s, ico: 'slot-' + s, rot: s === 'todos' ? 'Tudo' : SLOT_PT[s],
+               cls: cls, data: { slot: s } };
+    });
+  }
+  function slotTabs(atual, aoMudar) {
+    return icoFila('slot-tabs', slotOpcoes('btn-tab'), atual, aoMudar);
+  }
+  function passaSlot(itemId, filtro) {
+    return filtro === 'todos' || slotOf(itemId) === filtro;
+  }
+
   /* A fileira dos ELEMENTOS (pedido 25/08: "nos menus onde aparecem os itens
    * precisa ter uma forma de filtrar por elemento"): filtra qualquer grade
-   * de itens pelo elemento da peça — inventário, forja e banco usam a mesma.
-   * Cada chip acende com a cor do próprio elemento. */
+   * de itens pelo elemento da peça — inventário, forja e os bancos usam a
+   * mesma. Cada botão acende com a cor do próprio elemento; o "Todos" é o
+   * anel das cinco tintas. (22/09: virou ícone; a assinatura é a de sempre.) */
   var ELEM_FILTROS = ['todos', 'fogo', 'agua', 'terra', 'ar', 'neutro'];
-  function elemTabs(atual, aoMudar) {
-    var tabs = el('div', 'inv-tabs elem-tabs');
-    ELEM_FILTROS.forEach(function (e2) {
-      var b = btn(e2 === 'todos' ? 'Todos' : ELEM_PT[e2],
-        'btn-tab bt-elem' + (atual === e2 ? ' is-on' : ''), function () { aoMudar(e2); });
-      if (e2 !== 'todos') b.style.setProperty('--ec', elemColor(e2));
-      tabs.appendChild(b);
+  function elemOpcoes(cls) {
+    return ELEM_FILTROS.map(function (e2) {
+      return { id: e2, ico: 'el-' + e2, rot: e2 === 'todos' ? 'Todos' : ELEM_PT[e2],
+               cls: cls, cor: e2 === 'todos' ? null : elemColor(e2), data: { el: e2 } };
     });
-    return tabs;
+  }
+  function elemTabs(atual, aoMudar) {
+    return icoFila('elem-tabs', elemOpcoes('btn-tab bt-elem'), atual, aoMudar);
+  }
+  /* O elemento de uma peça OU de uma pedra. 22/09: a pedra não é item — o
+   * itemDef dela dava null e TODA pedra caía em "neutro" (Fogo não mostrava
+   * nenhuma, Neutro mostrava as seis). A Âncora de Forja é do elemento
+   * 'forja': só aparece em "Todos". */
+  function elementoDe(id) {
+    var it = itemDef(id);
+    if (it) return it.element || 'neutro';
+    var sd = stoneDefs()[id];
+    if (sd) return sd.element || 'neutro';
+    return 'neutro';
   }
   function passaElemento(itemId, filtro) {
-    if (filtro === 'todos') return true;
-    var it = itemDef(itemId);
-    return ((it && it.element) || 'neutro') === filtro;
+    return filtro === 'todos' || elementoDe(itemId) === filtro;
+  }
+  /* As duas fileiras de filtro lado a lado (espaço | elemento): numa tela
+   * larga dividem uma linha, no celular a de elementos desce sozinha. */
+  function filtrosDeItem(slotAtual, aoSlot, elemAtual, aoElem) {
+    var w = el('div', 'ico-filtros');
+    if (aoSlot) w.appendChild(slotTabs(slotAtual, aoSlot));
+    if (aoElem) w.appendChild(elemTabs(elemAtual, aoElem));
+    return w;
   }
 
   // ---- A GRADE. Iguais empilham num espaço só, com ×N.
@@ -6746,7 +7386,9 @@ var JOGO = (typeof window !== 'undefined')
         cell.appendChild(el('span', 'ig-n', String(n)));
         cell.appendChild(el('span', 'ig-nm', esc(defs[k].name)));
         tap(cell, function () {
-          toast(defs[k].name + ': ' + (defs[k].description || 'Usada na forja.'));
+          // 22/09: a pedra sobrando tem saída — o Mercadinho vende em lote
+          toast(defs[k].name + ': ' + (defs[k].description || 'Usada na forja.') +
+                ' Sobrando? O Mercadinho vende avulsa ou em lotes de 10, 50 e 100.');
         });
         grid.appendChild(cell);
       });
@@ -6860,7 +7502,9 @@ var JOGO = (typeof window !== 'undefined')
       partyHeroes().forEach(function (id) {
         SLOTS.forEach(function (c) { if (heroItem(hero(id), c)) vestidas++; });
       });
-      grid.dataset.vazio = invMainTab !== 'equip'
+      grid.dataset.vazio = (invMainTab === 'pedras' && invElemFiltro !== 'todos')
+        ? 'Nenhuma pedra de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) + ' no saco.'
+        : invMainTab !== 'equip'
         ? 'Nenhum item desta categoria no momento.'
         : invElemFiltro !== 'todos'
           ? 'Nada de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) +
@@ -7013,166 +7657,193 @@ var JOGO = (typeof window !== 'undefined')
       sheetParty('forja');
     }
 
-    // ===== A BANCADA
-    var banca = el('div', 'forge-banca2' + (atual ? ' ' + tierClass(lv2) : ''));
+    /* ===== OS DOIS MODOS (22/09): Forjar | Quebrar, redondos, no alto da ficha.
+     * A bancada de FORJAR é a de sempre (03/09) e mora numa função só para o
+     * modo Quebrar poder trocá-la pela dele; a prateleira e a grade embaixo
+     * são das duas, com o que muda marcado por `quebra`. */
+    var quebra = forjaModo === 'quebrar';
+    body.appendChild(forjaModos());
+    if (quebra) quebraBancada(body, atual, alvos, aceitaDrop);
+    else bancadaDeForjar();
 
-    var sPeca = el('div', 'fg-slot fg-slot-peca' + (atual ? ' has' : ''));
-    if (atual) {
-      sPeca.appendChild(art('itemIcon', [atual.itemId, 56], 56));
-      sPeca.appendChild(el('b', null, esc((it2 && it2.name) || atual.itemId) + (lv2 ? ' +' + lv2 : '')));
-      sPeca.appendChild(el('span', null, (atual.stars ? '★' + atual.stars + ' · ' : '') +
-        esc(tierOf(lv2)) + (atual.kind === 'worn'
-          ? ' · vestida por ' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId))
-          : ' · no saco' + (atual.count > 1 ? ' ×' + atual.count : ''))));
-      tap(sPeca, function () { forgeTarget = null; sheetParty('forja'); });
-      tipOn(sPeca, 'A peça na bancada', 'Toque para tirar da bancada. Arraste outra da grade para trocar.', '#e8c25a');
-    } else {
-      sPeca.appendChild(el('span', 'fg-slot-ic', '⤓'));
-      sPeca.appendChild(el('b', null, 'A peça'));
-      sPeca.appendChild(el('span', null, 'arraste da grade — ou toque numa'));
-    }
-    aceitaDrop(sPeca, 'peca', function (d) {
-      var alvo = alvos[d.idx];
-      if (!alvo) return;
-      forgeTarget = alvo; sheetParty('forja');
-    });
-    banca.appendChild(sPeca);
+    // ===== A BANCADA (de forjar)
+    function bancadaDeForjar() {
+      var banca = el('div', 'forge-banca2' + (atual ? ' ' + tierClass(lv2) : ''));
 
-    var mais = el('span', 'fg-op', '+');
-    banca.appendChild(mais);
-
-    var errada = !!(forjaPedra && pedraCerta && forjaPedra !== pedraCerta);
-    var sPedra = el('div', 'fg-slot fg-slot-pedra' + (forjaPedra ? ' has' : '') + (errada ? ' is-errada' : ''));
-    if (forjaPedra) {
-      var sdE = defs[forjaPedra] || {};
-      var temN = stoneCount(forjaPedra);
-      sPedra.appendChild(art('stoneIcon', [forjaPedra, 56], 56));
-      sPedra.appendChild(el('b', null, esc(sdE.name || forjaPedra)));
-      sPedra.appendChild(el('span', null, (info && !info.maxed && !errada)
-        ? '<b>' + temN + ' / ' + info.custo + '</b> para esta batida'
-        : temN + ' na prateleira'));
-      tap(sPedra, function () { forjaPedra = null; sheetParty('forja'); });
-      tipOn(sPedra, 'A pedra na bancada', 'Toque para devolver à prateleira.', '#e8c25a');
-    } else {
-      sPedra.appendChild(el('span', 'fg-slot-ic', '◈'));
-      sPedra.appendChild(el('b', null, 'A pedra'));
-      sPedra.appendChild(el('span', null, sdCerta
-        ? 'esta peça pede <b>' + esc(sdCerta.name) + '</b>'
-        : 'toque ou arraste da prateleira'));
-    }
-    aceitaDrop(sPedra, 'pedra', function (d) { escolhePedra(d.id); });
-    banca.appendChild(sPedra);
-
-    var seta = el('span', 'fg-op fg-seta', '→');
-    banca.appendChild(seta);
-
-    var sRes = el('div', 'fg-slot fg-slot-res' + (atual && info && !info.maxed ? ' has' : ''));
-    if (atual && info && !info.maxed) {
-      sRes.appendChild(art('itemIcon', [atual.itemId, 56], 56));
-      sRes.appendChild(el('b', null, '+' + (lv2 + 1) + ' ' + esc(tierOf(lv2 + 1))));
-      sRes.appendChild(el('span', null, bonusPreview(it2, lv2 + 1, atual.stars)));
-    } else if (atual && info && info.maxed) {
-      sRes.appendChild(el('span', 'fg-slot-ic', '✦'));
-      sRes.appendChild(el('b', null, 'No máximo'));
-      sRes.appendChild(el('span', null, 'Magnífico +' + maxLv));
-    } else {
-      sRes.appendChild(el('span', 'fg-slot-ic', '?'));
-      sRes.appendChild(el('b', null, 'O resultado'));
-      sRes.appendChild(el('span', null, 'aparece aqui'));
-    }
-    banca.appendChild(sRes);
-    body.appendChild(banca);
-
-    // a trilha de níveis e o estado da bancada
-    if (atual) {
-      var track = el('div', 'forge-track');
-      for (var i3 = 0; i3 <= maxLv; i3++) {
-        track.appendChild(el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : '')));
-      }
-      body.appendChild(track);
-    }
-    var estado = el('div', 'fg-estado');
-    var pronto = false, usarG = false;
-    if (!atual) {
-      estado.appendChild(el('p', 'inv-dica', 'Ponha uma peça na bancada: arraste da grade abaixo ou toque nela.'));
-    } else if (!info) {
-      estado.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
-    } else if (info.maxed) {
-      estado.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>. Esta peça não sobe mais.'));
-    } else if (!forjaPedra) {
-      estado.appendChild(el('p', 'inv-dica', 'Agora a pedra: esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) +
-        '</b>' + (sdCerta ? ' (' + esc(ELEM_PT[sdCerta.element] || sdCerta.element) + ')' : '') +
-        ' — está acesa na prateleira. Você tem <b>' + stoneCount(pedraCerta) + '</b>, a batida leva <b>' + info.custo + '</b>.'));
-    } else if (errada) {
-      var sdX = defs[forjaPedra] || {};
-      estado.appendChild(el('p', 'forge-short', 'Pedra errada: <b>' + esc(sdX.name || forjaPedra) + '</b> é de ' +
-        esc(ELEM_PT[sdX.element] || sdX.element || '?') + '; esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) + '</b>.'));
-    } else if (!info.temPedras) {
-      estado.appendChild(el('p', 'forge-short', 'Faltam <b>' + (info.custo - stoneCount(pedraCerta)) + '</b> de <b>' +
-        esc((sdCerta || {}).name || pedraCerta) + '</b>. Monstros de ' +
-        esc(ELEM_PT[(sdCerta || {}).element] || '') + ' derrubam.'));
-    } else {
-      pronto = true;
-      usarG = !!(info.arriscado && forjaComGuarda && info.guardas > 0);
-      if (info.arriscado) {
-        var pct = Math.round(info.chance * 100);
-        estado.appendChild(el('p', 'forge-risco', 'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
-          (usarG ? 'a <b>Âncora segura</b> em +' + lv2 + '.' : 'a peça <b>volta para +' + Math.max(0, lv2 - 1) + '</b>.') +
-          (info.guardas > 0 ? (usarG ? ' <i>(Âncora junto — toque nela para tirar)</i>' : ' <i>Toque na Âncora da prateleira para levá-la junto (' + info.guardas + ' no saco).</i>')
-                            : ' <i>Sem Âncora no saco — só os chefes mais fundos derrubam.</i>')));
+      var sPeca = el('div', 'fg-slot fg-slot-peca' + (atual ? ' has' : ''));
+      if (atual) {
+        sPeca.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+        sPeca.appendChild(el('b', null, esc((it2 && it2.name) || atual.itemId) + (lv2 ? ' +' + lv2 : '')));
+        sPeca.appendChild(el('span', null, (atual.stars ? '★' + atual.stars + ' · ' : '') +
+          esc(tierOf(lv2)) + (atual.kind === 'worn'
+            ? ' · vestida por ' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId))
+            : ' · no saco' + (atual.count > 1 ? ' ×' + atual.count : ''))));
+        tap(sPeca, function () { forgeTarget = null; sheetParty('forja'); });
+        tipOn(sPeca, 'A peça na bancada', 'Toque para tirar da bancada. Arraste outra da grade para trocar.', '#e8c25a');
       } else {
-        estado.appendChild(el('p', 'inv-dica', 'Batida segura: <b>' + stoneCount(pedraCerta) + '</b> ' +
-          esc((sdCerta || {}).name || pedraCerta) + ' na prateleira, a batida leva <b>' + info.custo + '</b>.'));
+        sPeca.appendChild(el('span', 'fg-slot-ic', '⤓'));
+        sPeca.appendChild(el('b', null, 'A peça'));
+        sPeca.appendChild(el('span', null, 'arraste da grade — ou toque numa'));
+      }
+      aceitaDrop(sPeca, 'peca', function (d) {
+        var alvo = alvos[d.idx];
+        if (!alvo) return;
+        forgeTarget = alvo; sheetParty('forja');
+      });
+      banca.appendChild(sPeca);
+
+      var mais = el('span', 'fg-op', '+');
+      banca.appendChild(mais);
+
+      var errada = !!(forjaPedra && pedraCerta && forjaPedra !== pedraCerta);
+      var sPedra = el('div', 'fg-slot fg-slot-pedra' + (forjaPedra ? ' has' : '') + (errada ? ' is-errada' : ''));
+      if (forjaPedra) {
+        var sdE = defs[forjaPedra] || {};
+        var temN = stoneCount(forjaPedra);
+        sPedra.appendChild(art('stoneIcon', [forjaPedra, 56], 56));
+        sPedra.appendChild(el('b', null, esc(sdE.name || forjaPedra)));
+        sPedra.appendChild(el('span', null, (info && !info.maxed && !errada)
+          ? '<b>' + temN + ' / ' + info.custo + '</b> para esta batida'
+          : temN + ' na prateleira'));
+        tap(sPedra, function () { forjaPedra = null; sheetParty('forja'); });
+        tipOn(sPedra, 'A pedra na bancada', 'Toque para devolver à prateleira.', '#e8c25a');
+      } else {
+        sPedra.appendChild(el('span', 'fg-slot-ic', '◈'));
+        sPedra.appendChild(el('b', null, 'A pedra'));
+        sPedra.appendChild(el('span', null, sdCerta
+          ? 'esta peça pede <b>' + esc(sdCerta.name) + '</b>'
+          : 'toque ou arraste da prateleira'));
+      }
+      aceitaDrop(sPedra, 'pedra', function (d) { escolhePedra(d.id); });
+      banca.appendChild(sPedra);
+
+      var seta = el('span', 'fg-op fg-seta', '→');
+      banca.appendChild(seta);
+
+      var sRes = el('div', 'fg-slot fg-slot-res' + (atual && info && !info.maxed ? ' has' : ''));
+      if (atual && info && !info.maxed) {
+        sRes.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+        sRes.appendChild(el('b', null, '+' + (lv2 + 1) + ' ' + esc(tierOf(lv2 + 1))));
+        sRes.appendChild(el('span', null, bonusPreview(it2, lv2 + 1, atual.stars)));
+      } else if (atual && info && info.maxed) {
+        sRes.appendChild(el('span', 'fg-slot-ic', '✦'));
+        sRes.appendChild(el('b', null, 'No máximo'));
+        sRes.appendChild(el('span', null, 'Magnífico +' + maxLv));
+      } else {
+        sRes.appendChild(el('span', 'fg-slot-ic', '?'));
+        sRes.appendChild(el('b', null, 'O resultado'));
+        sRes.appendChild(el('span', null, 'aparece aqui'));
+      }
+      banca.appendChild(sRes);
+      body.appendChild(banca);
+
+      // a trilha de níveis e o estado da bancada
+      if (atual) {
+        var track = el('div', 'forge-track');
+        for (var i3 = 0; i3 <= maxLv; i3++) {
+          track.appendChild(el('i', 'fg-step ' + tierClass(i3) + (i3 <= lv2 ? ' is-on' : '') + (i3 === lv2 + 1 ? ' is-next' : '')));
+        }
+        body.appendChild(track);
+      }
+      var estado = el('div', 'fg-estado');
+      var pronto = false, usarG = false;
+      if (!atual) {
+        estado.appendChild(el('p', 'inv-dica', 'Ponha uma peça na bancada: arraste da grade abaixo ou toque nela.'));
+      } else if (!info) {
+        estado.appendChild(el('p', 'empty', 'A forja ainda não está disponível.'));
+      } else if (info.maxed) {
+        estado.appendChild(el('p', 'forge-max', 'No máximo: <b>Magnífico +' + maxLv + '</b>. Esta peça não sobe mais.'));
+      } else if (!forjaPedra) {
+        estado.appendChild(el('p', 'inv-dica', 'Agora a pedra: esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) +
+          '</b>' + (sdCerta ? ' (' + esc(ELEM_PT[sdCerta.element] || sdCerta.element) + ')' : '') +
+          ' — está acesa na prateleira. Você tem <b>' + stoneCount(pedraCerta) + '</b>, a batida leva <b>' + info.custo + '</b>.'));
+      } else if (errada) {
+        var sdX = defs[forjaPedra] || {};
+        estado.appendChild(el('p', 'forge-short', 'Pedra errada: <b>' + esc(sdX.name || forjaPedra) + '</b> é de ' +
+          esc(ELEM_PT[sdX.element] || sdX.element || '?') + '; esta peça pede <b>' + esc((sdCerta || {}).name || pedraCerta) + '</b>.'));
+      } else if (!info.temPedras) {
+        estado.appendChild(el('p', 'forge-short', 'Faltam <b>' + (info.custo - stoneCount(pedraCerta)) + '</b> de <b>' +
+          esc((sdCerta || {}).name || pedraCerta) + '</b>. Monstros de ' +
+          esc(ELEM_PT[(sdCerta || {}).element] || '') + ' derrubam.'));
+      } else {
+        pronto = true;
+        usarG = !!(info.arriscado && forjaComGuarda && info.guardas > 0);
+        if (info.arriscado) {
+          var pct = Math.round(info.chance * 100);
+          estado.appendChild(el('p', 'forge-risco', 'Batida arriscada: <b>' + pct + '%</b> de subir — falhou, ' +
+            (usarG ? 'a <b>Âncora segura</b> em +' + lv2 + '.' : 'a peça <b>volta para +' + Math.max(0, lv2 - 1) + '</b>.') +
+            (info.guardas > 0 ? (usarG ? ' <i>(Âncora junto — toque nela para tirar)</i>' : ' <i>Toque na Âncora da prateleira para levá-la junto (' + info.guardas + ' no saco).</i>')
+                              : ' <i>Sem Âncora no saco — só os chefes mais fundos derrubam.</i>')));
+        } else {
+          estado.appendChild(el('p', 'inv-dica', 'Batida segura: <b>' + stoneCount(pedraCerta) + '</b> ' +
+            esc((sdCerta || {}).name || pedraCerta) + ' na prateleira, a batida leva <b>' + info.custo + '</b>.'));
+        }
+      }
+      body.appendChild(estado);
+      if (atual && info && !info.maxed) {
+        var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
+          if (!pronto) { toast(!forjaPedra ? 'Escolha a pedra primeiro.' : (errada ? 'Essa não é a pedra desta peça.' : 'Pedras insuficientes.')); return; }
+          // 13/09 (a segurança): com sessão do site a batida é sorteada NO SERVIDOR
+          var AutF = JOGO.Autoridade;
+          if (AutF && AutF.ligada && AutF.ligada()) {
+            var opF = atual.kind === 'worn'
+              ? AutF.opAgora('forjarVestida', { heroId: atual.heroId, slot: slotRaw(atual.slot), usarGuarda: !!usarG })
+              : AutF.opAgora('forjarPeca', { invIndex: atual.index, usarGuarda: !!usarG });
+            opF.then(function (res) {
+              if (!res.ok) { toast(res.erro || 'O servidor não forjou agora.'); return; }
+              mostraForja(res.resultado);
+            });
+            return;
+          }
+          mostraForja(forjar(atual, usarG));
+          function mostraForja(fim) {
+          if (fim) {
+            var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
+            var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
+            if (como === 'subiu') toast('Forjado: +' + nivelNovo + ' ' + tierOf(nivelNovo) + '!', 'good');
+            else if (como === 'segurou') toast('A batida falhou — a Âncora segurou em +' + nivelNovo + '.', 'good');
+            else toast('A batida falhou: a peça voltou para +' + nivelNovo + '.');
+            forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: nivelNovo, stars: atual.stars,
+                            heroId: atual.heroId, slot: atual.slot };
+            if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
+                invSel.stars === atual.stars && atual.kind === 'bag') {
+              invSel = { itemId: atual.itemId, level: nivelNovo, stars: atual.stars };
+            }
+            sheetParty('forja');
+          } else toast('Pedras insuficientes.');
+          }
+        });
+        body.appendChild(go);
       }
     }
-    body.appendChild(estado);
-    if (atual && info && !info.maxed) {
-      var go = btn('🔨 Bater o martelo — vira +' + (lv2 + 1), 'btn-primary btn-block' + (pronto ? '' : ' is-off'), function () {
-        if (!pronto) { toast(!forjaPedra ? 'Escolha a pedra primeiro.' : (errada ? 'Essa não é a pedra desta peça.' : 'Pedras insuficientes.')); return; }
-        // 13/09 (a segurança): com sessão do site a batida é sorteada NO SERVIDOR
-        var AutF = JOGO.Autoridade;
-        if (AutF && AutF.ligada && AutF.ligada()) {
-          var opF = atual.kind === 'worn'
-            ? AutF.opAgora('forjarVestida', { heroId: atual.heroId, slot: slotRaw(atual.slot), usarGuarda: !!usarG })
-            : AutF.opAgora('forjarPeca', { invIndex: atual.index, usarGuarda: !!usarG });
-          opF.then(function (res) {
-            if (!res.ok) { toast(res.erro || 'O servidor não forjou agora.'); return; }
-            mostraForja(res.resultado);
-          });
-          return;
-        }
-        mostraForja(forjar(atual, usarG));
-        function mostraForja(fim) {
-        if (fim) {
-          var nivelNovo = (typeof fim === 'object') ? fim.nivel : lv2 + 1;
-          var como = (typeof fim === 'object') ? fim.resultado : 'subiu';
-          if (como === 'subiu') toast('Forjado: +' + nivelNovo + ' ' + tierOf(nivelNovo) + '!', 'good');
-          else if (como === 'segurou') toast('A batida falhou — a Âncora segurou em +' + nivelNovo + '.', 'good');
-          else toast('A batida falhou: a peça voltou para +' + nivelNovo + '.');
-          forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: nivelNovo, stars: atual.stars,
-                          heroId: atual.heroId, slot: atual.slot };
-          if (invSel && invSel.itemId === atual.itemId && invSel.level === lv2 &&
-              invSel.stars === atual.stars && atual.kind === 'bag') {
-            invSel = { itemId: atual.itemId, level: nivelNovo, stars: atual.stars };
-          }
-          sheetParty('forja');
-        } else toast('Pedras insuficientes.');
-        }
-      });
-      body.appendChild(go);
-    }
 
-    // ===== A PRATELEIRA: as pedras, arrastáveis; a certa acesa; a Âncora liga/desliga
+    // ===== A PRATELEIRA: as pedras, arrastáveis; a certa acesa; a Âncora liga/desliga.
+    // No Quebrar ela só MOSTRA — não há pedra a escolher: acende a pedra em que
+    // a peça da bancada vira (is-destino, na cor do elemento) e o toque abre a
+    // descrição. Fica nos dois modos: é aqui que se vê o monte crescer.
+    var qDestino = (quebra && atual) ? quebraInfoAlvo(atual, 1) : null;
+    var pedraDestino = (qDestino && QUEBRA_NUNCA.indexOf(qDestino.motivo) < 0) ? qDestino.stoneId : null;
     body.appendChild(el('h4', 'fg-grupo', 'A prateleira de pedras'));
     var stock = el('div', 'forge-stock');
     for (k in defs) {
       if (!defs.hasOwnProperty(k)) continue;
       var n = stoneCount(k);
-      var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty') +
-        (k === pedraCerta ? ' is-certa' : '') + (k === forjaPedra ? ' is-sel' : '') +
-        (k === anchorId && forjaComGuarda ? ' is-sel' : ''));
+      var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty') + (quebra
+        ? (k === pedraDestino ? ' is-destino' : '')
+        : (k === pedraCerta ? ' is-certa' : '') + (k === forjaPedra ? ' is-sel' : '') +
+          (k === anchorId && forjaComGuarda ? ' is-sel' : '')));
       chip.appendChild(art('stoneIcon', [k, 40], 40));
       chip.appendChild(el('span', 'stone-n', String(n)));
+      if (quebra) {
+        chip.style.setProperty('--ec', elemColor(defs[k].element));
+        chip.appendChild(el('span', 'stone-nm', esc(defs[k].name)));
+        tipOn(chip, defs[k].name, esc(defs[k].description || '') + (k === anchorId
+          ? '<br><i>Não sai de quebra nenhuma: é a guarda da forja.</i>'
+          : '<br><i>Vem da quebra das peças de ' + esc(ELEM_PT[defs[k].element] || defs[k].element) + '.</i>'),
+          elemColor(defs[k].element));
+        stock.appendChild(chip);
+        continue;
+      }
       chip.appendChild(el('span', 'stone-nm', esc(defs[k].name) + (k === anchorId ? (forjaComGuarda ? ' · vai junto' : ' · opcional') : '')));
       tipOn(chip, defs[k].name, esc(defs[k].description || '') +
         (k === anchorId ? '<br><i>Toque para levar junto na batida arriscada.</i>' : '<br><i>Toque ou arraste para a bancada.</i>'),
@@ -7184,7 +7855,8 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(stock);
 
     if (!alvos.length) {
-      body.appendChild(el('p', 'empty', 'Nenhuma peça para forjar — nem no saco, nem vestida.'));
+      body.appendChild(el('p', 'empty', quebra ? 'Nenhuma peça no saco para quebrar.'
+                                               : 'Nenhuma peça para forjar — nem no saco, nem vestida.'));
       return;
     }
 
@@ -7210,33 +7882,73 @@ var JOGO = (typeof window !== 'undefined')
           esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
       }
       c.appendChild(el('span', 'ig-nm', esc(it.name)));
+      // no Quebrar, cada célula diz quanto rende UMA cópia (→N, na cor da
+      // pedra); a que não se quebra fica apagada com ✕ — o toque ainda a põe
+      // na bancada, que diz o porquê
+      if (quebra) {
+        var qc = quebraInfoAlvo(alvo, 1);
+        var rende = el('span', 'fg-rende', (qc && qc.pode) ? '→' + qc.pedras : '✕');
+        if (qc && qc.pode) {
+          rende.style.setProperty('--ec', elemColor((stoneDefs()[qc.stoneId] || {}).element));
+          rende.setAttribute('data-pedra', qc.stoneId);
+        } else {
+          c.classList.add('is-nao-quebra');
+        }
+        c.appendChild(rende);
+      }
       arrastavel(c, { tipo: 'peca', idx: idx });
-      tap(c, function () { forgeTarget = alvo; sheetParty('forja'); });
+      tap(c, function () {
+        if (!mesmoAlvo(alvo, forgeTarget)) forjaQuebraN = 1;
+        forgeTarget = alvo;
+        sheetParty('forja');
+      });
       return c;
     }
-    body.appendChild(elemTabs(forjaElemFiltro, function (e2) {
+    // 22/09: espaço E elemento, redondos — valem para o saco e para as vestidas.
+    // O `idx` de cada célula é a posição em `alvos` (a lista INTEIRA): o filtro
+    // só esconde, e o arrasto até a bancada continua achando a peça certa.
+    body.appendChild(filtrosDeItem(forjaSlotFiltro, function (s) {
+      forjaSlotFiltro = s;
+      sheetParty('forja');
+    }, forjaElemFiltro, function (e2) {
       forjaElemFiltro = e2;
       sheetParty('forja');
     }));
-    var doSaco = [], vestidas = [];
+    // No Quebrar só o SACO entra na grade: a vestida não está nele (o Progress
+    // nem a alcança) — em vez do grupo, uma linha diz como trazê-la.
+    var doSaco = [], vestidas = [], vestidasFora = 0;
     alvos.forEach(function (a, idx) {
+      if (!passaSlot(a.itemId, forjaSlotFiltro)) return;
       if (!passaElemento(a.itemId, forjaElemFiltro)) return;
-      if (a.kind === 'bag') doSaco.push([a, idx]); else vestidas.push([a, idx]);
+      if (a.kind === 'bag') doSaco.push([a, idx]);
+      else if (quebra) vestidasFora++;
+      else vestidas.push([a, idx]);
     });
+    var paraQue = quebra ? 'para quebrar' : 'para forjar';
     if (!doSaco.length && !vestidas.length) {
-      body.appendChild(el('p', 'inv-dica', 'Nada de ' +
-        (ELEM_PT[forjaElemFiltro] || forjaElemFiltro) + ' para forjar — o filtro está ligado.'));
+      var oQue = [];
+      if (forjaSlotFiltro !== 'todos') oQue.push(SLOT_PT[forjaSlotFiltro] || forjaSlotFiltro);
+      if (forjaElemFiltro !== 'todos') oQue.push(ELEM_PT[forjaElemFiltro] || forjaElemFiltro);
+      body.appendChild(el('p', 'inv-dica', oQue.length
+        ? 'Nada de ' + esc(oQue.join(' de ')) + ' ' + paraQue + ' — o filtro está ligado.'
+        : 'Nenhuma peça no saco ' + paraQue + '.'));
     }
     [[doSaco, 'No saco'], [vestidas, 'Vestidas']].forEach(function (par) {
       if (!par[0].length) return;
       body.appendChild(el('h4', 'fg-grupo', par[1] + ' (' + par[0].length + ')'));
-      var grade = el('div', 'forge-pick');
+      var grade = el('div', 'forge-pick' + (quebra ? ' fg-pick-quebra' : ''));
       par[0].forEach(function (pa) { grade.appendChild(celDe(pa[0], pa[1])); });
       body.appendChild(grade);
     });
+    if (vestidasFora) {
+      body.appendChild(el('p', 'inv-dica fg-vestidas-fora', vestidasFora === 1
+        ? '1 peça vestida não aparece aqui: tire do herói para quebrar.'
+        : vestidasFora + ' peças vestidas não aparecem aqui: tire do herói para quebrar.'));
+    }
 
     // ===== A ESTRELA (fundir 3 cópias) — a outra trilha, só com peça na bancada
-    if (!atual) return;
+    // (e só no Forjar: no Quebrar a peça vai embora, não sobe)
+    if (!atual || quebra) return;
     var ce = el('div', 'forge-card fc-estrela');
     ce.appendChild(el('h4', null, 'A Estrela' +
       '<i>3 cópias iguais do saco viram ★ — no nível médio, para baixo</i>'));
@@ -7292,6 +8004,263 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     body.appendChild(ce);
+  }
+
+  // ----------------------------------------------------------------- A QUEBRA
+  /* A BANCADA DE QUEBRAR (22/09, pedido do dono: "na forja o jogador poderá
+   * quebrar os itens, que darão pedras daquele elemento"). A mesma bancada de
+   * arrastar da forja, com dois encaixes — A PEÇA → AS PEDRAS — e os mesmos
+   * gestos: arrastar da grade, tocar numa célula, tocar no encaixe para
+   * esvaziar. A CONTA é toda do Progress ([D20], quebraInfo); a linha
+   * embaixo da bancada só a escreve por partes, para o jogador ver POR QUE a
+   * épica +5 vale 83 pedras e a comum 1. Só o SACO se quebra: a vestida
+   * explica e não ganha botão. O golpe pergunta antes (a peça some para
+   * sempre) e, com sessão do site, quem quebra é o servidor ('quebrarPeca',
+   * como a batida do martelo). */
+  var FORJA_MODOS = [
+    { id: 'forjar', ico: 'fg-forjar', rot: 'Forjar', tit: 'Forjar a peça',
+      sub: 'a pedra do elemento e o martelo: a peça sobe um degrau' },
+    { id: 'quebrar', ico: 'fg-quebrar', rot: 'Quebrar', tit: 'Quebrar a peça em pedras',
+      sub: 'a peça some e vira pedras do elemento dela' }
+  ];
+  var MOTIVO_QUEBRA = {
+    mestre: 'Peça do Mestre não se quebra.',
+    'sem-pedra': 'O elemento desta peça não tem pedra: ela não se quebra.',
+    copias: 'Não há tantas cópias iguais no saco.',
+    n: 'Quantidade de cópias inválida.',
+    emprestada: 'Peça emprestada do banco da guilda: devolva antes de quebrar.'
+  };
+  // os motivos que são da PEÇA, e não do pedido: esta nunca se quebra
+  var QUEBRA_NUNCA = ['mestre', 'sem-pedra'];
+
+  // a fileira dos dois modos, com o nome do aberto escrito ao lado
+  function forjaModos() {
+    var w = el('div', 'fg-modos');
+    w.appendChild(icoFila('fg-modos-fila', FORJA_MODOS.map(function (m) {
+      return { id: m.id, ico: m.ico, rot: m.rot, cls: 'btn-tab', data: { modo: m.id } };
+    }), forjaModo, function (id) {
+      if (id === forjaModo) return;
+      forjaModo = id;
+      forjaQuebraN = 1;
+      sheetParty('forja');
+    }));
+    var m = FORJA_MODOS[forjaModo === 'quebrar' ? 1 : 0];
+    w.appendChild(el('h3', 'fg-modo-tit', esc(m.tit) + '<i>' + esc(m.sub) + '</i>'));
+    return w;
+  }
+
+  /* A conta de um alvo da forja: a do SACO pelo índice (com as cópias e o
+   * total de n); a da VESTIDA pela variante (quebraInfoDe) — só para a tela
+   * dizer quanto ela daria no saco, o Progress nunca a quebra. */
+  function quebraInfoAlvo(alvo, n) {
+    if (!alvo) return null;
+    if (alvo.kind === 'bag') return safe(function () { return P().quebraInfo(alvo.index, n); }, null);
+    return safe(function () { return P().quebraInfoDe(alvo.itemId, alvo.level, alvo.stars); }, null);
+  }
+
+  /* A linha da conta, por partes (todo número vem do Progress):
+   *   "Épico 8 × Nv. 30 (×3) × ★1 (×3) = 72 · forja +5 devolve 11 → 83 Brasa Coagulada"
+   * O "= subtotal" só entra quando algo multiplicou de verdade; o piso só
+   * quando foi ele que valeu; com n cópias o fim diz "× n cópias = total". */
+  function quebraContaTxt(q, nomePedra) {
+    var p = q.partes || {};
+    var txt = esc(RAR_PT[q.rarity] || q.rarity || '') + ' <b>' + p.base + '</b>';
+    var multiplicou = false;
+    if (q.nivelUso > 0) {
+      txt += ' × Nv. ' + q.nivelUso + ' (×' + p.degrau + ')';
+      if (p.degrau > 1) multiplicou = true;
+    }
+    if (q.stars > 0) {
+      txt += ' × ★' + q.stars + ' (×' + p.estrelas + ')';
+      multiplicou = true;
+    }
+    var sub = Math.floor(p.base * p.degrau * p.estrelas);
+    if (multiplicou) txt += ' = <b>' + sub + '</b>';
+    if (q.level > 0) txt += ' · forja +' + q.level + ' devolve <b>' + p.forja + '</b>';
+    if (q.pedras > sub + p.forja) txt += ' · o piso é ' + q.pedras;
+    txt += ' → <b class="fg-conta-fim">' + q.pedras + ' ' + esc(nomePedra) + '</b>';
+    if (q.n > 1) txt += ' × ' + q.n + ' cópias = <b class="fg-conta-fim">' + q.total + '</b>';
+    return txt;
+  }
+
+  // a recusa do servidor em português — a 'emprestada' vem do juiz (a cópia
+  // que a guilda emprestou não sai do saco), o resto como o martelo faz
+  function recusaQuebraTxt(res) {
+    var erro = (res && res.erro) || '';
+    if ((res && res.motivo === 'emprestada') || /emprestad/i.test(erro)) return MOTIVO_QUEBRA.emprestada;
+    if (res && res.foraDoAr) return 'O servidor não respondeu — nada foi quebrado.';
+    if (res && res.motivo && MOTIVO_QUEBRA[res.motivo]) return MOTIVO_QUEBRA[res.motivo];
+    return erro || 'O servidor não quebrou agora.';
+  }
+
+  function quebraBancada(body, atual, alvos, aceitaDrop) {
+    var defs = stoneDefs();
+    var it = atual ? itemDef(atual.itemId) : null;
+    var lv = atual ? atual.level : 0;
+    var vestida = !!(atual && atual.kind === 'worn');
+    // a conta de UMA cópia traz quantas iguais há; "todas" pede a de todas
+    var q = quebraInfoAlvo(atual, 1);
+    var copias = (q && !vestida) ? (q.copias || 1) : 1;
+    var maxN = safe(function () { return P().quebraCfg().maxN; }, 99) || 99;
+    var todas = Math.min(copias, maxN);
+    var n = (forjaQuebraN === 'todas' && todas > 1) ? todas : 1;
+    if (n > 1) q = quebraInfoAlvo(atual, n) || q;
+    var sd = q ? (defs[q.stoneId] || {}) : {};
+    var nomePedra = sd.name || (q && q.stoneId) || '';
+    var corPedra = elemColor(sd.element);
+    var nunca = !!(q && QUEBRA_NUNCA.indexOf(q.motivo) >= 0);
+    var pode = !!(q && q.pode && !vestida);
+
+    // ===== A BANCADA: a peça → as pedras
+    var banca = el('div', 'forge-banca2 fg-banca-quebra');
+    var sPeca = el('div', 'fg-slot fg-slot-peca' + (atual ? ' has' : '') + ((vestida || nunca) ? ' is-errada' : ''));
+    if (atual) {
+      sPeca.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+      sPeca.appendChild(el('b', null, esc((it && it.name) || atual.itemId) + (lv ? ' +' + lv : '')));
+      // aqui vale a RARIDADE (é ela que abre a conta), não o degrau da forja
+      var rar = (q && q.rarity) || (it && it.rarity) || '';
+      sPeca.appendChild(el('span', null, (atual.stars ? '★' + atual.stars + ' · ' : '') +
+        esc(RAR_PT[rar] || rar) + (vestida
+          ? ' · vestida por ' + esc(className((hero(atual.heroId) || {}).classId || atual.heroId))
+          : ' · no saco' + (atual.count > 1 ? ' ×' + atual.count : ''))));
+      tap(sPeca, function () { forgeTarget = null; forjaQuebraN = 1; sheetParty('forja'); });
+      tipOn(sPeca, 'A peça na bancada', 'Toque para tirar da bancada. Arraste outra da grade para trocar.', '#e8c25a');
+    } else {
+      sPeca.appendChild(el('span', 'fg-slot-ic', '⤓'));
+      sPeca.appendChild(el('b', null, 'A peça'));
+      sPeca.appendChild(el('span', null, 'arraste da grade — ou toque numa'));
+    }
+    aceitaDrop(sPeca, 'peca', function (d) {
+      var alvo = alvos[d.idx];
+      if (!alvo) return;
+      if (!mesmoAlvo(alvo, forgeTarget)) forjaQuebraN = 1;
+      forgeTarget = alvo;
+      sheetParty('forja');
+    });
+    banca.appendChild(sPeca);
+    banca.appendChild(el('span', 'fg-op fg-seta', '→'));
+
+    // as pedras: o ícone, "×N" e o nome — na cor do elemento. A vestida mostra
+    // o que daria (apagada); a que nunca se quebra, o ✕ e o porquê curto.
+    var mostraPedra = !!(atual && q && !nunca);
+    var vira = q ? (vestida ? q.pedras : q.total) : 0;
+    var sPedras = el('div', 'fg-slot fg-slot-pedras' + (mostraPedra ? ' has' : '') +
+                            ((atual && q && !pode) ? ' is-errada' : ''));
+    if (mostraPedra) {
+      sPedras.style.setProperty('--ec', corPedra);
+      sPedras.setAttribute('data-pedra', q.stoneId);
+      sPedras.setAttribute('data-total', String(vira));
+      sPedras.appendChild(art('stoneIcon', [q.stoneId, 56], 56));
+      sPedras.appendChild(el('b', null, '×' + vira));
+      sPedras.appendChild(el('span', null, esc(nomePedra) + (vestida ? ' · se estivesse no saco' : '')));
+    } else if (atual && q) {
+      sPedras.appendChild(el('span', 'fg-slot-ic', '✕'));
+      sPedras.appendChild(el('b', null, 'Não quebra'));
+      sPedras.appendChild(el('span', null, q.motivo === 'mestre' ? 'peça do Mestre' : 'o elemento não tem pedra'));
+    } else {
+      sPedras.appendChild(el('span', 'fg-slot-ic', '◈'));
+      sPedras.appendChild(el('b', null, 'As pedras'));
+      sPedras.appendChild(el('span', null, 'aparecem aqui'));
+    }
+    banca.appendChild(sPedras);
+    body.appendChild(banca);
+
+    // ===== O ESTADO: a conta por partes, ou o porquê de não quebrar
+    var estado = el('div', 'fg-estado');
+    if (!atual) {
+      estado.appendChild(el('p', 'inv-dica', 'Ponha uma peça na bancada: arraste da grade abaixo ou toque nela. ' +
+        'Quanto mais rara, alta, estrelada e forjada, mais pedras ela vira.'));
+    } else if (!q) {
+      estado.appendChild(el('p', 'empty', 'A quebra ainda não está disponível.'));
+    } else if (nunca) {
+      estado.appendChild(el('p', 'forge-short fg-quebra-nao', esc(MOTIVO_QUEBRA[q.motivo])));
+    } else if (vestida) {
+      estado.appendChild(el('p', 'forge-short fg-quebra-nao', '<b>Vestida</b> — tire do herói para quebrar. ' +
+        'No saco ela daria <b>' + q.pedras + ' ' + esc(nomePedra) + '</b>.'));
+    } else if (!q.pode) {
+      estado.appendChild(el('p', 'forge-short fg-quebra-nao', esc(MOTIVO_QUEBRA[q.motivo] || 'Esta peça não se quebra.')));
+    } else {
+      var conta = el('p', 'fg-conta', quebraContaTxt(q, nomePedra));
+      conta.style.setProperty('--ec', corPedra);
+      estado.appendChild(conta);
+    }
+    body.appendChild(estado);
+
+    // ===== QUANTAS: com cópias iguais no saco, uma ou todas (os números ficam
+    // TEXTO, como os atalhos 1/5/10 das poções)
+    if (atual && q && !vestida && !nunca && copias > 1) {
+      var qtd = el('div', 'fg-qtd');
+      qtd.appendChild(el('span', 'fg-qtd-rot', 'Quantas cópias iguais:'));
+      [[1, '1'], ['todas', 'todas (×' + todas + ')']].forEach(function (op) {
+        var acesa = (op[0] === 'todas') === (n > 1);
+        var b = btn(op[1], 'btn-mini fg-qtd-b' + (acesa ? ' is-on' : ''), function () {
+          if (forjaQuebraN === op[0]) return;
+          forjaQuebraN = op[0];
+          sheetParty('forja');
+        });
+        b.setAttribute('data-n', String(op[0]));
+        b.setAttribute('aria-pressed', acesa ? 'true' : 'false');
+        qtd.appendChild(b);
+      });
+      body.appendChild(qtd);
+    }
+
+    // ===== O GOLPE: pergunta antes — a peça não volta
+    if (!pode) return;
+    var icoQ = safe(function () { return JOGO.IconesUI.svg('fg-quebrar'); }, '') || '';
+    var go = btn(icoQ + (forjaQuebrando ? 'Quebrando…' : 'Quebrar — vira ' + q.total + ' ' + esc(nomePedra)),
+      'btn-warn btn-block fg-quebrar-go' + (forjaQuebrando ? ' is-off' : ''), pergunta);
+    body.appendChild(go);
+
+    function pergunta() {
+      var qual = '<b>' + esc((it && it.name) || atual.itemId) + (lv ? ' +' + lv : '') +
+                 (atual.stars ? ' ★' + atual.stars : '') + '</b>';
+      var viram = '<b>' + q.total + ' ' + esc(nomePedra) + '</b>';
+      confirmSheet(n > 1 ? 'Quebrar ' + n + ' cópias?' : 'Quebrar a peça?',
+        (n > 1 ? 'As <b>' + n + ' cópias</b> de ' + qual + ' somem <b>para sempre</b> e viram ' + viram + '.'
+               : qual + ' some <b>para sempre</b> e vira ' + viram + '.') + ' Não tem volta.',
+        golpe, { sim: 'Quebrar', simCls: 'btn-warn', aoCancelar: function () { sheetParty('forja'); } });
+    }
+    // a forja só se redesenha se ainda for a ficha aberta: a resposta do
+    // servidor pode chegar com o jogador já em outra
+    function refaz() { if (sheetName === 'party' && partyTab === 'forja') sheetParty('forja'); }
+    function avisa(fim) {
+      if (!fim) { toast('A peça não se quebrou.'); return; }
+      var nomeF = (defs[fim.stoneId] || {}).name || nomePedra;
+      toast('+' + (fim.pedras || q.total) + ' ' + nomeF +
+            (fim.n > 1 ? ' — as ' + fim.n + ' peças viraram pedra.' : ' — a peça virou pedra.'), 'good');
+      forjaQuebraN = 1;
+      // forgeTarget fica como está (é descrito por VALOR): se sobrou cópia
+      // igual, ela continua na bancada; se não, a bancada esvazia sozinha
+    }
+    function golpe() {
+      // a SÉRIE vai junto do índice: se o estado for adotado no caminho (a fila
+      // que sobe antes da op, um 409), o índice aponta outra peça — e a trava
+      // do Progress recusa em vez de quebrar a errada
+      var idx = atual.index, nAgora = n, serie = q.iid || null;
+      var args = { invIndex: idx, n: nAgora };
+      if (serie) args.iid = serie;
+      // com sessão do site, é o servidor quem quebra (o estado dele é adotado)
+      var AutQ = JOGO.Autoridade;
+      if (AutQ && AutQ.ligada && AutQ.ligada()) {
+        forjaQuebrando = true;
+        sheetParty('forja');                         // volta à forja, o botão esperando
+        AutQ.opAgora('quebrarPeca', args).then(function (res) {
+          forjaQuebrando = false;
+          if (!res || !res.ok) toast(recusaQuebraTxt(res));
+          else if (!res.resultado) toast('O servidor não quebrou: o saco mudou. Confira a bancada.');
+          else avisa(res.resultado);
+          refaz();
+        }, function () {
+          forjaQuebrando = false;
+          toast('O servidor não respondeu — nada foi quebrado.');
+          refaz();
+        });
+        return;
+      }
+      avisa(safe(function () { return P().quebraPeca(idx, nAgora, { iid: serie }); }, false));
+      sheetParty('forja');
+    }
   }
 
   // prévia de bônus de uma peça num certo degrau das DUAS trilhas [D18]
@@ -8633,6 +9602,30 @@ var JOGO = (typeof window !== 'undefined')
                      count: 1, indices: [idx], entrada: e2 };
           });
 
+          /* OS FILTROS DO BANCO DA GUILDA (22/09, junto com os ícones): espaço,
+           * elemento e a busca por nome, nas DUAS colunas, como no cofre.
+           * Filtrar só escolhe o que se DESENHA: cada pilha leva a posição
+           * ORIGINAL (`indices`, do saco e da lista do banco) e a devolução
+           * procura o empréstimo na lista `itens` inteira — pegar, depositar
+           * e devolver não sabem que houve filtro. */
+          bg.appendChild(filtrosDeItem(guildaSlotFiltro, function (s) {
+            guildaSlotFiltro = s;
+            sheetGuilda();
+          }, guildaElemFiltro, function (e2) {
+            guildaElemFiltro = e2;
+            sheetGuilda();
+          }));
+          bg.appendChild(buscaInput(guildaBusca, function (t) {
+            guildaBusca = t;
+            aplicaBusca(duplo, t);
+          }));
+          function passaGuilda(pi) {
+            return passaSlot(pi.itemId, guildaSlotFiltro) && passaElemento(pi.itemId, guildaElemFiltro);
+          }
+          var totalBanco = pilhasBanco.length;
+          pilhas = pilhas.filter(passaGuilda);
+          pilhasBanco = pilhasBanco.filter(passaGuilda);
+
           var duplo = el('div', 'bk2-duplo');
           var colSaco = el('div', 'bk2-col');
           colSaco.dataset.lado = 'saco';
@@ -8668,7 +9661,7 @@ var JOGO = (typeof window !== 'undefined')
 
           var colBanco = el('div', 'bk2-col');
           colBanco.dataset.lado = 'cofre';
-          colBanco.appendChild(el('h3', 'bk-tit', 'Banco da guilda (' + itens.length + ')'));
+          colBanco.appendChild(el('h3', 'bk-tit', 'Banco da guilda (' + totalBanco + ')'));
           colBanco.appendChild(bancoGrade(pilhasBanco, 'cofre', function (pi) {
             var e2 = pi.entrada;
             if (e2.emprestadoPara && e2.emprestadoPara !== euId) {
@@ -8708,6 +9701,7 @@ var JOGO = (typeof window !== 'undefined')
           duplo.appendChild(colSaco);
           duplo.appendChild(colBanco);
           bg.appendChild(duplo);
+          if (guildaBusca) aplicaBusca(duplo, guildaBusca);
 
           // o extrato: quem deve o quê — a grade não conta essa história
           var emprestadas = itens.filter(function (e3) { return !!e3.emprestadoPara; });
@@ -8799,15 +9793,19 @@ var JOGO = (typeof window !== 'undefined')
       'Qualquer item, conjunto, bicho, pedra, selo, carta ou pergaminho do jogo — direto para o saco, sem sorteio.');
     sheetName = 'gmcaixa';
 
-    var abas = el('div', 'inv-filtros');
-    abas.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
-    [['itens', 'Itens'], ['sets', 'Conjuntos'], ['bichos', 'Bichos'], ['pedras', 'Pedras'],
-     ['moedas', 'Selos e insígnias'], ['cartas', 'Cartas'], ['pergaminhos', 'Pergaminhos']].forEach(function (par) {
-      var b = btn(par[1], 'btn-mini' + (gmCaixaAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
-        gmCaixaAba = par[0]; sheetGMCaixa();
-      });
-      abas.appendChild(b);
-    });
+    // 22/09: as sete abas redondas, com o nome de sempre escondido (a prova
+    // tests/prova_gm_caixa.html acha a aba pelo texto exato) e o da aberta
+    // escrito no fim da fileira
+    var GM_ABAS = [['itens', 'gm-itens', 'Itens'], ['sets', 'gm-sets', 'Conjuntos'],
+      ['bichos', 'gm-bichos', 'Bichos'], ['pedras', 'gm-pedras', 'Pedras'],
+      ['moedas', 'gm-selos', 'Selos e insígnias'], ['cartas', 'gm-cartas', 'Cartas'],
+      ['pergaminhos', 'gm-pergaminhos', 'Pergaminhos']];
+    var abas = icoFila('inv-filtros gm-abas', GM_ABAS.map(function (t) {
+      return { id: t[0], ico: t[1], rot: t[2], cls: 'btn-mini',
+               clsTexto: gmCaixaAba === t[0] ? 'btn-gold' : 'btn-ghost', data: { aba: t[0] } };
+    }), gmCaixaAba, function (id) {
+      gmCaixaAba = id; sheetGMCaixa();
+    }, true);
     body.appendChild(abas);
     var busca = document.createElement('input');
     busca.className = 'hub-input';

@@ -1,4 +1,4 @@
-// O Mercadinho — o HDV do Acampamento, a alma da economia (dono: lógica).
+// O Mercadinho — a casa de leilões do Acampamento, a alma da economia (dono: lógica).
 var JOGO = (typeof window !== 'undefined')
   ? (window.JOGO = window.JOGO || {})
   : (globalThis.JOGO = globalThis.JOGO || {});
@@ -29,6 +29,15 @@ var JOGO = (typeof window !== 'undefined')
  * A TAXA É O RALO: toda venda de jogador paga 5% (mínimo 1). Economia sem
  * ralo incha até o vintém não valer nada — a taxa é pequena o bastante para
  * não doer e existe para o dia em que a moeda circular entre contas.
+ *
+ * AS PEDRAS DE FORJA EM LOTE (22/09, pedido do dono: vender pedra no
+ * mercado, uma a uma ou em lotes de 10, 50 e 100). O lote é uma oferta como
+ * a peça, com `tipo: 'pedra'`, `stoneId` e `qtd` e SEM itemId — quem olha
+ * `of.itemId` para achar a peça não confunde pedra com peça. Diferente da
+ * peça, quem tira as pedras do estoque é ESTE módulo (anunciarPedras chama o
+ * Progress.gastaPedras), porque pedra não tem ficha nem série para o
+ * chamador mover. Com o servidor, o lote é uma linha de mercado_anuncios
+ * mais uma de mercado_lotes (servidor/mercado.py).
  */
 (function () {
   'use strict';
@@ -89,6 +98,44 @@ var JOGO = (typeof window !== 'undefined')
     return Math.max(1, Math.round(preco));
   };
 
+  /* A RÉGUA DA PEDRA (22/09). Os lotes são fixos — 1, 10, 50 e 100 — para o
+   * balcão agrupar anúncios iguais e o preço por pedra ser comparável; a
+   * mesma lista mora em servidor/mercado.py (LOTES_PEDRA) e no juiz.
+   * O preço sugerido por pedra vem do tempo de caça: uma pedra comum sai a
+   * ~2-3 vinténs do tempo que se leva para achá-la (estimativa do lote de
+   * 22/09, não medida em partida), e o preço fica um pouco acima disso
+   * (quem vende quer lucro, quem compra poupa o tempo). Fogo e
+   * neutro valem mais porque saem de MENOS monstros (6 e 5 dos 49 que
+   * derrubam pedra, contados nos dados em 22/09); a âncora só sai de CHEFE
+   * (8% a 30% por chefe, DATA.upgrade.guardDropByDungeon) e é a pedra que
+   * segura o nível na forja arriscada — por isso vale dezenas de comuns.
+   * Pedra que a régua não conhece vale 4. O sugerido nunca passa do
+   * PRECO_MAX (o lote de 100 âncoras bate no teto) nem fica abaixo de 2. */
+  M.LOTES_PEDRA = [1, 10, 50, 100];
+  M.PEDRA_BASE = {
+    'stone-tear': 3, 'stone-root': 3, 'stone-breath': 4,
+    'stone-ember': 5, 'stone-slate': 5, 'stone-anchor': 150
+  };
+  var PEDRA_BASE_PADRAO = 4;
+  function temChave(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
+  function pedrasDef() { return DATA().stones || {}; }
+  M.precoSugeridoPedra = function (stoneId, qtd) {
+    var base = temChave(M.PEDRA_BASE, stoneId) ? M.PEDRA_BASE[stoneId] : PEDRA_BASE_PADRAO;
+    var q = Math.max(1, Math.floor(Number(qtd) || 1));
+    return Math.min(M.PRECO_MAX, Math.max(2, Math.round(base * q)));
+  };
+  /* a oferta é um lote de pedras? (a local e a do servidor dizem `tipo`) */
+  M.ehLote = function (of) { return !!(of && of.tipo === 'pedra'); };
+  M.nomePedra = function (stoneId) {
+    var s = pedrasDef();
+    var d = temChave(s, stoneId) ? s[stoneId] : null;
+    return (d && d.name) || String(stoneId);
+  };
+  function loteValido(of) {
+    return !!(of && of.tipo === 'pedra' && typeof of.stoneId === 'string' && of.stoneId &&
+              M.LOTES_PEDRA.indexOf(of.qtd) >= 0);
+  }
+
   /* A BANCA DO MERCADOR (13/09, pedido do dono: "no mercadinho do jogo deve ter poções
    * à venda por vinténs. poções que carregam a vida vão para consumíveis no inventário").
    * O mercador-fantasma saiu do balcão de PEÇAS (12/09) e continua fora: esta banca é
@@ -138,7 +185,8 @@ var JOGO = (typeof window !== 'undefined')
    * de antes de 12/09 — e sai peça por peça, pelo dono da oferta, nunca
    * limpando a lista inteira. Save com forma estranha vira balcão vazio em
    * vez de derrubar o jogo, mas nenhuma oferta de jogador se perde por
-   * causa de virada de dia ou de deploy. */
+   * causa de virada de dia ou de deploy. O lote de pedras (22/09) não tem
+   * itemId: fica se for um lote de verdade (tipo, pedra e tamanho da régua). */
   M.abrir = function (dataForcada) {
     var db = DB();
     if (!db) return Promise.resolve(null);
@@ -147,7 +195,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!mc || typeof mc !== 'object' || !isArray(mc.ofertas)) mc = { dia: null, ofertas: [] };
       var antes = mc.ofertas.length;
       var limpas = mc.ofertas.filter(function (o) {
-        return o && o.itemId && o.vendedor !== 'mercador';
+        return o && (o.tipo === 'pedra' ? loteValido(o) : !!o.itemId) && o.vendedor !== 'mercador';
       });
       var mudou = (limpas.length !== antes) || (mc.dia !== dia);
       mc = { dia: dia, ofertas: limpas };
@@ -180,9 +228,50 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
+  /* Anuncia um LOTE de pedras de forja (22/09). Aqui, e não no chamador, as
+   * pedras saem do estoque (Progress.gastaPedras, tudo ou nada): a oferta só
+   * entra no balcão com as pedras já fora, e se a gravação do balcão falhar
+   * depois do débito elas voltam (addStones) — pedra não some no meio. */
+  M.anunciarPedras = function (stoneId, qtd, preco, dataForcada) {
+    var db = DB(), P = JOGO.Progress;
+    if (!db || !P || !P.gastaPedras || !P.addStones) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (typeof stoneId !== 'string' || !temChave(pedrasDef(), stoneId)) {
+      return Promise.resolve({ ok: false, erro: 'pedra desconhecida' });
+    }
+    qtd = Number(qtd);
+    if (M.LOTES_PEDRA.indexOf(qtd) < 0) {
+      return Promise.resolve({ ok: false, erro: 'o lote é de ' + M.LOTES_PEDRA.join(', ') + ' pedras' });
+    }
+    preco = Math.floor(Number(preco));
+    if (!isFinite(preco) || preco < 1 || preco > M.PRECO_MAX) {
+      return Promise.resolve({ ok: false, erro: 'preço entre 1 e ' + M.PRECO_MAX });
+    }
+    return M.abrir(dataForcada).then(function (mc) {
+      if (!mc) return { ok: false, erro: 'sem conta' };
+      if (!P.gastaPedras(stoneId, qtd)) {
+        return { ok: false, erro: 'pedras insuficientes: o lote pede ' + qtd + ' e você tem ' +
+                 (P.stoneCount ? P.stoneCount(stoneId) : 0) };
+      }
+      mc.ofertas.push({
+        id: 'jg-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36),
+        vendedor: 'jogador', tipo: 'pedra', stoneId: stoneId, qtd: qtd, preco: preco
+      });
+      function devolve(e) {
+        P.addStones(stoneId, qtd);
+        return { ok: false, erro: 'o balcão não gravou — as pedras voltaram (' + ((e && e.message) || e || 'erro') + ')' };
+      }
+      var gravou;
+      try { gravou = db.mercadoGravar(mc); } catch (e) { return devolve(e); }
+      return Promise.resolve(gravou).then(function () {
+        return { ok: true, total: mc.ofertas.length };
+      }, devolve);
+    });
+  };
+
   /* Compra uma oferta: debita o comprador, tira a oferta do balcão e — se o
    * vendedor é o jogador — credita o preço MENOS a taxa. A peça comprada
-   * volta pelo retorno; quem a põe no saco é o chamador. */
+   * volta pelo retorno; quem a põe no saco é o chamador. O LOTE de pedras
+   * (22/09) entra direto no estoque (addStones): pedra não ocupa o saco. */
   M.comprar = function (ofertaId, dataForcada) {
     var db = DB();
     if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
@@ -193,6 +282,9 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (idx < 0) return { ok: false, erro: 'essa oferta já saiu do balcão' };
       var of = mc.ofertas[idx];
+      var lote = M.ehLote(of), P = JOGO.Progress;
+      // sem o Progress não há onde pôr a pedra: recusa ANTES de cobrar
+      if (lote && !(P && P.addStones)) return { ok: false, erro: 'sem conta' };
       return db.gastarMoedas(of.preco).then(function (pg) {
         if (!pg.ok) return { ok: false, erro: pg.erro || 'vinténs insuficientes' };
         mc.ofertas.splice(idx, 1);
@@ -204,6 +296,10 @@ var JOGO = (typeof window !== 'undefined')
           cadeia = cadeia.then(function () { return db.ganharMoedas(repasse); });
         }
         return cadeia.then(function () {
+          if (lote) {
+            P.addStones(of.stoneId, of.qtd);
+            return { ok: true, pedras: { stoneId: of.stoneId, qtd: of.qtd }, pagou: of.preco, repasse: repasse };
+          }
           return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars, iid: of.iid || null },
                    pagou: of.preco, repasse: repasse };
         });
@@ -211,7 +307,8 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
-  /* Retira uma oferta do PRÓPRIO jogador — a peça volta pelo retorno. */
+  /* Retira uma oferta do PRÓPRIO jogador — a peça volta pelo retorno; o lote
+   * de pedras volta direto ao estoque (addStones), como na compra. */
   M.retirar = function (ofertaId, dataForcada) {
     var db = DB();
     if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
@@ -223,8 +320,14 @@ var JOGO = (typeof window !== 'undefined')
       if (idx < 0) return { ok: false, erro: 'essa oferta já saiu do balcão' };
       var of = mc.ofertas[idx];
       if (of.vendedor !== 'jogador') return { ok: false, erro: 'a banca do mercador não é sua' };
+      var lote = M.ehLote(of), P = JOGO.Progress;
+      if (lote && !(P && P.addStones)) return { ok: false, erro: 'sem conta' };
       mc.ofertas.splice(idx, 1);
       return db.mercadoGravar(mc).then(function () {
+        if (lote) {
+          P.addStones(of.stoneId, of.qtd);
+          return { ok: true, pedras: { stoneId: of.stoneId, qtd: of.qtd } };
+        }
         return { ok: true, item: { itemId: of.itemId, level: of.level, stars: of.stars, iid: of.iid || null } };
       });
     });
@@ -291,6 +394,12 @@ var JOGO = (typeof window !== 'undefined')
     else corpo.invIndex = invIndex;
     return pede('/api/mercado/anunciar', corpo);
   };
+  /* o LOTE de pedras (22/09): a mesma rota, com `tipo: 'pedra'`. O servidor tira as
+   * pedras do estado dele (op interna mercadoTiraPedras) e devolve o estado novo */
+  Srv.anunciarPedras = function (stoneId, qtd, preco) {
+    return pede('/api/mercado/anunciar', { tipo: 'pedra', stoneId: stoneId,
+                                            qtd: Math.floor(Number(qtd)), preco: Math.floor(Number(preco)) });
+  };
   Srv.comprar = function (anuncioId) { return pede('/api/mercado/comprar', { anuncioId: anuncioId }); };
   Srv.propor = function (anuncioId, valor) {
     return pede('/api/mercado/propor', { anuncioId: anuncioId, valor: Math.floor(Number(valor)) });
@@ -312,26 +421,31 @@ var JOGO = (typeof window !== 'undefined')
   /* ------------------------------------------------------------ os textos dos avisos */
   function nomeDo(itemId) {
     var it = (DATA().items || {})[itemId];
-    return (it && it.name) || itemId;
+    if (it && it.name) return it.name;
+    return temChave(pedrasDef(), itemId) ? M.nomePedra(itemId) : itemId;
   }
+  /* o lote (22/09) se lê "50× Brasa Coagulada"; a peça, "Nome +2 ★1" */
   function peca(x) {
+    if (M.ehLote(x)) return (x.qtd || 1) + '× ' + M.nomePedra(x.stoneId || x.itemId);
     return nomeDo(x.itemId) + (x.level ? ' +' + x.level : '') + (x.stars ? ' ★' + x.stars : '');
   }
+  /* depois de "o", "do", "pelo": "o lote de 50× Brasa Coagulada", "o Ferrão de Vespa +1" */
+  function oQue(x) { return (M.ehLote(x) ? 'lote de ' : '') + peca(x); }
   Srv.textoVenda = function (v) {
     return 'Vendido: ' + peca(v) + ' para ' + (v.comprador || 'um jogador') + ' por ' + v.valor + ' vinténs' +
       (v.viaProposta ? ' (proposta)' : '') + ' — taxa de ' + v.taxa + ', +' + v.recebeu + ' no saco.';
   };
   Srv.textoDesfecho = function (p) {
     if (p.estado === 'perdida') {
-      return 'O ' + peca(p) + ' foi vendido a outro jogador — você perdeu essa negociação (' + p.valor + ' vinténs).';
+      return 'O ' + oQue(p) + ' foi vendido a outro jogador — você perdeu essa negociação (' + p.valor + ' vinténs).';
     }
     if (p.estado === 'recusada') {
-      return (p.vendedor || 'O vendedor') + ' recusou sua oferta de ' + p.valor + ' vinténs pelo ' + peca(p) + '.';
+      return (p.vendedor || 'O vendedor') + ' recusou sua oferta de ' + p.valor + ' vinténs pelo ' + oQue(p) + '.';
     }
-    return 'O anúncio do ' + peca(p) + ' saiu do balcão — sua oferta de ' + p.valor + ' vinténs foi cancelada.';
+    return 'O anúncio do ' + oQue(p) + ' saiu do balcão — sua oferta de ' + p.valor + ' vinténs foi cancelada.';
   };
   Srv.textoRecebida = function (p) {
-    return (p.comprador || 'Um jogador') + ' ofereceu ' + p.valor + ' vinténs pelo seu ' + peca(p) +
+    return (p.comprador || 'Um jogador') + ' ofereceu ' + p.valor + ' vinténs pelo seu ' + oQue(p) +
       ' (à venda por ' + p.preco + '). Responda em Meus anúncios.';
   };
 

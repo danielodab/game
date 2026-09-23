@@ -186,6 +186,34 @@ anunciar|comprar|propor|cancelar|responder|confirmar|retirar|visto`.
 - As ops antigas do jogador (`anunciarMercado`, `comprarMercado`, `retirarMercado`) são
   recusadas pelo juiz; as ofertas que ainda moravam no `db.mercado.ofertas` viram anúncios na
   primeira chamada de mercado da conta (`mercadoLegadoTira`), com a série.
+- **O lote de pedras de forja (22/09).** `POST /api/mercado/anunciar {tipo: 'pedra', stoneId,
+  qtd, preco}` — o corpo SEM `tipo` segue o da peça (`{preco, iid}` ou `{preco, invIndex}`).
+  A API confere a forma (stoneId no formato de id, `qtd` inteiro puro em 1/10/50/100, preço
+  inteiro 1..9999: senão 400) e o teto de anúncios (o lote conta como a peça); o juiz, a regra:
+  op INTERNA `mercadoTiraPedras {stoneId, qtd}` — a pedra tem de existir em `DATA.stones`
+  (senão `argumento`, que a API devolve como 400) e o estoque tem de cobrir (`falta`, que a API
+  devolve como 409 `pedras` com `tem`/`faltam`, sem gravar nada); tira pelo
+  `Progress.gastaPedras`, tudo ou nada. O anúncio é a linha de `mercado_anuncios` com
+  `item_id` = a pedra, level/stars 0 e `iid` NULL, mais uma linha em `mercado_lotes
+  (anuncio_id PK → mercado_anuncios ON DELETE CASCADE, tipo CHECK 'pedra', qtd CHECK
+  1/10/50/100)` — tabela nova, nunca ALTER —, gravadas na mesma transação que o estado.
+  Comprar, propor/aceitar/confirmar e retirar são os de sempre; só a entrega muda: op INTERNA
+  `mercadoPoePedras {stoneId, qtd}` (mesmas conferências; `addStones` — pedra não ocupa o
+  saco, então não há `saco` cheio) no lugar do `mercadoPoe`, sem série a conferir e sem mexer
+  no registro `itens`. As duas ops estão em `OPS_INTERNAS` (salas.py): pelo `/api/op`, 403.
+  O lote que ainda morasse no `db.mercado.ofertas` (o mercadinho local) NÃO vira anúncio:
+  `mercadoLegadoTira` põe as pedras de volta no estoque do vendedor. Leituras: o `resumo`
+  separa `itens` (só peças) de `pedras` (`[{stoneId, lotes, pedras, menor, menorUnit, meus}]`);
+  o `item?id=<pedra>` ordena pelo preço por pedra; todo objeto com cara de anúncio leva
+  `tipo` ('peca' | 'pedra') e `qtd` (1 na peça). No rolling update, o contêiner velho vê o
+  lote como uma peça que o juiz dele não aceita (`mercadoPoe`: peça inválida, 422): a compra e
+  a retirada caem lá sem mexer em nada, e passam no contêiner novo.
+  **Limite conhecido:** a MIGRAÇÃO do mercadinho local (`_mc_migra`) no contêiner velho não
+  conhece lote: um lote local que chegue ao servidor no primeiro save de uma conta e tenha a
+  primeira chamada do mercado atendida pelo contêiner velho, nos segundos de sobreposição,
+  some sem devolver as pedras (a marca da migração impede a nova de refazer). Pede três
+  coisas raras juntas — lote criado offline, primeiro login e a janela do deploy —; o contêiner
+  novo devolve o lote ao estoque.
 
 ## 5. O juiz (Node, só 127.0.0.1)
 
@@ -496,6 +524,12 @@ argumentos e chama a função do jogo. Sorteio (forja, roleta) usa o gerador sem
 pelo servidor. Saída: `{ok, progress, db, resultados, iids, hash}`; 422
 `{erro, motivo, indice}` na primeira op recusada (as anteriores não valem: o pedido é
 tudo ou nada).
+
+A quebra (22/09): `quebrarPeca {invIndex, n?}` (n de 1 a 99, ausente = 1) chama
+`Progress.quebraPeca` — n cópias idênticas do saco viram pedras do elemento pela régua de
+`DATA.quebra`, sem sorteio. As séries quebradas saem em `iids.fora` (o cartório as aposenta
+como qualquer consumo) e a cópia emprestada da guilda cai com `emprestada`. Cópia a menos, a
+Panóplia do Mestre ou índice sem peça devolvem `false` com o estado igual (não é 422).
 
 ## 6. O cliente
 

@@ -20,6 +20,12 @@ O que se prova (o pedido do dono de 13/09):
   - as ofertas antigas do db.mercado.ofertas viram anúncios (com a série);
   - a série não duplica nem some: nem na op seguinte, nem na varredura do salvar sem juiz;
   - as ops antigas do jogador e as internas do mercado não passam pelo /api/op.
+E o LOTE de pedras de forja (22/09): anunciar tira as pedras do estado no servidor (linha em
+mercado_lotes), lote fora da régua é 400, estoque curto não grava nada, comprar põe as pedras no
+comprador (saco depois banco, com a taxa, mesmo de saco cheio), retirar as devolve, o resumo
+agrega por pedra (e `itens` não mostra lote), o item?id=<pedra> ordena pelo preço por pedra, a
+proposta aceita e confirmada move as pedras, o teto de anúncios conta os lotes, o lote local de
+antes volta ao estoque na migração e as leituras dizem `tipo` e `qtd`.
 Os processos rodam com prioridade abaixo do normal: a máquina é dividida com quem joga.
 """
 import copy
@@ -127,9 +133,17 @@ class ProvaDoMercado(unittest.TestCase):
         finally:
             b.close()
 
-    def poe_estado(self, c, carteira=0, banco=0, pecas=(), mercado=None, nasc_extra=()):
+    def poe_estado(self, c, carteira=0, banco=0, pecas=(), mercado=None, nasc_extra=(), pedras=None, saco_cheio=0):
+        """`pedras` = {stoneId: n} vira o estoque inteiro; `saco_cheio` = quantas peças de enchimento
+        (com série) além de `pecas` — o lote de pedras não precisa de espaço no saco."""
         p = copy.deepcopy(self.inicial['progress'])
         d = copy.deepcopy(self.inicial['db'])
+        if pedras is not None:
+            p['stones'] = dict(pedras)
+        enche = [self.serie('en') for _ in range(saco_cheio)]
+        for iid in enche:
+            p['inventory'].append({'itemId': PECA, 'level': 0, 'stars': 0, 'iid': iid})
+        nasc_extra = list(nasc_extra) + enche
         for iid in pecas:
             p['inventory'].append({'itemId': PECA, 'level': 1, 'stars': 1, 'iid': iid})
         d['carteira'] = {'moedas': carteira}
@@ -166,6 +180,26 @@ class ProvaDoMercado(unittest.TestCase):
 
     def item_do_registro(self, iid):
         return self.sql("SELECT conta_id, origem, estado FROM itens WHERE iid = ?", iid)
+
+    @staticmethod
+    def estoque(s, sid):
+        """As pedras `sid` no estado (save ou resposta que traz `progress`)."""
+        return int((s['progress'].get('stones') or {}).get(sid) or 0)
+
+    def anuncia_lote(self, c, sid, qtd, preco):
+        status, r = c.pede('POST', '/api/mercado/anunciar', {'tipo': 'pedra', 'stoneId': sid, 'qtd': qtd, 'preco': preco})
+        self.assertEqual(status, 200, r)
+        return r['anuncio']['id']
+
+    _limite = None
+
+    def limite_do_saco(self):
+        if ProvaDoMercado._limite is None:
+            ProvaDoMercado._limite = int(roda_node(
+                ['-e', "const est=require(process.argv[1]);const w=est.mundoEconomico({});est.poeEstado(w,null,null);"
+                       "process.stdout.write(JSON.stringify(w.J.Progress.bagLimit ? w.J.Progress.bagLimit() : 60))",
+                 ESTADO_JS]))
+        return ProvaDoMercado._limite
 
     # -- as provas -------------------------------------------------------------------------------
     def test_01_sem_juiz_503_e_ops_fechadas(self):
@@ -516,6 +550,185 @@ class ProvaDoMercado(unittest.TestCase):
         self.assertEqual((status, r.get('motivo')), (409, 'saco'), r)
         self.assertEqual(self.save(b)['versao'], antes['versao'])
         self.assertEqual(self.sql("SELECT estado FROM mercado_anuncios WHERE id = ?", aid)[0]['estado'], 'aberto')
+
+    # -- o LOTE de pedras de forja (22/09) --------------------------------------------------------------
+    def test_14_lote_anuncia_e_retira(self):
+        a = self.novo('Pedreira')
+        self.poe_estado(a, pedras={'stone-ember': 120})
+        antes = self.save(a)
+        for corpo in ({'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 7, 'preco': 50},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': '10', 'preco': 50},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': True, 'preco': 50},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 10.0, 'preco': 50},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 1000, 'preco': 50},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 10, 'preco': 0},
+                      {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 10, 'preco': 10000},
+                      {'tipo': 'pedra', 'stoneId': 'stone ember', 'qtd': 10, 'preco': 50},
+                      {'tipo': 'pedra', 'qtd': 10, 'preco': 50},
+                      {'tipo': 'lote', 'stoneId': 'stone-ember', 'qtd': 10, 'preco': 50}):
+            status, r = a.pede('POST', '/api/mercado/anunciar', corpo)
+            self.assertEqual(status, 400, (corpo, r))
+        # a pedra que o dado não conhece: quem diz é o juiz (argumento), a API devolve 400
+        status, r = a.pede('POST', '/api/mercado/anunciar', {'tipo': 'pedra', 'stoneId': 'stone-nada', 'qtd': 1, 'preco': 5})
+        self.assertEqual((status, r.get('motivo')), (400, 'argumento'), r)
+        # estoque curto: 409 'pedras', e nada é gravado
+        status, r = a.pede('POST', '/api/mercado/anunciar', {'tipo': 'pedra', 'stoneId': 'stone-tear', 'qtd': 10, 'preco': 30})
+        self.assertEqual((status, r.get('motivo'), r.get('tem'), r.get('faltam')), (409, 'pedras', 0, 10), r)
+        self.assertIn('pedras insuficientes', r['erro'])
+        depois = self.save(a)
+        self.assertEqual((depois['versao'], depois['progress'].get('stones')), (antes['versao'], antes['progress'].get('stones')))
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM mercado_anuncios WHERE vendedor_id = ?", a.conta['id']),
+                         [{'n': 0}], 'nada foi anunciado')
+        # o lote de 50: as pedras saem do estado do SERVIDOR
+        status, r = a.pede('POST', '/api/mercado/anunciar', {'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 50, 'preco': 240})
+        self.assertEqual(status, 200, r)
+        aid = r['anuncio']['id']
+        self.assertEqual(r['anuncio'], {'id': aid, 'tipo': 'pedra', 'itemId': 'stone-ember', 'stoneId': 'stone-ember',
+                                        'qtd': 50, 'preco': 240, 'taxa': taxa(240)})
+        self.assertEqual(self.estoque(r, 'stone-ember'), 70, 'a resposta traz o estado sem as 50')
+        s = self.save(a)
+        self.assertEqual((self.estoque(s, 'stone-ember'), s['versao']), (70, r['versao']))
+        self.assertEqual(self.sql("SELECT anuncio_id, tipo, qtd FROM mercado_lotes WHERE anuncio_id = ?", aid),
+                         [{'anuncio_id': aid, 'tipo': 'pedra', 'qtd': 50}])
+        self.assertEqual(self.sql("SELECT item_id, iid, level, stars, preco, estado FROM mercado_anuncios WHERE id = ?", aid),
+                         [{'item_id': 'stone-ember', 'iid': None, 'level': 0, 'stars': 0, 'preco': 240, 'estado': 'aberto'}])
+        # Meus anúncios diz tipo e qtd (a peça diria 'peca' e 1)
+        status, meus = a.pede('GET', '/api/mercado/meus')
+        self.assertEqual([(x['id'], x['tipo'], x['qtd'], x['itemId'], x['taxa']) for x in meus['anuncios']],
+                         [(aid, 'pedra', 50, 'stone-ember', 12)])
+        # retirar: as 50 voltam ao estoque
+        status, r = a.pede('POST', '/api/mercado/retirar', {'anuncioId': aid})
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['tipo'], r['pedras']), ('pedra', {'stoneId': 'stone-ember', 'qtd': 50}))
+        self.assertEqual(r['item'], {'itemId': 'stone-ember', 'level': 0, 'stars': 0, 'qtd': 50, 'tipo': 'pedra'})
+        self.assertEqual(self.estoque(r, 'stone-ember'), 120)
+        self.assertEqual(self.estoque(self.save(a), 'stone-ember'), 120)
+        self.assertEqual(self.sql("SELECT estado FROM mercado_anuncios WHERE id = ?", aid)[0]['estado'], 'retirado')
+        self.assertEqual(a.pede('POST', '/api/mercado/retirar', {'anuncioId': aid})[0], 409, 'não retira duas vezes')
+
+    def test_15_lote_comprar_saco_depois_banco(self):
+        a, b, c = self.novo('Vende Lote'), self.novo('Compra Lote'), self.novo('Lote Liso')
+        self.poe_estado(a, carteira=5, pedras={'stone-tear': 100})
+        # o comprador de saco CHEIO: pedra não ocupa o saco, a compra passa
+        self.poe_estado(b, carteira=30, banco=200, pedras={'stone-tear': 3}, saco_cheio=self.limite_do_saco())
+        self.poe_estado(c, carteira=40, banco=50)
+        aid = self.anuncia_lote(a, 'stone-tear', 100, 150)
+        self.assertEqual(a.pede('POST', '/api/mercado/comprar', {'anuncioId': aid})[0], 400, 'o próprio lote não se compra')
+        status, r = c.pede('POST', '/api/mercado/comprar', {'anuncioId': aid})
+        self.assertEqual((status, r.get('motivo'), r.get('faltam')), (409, 'saldo', 60), r)
+        self.assertEqual(self.estoque(self.save(c), 'stone-tear'), 0)
+        status, r = b.pede('POST', '/api/mercado/comprar', {'anuncioId': aid})
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['valor'], r['deCarteira'], r['deBanco'], r['tipo'], r['qtd']), (150, 30, 120, 'pedra', 100))
+        self.assertEqual(r['pedras'], {'stoneId': 'stone-tear', 'qtd': 100})
+        self.assertEqual(r['item'], {'itemId': 'stone-tear', 'level': 0, 'stars': 0, 'qtd': 100, 'tipo': 'pedra'})
+        sb, sa = self.save(b), self.save(a)
+        self.assertEqual((self.estoque(sb, 'stone-tear'), self.bolso(sb)), (103, (0, 80)))
+        self.assertEqual((self.estoque(sa, 'stone-tear'), self.bolso(sa)), (0, (5 + 150 - taxa(150), 0)),
+                         'o vendedor recebe o preço menos a taxa (8 de 150)')
+        self.assertEqual((sb['progress'], sb['db']), (r['progress'], r['db']))
+        self.assertEqual(self.sql("SELECT estado, valor_final, taxa, comprador_id FROM mercado_anuncios WHERE id = ?", aid),
+                         [{'estado': 'vendido', 'valor_final': 150, 'taxa': 8, 'comprador_id': b.conta['id']}])
+        self.assertEqual(b.pede('POST', '/api/mercado/comprar', {'anuncioId': aid})[1].get('motivo'), 'perdeu')
+        # o vendedor fica sabendo, com tipo e qtd
+        status, av = a.pede('GET', '/api/mercado/avisos')
+        venda = [v for v in av['vendas'] if v['id'] == aid]
+        self.assertEqual([(v['tipo'], v['qtd'], v['itemId'], v['valor'], v['recebeu']) for v in venda],
+                         [('pedra', 100, 'stone-tear', 150, 142)], av)
+        status, meus = a.pede('GET', '/api/mercado/meus')
+        self.assertEqual([(v['tipo'], v['qtd'], v['recebeu']) for v in meus['vendas'] if v['id'] == aid], [('pedra', 100, 142)])
+
+    def test_16_resumo_e_item_das_pedras(self):
+        a, b = self.novo('Lotes A'), self.novo('Lotes B')
+        self.poe_estado(a, pedras={'stone-breath': 200})
+        self.poe_estado(b, pedras={'stone-breath': 100})
+        ids = [self.anuncia_lote(a, 'stone-breath', 10, 50),          # 5 por pedra
+               self.anuncia_lote(a, 'stone-breath', 100, 350),        # 3,5
+               self.anuncia_lote(a, 'stone-breath', 10, 35),          # 3,5 — empata, o lote mais barato primeiro
+               self.anuncia_lote(b, 'stone-breath', 50, 200),         # 4
+               self.anuncia_lote(b, 'stone-breath', 1, 7)]            # 7
+        status, res = a.pede('GET', '/api/mercado/resumo')
+        self.assertEqual(status, 200, res)
+        self.assertEqual([x for x in res['pedras'] if x['stoneId'] == 'stone-breath'],
+                         [{'stoneId': 'stone-breath', 'lotes': 5, 'pedras': 171, 'menor': 7, 'menorUnit': 3.5, 'meus': 3}])
+        self.assertEqual(res['lotesPedra'], [1, 10, 50, 100])
+        self.assertNotIn('stone-breath', [x['itemId'] for x in res['itens']], 'itens é só de peças')
+        self.assertTrue(all(not x['itemId'].startswith('stone-') for x in res['itens']), res['itens'])
+        status, it = b.pede('GET', '/api/mercado/item?id=stone-breath')
+        self.assertEqual(status, 200, it)
+        self.assertEqual([(x['id'], x['tipo'], x['qtd'], x['preco'], x['unit'], x['meu']) for x in it['anuncios']],
+                         [(ids[2], 'pedra', 10, 35, 3.5, False), (ids[1], 'pedra', 100, 350, 3.5, False),
+                          (ids[3], 'pedra', 50, 200, 4, True), (ids[0], 'pedra', 10, 50, 5, False),
+                          (ids[4], 'pedra', 1, 7, 7, True)])
+        self.assertEqual(it['anuncios'][0]['vendedor'], a.conta['nome'])
+        # a peça ganha tipo 'peca', qtd 1 e unit = preço, e a ordem de sempre (preço)
+        status, it = b.pede('GET', '/api/mercado/item?id=' + PECA)
+        self.assertTrue(it['anuncios'], it)
+        self.assertTrue(all(x['tipo'] == 'peca' and x['qtd'] == 1 and x['unit'] == x['preco'] for x in it['anuncios']))
+        self.assertEqual([x['preco'] for x in it['anuncios']], sorted(x['preco'] for x in it['anuncios']))
+        # o estoque dos dois caiu o que anunciaram
+        self.assertEqual((self.estoque(self.save(a), 'stone-breath'), self.estoque(self.save(b), 'stone-breath')), (80, 49))
+
+    def test_17_proposta_no_lote(self):
+        a, b, c = self.novo('Lote Prop'), self.novo('Propoe Lote'), self.novo('Perde Lote')
+        self.poe_estado(a, pedras={'stone-slate': 60})
+        self.poe_estado(b, carteira=100)
+        self.poe_estado(c, carteira=100)
+        aid = self.anuncia_lote(a, 'stone-slate', 50, 100)
+        self.assertEqual(b.pede('POST', '/api/mercado/propor', {'anuncioId': aid, 'valor': 100})[0], 400,
+                         'a proposta é menor que o preço, no lote também')
+        pb, pc = self.propoe(b, aid, 80), self.propoe(c, aid, 60)
+        status, av = a.pede('GET', '/api/mercado/avisos')
+        self.assertEqual(sorted((x['id'], x['tipo'], x['qtd']) for x in av['recebidas'] if x['anuncioId'] == aid),
+                         sorted([(pb, 'pedra', 50), (pc, 'pedra', 50)]))
+        self.assertEqual(a.pede('POST', '/api/mercado/responder', {'propostaId': pb, 'aceitar': True})[0], 200)
+        status, av = b.pede('GET', '/api/mercado/avisos')
+        conf = [x for x in av['confirmar'] if x['id'] == pb]
+        self.assertEqual([(x['tipo'], x['qtd'], x['itemId'], x['valor'], x['preco']) for x in conf],
+                         [('pedra', 50, 'stone-slate', 80, 100)])
+        status, minhas = b.pede('GET', '/api/mercado/propostas')
+        self.assertEqual([(x['tipo'], x['qtd'], x['estado']) for x in minhas['propostas'] if x['id'] == pb],
+                         [('pedra', 50, 'aceita')])
+        status, r = b.pede('POST', '/api/mercado/confirmar', {'propostaId': pb, 'aceitar': True})
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['valor'], r['tipo'], r['pedras']), (80, 'pedra', {'stoneId': 'stone-slate', 'qtd': 50}))
+        sb, sa = self.save(b), self.save(a)
+        self.assertEqual((self.estoque(sb, 'stone-slate'), self.bolso(sb)), (50, (20, 0)))
+        self.assertEqual((self.estoque(sa, 'stone-slate'), self.bolso(sa)), (10, (80 - taxa(80), 0)))
+        self.assertEqual(self.sql("SELECT estado FROM mercado_propostas WHERE id = ?", pb)[0]['estado'], 'concluida')
+        status, av = c.pede('GET', '/api/mercado/avisos')
+        self.assertEqual([(x['estado'], x['tipo'], x['qtd']) for x in av['desfechos'] if x['id'] == pc],
+                         [('perdida', 'pedra', 50)])
+        self.assertEqual(self.bolso(self.save(c)), (100, 0), 'quem perdeu não paga nada')
+
+    def test_18_lote_ops_internas_e_teto(self):
+        a = self.novo('Teto Lote')
+        import mercado as mc
+        self.poe_estado(a, pedras={'stone-root': mc.ANUNCIOS_MAX + 1})
+        for nome in ('mercadoTiraPedras', 'mercadoPoePedras'):
+            status, r = a.pede('POST', '/api/op', {'ops': [{'nome': nome, 'args': {'stoneId': 'stone-root', 'qtd': 1}}]})
+            self.assertEqual(status, 403, (nome, r))
+        # o teto de anúncios abertos conta o lote como conta a peça
+        for _ in range(mc.ANUNCIOS_MAX):
+            self.anuncia_lote(a, 'stone-root', 1, 3)
+        status, r = a.pede('POST', '/api/mercado/anunciar', {'tipo': 'pedra', 'stoneId': 'stone-root', 'qtd': 1, 'preco': 3})
+        self.assertEqual(status, 409, r)
+        self.assertIn('máximo', r['erro'])
+        self.assertEqual(self.estoque(self.save(a), 'stone-root'), 1, 'o anúncio recusado pelo teto não tira pedra')
+
+    def test_19_lote_local_de_antes_volta_ao_estoque(self):
+        a = self.novo('Lote Legado')
+        mercado = {'dia': '2026-09-21', 'ofertas': [
+            {'id': 'jg-1', 'vendedor': 'jogador', 'tipo': 'pedra', 'stoneId': 'stone-ember', 'qtd': 10, 'preco': 50},
+            {'id': 'jg-2', 'vendedor': 'jogador', 'itemId': PECA, 'level': 0, 'stars': 0, 'iid': None, 'preco': 40}]}
+        self.poe_estado(a, mercado=mercado, pedras={'stone-ember': 5})
+        status, r = a.pede('GET', '/api/mercado/meus')
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['db']['mercado']['ofertas'], [])
+        self.assertEqual(self.estoque(r, 'stone-ember'), 15, 'as 10 do lote local voltaram ao estoque')
+        self.assertEqual([(x['tipo'], x['itemId'], x['preco']) for x in r['anuncios']], [('peca', PECA, 40)],
+                         'só a peça virou anúncio')
+        self.assertEqual(self.estoque(self.save(a), 'stone-ember'), 15)
 
 
 if __name__ == '__main__':

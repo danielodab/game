@@ -899,6 +899,55 @@ JOGO.DATA = JOGO.DATA || {};
   };
 
   // =========================================================================
+  // A QUEBRA (22/09, pedido do dono: "na forja o jogador poderá quebrar os
+  // itens, que darão pedras daquele elemento; a depender do nível do item e
+  // poder dá mais pedras").
+  //
+  // Quebrar desfaz a peça do saco em pedras do ELEMENTO dela (neutra dá Lasca
+  // da Lousa; a Âncora nunca sai daqui). A conta tem três andares e mora
+  // inteira nesta tabela — o Progress só multiplica (`quebraInfoDe`):
+  //
+  //   pedras = max(minimo, floor(base[raridade] × T × porEstrela^★)
+  //                        + floor(reembolsoForja × custo NOMINAL até o +N))
+  //   T = teto(nívelDeUso / degrauNivel) → 1 · 2 · 3   (o "nível do item")
+  //
+  // POR QUE NÃO VIRA MÁQUINA DE PEDRA (as três portas que um laço usaria):
+  //   • FORJA. O reembolso é METADE do custo NOMINAL (a tabela de stoneCost
+  //     acima, 107 no +10). Do +5 em diante a batida falha e regride, então o
+  //     custo REAL é bem maior que o nominal — forjar e quebrar sempre perde.
+  //   • ESTRELA. `porEstrela` = 3 são as 3 cópias que a fusão consumiu:
+  //     quebrar um ★1 dá o mesmo que quebrar as três cópias soltas, nunca mais.
+  //     E a fusão sai no nível da MÉDIA arredondada para baixo, com o reembolso
+  //     contado uma vez só — fundir antes de quebrar só pode perder.
+  //   • A PEÇA EM SI. Ninguém fabrica peça: ela cai (~1 por descida) e some
+  //     ao quebrar. A descida já paga ~15 pedras (Estufa) a ~85 (Coração
+  //     Partido); a quebra de uma comum soma 1 a 3, a épica do fundo 24.
+  //
+  // EXEMPLOS (nominal: +3 = 9 · +5 = 23 · +7 = 46 · +10 = 107):
+  //   peça                         nv  T  ★  forja   conta              pedras
+  //   comum da Estufa              3   1  0  +0      1×1×1              1
+  //   rara da Estufa               5   1  0  +0      3×1×1              3
+  //   comum do Fecho de Brasa      11  2  0  +0      1×2×1              2
+  //   épica da Cisterna            11  2  0  +0      8×2×1              16
+  //   épica do Coração Partido     30  3  0  +0      8×3×1              24
+  //   lendária (qualquer)          30  3  0  +0      15×3×1             45
+  //   rara dos Andaimes ★1 +5      18  2  1  +5      3×2×3 + 11         29
+  //   comum da Estufa ★3           3   1  3  +0      1×1×27             27
+  //   lendária +10                 30  3  0  +10     45 + 53            98
+  //
+  // A Panóplia do Mestre (ids 'gm-*', noDrop) não se quebra: é o privilégio
+  // do dono, não matéria de forja. Campo novo aqui precisa entrar também no
+  // `quebraCfg()` do progress.js (ele lê campo a campo, com padrão).
+  // =========================================================================
+  DATA.quebra = {
+    base: { comum: 1, raro: 3, epico: 8, lendario: 15 },  // pedras por raridade
+    degrauNivel: 10,       // T = teto(nivelUso / degrauNivel) → 1..3 (o "nível do item")
+    porEstrela: 3,         // ×3 por estrela: as 3 cópias que a fusão consumiu
+    reembolsoForja: 0.5,   // metade das pedras NOMINAIS gastas até o nível de forja atual
+    minimo: 1              // nenhuma quebra devolve zero
+  };
+
+  // =========================================================================
   // RODAPÉ — deriva `element`, `setId`, `dropWeight` e `nivelUso` de cada item a partir do
   // conjunto a que ele pertence e da raridade. Nenhum item pode ficar fora de
   // um conjunto: a validação acusa (element/setId nulos).
