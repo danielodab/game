@@ -343,7 +343,9 @@
           var tE = (e2.pos.x - ent.x) * (-uzE) + (e2.pos.z - ent.z) * uxE;        // de través
           check('... pelo EIXO do corredor do portão, rumo à boca (t ≈ 0, d < 0)', dE < -(ent.raio) && Math.abs(tE) < 0.6,
                 'd ' + dE.toFixed(2) + ' · t ' + tE.toFixed(2));
-          check('a entrada mora no arco dos portais (r = 0,75 do meio-lado, a oeste)', Math.abs(rE / 0.75 - 58) < 0.5 && ent.x < -35 && Math.abs(ent.z) < 4,
+          // 22/09: a oeste, mas não mais no x: o portão desceu do ang -1,54 (z -1,3) para o
+          // -1,70 (z 5,6), longe dos muros da Estufa; o passo exato a corredores.html cobra
+          check('a entrada mora no arco dos portais (r = 0,75 do meio-lado, a oeste)', Math.abs(rE / 0.75 - 58) < 0.5 && ent.x < -35 && Math.abs(ent.z) < 8,
                 JSON.stringify({ x: +ent.x.toFixed(2), z: +ent.z.toFixed(2) }));
           // 20/09 (o dono): o corredor do portão voltou com os muros DELE — o catálogo do
           // Campo veste a fileira, e o raio de conversa é o de portal aberto.

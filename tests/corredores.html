@@ -298,14 +298,27 @@
           check('a entrada do Campo fica a 0,5 m ou mais de todo muro de corredor alheio', piorS >= 0.5,
                 'mais perto: ' + piorS.toFixed(2) + ' m (' + quem + ')');
           check('o meio da entrada do Campo está livre', livre({ x: campo.x, z: campo.z }));
-          // o portão é um dente do arco: um passo a oeste do portal 0, no mesmo raio
+          /* o portão é um dente do arco: a oeste do portal 0, no mesmo raio. 22/09 (dono: "afaste
+           * um pouco o portal e seus muros de pvp dos portais de calabouços"): a distância deixou
+           * de ser um passo (0,44) e vem do jogo (M.arcoCampo, 0,60) — e os muros das duas
+           * fileiras têm de ficar a 5 m ou mais (eram 1,41 com um passo) */
           var p0 = L.filter(function (l) { return Math.atan2(l.x, -l.z) < -1.0; })
                     .sort(function (a, b) { return Math.atan2(a.x, -a.z) - Math.atan2(b.x, -b.z); })[0];
           var rC = Math.hypot(campo.x, campo.z), r0 = p0 ? Math.hypot(p0.x, p0.z) : 0;
           var passo = p0 ? Math.atan2(p0.x, -p0.z) - Math.atan2(campo.x, -campo.z) : 0;
-          check('o portão do Campo está no arco dos portais: mesmo raio do portal 0 e um passo (0,44 rad) a oeste',
-                !!p0 && Math.abs(rC - r0) < 0.05 && Math.abs(passo - 0.44) < 0.005,
+          check('o portão do Campo está no arco dos portais: mesmo raio do portal 0 e ARCO_CAMPO (' + M.arcoCampo + ' rad) a oeste',
+                !!p0 && M.arcoCampo > 0.44 && Math.abs(rC - r0) < 0.05 && Math.abs(passo - M.arcoCampo) < 0.005,
                 'r ' + rC.toFixed(2) + ' / ' + r0.toFixed(2) + ' · passo ' + passo.toFixed(3));
+          var muroMuro = 99;
+          doPortao.forEach(function (a) {
+            if (a.r < 1.9) return;                                   // só os muros da fileira
+            S.forEach(function (b) {
+              if (!p0 || b.dono !== p0.id || b.r < 1.9) return;
+              muroMuro = Math.min(muroMuro, Math.hypot(a.x - b.x, a.z - b.z) - a.r - b.r);
+            });
+          });
+          check('os muros do portão ficam a 5 m ou mais dos muros do portal 0', muroMuro >= 5,
+                muroMuro.toFixed(2) + ' m (' + (p0 && p0.id) + ')');
         }
         fecha();
       })

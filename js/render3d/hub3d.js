@@ -136,8 +136,12 @@ var JOGO = (typeof window !== 'undefined')
   var RAIO_MAPA = 58;
   /* O ARCO DOS PORTAIS, num lugar só: o primeiro ângulo, o passo entre vizinhos
    * e o raio (fração do meio-lado). montaPortais lê daqui e o portão do Campo
-   * é o dente seguinte do mesmo leque (PRACA.campo = ARCO_A0 - ARCO_PASSO). */
-  var ARCO_A0 = -1.10, ARCO_PASSO = 0.44, ARCO_R = 0.75;
+   * fica no mesmo leque, ARCO_CAMPO a oeste do portal 0 (PRACA.campo).
+   * 22/09 (dono, com foto: "afaste um pouco o portal e seus muros de pvp dos portais
+   * de calabouços"): o portão era o dente seguinte, a um passo (0,44), e os muros da
+   * fileira dele ficavam a 1,41 m dos da Estufa — as duas pistas liam como uma só.
+   * Com 0,60 sobram 6,25 m de grama de muro a muro (scratchpad/oeste.js). */
+  var ARCO_A0 = -1.10, ARCO_PASSO = 0.44, ARCO_R = 0.75, ARCO_CAMPO = 0.60;
   /* o tronco da Árvore-Mundo é SÓLIDO: quem anda desliza por fora dele */
   var TRONCO_RAIO = 4.6;
   /* AS MEDIDAS DO CORREDOR DO PORTAL, num lugar só — a prova
@@ -1007,7 +1011,8 @@ var JOGO = (typeof window !== 'undefined')
    * havia vão: entre a Arena e o corredor do primeiro portal sobravam 3,6 m (R 50).
    * 19/09 (dono, com foto: "melhore a praça central pois o portal do mapa pvp está no
    * meio... se for necessário aumente o mapa geral para encaixar esse pvp"): virou o
-   * SÉTIMO PORTÃO DO ARCO — um passo a oeste do portal 0 (PRACA.campo), encarando a
+   * SÉTIMO PORTÃO DO ARCO — a oeste do portal 0 (PRACA.campo; desde 22/09 a ARCO_CAMPO,
+   * mais que um passo, para os muros das duas fileiras não se encostarem), encarando a
    * Árvore como os outros, no mesmo porte 1,3×, e com corredor murado (plantaCantinhos lê
    * o lugar pelo `portao` e pelo `tema`: os muros do catálogo do Campo, campoCfg().tema —
    * desde 20/09 o lote de PvP do próprio dono). Duas diferenças para um portal de
@@ -1016,9 +1021,11 @@ var JOGO = (typeof window !== 'undefined')
    * o lugar são duas bandeiras vermelhas na boca (21/09, o dono: os dois braseiros do fim
    * saíram, "tire essas duas luminárias"). O arco continua vermelho e sem parede
    * (entra-se nele); o raio de conversa é 6,4, o de portal aberto, porque com 4,6 o painel
-   * ficava mudo atrás do arco. Folgas (R 58, medidas): conversa 6,4 ↔ 6,4 do portal 0
-   * sobra 6,19; ↔ Arena (13) sobra 8,84; pegada do corredor ↔ caixa da Arena 11,64
-   * (tests/paredes.html e corredores.html cobram). */
+   * ficava mudo atrás do arco. Folgas (22/09, R 58, ang -1,70, Arena de 24 m; medidas no
+   * jogo): conversa 6,4 ↔ 6,4 do portal 0 sobra 12,91; ↔ Arena (13) sobra 3,87; caixa do
+   * portão ↔ caixa da Arena 4,23; muros da fileira ↔ muros da Estufa 6,25 e ↔ parede da
+   * Arena 6,24. As provas cobram a caixa (≥ 1 m) e a conversa (tests/paredes.html) e os
+   * muros ↔ Estufa (≥ 5 m, corredores.html); muro ↔ parede da Arena ninguém cobra. */
   function montaEntradaCampo() {
     if (!PRACA.campo) return;
     var pp = pontoDaPraca('campo');
@@ -1704,7 +1711,8 @@ var JOGO = (typeof window !== 'undefined')
       // com espaço para o cantinho temático — e os extremos não descem
       // tanto a ponto de a Sede e a Arena os taparem da câmera padrão.
       // 19/09: o padrão do arco (ARCO_A0, ARCO_PASSO, ARCO_R) é o que o dono
-      // pediu para manter; o portão do Campo é o dente seguinte (i = -1).
+      // pediu para manter. O portão do Campo NÃO segue o passo: desde 22/09 ele
+      // fica ARCO_CAMPO (0,60) a oeste do portal 0, mais longe que um vizinho.
       var ang = ARCO_A0 + ARCO_PASSO * i;
       var px = Math.sin(ang) * RAIO_MAPA * ARCO_R;
       var pz = -Math.cos(ang) * RAIO_MAPA * ARCO_R;
@@ -1805,8 +1813,17 @@ var JOGO = (typeof window !== 'undefined')
    * Poço↔Forja 5,66, Forja↔Barraquinha 6,03); a caixa da Arena fica a 2,05 m
    * do meio-fio no canto e a da Forja a 3,25 — se a arte de uma delas trocar
    * por outra mais larga, medir de novo antes de plantar. */
+  /* 22/09 (dono, com foto: "aumente o tamanho da arena e coloque a estrada chegando até
+   * ela"). A Arena "de 24 m" media 17,3: a escala saía da caixa JÁ GIRADA (ver `reto` em
+   * montaObra), e a calçada, que parava a 9,8 do centro, ficava 1,15 m antes da muralha.
+   * Agora ela tem os 24 m de verdade (10,8 de altura) e desceu meio passo para o sul,
+   * porque o portão do Campo também desceu (ARCO_CAMPO). Folgas medidas em
+   * scratchpad/oeste.js, a Arena como o disco de 12 m que ela é: portão do Campo 5,07 ·
+   * Poço 4,35 · borda do mapa 4,33 · pista do anel 9,37; conversa Arena (13) ↔ Campo
+   * (6,4) sobra 3,87. A calçada agora entra pelo arco da Arena, que encara a Árvore, e
+   * para a 7,2 do centro — no fim da passagem, antes da areia. */
   var PRACA = {
-    arena:   { ang: -2.16, r: 48.0, frente: 9.8 },   // era (-1,78; 36) → (-39,9; 26,7), canto SO
+    arena:   { ang: -2.20, r: 48.5, frente: 7.2 },   // era (-2,16; 48) → (-39,2; 28,5), canto SO
     // o poço: a caixa medida abraça a armação de madeira, a base de pedra
     // tem só ~5 m — a 3,3 do centro a calçada parava na grama (foto do dono)
     poco:    { ang: -2.62, r: 39.5, frente: 2.0 },   // era (-2,40; 34) → (-19,7; 34,3)
@@ -1815,11 +1832,12 @@ var JOGO = (typeof window !== 'undefined')
     mercado: { ang: 2.80, r: 44.0, frente: 2.0 },    // 38 × 1,16
     banco:   { ang: 2.30, r: 40.5, frente: 2.5 },    // 35 × 1,16
     sede:    { ang: 1.78, r: 42.0, frente: 3.0 },    // 36 × 1,16
-    // 19/09: o portão do Campo de PvP é o SÉTIMO DENTE do arco dos portais, um passo a
-    // oeste do portal 0 (ang -1,54, r 0,75·R = 43,5 → (-43,5; -1,3)) — o mesmo corredor,
-    // a mesma câmara, o mesmo porte (montaEntradaCampo e plantaCantinhos). Era o gramado
-    // de dentro do anel (-1,42; 16,6), "no meio" da praça, ao lado da Árvore (foto do dono).
-    campo:   { ang: ARCO_A0 - ARCO_PASSO, r: ARCO_R * RAIO_MAPA, frente: 1.0 }
+    // 19/09: o portão do Campo de PvP é o SÉTIMO DENTE do arco dos portais, a oeste do
+    // portal 0, no mesmo raio (0,75·R = 43,5) — o mesmo porte (montaEntradaCampo e
+    // plantaCantinhos). Era o gramado de dentro do anel (-1,42; 16,6), "no meio" da
+    // praça, ao lado da Árvore (foto do dono). 22/09: de um passo (ang -1,54 → (-43,5;
+    // -1,3)) para ARCO_CAMPO, ang -1,70 → (-43,1; 5,6), longe dos muros da Estufa.
+    campo:   { ang: ARCO_A0 - ARCO_CAMPO, r: ARCO_R * RAIO_MAPA, frente: 1.0 }
   };
   function pontoDaPraca(id) {
     var p = PRACA[id];
@@ -1914,7 +1932,8 @@ var JOGO = (typeof window !== 'undefined')
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    // o raio acompanha o coliseu de 24 m: 13 do centro = um passo da parede
+    // o raio acompanha o coliseu de 24 m: 13 do centro = um passo da parede (a parede
+    // é 11,76; o coliseu só passou a ter os 24 m de fato em 22/09 — antes media 17,3)
     lugares.push({ id: 'arena', tipo: 'arena', nome: 'Arena',
                    pos: new THREE.Vector3(px, 0, pz), raio: 13.0, node: g });
   }
@@ -2260,8 +2279,12 @@ var JOGO = (typeof window !== 'undefined')
       mercado: { chave: 'praca_mercado', alvoAlt: 6.5, teto: 11 },
       banco:   { chave: 'praca_banco',   alvoAlt: 8.0, teto: 12 },
       // "muito maior, mais imponente" (30/08): o coliseu quase dobrou —
-      // é a segunda silhueta do mapa, atrás só da Árvore-Mundo
-      arena:   { chave: 'praca_arena',   alvoAlt: 9.5, teto: 24 },
+      // é a segunda silhueta do mapa, atrás só da Árvore-Mundo.
+      // 22/09 ("aumente o tamanho da arena"): 24 m de diâmetro DE VERDADE (`reto`; antes
+      // saía 17,3 × 7,8) e 10,8 de altura — o alvo sobe para a largura mandar. A muralha
+      // desce até o chão no disco inteiro (medido: a base chega a 100% do raio em toda
+      // volta), então a parede é quase o raio todo, e não os 72% de quem tem telhado
+      arena:   { chave: 'praca_arena',   alvoAlt: 11, teto: 24, reto: true, parede: 0.98 },
       sede:    { chave: 'praca_sede',    alvoAlt: 9.5, teto: 14 },
       // a barraca do ferreiro veste quando a arte chegar (embute_praca)
       forja:   { chave: 'praca_forja',   alvoAlt: 6.0, teto: 10 },
@@ -2272,32 +2295,46 @@ var JOGO = (typeof window !== 'undefined')
       poco:    { chave: 'praca_poco',    alvoAlt: 3.6, teto: 8 },
       // 20/09: o PORTAL DE ESPADAS do Campo de PvP (lote do dono). Alto como um portal
       // de calabouço (o herói tem 2,05 m e passa por baixo) e largo o bastante para o
-      // leque de lâminas caber sem o teto morder a altura
-      campo:   { chave: 'praca_portal_pvp', alvoAlt: 6.0, teto: 9.5 }
+      // leque de lâminas caber sem o teto morder a altura. 22/09: `reto`, porque o
+      // portão desceu para ang -1,70 e, medido girado, sairia 6% menor que o de antes
+      campo:   { chave: 'praca_portal_pvp', alvoAlt: 6.0, teto: 9.5, reto: true }
     };
-    function montaObra(chave, alvoAlt, teto, rotY) {
+    /* 22/09: MEDIR RETO (`reto`). A caixa do three é alinhada aos eixos do MUNDO e, sem
+     * `precise`, é a caixa do modelo girada e reencaixada: medida depois do giro, uma obra
+     * que encara a Árvore em diagonal incha até 1,41× — e o `teto` cortava a escala por essa
+     * caixa inchada. Era assim que a Arena "de 24 m" media 17,3 (ela mora a 124° e incha
+     * 1,39×), e mudar uma obra de lugar mudava o tamanho dela. Com `reto`, a escala sai do
+     * modelo ainda sem giro e da caixa dos VÉRTICES: o porte não depende de onde a obra mora.
+     * As outras seguem na medida antiga — trocá-las agora mexeria no porte de todas. */
+    function montaObra(chave, alvoAlt, teto, rotY, reto) {
       var cena = null;
       try { cena = m2.rawScene(chave); } catch (e) {}
       if (!cena) return null;
       var no = cena.clone(true);
-      // a ROTAÇÃO entra ANTES da medição: centrar primeiro e girar depois
+      var cx, alt, larg;
+      function mede() {
+        no.updateMatrixWorld(true);
+        cx = new THREE.Box3().setFromObject(no, !!reto);
+        alt = cx.max.y - cx.min.y;
+        larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+      }
+      if (reto) mede();
+      // a ROTAÇÃO entra ANTES do centramento: centrar primeiro e girar depois
       // deslocaria o centro junto — o mesmo tombo de eixo de sempre
       no.rotation.y = rotY || 0;
-      no.updateMatrixWorld(true);
-      var cx = new THREE.Box3().setFromObject(no);
-      var alt = cx.max.y - cx.min.y;
-      var larg = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z);
+      if (!reto) mede();
       if (!isFinite(alt) || alt < 0.01) return null;
       var k = alvoAlt / alt;
       if (isFinite(larg) && larg > 0.01 && larg * k > teto) k = teto / larg;
       no.scale.multiplyScalar(k);
       no.updateMatrixWorld(true);
-      cx = new THREE.Box3().setFromObject(no);
+      cx = new THREE.Box3().setFromObject(no, !!reto);
       no.position.y -= cx.min.y;                        // assenta pelo pé
       no.position.x -= (cx.min.x + cx.max.x) / 2;       // e centra na casa
       no.position.z -= (cx.min.z + cx.max.z) / 2;
-      // o RAIO no chão sai da caixa já escalada: é ele que vira parede
-      var meia = Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z) / 2;
+      // o RAIO no chão sai da caixa já escalada: é ele que vira parede (a obra `reto`
+      // usa a largura dela, não a da caixa girada)
+      var meia = reto ? larg * k / 2 : Math.max(cx.max.x - cx.min.x, cx.max.z - cx.min.z) / 2;
       return { no: no, alt: cx.max.y - cx.min.y, raio: meia };
     }
 
@@ -2314,7 +2351,7 @@ var JOGO = (typeof window !== 'undefined')
        * volta ao zero — senão o portal do dono saía girado duas vezes. */
       if (lg.tipo === 'campo') lg.node.rotation.set(0, 0, 0);
       // o prédio ENCARA o centro da praça, como os portais
-      var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto, giro);
+      var feito = montaObra(obra.chave, obra.alvoAlt, obra.teto, giro, obra.reto);
       if (!feito) return false;
       /* fora os volumes provisórios; o RÓTULO fica e sobe para o teto. E a LUZ DO CHÃO
        * (20/09) fica: é ela que diz "entrada" de longe, e quem a punha era o arco
@@ -2356,7 +2393,8 @@ var JOGO = (typeof window !== 'undefined')
        * uma parede além dele deixaria o prédio mudo. */
       // 20/09: no PORTÃO do Campo não — entra-se nele (é uma porta, não um prédio), e a
       // prova cobra `campo.solido` zerado
-      if (lg.tipo !== 'campo') lg.solido = Math.max(1.0, Math.min(feito.raio * 0.72, (lg.raio || 3) - 1.2));
+      // (a `parede` da obra troca os 72%: a Arena não tem telhado, a muralha é o disco todo)
+      if (lg.tipo !== 'campo') lg.solido = Math.max(1.0, Math.min(feito.raio * (obra.parede || 0.72), (lg.raio || 3) - 1.2));
       return true;
     }
     for (var i = 0; i < lugares.length; i++) {
@@ -3948,6 +3986,7 @@ var JOGO = (typeof window !== 'undefined')
   Hub._corredorMedidas = function () {
     var f = {};
     for (var k in CORREDOR) if (CORREDOR.hasOwnProperty(k)) f[k] = CORREDOR[k];
+    f.arcoCampo = ARCO_CAMPO;     // 22/09: do portal 0 ao portão do Campo, em radianos
     return f;
   };
   /* quais portais já ganharam corredor (a prova e a depuração perguntam) */
@@ -4126,7 +4165,8 @@ var JOGO = (typeof window !== 'undefined')
     return { miolo: MIOLO_RAIO + MEIO_FIO, anel: ANEL_RAIO, meia: CAMINHO_MEIA + MEIO_FIO, vias: caminhosVias.slice() };
   };
   /* a caixa (mundo) do nó de um lugar: a prova confere que a entrada do Campo não
-   * encosta em obra nenhuma */
+   * encosta em obra nenhuma. 22/09: pelos VÉRTICES (`precise`) — a caixa rápida é a do
+   * modelo girada e reencaixada, e a Arena de 24 m, que mora em diagonal, media 33,5 */
   Hub._caixaDoLugar = function (id) {
     for (var i = 0; i < lugares.length; i++) {
       if (lugares[i].id !== id || !THREE) continue;
@@ -4134,7 +4174,7 @@ var JOGO = (typeof window !== 'undefined')
       lugares[i].node.updateMatrixWorld(true);
       lugares[i].node.traverse(function (n) {
         // sem o rótulo (sprite no alto) e sem a luz pintada no chão
-        if (n.isMesh && n.geometry && !(n.userData && n.userData.semCaixa)) b.expandByObject(n);
+        if (n.isMesh && n.geometry && !(n.userData && n.userData.semCaixa)) b.expandByObject(n, true);
       });
       if (b.isEmpty()) return null;
       return { x0: b.min.x, x1: b.max.x, y0: b.min.y, y1: b.max.y, z0: b.min.z, z1: b.max.z };
