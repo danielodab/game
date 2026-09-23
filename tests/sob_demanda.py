@@ -43,7 +43,8 @@ E, do conserto da revisão (10/09): com Economia de Dados a pré-busca não liga
 o avatar, o fantasma e o perfil de FUSÃO pedem o corpo próprio e trocam; o
 gancho abre só o que a descida usa; o grimório (Progress.spellsFor) entra no
 plano; um download da pré-busca empacado não segura o gancho; o guarda-roupa
-pede os corpos e se repinta.
+pede os corpos e se repinta. E (22/09): a pré-busca só ABRE a vitrine da
+praça (Hub.vitrine) — o resto baixa e fica fechado até o gancho.
 Depois de escrever o resultado a sonda derruba o quadro: o resto do tempo
 virtual passa sem desenhar nada (a máquina é compartilhada).
 """
@@ -386,35 +387,54 @@ SONDA = r'''<!DOCTYPE html>
     }));
     descida('cisterna', 'cistern', { pedido: { dungeonId: 'cistern', party: ['sumo'], sala: 0 },
       fn: function (Jg) { return Jg.Game.startRun(['sumo'], 'cistern'); } });
+    // ---- 4b. o DECODIFICADOR DE FOLGA, solto na praça: abre o que a
+    // pré-busca baixou sem prender a praça (antes: um por requestIdleCallback
+    // de prazo 2,5 s, e a praça desenhando sem parar só deixava sair pelo prazo).
+    // Desde 22/09 abre só a VITRINE (Bundle.vitrine: o que a praça mostra); o
+    // resto baixado fica fechado para o gancho — é a memória da aba
+    var folga0 = null;
+    function naVitrine(B) {
+      var v = {};
+      ((B.vitrine && B.vitrine()) || []).forEach(function (k) { v[k] = 1; });
+      return v;
+    }
     passo('cisterna:solta', function () {
       // o gancho abriu SÓ o plano: o que desceu fora dele segue fechado
       var fd = (R.foraAntes || []).filter(function (k) { return !decod(k); });
       R.passos['cisterna:fora'] = { antes: (R.foraAntes || []).length, fechados_depois: fd.length, exemplo: fd.slice(0, 3) };
-      if (J().Bundle.pausaDecodificacao) J().Bundle.pausaDecodificacao(false);
+      // a foto do que a folga vai abrir sai ANTES de soltar o decodificador:
+      // tirada depois, uma leva já começada (contada em `decod`, modelo ainda
+      // fechado) fazia os abertos darem um a menos que os fechados (22/09)
+      var B = J().Bundle, ord = B.ordemDaPreBusca(), vit = naVitrine(B);
+      function fechado(k) { return B.estadoDe(k) === 'chegou' && !decod(k); }
+      folga0 = { t: Date.now(), vit: vit,
+                 fechados: ord.filter(function (k) { return vit[k] && fechado(k); }).length,
+                 fora: ord.filter(function (k) { return !vit[k] && fechado(k); }),
+                 decod: JSON.parse(JSON.stringify((info() || {}).decod || {})) };
+      if (B.pausaDecodificacao) B.pausaDecodificacao(false);
       return true;
     });
-    // ---- 4b. o DECODIFICADOR DE FOLGA, solto na praça: abre o que a
-    // pré-busca baixou sem prender a praça (antes: um por requestIdleCallback
-    // de prazo 2,5 s, e a praça desenhando sem parar só deixava sair pelo prazo)
-    var folga0 = null;
     passo('folga', function () {
-      var Jg = J(), B = Jg.Bundle, ord = B.ordemDaPreBusca();
-      folga0 = { t: Date.now(), fechados: ord.filter(function (k) { return B.estadoDe(k) === 'chegou' && !decod(k); }).length,
-                 decod: JSON.parse(JSON.stringify((info() || {}).decod || {})) };
       marco('folga');
       return true;
     });
     passo('folga:fim', espera(function () {
       var B = J().Bundle, dg = B.diag();
       return dg.paraDecodificar === 0 && !dg.filaBaixa && !dg.vivosBaixa &&
-             B.ordemDaPreBusca().every(function (k) { return B.estadoDe(k) !== 'chegou' || decod(k); });
+             B.ordemDaPreBusca().every(function (k) { return !folga0.vit[k] || B.estadoDe(k) !== 'chegou' || decod(k); });
     }, function () {
       var d = (info() || {}).decod || {}, d0 = folga0.decod || {};
+      var foraFechados = folga0.fora.filter(function (k) { return !decod(k); });
       R.passos['folga:fim'] = { ms: Date.now() - folga0.t, fechados: folga0.fechados,
                                 modelos: (d.modelos || 0) - (d0.modelos || 0), levas: (d.levas || 0) - (d0.levas || 0),
                                 porPrazo: (d.porPrazo || 0) - (d0.porPrazo || 0),
-                                esperaMs: (d.esperaMs || 0) - (d0.esperaMs || 0), abrirMs: (d.abrirMs || 0) - (d0.abrirMs || 0) };
-    }, 300000));
+                                esperaMs: (d.esperaMs || 0) - (d0.esperaMs || 0), abrirMs: (d.abrirMs || 0) - (d0.abrirMs || 0),
+                                vitrine: Object.keys(folga0.vit).length, fora: folga0.fora.length,
+                                fora_fechados: foraFechados.length, exemplo: foraFechados.slice(0, 4),
+                                soBaixados: ((info() || {}).pre || {}).soBaixados };
+    // 22/09: 300 s não davam mais — a praça tem sete corredores, e no GL por
+    // software cada modelo levou ~3,8 s para abrir (60 da vitrine: 312 s)
+    }, 600000));
     // o Poco: o plano so existe depois do sorteio (preparar), entao a sonda pergunta depois
     passo('poco:desce', function () {
       var Jg = J();
@@ -1233,13 +1253,22 @@ def main():
             # modelo (no headless, GL por software em tempo real) e fica no relatório.
             lv = ff.get('levas') or 0
             esp_media = (ff.get('esperaMs') or 0) / float(lv) if lv else None
-            ps.check('o decodificador de folga abre na praça o que a pré-busca baixou (espera por leva abaixo dos 2,5 s de antes)',
+            ps.check('o decodificador de folga abre na praça a VITRINE que a pré-busca baixou (espera por leva abaixo dos 2,5 s de antes)',
                      (ff.get('fechados') or 0) > 0 and ff.get('modelos', 0) >= (ff.get('fechados') or 0)
                      and esp_media is not None and esp_media < 2500,
                      '%s baixados e fechados, abertos em %s levas (%s pelo prazo): espera média %s ms por leva, '
                      'abrir %s ms no total, %s ms do começo ao fim'
                      % (ff.get('fechados'), lv, ff.get('porPrazo'),
                         '%.0f' % esp_media if esp_media is not None else '?', ff.get('abrirMs'), ff.get('ms')))
+            # 22/09 ("a aba consome 2,6 GB"): modelo aberto guarda a textura
+            # descompactada (~12 MB); o que a praça não mostra só baixa
+            ps.check('a pré-busca só BAIXA o que a praça não mostra (monstro, peça fora do corredor, coroa): '
+                     'segue fechado depois da folga',
+                     (ff.get('vitrine') or 0) > 0 and (ff.get('fora') or 0) > 0
+                     and ff.get('fora_fechados') == ff.get('fora'),
+                     '%s chaves na vitrine; %s baixadas fora dela, %s ainda fechadas depois da folga (ex.: %s); '
+                     'soBaixados %s' % (ff.get('vitrine'), ff.get('fora'), ff.get('fora_fechados'),
+                                        ', '.join(ff.get('exemplo') or []), ff.get('soBaixados')))
             viz = (passos.get('poco:antessala') or {}).get('vizinhos') or []
             ps.check('Poço: a pré-busca do andar seguinte acha a sala sorteada, também depois do 1º andar',
                      any(v.get('sala', 0) >= 2 for v in viz) and all(v.get('existia') and v.get('chaves', 0) > 0 for v in viz),

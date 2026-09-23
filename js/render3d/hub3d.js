@@ -2614,11 +2614,7 @@ var JOGO = (typeof window !== 'undefined')
       // SOB DEMANDA: no jogo servido as peças do calabouço descem DEPOIS da
       // praça (pré-busca). Planta só com todas na mão — meio corredor não —
       // e o aviso do Models3D2 (aoChegar) chama de novo quando chegarem.
-      var precisa = [catT.alto, catT.pilar, catT.sotaque_alto, catT.sotaque, catT.chao];
-      var faltam = [];
-      precisa.forEach(function (lista) {
-        (lista || []).forEach(function (ch) { if (!m2.rawScene(ch)) faltam.push(ch); });
-      });
+      var faltam = pecasDoCorredor(catT).filter(function (ch) { return !m2.rawScene(ch); });
       if (faltam.length) {
         // 19/09: o portão do Campo veste o catálogo do Campo, que só desce com o Fecho
         // daquele tema aberto (pré-busca); se um dia ele estiver fechado, o portão pede
@@ -2771,6 +2767,51 @@ var JOGO = (typeof window !== 'undefined')
     if (!construcoesPlantadas || !enfeitesPlantados) return;
     try { if (JOGO.Bundle && JOGO.Bundle.preBusca) JOGO.Bundle.preBusca(); } catch (eB) {}
   }
+  /* Os papéis do catálogo que um corredor de portal veste. Uma lista só para quem planta
+   * (plantaCantinhos) e para a vitrine: se as duas divergissem, a pré-busca deixaria
+   * fechada uma peça que o corredor espera, e ele nunca plantaria. */
+  var PAPEIS_DO_CORREDOR = ['alto', 'pilar', 'sotaque_alto', 'sotaque', 'chao'];
+  function pecasDoCorredor(catT) {
+    var fora = [];
+    PAPEIS_DO_CORREDOR.forEach(function (papel) { fora = fora.concat(catT[papel] || []); });
+    return fora;
+  }
+  /* A VITRINE (22/09, dono: "a aba do meu jogo no chrome consome 2.6gb"): as chaves de
+   * modelo que a PRAÇA mostra — as peças do corredor de cada portal aberto, o chefe atrás
+   * dele e o catálogo inteiro do Campo de PvP (o portão e a cena do Campo vestem o mesmo).
+   * A pré-busca (JOGO.Bundle.preBusca) baixa os calabouços abertos inteiros, mas só ABRE
+   * em segundo plano o que está aqui: modelo aberto guarda as texturas descompactadas
+   * (~12 MB cada, contra ~1 MB baixado), e monstro comum só serve lá dentro — quem o abre
+   * é o gancho da descida. MEDIDO numa conta nova, na praça, com a pré-busca terminada:
+   * abrindo tudo, 213 modelos e 2,34 GB de textura; só a vitrine, 142 e 1,57 GB — os
+   * 0,77 GB de diferença eram monstros, peças fora do corredor e coroas.
+   * Sai dos DADOS, não dos `lugares`: estes trocam com a cena (no Campo não há portal), e
+   * a vitrine tem de ser a da praça de onde quer que a pré-busca pergunte. */
+  Hub.vitrine = function () {
+    var D = JOGO.DATA || {}, cat = JOGO.CENARIO || {}, m2 = M2(), fora = [];
+    var ds = D.dungeons || [];
+    (Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; })).forEach(function (dg) {
+      if (!dg || !dg.id || dg.id === 'poco') return;
+      if (D.portalFechado && D.portalFechado(dg.id)) return;
+      if (dg.theme && cat[dg.theme]) fora = fora.concat(pecasDoCorredor(cat[dg.theme]));
+      var chefe = chefeDoCalabouco(dg.id);
+      if (!chefe) return;
+      fora.push(chefe);          // o poeChefeDoPortal confere rawScene(id do chefe)…
+      try {                      // …e o corpo sai do lookFor
+        var lk = (m2 && m2.lookFor) ? m2.lookFor(chefe) : null;
+        if (lk && lk.model) fora.push(lk.model);
+      } catch (e) {}
+    });
+    var tc = campoCfg().tema;
+    (tc === 'misto' ? ['garden', 'cistern'] : [tc]).forEach(function (t) {
+      var c = t && cat[t];
+      if (!c) return;
+      for (var papel in c) {
+        if (Object.prototype.hasOwnProperty.call(c, papel) && Array.isArray(c[papel])) fora = fora.concat(c[papel]);
+      }
+    });
+    return fora;
+  };
 
   // ------------------------------------------------------------------ o herói
   function montaHeroi(classId) {

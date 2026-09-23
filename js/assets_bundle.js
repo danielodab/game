@@ -64,7 +64,9 @@
 //                                    descida atras da #carga e chama deNovo depois
 //   JOGO.Bundle.plano(pedido)      — as chaves de modelo de uma descida
 //   JOGO.Bundle.preBusca()         — os calabouços ABERTOS em segundo plano
-//                                    (nao liga com Economia de Dados / 2G)
+//                                    (nao liga com Economia de Dados / 2G);
+//                                    abre so a vitrine da praca, o resto espera o gancho
+//   JOGO.Bundle.vitrine()          — o que a pre-busca abre (null = abre tudo)
 //   JOGO.Bundle.pede(chaves, cb)   — baixa e abre JA, sem tela: o corpo do avatar,
 //                                    do fantasma, o guarda-roupa; devolve quantas buscou
 //   JOGO.Bundle.corpoDe(ap)        — o corpo proprio de uma aparencia 'fus:a+b' (ou null)
@@ -286,8 +288,12 @@ var JOGO = (typeof window !== 'undefined')
   //   · cada calabouco baixa os modelos DELE na hora de descer (`B.segura`,
   //     chamado por Game.startRun/nextRoom/startDuel), atras da #carga;
   //   · com o Acampamento de pe (hub3d chama `B.preBusca`), os calabouços
-  //     ABERTOS descem em segundo plano, um arquivo por vez, e cada modelo e
-  //     decodificado quando o navegador folga — nunca no meio da batalha.
+  //     ABERTOS descem em segundo plano, um arquivo por vez, e o que a praca
+  //     MOSTRA (Hub.vitrine: corredores, chefes, o Campo) e decodificado
+  //     quando o navegador folga — nunca no meio da batalha. O resto (monstro
+  //     comum, peca fora do corredor, coroa) fica baixado e FECHADO ate o
+  //     gancho da descida (22/09): aberto, um modelo guarda ~12 MB de textura
+  //     descompactada; fechado, o ~1 MB do .glb.
   // Em casa (file://) nada disso liga: tudo continua embutido.
   //
   // O QUE BAIXAR NAO E LISTA ESCRITA A MAO: `B.plano` le os mesmos dados que o
@@ -313,7 +319,7 @@ var JOGO = (typeof window !== 'undefined')
   medida.porFase = { boot: { itens: 0, bytes: 0 }, descida: { itens: 0, bytes: 0 }, pre: { itens: 0, bytes: 0 },
                      avulso: { itens: 0, bytes: 0 } };      // avulso: o que B.pede buscou fora de descida
   medida.grupos = {};          // grupo -> { itens, bytes } do manifesto
-  medida.pre = { estado: 'parada', feitos: 0, total: 0 };
+  medida.pre = { estado: 'parada', feitos: 0, total: 0, soBaixados: 0 };   // soBaixados: fora da vitrine, fechados
   medida.ganchos = [];         // cada vez que a descida esperou: { onde, faltavam, ms, falhou }
   medida.vizinhos = [];        // o Poco: cada andar seguinte planejado cedo { sala, existia, chaves }
   // o decodificador de folga: levas, as que sairam pelo prazo do rIC, modelos,
@@ -688,10 +694,15 @@ var JOGO = (typeof window !== 'undefined')
     var t0 = agora(), nome = nomeDoPedido(pedido);
     var registro = { onde: nome, faltavam: faltam.length, ms: 0, falhou: 0 };
     medida.ganchos.push(registro);
-    telaAbre('baixando ' + nome + '…');
+    // a pre-busca deixa baixado e FECHADO o que a praca nao mostra: a descida
+    // entao so abre, e a tela nao diz que esta baixando o que ja chegou
+    var soAbre = faltam.every(function (k) { return estado['MODELS:' + k] === 'chegou'; });
+    var verbo = soAbre ? 'abrindo ' : 'baixando ';
+    if (soAbre) registro.soAbriu = true;
+    telaAbre(verbo + nome + '…');
     function roda() {
       fase = 'descida';
-      garante(faltam, function (f, t) { telaAnda('baixando ' + nome + '…', f, t); }, function (falhas) {
+      garante(faltam, function (f, t) { telaAnda(verbo + nome + '…', f, t); }, function (falhas) {
         fase = 'avulso';
         if (!falhas.length) {
           registro.ms = Math.round(agora() - t0);
@@ -806,17 +817,34 @@ var JOGO = (typeof window !== 'undefined')
       m2.novos(function () { medida.decod.abrirMs += Math.round(agora() - tAbre); agendaDecodificacao(); }, leva);
     });
   }
-  function preBuscaChaves(chaves) {
+  /* `abre` (opcional): { chave: true } do que abrir quando chegar; o resto so
+   * baixa e fica fechado ate um gancho ou um pede. Sem ele, abre tudo — o
+   * andar seguinte do Poco, o avulso e a nova tentativa seguem assim. */
+  function preBuscaChaves(chaves, abre) {
     chaves.forEach(function (k) {
       var it = porChave[k];
       if (!it || estado['MODELS:' + k] === 'chegou' || pronta(k)) return;
       medida.pre.total++;
       baixaUm(it, false, function (err) {
         medida.pre.feitos++;
-        if (!err) decodificaDepois(k);
+        if (err) return;
+        if (!abre || abre[k]) decodificaDepois(k);
+        else medida.pre.soBaixados++;
       });
     });
   }
+  /* A vitrine da praca (Hub.vitrine) como { chave: true }, ou null quando nao
+   * ha Hub ou ele nao devolveu nada — ai a pre-busca abre tudo, como antes:
+   * corredor sem peca aberta nunca planta, e isso e pior que memoria. */
+  function vitrine() {
+    var H = JOGO.Hub, ks = null;
+    try { ks = (H && H.vitrine) ? H.vitrine() : null; } catch (e) { ks = null; }
+    if (!ks || !ks.length) return null;
+    var mapa = {};
+    for (var i = 0; i < ks.length; i++) if (ks[i]) mapa[ks[i]] = true;
+    return mapa;
+  }
+  B.vitrine = function () { var v = vitrine(); return v ? Object.keys(v) : null; };
   /* A ordem: o Calabouco do Dia, os outros ABERTOS (o cenario de cada um
    * antes dos monstros — os cantinhos dos portais esperam as pecas), a fusao
    * e as invocacoes da dupla escolhida, e as coroas do ranking. Portal
@@ -877,7 +905,7 @@ var JOGO = (typeof window !== 'undefined')
     setTimeout(function () {
       medida.pre.estado = 'rodando';
       medida.pre.t0 = Math.round(agora());
-      preBuscaChaves(B.ordemDaPreBusca());
+      preBuscaChaves(B.ordemDaPreBusca(), vitrine());
     }, 2000);
   };
 
