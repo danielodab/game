@@ -159,6 +159,20 @@ var JOGO = (typeof window !== 'undefined')
     try { if (g && g.ladoDaTela) return g.ladoDaTela(u); } catch (e) {}
     return (u && u.side === 'player') ? 'meu' : 'inimigo';
   }
+  /* 22/09 — o invisível do OUTRO lado some 100% desta tela (corpo, barra, anel,
+   * sombra, anel da vez, câmera), e a armadilha só aparece para o lado dela.
+   * Quem decide é o Game (a régua do lado da tela); sem Game, o 'player' é o
+   * meu, como em ladoTela. */
+  function ocultoTela(u) {
+    var g = game();
+    try { if (g && g.ocultoNaTela) return !!g.ocultoNaTela(u); } catch (e) {}
+    return false;
+  }
+  function veArmadilha(tr) {
+    var g = game();
+    try { if (g && g.veArmadilha) return !!g.veArmadilha(tr); } catch (e) {}
+    return !!tr && (tr.side == null || tr.side === 'player');
+  }
   function engine() { return JOGO.Engine || null; }
   function state() { var g = game(); return (g && g.state) || null; }
   function DATA() { return JOGO.DATA || {}; }
@@ -3509,7 +3523,10 @@ var JOGO = (typeof window !== 'undefined')
       if (v.hideK > 0) alpha *= (1 - v.hideK);
 
       var stt = statusOf(u);
-      if (stt.invisible) alpha *= 0.30;                 // §4: invisível ~30%
+      if (stt.invisible) alpha *= 0.30;                 // §4: invisível ~30% (para o lado dele)
+      // 22/09: para o adversário, nada — nem o vulto de 30%, nem barra, anel ou
+      // sombra. O nó segue andando por baixo (vis), então reaparece no lugar certo.
+      node.visible = !ocultoTela(u);
       applyAlpha(node, alpha);
 
       // flash de dano (o emissivo elemental volta ao valor de base depois)
@@ -3726,7 +3743,12 @@ var JOGO = (typeof window !== 'undefined')
       for (var sv = 0; sv < semVisao.length; sv++) ovTile(semVisao[sv].x, semVisao[sv].y, '#9aa3ad', 0.16, 0.06, 0.55);
 
       // ALVOS por cima, forte: quem dá para acertar de verdade.
-      var targets = safe(function () { return en.castTargets ? en.castTargets(st, active.uid, spellId) : null; }, null);
+      // 22/09: as casas que ESTA tela vê como alvo (Game.alvosNaTela): a do
+      // invisível do outro lado não pode virar um buraco no destaque
+      var targets = safe(function () {
+        if (g && g.alvosNaTela) return g.alvosNaTela(active.uid, spellId);
+        return en.castTargets ? en.castTargets(st, active.uid, spellId) : null;
+      }, null);
       var inTargets = false;
       if (targets) {
         for (var k = 0; k < targets.length; k++) {
@@ -3754,7 +3776,7 @@ var JOGO = (typeof window !== 'undefined')
       if (pet.kind !== 'pet' || !pet.alive) continue;
       var ownerUid = pet.ownerUid || pet.owner || pet.summonerUid;
       var owner = ownerUid ? findUnit(ownerUid) : null;
-      if (!owner) continue;
+      if (!owner || ocultoTela(owner)) continue;        // 22/09: o anel do pet desenhava em volta do dono invisível
       var pd = (D.pets && D.pets[pet.defId] && D.pets[pet.defId].followDistance) || pet.followDistance || 2;
       for (var dy = -pd; dy <= pd; dy++) for (var dx = -pd; dx <= pd; dx++) {
         if (Math.abs(dx) + Math.abs(dy) !== pd) continue;
@@ -3790,7 +3812,8 @@ var JOGO = (typeof window !== 'undefined')
       activeRing.renderOrder = 4;
       overlayG.add(activeRing);
     }
-    if (!active) { activeRing.visible = false; return; }
+    // 22/09: a vez do invisível do outro lado não acende a casa dele
+    if (!active || ocultoTela(active)) { activeRing.visible = false; return; }
     var v = vis[active.uid] || { x: active.x, y: active.y };
     activeRing.visible = true;
     activeRing.position.set(wx(v.x), 0.11, wz(v.y));
@@ -3808,6 +3831,11 @@ var JOGO = (typeof window !== 'undefined')
   //
   // Agora a armadilha ARMADA fica no chao ate disparar ou expirar, desenhada
   // como um laco de urso — arco de metal e dentes — na cor do elemento dela.
+  //
+  // 22/09 (o dono: "jamais podem ficar visiveis para os inimigos ou
+  // adversarios, assim eles desviam e nunca caem"): so para o LADO de quem
+  // armou (veArmadilha). O adversario nao tem o que ler no tabuleiro — nem o
+  // laco, nem a sombra dele.
   var trapNodes = [];
   var trapSig = '';
   var trapGeoArco = null, trapGeoDente = null, trapGeoBase = null;
@@ -3869,7 +3897,10 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function rebuildTraps(st) {
-    var lista = (st && st.traps) || [];
+    var todas = (st && st.traps) || [], lista = [];
+    // a assinatura sai da lista JA filtrada: a armadilha do outro lado nem
+    // provoca redesenho quando nasce
+    for (var f = 0; f < todas.length; f++) if (veArmadilha(todas[f])) lista.push(todas[f]);
     var sig = '';
     for (var i = 0; i < lista.length; i++) {
       sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].trapId || '') + ';';
@@ -4488,7 +4519,8 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'turnStart':
         ovSig = '';
-        nudgeTo(ev.uid);
+        // 22/09: a câmera não corre até quem esta tela não pode ver
+        if (!ocultoTela(findUnit(ev.uid))) nudgeTo(ev.uid);
         break;
 
       case 'move':
@@ -4505,7 +4537,8 @@ var JOGO = (typeof window !== 'undefined')
           kind: 'cast', uid: ev.uid, tx: ev.x, ty: ev.y, t: 0, spellId: ev.spellId,
           hit: lastHitDelay, dur: lastHitDelay + 0.42, melee: melee, age: 0, started: false
         });
-        lastAtk = { x: u ? u.x : ev.x, y: u ? u.y : ev.y, age: 0 };
+        // 22/09: de quem esta tela não vê, o solavanco da vítima não aponta a casa
+        lastAtk = ocultoTela(u) ? null : { x: u ? u.x : ev.x, y: u ? u.y : ev.y, age: 0 };
         break;
 
       case 'damage':
@@ -4571,6 +4604,9 @@ var JOGO = (typeof window !== 'undefined')
         break;
 
       case 'fusion':
+        // 22/09: o fundido que segue invisível para esta tela não ganha clarão,
+        // luz nem câmera na casa dele (o nó do outro sai no próximo syncUnits)
+        if (ocultoTela(findUnit(ev.uid))) break;
         startFusion(ev);
         break;
 

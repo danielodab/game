@@ -2869,19 +2869,31 @@ var JOGO = (typeof window !== 'undefined')
       var cell = el('div', 'tl-unit ' + (lado === 'meu' ? 's-hero' : (lado === 'aliado' ? 's-parceiro' : 's-enemy')) +
                            (i === 0 ? ' is-now' : ''));
       cell.appendChild(art('portrait', [u.defId, { element: u.element, size: 48 }], i === 0 ? 46 : 34));
+      // 22/09: o invisível do outro lado continua na fila (a vez é de todos),
+      // mas sem a vida — ela cair entregaria que a área o pegou ali
+      var some = oculto(u);
       var hpPct = u.hpMax ? u.hp / u.hpMax : 0;
       var hb = el('div', 'tl-hp');
       var hf = el('i');
-      hf.style.width = Math.max(0, Math.min(100, hpPct * 100)) + '%';
+      hf.style.width = some ? '0%' : Math.max(0, Math.min(100, hpPct * 100)) + '%';
       hb.appendChild(hf);
       cell.appendChild(hb);
+      if (some) cell.style.opacity = '0.55';
       if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
       tipOn(cell, u.name || u.defId, unitTipBody(u), lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
       bt.timeline.appendChild(cell);
     }
   }
 
+  /* 22/09: o invisível do OUTRO lado — some desta tela (Game.ocultoNaTela) */
+  function oculto(u) {
+    var g = G();
+    if (!u || !g || typeof g.ocultoNaTela !== 'function') return false;
+    return !!safe(function () { return g.ocultoNaTela(u); }, false);
+  }
+
   function unitTipBody(u) {
+    if (oculto(u)) return '<i>Sumiu nas sombras — não dá para ver onde está.</i>';
     var out = '<i>' + (u.hp + ' / ' + u.hpMax + ' PV · ' + u.pa + ' PA · ' + u.pp + ' PP') + '</i>';
     if (u.shield) out += '<br>Escudo: ' + u.shield;
     if (u.element && u.element !== 'neutro') out += '<br>Elemento: ' + (ELEM_PT[u.element] || u.element);
@@ -2914,6 +2926,17 @@ var JOGO = (typeof window !== 'undefined')
       nm.appendChild(e2);
     }
     info.appendChild(nm);
+
+    // 22/09: na vez do invisível do outro lado o cartão diz só que ele sumiu —
+    // vida, PA e PP gastos contariam o que ele fez e onde apanhou
+    if (oculto(u)) {
+      var sumiu = el('div', 'ba-status');
+      sumiu.setAttribute('style', 'display:flex;flex-wrap:wrap;gap:4px;margin-top:4px');
+      sumiu.appendChild(chip('Invisível — sumiu nas sombras', EF_CHIP.invisible.cor));
+      info.appendChild(sumiu);
+      bt.active.appendChild(info);
+      return;
+    }
 
     var hp = el('div', 'ba-hp');
     var hpb = bar('bar-hp', u.hpMax ? u.hp / u.hpMax : 0, u.hp + ' / ' + u.hpMax);

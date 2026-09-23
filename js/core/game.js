@@ -849,6 +849,104 @@ var JOGO = (typeof window !== 'undefined')
     return 'meu';
   };
 
+  /* 22/09 — O QUE ESTA TELA NÃO PODE VER. Dois pedidos do dono: "na
+   * invisibilidade ele deve sumir 100% pro adversário" e "as armadilhas jamais
+   * podem ficar visíveis para os inimigos ou adversários… só para o jogador e
+   * para quem estiver jogando no time dele". O motor é o mesmo nos dois
+   * aparelhos (lockstep) e no juiz: esconder é SÓ da tela, e a régua é o lado
+   * do estado que é meu (meuLado) — no solo e no calabouço em dupla é 'player'
+   * (o monstro invisível some); no duelo e na guerra cada guilda vê as suas
+   * armadilhas e as do outro lado não. Quem sabe de qual armadilha é regra do
+   * motor (Engine.armadilhaVisivel, a mesma da IA): fora do PvP a de monstro
+   * segue à vista. O duelo de treino no MESMO teclado mostra tudo: não há de
+   * quem esconder quem está sentado ao lado. */
+  Game.telaVeTudo = function () {
+    return !rede && !!(Game.state && Game.state.pvp);
+  };
+  Game.ocultoNaTela = function (u) {
+    if (!u || !u.alive || u.offBoard || Game.telaVeTudo()) return false;
+    if (u.side === Game.meuLado()) return false;
+    return !!E().unitHasEffect(u, 'invisible');
+  };
+  Game.veArmadilha = function (tr) {
+    if (!tr) return false;
+    if (Game.telaVeTudo()) return true;
+    var en = E();
+    if (en && en.armadilhaVisivel) return !!en.armadilhaVisivel(Game.state, Game.meuLado(), tr);
+    return tr.side === Game.meuLado();
+  };
+  /* AS CASAS QUE ESTA TELA PINTA COMO ALVO (e aceita no toque). O motor recusa
+   * chão livre ocupado por um corpo que ele sabe que existe; para quem mira, a
+   * casa do invisível do outro lado é chão livre. Sem isto, o feitiço que pede
+   * casa vazia (as armadilhas do Xamã, invocação, salto) pintava todo o alcance
+   * menos ELA — o buraco entregava o Ladino sem gastar nada. Com ela no
+   * destaque, o toque vai ao motor, que recusa e avisa "há alguém que não se
+   * vê", como o esbarrão do passo. */
+  Game.alvosNaTela = function (uid, spellId) {
+    var st = Game.state, en = E(), alvos = [];
+    if (!st || !en) return alvos;
+    try { alvos = en.castTargets(st, uid, spellId) || []; } catch (e) { alvos = []; }
+    if (!en.podeLancar || !en.spellRange || !en.podeLancar(st, uid, spellId)) return alvos;
+    var u = en.findUnit(st, uid), sp = null, alc = [];
+    try { sp = en.spell(spellId); alc = en.spellRange(st, uid, spellId) || []; } catch (e2) { return alvos; }
+    if (!u || !sp) return alvos;
+    var tem = {};
+    for (var i = 0; i < alvos.length; i++) tem[alvos[i].x + ',' + alvos[i].y] = true;
+    for (var j = 0; j < alc.length; j++) {
+      var c = alc[j], o = en.unitAt(st, c.x, c.y);
+      if (!o || o === u || tem[c.x + ',' + c.y] || !Game.ocultoNaTela(o)) continue;
+      // a casa entra se valeria VAZIA — do jeito que esta tela a vê
+      if (en.validTargetCell(st, u, sp, c.x, c.y, true)) alvos.push({ x: c.x, y: c.y });
+    }
+    return alvos;
+  };
+  /* O evento como ESTA tela o percebe: o próprio `ev`, uma cópia sem a casa
+   * (x/y null) ou null — ninguém nesta tela (efeito, som, HUD) deve saber dele.
+   * O renderizador recebe `tela || ev` e esconde o corpo pelo estado; ele
+   * precisa do passo do invisível para saber onde o corpo está quando voltar
+   * a aparecer. Estes tipos são públicos mesmo com invisível no meio: a vez, a
+   * morte, pisar em armadilha ou em evento de chão (o chão entrega) e o que
+   * não é de ninguém. A FUSÃO não: o fundido segue invisível, e o clarão e a
+   * câmera dela iam direto à casa dele. */
+  var EV_PUBLICO = {
+    battleStart: 1, battleEnd: 1, roundStart: 1, turnStart: 1, turnEnd: 1,
+    death: 1, trapTriggered: 1, tileEvent: 1, summon: 1,
+    placed: 1, placement: 1, petSpawn: 1, timerTick: 1, prepTick: 1
+  };
+  // arma armadilha? QUALQUER efeito 'trap' — a fusão sempre junta outro
+  // efeito (cura, bênção, clima), e a casa dela vazava pelo lance
+  function armaArmadilha(sp) {
+    var ef = (sp && sp.effects) || [];
+    for (var i = 0; i < ef.length; i++) if (ef[i] && ef[i].type === 'trap') return true;
+    return false;
+  }
+  Game.eventoParaTela = function (ev) {
+    var st = Game.state;
+    if (!ev || !st || !st.units || Game.telaVeTudo()) return ev;
+    var eu = Game.meuLado();
+    if (ev.type === 'trapSet' || ev.type === 'trapExpired') {
+      var lado = ev.side;
+      if (lado == null && ev.uid != null) { var dono = E().findUnit(st, ev.uid); lado = dono && dono.side; }
+      return (lado != null && !Game.veArmadilha({ side: lado })) ? null : ev;
+    }
+    if (EV_PUBLICO[ev.type] || ev.uid == null) return ev;
+    var u = E().findUnit(st, ev.uid);
+    if (u && Game.ocultoNaTela(u)) return null;
+    // quem arma do outro lado aparece conjurando, mas a casa escolhida não:
+    // sem x/y o efeito toca no conjurador e o corpo não se vira para ela
+    if (ev.type === 'cast' && ev.x != null && u && u.side !== eu && !Game.veArmadilha({ side: u.side })) {
+      var sp = null;
+      try { sp = E().spell(ev.spellId); } catch (e) { sp = null; }
+      if (armaArmadilha(sp)) {
+        var c = {};
+        for (var k in ev) if (Object.prototype.hasOwnProperty.call(ev, k)) c[k] = ev[k];
+        c.x = null; c.y = null;
+        return c;
+      }
+    }
+    return ev;
+  };
+
   // o GANCHO DE TURNO: depois de toda chamada ao motor
   function posMotor() {
     if (!rede || !Game.state) return;
@@ -1598,8 +1696,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!u) return;
 
     if (Game.selectedSpellId) {
+      // 22/09: as casas que a TELA mostra como alvo (Game.alvosNaTela): a do
+      // invisível do outro lado vai ao motor, que recusa e avisa
       var targets = [];
-      try { targets = E().castTargets(Game.state, u.uid, Game.selectedSpellId) || []; }
+      try { targets = Game.alvosNaTela(u.uid, Game.selectedSpellId) || []; }
       catch (err) { targets = []; }
       for (var i = 0; i < targets.length; i++) {
         if (targets[i].x === x && targets[i].y === y) {
@@ -1615,7 +1715,11 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
 
-    if (E().unitAt(Game.state, x, y)) return;   // clique em unidade: nada
+    // clique em unidade que se vê: nada. 22/09: a casa do invisível do outro
+    // lado parece livre (Engine.reachable a pinta de azul) e vira o passo
+    // normal — o motor esbarra e para antes, igual nos dois aparelhos e no juiz
+    var ocup = E().unitAt(Game.state, x, y);
+    if (ocup && !E().ocultoDe(u, ocup)) return;
     // [G11] em rede a tentativa viaja mesmo quando falha (a esquiva que falha
     // gasta sorteio e zera o PP: o outro motor precisa fazer o mesmo)
     if (rede) aplicaLocal({ a: 'm', u: u.uid, x: x, y: y });

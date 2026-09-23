@@ -25,8 +25,12 @@ var JOGO = (typeof window !== 'undefined')
  *    favorecidos/prejudicados dos dois lados.
  *  - MARCAS: aplicar marca vale dano futuro; `detonateMarks` é avaliado pelo
  *    dano REAL (pilhas × mult), então a IA só detona quando compensa.
- *  - ARMADILHAS: a IA nunca escolhe terminar o movimento em célula com
- *    armadilha do lado inimigo (penalidade proibitiva, não bloqueio rígido).
+ *  - ARMADILHAS (22/09, o dono: "jamais podem ficar visíveis para os inimigos
+ *    ou adversários, assim eles desviam e nunca caem"): a IA só desvia da
+ *    armadilha do outro lado que o lado DELA enxerga (Engine.armadilhaVisivel).
+ *    O monstro não vê a do Xamã (nem nenhuma do lado do jogador) e cai nela; no
+ *    PvP ninguém vê a do outro. Fora do PvP a armadilha de monstro segue à
+ *    vista do jogador, então pet e invocação dele ainda desviam dela (−60).
  *  - EVENTOS DE TERRENO: bônus por terminar em evento bom (buff/fountain) e
  *    penalidade por evento ruim (drain); mystery vale um pouco (aposta).
  *  - ESQUIVA: recuar de uma célula fixada é penalizado pelo risco real
@@ -606,11 +610,12 @@ var JOGO = (typeof window !== 'undefined')
     }
     var dodgeRisk = 1 - worstDodge;   // 0 = sem risco
 
-    // v2: mapas de armadilha inimiga e de evento de terreno
+    // v2: mapas de armadilha do outro lado e de evento de terreno. 22/09: só a
+    // armadilha que o lado desta unidade ENXERGA — quem não sabe não desvia.
     var trapCells = {};
     for (i = 0; i < (state.traps || []).length; i++) {
       var tr = state.traps[i];
-      if (tr.side !== unit.side) trapCells[tr.x + ',' + tr.y] = true;
+      if (tr.side !== unit.side && E().armadilhaVisivel(state, unit.side, tr)) trapCells[tr.x + ',' + tr.y] = true;
     }
     var eventCells = {};
     var TE = DATA().tileEvents || {};
@@ -656,7 +661,7 @@ var JOGO = (typeof window !== 'undefined')
       score += -0.05 * cell.cost;
       if (cell.x === unit.x && cell.y === unit.y) score += 0.1;
 
-      // v2: risco de fixação ao sair, armadilhas visíveis e eventos de terreno
+      // v2: risco de fixação ao sair, armadilhas que ela vê e eventos de terreno
       if (cell.risky) score -= 18 * dodgeRisk;
       if (trapCells[cell.x + ',' + cell.y]) score -= 60;
       var ev = eventCells[cell.x + ',' + cell.y];

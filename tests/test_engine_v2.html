@@ -2986,13 +2986,16 @@
       ok(det1, 'com 3 marcas, detona');
     });
 
-    t('AI v2: evita terminar o movimento sobre armadilha inimiga visível', function () {
+    // 22/09 (o dono: "as armadilhas jamais podem ficar visíveis para os inimigos
+    // ou adversários, assim eles desviam e nunca caem"): era "evita terminar o
+    // movimento sobre armadilha inimiga visível" — agora a IA não sabe dela.
+    t('AI v2: não sabe da armadilha do outro lado (não desvia, pisa e cai)', function () {
       var st = arena(5, { a: 't-biter' });
       var m = byDef(st, 't-biter');
       var h = byHero(st, 't-h1');
       m.x = 8; m.y = 5; m.pp = 4; m.pa = 6;
       h.x = 4; h.y = 5;
-      // arma armadilhas em TODAS as células a que a IA gostaria de ir
+      // a célula a que a IA gostaria de ir, sem armadilha nenhuma
       var reach = E.reachable(st, m.uid);
       var target = null, bestD = 999;
       for (var k = 0; k < reach.length; k++) {
@@ -3000,14 +3003,16 @@
         if (dd < bestD) { bestD = dd; target = reach[k]; }
       }
       ok(!!target, 'há célula preferida');
+      var semArmadilha = JSON.stringify(JOGO.AI.planTurn(st, m.uid));
       st.traps.push({ x: target.x, y: target.y, trapId: 't-trapdmg',
                       ownerUid: h.uid, side: 'player', remaining: 3 });
       var plan = JOGO.AI.planTurn(st, m.uid);
+      eq(JSON.stringify(plan), semArmadilha, 'o plano é o mesmo com e sem a armadilha armada');
+      var pisa = false;
       for (var k2 = 0; k2 < plan.length; k2++) {
-        if (plan[k2].action === 'move') {
-          ok(!(plan[k2].x === target.x && plan[k2].y === target.y), 'não pisa na armadilha');
-        }
+        if (plan[k2].action === 'move' && plan[k2].x === target.x && plan[k2].y === target.y) pisa = true;
       }
+      ok(pisa, 'vai para a casa armada');
     });
 
     t('AI v2: prefere terminar sobre evento de terreno benéfico no caminho', function () {

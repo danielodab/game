@@ -73,7 +73,9 @@ elemento é armada numa sala real e fotografada.</div>
           JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo');
           ids = JOGO.Progress.heroIds();
         }
-        G.startRun(ids.slice(0, 2), 'greenhouse');
+        // `direto`: batalha na hora, sem antessala (desde a antessala, sem isto
+        // o Game.state ficava vazio e a prova parava em "sem sala")
+        G.startRun(ids.slice(0, 2), 'greenhouse', { direto: true });
       } catch (e) { st.textContent = 'não desci: ' + e.message; window.__pronto = true; return; }
       roda();
     })();
@@ -130,6 +132,58 @@ elemento é armada numa sala real e fotografada.</div>
       });
       check('some do chão quando dispara ou expira', sobrou === 0, sobrou + ' sobraram');
 
+      /* 22/09 (o dono: "as armadilhas jamais podem ficar visíveis para os
+       * inimigos ou adversários… só para o jogador e para quem estiver jogando
+       * no time dele"). Quem decide o que ESTA tela vê é o Game
+       * (Game.veArmadilha, com a régua do motor): no solo a armadilha de
+       * monstro segue à vista, como sempre foi; no duelo em rede a do outro
+       * lado some. O desenho tem de obedecer aos dois. */
+      function arcos() {
+        var n = 0;
+        if (cena) cena.children.forEach(function (g) {
+          g.traverse(function (o) {
+            if (o.isMesh && o.geometry && o.geometry.type === 'TorusGeometry') n++;
+          });
+        });
+        return n;
+      }
+      var outroLado = heroi.side === 'player' ? 'enemy' : 'player';
+      bt.traps.length = 0;
+      bt.traps.push({ x: heroi.x + 1, y: heroi.y + 1, trapId: 'trap-fogo-brasa',
+                      ownerUid: heroi.uid, side: heroi.side, remaining: 5 });
+      bt.traps.push({ x: heroi.x + 2, y: heroi.y + 1, trapId: 'trap-agua-redemoinho',
+                      ownerUid: 'monstro', side: outroLado, remaining: 5 });
+      bt.traps.push({ x: heroi.x + 3, y: heroi.y + 1, trapId: 'trap-terra-laco',
+                      ownerUid: 'monstro', side: outroLado, remaining: 5 });
+      for (var w2 = 0; w2 < 4; w2++) { try { R.render(0.04); } catch (err) {} }
+      check('no solo a armadilha de monstro segue no chão (as três aparecem)', arcos() === 3, arcos() + ' desenhadas (esperado 3)');
+      // a tela de quem joga o duelo em rede: só as do próprio lado
+      var veOriginal = G.veArmadilha;
+      G.veArmadilha = function (tr) { return !!tr && tr.side === heroi.side; };
+      for (var w2b = 0; w2b < 4; w2b++) { try { R.render(0.04); } catch (err) {} }
+      check('com a tela do duelo em rede, a armadilha do outro lado NÃO aparece e a minha sim', arcos() === 1, arcos() + ' desenhadas (esperado 1)');
+      G.veArmadilha = veOriginal;
+      bt.traps.length = 0;
+      for (var w3 = 0; w3 < 4; w3++) { try { R.render(0.04); } catch (err) {} }
+
+      /* e o invisível: o do outro lado some por inteiro (nó escondido); o meu
+       * segue na tela como vulto */
+      var monstro = (bt.units || []).filter(function (u) { return u.alive && u.side !== heroi.side; })[0];
+      if (monstro && R.unitNode) {
+        monstro.effects.push({ type: 'invisible', duration: 3, sourceUid: monstro.uid });
+        heroi.effects.push({ type: 'invisible', duration: 3, sourceUid: heroi.uid });
+        for (var w4 = 0; w4 < 4; w4++) { try { R.render(0.04); } catch (err) {} }
+        var nm = R.unitNode(monstro.uid), nh = R.unitNode(heroi.uid);
+        check('o invisível do outro lado some da tela (nó escondido)', !!nm && nm.visible === false, nm ? 'visible=' + nm.visible : 'sem nó');
+        check('o MEU invisível continua na minha tela', !!nh && nh.visible === true, nh ? 'visible=' + nh.visible : 'sem nó');
+        monstro.effects = monstro.effects.filter(function (e) { return e.type !== 'invisible'; });
+        heroi.effects = heroi.effects.filter(function (e) { return e.type !== 'invisible'; });
+        for (var w5 = 0; w5 < 4; w5++) { try { R.render(0.04); } catch (err) {} }
+        check('e volta a aparecer quando a invisibilidade acaba', !!nm && nm.visible === true, nm ? 'visible=' + nm.visible : 'sem nó');
+      } else {
+        check('há um monstro na sala para a prova do invisível', false, 'sem monstro ou sem R.unitNode');
+      }
+
       // ---- a foto
       bt.traps.push({ x: heroi.x + 1, y: heroi.y + 1, trapId: 'trap-fogo-brasa',
                       ownerUid: heroi.uid, side: heroi.side, remaining: 5 });
@@ -154,7 +208,8 @@ elemento é armada numa sala real e fotografada.</div>
       st.className = problemas.length ? 'fail' : 'allpass';
       st.textContent = (problemas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') +
         (problemas.length ? problemas.join(' | ')
-                          : ELEMS.length + ' armadilhas, uma cor por elemento, e somem ao sair');
+                          : ELEMS.length + ' armadilhas, uma cor por elemento, e somem ao sair; ' +
+                            'a do outro lado e o invisível dele não aparecem');
       window.__pronto = true;
     }
   });

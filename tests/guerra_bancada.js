@@ -208,6 +208,23 @@ function hashesIguais(ids, desde) {
   });
   return { n, dif };
 }
+/* 22/09: a guerra que ACABA dentro da janela medida não tem turno novo para
+ * comparar (n = 0) e isso não é divergência — com a invisibilidade de 2 turnos
+ * e a armadilha que para o passo, o B2 passou a acabar logo depois da volta da
+ * Ana. Nesse caso vale o estado FINAL: o mesmo hash nos quatro motores. */
+function hashBate(ids, desde) {
+  const hs = hashesIguais(ids, desde);
+  if (hs.n > 0 || hs.dif.length) return hs;
+  const finais = ids.map((id) => { try { return cli[id].J.Engine.hash(cli[id].J.Game.state); } catch (e) { return null; } });
+  const acabou = ids.every((id) => tela(id) !== 'battle');
+  hs.final = acabou && finais[0] != null && finais.every((h) => h === finais[0]);
+  hs.finais = finais;
+  return hs;
+}
+function hashOk(hs) { return !hs.dif.length && (hs.n > 0 || !!hs.final); }
+function hashTxt(hs) {
+  return hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' ') + (hs.finais ? ' · finais ' + hs.finais.join(',') : '');
+}
 let nGuerra = 0;
 function montaAta() {
   nGuerra++;
@@ -325,8 +342,8 @@ if (quer('B2')) (function B2() {
         cli.ana.avisos.map((a) => a.m).slice(-3).join(' | '));
   const tV = Math.max(...IDS.map(turno));
   ate(() => IDS.every((id) => tela(id) !== 'battle' || turno(id) >= tV + 16), 20000);
-  const hs = hashesIguais(IDS, tV + 1);
-  check('daí em diante o hash bate nos quatro', !hs.dif.length && hs.n > 0, hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' '));
+  const hs = hashBate(IDS, tV + 1);
+  check('daí em diante o hash bate nos quatro', hashOk(hs), hashTxt(hs));
   check('nenhum erro de script', !erros.length, erros.slice(0, 2).join(' | '));
 })();
 
@@ -358,8 +375,8 @@ if (quer('B3')) (function B3() {
         IDS.map((id) => ses(id).autoridade + ':' + iaDe(id, 'ana')).join(' '));
   const tV = Math.max(...IDS.map(turno));
   ate(() => IDS.every((id) => tela(id) !== 'battle' || turno(id) >= tV + 16), 20000);
-  const hs = hashesIguais(IDS, tV + 1);
-  check('daí em diante o hash bate nos quatro', !hs.dif.length && hs.n > 0, hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' '));
+  const hs = hashBate(IDS, tV + 1);
+  check('daí em diante o hash bate nos quatro', hashOk(hs), hashTxt(hs));
   check('nenhum erro de script', !erros.length, erros.slice(0, 2).join(' | '));
 })();
 
@@ -638,8 +655,8 @@ if (quer('B13')) (function B13() {
         'restaurações ' + ses('ana').restauracoes + ' · on ' + outros('ana').map((id) => ses(id).guerra.jogadores.find((j) => j.id === 'ana').on).join(','));
   const tA = Math.max(...IDS.map(turno));
   ate(() => IDS.every((id) => tela(id) !== 'battle' || turno(id) >= tA + 12), 20000);
-  const hs = hashesIguais(IDS, tA + 1);
-  check('daí em diante o hash bate nos quatro', !hs.dif.length && hs.n > 0, hs.n + ' turnos · dif ' + hs.dif.slice(0, 4).join(' '));
+  const hs = hashBate(IDS, tA + 1);
+  check('daí em diante o hash bate nos quatro', hashOk(hs), hashTxt(hs));
   check('nenhum erro de script', !erros.length, erros.slice(0, 2).join(' | '));
 })();
 

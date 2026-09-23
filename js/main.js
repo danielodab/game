@@ -11,15 +11,25 @@ var JOGO = (typeof window !== 'undefined')
     if (!engine || !engine.events) return;
     while (engine.events.length > 0) {
       var ev = engine.events.shift();
-      if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(ev);
-      if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(ev);
-      // O SOM entra na mesma fila que o desenho, e de proposito: assim ele
-      // escuta o jogo em vez de precisar de gancho proprio espalhado pelo
-      // engine. `JOGO.Audio` engole tudo em silencio ate o usuario tocar na
-      // pagina (trava de autoplay) e nunca levanta excecao — um bipe nao pode
-      // derrubar o laco principal.
-      if (JOGO.Audio && JOGO.Audio.handleEvent) JOGO.Audio.handleEvent(ev);
-      if (JOGO.UI && JOGO.UI.handleEvent) JOGO.UI.handleEvent(ev);
+      // 22/09: o evento como ESTA tela o percebe (Game.eventoParaTela) — null
+      // quando é do invisível do outro lado ou da armadilha que não é minha.
+      // O desenho ainda recebe o original para saber onde o corpo está; efeito,
+      // som e HUD só recebem o que esta tela pode ver.
+      var tela = ev;
+      if (JOGO.Game && JOGO.Game.eventoParaTela) {
+        try { tela = JOGO.Game.eventoParaTela(ev); } catch (e) { tela = ev; }
+      }
+      if (JOGO.Renderer && JOGO.Renderer.handleEvent) JOGO.Renderer.handleEvent(tela || ev);
+      if (tela) {
+        if (JOGO.FX && JOGO.FX.handleEvent) JOGO.FX.handleEvent(tela);
+        // O SOM entra na mesma fila que o desenho, e de proposito: assim ele
+        // escuta o jogo em vez de precisar de gancho proprio espalhado pelo
+        // engine. `JOGO.Audio` engole tudo em silencio ate o usuario tocar na
+        // pagina (trava de autoplay) e nunca levanta excecao — um bipe nao pode
+        // derrubar o laco principal.
+        if (JOGO.Audio && JOGO.Audio.handleEvent) JOGO.Audio.handleEvent(tela);
+        if (JOGO.UI && JOGO.UI.handleEvent) JOGO.UI.handleEvent(tela);
+      }
       if (JOGO.Game && JOGO.Game.handleEvent) JOGO.Game.handleEvent(ev);
     }
   }

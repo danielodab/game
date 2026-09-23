@@ -21,6 +21,9 @@ var JOGO = (typeof window !== 'undefined')
  *    do dono após o turno em que foi lançado (relança no turno N+1 seguinte).
  *  - Durações: efeitos "por X turnos" decrementam no FIM do turno da vítima.
  *    poison/regen ticam no INÍCIO do turno da vítima (X ticks para duração X).
+ *    Exceção (22/09): a INVISIBILIDADE posta na unidade durante o PRÓPRIO turno
+ *    dela não conta o fim desse turno — "por 2 turnos" são 2 turnos inteiros
+ *    depois do lance, como a recarga (ver `lancadoNoTurno` em tickDownEffects).
  *  - AoE ofensiva (damage/poison/push/pull/mark/…) NUNCA atinge o próprio
  *    conjurador. Fogo amigo em ALIADOS existe — posicionamento importa.
  *  - Push: direção fixa = eixo dominante do vetor conjurador→alvo (empate =
@@ -32,7 +35,15 @@ var JOGO = (typeof window !== 'undefined')
  *  - explodeOnDeath / split / enrage / regenAura: idênticos à v1.
  *  - Buff de initiative altera o valor mas NÃO reordena a batalha em curso.
  *  - Se os dois lados caírem no mesmo encadeamento, a derrota prevalece.
- *  - Invisibilidade restringe apenas a IA; quebra ao conjurar dano.
+ *  - Invisibilidade (22/09, o dono: "ele deve sumir 100% pro adversário"): para
+ *    quem é do OUTRO lado, a unidade invisível não existe — a IA não a mira,
+ *    feitiço de alvo único 'enemy' não aceita a casa dela, o raio em cadeia não
+ *    salta para ela e quem anda planeja o caminho como se a casa estivesse
+ *    livre, esbarra e para na casa anterior. Área ainda pega quem estiver
+ *    dentro, e ela ainda FIXA quem sai de perto (a emboscada). Quebra ao
+ *    conjurar dano de propósito — não quando a armadilha dela dispara nem
+ *    quando ela pisa num evento de chão. Esconder o corpo é da tela
+ *    (Game.ocultoNaTela): o estado é o mesmo nos dois motores e no juiz.
  *  - LoS: Bresenham entre centros; só PAREDE ALTA ('#') estritamente entre os
  *    extremos bloqueia.
  *  - Feitiço com 'swap' exige unidade viva no alvo; needsEmptyTile exige vazio.
@@ -74,6 +85,13 @@ var JOGO = (typeof window !== 'undefined')
  *     NÃO é do lado de quem armou, ao pisar durante um `Engine.move`
  *     deliberado (movimento forçado não pisa em armadilha — evita recursão).
  *     O feitiço da armadilha é conjurado pelo dono, a partir da célula dela.
+ *     22/09 (o dono: "jamais podem ficar visíveis para os inimigos… assim eles
+ *     desviam e nunca caem"): quem pisa numa armadilha do outro lado PARA na
+ *     casa dela — antes o passo seguia, o PP era cobrado inteiro e a carga de
+ *     casa única estourava na casa já vazia. Quem sabe dela é o lado de quem
+ *     armou (Engine.armadilhaVisivel): a IA do outro lado não desvia e a tela
+ *     não a desenha para ele (Game.veArmadilha). A exceção é a armadilha de
+ *     monstro fora do PvP, que segue à vista do jogador como sempre foi.
  *  8. reflect: devolve `pct`% do dano RECEBIDO (antes do escudo) ao agressor,
  *     como dano fixo neutro que não volta a refletir.
  *  9. moveTo: deslize por eixo dominante até `maxTiles`, parando na primeira
@@ -173,8 +191,18 @@ var JOGO = (typeof window !== 'undefined')
    *   4 — 21/09: a PREPARAÇÃO. O lance `p` passou a levar as casas escolhidas de
    *       TODOS em `l.e`, e quem tem casa marcada é posto antes de quem nasce ao
    *       acaso — uma sala aberta antes do deploy termina diferente se refeita
-   *       aqui, então ela cai como 'regras-mudaram' e não como 'divergiu' */
-  Engine.VERSAO_REGRAS = 4;
+   *       aqui, então ela cai como 'regras-mudaram' e não como 'divergiu'
+   *   5 — 22/09: a INVISIBILIDADE e a ARMADILHA. A invisibilidade posta no
+   *       próprio turno não conta o fim dele (o Ladino some 2 turnos inteiros;
+   *       a Sombra Curta foi de 1 para 2) e os feitiços de invisibilidade
+   *       dividem a recarga; ela nunca vai para o outro lado (a fusão que bate
+   *       e some esconde o conjurador, não o alvo); inimigo invisível não é
+   *       alvo de feitiço 'enemy' de casa única nem de salto de raio, e quem
+   *       anda esbarra nele e para antes; raio, veneno, empurrão e cia. também
+   *       tiram das sombras, a armadilha do dono não; pisar em armadilha do
+   *       outro lado PARA o passo na casa dela, e a carga dela não pega mais o
+   *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga */
+  Engine.VERSAO_REGRAS = 5;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -186,7 +214,13 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   function emit(ev) { Engine.events.push(ev); }
-  function log(text) { emit({ type: 'log', text: text }); }
+  // `uid` (22/09): de QUEM a linha fala, quando ela entrega que a unidade foi
+  // atingida ali — a tela do adversário cala a linha de quem está invisível.
+  function log(text, uid) {
+    var ev = { type: 'log', text: text };
+    if (uid != null) ev.uid = uid;
+    emit(ev);
+  }
   Engine.emit = emit;   // Fusion (mesmo dono) publica pela mesma fila
   Engine.log = log;
 
@@ -500,12 +534,12 @@ var JOGO = (typeof window !== 'undefined')
       var gain = Math.min(amount, u.hpMax - u.hp);
       u.hp += gain;
       emit({ type: 'weatherTick', uid: u.uid, amount: gain });
-      if (gain > 0) log(u.name + ' se fortalece com o clima (+' + gain + ').');
+      if (gain > 0) log(u.name + ' se fortalece com o clima (+' + gain + ').', u.uid);
     } else {
       // dano ambiental: ignora escudo e resistência, pode matar
       u.hp = Math.max(0, u.hp + amount);
       emit({ type: 'weatherTick', uid: u.uid, amount: amount });
-      log(u.name + ' sofre com o clima (' + amount + ').');
+      log(u.name + ' sofre com o clima (' + amount + ').', u.uid);
       checkEnrage(state, u);
       if (u.hp <= 0) processDeath(state, u);
     }
@@ -1086,12 +1120,25 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // --------------------------------------------------------------- movimento
-  function isWalkable(state, x, y) {
-    return isFloor(state, x, y) && !Engine.unitAt(state, x, y);
+  /* O QUE UMA UNIDADE NÃO VÊ (22/09). Inimigo invisível não existe para quem é
+   * do outro lado: a casa dele parece chão livre. É a mesma régua da IA
+   * (ai.js isInvisible), agora no motor — e vale igual para gente, porque a
+   * tela do adversário não desenha o corpo (Game.ocultoNaTela). */
+  function ocultoDe(quem, o) {
+    return !!(quem && o && o.side !== quem.side && Engine.unitHasEffect(o, 'invisible'));
+  }
+  Engine.ocultoDe = ocultoDe;
+
+  // `mover` (22/09): quem anda. Sem ele, a casa ocupada bloqueia sempre — é o
+  // corpo de verdade, que empurrão, invocação e deslize respeitam.
+  function isWalkable(state, x, y, mover) {
+    if (!isFloor(state, x, y)) return false;
+    var o = Engine.unitAt(state, x, y);
+    return !o || ocultoDe(mover, o);
   }
   var DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
-  function bfs(state, sx, sy, maxCost) {
+  function bfs(state, sx, sy, maxCost, mover) {
     var dist = {};
     var parent = {};
     var queue = [{ x: sx, y: sy }];
@@ -1105,7 +1152,7 @@ var JOGO = (typeof window !== 'undefined')
         var nx = cur.x + DIRS[i][0], ny = cur.y + DIRS[i][1];
         var key = nx + ',' + ny;
         if (dist[key] !== undefined) continue;
-        if (!isWalkable(state, nx, ny)) continue;
+        if (!isWalkable(state, nx, ny, mover)) continue;
         dist[key] = d + 1;
         parent[key] = cur.x + ',' + cur.y;
         queue.push({ x: nx, y: ny });
@@ -1114,16 +1161,29 @@ var JOGO = (typeof window !== 'undefined')
     return { dist: dist, parent: parent };
   }
 
-  // v2: inimigos vivos adjacentes a (x,y) que podem fixar `unit`
-  function lockersAt(state, unit, x, y) {
+  // v2: inimigos vivos adjacentes a (x,y) que podem fixar `unit`.
+  // `soVistos` (22/09): só os que `unit` enxerga — é o que a PRÉVIA pinta de
+  // âmbar. O teste de verdade (worstLocker) conta o invisível também: ele fixa
+  // quem sai de perto, e é assim que a emboscada se revela.
+  function lockersAt(state, unit, x, y, soVistos) {
     var out = [];
     for (var i = 0; i < state.units.length; i++) {
       var e = state.units[i];
       if (!e.alive || e.offBoard || e === unit) continue;
       if (e.side === unit.side) continue;
+      if (soVistos && ocultoDe(unit, e)) continue;
       if (manhattan(x, y, e.x, e.y) === 1) out.push(e);
     }
     return out;
+  }
+
+  // 22/09: armadilha do OUTRO lado nesta casa (a do próprio lado não dispara)
+  function armadilhaInimiga(state, u, x, y) {
+    var tr = state.traps || [];
+    for (var i = 0; i < tr.length; i++) {
+      if (tr[i].x === x && tr[i].y === y && tr[i].side !== u.side) return true;
+    }
+    return false;
   }
 
   // v2: bônus elemental do teste de esquiva
@@ -1162,8 +1222,8 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     if (!u || !u.alive || u.pp <= 0) return [];
     if (Engine.unitHasEffect(u, 'root')) return [];       // v2: enraizado não anda
-    var r = bfs(state, u.x, u.y, u.pp);
-    var lockers = lockersAt(state, u, u.x, u.y);          // v2
+    var r = bfs(state, u.x, u.y, u.pp, u);
+    var lockers = lockersAt(state, u, u.x, u.y, true);    // v2 (22/09: só os que ela vê)
     var out = [];
     for (var key in r.dist) {
       var c = r.dist[key];
@@ -1183,8 +1243,8 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     if (!u || !u.alive) return null;
     if (x === u.x && y === u.y) return null;
-    if (!isWalkable(state, x, y)) return null;
-    var r = bfs(state, u.x, u.y, u.pp);
+    if (!isWalkable(state, x, y, u)) return null;
+    var r = bfs(state, u.x, u.y, u.pp, u);
     var key = x + ',' + y;
     if (r.dist[key] === undefined) return null;
     var path = [];
@@ -1210,11 +1270,11 @@ var JOGO = (typeof window !== 'undefined')
    * polui o diário. */
   function explainNoStep(state, u, x, y) {
     if (x === u.x && y === u.y) return;
-    if (!isWalkable(state, x, y)) return;
-    var need = bfs(state, u.x, u.y, -1).dist[x + ',' + y];
+    if (!isWalkable(state, x, y, u)) return;
+    var need = bfs(state, u.x, u.y, -1, u).dist[x + ',' + y];
     if (need === undefined) return;                       // sem caminho: nada a dizer
-    if (u.pp <= 0) log(u.name + ' não tem mais Pontos de Passos neste turno.');
-    else log(u.name + ' precisa de ' + need + ' PP para chegar aí e só tem ' + u.pp + '.');
+    if (u.pp <= 0) log(u.name + ' não tem mais Pontos de Passos neste turno.', u.uid);
+    else log(u.name + ' precisa de ' + need + ' PP para chegar aí e só tem ' + u.pp + '.', u.uid);
   }
 
   Engine.move = function (state, uid, x, y) {
@@ -1222,11 +1282,35 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     if (!u || !u.alive || u.offBoard) return false;
     if (Engine.unitHasEffect(u, 'root')) {                // v2
-      log(u.name + ' está preso ao chão.');
+      log(u.name + ' está preso ao chão.', u.uid);
       return false;
     }
     var path = Engine.path(state, uid, x, y);
     if (!path || path.length > u.pp) { explainNoStep(state, u, x, y); return false; }
+
+    /* 22/09 — O CAMINHO PLANEJADO É O QUE A UNIDADE CONHECE. Ele atravessa a
+     * casa de um inimigo invisível como se fosse chão (ocultoDe) e não sabe da
+     * armadilha do outro lado; andando, o passo é cortado onde a verdade
+     * aparece:
+     *   - casa com alguém que ela não via: ESBARRA e para na casa anterior;
+     *   - armadilha do outro lado: CAI nela e para em cima.
+     * O PP cobrado é só o do trecho andado, e a fixação é testada contra a
+     * casa onde ela de fato termina. Esbarrar já no primeiro passo não tira
+     * ninguém do lugar e não gasta nada (devolve false, como passo recusado). */
+    var esbarrou = null, corte = path.length;
+    for (var pc = 0; pc < path.length; pc++) {
+      var quem = Engine.unitAt(state, path[pc].x, path[pc].y);
+      if (quem && quem !== u) { esbarrou = quem; corte = pc; break; }
+      if (armadilhaInimiga(state, u, path[pc].x, path[pc].y)) { corte = pc + 1; break; }
+    }
+    if (corte < path.length) path = path.slice(0, corte);
+    if (!path.length) {
+      emit({ type: 'esbarrou', uid: uid, x: esbarrou.x, y: esbarrou.y });
+      log(u.name + ' esbarra em alguém que não se vê.', u.uid);
+      return false;
+    }
+    x = path[path.length - 1].x;
+    y = path[path.length - 1].y;
 
     // v2: teste de esquiva/fixação, uma vez por movimento, contra o pior fixador
     var locker = worstLocker(state, u, x, y);
@@ -1241,7 +1325,7 @@ var JOGO = (typeof window !== 'undefined')
         if (critical) u.pa = Math.max(0, u.pa - 1);
         emit({ type: 'dodgeFail', uid: uid, lockerUid: locker.uid,
                chance: chance, critical: critical });
-        log(u.name + ' não escapa de ' + locker.name + (critical ? ' (falha crítica!)' : '') + '.');
+        log(u.name + ' não escapa de ' + locker.name + (critical ? ' (falha crítica!)' : '') + '.', u.uid);
         return false;
       }
     }
@@ -1249,6 +1333,10 @@ var JOGO = (typeof window !== 'undefined')
     u.pp -= path.length;
     u.x = x; u.y = y;
     emit({ type: 'move', uid: uid, path: path });
+    if (esbarrou) {
+      emit({ type: 'esbarrou', uid: uid, x: esbarrou.x, y: esbarrou.y });
+      log(u.name + ' esbarra em alguém que não se vê.', u.uid);
+    }
 
     // desafio ESTÁTUA: cada célula andada por herói/fusão conta; empurrão e
     // puxão NÃO passam por aqui e não contam — ser jogado não é andar
@@ -1641,7 +1729,10 @@ var JOGO = (typeof window !== 'undefined')
              nh(u.paMax), nh(u.ppMax), u.alive ? 1 : 0, u.offBoard ? 1 : 0, nh(u.shield),
              u.ia ? 1 : 0, u.dono || '', u.fusionIntent || '', u.enraged ? 1 : 0);
       var ef = u.effects || [];
-      for (j = 0; j < ef.length; j++) { e = ef[j]; p.push(e.type, nh(e.duration), nh(e.remaining || 0), nh(e.value || 0)); }
+      for (j = 0; j < ef.length; j++) {
+        e = ef[j]; p.push(e.type, nh(e.duration), nh(e.remaining || 0), nh(e.value || 0));
+        if (e.lancadoNoTurno != null) p.push('n' + nh(e.lancadoNoTurno));   // 22/09: só quando existe
+      }
       ks = Object.keys(u.cooldowns || {}).sort();
       for (j = 0; j < ks.length; j++) p.push(ks[j] + '=' + nh(u.cooldowns[ks[j]]));
       ks = Object.keys(u.castsThisTurn || {}).sort();
@@ -1803,7 +1894,9 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
-  function validTargetCell(state, unit, spell, tx, ty) {
+  // `vazia` (22/09, só para a tela): julga a casa como se não houvesse ninguém
+  // nela — é como quem mira vê a casa de um invisível do outro lado
+  function validTargetCell(state, unit, spell, tx, ty, vazia) {
     if (!inBounds(state, tx, ty)) return false;
     if (!isFloor(state, tx, ty)) return false;
     var rg = sRange(spell);
@@ -1811,8 +1904,11 @@ var JOGO = (typeof window !== 'undefined')
     if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
     if (rg.line && !(tx === unit.x || ty === unit.y)) return false;
     if (rg.los && !Engine.los(state, unit.x, unit.y, tx, ty)) return false;
-    var occupant = Engine.unitAt(state, tx, ty);
+    var occupant = vazia ? null : Engine.unitAt(state, tx, ty);
+    // o corpo existe (a casa não está vazia para invocar ou saltar), mas quem
+    // mira não vê inimigo invisível: para ele a casa está sem ninguém (22/09)
     if (spell.needsEmptyTile && occupant) return false;
+    if (occupant && ocultoDe(unit, occupant)) occupant = null;
     if (spellHasEffect(spell, 'swap') && (!occupant || occupant === unit)) return false;
     // v2: targetSide
     var ts = spell.targetSide;
@@ -1888,6 +1984,14 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     return out;
+  };
+
+  // 22/09: a mesma porta de castTargets, para a tela saber se o feitiço SAI
+  // agora (PA, recarga, vezes por turno) antes de pintar qualquer casa
+  Engine.podeLancar = function (state, uid, spellId) {
+    var u = Engine.findUnit(state, uid);
+    var spell = spellDef(spellId);
+    return !!(u && spell && canCastNow(state, u, spell));
   };
 
   Engine.castTargets = function (state, uid, spellId) {
@@ -2033,7 +2137,7 @@ var JOGO = (typeof window !== 'undefined')
       var comCobertura = Math.max(1, Math.floor(amount * (100 - Engine.COBERTURA_PCT) / 100));
       if (comCobertura < amount) {
         cobertura = { reducao: amount - comCobertura };
-        log(target.name + ' tem cobertura −' + Engine.COBERTURA_PCT + '% (−' + cobertura.reducao + ').');
+        log(target.name + ' tem cobertura −' + Engine.COBERTURA_PCT + '% (−' + cobertura.reducao + ').', target.uid);
         amount = comCobertura;
       }
     }
@@ -2086,7 +2190,7 @@ var JOGO = (typeof window !== 'undefined')
         if (attacker && attacker.alive) {
           var back = Math.round(amount * pct / 100);
           if (back > 0) {
-            log(target.name + ' reflete ' + back + ' de dano.');
+            log(target.name + ' reflete ' + back + ' de dano.', target.uid);
             emit({ type: 'reflect', uid: target.uid, targetUid: attacker.uid, amount: back });
             dealDamage(state, attacker, back, 'neutro', target.uid, true);
           }
@@ -2121,7 +2225,7 @@ var JOGO = (typeof window !== 'undefined')
       var eff = { type: 'buff', stat: 'power', value: t.power, duration: 9999, sourceUid: unit.uid };
       unit.effects.push(eff);
       emit({ type: 'effectApplied', uid: unit.uid, effect: eff });
-      log(unit.name + ' se enfurece! (+' + t.power + ' de poder)');
+      log(unit.name + ' se enfurece! (+' + t.power + ' de poder)', unit.uid);
     }
   }
 
@@ -2294,7 +2398,7 @@ var JOGO = (typeof window !== 'undefined')
   function forcedMove(state, caster, target, tiles, mode) {
     if (!target.alive || tiles <= 0) return;
     if (Engine.unitHasTrait(target, 'pushImmune')) {
-      log(target.name + ' não se move um palmo.');
+      log(target.name + ' não se move um palmo.', target.uid);
       return;
     }
     var fromX = target.x, fromY = target.y;
@@ -2340,7 +2444,7 @@ var JOGO = (typeof window !== 'undefined')
       emit({ type: 'pushed', uid: target.uid, fromX: fromX, fromY: fromY,
              toX: target.x, toY: target.y, collision: collisionDmg });
       if (collisionDmg > 0) {
-        log(target.name + ' colide! (' + collisionDmg + ' de dano)');
+        log(target.name + ' colide! (' + collisionDmg + ' de dano)', target.uid);
         dealDamage(state, target, collisionDmg, 'neutro', caster.uid);
       }
     }
@@ -2377,6 +2481,19 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // --------------------------------------------------- v2: armadilhas
+  /* QUEM SABE DE UMA ARMADILHA (22/09, o dono: "no xamã, as armadilhas jamais
+   * podem ficar visíveis para os inimigos ou adversários… só para o jogador e
+   * para quem estiver jogando no time dele"). O lado de quem armou, sempre; no
+   * PvP, ninguém mais. Fora do PvP a armadilha de MONSTRO continua à vista do
+   * jogador (e dos pets e invocações dele), como sempre foi — o pedido foi pela
+   * do Xamã; a do lado do jogador é que os monstros não enxergam. A MESMA régua
+   * serve à IA (ai.js) e à tela (Game.veArmadilha): quem não sabe não desvia. */
+  Engine.armadilhaVisivel = function (state, lado, tr) {
+    if (!tr) return false;
+    if (tr.side === lado) return true;
+    return !(state && state.pvp) && tr.side === 'enemy';
+  };
+
   Engine.trapsAt = function (state, x, y) {
     var out = [];
     for (var i = 0; i < state.traps.length; i++) {
@@ -2399,7 +2516,13 @@ var JOGO = (typeof window !== 'undefined')
       if (sp) {
         var owner = Engine.findUnit(state, tr.ownerUid);
         if (!owner || !owner.alive) owner = u;
-        castCore(state, owner, sp, x, y, { casterX: x, casterY: y, selfHarm: true, silent: true });
+        /* 22/09: `selfHarm` só quando o "conjurador" é a própria vítima (o dono
+         * morreu). Com o dono vivo ao lado da armadilha em círculo, a carga o
+         * pegava junto — era raro enquanto a IA desviava; com ela caindo, virou
+         * o normal (o Xamã arma a casa da frente e leva a própria Brasa).
+         * `armadilha`: o disparo não tira o dono das sombras (castCore). */
+        castCore(state, owner, sp, x, y, { casterX: x, casterY: y, selfHarm: owner === u,
+                                           armadilha: true, silent: true });
       }
       return true;
     }
@@ -2490,30 +2613,73 @@ var JOGO = (typeof window !== 'undefined')
     var spell = spellDef(spellId);
     if (!caster || !spell) return false;
     if (!canCastNow(state, caster, spell)) return false;
-    if (!validTargetCell(state, caster, spell, x, y)) return false;
+    if (!validTargetCell(state, caster, spell, x, y)) {
+      // 22/09: quem mira uma casa que pede chão livre e acha um corpo que não
+      // via fica sabendo ali mesmo — como quem anda e esbarra (nada é gasto)
+      var ali = spell.needsEmptyTile ? Engine.unitAt(state, x, y) : null;
+      if (ali && ocultoDe(caster, ali)) log(caster.name + ' não acha espaço ali: há alguém que não se vê.');
+      return false;
+    }
 
     caster.pa -= sPaCost(spell);
     caster.castsThisTurn[spellId] = (caster.castsThisTurn[spellId] || 0) + 1;
     if (sCooldown(spell) > 0) caster.cooldowns[spellId] = sCooldown(spell) + 1;
+    /* 22/09 — A RECARGA DA INVISIBILIDADE É UMA SÓ. Com 2 turnos inteiros por
+     * lance, a Sombra Curta e a Névoa Salgada (recarga 3 cada) alternadas
+     * cobriam 100% das vezes do inimigo: a IA nunca mais achava o Ladino e a
+     * sala só acabava na fúria da rodada 40 (medido na revisão). Lançar uma
+     * põe as outras de invisibilidade na mesma recarga: 2 vezes do inimigo
+     * escondido, 2 à vista. */
+    if (sCooldown(spell) > 0 && spellHasEffect(spell, 'invisible')) {
+      for (var q = 0; q < caster.spells.length; q++) {
+        var outra = spellDef(caster.spells[q]);
+        if (outra && outra.id !== spell.id && spellHasEffect(outra, 'invisible')) {
+          caster.cooldowns[outra.id] = Math.max(caster.cooldowns[outra.id] || 0, sCooldown(spell) + 1);
+        }
+      }
+    }
 
     castCore(state, caster, spell, x, y, {});
     return true;
   };
 
+  /* O QUE TIRA DAS SOMBRAS (22/09). Ferir de propósito: dano, raio em cadeia e
+   * detonar marcas sempre; veneno, empurrão, puxão, raiz, marca e quebrar
+   * escudo quando o feitiço mira outro (o veneno em si mesmo das Veias em
+   * Chamas não conta). Antes só 'damage' contava, e o Corte em Cadeia batia
+   * sem aparecer. */
+  var FERE = { damage: 1, chain: 1, detonateMarks: 1 };
+  var HOSTIL = { poison: 1, push: 1, pull: 1, root: 1, mark: 1, dispelShield: 1 };
+  function tiraDasSombras(spell) {
+    var efs = sEffects(spell), mira = spell.targetSide;
+    for (var i = 0; i < efs.length; i++) {
+      var t = efs[i] && efs[i].type;
+      if (FERE[t]) return true;
+      if (HOSTIL[t] && mira !== 'self' && mira !== 'ally') return true;
+    }
+    return false;
+  }
+
   // Conjuração sem custo/validação (usada por cast, armadilhas, pets e eventos).
   function castCore(state, caster, spell, x, y, opts) {
     opts = opts || {};
-    emit({ type: 'cast', uid: caster.uid, spellId: spell.id, x: x, y: y,
-           fxKey: spell.fxKey, element: spell.element });
-    if (!opts.silent) log(caster.name + ' conjura ' + spell.name + '.');
-
-    // invisível quebra ao conjurar dano
-    if (spellHasEffect(spell, 'damage') && Engine.unitHasEffect(caster, 'invisible')) {
+    /* invisível quebra ao ferir (tiraDasSombras). 22/09: só o golpe DE
+     * PROPÓSITO — a armadilha que dispara no turno do outro chega aqui com
+     * `armadilha` e não tira o dono das sombras. E a quebra vem ANTES do
+     * evento `cast`: a tela do adversário decide pelo estado se mostra o
+     * golpe, e o golpe que revela tem de aparecer. */
+    var oculto = Engine.unitHasEffect(caster, 'invisible');
+    var saiDasSombras = oculto && !opts.selfHarm && !opts.armadilha && tiraDasSombras(spell);
+    if (saiDasSombras) {
       for (var r = caster.effects.length - 1; r >= 0; r--) {
         if (caster.effects[r].type === 'invisible') caster.effects.splice(r, 1);
       }
-      log(caster.name + ' sai das sombras!');
     }
+    emit({ type: 'cast', uid: caster.uid, spellId: spell.id, x: x, y: y,
+           fxKey: spell.fxKey, element: spell.element });
+    // quem CONTINUA nas sombras não conta no diário do adversário o que lançou
+    if (!opts.silent) log(caster.name + ' conjura ' + spell.name + '.', (oculto && !saiDasSombras) ? caster.uid : undefined);
+    if (saiDasSombras) log(caster.name + ' sai das sombras!');
     applyEffects(state, caster, spell, x, y, opts);
   }
   Engine.castCore = castCore;
@@ -2588,7 +2754,7 @@ var JOGO = (typeof window !== 'undefined')
               var stolen = Math.round(hpLoss / 2);
               if (stolen > 0) {
                 applyHeal(state, caster, stolen);
-                log(caster.name + ' rouba ' + stolen + ' de vida.');
+                log(caster.name + ' rouba ' + stolen + ' de vida.', caster.uid);
               }
             }
           }
@@ -2740,15 +2906,29 @@ var JOGO = (typeof window !== 'undefined')
             applied = { type: 'taunt', duration: eff.duration, sourceUid: caster.uid };
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
-            log(u.name + ' provoca os inimigos!');
+            log(u.name + ' provoca os inimigos!', u.uid);
           }
           break;
 
         case 'invisible':
-          targets = unitsInTiles(true);
+          /* 22/09: a invisibilidade é de QUEM LANÇA e do time dele. As formas
+           * de fusão que batem e somem (Epílogo, Espectro, Carrossel, Pesadelo,
+           * Beco, Dédalo) punham o efeito em quem estava na área — os inimigos
+           * atingidos. Quando isso só atrapalhava a IA não fazia diferença;
+           * agora o invisível some da tela do outro lado e deixa de ser alvo,
+           * e o golpe escondia o próprio alvo do resto do time. O texto delas
+           * promete o contrário ("some de novo no mesmo movimento", "some junto
+           * com ele"): o inimigo fica de fora e, no feitiço que fere, quem some
+           * é o conjurador, esteja ele na área ou não. */
+          targets = unitsInTiles(true).filter(function (w) { return w.side === caster.side; });
+          if (caster.alive && !opts.selfHarm && targets.indexOf(caster) < 0 && tiraDasSombras(spell)) {
+            targets.push(caster);
+          }
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             applied = { type: 'invisible', duration: eff.duration, sourceUid: caster.uid };
+            // 22/09: posta no PRÓPRIO turno, não conta o fim dele (tickDownEffects)
+            if (u === Engine.activeUnit(state)) applied.lancadoNoTurno = state.turno || 0;
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
             log(u.name + ' some nas sombras.');
@@ -2764,7 +2944,7 @@ var JOGO = (typeof window !== 'undefined')
             u.effects.push(applied);
             u.pp = 0;                                   // prende já neste turno
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
-            log(u.name + ' fica preso ao chão.');
+            log(u.name + ' fica preso ao chão.', u.uid);
           }
           break;
 
@@ -2781,7 +2961,7 @@ var JOGO = (typeof window !== 'undefined')
             if (stacks <= 0) continue;
             emit({ type: 'markStack', uid: u.uid, stacks: 0 });
             var dmg = Math.round(stacks * (eff.mult || 0));
-            log(u.name + ': ' + stacks + ' marcas detonam (' + dmg + ').');
+            log(u.name + ': ' + stacks + ' marcas detonam (' + dmg + ').', u.uid);
             dealDamage(state, u, dmg, eff.element || spell.element || 'neutro', caster.uid, false, cobreDe(u));   // 19/09: a cobertura baixa
           }
           break;
@@ -2873,7 +3053,8 @@ var JOGO = (typeof window !== 'undefined')
             var trap = { x: tx2, y: ty2, trapId: eff.trapId, ownerUid: caster.uid,
                          side: caster.side, remaining: eff.duration || 3 };
             state.traps.push(trap);
-            emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: tx2, y: ty2 });
+            // `side` (22/09): a tela do outro lado cala este evento (Game.eventoParaTela)
+            emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: tx2, y: ty2, side: caster.side });
             nArm++;
           }
           if (nArm === 1) log(caster.name + ' arma uma armadilha.');
@@ -2897,7 +3078,7 @@ var JOGO = (typeof window !== 'undefined')
             recomputeShield(u);
             if (removed > 0) {
               emit({ type: 'cleanse', uid: u.uid, kinds: kinds.slice(), removed: removed });
-              log(u.name + ' se purifica.');
+              log(u.name + ' se purifica.', u.uid);
             }
           }
           break;
@@ -2924,7 +3105,7 @@ var JOGO = (typeof window !== 'undefined')
             if (had > 0) {
               emit({ type: 'dispelShield', uid: u.uid, removed: had });
               emit({ type: 'shield', uid: u.uid, amount: 0 });
-              log(u.name + ' perde o escudo.');
+              log(u.name + ' perde o escudo.', u.uid);
             }
           }
           break;
@@ -2994,6 +3175,7 @@ var JOGO = (typeof window !== 'undefined')
         var u = state.units[i];
         if (!u.alive || u.offBoard || hit[u.uid]) continue;
         if (u.side === caster.side) continue;
+        if (ocultoDe(caster, u)) continue;               // 22/09: o raio não acha quem não se vê
         var d = manhattan(cur.x, cur.y, u.x, u.y);
         if (d <= Engine.CHAIN_JUMP_RANGE && d < bestD && Engine.los(state, cur.x, cur.y, u.x, u.y)) { bestD = d; next = u; }
       }
@@ -3026,7 +3208,7 @@ var JOGO = (typeof window !== 'undefined')
       if (eff.type === 'poison') {
         var amt = rollDamageAmount(state, eff.min, eff.max,
           eff.sourcePower || 0, Engine.effResist(u, eff.element), Engine.markMultiplier(u));
-        if (amt > 0) log(u.name + ' sofre ' + amt + ' de veneno.');
+        if (amt > 0) log(u.name + ' sofre ' + amt + ' de veneno.', u.uid);
         dealDamage(state, u, amt, eff.element, eff.sourceUid);
       } else if (eff.type === 'regen') {
         applyHeal(state, u, rollInt(state, eff.min, eff.max));
@@ -3048,10 +3230,23 @@ var JOGO = (typeof window !== 'undefined')
   function tickDownEffects(state, u) {
     for (var i = u.effects.length - 1; i >= 0; i--) {
       var eff = u.effects[i];
+      /* 22/09 (o dono: "a invisibilidade só fica no turno que ele usa… tem que
+       * ficar 2 turnos completos"). A invisibilidade posta durante o PRÓPRIO
+       * turno da unidade pula o fim DESTE turno: sem isso a Sombra Curta (1)
+       * sumia antes de qualquer inimigo agir, e "por 2" valia uma rodada só.
+       * Compara com o número do turno, não com uma marca solta: se o pet do
+       * dono o esconder DEPOIS deste tique (a vez do pet vem depois), o próximo
+       * tique é de outro turno e conta normal. A marca some aqui de qualquer
+       * jeito; enquanto vive, vai na foto (JSON) e no hash (Engine.hash). */
+      if (eff.lancadoNoTurno != null) {
+        var pula = eff.lancadoNoTurno === (state.turno || 0);
+        delete eff.lancadoNoTurno;
+        if (pula) continue;
+      }
       eff.duration--;
       if (eff.duration <= 0) {
         u.effects.splice(i, 1);
-        log(u.name + ' ' + (EFEITO_PT[eff.type] || ('perde o efeito ' + eff.type)) + '.');
+        log(u.name + ' ' + (EFEITO_PT[eff.type] || ('perde o efeito ' + eff.type)) + '.', u.uid);
       }
     }
     recomputeShield(u);
@@ -3154,7 +3349,7 @@ var JOGO = (typeof window !== 'undefined')
       state.traps[i].remaining--;
       if (state.traps[i].remaining <= 0) {
         emit({ type: 'trapExpired', trapId: state.traps[i].trapId,
-               x: state.traps[i].x, y: state.traps[i].y });
+               x: state.traps[i].x, y: state.traps[i].y, side: state.traps[i].side });
         state.traps.splice(i, 1);
       }
     }

@@ -1002,8 +1002,8 @@ JOGO.DATA.spells = {
     paCost: 2, cooldown: 3, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: false, targetSide: 'self',
-    effects: [ { type: 'invisible', duration: 1 }, { type: 'buff', stat: 'dodge', value: 20, duration: 2 } ],
-    description: 'Some no intervalo entre duas lanternas: invisível por 1 turno e +20 de esquiva por 2.',
+    effects: [ { type: 'invisible', duration: 2 }, { type: 'buff', stat: 'dodge', value: 20, duration: 2 } ],
+    description: 'Some no intervalo entre duas lanternas: invisível por 2 turnos inteiros e +20 de esquiva por 2.',
     flavor: 'Num mundo sem céu, a sombra é o único lugar com espaço sobrando.',
     fxKey: 'shortShadow'
   },
