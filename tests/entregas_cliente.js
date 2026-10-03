@@ -145,6 +145,25 @@ function cliente(inicial, srv) {
           JSON.stringify([srv.progress.seloElemento, J.Progress.state.seloElemento]));
   }
 
+  // ---- 2b. (03/10, revisão) e a op feita enquanto a SEGUNDA leva viajava também não se perde. Depois do
+  // rebase o jogo adotou o estado do servidor, e o estado local não tem o efeito da fila que sobrou: a leva
+  // dela volta SEMPRE com o estado (o hashDepois não bate) — e a adoção comum apagava a fila feita no meio
+  {
+    const srv = servidor(inicial);
+    const J = cliente(inicial, srv);
+    await srv.entrega('mestreDarSelos', { elemento: 'terra', n: 12 });
+    J.Progress.escolheSeloElemento('agua');
+    srv.antesDeResponder = async () => { J.Progress.escolheSeloElemento('ar'); };
+    await J.Autoridade.descarrega();
+    srv.antesDeResponder = async () => { J.Progress.escolheSeloElemento('fogo'); };   // e ainda mexendo
+    await J.Autoridade.descarrega();
+    await J.Autoridade.descarrega();
+    check('a op da segunda viagem também sobe: o servidor e o jogo terminam na ÚLTIMA escolha',
+          srv.progress.seloElemento === 'fogo' && J.Progress.state.seloElemento === 'fogo' &&
+          srv.progress.selos.terra === 12 && J.Autoridade.hashLocal() === srv.hash && J.Autoridade.estado().fila === 0,
+          JSON.stringify([srv.progress.seloElemento, J.Progress.state.seloElemento, J.Autoridade.estado().fila]));
+  }
+
   // ---- 3. sincroniza: a fila vazia adota a entrega
   {
     const srv = servidor(inicial);

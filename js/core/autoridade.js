@@ -37,6 +37,11 @@ var JOGO = (typeof window !== 'undefined')
   var profundidade = 0;        // op dentro de op (vestirTraje chama equipar): só a de fora vai
   var adotando = false;
   var opsFeitas = 0;           // quantas ops esta página já pôs na fila (03/10: A.sincroniza vê se nasceu alguma no meio)
+  /* 03/10 (revisão): a fila que SOBROU de uma adoção com `manterFila` foi feita no estado de antes da adoção — a
+   * leva dela volta sempre com o estado (o hashDepois daqui não bate com o do servidor), e a adoção comum apagaria
+   * a fila nascida enquanto ELA viajava: a op do jogador sumia sem subir. Esta marca diz que a próxima leva é dessa
+   * fila, e a resposta dela também guarda o que nasceu no meio. */
+  var filaSobreAdocao = false;
   var fechamentos = [];        // fechar pendentes (sem rede): tentam de novo
   var ultimo = { versao: null, hash: null, erro: null };
   /* `parado` (13/09, um aparelho só): a conta entrou em outro aparelho e o jogo
@@ -110,9 +115,11 @@ var JOGO = (typeof window !== 'undefined')
       if (db && typeof db === 'object' && d.importar) d.importar(e.junta(db, d.exportar()));
       if (manterFila === true && fila.length) {
         hashAntesDaFila = ultimo.hash;
+        filaSobreAdocao = true;
       } else {
         fila = [];                                     // o que estava na fila já não vale sobre o estado novo
         hashAntesDaFila = null;
+        filaSobreAdocao = false;
       }
     } finally {
       adotando = false;
@@ -532,6 +539,8 @@ var JOGO = (typeof window !== 'undefined')
     if (descarregando) return descarregando.then(function () { return fila.length ? descarregaFila() : null; });
     if (!fila.length || !A.ligada()) return Promise.resolve(null);
     var lote = fila.splice(0, A.OPS_POR_PEDIDO);
+    var sobreAdocao = filaSobreAdocao;
+    filaSobreAdocao = false;
     var corpo = { hashAntes: hashAntesDaFila, ops: lote, hashDepois: A.hashLocal() };
     hashAntesDaFila = fila.length ? corpo.hashDepois : null;
     subindo = true;
@@ -543,13 +552,15 @@ var JOGO = (typeof window !== 'undefined')
         // sem rede: o lote volta para a frente da fila e tenta depois
         fila = lote.concat(fila);
         hashAntesDaFila = corpo.hashAntes;
+        filaSobreAdocao = sobreAdocao;
         if (!timerFila) timerFila = setTimeout(function () { timerFila = null; descarregaFila(); }, A.RETENTA_MS);
         return r;
       }
       anotaResposta(r);
-      if (r && r.ok && r.rebase) {
+      if (r && r.ok && (r.rebase || (sobreAdocao && (r.progress || r.db)))) {
         // 03/10: o Mestre tinha posto algo nesta conta e o servidor subiu a leva por cima (salas.py): o estado
-        // que volta tem as duas coisas, e o que o jogador fez enquanto isto viajava continua na fila
+        // que volta tem as duas coisas, e o que o jogador fez enquanto isto viajava continua na fila — e a
+        // leva seguinte, a dessa fila (filaSobreAdocao), também guarda a fila que nasceu enquanto ela viajava
         A.adota(r.progress, r.db, true);
         if (fila.length && !timerFila) timerFila = setTimeout(function () { timerFila = null; descarregaFila(); }, A.FILA_MS);
       } else if (r && (r.status === 409 || r.progress || r.db)) {

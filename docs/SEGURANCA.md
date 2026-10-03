@@ -820,7 +820,8 @@ aviso nem carta "O Mestre te enviou …" de algo que não entrou.
 chegue ao `/api/op` com o hash de antes de uma CORRENTE de entregas (da mais nova para trás, sem buraco) sobe por cima
 delas (`moderacao._rebase_entregas`, chamado no `salas.economia_op`): a entrega só acrescenta (a peça entra no fim do
 saco, a pedra no estoque), então os índices que a op cita apontam para as mesmas coisas. A resposta traz `rebase:
-true` e o estado com as duas coisas; o jogo guarda a fila que fez enquanto ela viajava (`autoridade.js`). Qualquer
+true` e o estado com as duas coisas; o jogo guarda a fila que fez enquanto ela viajava (`autoridade.js`) — e a
+leva dessa fila, que volta sempre com o estado, guarda também a que nasceu enquanto ELA viajava (`filaSobreAdocao`). Qualquer
 outra diferença de hash continua no 409 de sempre. O `Autoridade.sincroniza` (o aviso da entrega) só adota a leitura
 do estado se nenhuma op nasceu no meio. Não abre nada novo para quem trapaceia: a op continua passando pelo juiz no
 estado do servidor — é o mesmo que o cliente reler o `/api/save` e mandar de novo.
@@ -831,5 +832,5 @@ resposta velha). As ferramentas do painel de teste (liberar classe, nível, elem
 (`gmLiberaClasse`, `gmNivel`, `gmElemento`): a mesma função de `js/core/gm.js` roda no jogo e no juiz — e a regra de
 cada entrega mora em `GM.cru`, a mesma na Caixa do Mestre e no juiz.
 
-Provas: `tests/moderacao_api.py` (API + juiz, 16), `tests/entregas_cliente.js` (o jogo do jogador online, 10) e
+Provas: `tests/moderacao_api.py` (API + juiz, 16), `tests/entregas_cliente.js` (o jogo do jogador online, 11) e
 `tests/moderacao_rele_prova.py` (relé de verdade, 19).
