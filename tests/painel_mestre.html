@@ -279,6 +279,18 @@
     botaoCom('A Caixa para esta conta…', q('.pm-corpo')).click();
     check('na ficha do jogador, "A Caixa para esta conta…" abre a Caixa já com ele no "Para:"',
           PM.aba() === 'caixa' && PM.destino() && PM.destino().id === 42);
+    // 03/10 (revisão): a própria conta achada na busca é o "você" — senão a entrega ia como "para outro" e o
+    // jogo do Mestre não adotava o estado que voltou
+    PM.paraConta({ id: 1, nome: 'Dono' });
+    check('escolher a PRÓPRIA conta no "Para:" é o mesmo que "você"', PM.destino() === null);
+    respostas['/api/mestre/dar'] = { ok: true, status: 201, versao: 11, hash: 'h11', texto: '1× peça', progress: { inventory: [] }, db: {} };
+    var nAd2 = adotados.length;
+    PM.abrir('caixa');
+    var bMeu = botaoCom('Pôr no meu inventário', q('.pm-corpo .pm-item[data-item]'));
+    if (bMeu) bMeu.click();
+    await espera(30);
+    check('... e a entrega vai sem `conta` e o jogo adota a resposta', !!bMeu && !('conta' in ultimo('/api/mestre/dar').op.body) &&
+          adotados.length === nAd2 + 1, JSON.stringify(ultimo('/api/mestre/dar').op.body));
     PM.paraConta(null);
     // sem a HUD (esta página), as abas que ela desenha dizem onde aparecem, sem quebrar
     PM.abrir('eventos');

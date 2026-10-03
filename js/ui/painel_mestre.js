@@ -426,13 +426,18 @@ var JOGO = (typeof window !== 'undefined')
       escolher.disabled = true;
       var caixa = el('div', 'pm-cartao');
       bar.parentNode.insertBefore(caixa, bar.nextSibling);
-      var q = escolheConta(caixa, function (ct) { destino = { id: ct.id, nome: ct.nome }; desenha(); }, 'Entregar a esta conta');
+      var q = escolheConta(caixa, function (ct) { PM.paraConta(ct); desenha(); }, 'Entregar a esta conta');
       try { q.focus(); } catch (e) {}
     });
     bar.appendChild(escolher);
   }
   PM.destino = function () { return destino; };
-  PM.paraConta = function (c) { destino = c ? { id: c.id, nome: c.nome } : null; return destino; };
+  /* 03/10 (revisão): a própria conta escolhida na busca (ou a ficha dela) é o "você" — senão a entrega ia como
+   * "para outro" e o jogo do Mestre não adotava a resposta (a peça só aparecia na op seguinte, sem aviso) */
+  PM.paraConta = function (c) {
+    destino = (c && c.id !== eu().id) ? { id: c.id, nome: c.nome } : null;
+    return destino;
+  };
 
   /* A ENTREGA (03/10): o pedido {tipo, …} no formato do POST /api/mestre/dar (servidor/moderacao.py,
    * TIPOS_DAR). No ar, SÓ pelo servidor, na conta do "Para:"; em casa (sem sessão), no save local, pelas
