@@ -777,14 +777,49 @@ presentes, alertas) não deixam linha; o e-mail buscado vai mascarado. Lida em
 `GET /api/mestre/auditoria[?alvo=N][&acao=x][&limite=N]` e no `admin auditoria`.
 
 ### 10.5 O "pôr no inventário" do painel do Mestre
-`POST /api/mestre/dar {conta?, tipo, idem, ...}` roda **no juiz, no estado do servidor** (ops internas
-`mestreDarItem {itemId, estrelas, nivel, qtd}` e `mestreDarSelos {elemento, n}` em `servidor/juiz/economia.js`), como a
-entrega da loja — nunca no save local. A peça só entra no inventário do **próprio Mestre** (para um jogador, o presente
-do catálogo da ficha); os selos, em qualquer conta. As séries nascem com a origem `caixa` e entram no registro de
-instâncias; quando o alvo é o próprio Mestre, a resposta leva `{versao, hash, progress, db}` e o jogo adota sem
-recarregar. `idem` único por Mestre (o mesmo clique de novo devolve `repetido`); 120 por hora por Mestre; sem juiz,
-**503** (a autoridade e o juiz não podem divergir); conta banida ou sem estado no servidor, 409. As ferramentas do
-painel de teste (liberar classe, nível, elemento) viraram ops do Mestre (`gmLiberaClasse`, `gmNivel`, `gmElemento`):
-a mesma função de `js/core/gm.js` roda no jogo e no juiz.
+`POST /api/mestre/dar {conta?, tipo, idem, ...}` roda **no juiz, no estado do servidor** (ops internas `mestreDar*`
+em `servidor/juiz/economia.js`; o cliente que as mande pelo `/api/op` cai com 403), como a entrega da loja — nunca no
+save local. Desde 03/10 (o painel único do Mestre) entra **em qualquer conta**, de tudo o que a Caixa dá, com as
+réguas de `moderacao.TIPOS_DAR` e o juiz conferindo o resto no dado da conta de destino:
 
-Provas: `tests/moderacao_api.py` (API + juiz, 12) e `tests/moderacao_rele_prova.py` (relé de verdade, 18).
+| tipo | argumentos | régua |
+|---|---|---|
+| `item` | `itemId, estrelas, nivel, qtd` | qtd 1–20; estrelas e forja até o teto do dado; vaga no saco para todas, senão nada entra |
+| `set` | `setId` | o conjunto inteiro, com vaga para todas as peças |
+| `pet` | `petId, topo?` | `topo` = ★3 e nível 10 |
+| `pedras` | `stoneId, n` | 1–1000 |
+| `selos` | `elemento, n` | 1–999, os cinco elementos |
+| `insignias` | `n` | 1–100 |
+| `cartas` | `classId, n` ou `topo: true` | 1–500; a classe do Mestre não tem carta |
+| `pergaminho` | `pergaminho: xp\|elemento, n` | 1–99; entra só o que cabe no teto (99); cheio é 422 |
+| `bonus-xp` | `dias` | 1–30 |
+
+O que só existe na conta do Mestre (a Panóplia, as peças `gm-*`) não existe no dado do jogador: 422. **Nunca numa
+lápide** (conta excluída, 409 com a frase própria) **nem numa conta banida** (409); conta sem estado no servidor, 409.
+As séries nascem com a origem `caixa` e entram no registro de instâncias da conta de destino. `idem` único por Mestre
+(o mesmo clique de novo devolve `repetido`); 120 por hora por Mestre; sem juiz, **503**. A auditoria leva a conta de
+destino, a op e o que entrou.
+
+**O jogador fica sabendo** por `moderacao_entregas` (uma linha por entrega: o texto do que entrou, com os nomes do
+dado, e `avisar` = 0 quando é o próprio Mestre): o `GET /api/eu` — que o jogo já pergunta a cada 30 s com a aba à
+vista — leva `entregas` (as não vistas); o jogo pede `GET /api/entregas`, adota o estado, mostra "O Mestre te enviou
+…" e marca `POST /api/entregas/vistas {ids}` (só as da própria conta). Quem estava offline recebe ao entrar. E uma
+carta da Equipe ("O Mestre te enviou um presente") fica no correio.
+
+**Sem atropelar o jogador online.** A entrega guarda o hash do estado de antes e o de depois. Uma op do jogador que
+chegue ao `/api/op` com o hash de antes de uma CORRENTE de entregas (da mais nova para trás, sem buraco) sobe por cima
+delas (`moderacao._rebase_entregas`, chamado no `salas.economia_op`): a entrega só acrescenta (a peça entra no fim do
+saco, a pedra no estoque), então os índices que a op cita apontam para as mesmas coisas. A resposta traz `rebase:
+true` e o estado com as duas coisas; o jogo guarda a fila que fez enquanto ela viajava (`autoridade.js`). Qualquer
+outra diferença de hash continua no 409 de sempre. O `Autoridade.sincroniza` (o aviso da entrega) só adota a leitura
+do estado se nenhuma op nasceu no meio. Não abre nada novo para quem trapaceia: a op continua passando pelo juiz no
+estado do servidor — é o mesmo que o cliente reler o `/api/save` e mandar de novo.
+
+Quando o alvo é o próprio Mestre, a resposta leva `{versao, hash, progress, db}` e o jogo adota sem recarregar
+(`Autoridade.adotaDeFora`: se o Mestre fez outra coisa enquanto a entrega viajava, sincroniza em vez de adotar a
+resposta velha). As ferramentas do painel de teste (liberar classe, nível, elemento) viraram ops do Mestre
+(`gmLiberaClasse`, `gmNivel`, `gmElemento`): a mesma função de `js/core/gm.js` roda no jogo e no juiz — e a regra de
+cada entrega mora em `GM.cru`, a mesma na Caixa do Mestre e no juiz.
+
+Provas: `tests/moderacao_api.py` (API + juiz, 15), `tests/entregas_cliente.js` (o jogo do jogador online, 10) e
+`tests/moderacao_rele_prova.py` (relé de verdade, 19).

@@ -106,8 +106,10 @@ js/
     hud.js              TODA a interface
     debug.js            painel de teste (libera classes, nível, modo de efeitos)
     moderacao.js        a tela do banido, a denúncia e o correio da Equipe (02/10)
-    painel_mestre.js    o painel do Mestre por cima de qualquer tela (F9): contas,
-                        denúncias, banimentos, itens e moedas pelo servidor
+    painel_mestre.js    o painel ÚNICO do Mestre por cima de qualquer tela (M, F9):
+                        a Caixa (para ele ou para qualquer jogador, pelo servidor),
+                        moedas, contas, denúncias, banimentos, auditoria, eventos do
+                        mundo, grimório e ferramentas (03/10: juntou a ficha da M)
   main.js               o laço de quadro
 assets/embedded/*.js    modelos em base64 (o caminho file://)
 assets/models/bundle/   os MESMOS modelos em .glb de verdade + manifest.json
@@ -198,6 +200,12 @@ headless**:
 E lê-se a `<div id="summary">` do DOM despejado. Para foto, troque `--dump-dom`
 por `--window-size=L,A --screenshot=caminho.png`.
 
+> **Servindo com o `http.server` do Python, suba a fila de conexões** (`request_queue_size`,
+> que vem 5). A página que abre o `index.html` inteiro pede centenas de arquivos de uma vez; com
+> a fila de 5 o Windows recusa conexões na rajada e um script qualquer não chega — a prova falha
+> com "Cannot read properties of undefined" num módulo diferente a cada vez, ou o `gm_agenda.html`
+> "estoura as voltas" esperando o menu. Parece regressão de código e não é (medido em 03/10).
+
 > **Cuidado ao julgar imagem headless:** o WebGL ali é por **software**
 > (SwiftShader) e sai pálido. Nunca conclua "está fraco" a partir de uma captura
 > headless — compare sempre lado a lado na mesma folha.
@@ -215,9 +223,12 @@ jogador. Página nova sem essa linha é bug.
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
 | `test_progress_v2.html` | **118 passaram / 56 falharam** (medido 03/10 na base `39a6ae9` e depois — iguais). O "174 / 0" que estava aqui veio de um conserto de 21/09 que nunca entrou em ramo nenhum (`git log --all -- tests/test_progress_v2.html`) |
 | `validate_fusion.html` | 6.607 checagens, **51 falhas** (3.675 composições) — saque e pedras, nenhuma de fusão; as mesmas antes e depois de 03/10 |
-| **`moderacao_api.py`** (Python, API + juiz) | 12 de 12 — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |
+| **`moderacao_api.py`** (Python, API + juiz) | 15 de 15 (03/10: a Caixa inteira para QUALQUER jogador com aviso e carta, as réguas, nada para a lápide nem para a banida, e a op do jogador online que sobe por cima da entrega) — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |
 | **`moderacao_rele_prova.py`** (Python, relé de verdade) | 19 de 19 — o token banido ouve `banido` e cai com 4003 (no ident e com a praça aberta), o silenciado não fala, o banimento vencido confere, e a fala sem conta sai com o nome de troca (03/10, a revisão) |
-| **`painel_mestre.html`** (navegador) | 53 de 53 (03/10, a revisão: o Tab preso nas janelas e na capa do banido, o foco, a régua de 44 px no toque, a pílula das cartas e o ⚖ no celular) — o painel do Mestre (quem vê, F9, abas, filtros de item, o que vai ao servidor, a adoção do estado), a denúncia pela linha do chat, o correio e a tela do banido — contando o DOM e as camadas que recebem clique |
+| `gm_agenda.html` (o jogo inteiro) | 33 de 33 (03/10) — os eventos do mundo como a aba Eventos do painel único: só leitura sem a marca, o POST com a marca, a pergunta numa janela por cima do painel, a faixa da praça, o portal e a recompensa |
+| `prova_icones_menus.html` | 73 de 73 (03/10) — os menus de ícone; a Caixa do Mestre com as sete abas redondas DENTRO do painel único, e o "+10" da pedra pela porta da Caixa no jogo local |
+| **`entregas_cliente.js`** (Node) | 10 de 10 (03/10) — o jogo do jogador online com a entrega do Mestre: a op feita com o hash de antes não se perde, a fila feita durante a viagem fica, `sincroniza` não adota leitura que cruzou com op nova, `adotaDeFora` |
+| **`painel_mestre.html`** (navegador) | 74 de 74 (03/10: o painel ÚNICO — as nove abas, a tecla M, o "Para:" que escolhe o jogador, a Caixa e as moedas para ele sem adotar o estado de outra conta, o aviso dentro do painel, "O Mestre te enviou …" no jogo do jogador; e a revisão: o Tab preso nas janelas e na capa do banido, o foco, a régua de 44 px no toque, a pílula das cartas e o ⚖ no celular) — o painel do Mestre (quem vê, F9, abas, filtros de item, o que vai ao servidor, a adoção do estado), a denúncia pela linha do chat, o correio e a tela do banido — contando o DOM e as camadas que recebem clique |
 | `validate_world.html` | **7.914 checagens, 0 falhas** depois da junção de 03/10 (servido; com a seção 9 do Eco e os traços dos Colossos). 19/09: cobra "alcance > 0 ⇒ los:true"; a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 218 passaram / 0 falharam (02/10: + a Câmara do Eco) — 21 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
 | **`poco_perigos.js`** (Node) | 42 passaram / 0 falharam (02/10) — o chão do Poço e os Colossos: semente decide tudo, perigo nunca na entrada nem em casa de monstro, buraco nunca separa o mapa (nem o rachado debaixo de muro invocado deixa de virar buraco), todo disparo avisado com uma vez inteira para sair, a IA não para em casa avisada (0 em 1.303 decisões), um colosso e um chefe por andar múltiplo de 5, os quatro traços, o juiz refaz andares com perigo e colosso e chega ao mesmo hash |
