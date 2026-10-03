@@ -54,8 +54,12 @@ class ProvaDoEco(A.ProvaDaAutoridade):
     """Herda o palco e os ajudantes (novo, poe_estado, sql, save, roda_node...)."""
 
     def conta_pronta(self, apelido):
+        # 03/10: o herói no nível 26, e não no 22 do palco. Medido com o jogador de mentira (a IA) em tentativas de
+        # semente sorteada: no 22 ele não tira NADA do Eco em ~4% delas (6 de 150 — cai antes de chegar perto), e
+        # as provas que cobram "o placar do replay" com dano > 0 falhavam por sorte; no 26, 0 de 200 (o menor dano
+        # foi 90). A test_12 sobe dele para o 30 depois do fim
         c = self.novo(apelido)
-        self.poe_estado(c)
+        self.poe_estado(c, *self.estado_de_partida(nivel=26))
         return c
 
     def abre_eco(self, c, base=None, **kw):
