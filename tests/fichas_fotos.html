@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOTERRA — as fichas para foto</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* na FOTO o placar mora fora da tela: a foto é a janela inteira, como no
+     jogo; na PROVA (sem ?ficha=) a HUD roda numa coluna de celular (390×844)
+     e o placar fica embaixo dela */
+  #topo { position: fixed; left: -9999px; top: 0; font: 12px monospace; }
+  html.prova, html.prova body { overflow: auto; height: auto; }
+  html.prova #app { position: relative; width: 390px; height: 844px; }
+  html.prova #topo { position: static; padding: 10px; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  /* a praça sem o 3D: um chão escuro no lugar do mapa, para a ficha ter o
+     que cobrir (o véu da ficha é o que se quer ver na foto) */
+  #game-canvas { background: radial-gradient(ellipse 70% 60% at 50% 40%, #2a3340 0%, #10151b 100%); }
+</style>
+</head>
+<body>
+<!-- AS FICHAS PARA FOTO (02/10, a frente dos menus). Página LEVE — sem
+     index.html, sem WebGL: o CSS, os dados, o miolo, o Art, os ícones e a HUD
+     de verdade num #app do tamanho da janela, com uma conta semeada (saco
+     variado, pedras, poções, bichos, cofre, balcão, guilda, selos, missões) e
+     mesas de mentira para o que precisa de servidor (amigos, arena, troca,
+     mensagem particular). Abre UMA ficha por ?ficha= e marca window.__pronto.
+
+     É a régua das fotos antes|depois dos menus: as mesmas fichas, a mesma
+     semente, as duas larguras (1600×900 e 390×844). Quem fotografa é
+     tools/fotos_fichas.py (uma janela de Chrome só, ficha por ficha).
+
+     ?ficha= personagem | heroi | inventario | forja | feiticos | colecao |
+             banco | guilda | mercado | loteria | missoes | placar | amigos |
+             perfil | troca | contas | duelo | dupla | quadro | sussurro |
+             pausa | confirma | config | eco | praca | praca-poco | praca-sede |
+             praca-arena
+     ?foco=1 — põe o foco de teclado no primeiro botão da ficha (a foto do
+              anel de foco).
+
+     SEM ?ficha= é a PROVA do sistema das fichas (o padrão de 02/10), numa
+     coluna de 390×844: em cada ficha, o medalhão + título + fechar, o papel de
+     diálogo com nome, todo controle >= 44 px, nada vazando e o foco dentro; as
+     abas de texto com o texto de sempre; o foco que volta a quem abriu; as
+     Configurações mexendo no som e no movimento; o cais desenhado.
+       python tools/fotos_fichas.py prova   (janela de 390×844; o placar em #summary) -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script>if (!/[?&]ficha=/.test(location.search)) document.documentElement.className += ' prova';</script>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js','js/core/data/arenas.js','js/core/data/eco.js',
+    'js/core/data/campo_pvp.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
+    'js/core/vida.js','js/core/economia.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/gm.js','js/core/nomes.js','js/core/db.js',
+    'js/core/missoes.js','js/core/diario.js','js/core/agenda.js','js/core/poco.js',
+    'js/core/guilda.js','js/ui/brasao.js','js/core/mercado.js','js/core/rede.js','js/core/brasa.js',
+    'js/core/titulos.js','assets/embedded/coroas-pvp.js','js/core/troca.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/core/coop.js','js/core/grupo.js','js/core/amigos.js',
+    'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
+    'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
+    'js/audio.js','js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    erros.push('promessa: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function q1(s, r) { return (r || document).querySelector(s); }
+
+  var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI, DB = JOGO.DB, Gd = JOGO.Guilda;
+  var A = JOGO.Art;
+  function slotDe(id) { var s = (D.items[id] || {}).slot; return (A && A.slotKey) ? A.slotKey(s) : s; }
+  function elDe(id) { return (D.items[id] || {}).element || 'neutro'; }
+
+  // ------------------------------------------------------------ a semente
+  // a mesma da prova dos ícones (uma peça por espaço|elemento|raridade, na
+  // ordem do dado): a foto sai igual em toda máquina
+  var QUERO = ['punho|fogo|epico', 'passo|fogo|raro', 'casca|fogo|comum', 'lume|fogo|raro',
+               'punho|agua|comum', 'casca|agua|raro', 'lume|agua|raro',
+               'punho|terra|epico', 'passo|terra|raro', 'casca|ar|comum', 'lume|ar|raro',
+               'punho|neutro|lendario', 'casca|neutro|lendario'];
+  var SACO = [];
+  QUERO.forEach(function (k) {
+    var ids = Object.keys(D.items);
+    for (var i = 0; i < ids.length; i++) {
+      var it = D.items[ids[i]];
+      if (slotDe(ids[i]) + '|' + elDe(ids[i]) + '|' + it.rarity === k && SACO.indexOf(ids[i]) < 0) { SACO.push(ids[i]); return; }
+    }
+  });
+  var hids;
+  function semeia() {
+    P.load(); P.reset();
+    hids = P.heroIds();
+    var XP = D.leveling.xpTable;
+    P.addXp(hids[0], XP[11]);
+    if (hids[1]) P.addXp(hids[1], XP[7]);
+    SACO.forEach(function (id, i) {
+      var lv = [0, 3, 0, 7, 1, 0, 5, 10, 0, 2, 0, 4, 0][i] || 0;
+      var st = [0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 1, 0, 0][i] || 0;
+      P.state.inventory.push(P.novaCopia ? P.novaCopia(id, 'foto', lv, st) : { itemId: id, level: lv, stars: st });
+    });
+    for (var r = 0; r < 2; r++) P.state.inventory.push(P.novaCopia ? P.novaCopia(SACO[4], 'foto', 1, 2) : { itemId: SACO[4], level: 1, stars: 2 });
+    P.save();
+    Object.keys(D.stones).forEach(function (sid, i) { P.addStones(sid, [24, 9, 31, 5, 60, 2][i] || 3); });
+    P.poeConsumivel('pocao-pequena', 3); P.poeConsumivel('pocao-media', 5); P.poeConsumivel('pocao-grande', 2);
+    Object.keys(D.pets).slice(0, 3).forEach(function (pid) { P.addPet(pid); });
+    P.state.insignias = 20; P.save();
+    UI.init();
+    UI.selection(hids.slice(0, 2));
+    var BANCO = [SACO[0], SACO[5], SACO[8], SACO[12]];
+    var outros = [SACO[1], SACO[3], SACO[6], SACO[7], SACO[9], SACO[11]];
+    Gd._servidor = false;
+    try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+    return DB._zerar().then(function () {
+      return DB.batizar('Provador');
+    }).then(function () {
+      return DB.ganharMoedas(1240);
+    }).then(function () {
+      return BANCO.reduce(function (pr, id, i) {
+        return pr.then(function () { return DB.depositarItem({ itemId: id, level: i, stars: i % 2 }); });
+      }, Promise.resolve());
+    }).then(function () {
+      return DB.mercadoGravar({ dia: null, ofertas: outros.map(function (id, i) {
+        return { id: 'pv-' + i, vendedor: 'c' + i, vendedorNome: ['Fulano', 'Beltrano', 'Ciclano'][i % 3],
+                 itemId: id, level: i % 4, stars: i % 2, preco: 40 + i * 35 };
+      }).concat([{ id: 'pv-meu', vendedor: 'jogador', itemId: SACO[10], level: 0, stars: 0, preco: 90 }]) });
+    }).then(function () {
+      return DB.jogador();
+    }).then(function (j) {
+      Gd.contaAtiva(j.id, j.nome || 'Provador');
+      return Gd.criar('Forja do Vale', '⚑');
+    }).then(function () {
+      return [SACO[2], SACO[7], SACO[11]].reduce(function (pr, id, i) {
+        return pr.then(function () { return Gd.bancoDepositar({ itemId: id, level: i * 2, stars: 0 }); });
+      }, Promise.resolve());
+    });
+  }
+
+  // ---- as mesas de mentira (o que no jogo depende de servidor ou de outra aba)
+  var CLS = Object.keys(D.classes);
+  function ligaAmigos() {
+    var lista = { amigos: [{ conta: 11, nome: 'Beltrano', nivel: 14 }, { conta: 12, nome: 'Marta Ferro', nivel: 9 },
+                           { conta: 13, nome: 'Ciclano', nivel: 21 }],
+                  inimigos: [{ conta: 21, nome: 'Rato do Poço', nivel: 18 }] };
+    var st = { 11: { online: true, id: 'b1' }, 13: { online: true, luta: true, id: 'c1' } };
+    JOGO.Amigos = { pode: function () { return true; }, lista: function () { return JSON.parse(JSON.stringify(lista)); },
+      status: function (c) { return st[c] || null; }, liga: function () {}, aoMudar: null,
+      carrega: function () { return Promise.resolve({ ok: true }); },
+      definir: function () { return Promise.resolve({ ok: true }); },
+      ehAmigo: function () { return false; }, ehInimigo: function () { return false; } };
+  }
+  function ligaArena() {
+    var Ar = JOGO.Arena;
+    Ar.estado = function () { return { fase: 'livre', herois: null, classes: null, nivel: null }; };
+    Ar.quadro = function () {
+      var agora = Date.now();
+      return Promise.resolve({ ok: true, inscritos: [
+        { conta: 31, nome: 'Marta Ferro', nivel: 13, brasa: 1320, classes: [{ classId: CLS[1] }, { classId: CLS[3] }], desdeMs: agora - 125000 },
+        { conta: 32, nome: 'Beltrano', nivel: 11, brasa: 1180, classes: [{ classId: CLS[2] }, { classId: CLS[0] }], desdeMs: agora - 40000 },
+        { conta: 33, nome: 'Ciclano', nivel: 26, brasa: 1610, classes: [{ classId: CLS[4] }, { classId: CLS[5] }], desdeMs: agora - 600000 }] });
+    };
+  }
+  var TROCA_FALSA = {
+    _est: null,
+    estado: function () { return this._est; },
+    descrevePet: function (of) { return { nome: ((D.pets[of.petId] || {}).name || of.petId), nivel: 3, estrelas: 1 }; },
+    jaTenhoPet: function () { return false; },
+    porItem: function () { return true; }, tiraItem: function () {}, porPet: function () { return true; },
+    tiraPet: function () {}, porMoedas: function () {}, travar: function () {}, confirmar: function () {},
+    cancelar: function () {}
+  };
+  function ligaTroca() {
+    JOGO.Troca = TROCA_FALSA;
+    TROCA_FALSA._est = { fase: 'aberta', nomePar: 'Beltrano', mesmaConta: false,
+      minha: { itens: [{ itemId: SACO[9], level: 2, stars: 0 }], moedas: 0, pets: [], travada: false, confirmada: false },
+      dele: { itens: [{ itemId: SACO[1], level: 3, stars: 1 }], moedas: 120,
+              pets: [{ petId: Object.keys(D.pets)[4] }], travada: true, confirmada: false } };
+  }
+  function ligaSussurro() {
+    var S = JOGO.Sussurros;
+    var agora = Date.now();
+    S.pode = function () { return true; };
+    S.lista = function () {
+      return [{ de: 'b1', para: 'eu', nome: 'Beltrano', texto: 'Vai descer no Fecho hoje?', t: agora - 300000 },
+              { de: 'eu', para: 'b1', nome: 'Provador', texto: 'Vou sim, falta uma pedra de brasa.', t: agora - 240000 },
+              { de: 'b1', para: 'eu', nome: 'Beltrano', texto: 'Te espero na porta da Arena.', t: agora - 60000 }];
+    };
+  }
+  // a praça sem 3D: o Hub vira um dublê que só guarda o aoAproximar da HUD
+  function ligaPraca() {
+    JOGO.Hub = { entrar: function () { return false; }, sair: function () {}, aoAproximar: null };
+  }
+  function perfilFalso() {
+    return { id: 'b1', nome: 'Beltrano', titulo: 'Quebra-Muros', classe: CLS[2], nuvem: 11,
+             resumo: { nivel: 14, brasa: 1180, vitorias: 9, derrotas: 4, classes: [CLS[2], CLS[0]],
+                       poco: { recorde: 17, semanaMelhor: 12 } } };
+  }
+
+  var FICHAS = {
+    personagem: function () { UI.openSheet('char'); },
+    heroi: function () { UI.openSheet('heroSheet', hids[0]); },
+    inventario: function () { UI.openSheet('inventory'); },
+    forja: function () { UI.openSheet('forge'); },
+    feiticos: function () { UI.openSheet('spells'); },
+    colecao: function () { UI.openSheet('collection'); },
+    banco: function () { UI.openSheet('banco'); },
+    guilda: function () { UI.openSheet('guilda'); },
+    mercado: function () { UI.openSheet('mercado'); },
+    loteria: function () { UI.openSheet('loteria'); },
+    missoes: function () { UI.openSheet('missoes'); },
+    placar: function () { UI.openSheet('placar'); },
+    amigos: function () { ligaAmigos(); UI.openSheet('amigos'); },
+    perfil: function () { UI.openSheet('perfil', perfilFalso()); },
+    troca: function () { ligaTroca(); UI.openSheet('troca'); },
+    contas: function () { UI.openSheet('contas'); },
+    duelo: function () { UI.openSheet('duelo'); },
+    dupla: function () { ligaArena(); UI.openSheet('escolheDupla', { titulo: 'Inscrição na Arena', rotulo: 'Inscrever no quadro',
+      sub: 'Escolha os dois heróis que entram no quadro.', aoEscolher: function () {} }); },
+    quadro: function () { ligaArena(); UI.openSheet('arenaQuadro'); },
+    sussurro: function () { ligaSussurro(); UI.openSheet('sussurro', { id: 'b1', nome: 'Beltrano' }); },
+    pausa: function () { UI.openSheet('battleMenu'); },
+    // a pergunta de confirmação não tem porta própria: nasce do "Abandonar" da pausa
+    confirma: function () {
+      UI.openSheet('battleMenu');
+      var b = q1('.ui-sheet.is-on .btn-warn');
+      if (b) b.click();
+    },
+    config: function () { UI.openSheet('config'); },
+    // 03/10 (a junção com o Eco Primordial): a ficha do Eco nasce do sheetShell e entra na régua
+    eco: function () { UI.openSheet('eco'); },
+    praca: function () { ligaPraca(); UI.showScreen('hub'); },
+    'praca-poco': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'poco', nome: 'Poço sem Fundo' }); },
+    'praca-sede': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'sede', nome: 'Sede das Guildas' }); },
+    'praca-arena': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'arena', nome: 'Arena' }); }
+  };
+  function lugar(l) {
+    return espera(300).then(function () { if (JOGO.Hub.aoAproximar) JOGO.Hub.aoAproximar(l); });
+  }
+
+  // ------------------------------------------------------------ o modo FOTO
+  function foto() {
+    return semeia().then(function () {
+      var f = FICHAS[Q.ficha];
+      if (!f) { erros.push('ficha desconhecida: ' + Q.ficha); return; }
+      // fora da praça, a tela de fundo é o menu (o jogo abre nele)
+      if (!/^praca/.test(Q.ficha)) UI.showScreen('menu');
+      return f();
+    }).then(function () {
+      return espera(900);
+    }).then(function () {
+      if (Q.foco) {
+        var b = q1('.ui-sheet.is-on .sheet-body button, .ui-sheet.is-on .sheet-body [tabindex]');
+        if (b) b.focus();
+      }
+      // o tutor e os balões de primeira visita não são carregados aqui: a foto é a ficha
+      var abertas = document.querySelectorAll('.ui-sheet.is-on').length;
+      document.getElementById('summary').textContent = 'foto: ' + Q.ficha + ' · fichas abertas ' + abertas +
+        ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
+      window.__erros = erros;
+      window.__pronto = true;
+    }).catch(function (e) {
+      erros.push('semente: ' + (e && e.message || e));
+      window.__erros = erros;
+      window.__pronto = true;
+    });
+  }
+
+  // ------------------------------------------------------------ a PROVA do padrão
+  /* A régua do sistema das fichas, cobrada em TODA ficha, numa coluna de
+   * celular (390×844): o que se cobra é a REGRA (todo controle >= 44 px, o
+   * medalhão e o diálogo em todas, nada vazando), não a lista de classes de
+   * cada ficha — ficha nova que nascer do sheetShell entra sozinha na conta
+   * quando for posta em FICHAS. */
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    document.getElementById('log').appendChild(d);
+  }
+  function qa(s, r) { return [].slice.call((r || document).querySelectorAll(s)); }
+  function painel() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function visivel(n) {
+    var r = n.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    var cs = getComputedStyle(n);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+  // os controles que o dedo aperta — o que não for um destes é texto ou foto
+  var CONTROLES = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role="switch"], [tabindex]:not(.sheet-panel)';
+  /* AS EXCEÇÕES À RÉGUA DE 44, uma por uma e o porquê (ficha nova não entra
+   * aqui sem motivo escrito):
+   *   · a célula de peça do saco e do banco (.ig-cell) é um quadro de foto de
+   *     72+ px — mas é <div>, não entra na conta;
+   *   · o link dentro de um parágrafo (a sem classe .btn) segue o texto: alvo
+   *     de linha de texto é a linha inteira, como em qualquer página. */
+  function dispensado(n) {
+    if (n.tagName === 'A' && !n.classList.contains('btn')) return true;
+    return false;
+  }
+  function pequenos(raiz) {
+    var ruins = [];
+    qa(CONTROLES, raiz).forEach(function (n) {
+      if (!visivel(n) || dispensado(n)) return;
+      var r = n.getBoundingClientRect();
+      if (r.height < 43.5 || r.width < 43.5) {
+        var c = typeof n.className === 'string' ? n.className.split(/\s+/).slice(0, 3).join('.') : '';
+        ruins.push(n.tagName.toLowerCase() + (c ? '.' + c : '') + ' ' + Math.round(r.width) + '×' + Math.round(r.height) +
+                   ' "' + (n.textContent || n.value || '').trim().slice(0, 18) + '"');
+      }
+    });
+    return ruins;
+  }
+  // nada sai da ficha pelos lados (a coluna de 390), a não ser dentro de quem rola
+  function vazam(f) {
+    var fora = [];
+    var lim = f.getBoundingClientRect();
+    qa('*', f).forEach(function (n) {
+      var r = n.getBoundingClientRect();
+      if (!r.width) return;
+      if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+        var p = n.parentNode, rola = false;
+        while (p && p !== f) {
+          var ov = getComputedStyle(p).overflowX;
+          if (ov === 'auto' || ov === 'scroll' || ov === 'hidden') { rola = true; break; }
+          p = p.parentNode;
+        }
+        if (!rola) fora.push(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className || n.tagName));
+      }
+    });
+    return fora;
+  }
+
+  // as fichas que a régua cobra (as da praça são o cais e os painéis, à parte)
+  var NA_REGUA = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
+                  'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
+                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'eco'];
+
+  function prova() {
+    // a régua é de CELULAR: numa janela larga as regras de @media acham que é
+    // desktop e montam duas colunas dentro dos 390 px do #app (o saco ficava
+    // com 26 px de largura) — um estado que o jogo nunca mostra. Quem roda é
+    // `python tools/fotos_fichas.py prova` (janela de 390×844) ou o DevTools no
+    // modo celular; fora disso a prova diz por que não vale, em vez de mentir.
+    check('a prova roda numa janela de celular (largura <= 500 px)', window.innerWidth <= 500,
+          'janela de ' + window.innerWidth + ' px — use python tools/fotos_fichas.py prova');
+    var passo = Promise.resolve();
+    NA_REGUA.forEach(function (nome) {
+      passo = passo.then(function () {
+        UI.closeSheet();
+        UI.showScreen('menu');
+        return FICHAS[nome]();
+      }).then(function () { return espera(250); }).then(function () {
+        var f = painel();
+        if (!f) { check(nome + ': a ficha abre', false); return; }
+        var head = q1('.sheet-head', f), h2 = q1('.sheet-head h2', f);
+        var med = q1('.sheet-head > .sheet-ico svg.ico-svg', f);
+        var fecha = q1('.sheet-head .btn-close', f);
+        check(nome + ': cabeçalho com medalhão desenhado, título e fechar',
+              !!head && head.classList.contains('tem-ico') && !!med && !!h2 && !!h2.textContent.trim() && !!fecha,
+              h2 ? h2.textContent : 'sem título');
+        check(nome + ': é um diálogo com nome (role, aria-modal, aria-labelledby → o título)',
+              f.getAttribute('role') === 'dialog' && f.getAttribute('aria-modal') === 'true' &&
+              !!h2 && document.getElementById(f.getAttribute('aria-labelledby')) === h2);
+        check(nome + ': o fechar diz "Fechar" ao leitor de tela', !!fecha && fecha.getAttribute('aria-label') === 'Fechar');
+        var ruins = pequenos(f);
+        check(nome + ': todo controle visível mede ao menos 44×44', ruins.length === 0, ruins.slice(0, 4).join(' | '));
+        var fora = vazam(f);
+        check(nome + ': nada vaza da coluna de 390 px', fora.length === 0, fora.slice(0, 4).join(' | '));
+        check(nome + ': o foco está dentro da ficha', f.contains(document.activeElement),
+              document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
+      });
+    });
+
+    // ---- as abas de texto mantêm o texto de sempre (as provas antigas as acham por ele)
+    passo = passo.then(function () {
+      UI.closeSheet(); FICHAS.amigos();
+      return espera(200);
+    }).then(function () {
+      var abas = qa('.am-abas .btn-tab', painel());
+      check('Amigos: as duas abas são pílulas (.btn-tab), a aberta acesa e aria-pressed, com o texto de sempre',
+            abas.length === 2 && abas[0].textContent === 'Amigos' && abas[1].textContent === 'Inimigos' &&
+            abas[0].classList.contains('is-on') && abas[0].getAttribute('aria-pressed') === 'true' &&
+            abas[1].getAttribute('aria-pressed') === 'false', abas.map(function (b) { return b.textContent; }).join(','));
+      abas[1].click();
+      var abas2 = qa('.am-abas .btn-tab', painel());
+      check('Amigos: tocar em Inimigos acende Inimigos', abas2.length === 2 && abas2[1].classList.contains('is-on') &&
+            !abas2[0].classList.contains('is-on'));
+      abas2[0].click();
+      UI.closeSheet(); FICHAS.personagem();
+      return espera(300);
+    }).then(function () {
+      var abas = qa('.char-abas .btn-tab', painel());
+      var nomes = hids.slice(0, 2).map(function (h) { return D.classes[(P.hero(h) || {}).classId || h].name; });
+      check('Personagem: os heróis da dupla são abas com o nome da classe, uma acesa',
+            abas.length === 2 && abas[0].textContent === nomes[0] && abas[1].textContent === nomes[1] &&
+            abas.filter(function (b) { return b.classList.contains('is-on'); }).length === 1,
+            abas.map(function (b) { return b.textContent; }).join(',') + ' (esperava ' + nomes.join(',') + ')');
+    });
+
+    // ---- o foco volta para quem abriu a ficha (a porta da Conta, no menu)
+    passo = passo.then(function () {
+      UI.closeSheet();
+      UI.showScreen('menu');
+      var b = qa('.screen-menu.is-on .menu-fichas .btn').filter(function (x) { return /^Conta/.test(x.textContent); })[0];
+      check('Menu: a porta da Conta existe', !!b);
+      if (!b) return;
+      b.focus();
+      b.click();
+      var f = painel();
+      check('Contas: abrem pelo menu, com o foco dentro da ficha', !!f && f.contains(document.activeElement));
+      // O ANEL DE TECLADO. Script não consegue fingir um Tab de verdade (o
+      // :focus-visible depende de como o foco chegou), então a prova lê a
+      // REGRA: existe no style.css uma regra de :focus-visible com contorno
+      // sólido de >= 2 px, e o fechar (e um campo, e o interruptor) são
+      // alcançados pelo seletor dela sem o :focus-visible
+      var x = q1('.btn-close', f);
+      var regra = null;
+      [].forEach.call(document.styleSheets, function (ss) {
+        var rs; try { rs = ss.cssRules; } catch (e) { return; }
+        [].forEach.call(rs || [], function (r) {
+          if (regra || !r.selectorText || r.selectorText.indexOf(':focus-visible') < 0) return;
+          // o contorno vem como `outline: 2px solid var(--foco)` — com var() o
+          // navegador não abre o atalho em outline-style/width, então lê o texto
+          var m = /outline:\s*([\d.]+)px solid/.exec(r.style.cssText);
+          if (!m || parseFloat(m[1]) < 2) return;
+          var sel = r.selectorText.replace(/:focus-visible/g, '');
+          try { if (x.matches(sel)) regra = r; } catch (e) {}
+        });
+      });
+      check('o foco de teclado desenha o anel: uma regra :focus-visible de contorno sólido >= 2 px alcança os controles da ficha',
+            !!regra && ['input', 'button.btn-tab', 'summary'].every(function (t) {
+              var n = document.createElement(t.split('.')[0]);
+              if (t.indexOf('.') > 0) n.className = t.split('.')[1];
+              f.appendChild(n);
+              var ok = n.matches(regra.selectorText.replace(/:focus-visible/g, ''));
+              f.removeChild(n);
+              return ok;
+            }), regra ? regra.selectorText.slice(0, 120) : 'nenhuma regra');
+      x.focus();
+      x.click();
+      check('fechar a ficha devolve o foco a quem a abriu', document.activeElement === b,
+            document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
+    });
+
+    // ---- as Configurações mexem no aparelho, não no save
+    passo = passo.then(function () {
+      UI.closeSheet();
+      UI.showScreen('menu');
+      var porta = q1('.screen-menu.is-on .menu-config');
+      check('Menu: a porta das Configurações existe e abre a ficha', !!porta);
+      if (porta) porta.click(); else FICHAS.config();
+      return espera(150);
+    }).then(function () {
+      var f = painel(), Au = JOGO.Audio;
+      var chaves = qa('.cfg-chave', f);
+      check('Configurações: as chaves são interruptores (role=switch, aria-checked, rótulo)',
+            chaves.length >= 2 && chaves.every(function (c) {
+              return c.getAttribute('role') === 'switch' && /^(true|false)$/.test(c.getAttribute('aria-checked')) && !!c.getAttribute('aria-label');
+            }), chaves.length + ' chaves');
+      var som = chaves.filter(function (c) { return c.getAttribute('aria-label') === 'Som do jogo'; })[0];
+      var vol = q1('.cfg-volume', f);
+      var antes = Au.isMudo();
+      som.click();
+      check('Som do jogo: a chave desliga o som de verdade e apaga o volume',
+            Au.isMudo() === !antes && som.getAttribute('aria-checked') === String(!Au.isMudo()) && vol.disabled === Au.isMudo());
+      som.click();
+      vol.value = '40';
+      vol.dispatchEvent(new Event('input', { bubbles: true }));
+      check('Volume: o deslizador muda o volume do jogo e o número ao lado', Math.abs(Au.getVolume() - 0.4) < 1e-6 &&
+            q1('.cfg-num', f).textContent === '40%', Au.getVolume() + ' / ' + q1('.cfg-num', f).textContent);
+      var mov = chaves.filter(function (c) { return c.getAttribute('aria-label') === 'Menos movimento'; })[0];
+      mov.click();
+      var gravado = {};
+      try { gravado = JSON.parse(localStorage.getItem('soterra-pref-ui') || '{}'); } catch (e) {}
+      check('Menos movimento: liga a classe no <html> e grava na chave do aparelho',
+            document.documentElement.classList.contains('menos-movimento') && gravado.menosMovimento === true);
+      check('Menos movimento: a ficha para de animar', getComputedStyle(f).animationName === 'none',
+            getComputedStyle(f).animationName);
+      mov.click();
+      check('Menos movimento: desligar tira a classe', !document.documentElement.classList.contains('menos-movimento'));
+    });
+
+    // ---- a chave da tela cheia segue a TELA, não o toque (03/10, revisão): o
+    // navegador que recusa e o Esc que sai sem passar pela ficha não podem
+    // deixar a chave mostrando o contrário. A página não carrega o
+    // tela_cheia.js (sem tela de verdade no headless): um dublê com a mesma API.
+    var TCfalso = { _cheia: false, _recusa: true,
+      suporta: function () { return true; }, cheia: function () { return this._cheia; },
+      entra: function () { var me = this; if (me._recusa) return Promise.reject(new Error('recusado'));
+        me._cheia = true; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); },
+      sai: function () { this._cheia = false; document.dispatchEvent(new Event('fullscreenchange')); },
+      alterna: function () {} };
+    var TCvelho = JOGO.TelaCheia;
+    passo = passo.then(function () {
+      JOGO.TelaCheia = TCfalso;
+      UI.closeSheet(); UI.openSheet('config');
+      return espera(50);
+    }).then(function () {
+      var ch = qa('.cfg-chave', painel()).filter(function (c) { return c.getAttribute('aria-label') === 'Tela cheia'; })[0];
+      check('Tela cheia: a chave existe quando o aparelho suporta', !!ch);
+      if (!ch) return;
+      ch.click();
+      return espera(30).then(function () {
+        check('Tela cheia: o navegador recusou — a chave volta a "desligada"', ch.getAttribute('aria-checked') === 'false' &&
+              !ch.classList.contains('is-on'), ch.getAttribute('aria-checked'));
+        TCfalso._recusa = false;
+        ch.click();
+        return espera(30);
+      }).then(function () {
+        check('Tela cheia: entrou — a chave acende', ch.getAttribute('aria-checked') === 'true');
+        // o Esc do navegador (e o botão do canto) mudam a tela sem tocar na chave
+        TCfalso._cheia = false;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        var apagou = ch.getAttribute('aria-checked') === 'false';
+        TCfalso._cheia = true;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        check('Tela cheia: a tela muda por fora (Esc, botão do canto) — a chave acompanha nos dois sentidos',
+              apagou && ch.getAttribute('aria-checked') === 'true', ch.getAttribute('aria-checked'));
+        TCfalso._cheia = false;
+      });
+    }).then(function () { JOGO.TelaCheia = TCvelho; }, function (e) { JOGO.TelaCheia = TCvelho; throw e; });
+
+    // ---- o Tab dá a volta DENTRO da ficha (ela é diálogo modal): do último
+    // controle para o primeiro, e Shift+Tab do primeiro para o último
+    passo = passo.then(function () {
+      UI.closeSheet(); UI.openSheet('config');
+      var f = painel();
+      var foc = qa('button, a[href], input, select, textarea, summary', f).filter(function (n) {
+        return !n.disabled && n.getClientRects().length > 0;
+      });
+      var ult = foc[foc.length - 1], prim = foc[0];
+      ult.focus();
+      ult.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      check('Tab no último controle da ficha volta ao primeiro (não foge para trás do véu)',
+            document.activeElement === prim, document.activeElement ? document.activeElement.className : '?');
+      prim.focus();
+      prim.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+      check('Shift+Tab no primeiro controle vai ao último', document.activeElement === ult,
+            document.activeElement ? document.activeElement.className : '?');
+      UI.closeSheet();
+    });
+
+    // ---- quem está digitando fora da ficha (o chat da praça) não perde o
+    // campo quando uma ficha abre sozinha (a escolha do duelo chega pela rede):
+    // o foco puxado no meio da frase fazia o "i" abrir o inventário por cima
+    passo = passo.then(function () {
+      UI.closeSheet();
+      var campo = document.createElement('input');
+      campo.className = 'hub-chat-input';
+      document.getElementById('ui-root').appendChild(campo);
+      campo.focus();
+      UI.openSheet('config');
+      check('ficha que abre com alguém digitando fora dela deixa o foco no campo',
+            document.activeElement === campo, document.activeElement ? document.activeElement.tagName : '?');
+      UI.closeSheet();
+      check('fechar essa ficha também não tira o foco do campo', document.activeElement === campo);
+      campo.parentNode.removeChild(campo);
+    });
+
+    // ---- a régua do "desligado" (.btn.is-off apagado a 45%) não acende o que
+    // is-off ESCONDE: o recentrar da câmera some de verdade na batalha
+    passo = passo.then(function () {
+      var b = document.createElement('button');
+      b.className = 'btn bt-cam is-off';
+      b.textContent = '⌖';
+      document.getElementById('ui-root').appendChild(b);
+      var op = getComputedStyle(b).opacity;
+      check('o recentrar da câmera desligado continua invisível (is-off nele é sumir)', op === '0', 'opacity ' + op);
+      b.parentNode.removeChild(b);
+    });
+
+    // ---- o cais: o desenho no lugar do emoji, o nome de sempre
+    passo = passo.then(function () {
+      UI.closeSheet();
+      FICHAS.praca();
+      return espera(300);
+    }).then(function () {
+      var bs = qa('.screen-hub.is-on .hub-dock-b');
+      var rots = bs.map(function (b) { return (q1('.hd-rot', b) || {}).textContent; });
+      check('Cais: seis portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
+            bs.length === 6 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
+            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos$/.test(rots.join(',')), rots.join(','));
+      check('Cais: nenhum emoji sobrou no texto das portas',
+            bs.every(function (b) { return !/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(b.textContent); }),
+            bs.map(function (b) { return b.textContent; }).join(' | '));
+      var p0 = bs.filter(function (b) { var r = b.getBoundingClientRect(); return r.height < 43.5; });
+      check('Cais: toda porta mede ao menos 44 px de altura', p0.length === 0, p0.length + ' baixas');
+      bs[1].click();
+      var f = painel();
+      check('Cais: a porta acesa é a da ficha aberta, e o medalhão da ficha é o desenho da porta',
+            bs[1].classList.contains('is-on') && !!f && !!q1('.sheet-ico .ico-fc-inventario', f));
+      UI.closeSheet();
+    });
+
+    return passo.then(function () {
+      check('nenhum erro na página', erros.length === 0, erros.slice(0, 4).join(' | '));
+      var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check();
+      check('o save de verdade continua intocado', !!sb && sb.ok, sb ? JSON.stringify(sb.disco).slice(0, 120) : 'sem sandbox');
+    }).catch(function (e) {
+      check('a prova correu até o fim', false, (e && e.stack) || String(e));
+    }).then(function () {
+      var sum = document.getElementById('summary');
+      sum.className = falhas ? 'fail' : 'allpass';
+      sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+      window.__fail = falhas;
+      window.__pronto = true;
+    });
+  }
+
+  if (Q.ficha) foto();
+  else semeia().then(prova, function (e) {
+    erros.push('semente: ' + (e && e.message || e));
+    return prova();
+  });
+})();
+</script>
+</body>
+</html>

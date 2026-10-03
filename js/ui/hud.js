@@ -536,6 +536,26 @@ var JOGO = (typeof window !== 'undefined')
     sheetEl = el('div', 'ui-sheet');
     root.appendChild(sheetEl);
     tap(sheetEl, function (ev) { if (ev.target === sheetEl) closeSheet(); });
+    /* 03/10 (revisão): a ficha se anuncia como diálogo MODAL (aria-modal) — o
+     * leitor de tela passa a tratar o resto da página como inerte. O Tab, não:
+     * do último botão ele saía para o cais e os botões ATRÁS do véu, e o
+     * jogador de teclado se perdia num lugar que nem enxerga. O Tab dá a volta
+     * dentro da ficha (do último ao primeiro, e Shift+Tab do primeiro ao último). */
+    sheetEl.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab' || !sheetEl.classList.contains('is-on')) return;
+      var pn = sheetEl.querySelector('.sheet-panel');
+      if (!pn) return;
+      var foc = [].filter.call(pn.querySelectorAll(
+        'button, a[href], input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])'),
+        function (n) { return !n.disabled && n.tabIndex >= 0 && n.getClientRects().length > 0; });
+      if (!foc.length) return;
+      var prim = foc[0], ult = foc[foc.length - 1], at = document.activeElement, vai = null;
+      if (ev.shiftKey && (at === prim || at === pn)) vai = ult;
+      else if (!ev.shiftKey && at === ult) vai = prim;
+      if (!vai) return;
+      ev.preventDefault();
+      try { vai.focus(); } catch (e) {}
+    });
 
     tipEl = el('div', 'ui-tip');
     root.appendChild(tipEl);
@@ -878,6 +898,8 @@ var JOGO = (typeof window !== 'undefined')
     var rotuloConta = safe(function () { return JOGO.Contas.rotulo(); }, null);
     fichas.appendChild(btn(rotuloConta ? 'Conta: <b>' + esc(rotuloConta) + '</b>' : 'Conta',
       'btn-mini btn-ghost', function () { openSheet('contas'); }));
+    // 02/10: a ficha das Configurações (som, tela, movimento) — antes não havia
+    fichas.appendChild(btn('Configurações', 'btn-mini btn-ghost menu-config', function () { openSheet('config'); }));
     acts.appendChild(fichas);
     box.appendChild(acts);
 
@@ -1287,10 +1309,13 @@ var JOGO = (typeof window !== 'undefined')
     // o cais agora ACENDE a aba aberta (30/08): sem isso, no celular o menu
     // principal não dizia onde o jogador estava
     dockBotoes = {};
-    [{ ic: '🧍', rot: 'Personagem', abre: 'char' },
-     { ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
-     { ic: '📖', rot: 'Feitiços', abre: 'spells' },
-     { ic: '📜', rot: 'Missões', abre: 'missoes' },
+    // 02/10: o ícone (ico) é o desenho do icones_ui.js — o mesmo medalhão do
+    // cabeçalho da ficha que a porta abre; o emoji (ic) fica de reserva para
+    // quando o icones_ui.js não carregou
+    [{ ic: '🧍', ico: 'fc-personagem', rot: 'Personagem', abre: 'char' },
+     { ic: '🎒', ico: 'fc-inventario', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
+     { ic: '📖', ico: 'fc-feiticos', rot: 'Feitiços', abre: 'spells' },
+     { ic: '📜', ico: 'fc-missoes', rot: 'Missões', abre: 'missoes' },
      // 11/09: a Guilda é uma aba como as outras — SEMPRE no cais. Ela nascia
      // escondida e só aparecia se `resumoGuilda` já tivesse chegado quando a
      // conta foi pintada; como a guilda carrega por promessa, quase nunca
@@ -1298,15 +1323,18 @@ var JOGO = (typeof window !== 'undefined')
      // quem não está precisa da porta ainda mais — é por ela que se funda.
      // `remoto` avisa a ficha de que se está longe da Sede (cofre e banco
      // continuam só lá).
-     { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true },
+     { ic: '🛡️', ico: 'fc-guilda', rot: 'Guilda', abre: 'guilda', remoto: true },
      // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
-     { ic: '👥', rot: 'Amigos', abre: 'amigos' },
-     // 02/10: o Eco Primordial — a porta é a ficha, não uma construção nova (o dono: "não amontoe a praça")
-     { ic: '💠', rot: 'Eco', abre: 'eco' }
+      { ic: '👥', ico: 'fc-amigos', rot: 'Amigos', abre: 'amigos' },
+      // 02/10: o Eco Primordial — a porta é a ficha, não uma construção nova (o dono: "não amontoe a praça")
+      { ic: '💠', ico: 'fc-eco', rot: 'Eco', abre: 'eco' }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
-      b.appendChild(el('span', 'hd-ic', d.ic));
+      var svgD = safe(function () { return JOGO.IconesUI.svg(d.ico); }, '');
+      var ic = el('span', 'hd-ic' + (svgD ? ' is-svg' : ''), svgD || d.ic);
+      ic.setAttribute('aria-hidden', 'true');
+      b.appendChild(ic);
       b.appendChild(el('span', 'hd-rot', d.rot +
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
       tap(b, function () { openSheet(d.abre, d.remoto || undefined); });
@@ -1450,6 +1478,19 @@ var JOGO = (typeof window !== 'undefined')
       setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
     }
 
+    /* 02/10: o título do painel de aproximação leva o MESMO medalhão da
+     * ficha que o botão abre (o baú no banco, o poço no Poço) — o painel e a
+     * ficha passam a ser a mesma porta. Sem o icones_ui.js, só o texto. */
+    function tituloPainel(texto, ico) {
+      var h = el('h3', 'hp-tit', esc(texto));
+      var svg = safe(function () { return JOGO.IconesUI.svg(ico); }, '');
+      if (svg) {
+        var m = el('span', 'hp-ico', svg);
+        m.setAttribute('aria-hidden', 'true');
+        h.insertBefore(m, h.firstChild);
+      }
+      return h;
+    }
     if (JOGO.Hub) JOGO.Hub.aoAproximar = function (lugar) {
       // 11/09: o convite (grupo/duelo) em aberto não some por um passo
       if (painelModo === 'convite' && !painel.classList.contains('is-off')) return;
@@ -1519,21 +1560,21 @@ var JOGO = (typeof window !== 'undefined')
           'A descida se perde: da próxima vez você começa da primeira sala.'));
         painel.appendChild(btn('Sair', 'btn-warn btn-block', perguntaSair));
       } else if (lugar.tipo === 'banco') {
-        painel.appendChild(el('h3', null, 'Banco do Acampamento'));
+        painel.appendChild(tituloPainel('Banco do Acampamento', 'fc-banco'));
         painel.appendChild(el('p', 'hub-nota',
           'O que está no cofre não desce com você — e por isso nunca se perde.'));
         painel.appendChild(btn('Abrir o cofre', 'btn-primary btn-block', function () {
           openSheet('banco');
         }));
       } else if (lugar.tipo === 'mercado') {
-        painel.appendChild(el('h3', null, 'Mercadinho do Acampamento'));
+        painel.appendChild(tituloPainel('Mercadinho do Acampamento', 'fc-mercado'));
         painel.appendChild(el('p', 'hub-nota',
           'Peças à venda — só o que jogador anunciou. Toda venda sua paga 5% de taxa.'));
         painel.appendChild(btn('Abrir o balcão', 'btn-primary btn-block', function () {
           openSheet('mercado');
         }));
       } else if (lugar.tipo === 'arena') {
-        painel.appendChild(el('h3', null, 'Arena de Duelos'));
+        painel.appendChild(tituloPainel('Arena de Duelos', 'fc-duelo'));
         painel.appendChild(el('p', 'hub-nota',
           '<b>Desafio amistoso</b>: toque em alguém na praça (no mapa da praça; a coroa não muda). ' +
           '<b>Ranqueado</b>: inscreva a sua dupla no quadro e espere um desafio — ou desafie um inscrito.'));
@@ -1555,7 +1596,7 @@ var JOGO = (typeof window !== 'undefined')
         });
       } else if (lugar.tipo === 'poco') {
         // O POÇO SEM FUNDO (25/08; 13/09 saiu da Arena e ganhou a arte do dono)
-        painel.appendChild(el('h3', null, 'Poço sem Fundo'));
+        painel.appendChild(tituloPainel('Poço sem Fundo', 'fc-poco'));
         painel.appendChild(el('p', 'hub-nota',
           'A torre infinita: cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros mais duros.'));
         if (emGrupo()) {
@@ -1577,7 +1618,7 @@ var JOGO = (typeof window !== 'undefined')
           }
         });
       } else if (lugar.tipo === 'sede') {
-        painel.appendChild(el('h3', null, 'Sede das Guildas'));
+        painel.appendChild(tituloPainel('Sede das Guildas', 'fc-guilda'));
         painel.appendChild(el('p', 'hub-nota',
           'O estandarte dos clãs. A casa própria de cada guilda vem com o lobby — por ora, a ficha resolve tudo.'));
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
@@ -1586,7 +1627,7 @@ var JOGO = (typeof window !== 'undefined')
         painelGuerra(painel);         // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
       } else if (lugar.tipo === 'loteria') {
         // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
-        painel.appendChild(el('h3', null, 'Barraquinha da Sorte'));
+        painel.appendChild(tituloPainel('Barraquinha da Sorte', 'fc-loteria'));
         var sl = safe(function () { return P().roletaSaldo(); }, null);
         painel.appendChild(el('p', 'hub-nota', sl
           ? (sl.giros > 0 ? '<b>' + sl.total + '</b> selos no bolso — <b>' + sl.giros + '</b> giro(s) da sorte.'
@@ -1602,7 +1643,7 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'forja') {
         // A BARRACA DO FERREIRO (30/08): a forja ganhou endereço na praça —
         // a bigorna continua no cais para quem prefere o atalho
-        painel.appendChild(el('h3', null, 'Forja do Acampamento'));
+        painel.appendChild(tituloPainel('Forja do Acampamento', 'fc-forja'));
         painel.appendChild(el('p', 'hub-nota',
           'Ponha a peça na bancada, a pedra do elemento ao lado — e bata o martelo.'));
         painel.appendChild(btn('Chegar na bancada', 'btn-primary btn-block', function () {
@@ -3210,10 +3251,21 @@ var JOGO = (typeof window !== 'undefined')
 
   function closeSheet() {
     if (!sheetEl) return;
+    var tinhaFoco = sheetEl.contains(document.activeElement);
     sheetEl.classList.remove('is-on');
     sheetName = null;
     marcaDock(null);
     hideTip();
+    // 02/10: o foco volta a quem abriu a ficha — só se ele estava DENTRO
+    // dela (fechar por um clique lá fora não rouba o foco de ninguém)
+    var volta = sheetDeQuem;
+    sheetDeQuem = null;
+    if (tinhaFoco) {
+      try {
+        if (volta && volta.isConnected) volta.focus({ preventScroll: true });
+        else document.activeElement.blur();
+      } catch (e) {}
+    }
   }
   /* O BANCO — agora do jeito pedido: o saco do grupo de um lado,
    * o cofre do outro, as DUAS grades na mesma tela, e a peça ATRAVESSA —
@@ -5403,13 +5455,18 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (libs.indexOf(charHeroi) < 0) charHeroi = libs[0];
       caixa.appendChild(el('h3', 'bk-tit', 'Características'));
-      var chips = el('div', 'guilda-emblemas');
+      // 02/10: a escolha do herói é uma fileira de ABAS (a pílula dourada é a
+      // aberta, aria-pressed para o leitor de tela) — era um par de botões
+      // soltos de 18 px, com o tamanho de letra dos emblemas da guilda
+      var chips = el('div', 'abas-fila char-abas');
       libs.forEach(function (hid) {
-        chips.appendChild(btn(className(hero(hid).classId || hid),
-          'btn-mini ' + (hid === charHeroi ? 'btn-gold' : 'btn-ghost'), function () {
-            charHeroi = hid;
-            sheetChar();
-          }));
+        var on = hid === charHeroi;
+        var bA = btn(className(hero(hid).classId || hid), 'btn-tab' + (on ? ' is-on' : ''), function () {
+          charHeroi = hid;
+          sheetChar();
+        });
+        bA.setAttribute('aria-pressed', on ? 'true' : 'false');
+        chips.appendChild(bA);
       });
       caixa.appendChild(chips);
 
@@ -5951,20 +6008,83 @@ var JOGO = (typeof window !== 'undefined')
   }
   UI._buildEcoFim = buildEcoFim;            // provas
 
-  function sheetShell(title, sub) {
+  /* O MEDALHÃO DE CADA FICHA (02/10, a frente dos menus): o cabeçalho ganha o
+   * ícone da porta que abriu a ficha — o mesmo desenho do cais — para o
+   * jogador saber onde está sem ler o título. Quem decide é o NOME da ficha
+   * (o openSheet o põe antes de chamar a função de desenho; os redesenhos de
+   * dentro mantêm o nome) e, nas fichas de meta, a aba. Ficha sem entrada
+   * aqui sai com o losango de sempre: nenhum cabeçalho fica sem marca. */
+  var ICONE_FICHA = {
+    char: 'fc-personagem', heroSheet: 'fc-personagem', amigos: 'fc-amigos', guilda: 'fc-guilda',
+    banco: 'fc-banco', missoes: 'fc-missoes', mercado: 'fc-mercado', mercadoConfirma: 'fc-mercado',
+    loteria: 'fc-loteria', placar: 'fc-placar', troca: 'fc-troca', contas: 'fc-contas',
+    perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
+    arenaQuadro: 'fc-duelo', sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
+    gm: 'fc-mestre', gmcaixa: 'fc-mestre', gmagenda: 'fc-mestre', confirm: 'fc-alerta',
+    eco: 'fc-eco'   // 03/10, a junção com a frente do Eco Primordial
+  };
+  var ICONE_ABA = { inventario: 'fc-inventario', forja: 'fc-forja', feiticos: 'fc-feiticos',
+                    colecao: 'fc-colecao', avatar: 'fc-personagem' };
+  function iconeDaFicha() {
+    if (sheetName === 'party') return ICONE_ABA[partyTab] || null;
+    return ICONE_FICHA[sheetName] || null;
+  }
+  /* quem tinha o foco quando a ficha abriu: o foco volta para ele ao fechar
+   * (quem navega pelo teclado não pode ser jogado no começo da página) */
+  var sheetDeQuem = null;
+
+  function sheetShell(title, sub, ico) {
+    var jaAberta = sheetEl.classList.contains('is-on');
+    var focoDentro = jaAberta && sheetEl.contains(document.activeElement);
+    /* 03/10 (revisão): quem está DIGITANDO num campo fora da ficha (o chat da
+     * praça) não perde o campo. Há ficha que abre sozinha, pela rede — a
+     * escolha do duelo (aoDueloMudou) —, e o foco puxado para o painel no meio
+     * da frase fazia o resto dela virar atalho: o "i" de "aí" trocava a
+     * escolha do duelo pelo inventário, o Esc fechava a ficha, e no celular o
+     * teclado sumia. Antes da ficha virar diálogo o campo ficava com o foco. */
+    var ativo = document.activeElement;
+    var digitando = !!ativo && !sheetEl.contains(ativo) &&
+      (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.isContentEditable);
+    if (!jaAberta) {
+      var at = document.activeElement;
+      sheetDeQuem = (at && at !== document.body && !sheetEl.contains(at)) ? at : null;
+    }
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
+    // a ficha é um diálogo: o leitor de tela anuncia o título ao abrir, e o
+    // painel aceita o foco (tabindex -1) para o Tab começar DENTRO dela
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-labelledby', 'sheet-titulo');
+    panel.tabIndex = -1;
     var head = el('div', 'sheet-head');
+    var svg = safe(function () { return JOGO.IconesUI.svg(ico || iconeDaFicha() || ''); }, '');
+    if (svg) {
+      head.classList.add('tem-ico');
+      var med = el('span', 'sheet-ico', svg);
+      med.setAttribute('aria-hidden', 'true');
+      head.appendChild(med);
+    }
     var t = el('div', 'sheet-head-txt');
-    t.appendChild(el('h2', null, esc(title)));
+    var h2 = el('h2', null, esc(title));
+    h2.id = 'sheet-titulo';
+    t.appendChild(h2);
     if (sub) t.appendChild(el('p', null, sub));
     head.appendChild(t);
-    head.appendChild(btn('✕', 'btn-icon btn-close', closeSheet));
+    var fecha = btn('✕', 'btn-icon btn-close', closeSheet);
+    fecha.setAttribute('aria-label', 'Fechar');
+    head.appendChild(fecha);
     panel.appendChild(head);
     var body = el('div', 'sheet-body');
     panel.appendChild(body);
     sheetEl.appendChild(panel);
     sheetEl.classList.add('is-on');
+    // a ficha que acabou de abrir (ou que se redesenhou com o foco dentro,
+    // que o clear acabou de apagar) segura o foco; quem desenha um campo
+    // depois disto (a mensagem particular) toma o foco para o campo
+    if (!digitando && (!jaAberta || focoDentro || document.activeElement === document.body)) {
+      try { panel.focus({ preventScroll: true }); } catch (e) {}
+    }
     return body;
   }
   /* `op` (22/09, opcional — a quebra da forja é quem pede): {sim, simCls,
@@ -5973,7 +6093,7 @@ var JOGO = (typeof window !== 'undefined')
    * volta — sem `aoCancelar` ele só fecha, como sempre. */
   function confirmSheet(title, body, onYes, op) {
     op = op || {};
-    var b = sheetShell(title);
+    var b = sheetShell(title, null, 'fc-alerta');
     sheetName = 'confirm';
     b.appendChild(el('p', 'confirm-txt', body));
     var acts = el('div', 'confirm-acts');
@@ -6011,6 +6131,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
+    else if (name === 'config') sheetConfig();                             // 02/10: som, tela, movimento e atalhos
     else if (name === 'perfil') sheetPerfil(arg);
     else if (name === 'guilda') sheetGuilda(arg);
     else if (name === 'banco') sheetBanco();
@@ -8996,6 +9117,158 @@ var JOGO = (typeof window !== 'undefined')
    * seu save solo e seu cofre; trocar é recarregar a página com `?conta=` na
    * URL — a conta é decidida no boot, antes de db/progress carregarem. A
    * ficha também ensina o teste de DOIS JOGADORES: duas janelas, duas contas. */
+  /* AS CONFIGURAÇÕES (02/10, a frente dos menus). O dono pediu "Configurações"
+   * entre os menus a melhorar, e ela NÃO EXISTIA: o som só se desligava no
+   * botãozinho 🔊 da batalha (sem volume), a tela cheia só no canto, e os
+   * atalhos de teclado não estavam escritos em lugar nenhum. Esta ficha junta
+   * o que é do APARELHO — nada daqui é progresso nem vai para a conta: o som
+   * mora no js/audio.js (chave própria), o movimento numa chave soterra-* que
+   * o save_sandbox das provas já blinda. */
+  var PREF_UI = 'soterra-pref-ui';
+  function prefUi() {
+    try { return JSON.parse(localStorage.getItem(PREF_UI) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function gravaPrefUi(p) {
+    try { localStorage.setItem(PREF_UI, JSON.stringify(p)); } catch (e) {}
+    aplicaPrefUi(p);
+  }
+  // "menos movimento": a ficha não sobe deslizando, o botão não afunda —
+  // para quem enjoa, e para o celular fraco que engasga na animação
+  function aplicaPrefUi(p) {
+    try { document.documentElement.classList.toggle('menos-movimento', !!(p || prefUi()).menosMovimento); } catch (e) {}
+  }
+  aplicaPrefUi();
+  // o 🔊 da batalha acompanha o que a ficha mudou
+  function pintaBotaoSom() {
+    if (!bt.som || !JOGO.Audio) return;
+    bt.som.textContent = JOGO.Audio.isMudo() ? '🔇' : '🔊';
+    bt.som.title = JOGO.Audio.isMudo() ? 'som desligado' : 'som ligado';
+  }
+  /* A CHAVE (o interruptor): um <button role="switch"> com o aria-checked —
+   * o leitor de tela diz "ligado/desligado", o teclado liga com Espaço, e o
+   * alvo tem 44 px de altura, não a bolinha de 20. */
+  function linhaConfig(titulo, dica, controle) {
+    var ln = el('div', 'cfg-linha');
+    var tx = el('div', 'cfg-tx');
+    tx.appendChild(el('b', 'cfg-tit', titulo));
+    if (dica) tx.appendChild(el('span', 'cfg-dica', dica));
+    ln.appendChild(tx);
+    ln.appendChild(controle);
+    return ln;
+  }
+  function chaveConfig(ligada, rotulo, aoMudar) {
+    var b = el('button', 'cfg-chave' + (ligada ? ' is-on' : ''));
+    b.type = 'button';
+    b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', ligada ? 'true' : 'false');
+    b.setAttribute('aria-label', rotulo);
+    b.appendChild(el('span', 'cfg-bola'));
+    tap(b, function () {
+      var on = b.getAttribute('aria-checked') !== 'true';
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.classList.toggle('is-on', on);
+      aoMudar(on);
+    });
+    return b;
+  }
+  var chaveTelaViva = null, ouveTela = false;
+  function sincChaveTela() {
+    var c = chaveTelaViva, TC = JOGO.TelaCheia;
+    if (!c || !c.isConnected || !TC) return;
+    var on = !!TC.cheia();
+    c.setAttribute('aria-checked', on ? 'true' : 'false');
+    c.classList.toggle('is-on', on);
+  }
+  function sheetConfig() {
+    var body = sheetShell('Configurações',
+      'O que vale para este aparelho: o som, a tela e o movimento da interface. Nada daqui mexe no seu progresso.');
+    sheetName = 'config';
+    var Au = JOGO.Audio;
+
+    var som = el('section', 'cfg-sec');
+    som.appendChild(el('h3', 'bk-tit', 'Som'));
+    if (Au && Au.isMudo) {
+      var volume = document.createElement('input');
+      var lnVol = null;
+      som.appendChild(linhaConfig('Som do jogo', 'Golpes, passos e a interface.',
+        chaveConfig(!Au.isMudo(), 'Som do jogo', function (on) {
+          Au.setMudo(!on);
+          pintaBotaoSom();
+          volume.disabled = !on;
+          if (lnVol) lnVol.classList.toggle('is-apagado', !on);
+        })));
+      volume.type = 'range';
+      volume.min = '0'; volume.max = '100'; volume.step = '5';
+      volume.className = 'cfg-volume';
+      volume.value = String(Math.round((Au.getVolume ? Au.getVolume() : 0.7) * 100));
+      volume.setAttribute('aria-label', 'Volume');
+      volume.disabled = Au.isMudo();
+      var vNum = el('output', 'cfg-num', volume.value + '%');
+      volume.addEventListener('input', function () {
+        vNum.textContent = volume.value + '%';
+        Au.setVolume(Number(volume.value) / 100);
+      });
+      // a seta do teclado mexe no volume, não num atalho do jogo
+      volume.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      var vol = el('div', 'cfg-vol');
+      vol.appendChild(volume);
+      vol.appendChild(vNum);
+      lnVol = linhaConfig('Volume', null, vol);
+      if (Au.isMudo()) lnVol.classList.add('is-apagado');
+      som.appendChild(lnVol);
+    } else som.appendChild(el('p', 'empty', 'O som não carregou neste aparelho.'));
+    body.appendChild(som);
+
+    var tela = el('section', 'cfg-sec');
+    tela.appendChild(el('h3', 'bk-tit', 'Tela'));
+    var TC = JOGO.TelaCheia;
+    if (TC && TC.suporta && TC.suporta()) {
+      /* 03/10 (revisão): a chave segue a tela, não o toque. Ela virava na hora
+       * e ficava "ligada" quando o navegador recusava (quadro sem permissão)
+       * e também depois do Esc, que sai da tela cheia sem passar por aqui — e o
+       * toque seguinte fazia o contrário do que a chave mostrava. */
+      chaveTelaViva = chaveConfig(TC.cheia(), 'Tela cheia', function (on) {
+        var p = on ? TC.entra() : TC.sai();
+        if (p && typeof p.then === 'function') p.then(sincChaveTela, sincChaveTela);
+      });
+      tela.appendChild(linhaConfig('Tela cheia', 'Some a barra do navegador. Esc sai.', chaveTelaViva));
+      if (!ouveTela) {
+        ouveTela = true;
+        document.addEventListener('fullscreenchange', sincChaveTela);
+        document.addEventListener('webkitfullscreenchange', sincChaveTela);
+      }
+    }
+    tela.appendChild(linhaConfig('Menos movimento', 'As fichas abrem sem deslizar e os botões não afundam.',
+      chaveConfig(!!prefUi().menosMovimento, 'Menos movimento', function (on) {
+        var p = prefUi(); p.menosMovimento = on; gravaPrefUi(p);
+      })));
+    body.appendChild(tela);
+
+    // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
+    var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
+    if (!toque) {
+      var at = el('section', 'cfg-sec');
+      at.appendChild(el('h3', 'bk-tit', 'Atalhos de teclado'));
+      var lista = el('dl', 'cfg-atalhos');
+      [['I', 'abre e fecha o inventário'], ['Esc', 'fecha a ficha aberta'],
+       ['Tab', 'anda pelos botões da ficha; Enter ou Espaço aperta']]
+        .concat(mestreAtivo() ? [['M', 'abre o Painel do Mestre']] : [])
+        .forEach(function (a) {
+          lista.appendChild(el('dt', null, '<kbd class="tecla">' + a[0] + '</kbd>'));
+          lista.appendChild(el('dd', null, a[1]));
+        });
+      at.appendChild(lista);
+      body.appendChild(at);
+    }
+
+    var conta = el('section', 'cfg-sec');
+    conta.appendChild(el('h3', 'bk-tit', 'Conta'));
+    conta.appendChild(btn('Contas e nuvem', 'btn-ghost btn-block', function () { openSheet('contas'); }));
+    body.appendChild(conta);
+    var ver = safe(function () { return window.SOTERRA_VERSAO.versao; }, null);
+    body.appendChild(el('p', 'cfg-versao', 'SOTERRA — Ecos do Mundo Enterrado' + (ver ? ' · versão ' + esc(ver) : '')));
+  }
+
   function sheetContas() {
     var body = sheetShell('Contas',
       'Cada conta tem seu save e seu cofre. Trocar recarrega a página.');
@@ -9495,12 +9768,16 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(el('p', 'empty', 'Entre na sua conta para ter amigos e inimigos.'));
       return;
     }
-    var abas = el('div', 'am-abas');
+    // 02/10: as duas listas viram ABAS de verdade (mesma pílula das outras fichas)
+    var abas = el('div', 'am-abas abas-fila');
     [['amigos', 'Amigos'], ['inimigos', 'Inimigos']].forEach(function (a) {
-      abas.appendChild(btn(a[1], 'btn-mini ' + (amigosAba === a[0] ? 'btn-gold' : 'btn-ghost'), function () {
+      var on = amigosAba === a[0];
+      var bA = btn(a[1], 'btn-tab' + (on ? ' is-on' : ''), function () {
         amigosAba = a[0];
         sheetAmigos();
-      }));
+      });
+      bA.setAttribute('aria-pressed', on ? 'true' : 'false');
+      abas.appendChild(bA);
     });
     body.appendChild(abas);
 
@@ -10933,6 +11210,7 @@ var JOGO = (typeof window !== 'undefined')
           });
       }));
     }
+    acts.appendChild(btn('Configurações', 'btn-ghost', function () { openSheet('config'); }));
     acts.appendChild(btn('Voltar à luta', 'btn-primary', closeSheet));
     body.appendChild(acts);
   }
