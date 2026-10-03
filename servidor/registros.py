@@ -34,7 +34,8 @@ OS TETOS (o registro não pode virar um jeito de encher o disco):
   - por endereço (ou conta), POSTS_POR_MINUTO pedidos; o resto leva 429 e o cliente
     desiste da sessão;
   - no banco, CHAVES_MAX erros distintos: o mais velho (pela última vez) sai para o novo
-    entrar; e RETENCAO_DIAS: a faxina apaga o que não aparece há 30 dias;
+    entrar — o do cliente nunca despeja o da API —; quem não tem conta abre no máximo
+    NOVAS_SEM_CONTA_HORA erros novos por endereço por hora; e RETENCAO_DIAS: a faxina apaga o que não aparece há 30 dias;
   - contas por erro: CONTAS_POR_ERRO (o painel diz "50 ou mais").
 
 Só biblioteca padrão. Tabelas NOVAS, nunca ALTER (o rolling update divide o banco).
@@ -65,6 +66,12 @@ CAMPO_MAX = 60                   # tela, versão, navegador
 LISTA_MAX = 10                   # versões, telas e navegadores distintos lembrados por erro
 CONTAS_POR_ERRO = 50
 VEZES_MAX = 1000                 # o "vezes" que um lote diz ter visto do mesmo erro (o cliente junta repetidos)
+# 03/10 (revisão): a rota é aberta, e o teto global despejava os mais velhos — um endereço só, sem conta, com 20
+# erros distintos a cada 5 s, trocava as 5.000 linhas em ~21 min e o painel perdia as exceções da API. Agora:
+# quem não tem conta abre no máximo NOVAS_SEM_CONTA_HORA erros NOVOS por endereço por hora (repetir um que já
+# existe segue valendo), diz no máximo VEZES_SEM_CONTA de "vezes", e o erro do cliente nunca despeja o da API
+NOVAS_SEM_CONTA_HORA = 60
+VEZES_SEM_CONTA = 50
 FAXINA_S = 600                   # a faxina dos 30 dias roda no máximo a cada 10 min por processo
 PAINEL_MAX = 200                 # grupos no GET do Mestre
 TIPOS = ('erro', 'promessa', 'excecao')
@@ -185,6 +192,7 @@ class RegistrosMixin:
 
     def _registros_init(self):
         self._registro_baldes = {}       # chave do endereço ou da conta → [instantes] (em memória: é freio, não trilha)
+        self._registro_novas = {}        # chave do endereço sem conta → [instantes em que abriu um erro NOVO]
         self._registro_tranca = threading.Lock()
         self._registro_faxina_em = 0
 
@@ -212,18 +220,42 @@ class RegistrosMixin:
         if n:
             log.info("registro de erros: %d erro(s) sem aparecer há %d dias saíram", n, RETENCAO_DIAS)
 
-    def _registro_grava(self, origem, ent, contexto, conta_id, t):
-        """Uma entrada limpa (le_entrada) no banco: soma na linha da chave ou abre outra."""
+    def _registro_pode_abrir(self, freio):
+        """O endereço sem conta ainda pode abrir um erro NOVO nesta hora? Se pode, já conta."""
+        t = time.monotonic()
+        with self._registro_tranca:
+            lista = [x for x in self._registro_novas.get(freio, ()) if x > t - 3600]
+            if len(lista) >= NOVAS_SEM_CONTA_HORA:
+                self._registro_novas[freio] = lista
+                return False
+            lista.append(t)
+            self._registro_novas[freio] = lista
+            if len(self._registro_novas) > 20000:
+                for k in [k for k, v in self._registro_novas.items() if not v or v[-1] <= t - 3600]:
+                    del self._registro_novas[k]
+        return True
+
+    def _registro_grava(self, origem, ent, contexto, conta_id, t, pode_abrir=None):
+        """Uma entrada limpa (le_entrada) no banco: soma na linha da chave ou abre outra. `pode_abrir`
+        (só para quem não tem conta): chamada antes de abrir uma linha nova; False = a entrada cai.
+        Devolve a chave, ou None quando a entrada não entrou."""
         chave = chave_de(origem, ent['mensagem'], ent['pilha'], ent['onde'])
         r = self.con.execute("SELECT versoes, telas, navegadores FROM erros_registro WHERE chave = ?",
                              (chave,)).fetchone()
         versao, tela, nav = contexto.get('versao'), contexto.get('tela'), contexto.get('navegador')
         if r is None:
+            if pode_abrir is not None and not pode_abrir():
+                return None
             total = self.con.execute("SELECT COUNT(*) FROM erros_registro").fetchone()[0]
             if total >= CHAVES_MAX:
-                # cheio: sai o que está quieto há mais tempo (um erro novo vale mais que um velho resolvido)
-                self.con.execute("DELETE FROM erros_registro WHERE chave IN (SELECT chave FROM erros_registro "
-                                 "ORDER BY ultima_em, chave LIMIT ?)", (total - CHAVES_MAX + 1,))
+                # cheio: sai o que está quieto há mais tempo (um erro novo vale mais que um velho resolvido) —
+                # mas o do cliente só despeja outro do cliente: a exceção da API não sai por causa dele
+                filtro = "WHERE origem = 'cliente' " if origem == 'cliente' else ""
+                saiu = self.con.execute("DELETE FROM erros_registro WHERE chave IN (SELECT chave FROM erros_registro "
+                                        + filtro + "ORDER BY origem = 'api', ultima_em, chave LIMIT ?)",
+                                        (total - CHAVES_MAX + 1,)).rowcount
+                if total - saiu >= CHAVES_MAX:
+                    return None                              # só há da API: o do cliente fica de fora
             self.con.execute(
                 "INSERT INTO erros_registro(chave, origem, tipo, mensagem, onde, pilha, contagem, primeira_em, "
                 "ultima_em, versoes, telas, navegadores) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -264,12 +296,20 @@ class RegistrosMixin:
                     'tela': limpa(corpo.get('tela'), CAMPO_MAX) or None,
                     'navegador': limpa(corpo.get('navegador'), CAMPO_MAX) or None}
         entradas = [x for x in (le_entrada(e) for e in lote[:LOTE_MAX]) if x is not None]
+        pode_abrir = None
+        if conta is None:
+            for ent in entradas:
+                ent['vezes'] = min(ent['vezes'], VEZES_SEM_CONTA)
+            pode_abrir = lambda: self._registro_pode_abrir(freio)   # noqa: E731
         t = agora()
+        aceitos = 0
         with self._escrita():
             self._registro_faxina(t)
             for ent in entradas:
-                self._registro_grava('cliente', ent, contexto, conta['id'] if conta is not None else None, t)
-        return 200, {'ok': True, 'aceitos': len(entradas), 'descartados': len(lote) - len(entradas)}
+                if self._registro_grava('cliente', ent, contexto, conta['id'] if conta is not None else None, t,
+                                        pode_abrir) is not None:
+                    aceitos += 1
+        return 200, {'ok': True, 'aceitos': aceitos, 'descartados': len(lote) - aceitos}
 
     # -- a exceção não tratada da própria API ----------------------------------------------
     def registra_excecao_api(self, metodo, caminho, token=None):

@@ -295,6 +295,58 @@ class ProvaDentroDoProcesso(unittest.TestCase):
         finally:
             registros.CHAVES_MAX = velho
 
+    def test_teto_o_do_cliente_nao_despeja_o_da_api(self):
+        """03/10 (revisão): um endereço só enchia o teto e apagava as exceções da API."""
+        velho = registros.CHAVES_MAX
+        registros.CHAVES_MAX = 3
+        try:
+            with self.api._escrita():
+                self.api.con.execute("DELETE FROM erros_registro")
+            t = int(time.time()) - 1000
+            with self.api._escrita():
+                for i, origem in enumerate(('api', 'api', 'cliente')):
+                    self.api._registro_grava(origem, registros.le_entrada({'mensagem': 'base %d' % i}), {}, None, t + i)
+            for i in range(3):
+                with self.api._escrita():
+                    self.api._registro_grava('cliente', registros.le_entrada({'mensagem': 'enche %d' % i}), {}, None,
+                                             t + 10 + i)
+            linhas = sorted((r[0], r[1]) for r in self.api.con.execute("SELECT origem, mensagem FROM erros_registro"))
+            self.assertEqual(linhas, [('api', 'base 0'), ('api', 'base 1'), ('cliente', 'enche 2')])
+            # a da API ainda despeja a do cliente
+            with self.api._escrita():
+                self.api._registro_grava('api', registros.le_entrada({'mensagem': 'api nova'}), {}, None, t + 20)
+            self.assertEqual(sorted(r[0] for r in self.api.con.execute("SELECT origem FROM erros_registro")),
+                             ['api', 'api', 'api'])
+            # só há da API: o do cliente fica de fora
+            with self.api._escrita():
+                fora = self.api._registro_grava('cliente', registros.le_entrada({'mensagem': 'sem lugar'}), {}, None,
+                                                t + 30)
+            self.assertIsNone(fora)
+            self.assertEqual(self.api.con.execute("SELECT COUNT(*) FROM erros_registro").fetchone()[0], 3)
+        finally:
+            registros.CHAVES_MAX = velho
+            with self.api._escrita():
+                self.api.con.execute("DELETE FROM erros_registro")
+
+    def test_sem_conta_abre_poucas_linhas_novas_por_hora(self):
+        velho = registros.NOVAS_SEM_CONTA_HORA
+        registros.NOVAS_SEM_CONTA_HORA = 2
+        try:
+            corpo = lambda msgs, vezes=1: {'_ip': '198.51.100.77', 'erros': [  # noqa: E731
+                {'mensagem': m, 'vezes': vezes} for m in msgs]}
+            st, r = self.api.registro_erros(None, corpo(['anon a', 'anon b', 'anon c']))
+            self.assertEqual((st, r['aceitos'], r['descartados']), (200, 2, 1), r)
+            # repetir um que já existe segue valendo; e o "vezes" de quem não tem conta tem teto
+            st, r = self.api.registro_erros(None, corpo(['anon a'], vezes=1000))
+            self.assertEqual(r['aceitos'], 1, r)
+            n = self.api.con.execute("SELECT contagem FROM erros_registro WHERE mensagem = 'anon a'").fetchone()[0]
+            self.assertEqual(n, 1 + registros.VEZES_SEM_CONTA)
+            # outro endereço tem a própria cota
+            st, r = self.api.registro_erros(None, dict(corpo(['anon d']), _ip='198.51.100.78'))
+            self.assertEqual(r['aceitos'], 1, r)
+        finally:
+            registros.NOVAS_SEM_CONTA_HORA = velho
+
     def test_limpa(self):
         self.assertEqual(registros.limpa('ok? sim', 50), 'ok? sim', 'o "?" de frase fica')
         self.assertEqual(registros.limpa("Unexpected token '?'", 50), "Unexpected token '?'")
