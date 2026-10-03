@@ -140,7 +140,7 @@ OUTRO lado e o a favor só pega o lado de quem lança, e quem lança sempre, est
 (`Engine.feiticoMisto`). E a `trap` que cairia numa casa que o MESMO lance acabou de murar vai para a
 primeira vizinha de chão livre (norte, sul, oeste, leste). Feitiço de `targetSide: 'self'` cuja área
 é só a casa de quem lança: o hostil é o PREÇO e cai em quem lança (o `poison` do `sumo-fogo-15` e do
-`espadachim-fogo-12`). Os três sobem `Engine.VERSAO_REGRAS` para 6.
+`espadachim-fogo-12`). Os três sobem `Engine.VERSAO_REGRAS` para 6 (a mesma subida do chão do Poço e do Eco Primordial: uma só para o pacote de 03/10).
 
 ## 4. Fusão — sistema de composição
 

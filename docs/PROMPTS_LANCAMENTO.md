@@ -28,11 +28,13 @@ cenário vem em folha e o personagem vem recortado.
 
 1. **Os quatro Colossos** — o código já os espera: cada um tem a chave de
    modelo dele (`colosso-fogo`…) e, enquanto ela não existe, veste o corpo
-   provisório de um monstro do mesmo elemento (branch `noite/poco`,
-   `M.CORPO_PROVISORIO` em `js/render3d/models3d_v2.js`). Embutiu com a chave,
+   provisório de um monstro do mesmo elemento (`M.CORPO_PROVISORIO` em
+   `js/render3d/models3d_v2.js` — desde a junção de 03/10, UMA tabela para os
+   Colossos e o Eco; o aviso da revisão sobre as duas tabelas que se apagavam
+   foi resolvido ali). Embutiu com a chave,
    o colosso troca de roupa sozinho. É o lote que aparece no jogo mais rápido.
 2. **O Eco Primordial e os quatro Menores** — o evento semanal é vitrine do
-   lançamento. Também já esperam pela chave (branch `noite/supremo`): o Eco
+   lançamento. Também já esperam pela chave (a mesma tabela): o Eco
    veste hoje o Coração Partido a 2,44×, os Menores vestem os Arautos.
 3. **A Sala de Guerra** — hoje é toda primitiva desenhada no código. A arte
    entra, mas precisa de um catálogo novo no código para trocar as primitivas

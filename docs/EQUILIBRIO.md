@@ -179,7 +179,8 @@ cada classe contra as outras seis entre **45% e 55%**.
 
 Medir mais de um turno, com a área mirada direito, fez aparecer coisas que nenhum ajuste de
 número conserta — e que o `PAIR_TUNE` antigo estava tapando (o 3,83 do Muro Vivo existia
-por causa delas). Tudo isto sobe `Engine.VERSAO_REGRAS` para 6.
+por causa delas). Tudo isto sobe `Engine.VERSAO_REGRAS` para 6 — a mesma subida do chão do Poço e do Eco Primordial,
+que entraram juntos na junção de 03/10 (uma subida só para o pacote).
 
 **3.1 O feitiço misto acertava o lado errado** (`engine.js`, `feiticoMisto`). O motor
 aplicava cada efeito em **quem estivesse na área**, de qualquer lado. Feitiço de classe

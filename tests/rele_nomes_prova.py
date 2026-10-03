@@ -808,7 +808,13 @@ def _prova_com_banco(R, banco, contas):
         w, _ = rl.liga('marcabanido1')
         manda(w, t='ident', de='jbanido', token=contas['banido'][1])
         r = recebe(w, 3)
-        manda(w, t='chat', de='jbanido', nome='GM Banido', texto='x')
+        # 03/10 (a junção): o relé FECHA a conexão do banido logo depois do {t:'banido'}; se o
+        # fechamento chega antes desta fala, o envio levanta ConnectionClosed — o que a prova
+        # quer (a fala não sai) vale do mesmo jeito, então a corrida não derruba a prova inteira
+        try:
+            manda(w, t='chat', de='jbanido', nome='GM Banido', texto='x')
+        except Exception:
+            pass
         ch = primeiro(junta(obs, 0.5), 'chat', 'jbanido')
         try:
             rb = json.loads(r) if r else {}

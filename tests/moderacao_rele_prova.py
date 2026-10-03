@@ -41,6 +41,7 @@ sys.path.insert(0, AQUI)
 sys.path.insert(0, SERVIDOR)
 import api as cartorio  # noqa: E402
 import comum  # noqa: E402
+import privacidade  # noqa: E402   (03/10, a junção: o cadastro exige o aceite dos Termos)
 import moderacao  # noqa: E402
 import rele_ident  # noqa: E402
 from rele_prova import junta, manda, recebe  # noqa: E402
@@ -64,7 +65,7 @@ def cria_banco(pasta):
     contas = {}
     for i, rotulo in enumerate(('vigia', 'ana', 'bia', 'caio', 'duda', 'eva', 'fabio')):
         st, r = a.cadastro(None, {'nome': 'Prova %s' % rotulo.capitalize(), 'email': 'mod-%s-%d@prova.test' % (rotulo, i),
-                                  'senha': 'senha-de-prova-%d' % i})
+                                  'senha': 'senha-de-prova-%d' % i, 'aceiteTermos': privacidade.VERSAO_TERMOS})
         assert st == 201, (st, r)
         contas[rotulo] = (r['conta']['id'], r['token'])
     with a.tranca:

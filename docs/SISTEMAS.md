@@ -106,7 +106,9 @@ O que "obstáculos atrapalham" quer dizer no motor, medido em **todas** as salas
 
 O juiz refaz a sala com esta mesma função, então mudar a visão muda o fim de
 salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **6**
-(02/10: o corpo grande e o Eco Primordial, §6-B).
+— uma subida só, na junção de 03/10, para as três frentes que mudaram o fim de uma sala: o
+equilíbrio (docs/EQUILIBRIO.md), o chão do Poço e os Colossos (§6) e o corpo grande com o Eco
+Primordial (§6-B).
 
 ### Alcance e área
 
