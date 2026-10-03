@@ -568,6 +568,27 @@ var JOGO = (typeof window !== 'undefined')
    * armadilha, o evento e a poça da casa caem junto. */
   function desaba(state, p, I) {
     var tile = I.tileAt(state, p.x, p.y);
+    /* O MURO INVOCADO EM CIMA DO RACHADO (revisão de 02/10). O Minotauro pode
+     * erguer muro numa casa rachada (é chão livre); antes, o desabamento via
+     * 'wall', dava o rachado por caído e não abria buraco nenhum — o muro
+     * caía, a casa voltava a ser chão de andar, e a tela seguia desenhando o
+     * poço preto por cima dela. O chão cede por baixo do muro: o muro guarda
+     * 'hole' como o que a casa ERA, e devolve buraco quando expirar. */
+    if (tile && tile.type === 'wall' && tile.invocado) {
+      for (var w = 0; w < (state.walls || []).length; w++) {
+        var mw = state.walls[w];
+        if (mw.x === p.x && mw.y === p.y) { mw.antes = 'hole'; mw.deco = false; }
+      }
+      tile.desabou = true;
+      p.caiu = true; p.aviso = 0;
+      state.traps = state.traps.filter(function (t) { return t.x !== p.x || t.y !== p.y; });
+      state.tileEventsActive = state.tileEventsActive.filter(function (t) { return t.x !== p.x || t.y !== p.y; });
+      state.perigos = state.perigos.filter(function (q) { return q.tipo !== 'poca' || q.x !== p.x || q.y !== p.y; });
+      I.emit({ type: 'perigoDispara', id: p.id, tipo: 'rachado', x: p.x, y: p.y, casas: [{ x: p.x, y: p.y }],
+               elemento: 'neutro', atingidos: [] });
+      E().log('O chão rachado cede por baixo do muro: quando o muro cair, ali é buraco.');
+      return;
+    }
     if (!tile || tile.type !== 'floor') { p.caiu = true; p.aviso = 0; return; }
     var u = quemEsta(state, p.x, p.y), destino = null;
     if (u) {

@@ -291,6 +291,35 @@ function golpe(Ex, id, el, n) {
         !!ru && h2.x === 1 && h2.y === 3 && h2.pp === Math.max(0, pp0 - 1 - Po.RUNA_PP), JSON.stringify({ ru, pos: [h2.x, h2.y], pp: [pp0, h2.pp] }));
 })();
 
+/* O muro do Minotauro em cima do chão rachado (revisão de 02/10): o rachado
+ * que desaba debaixo do muro tem de virar buraco quando o muro cair — antes
+ * ele se dava por caído, a casa voltava a ser chão de andar e a tela seguia
+ * desenhando o poço preto por cima dela. */
+(function muroSobreRachado() {
+  const Jx = novo(), Ex = Jx.Engine;
+  const id = salaDeProva(Jx, [
+    '#########',
+    '#P......#',
+    '#.......#',
+    '#......a#',
+    '#########'
+  ], { a: 'cave-jaw' }, [{ tipo: 'rachado', x: 3, y: 2, desaba: 3 }]);
+  const st = Ex.createBattle(id, 0, [{ classId: 'minotauro', heroId: 'h1', level: 30 }], { seed: 1 });
+  const h = st.units.find((u) => u.side === 'player'), m = st.units.find((u) => u.side === 'enemy');
+  m.paMax = 0; m.ppMax = 0;
+  ateRodada(Ex, st, 2);
+  daVez(st, h); h.pp = 0; h.pa = 10;
+  if (h.spells.indexOf('minotauro-neutro-3') < 0) h.spells = h.spells.concat(['minotauro-neutro-3']);
+  const ergueu = Ex.cast(st, h.uid, 'minotauro-neutro-3', 3, 2) && st.grid.tiles[2][3].type === 'wall';
+  ateRodada(Ex, st, 6);
+  const p = st.perigos.find((q) => q.tipo === 'rachado');
+  h.pp = 9;
+  const pisavel = Ex.reachable(st, h.uid).some((c) => c.x === 3 && c.y === 2);
+  check('o rachado que desaba debaixo de um muro invocado vira buraco quando o muro cai (a tela e a regra dizem o mesmo)',
+        ergueu && p.caiu && st.walls.length === 0 && st.grid.tiles[2][3].type === 'hole' && !pisavel,
+        JSON.stringify({ ergueu, caiu: p.caiu, casa: st.grid.tiles[2][3].type, muros: st.walls.length, pisavel }));
+})();
+
 // ------------------------------------------------------------------ a IA e o caminho
 (function () {
   const Jx = novo(), Ex = Jx.Engine;

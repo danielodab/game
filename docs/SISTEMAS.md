@@ -338,7 +338,7 @@ semente, todos **à vista desde o começo** e todos **avisados antes de ferir**:
 | **placa de setas** | 1 | quem pisa (herói ou monstro) arma; setas varrem até 5 casas numa direção (até o primeiro obstáculo); a placa não está na linha | a linha acende ao armar; dispara no começo da **2ª rodada depois** |
 | **runa de exaustão** | 1 | prende o passo em cima dela e tira 2 PP | ela mesma (não fere) |
 | **jato** (fogo, água, terra ou ar) | 2 | a casa do respiro e as 4 vizinhas, a cada 3 rodadas a partir da 3ª; a resistência conta | a área acende no começo da rodada anterior |
-| **chão rachado** | 3 | desaba na rodada 3 a 5 e vira buraco; quem está em cima se fere e sobe na casa livre mais perto | range no começo da rodada anterior |
+| **chão rachado** | 3 | desaba na rodada 3 a 5 e vira buraco; quem está em cima se fere e sobe na casa livre mais perto; debaixo de um muro invocado ele cede do mesmo jeito, e o muro devolve buraco ao cair | range no começo da rodada anterior |
 
 O dano é **fração da vida máxima** da vítima (setas 12%, jato 15%, queda 10%;
 chefe e colosso levam metade): o Poço recebe herói de qualquer nível, e número
