@@ -305,7 +305,8 @@ expiração encerra o turno automaticamente; `Game.declareFusion(uidA, uidB)`;
 devolve o modo de movimento (nunca gasta a ação). 02/10: `Game.startEco(heroIds, aoAbrir)` (a tentativa do Eco:
 semente do servidor com sessão, treino sem), `Game.ecoTentativa()`, `Game.ecoFim()` e a tela `ecoFim`.
 03/10: `Game.ecoSalEstado()` → `{rodada, treino, semRede, tentativas}` enquanto a rodada espera o sal (null fora
-disso); o `Game.update` pede o sal sozinho (`JOGO.Autoridade.salEco`), tenta de novo sem rede e encerra a
+disso); o `Game.update` pede o sal sozinho (`JOGO.Autoridade.salEco`), tenta de novo sem rede (e quando o pedido
+fica sem resposta por `Game.SAL_PRAZO_MS`, 10 s) e encerra a
 tentativa na recusa de vez (`ecoFim().parouNaRodada`, `.semSal`).
 
 ### `JOGO.Renderer` (Designer Render) — PixiJS

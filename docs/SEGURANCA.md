@@ -245,7 +245,9 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
   - **Por que a chave é derivada e não guardada**: os dois contêineres do rolling update leem o mesmo segredo
     (`/dados/segredo`, §4) e chegam à mesma chave; o juiz recebe a chave DA tentativa, nunca o segredo.
   - **Sem rede** o jogo espera (a barra diz "sem resposta do servidor") e pede de novo o mesmo caminho a cada
-    4 s; a recusa de vez (vencida, `caminho-preso`) encerra a tentativa na virada e fecha com os lances até ali.
+    4 s. O pedido que não volta nem falha (a conexão que morreu calada: o `fetch` não tem prazo) conta como sem
+    rede depois de 10 s (`Game.SAL_PRAZO_MS`) e sai outro; o sal que o velho trouxer tarde não entra duas vezes.
+    A recusa de vez (vencida, `caminho-preso`) encerra a tentativa na virada e fecha com os lances até ali.
     O treino (sem sessão) passa pela mesma parada com um sal local e não pontua.
 - `POST /api/supremo/fechar` `{tentativa, lances, hashFinal}` → o juiz (`POST /supremo/fecha`, §5.4)
   refaz a Câmara pelo MESMO refazer da sala e devolve `Engine.ecoPlacar`. O que vale é esse número:

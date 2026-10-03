@@ -453,6 +453,7 @@ var JOGO = (typeof window !== 'undefined')
   var fimEco = null;           // o que a tela 'ecoFim' mostra
   var abrindoEco = false;      // o pedido da semente está no servidor: não sai outro
   var salEco = null;           // 03/10: { rodada, pedindo, dormindo, semRede, tentativas } do sal pedido agora
+  Game.SAL_PRAZO_MS = 10000;   // o pedido do sal sem resposta nenhuma em 10 s conta como sem rede (pedeSalEco)
   Game.ecoTentativa = function () {
     return ataEco ? { tentativa: ataEco.tentativa, treino: !!ataEco.treino, restantes: ataEco.restantes } : null;
   };
@@ -587,14 +588,26 @@ var JOGO = (typeof window !== 'undefined')
     salEco = pedido;
     // o caminho dos lances ATÉ AQUI: o juiz recalcula o mesmo, com o lance do sal logo depois deles
     var caminho = eng.ecoCaminho(ataSolo.lances);
+    /* O PEDIDO PENDURADO (revisão de 03/10). O fetch não tem prazo: a conexão que morreu calada (o celular que
+     * trocou de antena, o túnel, o Wi-Fi que caiu sem avisar) deixa o pedido sem resposta e sem erro por minutos,
+     * e a rodada ficava parada dizendo "vem do servidor…" sem pedir de novo — provado em tests/eco_sal_cliente.js.
+     * Passado Game.SAL_PRAZO_MS, o pedido conta como sem rede (a barra diz) e o próximo quadro pede outro: o MESMO
+     * caminho recebe o MESMO sal, então o pedido em dobro não estraga nada no servidor. */
+    setTimeout(function () {
+      if (salEco === pedido && pedido.pedindo) { pedido.pedindo = false; pedido.semRede = true; }
+    }, Game.SAL_PRAZO_MS || 10000);
     A.salEco({ tentativa: tent, rodada: r, caminho: caminho }).then(function (resp) {
       // a tentativa acabou (ou outra começou) enquanto o pedido viajava: a resposta não serve mais
-      if (salEco !== pedido || !ataEco || ataEco.tentativa !== tent || Game.state !== st) return;
+      if (!ataEco || ataEco.tentativa !== tent || Game.state !== st) return;
+      // o sal vale mesmo vindo do pedido que passou do prazo (os lances não mudam na espera: o caminho é o
+      // mesmo), desde que a rodada dele ainda espere — o segundo sal da mesma rodada não entra
       if (resp && resp.ok && typeof resp.sal === 'number') {
+        if (eng.ecoEsperaSal(st) !== r) return;
         salEco = null;
         aplicaSalEco(r, resp.sal);
         return;
       }
+      if (salEco !== pedido) return;      // a falha de um pedido que outro já substituiu não decide nada
       if (resp && resp.foraDoAr) {
         pedido.pedindo = false;
         pedido.dormindo = true;

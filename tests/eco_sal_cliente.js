@@ -15,6 +15,8 @@
  *   - sem rede, a tentativa ESPERA (o estado diz "sem rede"), pede de novo o MESMO caminho e segue quando volta;
  *   - a recusa de vez (a tentativa venceu) encerra a tentativa ali e fecha com os lances até a rodada que valeu;
  *   - largar no meio da espera fecha sem o sal, e o sal que chega depois não mexe em nada;
+ *   - o pedido pendurado (a conexão que morreu calada: nem resposta nem erro) passa do prazo e sai outro, e o sal
+ *     que ele trouxer tarde não entra duas vezes;
  *   - o treino (sem servidor) passa pela mesma parada com um sal daqui, sem pedir nada a ninguém. */
 const path = require('path');
 const raiz = path.join(__dirname, '..');
@@ -109,7 +111,9 @@ function cliente(inicial, srv, ligado) {
   const ctx = mundo(arqs, (c) => {
     c.window = c;
     c.crypto = nodeCrypto.webcrypto;
-    c.setTimeout = (fn, ms) => setTimeout(fn, Math.min(ms || 0, 20));
+    // a retentativa sem rede (4 s) encurta; o prazo do pedido pendurado (Game.SAL_PRAZO_MS, 10 s) fica de verdade —
+    // o cenário que o quer curto troca o número no Game dele
+    c.setTimeout = (fn, ms) => setTimeout(fn, (ms || 0) >= 10000 ? ms : Math.min(ms || 0, 20));
     c.clearTimeout = clearTimeout;
     c.addEventListener = () => {};
     c.JOGO = {
@@ -280,6 +284,37 @@ async function anda(c, para, limite) {
         fech4.length === 1 && fech4[0].corpo.lances.every((l) => l.a !== 'r') && G4.screen === 'hub' && !G4.state,
         fech4.length + ' ' + G4.screen);
   check('o sal que chega depois de largar não mexe em nada', !G4.state && G4.screen === 'hub');
+
+  // ---- 4b. o pedido PENDURADO (revisão de 03/10): a conexão morreu calada e o fetch não responde nem falha. Sem
+  // prazo, a rodada ficava parada para sempre num pedido só; com ele, o pedido conta como sem rede, sai outro com o
+  // MESMO caminho, e o sal que o primeiro trouxer tarde não entra duas vezes
+  const srv6 = servidor(inicial);
+  let pendura = 0, soltaVelho = null;
+  srv6.modoSal = (corpo) => (corpo.rodada === 2 && pendura === 0)
+    ? (pendura++, new Promise((res) => { soltaVelho = () => res(srv6.responde('/api/supremo/sal', corpo)); }))
+    : null;
+  const seis = cliente(inicial, srv6);
+  const G6 = seis.J.Game;
+  G6.SAL_PRAZO_MS = 50;
+  await comeca(seis);
+  await anda(seis, (g) => !!g.ecoSalEstado());
+  for (let i = 0; i < 200 && G6.state && G6.state.round === 1; i++) { await espera(2); G6.update(0.05); }
+  const ped6 = srv6.dos('/api/supremo/sal').filter((p) => p.corpo.rodada === 2);
+  check('o pedido pendurado (sem resposta e sem erro) passa do prazo e sai outro com o MESMO caminho, e a rodada 2 começa',
+        ped6.length === 2 && ped6[1].corpo.caminho === ped6[0].corpo.caminho && !!G6.state && G6.state.round === 2,
+        ped6.length + ' pedidos, rodada ' + (G6.state && G6.state.round));
+  const lances6 = () => (registroDe(seis) || { lances: [] }).lances.filter((l) => l.a === 'r');
+  const antes6 = lances6().length, h6 = seis.J.Engine.hash(G6.state);
+  soltaVelho();
+  await espera(10);
+  check('... e o sal que o pedido velho traz depois não entra de novo (um lance de sal da rodada 2, nada mexe)',
+        lances6().length === antes6 && lances6().filter((l) => l.r === 2).length === 1 && seis.J.Engine.hash(G6.state) === h6,
+        JSON.stringify(lances6()));
+  await anda(seis);
+  const t6 = srv6.tentativas[Object.keys(srv6.tentativas)[0]];
+  for (let i = 0; i < 200 && t6 && t6.estado === 'aberta'; i++) await espera(2);
+  check('... e a tentativa que passou pelo pedido pendurado fecha limpa no juiz', !!t6 && t6.estado === 'conferida',
+        t6 && (t6.estado + ' ' + t6.recusa));
 
   // ---- 5. o treino (sem servidor): a mesma parada, com o sal daqui
   const srv5 = servidor(inicial);
