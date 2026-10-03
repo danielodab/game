@@ -620,9 +620,13 @@ Desde 02/10, com a conta do site (o servidor dono da economia), liberar classe,
 nível e elemento viram ops do Mestre (`GM.liberaClasse`/`poeNivel`/`poeElemento`
 em `js/core/gm.js`, refeitas pelo juiz); encher o saco, desfazer e a Brasa ficam
 só para o jogo local. O mesmo corpo aparece na aba **Ferramentas** do painel do
-Mestre (`js/ui/painel_mestre.js`, tecla F9), que também dá peça com estrelas e
-forja, moedas, e cuida de contas, denúncias e banimentos — a regra disso mora no
-servidor (`docs/SEGURANCA.md` §10).
+Mestre (`js/ui/painel_mestre.js`). Desde 03/10 ele é o painel **único** do Mestre
+(tecla M, F9 ou Ctrl+Alt+M, e os botões ⚔): a Caixa (peça com estrelas, forja e
+quantidade, conjunto, bicho, pedras, selos, insígnias, cartas, pergaminhos e
+bônus de XP — para o próprio Mestre ou para QUALQUER jogador, pelo servidor, com
+aviso "O Mestre te enviou …" e carta da Equipe), moedas, contas, denúncias,
+banimentos, auditoria, os eventos do mundo e o grimório — a regra disso mora no
+servidor (`docs/SEGURANCA.md` §10.5).
 
 ---
 
