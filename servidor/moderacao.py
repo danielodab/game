@@ -449,6 +449,17 @@ class ModeracaoMixin:
             return None
         t = agora() if t is None else t
         cid = conta['id']
+        # primeiro SÓ LENDO: a conta banida que insiste (cada pedido dela passa por aqui) não
+        # pega a trava de escrita do banco; a _escrita só abre quando há linha vencida a fechar
+        with self.tranca:
+            r = self.con.execute("SELECT banido FROM contas WHERE id = ?", (cid,)).fetchone()
+            if r is None or not r['banido']:
+                return None
+            rows = _abertas(self.con, 'moderacao_banimentos', cid)
+            if not rows:
+                return dict(BANIMENTO_LEGADO)       # o banimento de antes desta tabela: permanente
+            if not any(x['fim'] is not None and x['fim'] <= t for x in rows):
+                return punicao_publica(_vigente(rows, t))
         with self._escrita():
             r = self.con.execute("SELECT banido FROM contas WHERE id = ?", (cid,)).fetchone()
             if r is None or not r['banido']:
