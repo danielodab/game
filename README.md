@@ -206,11 +206,11 @@ jogador. Página nova sem essa linha é bug.
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
-| `carga.html` | passou — 23,87 MB servido contra 30,84 MB embutido |
+| `carga.html` | passou (03/10) — 40,02 MB na primeira visita servida, 92 `.glb` (eram 40,88 MB antes do relevo/brilho a 512) |
 | `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
 | `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
-| **`texturas_prova.py`** (Python) | 15 de 15 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta, `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
+| **`texturas_prova.py`** (Python) | 16 de 16 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta (também quando divide o bufferView com o relevo), `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
 | `texturas_abrem.html` | passou (03/10) — 333/333 `.glb` do bundle abrem no three e desenham, 0 erros de GL |
 | **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |
 

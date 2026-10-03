@@ -32,7 +32,8 @@ O QUE ELE FAZ EM CADA .glb
   1. le o JSON e marca o PAPEL de cada imagem pelo uso: cor (baseColor,
      emissive), relevo, metal/rugosidade, oclusao, ou "outro" (textura
      pendurada numa extensao). So reduz imagem cujos usos sao TODOS relevo/
-     brilho/oclusao — a mesma imagem servindo de cor fica intacta;
+     brilho/oclusao — a mesma imagem servindo de cor fica intacta, e o
+     papel vale pelo bufferView (imagens que dividem os bytes somam papeis);
   2. redimensiona com Lanczos para que o lado maior fique em 512, no MESMO
      formato: JPEG com qualidade 90 e sem subamostrar o croma (4:4:4 — no
      relevo o croma E a direcao da normal), PNG/WebP sem perder canal;
