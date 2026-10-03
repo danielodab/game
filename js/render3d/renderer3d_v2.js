@@ -4559,7 +4559,11 @@ var JOGO = (typeof window !== 'undefined')
 
   function descartaMuro(n) {
     if (n.parent) n.parent.remove(n);
-    n.traverse(function (o) { if (o.isMesh && o.material) o.material.dispose(); });
+    n.traverse(function (o) {
+      if (o.isMesh && o.material) o.material.dispose();
+      // 03/10: o colar de espinhos é instanciado — o buffer das matrizes também vai embora
+      if (o.isInstancedMesh && o.dispose) o.dispose();
+    });
   }
 
   function updateWalls() {
