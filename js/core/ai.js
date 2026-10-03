@@ -15,7 +15,8 @@ var JOGO = (typeof window !== 'undefined')
  *  - Papéis: melee aproxima e bate; ranged mantém a distância ideal e recua se
  *    colado; support cura/bufa o aliado mais ferido; boss avalia tudo.
  *  - O plano nunca excede PA/PP e SEMPRE termina com {action:'end'}.
- *  - teleport/swap não são planejados (valor 0).
+ *  - swap não é planejado (valor 0). O teleporte vale como a investida
+ *    (03/10): aproximar, para quem bate de perto.
  *
  * Novidades v2 (decisões de design documentadas):
  *  - Todos os feitiços são resolvidos por `Engine.spell(id)` (classes, monstros,
@@ -344,6 +345,9 @@ var JOGO = (typeof window !== 'undefined')
         case 'invisible':
           if (!isInvisible(unit)) value += (unit.hp / unit.hpMax < 0.6) ? 8 : 1;
           break;
+        case 'wall':
+          value += valorDoMuro(state, unit, cx, cy, tiles, ctx);
+          break;
 
         // ---------------------------------------------------------------- v2
         case 'root':
@@ -416,7 +420,12 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'moveTo':
-          // investida: aproximar interessa a quem bate de perto
+        case 'teleport':
+          // investida: aproximar interessa a quem bate de perto. 03/10: o
+          // TELEPORTE entra pela mesma régua — valia zero, e o Ladino do Ar
+          // (Passo do Vento) e o Bruxo do Ar nunca saltavam: o caminho inteiro
+          // jogava sem o verbo dele quando a IA conduzia (o herói que caiu da
+          // rede, a bancada do equilíbrio). Nenhum monstro teleporta (medido).
           if (ctx.role === 'melee' || ctx.role === 'boss') {
             var before = ctx.nearestEnemyDistTo(cx, cy);
             var after = ctx.nearestEnemyDistTo(tx, ty);
@@ -426,7 +435,7 @@ var JOGO = (typeof window !== 'undefined')
         case 'chain':
           value += chainValue(state, unit, eff, occ, ctx, elemBonus);
           break;
-        // teleport/swap: valor 0 — a IA não os planeja
+        // swap: valor 0 — a IA não o planeja
       }
     }
     return value;
@@ -457,6 +466,61 @@ var JOGO = (typeof window !== 'undefined')
       cur = next;
     }
     return total;
+  }
+
+  /* 03/10 — O MURO DO MINOTAURO VALIA ZERO PARA A IA. O `switch` de castValue
+   * não tinha o caso 'wall', então o muro puro (Muralha, Muro de Pedra…) nunca
+   * saía, e o muro que vem junto de dano valia só o dano: o verbo inteiro da
+   * classe (BARRAR, docs/CLASSES_V3.md) sumia de toda batalha jogada pela IA —
+   * o herói que caiu da rede (`ia`) e a bancada do equilíbrio, que mede as
+   * classes com a IA dos dois lados. Monstro nenhum ergue muro (medido), então
+   * o PvE não muda.
+   * O que o muro vale aqui é o que ele faz de fato no motor: cortar a VISÃO de
+   * um inimigo até um dos nossos (o tiro que não sai no turno dele) e fechar a
+   * casa ao lado de um inimigo (o passo que ele não dá). Mede a visão com o
+   * muro posto de verdade na grade e devolve a casa como estava — a função
+   * continua pura para quem a chama. Teto de 30: um feitiço de dano médio. */
+  function valorDoMuro(state, unit, cx, cy, tiles, ctx) {
+    var novas = [], i, j;
+    for (i = 0; i < tiles.length; i++) {
+      var c = tiles[i];
+      if (!isFloor(state, c.x, c.y)) continue;
+      var occ = ctx.uAt(c.x, c.y);
+      if (occ && occ !== unit) continue;
+      if (c.x === cx && c.y === cy) continue;
+      novas.push(c);
+    }
+    if (!novas.length) return 0;
+    var meus = [{ u: unit, x: cx, y: cy }];
+    for (i = 0; i < ctx.allies.length; i++) meus.push({ u: ctx.allies[i], x: ctx.allies[i].x, y: ctx.allies[i].y });
+    var pares = [];
+    for (i = 0; i < ctx.enemies.length; i++) {
+      for (j = 0; j < meus.length; j++) {
+        var e = ctx.enemies[i], a = meus[j];
+        if (E().los(state, e.x, e.y, a.x, a.y)) pares.push([e, a]);
+      }
+    }
+    var antes = [];
+    for (i = 0; i < novas.length; i++) {
+      antes.push(state.grid.tiles[novas[i].y][novas[i].x].type);
+      state.grid.tiles[novas[i].y][novas[i].x].type = 'wall';
+    }
+    var v = 0;
+    try {
+      for (i = 0; i < pares.length; i++) {
+        if (!E().los(state, pares[i][0].x, pares[i][0].y, pares[i][1].x, pares[i][1].y)) {
+          v += pares[i][1].u === unit ? 6 : 8;
+        }
+      }
+      for (i = 0; i < novas.length; i++) {
+        for (j = 0; j < ctx.enemies.length; j++) {
+          if (manhattan(novas[i].x, novas[i].y, ctx.enemies[j].x, ctx.enemies[j].y) === 1) v += 2;
+        }
+      }
+    } finally {
+      for (i = 0; i < novas.length; i++) state.grid.tiles[novas[i].y][novas[i].x].type = antes[i];
+    }
+    return Math.min(30, v);
   }
 
   // v2: saldo elemental de trocar o clima
