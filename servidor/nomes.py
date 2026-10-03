@@ -27,6 +27,10 @@ esqueleto de comparação (que desmonta disfarce) e não um `if nome == 'GM'`.
    mod, gm, suporte… seguido de "do jogo", "del juego", "do game", "do
    servidor" ou "da Soterra" — "Criador do Jogo", "Dona do Jogo",
    "Maestro del Juego". Sozinhos, "Criador", "Dona" e "Maestro" passam.
+   E a EQUIPE COMO VOZ (03/10): o jogo assina as falas da moderação como "a
+   Equipe" (carta, correio), então "Equipe"/"Equipo" cai sozinha ou só com
+   artigo, conectivo e as palavras do correio — "A Equipe", "Correio da
+   Equipe", "Carta da Equipe", "Equipe BR". "Equipe Rocket" passa.
 
 2. COMO CADA PALAVRA CONTA — nome de gente não pode virar refém:
    - LONGA (admin, moderador, staff, suporte, desenvolvedor, helpdesk…):
@@ -494,6 +498,12 @@ CARGOS = [
     'suporte', 'soporte', 'support', 'atendimento', 'owner', 'admin', 'mod', 'gm',
 ]
 LIGAS = ['', 'do', 'da', 'de', 'del', 'dos', 'das', 'of', 'ofthe', 'the']
+EQUIPE = ['equipe', 'equipo', 'equipes', 'equipos']   # a Equipe como voz (03/10)
+COM_EQUIPE = [                 # o que pode vir junto dela sem desarmar
+    'a', 'o', 'as', 'os', 'la', 'el', 'los', 'las', 'the', 'da', 'do', 'de', 'del',
+    'das', 'dos', 'correio', 'correo', 'carta', 'cartas', 'mensagem', 'mensaje',
+    'aviso', 'avisos', 'br', 'brasil', 'oficial', 'official',
+]
 OBJETOS = ['jogo', 'juego', 'game', 'servidor', 'server', 'soterra']
 CONECTORES = [
     'do', 'da', 'dos', 'das', 'de', 'di', 'du', 'no', 'na', 'nos', 'nas', 'em',
@@ -1065,6 +1075,34 @@ def _cobre(p, L):
     return None
 
 
+def _voz_equipe(pals, L):
+    """a Equipe como voz: o nome inteiro (as palavras emendadas) é feito só
+    de EQUIPE e COM_EQUIPE, com uma EQUIPE pelo menos — "A Equipe", "Correio
+    da Equipe", "EquipeBR". Bit 1: chegou aqui; bit 2: já passou pela Equipe."""
+    p = ''.join(pals)
+    n = len(p)
+    if n == 0:
+        return None
+    chega = [0] * (n + 1)
+    chega[0] = 1
+    for i in range(n):
+        m = chega[i]
+        if not m:
+            continue
+        for t in L['equipe']:
+            if p[i:i + len(t)] == t:
+                chega[i + len(t)] |= 2
+        for t in L['com_equipe']:
+            if p[i:i + len(t)] == t:
+                chega[i + len(t)] |= m
+    if not chega[n] & 2:
+        return None
+    for k in range(len(L['equipe'])):
+        if L['equipe'][k] in p:
+            return EQUIPE[k]
+    return None
+
+
 def _bate(q, L):
     """A palavra reservada (original) que casou numa leitura, ou None."""
     pals, extras = q
@@ -1119,7 +1157,8 @@ def _bate(q, L):
         r = _cobre(p, L)
         if r:
             return r
-    return None
+    # 7) a Equipe como voz (A Equipe, Correio da Equipe)
+    return _voz_equipe(pals, L)
 
 
 def _listas(f):
@@ -1133,6 +1172,8 @@ def _listas(f):
         'cargos': [f(x) for x in CARGOS],
         'ligas': [f(x) for x in LIGAS],
         'objetos': [f(x) for x in OBJETOS],
+        'equipe': [f(x) for x in EQUIPE],
+        'com_equipe': [f(x) for x in COM_EQUIPE],
         'conectores': [f(x) for x in CONECTORES],
         'excecoes': [f(x) for x in EXCECOES],
         'sem': f(NEGA),
@@ -1222,6 +1263,7 @@ def tabelas():
         'dentro': list(DENTRO), 'palavra': list(PALAVRA), 'silaba': list(SILABA),
         'vogais': VOGAIS, 'contexto': list(CONTEXTO), 'cargos': list(CARGOS),
         'ligas': list(LIGAS), 'objetos': list(OBJETOS),
+        'equipe': list(EQUIPE), 'com_equipe': list(COM_EQUIPE),
         'conectores': list(CONECTORES), 'nega': NEGA, 'plural_es': PLURAL_ES,
         'excecoes': list(EXCECOES),
         'acentos': ACENTOS, 'ordinais': ORDINAIS, 'espacos': ESPACOS,

@@ -30,6 +30,10 @@ var JOGO = (typeof window !== 'undefined')
  *    mod, gm, suporte… seguido de "do jogo", "del juego", "do game", "do
  *    servidor" ou "da Soterra" — "Criador do Jogo", "Dona do Jogo",
  *    "Maestro del Juego". Sozinhos, "Criador", "Dona" e "Maestro" passam.
+ *    E a EQUIPE COMO VOZ (03/10): o jogo assina as falas da moderação como "a
+ *    Equipe" (carta, correio), então "Equipe"/"Equipo" cai sozinha ou só com
+ *    artigo, conectivo e as palavras do correio — "A Equipe", "Correio da
+ *    Equipe", "Carta da Equipe", "Equipe BR". "Equipe Rocket" passa.
  *
  * 2. COMO CADA PALAVRA CONTA — nome de gente não pode virar refém:
  *    - LONGA (admin, moderador, staff, suporte, desenvolvedor, helpdesk…):
@@ -501,6 +505,12 @@ var JOGO = (typeof window !== 'undefined')
     'suporte', 'soporte', 'support', 'atendimento', 'owner', 'admin', 'mod', 'gm'
   ];
   var LIGAS = ['', 'do', 'da', 'de', 'del', 'dos', 'das', 'of', 'ofthe', 'the'];
+  var EQUIPE = ['equipe', 'equipo', 'equipes', 'equipos'];   // a Equipe como voz (03/10)
+  var COM_EQUIPE = [              // o que pode vir junto dela sem desarmar
+    'a', 'o', 'as', 'os', 'la', 'el', 'los', 'las', 'the', 'da', 'do', 'de', 'del',
+    'das', 'dos', 'correio', 'correo', 'carta', 'cartas', 'mensagem', 'mensaje',
+    'aviso', 'avisos', 'br', 'brasil', 'oficial', 'official'
+  ];
   var OBJETOS = ['jogo', 'juego', 'game', 'servidor', 'server', 'soterra'];
   var CONECTORES = [
     'do', 'da', 'dos', 'das', 'de', 'di', 'du', 'no', 'na', 'nos', 'nas', 'em',
@@ -1074,6 +1084,32 @@ var JOGO = (typeof window !== 'undefined')
     return null;
   }
 
+  /* a Equipe como voz: o nome inteiro (as palavras emendadas) é feito só de
+   * EQUIPE e COM_EQUIPE, com uma EQUIPE pelo menos — "A Equipe", "Correio da
+   * Equipe", "EquipeBR". Bit 1: chegou aqui; bit 2: já passou pela Equipe. */
+  function vozEquipe(pals, L) {
+    var p = pals.join(''), n = p.length, i, t, m, k;
+    if (n === 0) return null;
+    var chega = [];
+    for (i = 0; i <= n; i++) chega.push(0);
+    chega[0] = 1;
+    for (i = 0; i < n; i++) {
+      m = chega[i];
+      if (!m) continue;
+      for (t = 0; t < L.equipe.length; t++) {
+        if (p.substr(i, L.equipe[t].length) === L.equipe[t]) chega[i + L.equipe[t].length] |= 2;
+      }
+      for (t = 0; t < L.com_equipe.length; t++) {
+        if (p.substr(i, L.com_equipe[t].length) === L.com_equipe[t]) chega[i + L.com_equipe[t].length] |= m;
+      }
+    }
+    if (!(chega[n] & 2)) return null;
+    for (k = 0; k < L.equipe.length; k++) {
+      if (p.indexOf(L.equipe[k]) >= 0) return EQUIPE[k];
+    }
+    return null;
+  }
+
   /* A palavra reservada (original) que casou numa leitura, ou null. */
   function bate(q, L) {
     var pals = q.p, extras = q.e, juntas = pals.concat(extras);
@@ -1129,7 +1165,8 @@ var JOGO = (typeof window !== 'undefined')
       r = cobre(juntas[i], L);
       if (r) return r;
     }
-    return null;
+    // 7) a Equipe como voz (A Equipe, Correio da Equipe)
+    return vozEquipe(pals, L);
   }
 
   function listas(f) {
@@ -1142,7 +1179,8 @@ var JOGO = (typeof window !== 'undefined')
       dentro: m(DENTRO), palavra: m(PALAVRA), silaba: m(SILABA),
       todas: m(DENTRO.concat(PALAVRA)), o_todas: DENTRO.concat(PALAVRA),
       contexto: m(CONTEXTO), cargos: m(CARGOS), ligas: m(LIGAS),
-      objetos: m(OBJETOS), conectores: m(CONECTORES), excecoes: m(EXCECOES),
+      objetos: m(OBJETOS), equipe: m(EQUIPE), com_equipe: m(COM_EQUIPE),
+      conectores: m(CONECTORES), excecoes: m(EXCECOES),
       sem: f(NEGA), plural_es: f(PLURAL_ES)
     };
   }
@@ -1240,6 +1278,7 @@ var JOGO = (typeof window !== 'undefined')
       leet: l.sort(), arte: a,
       dentro: DENTRO, palavra: PALAVRA, silaba: SILABA, vogais: VOGAIS,
       contexto: CONTEXTO, cargos: CARGOS, ligas: LIGAS, objetos: OBJETOS,
+      equipe: EQUIPE, com_equipe: COM_EQUIPE,
       conectores: CONECTORES, nega: NEGA, plural_es: PLURAL_ES, excecoes: EXCECOES,
       acentos: ACENTOS, ordinais: ORDINAIS, espacos: ESPACOS,
       permitidos: PERMITIDOS_EXTRA, cola: COLA,
