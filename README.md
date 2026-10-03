@@ -284,6 +284,33 @@ simula o celular num quadro dentro de uma janela larga, onde as regras `@media` 
 valem; numa tela de verdade de 320, 360 ou 390 px o cais cabe (`eco_hud.html` e `fichas_fotos.html`
 medem isso numa janela de celular).
 
+**A bateria depois da segunda junção de 03/10** (os ajustes `minotauro` → `eco` → `mestre2`, ver
+§7.0.1), comparada com a base `f3f2e35`: todas as provas de Node, todas as de API e relé, e no Chrome
+headless pela vez da máquina as páginas que os ajustes e a noite tocam. **Nenhuma falha nova.** A
+junção quebrou uma prova e foi consertada no mesmo ramo: o espinho no corpo 2×2 do Eco
+(`regras_equilibrio.js`) passava a vez com `endTurn` em laço, e depois do sorteio rodada a rodada a
+virada da Câmara para esperando o sal — a prova agora dá o sal da rodada, como o jogo. Passaram:
+Node — `eco_motor` 74, `eco_sal_cliente` 18, `entregas_cliente` 11, `regras_equilibrio` 64,
+`juiz_supremo` 27, `guerra_bancada` 96, `invisivel_armadilha` 106, `visao_mapas` 218,
+`poco_perigos` 42, `juiz_economia` 46, `juiz_guerra` 26, `juiz_pocoes` 46, `juiz_grupo` 12,
+`juiz_recompensa` 19, `juiz_sala` 9, `mercado_cliente` 26, `um_aparelho_cliente` 33,
+`inatividade_mestre` 11, `registro_erros` 40; API e relé — as 21 `*_api.py` (fora a `guilda_api.py`
+de sempre: `moderacao_api` 16, `supremo_api` 29, `arena_api` 8, `grupo_duelo_api` 17,
+`servidor_api` 43, `conta_api` 33, `guerra_api` 24…), `coolify_prova` 64, `rele_prova` 96,
+`rele_amigos` 26, `rele_aparelho` 15, `rele_presenca` 24, `guerra_rele` 14, `moderacao_rele` 19,
+`texturas_prova` 16, `rede_dois_prova --sem-navegador` 62, `carga_prova` 19; navegador —
+`eco_hud` 49, `painel_mestre` 76, `prova_icones_menus` 76, `gm_agenda` 33, `gm` 13, `muro_visual`
+20, `muro` 12, `muro_area` 5, `pvp_hud` 35, `grupo` 226, `duelo` 10, `campo_pvp` 52, `desafios` 11,
+`guerra_hud` 33, `validate_world` 7.914/0, `validate_data` 2.631/0, `test_engine_v2` 218,
+`texturas_abrem` 333/333, `carga.html` 40,18 MB, `vida_praca` 46, `privacidade_navegador.py` 11,
+`fichas_fotos` 174 e mais 16 páginas de HUD e conta. Falham as mesmas da base: as de cima, `equilibrio.js`
+rápida **423 de 436** (= a ponta do `ajuste/minotauro`), `equilibrio_fusao.html` 118 de 126 (as 8
+da base) e `site_prova.py` só com os retratos dos Colossos. `celular.html` e `toque.html` ficam em
+"rodando…" em tempo real **também na base** (são páginas velhas: listam embutidos à mão e descem sem
+`{ direto: true }`, §8) — os 13 e 12 da tabela são de antes. `juiz_jogador.js` e
+`juiz_grupo_jogador.js` não são provas: são o jogador de mentira que as provas da API chamam (lê o
+pedido da entrada padrão).
+
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
 
@@ -346,7 +373,7 @@ sistema visual das fichas e a ficha de Configurações) → **arte** (`docs/PROM
     das fichas passou a cobrar a ficha do Eco.
 - **Fica para o dono decidir:** a conta banida não alcança "Excluir conta" nem "Baixar meus
   dados" (o 403 do banimento vem antes — direito do titular contra evasão de banimento); o escudo
-  do Minotauro em 1024; o Minotauro na régua da IA (§7.1); a mira dos efeitos do Eco no canto do corpo; e o
+  do Minotauro em 1024; a mira dos efeitos do Eco no canto do corpo; e o
   número de BASE dos feitiços de fusão, que com o `PAIR_TUNE` por nível **desce** do nível 1 para o
   30 em várias duplas (Arqueiro+Bruxo: 15–21 no 1, 14–19 no 30; o poder do herói entra depois, na
   batalha) — a wiki e a barra mostram esse número, e quem lê pode achar que a fusão enfraquece.
@@ -358,6 +385,25 @@ sistema visual das fichas e a ficha de Configurações) → **arte** (`docs/PROM
   Sem rede a tentativa espera e pede de novo; o prazo de 2 h ficou (agora é conforto, não janela de ensaio).
   `Engine.VERSAO_REGRAS` continua **6** (o 6 ainda não tinha ido ao ar). Detalhes em
   [`docs/SEGURANCA.md`](docs/SEGURANCA.md) §4.8 e §9.
+
+### 7.0.1 Os ajustes de antes de subir (03/10, a segunda junção)
+
+Três respostas do dono viraram três frentes a partir de `f3f2e35`, juntadas nesta ordem, cada uma
+num merge próprio: **minotauro** (o muro que fere quem encosta e a paridade da Arena de 5 para 3
+níveis — §4 e §7.1) → **eco** (a sorte de cada rodada vem do servidor, travada no caminho jogado — o
+ensaio fora do jogo acaba, item acima) → **mestre2** (um painel só do Mestre na M e no F9, e a Caixa
+que entrega no inventário de QUALQUER jogador pelo servidor, com aviso, carta da Equipe e auditoria;
+cartas e bicho esperam a luta do jogador acabar). `Engine.VERSAO_REGRAS` continua **6** (o 6 ainda
+não foi ao ar): o histórico em `engine.js` conta, no mesmo 6, o sal das rodadas do Eco e o muro de
+espinhos — esse comentário foi o único conflito, e ficou com as duas coisas.
+
+- **Para o dono testar depois de subir:** com duas contas, a Caixa para o outro jogador (e cartas
+  com ele numa sala: tem de aparecer "mande quando a luta acabar"); uma tentativa do Eco com a rede
+  caindo no meio (a barra espera e continua); o Minotauro com gente jogando — nos níveis 12 e 20 ele
+  ficou um ponto acima da média dos outros.
+- **Consequência aceita:** quem fecha a aba no meio de uma sala fica até 2 h sem receber cartas nem
+  bicho do Mestre (o resto entra). Cada recusa do pedido do sal grava um `supremo-ensaio` na conta,
+  sem teto por tentativa (o save recusado já fazia igual).
 
 ### 7.1 O equilíbrio: medido, acertado, e o que sobrou
 
