@@ -236,6 +236,12 @@ jogos.
 | duelos em dupla: médias de classe em 45–55% | 5 de 28 | **20 de 28** |
 | a prova inteira | 259 de 436 | **399 de 436** |
 
+A prova rápida (`node tests/equilibrio.js`, 2 sementes, a que se roda no dia a dia) deu
+**418 de 436** na mesma árvore: ela é mais branda nas células (só acusa quando o intervalo de
+90% inteiro sai da faixa) e mais ruidosa nas médias (168 jogos — o Caçador oscila entre 53% e
+59% de uma medida para a outra). A referência é a completa. No navegador,
+`tests/equilibrio_fusao.html` deu 118 de 126, o mesmo número da fusão na prova rápida.
+
 ### 4.1 Duelos em dupla — a média de cada classe contra as outras seis
 
 924 jogos por classe e nível (154 por célula).
