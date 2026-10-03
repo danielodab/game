@@ -347,10 +347,105 @@ var JOGO = (typeof window !== 'undefined')
       furado(caixa(9.1, 4, 11, 16, 1.8) + caixa(10.9, 5.8, 7.4, 12.4, 0.9)) +
       cheio('M14.6 8.3L17.1 12L14.6 15.7L12.1 12Z')));
   // o pergaminho: dois rolos cheios e o papel a meia tinta com as linhas
-  poe('gm-pergaminhos',
+  var PERGAMINHO =
     ret(6, 5.4, 12, 13.2, 0, MEIA) +
     ret(8.4, 8.3, 7.2, 1.4, 0.7) + ret(8.4, 11.2, 7.2, 1.4, 0.7) + ret(8.4, 14.1, 4.8, 1.4, 0.7) +
-    ret(3.6, 2.2, 16.8, 3.4, 1.7) + ret(3.6, 18.4, 16.8, 3.4, 1.7));
+    ret(3.6, 2.2, 16.8, 3.4, 1.7) + ret(3.6, 18.4, 16.8, 3.4, 1.7);
+  poe('gm-pergaminhos', PERGAMINHO);
+
+  /* --- AS FICHAS (02/10, a frente dos menus): o medalhão do cabeçalho de
+   * cada ficha e as portas do cais. O cais era de EMOJI — cada sistema
+   * desenha o seu (a mochila rosa do Windows, a azul do Android), com cor
+   * própria que brigava com o ouro da moldura e sem traço comum com os
+   * ícones das abas. Aqui é o mesmo lápis: silhueta cheia, meia tinta, furo.
+   * Quem já tem desenho no catálogo reaproveita (forja, cartas, barraca). */
+  // o busto: a cabeça e os ombros — "eu", a conta
+  var BUSTO = disco(12, 7.4, 4.3) + cheio('M3.4 21.8C3.4 16.4 7.2 13 12 13C16.8 13 20.6 16.4 20.6 21.8Z');
+  poe('fc-personagem', BUSTO);
+  // a mochila: a alça de mão, o corpo com o rasgo da aba e o bolso a meia tinta
+  poe('fc-inventario',
+    risco('M9.2 5.4V4.4C9.2 3 10.4 2 12 2C13.6 2 14.8 3 14.8 4.4V5.4', 1.7) +
+    furado(caixa(4.2, 5, 15.6, 17, 3.6) + 'M4.4 10.4H19.6V11.7H4.4Z' + caixa(7.6, 14, 8.8, 5.4, 1.2)) +
+    ret(7.6, 14, 8.8, 5.4, 1.2, MEIA) + disco(12, 11.05, 1.5));
+  // o grimório fechado: a capa com a runa vazada e o miolo das folhas ao lado
+  poe('fc-feiticos',
+    furado(caixa(4, 2.2, 14, 19.6, 1.8) + estrela(11, 11.6, 5, 1.9, 4)) +
+    ret(18.8, 3.6, 2, 16.8, 0.7, MEIA));
+  poe('fc-missoes', PERGAMINHO);
+  // o escudo de brasão com a asna vazada — o mesmo gesto do estandarte da Sede
+  poe('fc-guilda',
+    furado('M12 2L20.2 4.8V11.4C20.2 16.4 16.8 20.2 12 22C7.2 20.2 3.8 16.4 3.8 11.4V4.8Z' +
+           'M6.8 12.8L12 8.6L17.2 12.8V15.4L12 11.2L6.8 15.4Z'));
+  // dois bustos: o de trás a meia tinta
+  poe('fc-amigos',
+    disco(16.2, 7, 3.3, MEIA) + cheio('M10.8 19.6C10.8 15.2 13.2 12.4 16.2 12.4C19.4 12.4 22 15.2 22 19.6Z', MEIA) +
+    disco(8.8, 8.6, 3.9) + cheio('M2 21.8C2 16.8 5 13.8 8.8 13.8C12.6 13.8 15.6 16.8 15.6 21.8Z'));
+  poe('fc-forja', DESENHO['fg-forjar']);
+  poe('fc-colecao', DESENHO['gm-cartas']);
+  // o baú do cofre: a tampa abaulada e o corpo com o buraco da fechadura
+  poe('fc-banco',
+    cheio('M3 9.4V7.6C3 4.8 5.2 3 8 3H16C18.8 3 21 4.8 21 7.6V9.4Z') +
+    ret(6.2, 3.4, 1.8, 6, 0, MEIA) + ret(16, 3.4, 1.8, 6, 0, MEIA) +
+    furado('M3 10.8H21V20C21 21.1 20.1 22 19 22H5C3.9 22 3 21.1 3 20Z' +
+           roda(12, 14.6, 1.8) + 'M11.2 15.6H12.8L13.3 19H10.7Z'));
+  poe('fc-mercado', DESENHO['mc-meus']);
+  // a roleta: o aro, o miolo a meia tinta riscado pelos raios, e o ponteiro em cima
+  poe('fc-loteria',
+    furado(roda(12, 13.2, 8.8) + roda(12, 13.2, 6.7)) +
+    disco(12, 13.2, 6.7, MEIA) +
+    risco('M12 6.9V19.5M5.7 13.2H18.3M7.55 8.75L16.45 17.65M16.45 8.75L7.55 17.65', 1.4) +
+    disco(12, 13.2, 1.9) + cheio('M9.4 1.6H14.6L12 5.8Z'));
+  // a taça: as alças em risco, a haste e a base em dois degraus
+  poe('fc-placar',
+    cheio('M6.6 2.4H17.4V8.6C17.4 12 15 14.4 12 14.4C9 14.4 6.6 12 6.6 8.6Z') +
+    risco('M6.6 4.8H3.8V6.6C3.8 8.9 5.4 10.6 7.6 10.8M17.4 4.8H20.2V6.6C20.2 8.9 18.6 10.6 16.4 10.8', 1.6) +
+    ret(10.9, 14, 2.2, 3.4, 0.4) + ret(8.2, 17.2, 7.6, 2.4, 0.6, MEIA) + ret(6.2, 19.4, 11.6, 2.4, 1.1));
+  // o retrato no medalhão: o perfil de outro jogador
+  poe('fc-perfil',
+    furado(roda(12, 12, 10) + roda(12, 12, 8.2)) + disco(12, 9.6, 3.1) +
+    cheio('M6.3 18.3C6.8 15.4 9.1 13.6 12 13.6C14.9 13.6 17.2 15.4 17.7 18.3C16.3 19.8 14.3 20.6 12 20.6C9.7 20.6 7.7 19.8 6.3 18.3Z'));
+  // as duas setas que se cruzam: vai uma, volta a outra (a de volta a meia tinta)
+  poe('fc-troca',
+    risco('M3.4 8H18.6M15 4.4L18.6 8L15 11.6', 2.2) +
+    risco('M20.6 16H5.4M9 12.4L5.4 16L9 19.6', 2.2, MEIA));
+  // a chave: o anel vazado, a haste e os dois dentes
+  poe('fc-contas',
+    furado(roda(7.4, 12, 5.4) + roda(7.4, 12, 2.2)) +
+    ret(12.2, 10.9, 9.8, 2.2, 0.6) + ret(17.2, 12.9, 1.9, 3.8, 0.4) + ret(20.1, 12.9, 1.9, 2.8, 0.4));
+  // duas espadas cruzadas: o duelo, a arena, o quadro
+  var ESPADA = cheio('M11 2.6L12 1.3L13 2.6V14.4H11Z') + ret(8.3, 14.4, 7.4, 1.8, 0.9) +
+               ret(11.1, 16.2, 1.8, 3.6, 0.5) + disco(12, 20.6, 1.35);
+  poe('fc-duelo', grupo('rotate(45 12 12)', ESPADA) + grupo('rotate(-45 12 12)', ESPADA));
+  // o balão da conversa com as três reticências vazadas
+  poe('fc-mensagem',
+    furado('M4.4 3.4H19.6C20.9 3.4 22 4.5 22 5.8V14.2C22 15.5 20.9 16.6 19.6 16.6H10.6L5.8 20.8V16.6H4.4C3.1 16.6 2 15.5 2 14.2V5.8C2 4.5 3.1 3.4 4.4 3.4Z' +
+           roda(7.6, 10, 1.45) + roda(12, 10, 1.45) + roda(16.4, 10, 1.45)));
+  // a pausa: o disco com as duas barras vazadas
+  poe('fc-pausa', furado(roda(12, 12, 10) + 'M8.5 7.2H10.9V16.8H8.5ZM13.1 7.2H15.5V16.8H13.1Z'));
+  // a engrenagem de oito dentes com o eixo vazado
+  poe('fc-config', (function () {
+    var d = '', k, a, pts = [], R1 = 7.7, R2 = 10.2;
+    function p(r, g) { var rad = g * Math.PI / 180; pts.push(n(12 + Math.cos(rad) * r) + ' ' + n(12 + Math.sin(rad) * r)); }
+    for (k = 0; k < 8; k++) { a = k * 45; p(R1, a - 16); p(R2, a - 9); p(R2, a + 9); p(R1, a + 16); }
+    d = 'M' + pts.join('L') + 'Z';
+    return furado(d + roda(12, 12, 3.3));
+  })());
+  // a coroa de três pontas: o Mestre
+  poe('fc-mestre',
+    cheio('M2.6 7.6L7.4 12L12 4.6L16.6 12L21.4 7.6L19.6 18H4.4Z') +
+    disco(2.8, 6.6, 1.5) + disco(12, 3.4, 1.6) + disco(21.2, 6.6, 1.5) +
+    ret(4.4, 19.2, 15.2, 2.6, 1));
+  // o triângulo de aviso com a exclamação vazada: a pergunta que confirma
+  poe('fc-alerta',
+    furado('M10.6 3.3C11.2 2.2 12.8 2.2 13.4 3.3L22.1 18.9C22.7 20 21.9 21.3 20.7 21.3H3.3C2.1 21.3 1.3 20 1.9 18.9Z' +
+           'M10.85 8.4H13.15L12.75 14.8H11.25Z' + roda(12, 17.6, 1.3)));
+  // o poço: o telhadinho, as duas colunas, o balde na corda e a mureta de pedra
+  poe('fc-poco',
+    cheio('M2.8 7L12 2.2L21.2 7V8.6H2.8Z') +
+    ret(4.8, 8.6, 1.8, 6, 0.5) + ret(17.4, 8.6, 1.8, 6, 0.5) +
+    risco('M12 8.6V11.4', 1.2) + ret(10.3, 11.2, 3.4, 2.6, 0.6, MEIA) +
+    furado('M3.2 14.6H20.8V20C20.8 21.1 19.9 22 18.8 22H5.2C4.1 22 3.2 21.1 3.2 20Z' +
+           'M3.2 17.7H20.8V18.7H3.2ZM11.5 14.6H12.5V17.7H11.5ZM7.4 18.7H8.4V22H7.4ZM15.6 18.7H16.6V22H15.6Z'));
 
   /* --------------------------------------------------------------- a API */
   function tem(id) { return Object.prototype.hasOwnProperty.call(DESENHO, id); }
