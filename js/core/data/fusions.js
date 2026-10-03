@@ -337,7 +337,10 @@ JOGO.DATA = JOGO.DATA || {};
   // --- ARQUEIRO + ESPADACHIM — Caçador de Sombras -------------------------
   // Assinatura: invisibilidade + salto até o alvo + execução de marcas.
   F['arqueiro+espadachim'] = [
-    { tier: 0, formName: 'Bote', paCost: 3, cooldown: 1, castsPerTurn: 1,
+    // 03/10: a forma de base de toda dupla sai DUAS vezes por turno; o Bote era
+    // a única (com o Encontrão) presa a recarga 1 — no nível 5 a fusão tinha um
+    // golpe por turno contra os quatro dos dois separados e rendia 23% deles
+    { tier: 0, formName: 'Bote', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [mv(4), d('@A', 16, 21)],
@@ -854,7 +857,8 @@ JOGO.DATA = JOGO.DATA || {};
   // --- ESPADACHIM + SUMO — Investida Titânica -----------------------------
   // Assinatura: peso em movimento — investe de longe, agarra, gira e arremessa.
   F['espadachim+sumo'] = [
-    { tier: 0, formName: 'Encontrão', paCost: 3, cooldown: 1, castsPerTurn: 1,
+    // 03/10: a outra forma de base presa a recarga (ver o Bote): rendia 10% no nível 5
+    { tier: 0, formName: 'Encontrão', paCost: 3, cooldown: 0, castsPerTurn: 2,
       range: rng(1, 4), aoe: aoe('single', 0), needsEmptyTile: false, targetSide: 'enemy',
       riderMode: 'offense',
       mechanic: [mv(3), d('@A', 15, 21)],
