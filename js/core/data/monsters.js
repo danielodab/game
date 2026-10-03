@@ -1494,19 +1494,19 @@ JOGO.DATA = JOGO.DATA || {};
     },
     'm-sum-familiar-bite': {
       name: 'Dentada do Familiar', element: 'neutro', paCost: 3,
-      effects: [{ type: 'damage', element: 'neutro', min: 10, max: 14 }],
+      effects: [{ type: 'damage', element: 'neutro', min: 7, max: 10 }],
       description: 'O familiar morde com a convicção de quem não tem nome a zelar.',
       flavor: 'Nome é compromisso. Ele só tem dentes.'
     },
     'm-sum-hound-bite': {
       name: 'Mordida Quente', element: 'fogo', paCost: 3, castsPerTurn: 2,
-      effects: [{ type: 'damage', element: 'fogo', min: 13, max: 17 }],
+      effects: [{ type: 'damage', element: 'fogo', min: 9, max: 12 }],
       description: 'O cão de brasa morde e deixa a marca do ferro em brasa.',
       flavor: 'Abana o rabo. O rabo acende o chão.'
     },
     'm-sum-colossus-smash': {
       name: 'Malho de Magma', element: 'fogo', paCost: 4,
-      effects: [{ type: 'damage', element: 'fogo', min: 26, max: 34 }],
+      effects: [{ type: 'damage', element: 'fogo', min: 22, max: 29 }],
       description: 'O colosso desce o braço fundido como quem fecha um portão.',
       flavor: 'Ninguém o convidava desde a Lousa.'
     },
@@ -1514,83 +1514,83 @@ JOGO.DATA = JOGO.DATA || {};
       name: 'Erupção', element: 'fogo', paCost: 4, cooldown: 2, range: [1, 4],
       shape: 'circle', size: 1,
       effects: [
-        { type: 'damage', element: 'fogo', min: 18, max: 24 },
-        { type: 'poison', element: 'fogo', min: 5, max: 8, duration: 2 }
+        { type: 'damage', element: 'fogo', min: 15, max: 20 },
+        { type: 'poison', element: 'fogo', min: 4, max: 7, duration: 2 }
       ],
       description: 'O chão abre num círculo de 1 célula e cospe magma que continua queimando.',
       flavor: 'O calor dele é que muda o clima da sala.', fxKey: 'nova'
     },
     'm-sum-nymph-mend': {
       name: 'Mão de Maré', element: 'agua', paCost: 3, castsPerTurn: 2, range: [0, 4], targetSide: 'ally',
-      effects: [{ type: 'heal', min: 14, max: 19 }],
+      effects: [{ type: 'heal', min: 10, max: 13 }],
       description: 'A ninfa toca a ferida do aliado e a água decide fechá-la.',
       flavor: 'Ela nunca fala. Só olha para quem está sangrando e resolve.', fxKey: 'heal'
     },
     'm-sum-nymph-veil': {
       name: 'Véu de Água', element: 'agua', paCost: 2, cooldown: 1, range: [0, 4], targetSide: 'ally',
-      effects: [{ type: 'shield', value: 18, duration: 2 }],
-      description: 'Uma película de água parada envolve o aliado: 18 de escudo por 2 turnos.',
+      effects: [{ type: 'shield', value: 13, duration: 2 }],
+      description: 'Uma película de água parada envolve o aliado: 13 de escudo por 2 turnos.',
       flavor: 'Água parada aguenta mais do que água brava.', fxKey: 'shieldFx'
     },
     'm-sum-sentinel-slam': {
       name: 'Pancada de Sentinela', element: 'terra', paCost: 3,
-      effects: [{ type: 'damage', element: 'terra', min: 14, max: 18 }],
+      effects: [{ type: 'damage', element: 'terra', min: 10, max: 13 }],
       description: 'A sentinela bate uma vez, com o peso todo, sem sair do lugar.',
       flavor: 'Fica onde foi posta.'
     },
     'm-sum-sentinel-guard': {
       name: 'Postar-se', element: 'terra', paCost: 2, cooldown: 2, range: [0, 0], los: false, targetSide: 'self',
-      effects: [{ type: 'shield', value: 25, duration: 2 }, { type: 'taunt', duration: 2 }],
-      description: 'A sentinela crava os pés e chama o corredor inteiro para si: 25 de escudo e provocação.',
+      effects: [{ type: 'shield', value: 18, duration: 2 }, { type: 'taunt', duration: 2 }],
+      description: 'A sentinela crava os pés e chama o corredor inteiro para si: 18 de escudo e provocação.',
       flavor: 'O tampão de corredor do invocador.', fxKey: 'shieldFx'
     },
     'm-sum-golem-fist': {
       name: 'Punho da Montanha', element: 'terra', paCost: 4,
-      effects: [{ type: 'damage', element: 'terra', min: 28, max: 36 }],
+      effects: [{ type: 'damage', element: 'terra', min: 24, max: 31 }],
       description: 'Um punho do tamanho de uma porta desce com a paciência de uma encosta.',
       flavor: 'Ele só perguntou se a montanha topava dar uns passos.'
     },
     'm-sum-golem-quake': {
       name: 'Passo de Montanha', element: 'terra', paCost: 4, cooldown: 2, range: [1, 2],
       shape: 'cross', size: 1,
-      effects: [{ type: 'damage', element: 'terra', min: 20, max: 26 }, { type: 'root', duration: 1 }],
+      effects: [{ type: 'damage', element: 'terra', min: 17, max: 22 }, { type: 'root', duration: 1 }],
       description: 'Um passo só, e a cruz ao redor racha: dano em área e pés presos por 1 turno.',
       flavor: 'A montanha não corre. A montanha chega.', fxKey: 'nova'
     },
     'm-sum-drowned-drag': {
       name: 'Braçada Funda', element: 'agua', paCost: 3, castsPerTurn: 1, range: [1, 4],
-      effects: [{ type: 'damage', element: 'agua', min: 20, max: 27 }, { type: 'pull', tiles: 2 }],
+      effects: [{ type: 'damage', element: 'agua', min: 17, max: 23 }, { type: 'pull', tiles: 2 }],
       description: 'O braço pesado alcança longe e traz o alvo 2 células para perto.',
       flavor: 'Não puxa para matar. Puxa para não ficar sozinho.'
     },
     'm-sum-drowned-weight': {
       name: 'Peso de Água', element: 'agua', paCost: 4, castsPerTurn: 1, range: [1, 1],
-      effects: [{ type: 'damage', element: 'agua', min: 26, max: 34 }, { type: 'root', duration: 1 }],
+      effects: [{ type: 'damage', element: 'agua', min: 22, max: 29 }, { type: 'root', duration: 1 }],
       description: 'Despeja o próprio corpo sobre quem está colado: dói e prende no chão por um turno.',
       flavor: 'Afogar é uma questão de paciência.'
     },
     'm-sum-eye-gale': {
       name: 'Ventania Curta', element: 'ar', paCost: 3, castsPerTurn: 1, range: [1, 3],
       aoe: { shape: 'circle', size: 2 },
-      effects: [{ type: 'damage', element: 'ar', min: 16, max: 22 }, { type: 'push', tiles: 2 }],
+      effects: [{ type: 'damage', element: 'ar', min: 17, max: 23 }, { type: 'push', tiles: 2 }],
       description: 'Abre os braços e o que estiver em volta volta 2 células, machucado.',
       flavor: 'Ele não expulsa por raiva. Expulsa por hábito.'
     },
     'm-sum-eye-calm': {
       name: 'Miolo Parado', element: 'ar', paCost: 4, castsPerTurn: 1, range: [0, 2], targetSide: 'ally',
-      effects: [{ type: 'shield', value: 40, duration: 2 }],
-      description: 'Dentro da espiral o vento não bate: quem estiver perto ganha 40 de escudo por 2 turnos.',
+      effects: [{ type: 'shield', value: 34, duration: 2 }],
+      description: 'Dentro da espiral o vento não bate: quem estiver perto ganha 34 de escudo por 2 turnos.',
       flavor: 'No meio da tempestade há um lugar parado.'
     },
     'm-sum-falcon-strike': {
       name: 'Bicada de Tormenta', element: 'ar', paCost: 3, castsPerTurn: 2,
-      effects: [{ type: 'damage', element: 'ar', min: 12, max: 16 }, { type: 'push', tiles: 2 }],
+      effects: [{ type: 'damage', element: 'ar', min: 10, max: 13 }, { type: 'push', tiles: 2 }],
       description: 'O bico acerta com o vento junto e devolve o alvo 2 células.',
       flavor: 'Não existe céu para ele voar. Voa assim mesmo, de raiva.'
     },
     'm-sum-falcon-dive': {
       name: 'Mergulho', element: 'ar', paCost: 4, cooldown: 1, range: [1, 5],
-      effects: [{ type: 'moveTo', maxTiles: 5 }, { type: 'damage', element: 'ar', min: 10, max: 14 }],
+      effects: [{ type: 'moveTo', maxTiles: 5 }, { type: 'damage', element: 'ar', min: 8, max: 12 }],
       description: 'O falcão fecha as asas, atravessa até 5 células e abre as garras no fim.',
       flavor: 'Chega antes de todo mundo, inclusive do plano.', fxKey: 'gust'
     }

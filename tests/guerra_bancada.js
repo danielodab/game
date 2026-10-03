@@ -564,6 +564,14 @@ if (quer('B10')) (function B10() {
   ate(() => IDS.some((id) => tela(id) !== 'battle') || relogio.t - tA > 60000, 600, 100);
   check('a guerra anda para os quatro (ninguém travado, o turno sobe)', IDS.every((id) => tela(id) !== 'battle' || (!cli[id].J.Coop.bloqueado() && turno(id) > T0 + 6)),
         'turnos ' + IDS.map((id) => id + '=' + turno(id)).join(' ') + ' · telas ' + IDS.map(tela).join(','));
+  /* 03/10: com as classes do equilíbrio (docs/EQUILIBRIO.md) a guerra pode
+   * ACABAR dentro da janela acima, e a espera para no primeiro cliente que
+   * sai da batalha — um outro ainda está um passo atrás, com o último lance
+   * por aplicar, e a comparação pegava esse instante (a Ana mostrava vivo o
+   * herói que os outros três já tinham visto cair; um passo depois os quatro
+   * concordam). A regra é a mesma: as marcas iguais nos quatro, comparadas
+   * quando os quatro chegaram ao mesmo ponto. */
+  if (IDS.some((id) => tela(id) !== 'battle')) ate(() => IDS.every((id) => tela(id) !== 'battle'), 3000, 100);
   check('a marca do Cris e a da Duda são iguais nos quatro (a `volta` que chegou antes da foto entrou depois dela)',
         new Set(IDS.map((id) => iaDe(id, 'cris'))).size === 1 && new Set(IDS.map((id) => iaDe(id, 'duda'))).size === 1,
         'cris ' + IDS.map((id) => iaDe(id, 'cris')).join(' ') + ' · duda ' + IDS.map((id) => iaDe(id, 'duda')).join(' '));
