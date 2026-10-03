@@ -444,6 +444,36 @@ class ProvaDaPrivacidade(unittest.TestCase):
         for chave in ('save', 'itens', 'salas', 'barras_de_ouro', 'loja', 'pagamentos', 'mercadinho', 'guilda',
                       'ranking', 'retrato', 'vida_dos_herois', 'registros_de_erro'):
             self.assertIn(chave, d)
+        # 03/10 (revisão): o que a Política lista e o arquivo não trazia — as lutas com outros jogadores, o banco,
+        # o XP doado, o mural, os pedidos de guilda e a presença. Cada lista tem de trazer a linha DESTA conta
+        cid, bid, t = a.conta['id'], b.conta['id'], int(time.time())
+        st, r = a.pede('POST', '/api/guilda/criar', {'nome': 'Guarda Dados %d' % cid})
+        self.assertEqual(st, 200, r)
+        gid = r['guilda']['id']
+        a.pede('POST', '/api/guilda/mural', {'texto': 'meu recado'})
+        self.sql("INSERT OR REPLACE INTO guilda_contrib(guilda_id, conta_id, xp) VALUES (?, ?, 321)", gid, cid)
+        self.sql("INSERT INTO guilda_banco(guilda_id, item_id, nivel, estrelas, iid, dono_id, em) "
+                 "VALUES (?, 'it-dado', 3, 1, 'jdado1', ?, ?)", gid, cid, t)
+        self.sql("INSERT INTO duelos(did, a_id, b_id, fase, venc, criado_em) VALUES ('d-dados-1', ?, ?, 'won', 'B', ?)",
+                 bid, cid, t)
+        self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, "
+                 "b_nivel, a_desde_ms, criada_ms, prazo_ms, estado) VALUES ('d-dados-ar', ?, ?, '[]', '[]', '[]', '[]', "
+                 "1, 1, ?, ?, ?, 'jogada')", cid, bid, t * 1000, t * 1000, t * 1000)
+        self.sql("INSERT INTO rele_presenca(conta_id, evento, em_ms) VALUES (?, 'caiu', ?)", cid, t * 1000)
+        self.sql("DELETE FROM limites WHERE chave = ?", 'meus-dados:%d' % cid)
+        st, r = a.pede('GET', '/api/conta/meus-dados')
+        self.assertEqual(st, 200, r)
+        d = r['dados']
+        self.assertEqual([(x['did'], x['meu_lado'], x['venc']) for x in d['duelos']['itens']], [('d-dados-1', 'B', 'B')])
+        self.assertEqual([(x['did'], x['meu_lado']) for x in d['arena']['itens']], [('d-dados-ar', 'A')])
+        self.assertIn('guerras', d)
+        self.assertIn('salas_em_grupo', d)
+        self.assertEqual([(x['item_id'], x['iid']) for x in d['guilda_banco_minhas_pecas']], [('it-dado', 'jdado1')])
+        self.assertEqual([x['xp'] for x in d['guilda_xp_doado']], [321])
+        self.assertEqual([x['texto'] for x in d['guilda_mural_escrito']], ['meu recado'])
+        self.assertEqual([x['evento'] for x in d['presenca']], ['caiu'])
+        self.assertNotIn('"%d"' % bid, json.dumps(d['duelos']), 'o número do adversário não entra')
+        # (o balde foi esvaziado antes deste pedido: ele é o 1º da hora, e o laço abaixo completa o teto)
         for _ in range(privacidade.MEUS_DADOS_POR_HORA - 1):
             self.assertEqual(a.pede('GET', '/api/conta/meus-dados')[0], 200)
         st, r = a.pede('GET', '/api/conta/meus-dados')

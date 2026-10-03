@@ -412,6 +412,45 @@ class PrivacidadeMixin:
                 'propostas': self._lista("SELECT valor, estado, criado_em, resolvida_em FROM mercado_propostas "
                                          "WHERE comprador_id = ? ORDER BY id DESC", (cid,))},
         }
+        # 03/10 (revisão): o resto do que o servidor guarda desta conta. A Política (seção 8) e a página
+        # prometem "tudo"; sem estes, faltavam as lutas com outros jogadores (que a Política lista na
+        # seção 2), as peças da pessoa guardadas no banco da guilda, o XP que ela doou, a mensagem que
+        # escreveu no mural, os pedidos e convites de guilda e a presença do relé. O adversário entra só
+        # como o LADO (A/B) — o número da outra conta é dado de outra pessoa
+        dados['duelos'] = self._lista(
+            "SELECT did, CASE WHEN a_id = ? THEN 'A' ELSE 'B' END AS meu_lado, fase, venc, criado_em FROM duelos "
+            "WHERE a_id = ? OR b_id = ? ORDER BY criado_em DESC", (cid, cid, cid))
+        dados['arena'] = self._lista(
+            "SELECT did, CASE WHEN a_id = ? THEN 'A' ELSE 'B' END AS meu_lado, estado, criada_ms, pronta_ms "
+            "FROM arena_partidas WHERE a_id = ? OR b_id = ? ORDER BY criada_ms DESC", (cid, cid, cid))
+        dados['guerras'] = self._lista(
+            "SELECT p.gid, j.lado AS meu_lado, j.herois, p.estado, p.criada_ms FROM guerra_jogadores j "
+            "JOIN guerra_partidas p ON p.gid = j.gid WHERE j.conta_id = ? ORDER BY p.criada_ms DESC", (cid,))
+        dados['salas_em_grupo'] = self._lista(
+            "SELECT dungeon, sala, dificuldade, estado, aberta_em, fechada_em, "
+            "CASE WHEN lider_id = ? THEN 'lider' ELSE 'membro' END AS papel FROM salas_grupo "
+            "WHERE lider_id = ? OR membro_id = ? ORDER BY aberta_em DESC", (cid, cid, cid))
+        # uma linha por guilda: a contribuição fica na guilda de antes quando a pessoa sai dela
+        dados['guilda_xp_doado'] = [dict(r) for r in self.con.execute(
+            "SELECT g.nome AS guilda, c.xp FROM guilda_contrib c JOIN guildas g ON g.id = c.guilda_id "
+            "WHERE c.conta_id = ? ORDER BY g.nome", (cid,))]
+        dados['guilda_banco_minhas_pecas'] = [dict(r) for r in self.con.execute(
+            "SELECT g.nome AS guilda, b.item_id, b.nivel, b.estrelas, b.iid, (b.emprestado_para IS NOT NULL) AS emprestada, "
+            "b.em FROM guilda_banco b JOIN guildas g ON g.id = b.guilda_id WHERE b.dono_id = ? ORDER BY b.em", (cid,))]
+        dados['guilda_emprestimos_comigo'] = [dict(r) for r in self.con.execute(
+            "SELECT b.item_id, b.nivel, b.estrelas, e.iid, e.em FROM guilda_emprestimos e "
+            "JOIN guilda_banco b ON b.id = e.banco_id WHERE e.conta_id = ? ORDER BY e.em", (cid,))]
+        dados['guilda_mural_escrito'] = [dict(r) for r in self.con.execute(
+            "SELECT g.nome AS guilda, m.texto, m.em FROM guilda_mural m JOIN guildas g ON g.id = m.guilda_id "
+            "WHERE m.autor_id = ?", (cid,))]
+        dados['guilda_pedidos'] = [dict(r) for r in self.con.execute(
+            "SELECT g.nome AS guilda, p.em FROM guilda_pedidos p JOIN guildas g ON g.id = p.guilda_id "
+            "WHERE p.conta_id = ? ORDER BY p.em", (cid,))]
+        dados['guilda_convites'] = [dict(r) for r in self.con.execute(
+            "SELECT g.nome AS guilda, c.em FROM guilda_convites c JOIN guildas g ON g.id = c.guilda_id "
+            "WHERE c.conta_id = ? ORDER BY c.em", (cid,))]
+        dados['presenca'] = [dict(r) for r in self.con.execute(
+            "SELECT evento, em_ms FROM rele_presenca WHERE conta_id = ? ORDER BY em_ms DESC", (cid,))]
         try:   # a tabela é do servidor/registros.py; sem ela (um banco de antes), a lista fica vazia
             dados['registros_de_erro'] = [dict(r) for r in self.con.execute(
                 "SELECT e.origem, e.mensagem, e.ultima_em FROM erros_registro_contas x JOIN erros_registro e "

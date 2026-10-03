@@ -244,8 +244,9 @@ nunca ALTER. Um advogado revisa os textos antes de abrir ao público (`docs/REVI
   endereço que era da conta. A prova lê o esquema: nenhuma coluna com chave para `contas` (nem
   `conta_id` sem chave) pode apontar para a conta depois.
 - **Baixar meus dados.** `GET /api/conta/meus-dados`: o JSON de tudo o que o servidor guarda da
-  conta (dados, aceites, save, sessões com IP, eventos, itens, salas, guilda, amigos, barras,
-  loja, pagamentos, mercadinho, erros), listas longas com `total` e `incluidos`; 5 por hora.
+  conta (dados, aceites, save, sessões com IP, eventos, itens, salas, duelos, Arena, guerras,
+  salas em grupo, guilda — com as peças no banco, o XP doado, o mural, pedidos e convites —, amigos,
+  presença, barras, loja, pagamentos, mercadinho, erros; o adversário entra só como o lado A/B), listas longas com `total` e `incluidos`; 5 por hora.
 - **A faxina dos prazos** (`_faxina_privacidade`, no boot e a cada sessão aberta, no máximo 1
   vez por hora): sessões sem uso há 30 dias (com o IP delas), o resumo das derrubadas, códigos e
   contagens de freio de mais de 1 dia, erros quietos há 30 dias. Antes, a sessão vencida só
