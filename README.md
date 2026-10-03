@@ -201,7 +201,7 @@ jogador. Página nova sem essa linha é bug.
 |---|---|
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
 | `test_progress_v2.html` | 174 passaram / 0 falharam |
-| **`moderacao_api.py`** (Python, API + juiz) | 11 de 11 — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz e as ferramentas do Mestre (02/10) |
+| **`moderacao_api.py`** (Python, API + juiz) | 12 de 12 — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |
 | **`moderacao_rele_prova.py`** (Python, relé de verdade) | 18 de 18 — o token banido ouve `banido` e cai com 4003 (no ident e com a praça aberta), o silenciado não fala, o banimento vencido confere |
 | **`painel_mestre.html`** (navegador) | 45 de 45 — o painel do Mestre (quem vê, F9, abas, filtros de item, o que vai ao servidor, a adoção do estado), a denúncia pela linha do chat, o correio e a tela do banido — contando o DOM e as camadas que recebem clique |
 | `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |

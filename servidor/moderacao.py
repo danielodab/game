@@ -494,8 +494,17 @@ class ModeracaoMixin:
             raise Recusa(409, 'essa conta tem a marca de Mestre: tire a marca no Terminal (admin tirar-mestre) antes')
         return alvo
 
+    def _fecha_vencidas(self, tabela, conta_id, t):
+        """Dentro de uma _escrita: as linhas abertas cujo prazo já passou fecham como 'expirou', no
+        instante do fim delas. O silêncio nunca é fechado pelo prazo (vale pela linha) e o banimento
+        vencido só fecha no próximo pedido DA CONTA: sem isto, punir de novo ou desfazer depois do
+        prazo gravava a linha velha como 'trocado'/'desfeito', e o histórico do Mestre mentia."""
+        self.con.execute("UPDATE %s SET encerrado_em = fim, encerrado_como = 'expirou' WHERE conta_id = ? "
+                         "AND encerrado_em IS NULL AND fim IS NOT NULL AND fim <= ?" % tabela, (conta_id, t))
+
     def _pune(self, tabela, mestre, alvo, fim, motivo, denuncia_id, t):
-        """Dentro de uma _escrita: a linha nova (a aberta de antes fecha como 'trocado')."""
+        """Dentro de uma _escrita: a linha nova (a aberta de antes fecha como 'trocado'; a vencida, 'expirou')."""
+        self._fecha_vencidas(tabela, alvo['id'], t)
         self.con.execute("UPDATE %s SET encerrado_em = ?, encerrado_por = ?, encerrado_como = 'trocado' "
                          "WHERE conta_id = ? AND encerrado_em IS NULL" % tabela, (t, mestre['id'], alvo['id']))
         lid = self.con.execute(
@@ -521,7 +530,9 @@ class ModeracaoMixin:
         return r
 
     def _desfaz(self, tabela, mestre, alvo_id, motivo, t):
-        """Dentro de uma _escrita: fecha as linhas abertas como 'desfeito'. Devolve quantas."""
+        """Dentro de uma _escrita: fecha as linhas abertas como 'desfeito' (as vencidas, como 'expirou').
+        Devolve quantas foram desfeitas."""
+        self._fecha_vencidas(tabela, alvo_id, t)
         return self.con.execute(
             "UPDATE %s SET encerrado_em = ?, encerrado_por = ?, encerrado_como = 'desfeito', encerrado_motivo = ? "
             "WHERE conta_id = ? AND encerrado_em IS NULL" % tabela, (t, mestre['id'], motivo, alvo_id)).rowcount

@@ -612,7 +612,8 @@ registrada**. O código do servidor mora em `servidor/moderacao.py` (mixin da Ap
 
 ### 10.1 O banimento
 - Tabela `moderacao_banimentos` (motivo, início, fim — `NULL` = permanente —, quem aplicou, a denúncia que o causou, e
-  como acabou: `expirou`, `desfeito`, `trocado`). `contas.banido` continua sendo a **chave geral**: com 0 a conta não
+  como acabou: `expirou`, `desfeito`, `trocado` — a linha cujo prazo já tinha passado fecha como `expirou`, no fim
+  dela, mesmo quando quem a fecha é um banir/desbanir posterior). `contas.banido` continua sendo a **chave geral**: com 0 a conta não
   está banida, ponto (o `admin desbanir` do Terminal e o ranking, a guilda, os amigos e a troca leem esse 0/1).
 - Banida = `contas.banido = 1` **e** (uma linha aberta em vigor **ou** nenhuma linha aberta — o banimento de antes
   desta tabela, que é permanente sem motivo registrado: `banimento.legado`).
@@ -671,4 +672,4 @@ recarregar. `idem` único por Mestre (o mesmo clique de novo devolve `repetido`)
 painel de teste (liberar classe, nível, elemento) viraram ops do Mestre (`gmLiberaClasse`, `gmNivel`, `gmElemento`):
 a mesma função de `js/core/gm.js` roda no jogo e no juiz.
 
-Provas: `tests/moderacao_api.py` (API + juiz, 11) e `tests/moderacao_rele_prova.py` (relé de verdade, 18).
+Provas: `tests/moderacao_api.py` (API + juiz, 12) e `tests/moderacao_rele_prova.py` (relé de verdade, 18).

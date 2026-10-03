@@ -549,6 +549,38 @@ class ProvaDaModeracao(unittest.TestCase):
         self.assertEqual(status, 422, r)
         self.assertEqual(r.get('motivo'), 'gm')
 
+    def test_12_o_historico_diz_expirou_e_nao_trocado(self):
+        # 03/10 (revisão): o silêncio nunca é fechado pelo prazo (vale pela linha), e o banimento vencido só
+        # fecha no próximo pedido DA CONTA. Punir de novo ou desfazer depois do prazo marcava a linha velha
+        # como 'trocado' ou 'desfeito' — o histórico que o Mestre lê mentia: ela tinha EXPIRADO, no fim dela
+        m, j = self.mestre('Guia Historia'), self.novo('Jogador Historia')
+        t = int(time.time())
+        cala = {'conta': j.conta['id'], 'duracao': '1h', 'motivo': 'flood no chat'}
+        self.assertEqual(m.pede('POST', '/api/mestre/silenciar', cala)[0], 201)
+        self.sql("UPDATE moderacao_silencios SET fim = ? WHERE conta_id = ?", t - 5, j.conta['id'])
+        self.assertEqual(m.pede('POST', '/api/mestre/silenciar', cala)[0], 201)
+        sils = self.sql("SELECT encerrado_como, encerrado_em FROM moderacao_silencios WHERE conta_id = ? ORDER BY id",
+                        j.conta['id'])
+        self.assertEqual([(x['encerrado_como'], x['encerrado_em']) for x in sils], [('expirou', t - 5), (None, None)])
+        # a vigente desfeita fecha como 'desfeito'; a que venceu antes continua 'expirou'
+        self.assertEqual(m.pede('POST', '/api/mestre/dessilenciar', {'conta': j.conta['id']})[0], 200)
+        sils = self.sql("SELECT encerrado_como FROM moderacao_silencios WHERE conta_id = ? ORDER BY id", j.conta['id'])
+        self.assertEqual([x['encerrado_como'] for x in sils], ['expirou', 'desfeito'])
+        # o banimento vencido que ninguém da conta tocou: banir de novo não o "troca"
+        self.assertEqual(self.bane(m, j)[0], 201)
+        self.sql("UPDATE moderacao_banimentos SET fim = ? WHERE conta_id = ?", t - 5, j.conta['id'])
+        self.assertEqual(self.bane(m, j, duracao='24h')[0], 201)
+        bans = self.sql("SELECT encerrado_como, encerrado_em FROM moderacao_banimentos WHERE conta_id = ? ORDER BY id",
+                        j.conta['id'])
+        self.assertEqual([(x['encerrado_como'], x['encerrado_em']) for x in bans], [('expirou', t - 5), (None, None)])
+        # e desbanir depois de a segunda vencer (contas.banido ainda 1): ela também fecha como 'expirou'
+        self.sql("UPDATE moderacao_banimentos SET fim = ? WHERE conta_id = ? AND encerrado_em IS NULL", t - 2,
+                 j.conta['id'])
+        self.assertEqual(m.pede('POST', '/api/mestre/desbanir', {'conta': j.conta['id']})[0], 200)
+        bans = self.sql("SELECT encerrado_como FROM moderacao_banimentos WHERE conta_id = ? ORDER BY id", j.conta['id'])
+        self.assertEqual([x['encerrado_como'] for x in bans], ['expirou', 'expirou'])
+        self.assertEqual(j.pede('GET', '/api/eu')[0], 200)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
