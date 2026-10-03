@@ -147,8 +147,10 @@
 
   // ---- 2) a batalha de treino: a linha da sala
   p(function () {
-    var r = G.startEco([hid]);
-    check('o treino abre a Câmara na hora (sem servidor)', r === true && G.screen === 'battle' && !!G.state && !!G.state.eco, String(r));
+    // o botão da ficha (o caminho do jogador)
+    q1('.eco-entra', ficha()).click();
+    check('o treino abre a Câmara na hora (sem servidor)', G.screen === 'battle' && !!G.state && !!G.state.eco &&
+          G.ecoTentativa() && G.ecoTentativa().treino === true, G.screen);
     check('a ficha fecha ao entrar', !ficha());
     // a preparação: começa a luta (o relógio de 30 s é de parede; aqui o PRONTO)
     var op = E.opcoesDe(G.state, G.state.placement.uid)[0];
