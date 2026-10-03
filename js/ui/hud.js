@@ -603,7 +603,7 @@ var JOGO = (typeof window !== 'undefined')
         if (sheetName === 'party' && partyTab === 'inventario') closeSheet();
         else openSheet('inventory');
       }
-      // M: o Painel do Mestre de qualquer tela (12/09) — só para o Mestre
+      // M: o Painel do Mestre de qualquer tela (12/09) — só para o Mestre; 03/10: o painel único
       if (k === 'm' && mestreAtivo()) {
         ev.preventDefault();
         alternaPainelMestre();
@@ -887,8 +887,8 @@ var JOGO = (typeof window !== 'undefined')
     // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada —
     // é a porta do Mestre e não entra na conta do "menu enxuto"
     if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
-      acts.appendChild(btn('⚔ Grimório e Caixa do Mestre', 'btn-gold btn-big', function () {
-        openSheet('gm');
+      acts.appendChild(btn('⚔ Painel do Mestre', 'btn-gold btn-big', function () {
+        gmAbre();
       }));
     }
     var fichas = el('div', 'menu-fichas');
@@ -1272,7 +1272,7 @@ var JOGO = (typeof window !== 'undefined')
     // 12/09: o Painel do Mestre abre daqui, sem voltar ao Menu (também na batalha e na tecla M)
     if (mestreAtivo()) {
       var bGm = btn('⚔ Mestre', 'btn-mini btn-gold hub-gm', function () { alternaPainelMestre(); });
-      bGm.title = 'Grimório e Caixa do Mestre (M)';
+      bGm.title = 'Painel do Mestre (M ou F9)';
       acts.insertBefore(bGm, acts.firstChild);
     }
     top.appendChild(acts);
@@ -2658,7 +2658,7 @@ var JOGO = (typeof window !== 'undefined')
     // O PAINEL DO MESTRE no meio da luta (12/09): só existe para o Mestre
     if (mestreAtivo()) {
       bt.gm = btn('⚔', 'bt-gm', function () { alternaPainelMestre(); });
-      bt.gm.title = 'Grimório e Caixa do Mestre (M)';
+      bt.gm.title = 'Painel do Mestre (M ou F9)';
       top.appendChild(bt.gm);
     }
 
@@ -6031,7 +6031,7 @@ var JOGO = (typeof window !== 'undefined')
     loteria: 'fc-loteria', placar: 'fc-placar', troca: 'fc-troca', contas: 'fc-contas',
     perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
     arenaQuadro: 'fc-duelo', sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
-    gm: 'fc-mestre', gmcaixa: 'fc-mestre', gmagenda: 'fc-mestre', confirm: 'fc-alerta',
+    confirm: 'fc-alerta',
     eco: 'fc-eco'   // 03/10, a junção com a frente do Eco Primordial
   };
   var ICONE_ABA = { inventario: 'fc-inventario', forja: 'fc-forja', feiticos: 'fc-feiticos',
@@ -6116,7 +6116,10 @@ var JOGO = (typeof window !== 'undefined')
     b.appendChild(acts);
   }
 
+  // 03/10: as fichas do Mestre de antes viraram abas do painel único (js/ui/painel_mestre.js)
+  var GM_FICHA_ABA = { gm: 'grimorio', gmcaixa: 'caixa', gmagenda: 'eventos' };
   function openSheet(name, arg) {
+    if (GM_FICHA_ABA.hasOwnProperty(name)) { gmAbre(GM_FICHA_ABA[name]); return; }
     sheetName = name;
     lastSheetArg = arg;          // guardado para UI.repaint() saber o que reabrir
     marcaDock(name);             // o cais acende a aba aberta (30/08)
@@ -6127,9 +6130,6 @@ var JOGO = (typeof window !== 'undefined')
     if (name === 'char') { sheetChar(); return; }   // 11/09: a ficha da conta
     if (name === 'amigos') { sheetAmigos(); return; }   // 13/09: amigos e inimigos
     if (name === 'eco') { sheetEco(); return; }         // 02/10: o Eco Primordial (o chefe supremo da semana)
-    if (name === 'gm') { sheetGM(); return; }
-    if (name === 'gmcaixa') { sheetGMCaixa(); return; }
-    if (name === 'gmagenda') { sheetGMAgenda(); return; }   // 10/09: os eventos do mundo
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);
@@ -9263,8 +9263,8 @@ var JOGO = (typeof window !== 'undefined')
       var lista = el('dl', 'cfg-atalhos');
       [['I', 'abre e fecha o inventário'], ['Esc', 'fecha a ficha aberta'],
        ['Tab', 'anda pelos botões da ficha; Enter ou Espaço aperta']]
-        .concat(mestreAtivo() ? [['M', 'abre o Grimório e a Caixa do Mestre (PA/PP, feitiços, itens, eventos)'],
-                                 ['F9', 'abre o Painel do Mestre (jogadores, denúncias, banimentos, auditoria)']] : [])
+        .concat(mestreAtivo() ? [['M', 'abre e fecha o Painel do Mestre (a Caixa, os jogadores, os eventos, o grimório…)'],
+                                 ['F9', 'o mesmo painel, de qualquer tela (também Ctrl+Alt+M)']] : [])
         .forEach(function (a) {
           lista.appendChild(el('dt', null, '<kbd class="tecla">' + a[0] + '</kbd>'));
           lista.appendChild(el('dd', null, a[1]));
@@ -10492,24 +10492,61 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
 
-  /* O PAINEL DO MESTRE (31/08): só existe com a chave do dono. PA/PP à
-   * escolha, o set e os quatro caminhos com um toque, e o GRIMÓRIO —
-   * qualquer feitiço do jogo entra na barra do GM. O Julgamento vai sempre. */
+  /* O MESTRE NO PAINEL ÚNICO (03/10, o dono: "junte" o painel do Mestre de antes — a tecla M: o grimório, a
+   * Caixa, os eventos do mundo — com o painel novo do F9). As três fichas que moravam aqui (gm, gmcaixa,
+   * gmagenda) viraram ABAS do js/ui/painel_mestre.js: Caixa, Eventos e Grimório. O corpo de cada uma
+   * continua sendo desenhado AQUI (ele usa o miúdo da HUD: o desenho dos ícones, os nomes de slot e de
+   * raridade, a agenda), mas dentro do corpo do painel, por estas três portas:
+   *   UI.gmCaixaEm(alvo, ctx)    a Caixa (as sete abas redondas de sempre)
+   *   UI.gmAgendaEm(alvo, ctx)   os eventos do mundo (Agora, Agendar, Calendário)
+   *   UI.gmGrimorioEm(alvo, ctx) o grimório (qualquer feitiço na barra do Mestre)
+   * `ctx` é do painel: entrega(pedido, rotulo) → Promise (PELO SERVIDOR na conta marcada, ou no save local
+   * com a chave em casa), destino (null = o próprio Mestre, ou {id, nome} de um jogador), aviso(texto,
+   * tipo), confirma(titulo, html, fn), refaz() (redesenha a aba), aberta() (a aba ainda está na tela) e
+   * itensEm(alvo) (a busca de peças com estrelas, forja e quantidade, que é do painel). O openSheet com os
+   * nomes de antes abre a aba certa do painel (as provas e quem mais chamar seguem funcionando). O PA/PP e
+   * o "Aparelhar o Mestre" foram para as Ferramentas do painel — um lugar só. */
   var gmBusca = '';
+  function gmAbre(qual) {
+    var PM = JOGO.PainelMestre;
+    if (PM && PM.abrir) return PM.abrir(qual);
+    toast('O painel do Mestre não carregou nesta página.');
+    return false;
+  }
+  function gmCtx(ctx) {
+    ctx = ctx || {};
+    return {
+      entrega: ctx.entrega || function () { return Promise.resolve(null); },
+      destino: ctx.destino || null,
+      aviso: ctx.aviso || toast,
+      confirma: ctx.confirma || function (t, h, fn) { confirmSheet(t, h, fn); },
+      refaz: ctx.refaz || function () {},
+      aberta: ctx.aberta || function () { return true; },
+      itensEm: ctx.itensEm || null
+    };
+  }
+
   /* A CAIXA DO MESTRE (03/09, pedido do dono): "o GM pode abrir uma caixa
    * para pegar qualquer item do jogo pra ele equipar; terá um menu exclusivo
    * para pegar pet ou set para seu inventário". Três abas — Itens, Conjuntos,
    * Bichos — com busca; tudo entra direto no saco. Só com a chave virada.
    * 11/09 ("quero liberar pedras e as outras coisas também"): mais quatro —
    * Pedras, Selos e insígnias, Cartas (de classe) e Pergaminhos (com os dias
-   * de bônus de XP) —, cada linha com o que a conta já tem. */
+   * de bônus de XP) —, cada linha com o que a conta já tem.
+   * 03/10 (o painel único): a Caixa entrega também no inventário de QUALQUER
+   * jogador (o "Para:" do painel escolhe), pelo servidor. Cada botão manda um
+   * pedido {tipo, …} ao ctx.entrega — o mesmo formato do POST /api/mestre/dar
+   * (servidor/moderacao.py, TIPOS_DAR). "Você tem N" só aparece quando a Caixa
+   * entrega ao próprio Mestre: do jogador, o painel não tem o saco na mão. */
   var gmCaixaAba = 'itens', gmCaixaBusca = '';
-  function sheetGMCaixa() {
+  function gmCaixaEm(body, ctx0) {
     var GMod = JOGO.GM;
-    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
-    var body = sheetShell('A Caixa do Mestre',
-      'Qualquer item, conjunto, bicho, pedra, selo, carta ou pergaminho do jogo — direto para o saco, sem sorteio.');
-    sheetName = 'gmcaixa';
+    var ctx = gmCtx(ctx0);
+    var proprio = !ctx.destino;
+    if (!GMod || !GMod.ativo || !GMod.ativo()) {
+      body.appendChild(el('p', 'inv-dica', 'A Caixa é do Mestre: entre com a conta dele (ou com a chave, em casa).'));
+      return;
+    }
 
     // 22/09: as sete abas redondas, com o nome de sempre escondido (a prova
     // tests/prova_gm_caixa.html acha a aba pelo texto exato) e o da aberta
@@ -10522,9 +10559,14 @@ var JOGO = (typeof window !== 'undefined')
       return { id: t[0], ico: t[1], rot: t[2], cls: 'btn-mini',
                clsTexto: gmCaixaAba === t[0] ? 'btn-gold' : 'btn-ghost', data: { aba: t[0] } };
     }), gmCaixaAba, function (id) {
-      gmCaixaAba = id; sheetGMCaixa();
+      gmCaixaAba = id; ctx.refaz();
     }, true);
     body.appendChild(abas);
+    // as peças: a busca do painel (nome, slot, raridade, elemento, nível; estrelas, forja e quantidade)
+    if (gmCaixaAba === 'itens') {
+      if (ctx.itensEm) ctx.itensEm(body);
+      return;
+    }
     var busca = document.createElement('input');
     busca.className = 'hub-input';
     busca.placeholder = 'buscar por nome...';
@@ -10533,6 +10575,7 @@ var JOGO = (typeof window !== 'undefined')
     var listaEl = el('div', 'ms-caixa');
     body.appendChild(listaEl);
     var D0 = D();
+    var paraQuem = proprio ? '' : ' · vai para <b>' + esc(ctx.destino.nome) + '</b>';
 
     function linha(icone, titulo, sub, rotuloBtn, aoPegar) {
       var row = el('div', 'ms-linha');
@@ -10546,15 +10589,19 @@ var JOGO = (typeof window !== 'undefined')
       row.appendChild(btn(rotuloBtn, 'btn-mini btn-gold', aoPegar));
       return row;
     }
-    // entregou: avisa e repinta, para a linha mostrar o que a conta tem agora
-    function dar(ok, msg) {
-      if (ok) { toast(msg, 'good'); pinta(); } else toast('não deu');
+    // entrega pelo painel; deu certo, repinta (a linha mostra o que a conta tem agora)
+    function dar(pedido, rotulo) {
+      return ctx.entrega(pedido, rotulo).then(function (r) {
+        if (r && r.ok && ctx.aberta()) pinta();
+        return r;
+      });
     }
     function glifo(txt) {
       var g = el('span', null, txt);
       g.style.cssText = 'width:40px;flex:none;text-align:center;font-size:26px;line-height:40px';
       return g;
     }
+    function tem(n) { return proprio ? 'você tem <b>' + n + '</b> · ' : ''; }
     function pinta() {
       clear(listaEl);
       var tq = (gmCaixaBusca || '').toLowerCase();
@@ -10566,25 +10613,7 @@ var JOGO = (typeof window !== 'undefined')
         if (++vistas > TETO) { listaEl.appendChild(el('p', 'inv-dica', '… e mais — afine a busca.')); return true; }
         return false;
       }
-      if (gmCaixaAba === 'itens') {
-        var ids = Object.keys(D0.items || {}).sort(function (a, b) {
-          return (D0.items[a].name || a).localeCompare(D0.items[b].name || b);
-        });
-        for (var i = 0; i < ids.length; i++) {
-          var it = D0.items[ids[i]];
-          if (!it || !passa(it.name, ids[i])) continue;
-          if (corta()) break;
-          (function (id2, it2) {
-            var sub = esc(SLOT_PT[slotOf(id2)] || '') + ' · ' + esc(RAR_PT[it2.rarity] || it2.rarity || '') +
-                      (it2.setId ? ' · ' + esc((setDef(it2.setId) || {}).name || it2.setId) : '') +
-                      ' · ' + esc(bonusText(it2.bonuses));
-            listaEl.appendChild(linha(art('itemIcon', [id2, 40], 40), it2.name || id2, sub, 'Pegar', function () {
-              if (GMod.pegaItem(id2)) toast(it2.name + ' está no saco.', 'good');
-              else toast('não deu');
-            }));
-          })(ids[i], it);
-        }
-      } else if (gmCaixaAba === 'sets') {
+      if (gmCaixaAba === 'sets') {
         var sids = Object.keys(D0.sets || {}).sort(function (a, b) {
           return (D0.sets[a].name || a).localeCompare(D0.sets[b].name || b);
         });
@@ -10596,9 +10625,8 @@ var JOGO = (typeof window !== 'undefined')
             var pecas = (sd2.pieces || []).map(function (pid) { return (itemDef(pid) || {}).name || pid; });
             var ic = art('itemIcon', [(sd2.pieces || [])[0], 40], 40);
             listaEl.appendChild(linha(ic, sd2.name || sid2,
-              pecas.length + ' peças: ' + esc(pecas.join(', ')), 'Pegar o conjunto', function () {
-                var n = GMod.pegaSet(sid2);
-                toast(n ? (sd2.name + ': ' + n + ' peças no saco.') : 'não deu', n ? 'good' : undefined);
+              pecas.length + ' peças: ' + esc(pecas.join(', ')) + paraQuem, 'Pegar o conjunto', function () {
+                dar({ tipo: 'set', setId: sid2 }, sd2.name || sid2);
               }));
           })(sids[s], sd);
         }
@@ -10608,19 +10636,22 @@ var JOGO = (typeof window !== 'undefined')
         Object.keys(pedras).forEach(function (sid) {
           var pd3 = pedras[sid];
           if (!pd3 || !passa(pd3.name, sid) || corta()) return;
-          var tem = safe(function () { return JOGO.Progress.stoneCount(sid); }, 0) || 0;
+          var n = safe(function () { return JOGO.Progress.stoneCount(sid); }, 0) || 0;
           var qual = pd3.element === 'forja' ? 'segura o nível quando a batida da forja falha'
                    : 'forja as peças de ' + (ELEM_PT[pd3.element] || pd3.element);
-          var row = linha(art('stoneIcon', [sid, 40], 40), pd3.name || sid, 'você tem <b>' + tem + '</b> · ' + esc(qual),
-            '+10', function () { dar(GMod.pegaPedras(sid, 10), '+10 ' + pd3.name + '.'); });
-          row.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaPedras(sid, 100), '+100 ' + pd3.name + '.'); }));
+          var row = linha(art('stoneIcon', [sid, 40], 40), pd3.name || sid, tem(n) + esc(qual) + paraQuem,
+            '+10', function () { dar({ tipo: 'pedras', stoneId: sid, n: 10 }, '10× ' + pd3.name); });
+          row.appendChild(btn('+100', 'btn-mini btn-primary', function () {
+            dar({ tipo: 'pedras', stoneId: sid, n: 100 }, '100× ' + pd3.name);
+          }));
           listaEl.appendChild(row);
         });
         if (vistas) {
           listaEl.appendChild(btn('+100 de cada pedra', 'btn-gold btn-block', function () {
-            var n = 0;
-            Object.keys(pedras).forEach(function (sid) { if (GMod.pegaPedras(sid, 100)) n++; });
-            dar(n > 0, '+100 de cada uma das ' + n + ' pedras.');
+            // uma entrega por pedra, uma depois da outra (o servidor confere cada uma)
+            Object.keys(pedras).reduce(function (p, sid) {
+              return p.then(function () { return ctx.entrega({ tipo: 'pedras', stoneId: sid, n: 100 }, '100× ' + pedras[sid].name); });
+            }, Promise.resolve()).then(function () { if (ctx.aberta()) pinta(); });
           }));
         }
       } else if (gmCaixaAba === 'moedas') {
@@ -10631,18 +10662,22 @@ var JOGO = (typeof window !== 'undefined')
           var nomeS = 'Selo de ' + (ELEM_PT[e4] || e4);
           if (!passa(nomeS, e4) || corta()) return;
           var row = linha(art('seloIcon', [e4, 40], 40, 'selo-moeda-img'), nomeS,
-            'você tem <b>' + (selos[e4] || 0) + '</b> · ' + porGiro + ' selos somados pagam um giro na roleta do Colecionador',
-            '+10', function () { dar(GMod.pegaSelos(e4, 10), '+10 ' + nomeS + '.'); });
-          row.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaSelos(e4, 100), '+100 ' + nomeS + '.'); }));
+            tem(selos[e4] || 0) + porGiro + ' selos somados pagam um giro na roleta do Colecionador' + paraQuem,
+            '+10', function () { dar({ tipo: 'selos', elemento: e4, n: 10 }, '10 ' + nomeS); });
+          row.appendChild(btn('+100', 'btn-mini btn-primary', function () {
+            dar({ tipo: 'selos', elemento: e4, n: 100 }, '100 ' + nomeS);
+          }));
           listaEl.appendChild(row);
         });
         if (passa('Insígnia de Fundação', 'insignia') && !corta()) {
           var ins = safe(function () { return JOGO.Progress.insigniasVer(); }, 0) || 0;
           var porGuilda = (D0.insignias && D0.insignias.porGuilda) || 10;
           var rowI = linha(art('insigniaIcon', [40], 40, 'selo-moeda-img'), 'Insígnia de Fundação',
-            'você tem <b>' + ins + '</b> · ' + porGuilda + ' fundam uma guilda',
-            '+10', function () { dar(GMod.pegaInsignias(10), '+10 Insígnias de Fundação.'); });
-          rowI.appendChild(btn('+100', 'btn-mini btn-primary', function () { dar(GMod.pegaInsignias(100), '+100 Insígnias de Fundação.'); }));
+            tem(ins) + porGuilda + ' fundam uma guilda' + paraQuem,
+            '+10', function () { dar({ tipo: 'insignias', n: 10 }, '10 Insígnias de Fundação'); });
+          rowI.appendChild(btn('+100', 'btn-mini btn-primary', function () {
+            dar({ tipo: 'insignias', n: 100 }, '100 Insígnias de Fundação');
+          }));
           listaEl.appendChild(rowI);
         }
       } else if (gmCaixaAba === 'cartas') {
@@ -10651,12 +10686,14 @@ var JOGO = (typeof window !== 'undefined')
           var cd = D0.classes[cid];
           if (!cd || cid === 'gm' || !passa(cd.name, cid) || corta()) return;
           var ci = safe(function () { return JOGO.Progress.cardInfo(cid); }, null) || {};
-          var sub = (ci.unlocked ? 'liberada' : 'trancada (' + (ci.unlockCost || 0) + ' cartas liberam)') +
-                    ' · <b>' + (ci.cards || 0) + '</b> cartas · ' + (ci.stars ? '★' + ci.stars : 'sem estrela');
+          var sub = proprio
+            ? (ci.unlocked ? 'liberada' : 'trancada (' + (ci.unlockCost || 0) + ' cartas liberam)') +
+              ' · <b>' + (ci.cards || 0) + '</b> cartas · ' + (ci.stars ? '★' + ci.stars : 'sem estrela')
+            : 'cartas de classe' + paraQuem;
           var row = linha(art('portrait', [cid, { element: 'neutro', size: 80 }], 40), cd.name || cid, sub,
-            '+10', function () { dar(GMod.pegaCartas(cid, 10), '+10 cartas de ' + cd.name + '.'); });
+            '+10', function () { dar({ tipo: 'cartas', classId: cid, n: 10 }, '10 cartas de ' + cd.name); });
           row.appendChild(btn('Liberar e ★5', 'btn-mini btn-primary', function () {
-            dar(GMod.pegaCartas(cid, 'topo'), cd.name + ': liberada e no ★5.');
+            dar({ tipo: 'cartas', classId: cid, topo: true }, cd.name + ': liberada e no ★5');
           }));
           listaEl.appendChild(row);
         });
@@ -10669,11 +10706,11 @@ var JOGO = (typeof window !== 'undefined')
           (xpP.salas || 9) + ' salas vencidas'],
          ['elemento', 'Pergaminho da Reescrita', 'troca um caminho de elemento do herói por outro']].forEach(function (pp) {
           if (!passa(pp[1], pp[0]) || corta()) return;
-          var row = linha(glifo('📜'), pp[1], 'você tem <b>' + (pg[pp[0]] || 0) + '</b> de ' + tetoP + ' · ' + esc(pp[2]),
-            '+1', function () { var n = GMod.pegaPergaminho(pp[0], 1); if (n) dar(true, '+1 ' + pp[1] + '.'); else toast('Já está no teto de ' + tetoP + '.'); });
+          var row = linha(glifo('📜'), pp[1], (proprio ? 'você tem <b>' + (pg[pp[0]] || 0) + '</b> de ' + tetoP + ' · '
+                                                        : 'até ' + tetoP + ' · ') + esc(pp[2]) + paraQuem,
+            '+1', function () { dar({ tipo: 'pergaminho', pergaminho: pp[0], n: 1 }, '1 ' + pp[1]); });
           row.appendChild(btn('Encher', 'btn-mini btn-primary', function () {
-            var n = GMod.pegaPergaminho(pp[0], tetoP);
-            if (n) dar(true, '+' + n + ' ' + pp[1] + '.'); else toast('Já está no teto de ' + tetoP + '.');
+            dar({ tipo: 'pergaminho', pergaminho: pp[0], n: tetoP }, pp[1] + ' até o teto');
           }));
           listaEl.appendChild(row);
         });
@@ -10682,13 +10719,15 @@ var JOGO = (typeof window !== 'undefined')
           var agoraB = safe(function () { return JOGO.Agenda.agora(); }, null) || Date.now();
           var agoraSB = agoraB > 1e11 ? agoraB / 1000 : agoraB;
           var fatorB = String((D0.bonusXp && D0.bonusXp.fator) || 1.5).replace('.', ',');
-          var estadoB = ate > agoraSB
+          var estadoB = !proprio ? 'soma aos dias que a conta já tiver' : ate > agoraSB
             ? 'ligado até ' + new Date(ate * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
             : 'desligado';
           var rowB = linha(glifo('⏳'), 'Bônus de XP (×' + fatorB + ')',
-            estadoB + ' · o mesmo da loja; conta no relógio do servidor',
-            '+1 dia', function () { dar(GMod.pegaBonusXp(1), '+1 dia de bônus de XP.'); });
-          rowB.appendChild(btn('+7 dias', 'btn-mini btn-primary', function () { dar(GMod.pegaBonusXp(7), '+7 dias de bônus de XP.'); }));
+            estadoB + ' · o mesmo da loja; conta no relógio do servidor' + paraQuem,
+            '+1 dia', function () { dar({ tipo: 'bonus-xp', dias: 1 }, '1 dia de bônus de XP'); });
+          rowB.appendChild(btn('+7 dias', 'btn-mini btn-primary', function () {
+            dar({ tipo: 'bonus-xp', dias: 7 }, '7 dias de bônus de XP');
+          }));
           listaEl.appendChild(rowB);
         }
       } else {
@@ -10701,14 +10740,12 @@ var JOGO = (typeof window !== 'undefined')
           if (corta()) break;
           (function (pid2, pd2) {
             var info = petCardInfo(pid2);
-            var sub = esc(bonusText(pd2.bonuses)) + ' · ' + (info.unlocked ? 'é seu — ' + petNivelTxt(pid2) : 'não é seu');
+            var sub = esc(bonusText(pd2.bonuses)) + (proprio ? ' · ' + (info.unlocked ? 'é seu — ' + petNivelTxt(pid2) : 'não é seu') : paraQuem);
             var row = linha(art('petIcon', [pid2, 40], 40), pd2.name || pid2, sub, 'Pegar', function () {
-              if (GMod.pegaPet(pid2, false)) { toast(pd2.name + ' está no saco de bichos.', 'good'); sheetGMCaixa(); }
-              else toast('não deu');
+              dar({ tipo: 'pet', petId: pid2, topo: false }, pd2.name);
             });
             row.appendChild(btn('★3 nv10', 'btn-mini btn-primary', function () {
-              if (GMod.pegaPet(pid2, true)) { toast(pd2.name + ' no topo: ★3, nível 10.', 'good'); sheetGMCaixa(); }
-              else toast('não deu');
+              dar({ tipo: 'pet', petId: pid2, topo: true }, pd2.name + ' no topo: ★3, nível 10');
             }));
             listaEl.appendChild(row);
           })(pids[p], pd);
@@ -10717,9 +10754,11 @@ var JOGO = (typeof window !== 'undefined')
       if (!vistas) listaEl.appendChild(el('p', 'inv-dica', 'Nada com esse nome.'));
     }
     busca.addEventListener('input', function () { gmCaixaBusca = busca.value; pinta(); });
+    busca.addEventListener('keydown', function (ev) { ev.stopPropagation(); });   // o "i" digitado aqui não abre o saco
     pinta();
-    body.appendChild(btn('Voltar ao Grimório do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
   }
+  UI.gmCaixaEm = gmCaixaEm;
+  UI.gmCaixaAba = function (id) { gmCaixaAba = id; };     // o painel abre a Caixa já numa aba ('itens')
 
   /* OS EVENTOS DO MUNDO (10/09, pedido do dono: "eventos ligados pelo jogo +
    * calendário automático, mostrados no site"). Três abas no molde da Caixa:
@@ -10729,7 +10768,8 @@ var JOGO = (typeof window !== 'undefined')
    * conta com a marca de Mestre (contas.gm = 1): sem essa sessão — a chave
    * local abre a ficha, mas não liga evento de ninguém — ou com o servidor
    * fora, a ficha fica só de leitura e diz o que falta. Os tetos são os da
-   * agenda (xp 2 · vintém 1,5 · pedras 2 · saque 1,5 · aviso 1). */
+   * agenda (xp 2 · vintém 1,5 · pedras 2 · saque 1,5 · aviso 1).
+   * 03/10: é a aba Eventos do painel único do Mestre (UI.gmAgendaEm). */
   var gmAgendaAba = 'agora';
   var gmAgendaRasc = { tipo: 'xp', mult: 2, cal: '', titulo: '', texto: '', horas: 2,
                        ini: '', fim: '', dias: [6], hora: '10:00', durH: 12 };
@@ -10742,18 +10782,19 @@ var JOGO = (typeof window !== 'undefined')
     saque: 'Sai peça com mais frequência; a proporção entre as raridades não muda. Junto do Calabouço do Dia, vale o maior.',
     aviso: 'Só um anúncio no jogo e no site, sem mexer em nada.'
   };
-  function sheetGMAgenda() {
+  function gmAgendaEm(body, ctx0) {
     var GMod = JOGO.GM, Ag = JOGO.Agenda;
-    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
-    var body = sheetShell('Eventos do mundo',
-      'Liga agora, agenda ou põe no calendário de toda semana — vale para todos os jogadores, no jogo e no site.');
-    sheetName = 'gmagenda';
-    function voltar() {
-      body.appendChild(btn('Voltar ao Grimório do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
+    var ctx = gmCtx(ctx0);
+    // redesenha a aba (só se o painel ainda estiver nela: a resposta do servidor pode chegar depois)
+    function refaz() { if (ctx.aberta()) ctx.refaz(); }
+    if (!GMod || !GMod.ativo || !GMod.ativo()) {
+      body.appendChild(el('p', 'inv-dica', 'Os eventos do mundo são do Mestre: entre com a conta dele.'));
+      return;
     }
+    body.appendChild(el('p', 'inv-dica ag-sub',
+      'Liga agora, agenda ou põe no calendário de toda semana — vale para todos os jogadores, no jogo e no site.'));
     if (!Ag || !Ag.fator) {
       body.appendChild(el('p', 'inv-dica', 'A agenda do mundo não carregou nesta página.'));
-      voltar();
       return;
     }
     var S = JOGO.Sessao;
@@ -10767,7 +10808,7 @@ var JOGO = (typeof window !== 'undefined')
     [['agora', 'Agora'], ['agendar', 'Agendar'], ['calendario', 'Calendário']].forEach(function (par) {
       abas.appendChild(btn(par[1], 'btn-mini ag-aba' + (gmAgendaAba === par[0] ? ' btn-gold' : ' btn-ghost'), function () {
         gmAgendaAba = par[0];
-        sheetGMAgenda();
+        refaz();
       }));
     });
     body.appendChild(abas);
@@ -10782,9 +10823,9 @@ var JOGO = (typeof window !== 'undefined')
     function desliga(b) { if (!pode) { b.disabled = true; b.classList.add('is-off'); } return b; }
     // a resposta do servidor: o erro dele vai inteiro para o toast; a ficha repinta
     function resposta(r, okMsg) {
-      if (r && r.ok) toast(okMsg, 'good');
-      else toast((r && r.erro) || 'não deu — o servidor não respondeu');
-      if (sheetName === 'gmagenda' || sheetName == null) openSheet('gmagenda');
+      if (r && r.ok) ctx.aviso(okMsg, 'good');
+      else ctx.aviso((r && r.erro) || 'não deu — o servidor não respondeu');
+      refaz();
     }
     function campo(txt, controle) {
       var w = el('label', 'ag-campo');
@@ -10827,7 +10868,7 @@ var JOGO = (typeof window !== 'undefined')
         return [t, Ag.NOMES[t] + (Ag.TETOS[t] > 1 ? ' (até ' + Ag.fmtFator(Ag.TETOS[t]) + ')' : '')];
       }), R.tipo, function (v) {
         R.tipo = v;
-        sheetGMAgenda();
+        refaz();
       })));
       var teto = Ag.TETOS[R.tipo] || 1;
       if (teto > 1) {
@@ -10841,7 +10882,7 @@ var JOGO = (typeof window !== 'undefined')
         var atalhos = el('div', 'ag-dias ag-atalhos');
         multsDe(R.tipo).forEach(function (m) {
           atalhos.appendChild(btn(Ag.fmtFator(m), 'btn-mini ag-mult-b' + (multLido(R.mult) === m ? ' btn-gold' : ' btn-ghost'),
-            function () { R.mult = m; sheetGMAgenda(); }));
+            function () { R.mult = m; refaz(); }));
         });
         wMult.appendChild(atalhos);
         form.appendChild(wMult);
@@ -10864,7 +10905,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     function tituloOk() {
       var t = String(gmAgendaRasc.titulo || '').trim();
-      if (t.length < 3 || t.length > 60) { toast('O título precisa de 3 a 60 letras.'); return false; }
+      if (t.length < 3 || t.length > 60) { ctx.aviso('O título precisa de 3 a 60 letras.'); return false; }
       return multOk();
     }
     // "1,5" ou "1.5" → 1.5, em 2 casas (o servidor arredonda igual); lixo → NaN
@@ -10877,7 +10918,7 @@ var JOGO = (typeof window !== 'undefined')
       if (R.tipo === 'aviso') return true;
       var teto = Ag.TETOS[R.tipo] || 1, m = multLido(R.mult);
       if (!(m > 1 && m <= teto)) {
-        toast('O multiplicador vai de ×1,01 até ' + Ag.fmtFator(teto) + '.');
+        ctx.aviso('O multiplicador vai de ×1,01 até ' + Ag.fmtFator(teto) + '.');
         return false;
       }
       R.mult = m;
@@ -10905,7 +10946,7 @@ var JOGO = (typeof window !== 'undefined')
         var alvo = Ag.alvoDe(e);
         if (alvo && alvo.alvo === 'evento') {
           row.appendChild(desliga(btn(noArAgora ? 'Encerrar' : 'Cancelar', 'btn-mini btn-ghost ag-cancela', function () {
-            confirmSheet(noArAgora ? 'Encerrar o evento agora?' : 'Cancelar o evento?',
+            ctx.confirma(noArAgora ? 'Encerrar o evento agora?' : 'Cancelar o evento?',
               '<b>' + esc(e.titulo) + '</b> (' + esc(Ag.rotulo(e)) + ') sai do ar para todo mundo. ' +
               'Não há como desfazer — dá para ligar de novo.',
               function () {
@@ -10931,7 +10972,7 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(desliga(btn('Ligar agora', 'btn-gold btn-block ag-envia', function () {
         if (!tituloOk()) return;
         var h = Math.floor(Number(R.horas));
-        if (!(h >= 1 && h <= 168)) { toast('A duração vai de 1 a 168 horas.'); return; }
+        if (!(h >= 1 && h <= 168)) { ctx.aviso('A duração vai de 1 a 168 horas.'); return; }
         var c = corpoComum();
         // sem `inicio`: o servidor liga no relógio DELE. As 168 h cheias perdem
         // 2 min para não passar dos 7 dias por um desvio de relógio de segundos.
@@ -10954,9 +10995,9 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(desliga(btn('Agendar', 'btn-gold btn-block ag-envia', function () {
         if (!tituloOk()) return;
         var ini = Ag.deBrasilia(R.ini), fim = Ag.deBrasilia(R.fim);
-        if (ini == null || fim == null) { toast('Diga quando começa e quando termina.'); return; }
-        if (!(fim > ini)) { toast('O fim tem de vir depois do começo.'); return; }
-        if (fim - ini > 7 * 86400) { toast('Um evento dura no máximo 7 dias.'); return; }
+        if (ini == null || fim == null) { ctx.aviso('Diga quando começa e quando termina.'); return; }
+        if (!(fim > ini)) { ctx.aviso('O fim tem de vir depois do começo.'); return; }
+        if (fim - ini > 7 * 86400) { ctx.aviso('Um evento dura no máximo 7 dias.'); return; }
         var c = corpoComum();
         c.inicio = ini;
         c.fim = fim;
@@ -10974,7 +11015,7 @@ var JOGO = (typeof window !== 'undefined')
         dias.appendChild(btn(nome, 'btn-mini ag-dia-b' + (on ? ' btn-gold' : ' btn-ghost'), function () {
           var i = R.dias.indexOf(d);
           if (i >= 0) R.dias.splice(i, 1); else R.dias.push(d);
-          sheetGMAgenda();
+          refaz();
         }));
       });
       var wDias = el('div', 'ag-campo');          // div, não label: o toque no rótulo apertaria o domingo
@@ -10987,10 +11028,10 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(fC);
       body.appendChild(desliga(btn('Pôr no calendário', 'btn-gold btn-block ag-envia', function () {
         if (!tituloOk()) return;
-        if (!R.dias.length) { toast('Escolha pelo menos um dia.'); return; }
-        if (!/^\d{2}:\d{2}$/.test(String(R.hora || ''))) { toast('A hora vai no formato 10:00.'); return; }
+        if (!R.dias.length) { ctx.aviso('Escolha pelo menos um dia.'); return; }
+        if (!/^\d{2}:\d{2}$/.test(String(R.hora || ''))) { ctx.aviso('A hora vai no formato 10:00.'); return; }
         var dur = Math.round(Number(R.durH) * 60);
-        if (!(dur >= 15 && dur <= 1440)) { toast('A duração vai de 15 minutos a 24 horas.'); return; }
+        if (!(dur >= 15 && dur <= 1440)) { ctx.aviso('A duração vai de 15 minutos a 24 horas.'); return; }
         var c = corpoComum();
         c.dias = R.dias.slice().sort(function (a, b) { return a - b; });
         c.hora = R.hora;
@@ -11013,7 +11054,7 @@ var JOGO = (typeof window !== 'undefined')
         tx.appendChild(el('div', 'ms-prog', esc(Ag.textoRegra(rg))));
         row.appendChild(tx);
         row.appendChild(desliga(btn('Cancelar', 'btn-mini btn-ghost ag-cancela', function () {
-          confirmSheet('Tirar a regra do calendário?',
+          ctx.confirma('Tirar a regra do calendário?',
             '<b>' + esc(rg.titulo) + '</b> para de acontecer — e a ocorrência que estiver no ar sai junto.',
             function () {
               Ag.cancelar('regra', rg.id).then(function (r) { resposta(r, 'Regra cancelada.'); });
@@ -11057,63 +11098,25 @@ var JOGO = (typeof window !== 'undefined')
     // (em casa, só com sessão ou API apontada — Agenda.refresca decide)
     if (Ag.refresca) {
       Ag.refresca(60000).then(function (r) {
-        if (r && !r.pulou && sheetName === 'gmagenda' && (r.mudou || !!r.ok !== servidor)) sheetGMAgenda();
+        if (r && !r.pulou && (r.mudou || !!r.ok !== servidor)) refaz();
       });
     }
-    voltar();
   }
+  UI.gmAgendaEm = gmAgendaEm;
 
-  function sheetGM() {
+  /* O GRIMÓRIO DO MESTRE (31/08): qualquer feitiço do jogo entra na barra do Mestre do Fundo; o
+   * Julgamento vai sempre. 03/10: a aba Grimório do painel único (UI.gmGrimorioEm); o PA/PP e o
+   * "Aparelhar o Mestre" moram nas Ferramentas do painel. */
+  function gmGrimorioEm(body, ctx0) {
     var GMod = JOGO.GM;
-    if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
-    // 03/10 (revisão): "Painel do Mestre" é o painel novo por cima de tudo (F9, js/ui/painel_mestre.js) — esta
-    // ficha, a da tecla M, é o grimório e a Caixa, como o painel novo já a chama
-    var body = sheetShell('Grimório e Caixa do Mestre',
-      'O mundo é seu. PA/PP à sua palavra, o grimório inteiro à mão, e o cofre sem fundo.');
-    sheetName = 'gm';
-
-    var pp3 = GMod.paPp();
-    var linhaP = el('div', 'guilda-governo');
-    linhaP.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-    function campoNum(valor) {
-      var i2 = document.createElement('input');
-      i2.type = 'number'; i2.min = '1'; i2.max = '30';
-      i2.value = String(valor);
-      i2.className = 'hub-input';
-      i2.style.cssText = 'width:64px;margin:0';
-      return i2;
+    var ctx = gmCtx(ctx0);
+    if (!GMod || !GMod.ativo || !GMod.ativo()) {
+      body.appendChild(el('p', 'inv-dica', 'O grimório é do Mestre: entre com a conta dele (ou com a chave, em casa).'));
+      return;
     }
-    var inPa = campoNum(pp3.pa), inPp = campoNum(pp3.pp);
-    linhaP.appendChild(el('span', 'inv-dica', 'PA:'));
-    linhaP.appendChild(inPa);
-    linhaP.appendChild(el('span', 'inv-dica', 'PP:'));
-    linhaP.appendChild(inPp);
-    linhaP.appendChild(btn('Aplicar', 'btn-mini btn-gold', function () {
-      GMod.definePaPp(inPa.value, inPp.value);
-      toast('O Mestre decidiu: ' + GMod.paPp().pa + ' PA e ' + GMod.paPp().pp + ' PP.', 'good');
-    }));
-    linhaP.appendChild(btn('Aparelhar o Mestre', 'btn-mini btn-primary', function () {
-      if (GMod.aparelha()) toast('Panóplia no saco e os quatro caminhos abertos.', 'good');
-      else toast('não deu — o Progress não respondeu');
-    }));
-    body.appendChild(linhaP);
-    // A CAIXA DO MESTRE (03/09): qualquer item, conjunto ou bicho do jogo
-    body.appendChild(btn('📦 Abrir a Caixa do Mestre — itens, bichos, pedras, selos, cartas e pergaminhos', 'btn-gold btn-block', function () {
-      openSheet('gmcaixa');
-    }));
-    // OS EVENTOS DO MUNDO (10/09): XP, vinténs, pedras, saque ou aviso para todos os jogadores
-    body.appendChild(btn('📅 Eventos do mundo: ligar agora, agendar, calendário', 'btn-gold btn-block', function () {
-      openSheet('gmagenda');
-    }));
-    // 02/10: as contas, as denúncias, os banimentos e o inventário pelo servidor (js/ui/painel_mestre.js, F9)
-    if (JOGO.PainelMestre) body.appendChild(btn('⚖ Jogadores, denúncias, banimentos, itens com estrelas e moedas (F9)', 'btn-gold btn-block', function () {
-      closeSheet();
-      JOGO.PainelMestre.abrir();
-    }));
     body.appendChild(el('p', 'inv-dica',
-      'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +
-      'A conta do Mestre entra direto com o <b>Mestre do Fundo</b>; este painel abre de qualquer tela ' +
-      '(o botão ⚔ ou a tecla <b>M</b>).'));
+      'O cofre não tem fundo: todo preço se paga sozinho enquanto o modo Mestre estiver ligado. ' +
+      'A conta do Mestre entra direto com o <b>Mestre do Fundo</b>.'));
 
     // ---- o GRIMÓRIO
     body.appendChild(el('h3', 'hs-sec', 'Grimório — qualquer feitiço do jogo'));
@@ -11167,7 +11170,7 @@ var JOGO = (typeof window !== 'undefined')
           row.appendChild(btn(tem ? 'Tirar' : 'Pôr na barra',
             'btn-mini ' + (tem ? 'btn-ghost' : 'btn-gold'), function () {
               GMod.alternaSpell(sp2.id);
-              sheetGM();
+              ctx.refaz();
             }));
           listaEl.appendChild(row);
         })(sp);
@@ -11175,8 +11178,11 @@ var JOGO = (typeof window !== 'undefined')
       if (!vistas) listaEl.appendChild(el('p', 'empty', 'Nada com esse nome no acervo.'));
     }
     busca.addEventListener('input', function () { gmBusca = busca.value; pinta(); });
+    busca.addEventListener('keydown', function (ev) { ev.stopPropagation(); });   // o "m" digitado aqui não fecha o painel
     pinta();
   }
+  UI.gmGrimorioEm = gmGrimorioEm;
+
 
   function sheetBattleMenu() {
     var body = sheetShell('Pausa');
@@ -13283,11 +13289,12 @@ var JOGO = (typeof window !== 'undefined')
     return mestreAtivo() && !!(JOGO.GM.contaMestre && safe(function () { return JOGO.GM.contaMestre(); }, false)) &&
       !!hero('gm');
   }
-  // abre o Painel do Mestre por cima da tela em que está; aberto (ou numa das fichas dele), fecha
+  // abre o painel único do Mestre por cima da tela em que está (na última aba aberta); aberto, fecha
   function alternaPainelMestre() {
     if (!mestreAtivo()) return;
-    if (sheetName === 'gm') closeSheet();
-    else openSheet('gm');
+    var PM = JOGO.PainelMestre;
+    if (PM && PM.alterna) PM.alterna();
+    else gmAbre('grimorio');
   }
   /* Quem NÃO entra direto: as provas (tests/*.html abrem o jogo num iframe e
    * esperam o menu para dirigir a partir dele — com a dupla lembrada no save

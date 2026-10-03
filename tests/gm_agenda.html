@@ -10,7 +10,8 @@ iframe{width:1100px;height:760px;border:0;display:block}
 #log{padding:8px;white-space:pre-wrap}</style>
 </head>
 <body>
-<!-- A FICHA gmagenda (10/09) no jogo INTEIRO: o index num quadro, com a chave
+<!-- A FICHA gmagenda (10/09) no jogo INTEIRO — desde 03/10 a aba EVENTOS do painel único do Mestre
+     (js/ui/painel_mestre.js; o openSheet('gmagenda') de antes abre a aba). O index num quadro, com a chave
      do Mestre e o save na memória (?sandbox=1), e o servidor de mentira no
      gancho Sessao._fetch. Sem sessão do site a ficha é só leitura, com a nota;
      com a sessão marcada (gm:true) o POST de 201 põe o evento na lista. Espera
@@ -118,7 +119,7 @@ iframe{width:1100px;height:760px;border:0;display:block}
       return http(404, { ok: false, erro: 'rota desconhecida' });
     };
     function posts() { return chamadas.filter(function (c) { return c.method === 'POST'; }); }
-    function painel() { return d.querySelector('.sheet-panel'); }
+    function painel() { return d.querySelector('.pm-capa .pm-corpo'); }   // 03/10: a aba Eventos do painel único
     function aba(nome) {
       return [].slice.call(painel().querySelectorAll('.ag-aba')).filter(function (b) { return b.textContent.trim() === nome; })[0];
     }
@@ -129,8 +130,10 @@ iframe{width:1100px;height:760px;border:0;display:block}
       // ---- 1. sem sessão: só leitura, com a nota
       UI.openSheet('gmagenda');
       var p = painel();
-      var h2 = p && p.querySelector('.sheet-head h2');
-      check('openSheet("gmagenda") abre a ficha "Eventos do mundo"', !!h2 && /Eventos do mundo/.test(h2.textContent));
+      var abaOn = d.querySelector('.pm-capa .pm-aba.is-on');
+      check('openSheet("gmagenda") abre a aba Eventos do painel único do Mestre (e nenhuma ficha da HUD)',
+            !!p && J.PainelMestre.aba() === 'eventos' && !!abaOn && abaOn.textContent === 'Eventos' &&
+            !!p.querySelector('.ag-sub') && !d.querySelector('#ui-root .ui-sheet.is-on'), abaOn && abaOn.textContent);
       var nomes = [].slice.call(p.querySelectorAll('.ag-aba')).map(function (b) { return b.textContent.trim(); });
       check('as três abas: Agora, Agendar, Calendário', nomes.join('|') === 'Agora|Agendar|Calendário', nomes.join('|'));
       var nota = p.querySelector('.ag-nota');
@@ -193,7 +196,7 @@ iframe{width:1100px;height:760px;border:0;display:block}
       clica(p.querySelector('.ag-envia'));
       return esperaAte(function () {
         var p2 = painel();
-        return p2 && /Sábado de Pedra/.test(p2.textContent) && /Eventos do mundo/.test(p2.textContent);
+        return p2 && /Sábado de Pedra/.test(p2.textContent) && /Liga agora/.test(p2.textContent);
       }, 80).then(function (apareceu) {
         var c = posts()[posts().length - 1] || {};
         check('o POST foi um só, com Authorization, sem início (liga agora) e fim = agora + 2 h',
@@ -208,12 +211,13 @@ iframe{width:1100px;height:760px;border:0;display:block}
       var b = painel().querySelector('[data-evento="e12"] .ag-cancela');
       check('com a sessão, "Encerrar" fica ligado', !!b && b.disabled === false && /Encerrar/.test(b.textContent));
       clica(b);
-      var conf = [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (x) { return /Confirmar/.test(x.textContent); })[0];
-      check('encerrar pergunta antes', !!conf);
+      // a pergunta é uma janela POR CIMA do painel (a ficha da HUD ficaria por baixo dele)
+      var conf = [].slice.call(d.querySelectorAll('.mod-capa button')).filter(function (x) { return /Confirmar/.test(x.textContent); })[0];
+      check('encerrar pergunta antes, numa janela por cima do painel', !!conf);
       clica(conf);
       return esperaAte(function () {
         var p2 = painel();
-        return p2 && /Eventos do mundo/.test(p2.textContent) && !p2.querySelector('[data-evento="e12"]');
+        return p2 && /Liga agora/.test(p2.textContent) && !p2.querySelector('[data-evento="e12"]');
       }, 80).then(function (saiu) {
         var c = posts()[posts().length - 1] || {};
         check('encerrar: POST /api/eventos/cancelar {alvo:"evento", id:12}',
@@ -226,6 +230,7 @@ iframe{width:1100px;height:760px;border:0;display:block}
       // os chips da recompensa. O nome vem antes: sem ele a praça pede o nome
       // e o pedido toma o painel do portal.
       UI.closeSheet();
+      J.PainelMestre.fechar();
       return J.DB.batizar('Mestre da Prova').then(function () {
         UI.showScreen('hub');
         return esperaAte(function () {

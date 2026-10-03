@@ -115,8 +115,10 @@
     var capa = q('.pm-capa');
     check('o painel recebe clique (pointer-events: auto; fora do #ui-root)',
           pe(capa) === 'auto' && !document.getElementById('ui-root').contains(capa));
-    check('as sete abas', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
-          'Itens,Moedas,Jogadores,Denúncias,Banimentos,Auditoria,Ferramentas');
+    // 03/10: o painel ÚNICO — o de antes da tecla M (grimório, Caixa, eventos do mundo) virou as abas Caixa, Eventos e Grimório
+    check('as nove abas do painel único', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
+          'Caixa,Moedas,Jogadores,Denúncias,Banimentos,Auditoria,Eventos,Grimório,Ferramentas',
+          qq('.pm-aba').map(function (x) { return x.textContent; }).join(','));
     var focP = M.focaveis(capa);
     focP[focP.length - 1].focus();
     var tabP = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
@@ -126,6 +128,17 @@
     check('Esc fecha', !PM.aberto());
     tecla('m', { ctrlKey: true, altKey: true });
     check('Ctrl+Alt+M também abre', PM.aberto());
+    // 03/10: a tecla M (a do painel de antes) fecha o painel aberto — mas não quando se digita "m" num campo
+    PM.abrir('caixa');
+    var campoBusca = q('.pm-corpo input[type=search]');
+    campoBusca.focus();
+    campoBusca.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true }));
+    var abertoDigitando = PM.aberto();
+    var evM = new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true });
+    q('.pm-capa').dispatchEvent(evM);
+    check('a tecla M fecha o painel (e o "m" digitado na busca não fecha)', abertoDigitando && !PM.aberto() && evM.defaultPrevented);
+    PM.abrir('itens');
+    check('o nome de antes ("itens") abre a aba Caixa', PM.aba() === 'caixa');
 
     // ============================================================ Itens
     PM.abrir('itens');
@@ -163,6 +176,9 @@
           pd.op.body.estrelas === 3 && pd.op.body.nivel === 2 && pd.op.body.qtd === 2 && /^[0-9a-f]{24}$/.test(pd.op.body.idem),
           JSON.stringify(pd && pd.op.body));
     check('e o jogo ADOTA o estado que o servidor devolveu (sem recarregar)', adotados.length === 1 && adotados[0].versao === 9);
+    check('o "Para:" diz que é o próprio Mestre', /Para:\s*Dono \(você\)/.test(q('.pm-para').textContent), q('.pm-para').textContent);
+    check('o aviso sai DENTRO do painel (o da HUD fica por baixo do véu)',
+          !!q('.pm-capa .pm-toast.is-on') && q('.pm-toast').textContent.indexOf('no seu inventário') >= 0, q('.pm-toast').textContent);
     var invAntes = P.state.inventory.length;
     check('nada entrou no save local por fora do servidor', P.state.inventory.length === invAntes);
 
@@ -221,6 +237,56 @@
     check('na ficha do próprio Mestre não há banir nem silenciar', !botaoCom('Banir', q('.pm-corpo')) &&
           q('.pm-corpo').textContent.indexOf('O Mestre não silencia nem bane a si mesmo') >= 0);
 
+    // ============================================================ a Caixa para QUALQUER jogador (03/10)
+    respostas['/api/mestre/conta'] = Object.assign({}, respostas['/api/mestre/conta'], { conta: { id: 42, nome: 'Bia',
+      email: 'bia@x.test', criadoEm: 1790000000, gm: false } });
+    PM.paraConta(null);
+    PM.abrir('caixa');
+    botaoCom('Escolher um jogador…', q('.pm-corpo')).click();
+    var bConta = qq('.pm-corpo input[type=search]')[0];
+    bConta.value = 'Bia';
+    botaoCom('Buscar', q('.pm-corpo')).click();
+    await espera(30);
+    botaoCom('Entregar a esta conta').click();
+    await espera(10);
+    check('o "Para:" escolhe um jogador pela busca de contas', /Bia · #42/.test(q('.pm-para').textContent) &&
+          q('.pm-para').classList.contains('is-outro') && PM.destino().id === 42, q('.pm-para').textContent);
+    respostas['/api/mestre/dar'] = { ok: true, status: 201, versao: 4, texto: '2× Ferrão de Vespa +2 ★3' };
+    var nAd = adotados.length;
+    var lEnv = q('.pm-corpo .pm-item[data-item]');
+    var bEnv = botaoCom('Enviar a Bia', lEnv);
+    check('com outro jogador no "Para:", o botão da peça diz para quem vai', !!bEnv && !botaoCom('Pôr no meu inventário', q('.pm-corpo')));
+    bEnv.click();
+    await espera(30);
+    var pe2 = ultimo('/api/mestre/dar');
+    check('enviar a um jogador: o MESMO pedido do servidor, com a conta dele (e a peça, estrelas, forja, quantidade)',
+          pe2.op.body.conta === 42 && pe2.op.body.tipo === 'item' && pe2.op.body.itemId === lEnv.getAttribute('data-item') &&
+          pe2.op.body.estrelas === 3 && pe2.op.body.qtd === 2, JSON.stringify(pe2.op.body));
+    check('... e o Mestre NÃO adota o estado de outra conta', adotados.length === nAd);
+    check('o aviso diz o que foi (o texto do servidor) e para quem', q('.pm-toast').textContent === '2× Ferrão de Vespa +2 ★3 a caminho de Bia.',
+          q('.pm-toast').textContent);
+    respostas['/api/mestre/presentear'] = { ok: true, presente: { nome: 'vinténs' } };
+    PM.abrir('moedas');
+    check('as Moedas seguem o mesmo "Para:" (e os selos agora moram na Caixa)', /Bia · #42/.test(q('.pm-para').textContent) &&
+          !qq('.pm-corpo h3').some(function (h) { return /Selos/.test(h.textContent); }));
+    botaoCom('Dar vinténs').click();
+    await espera(30);
+    check('vinténs para a conta do "Para:"', ultimo('/api/mestre/presentear').op.body.conta === 42);
+    botaoCom('Voltar para mim', q('.pm-corpo')).click();
+    check('"Voltar para mim" devolve o "Para:" ao Mestre', PM.destino() === null && /\(você\)/.test(q('.pm-para').textContent));
+    PM.abreFicha(42);
+    await espera(30);
+    botaoCom('A Caixa para esta conta…', q('.pm-corpo')).click();
+    check('na ficha do jogador, "A Caixa para esta conta…" abre a Caixa já com ele no "Para:"',
+          PM.aba() === 'caixa' && PM.destino() && PM.destino().id === 42);
+    PM.paraConta(null);
+    // sem a HUD (esta página), as abas que ela desenha dizem onde aparecem, sem quebrar
+    PM.abrir('eventos');
+    var tEv = q('.pm-corpo').textContent;
+    PM.abrir('grimorio');
+    check('Eventos e Grimório sem a HUD: o aviso, não um erro', /eventos do mundo aparecem/.test(tEv) &&
+          /grimório aparece/.test(q('.pm-corpo').textContent) && !/falhou ao desenhar/.test(tEv + q('.pm-corpo').textContent));
+
     // ============================================================ Denúncias
     respostas['/api/mestre/denuncias'] = { ok: true, contagem: { aberta: 1, 'em-analise': 0, procedente: 0, improcedente: 0 }, denuncias: [{
       id: 5, estado: 'aberta', categoria: 'ofensa', categoriaNome: 'ofensa ou assédio', texto: 'me xingou', onde: 'chat',
@@ -266,6 +332,8 @@
     check('Ferramentas desenha o corpo do painel de teste (JOGO.Debug.desenhaEm), sem cópia',
           qq('.pm-corpo .dbg-acoes').length >= 1 && !!botaoCom('Liberar as 6 classes', q('.pm-corpo')) &&
           !!q('.pm-corpo .pm-cartao h3') && q('.pm-corpo').textContent.indexOf('PA e PP do Mestre') >= 0);
+    check('o "Aparelhar o Mestre" (da ficha da tecla M) mora nas Ferramentas, uma vez só',
+          qq('.pm-corpo button').filter(function (b) { return b.textContent === 'Aparelhar o Mestre'; }).length === 1);
     PM.fechar();
 
     // ============================================================ a denúncia do jogador

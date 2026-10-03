@@ -224,7 +224,7 @@ FRASE_LAPIDE = 'essa conta foi excluída pelo titular: o id é só a lápide del
 DADOS_MAX = 2000                       # o JSON de uma linha de auditoria
 RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 RE_ID_TEXTO = re.compile(r'^[a-z0-9_-]{1,64}$')
-ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar')
+ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar', 'neutro')   # 03/10: o neutro também (a Caixa sempre deu)
 TENTATIVAS = 3                          # quantas vezes refazer quando o estado muda no meio
 FRASE_SEM_JUIZ = ('o juiz do servidor está fora: sem ele nada entra no inventário (a autoridade e o juiz não '
                   'podem divergir). Tente de novo em instantes')
