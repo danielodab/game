@@ -283,11 +283,17 @@ def principal(conferir=False):
     # 02/10: o relevo e o brilho dos modelos ficam em 512 (tools/reduz_texturas.py).
     # Este e o passo que TODO lote atravessa, entao e aqui que o esquecimento
     # aparece: so avisa (nao reduz sozinho — mexer nos embutidos e decisao de
-    # quem esta embutindo) e a tests/texturas_prova.py reprova. Sem Pillow, cala.
+    # quem esta embutindo) e a tests/texturas_prova.py reprova. Sem Pillow, pula
+    # o aviso: o reduz_texturas importa sem ele (o Pillow so entra dentro das
+    # funcoes), entao testar so o `import reduz_texturas` deixava o extrai_assets
+    # — que ate aqui era so biblioteca padrao — morrer com ModuleNotFoundError no
+    # primeiro .glb de uma maquina sem Pillow.
     try:
         import reduz_texturas
+        import PIL.Image  # noqa: F401  (o aviso le o cabecalho de cada imagem)
     except Exception:
         reduz_texturas = None
+        print('(sem Pillow: o aviso de relevo/brilho acima de 512 px fica de fora)')
     sem_reduzir = []
     faltando = []
     tabelas = {}                 # caminho relativo -> texto
