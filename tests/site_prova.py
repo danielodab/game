@@ -137,6 +137,18 @@ RANKING_CHEIA = json.loads(r'''
 EVENTOS_VAZIA = dict(EVENTOS_CHEIA, ativos=[], proximos=[], regras=[], fatores={'geral': {}, 'porCalabouco': {}})
 # 10/09: a equipe (contas.gm = 1) sai à parte, só com nome e avatar; o 2º nome,
 # com HTML, prova que a página passa tudo pelo SITE.esc
+# 02/10: o placar semanal do Eco Primordial (servidor/supremo.py, GET /api/supremo/ranking)
+SUPREMO_CHEIA = {'ok': True, 'agora': 1789041600, 'atual': 40, 'fechada': False, 'semanasFechadas': [39],
+                 'semana': {'id': 40, 'inicio': 1788836400, 'fim': 1789441199},
+                 'faixas': [{'id': 'podio', 'de': 1, 'ate': 3, 'nome': '1º ao 3º', 'vintens': 5000, 'selos': 20,
+                             'titulo': 'Voz do Eco'},
+                            {'id': 'participacao', 'de': 101, 'ate': None, 'nome': 'participação', 'vintens': 150,
+                             'selos': 0, 'titulo': None}],
+                 'ranking': [{'posicao': 1, 'nome': 'Ana <i>Brava</i>', 'pontos': 7500, 'dano': 6000, 'derrubou': True,
+                              'rodada': 11},
+                             {'posicao': 2, 'nome': 'Bruno', 'pontos': 4100, 'dano': 4100, 'derrubou': False,
+                              'rodada': 12}]}
+SUPREMO_VAZIA = dict(SUPREMO_CHEIA, ranking=[], semanasFechadas=[])
 RANKING_VAZIA = dict(RANKING_CHEIA, jogadores=[], pvp=[], guildas=[], equipe=[],
                      porClasse={c: [] for c in RANKING_CHEIA['classes']})
 CLASSES = RANKING_CHEIA['classes']
@@ -432,6 +444,14 @@ def prova_ranking(abre):
           tem and 'sem-foto' not in eq, 'arquivos: %s' % ('sim' if tem else 'FALTAM'))
     tabelas = ' '.join(texto(bloco(h, 'tbody', 'rk-' + i)) for i in ('jogadores', 'pvp', 'guildas', 'classe'))
     check('ranking (cheia): a equipe fica fora das tabelas', 'GM-ODA' not in tabelas and 'Nena' not in tabelas)
+    # 02/10: o placar semanal do Eco Primordial
+    eco = texto(bloco(h, 'tbody', 'rk-eco'))
+    check('ranking (cheia): o placar do Eco com os pontos, o dano e a estrela de quem derrubou',
+          '7.500' in eco and '6.000' in eco and '★' in eco and 'Bruno' in eco, eco[:120])
+    check('ranking (cheia): o nome do placar do Eco passa pelo SITE.esc', '&lt;i&gt;Brava&lt;/i&gt;' in bloco(h, 'tbody', 'rk-eco'))
+    check('ranking (cheia): a semana de agora e a fechada em abas, e as faixas com o título',
+          'esta semana' in texto(bloco(h, 'div', 'eco-semanas')) and 'semana 39' in texto(bloco(h, 'div', 'eco-semanas'))
+          and 'Voz do Eco' in texto(bloco(h, 'ul', 'eco-faixas')))
 
     h = abre('ranking.html', 'cheia', '#classe=bruxo')
     bt = re.search(r'<button[^>]*data-classe="bruxo"[^>]*>', h)
@@ -439,6 +459,7 @@ def prova_ranking(abre):
           and 'ninguém ainda' in texto(h) and 'Pia' not in texto(bloco(h, 'tbody', 'rk-classe')))
 
     h = abre('ranking.html', 'vazia', '#classe=sumo')
+    check('ranking (vazia): o placar do Eco diz que o primeiro lugar está livre', 'primeiro lugar está livre' in texto(h))
     check('ranking (vazia): 7 abas e ninguém ainda',
           len(re.findall(r'data-classe="', bloco(h, 'div', 'abas-classe'))) == 7 and 'ninguém ainda' in texto(h))
     limpo('ranking (vazia)', h)
@@ -994,9 +1015,11 @@ def main():
         site = 'http://127.0.0.1:%d/site/' % porta
         apis = {}
         for nome, respostas in (('cheia', {'/api/eventos': EVENTOS_CHEIA, '/api/ranking': RANKING_CHEIA,
-                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_CHEIA}),
+                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_CHEIA,
+                                           '/api/supremo/ranking': SUPREMO_CHEIA}),
                                 ('vazia', {'/api/eventos': EVENTOS_VAZIA, '/api/ranking': RANKING_VAZIA,
-                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_VAZIA})):
+                                           '/api/saude': SAUDE, '/api/loja/catalogo': CATALOGO_VAZIA,
+                                           '/api/supremo/ranking': SUPREMO_VAZIA})):
             s, p = sobe(fabrica_api(nome, respostas))
             servidores.append(s)
             apis[nome] = 'http://127.0.0.1:%d' % p
@@ -1025,7 +1048,8 @@ def main():
             print('  (%d fotos pedidas em site/img/, %d ainda sem arquivo: a moldura mostra a inicial)'
                   % (len(imgs), len({p for p, c in PEDIDOS if c == '404' and p.startswith('/site/img/')})))
         rotas = sorted({(m, c) for v, m, c, cod in PEDIDOS_API if cod != 200})
-        check('as páginas só pedem à API rotas que ela conhece (eventos, ranking, saude, loja/catalogo)', not rotas, repr(rotas[:4]))
+        check('as páginas só pedem à API rotas que ela conhece (eventos, ranking, saude, loja/catalogo, supremo/ranking)',
+              not rotas, repr(rotas[:4]))
         # o site lê o mapa do build (../js/versao.js) como o jogo; sem mapa (o
         # 'dev' do repositório, que é o servido aqui, como em casa), a folha e
         # os scripts vão com o carimbo ?t= do instante, e no ar esse ?t= sai
