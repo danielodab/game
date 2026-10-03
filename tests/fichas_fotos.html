@@ -498,6 +498,46 @@
       check('Menos movimento: desligar tira a classe', !document.documentElement.classList.contains('menos-movimento'));
     });
 
+    // ---- a chave da tela cheia segue a TELA, não o toque (03/10, revisão): o
+    // navegador que recusa e o Esc que sai sem passar pela ficha não podem
+    // deixar a chave mostrando o contrário. A página não carrega o
+    // tela_cheia.js (sem tela de verdade no headless): um dublê com a mesma API.
+    var TCfalso = { _cheia: false, _recusa: true,
+      suporta: function () { return true; }, cheia: function () { return this._cheia; },
+      entra: function () { var me = this; if (me._recusa) return Promise.reject(new Error('recusado'));
+        me._cheia = true; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); },
+      sai: function () { this._cheia = false; document.dispatchEvent(new Event('fullscreenchange')); },
+      alterna: function () {} };
+    var TCvelho = JOGO.TelaCheia;
+    passo = passo.then(function () {
+      JOGO.TelaCheia = TCfalso;
+      UI.closeSheet(); UI.openSheet('config');
+      return espera(50);
+    }).then(function () {
+      var ch = qa('.cfg-chave', painel()).filter(function (c) { return c.getAttribute('aria-label') === 'Tela cheia'; })[0];
+      check('Tela cheia: a chave existe quando o aparelho suporta', !!ch);
+      if (!ch) return;
+      ch.click();
+      return espera(30).then(function () {
+        check('Tela cheia: o navegador recusou — a chave volta a "desligada"', ch.getAttribute('aria-checked') === 'false' &&
+              !ch.classList.contains('is-on'), ch.getAttribute('aria-checked'));
+        TCfalso._recusa = false;
+        ch.click();
+        return espera(30);
+      }).then(function () {
+        check('Tela cheia: entrou — a chave acende', ch.getAttribute('aria-checked') === 'true');
+        // o Esc do navegador (e o botão do canto) mudam a tela sem tocar na chave
+        TCfalso._cheia = false;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        var apagou = ch.getAttribute('aria-checked') === 'false';
+        TCfalso._cheia = true;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        check('Tela cheia: a tela muda por fora (Esc, botão do canto) — a chave acompanha nos dois sentidos',
+              apagou && ch.getAttribute('aria-checked') === 'true', ch.getAttribute('aria-checked'));
+        TCfalso._cheia = false;
+      });
+    }).then(function () { JOGO.TelaCheia = TCvelho; }, function (e) { JOGO.TelaCheia = TCvelho; throw e; });
+
     // ---- o Tab dá a volta DENTRO da ficha (ela é diálogo modal): do último
     // controle para o primeiro, e Shift+Tab do primeiro para o último
     passo = passo.then(function () {

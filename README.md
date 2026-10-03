@@ -208,7 +208,7 @@ jogador. Página nova sem essa linha é bug.
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
 | `carga.html` | passou — 23,87 MB servido contra 30,84 MB embutido |
 | `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
-| **`fichas_fotos.html`** (sem `?ficha=`) | a régua das fichas (02/10): em cada uma das 23 fichas, medalhão + título + fechar, papel de diálogo com nome, todo controle ≥ 44 px numa coluna de 390, nada vazando, foco dentro e de volta a quem abriu; abas de texto, Configurações e o cais desenhado. Com `?ficha=<nome>` é a página das FOTOS — `tools/fotos_fichas.py` fotografa todas (1600×900 e 390×844) numa janela de Chrome só e monta a folha antes\|depois |
+| **`fichas_fotos.html`** (sem `?ficha=`) | a régua das fichas (02/10): em cada uma das 23 fichas, medalhão + título + fechar, papel de diálogo com nome, todo controle ≥ 44 px numa coluna de 390, nada vazando, foco dentro e de volta a quem abriu, o Tab dando a volta dentro dela, e quem digita fora dela (o chat) sem perder o campo; abas de texto, Configurações (a chave da tela cheia seguindo a tela), o cais desenhado e o `.is-off` que esconde continuando escondido. Com `?ficha=<nome>` é a página das FOTOS — `tools/fotos_fichas.py` fotografa todas (1600×900 e 390×844) numa janela de Chrome só e monta a folha antes\|depois |
 | `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |

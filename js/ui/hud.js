@@ -8887,6 +8887,14 @@ var JOGO = (typeof window !== 'undefined')
     });
     return b;
   }
+  var chaveTelaViva = null, ouveTela = false;
+  function sincChaveTela() {
+    var c = chaveTelaViva, TC = JOGO.TelaCheia;
+    if (!c || !c.isConnected || !TC) return;
+    var on = !!TC.cheia();
+    c.setAttribute('aria-checked', on ? 'true' : 'false');
+    c.classList.toggle('is-on', on);
+  }
   function sheetConfig() {
     var body = sheetShell('Configurações',
       'O que vale para este aparelho: o som, a tela e o movimento da interface. Nada daqui mexe no seu progresso.');
@@ -8931,8 +8939,20 @@ var JOGO = (typeof window !== 'undefined')
     tela.appendChild(el('h3', 'bk-tit', 'Tela'));
     var TC = JOGO.TelaCheia;
     if (TC && TC.suporta && TC.suporta()) {
-      tela.appendChild(linhaConfig('Tela cheia', 'Some a barra do navegador. Esc sai.',
-        chaveConfig(TC.cheia(), 'Tela cheia', function () { TC.alterna(); })));
+      /* 03/10 (revisão): a chave segue a tela, não o toque. Ela virava na hora
+       * e ficava "ligada" quando o navegador recusava (quadro sem permissão)
+       * e também depois do Esc, que sai da tela cheia sem passar por aqui — e o
+       * toque seguinte fazia o contrário do que a chave mostrava. */
+      chaveTelaViva = chaveConfig(TC.cheia(), 'Tela cheia', function (on) {
+        var p = on ? TC.entra() : TC.sai();
+        if (p && typeof p.then === 'function') p.then(sincChaveTela, sincChaveTela);
+      });
+      tela.appendChild(linhaConfig('Tela cheia', 'Some a barra do navegador. Esc sai.', chaveTelaViva));
+      if (!ouveTela) {
+        ouveTela = true;
+        document.addEventListener('fullscreenchange', sincChaveTela);
+        document.addEventListener('webkitfullscreenchange', sincChaveTela);
+      }
     }
     tela.appendChild(linhaConfig('Menos movimento', 'As fichas abrem sem deslizar e os botões não afundam.',
       chaveConfig(!!prefUi().menosMovimento, 'Menos movimento', function (on) {
