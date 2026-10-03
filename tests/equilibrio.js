@@ -7,8 +7,10 @@
  *   node tests/equilibrio.js perfis          só os perfis das 7 classes × 4 caminhos × 4 níveis
  *   node tests/equilibrio.js fusao           só a fusão contra os dois separados
  *   node tests/equilibrio.js duelos          só a matriz de duelos
- *   opções: --completo (todas as 16 misturas na fusão e mais sementes nos duelos — a
- *           medida do documento, ~1 h de CPU), --trabalhadores N, --json arquivo
+ *   opções: --completo (todas as 16 misturas na fusão e 11 sementes nos duelos — a
+ *           medida do documento, ~35 min com 4 filhos), --trabalhadores N, --json arquivo,
+ *           --ajuste arquivo (calibrar sem tocar nos dados), --niveis 5,30 · --classes x,y ·
+ *           --sementes N · --sem1v1 (recortes para calibrar)
  *
  * Roda sobre o motor do juiz (servidor/juiz/motor.js) + progress.js: o jogo de verdade,
  * sem navegador. Divide o trabalho em processos-filhos de prioridade BAIXA (a máquina é
@@ -77,7 +79,7 @@ const FAIXA_CAMINHO = 0.25;
 
 /* A FERRAMENTA DE CALIBRAGEM (`--ajuste arquivo.json`): experimenta
  * multiplicadores SEM tocar nos dados, só na memória dos filhos. Foi assim que
- * os números de docs/EQUILIBRIO.md §6 foram achados; o que ficou foi escrito à
+ * os números de docs/EQUILIBRIO.md §5 foram achados; o que ficou foi escrito à
  * mão em spells.js/fusions.js/classes.js, com o porquê ao lado. Formato:
  *   { "classes": { "<classe>": { "dano": k, "cura": k, "escudo": k, "pv": +n,
  *                                "tier": { "<nível>": k }, "<elemento>": k } },

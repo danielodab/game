@@ -469,7 +469,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   /* 03/10 — O MURO DO MINOTAURO VALIA ZERO PARA A IA. O `switch` de castValue
-   * não tinha o caso 'wall', então o muro puro (Muralha, Muro de Pedra…) nunca
+   * não tinha o caso 'wall', então o muro puro (Primeira Pedra, Menir, Muralha…) nunca
    * saía, e o muro que vem junto de dano valia só o dano: o verbo inteiro da
    * classe (BARRAR, docs/CLASSES_V3.md) sumia de toda batalha jogada pela IA —
    * o herói que caiu da rede (`ia`) e a bancada do equilíbrio, que mede as

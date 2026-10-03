@@ -124,6 +124,15 @@ Isso permite largar a explosão **entre** dois inimigos, ou chutar onde o outro
 vai estar. Antes disso a área só podia ser lançada em cima de alguém, o que
 jogava fora metade da mecânica de posicionamento.
 
+**De que lado cai cada efeito (03/10).** O que fere pega quem estiver na área,
+menos quem lança — a área do Bruxo queima o parceiro, de propósito. O que ajuda
+(cura, escudo, bênção, regeneração) pega quem estiver na área. O feitiço
+**misto** — que fere E ajuda, como meia tabela das formas de fusão ("fere o
+inimigo e cura o aliado no mesmo gesto") — fere só o outro lado e ajuda só o
+próprio lado, e quem lança sempre recebe a parte que ajuda. E a armadilha que o
+mesmo lance arma na casa onde acabou de erguer muro vai para a vizinha livre
+("deixa o laço armado ao pé"). Ver `docs/EQUILIBRIO.md` §3.
+
 ### Esquiva e fixação
 
 Esquiva é **identidade de classe**, não um número igual para todos — vai de
@@ -144,23 +153,25 @@ Nove marcas espalhadas pelo chão (`ev-*`), que agem **sobre quem pisa**:
 
 ---
 
-## 3. As seis classes
+## 3. As sete classes
 
 Cada uma tem **3 feitiços neutros** que todo mundo daquela classe sabe de saída,
 mais **quatro caminhos elementais** — e você escolhe **um** no nível 5,
-**para sempre**.
+**para sempre**. O papel de cada uma é uma regra medida (dano, alcance, cura,
+escudo, vida efetiva — ver [`docs/EQUILIBRIO.md`](EQUILIBRIO.md) §2.1).
 
 | id no código | nome | papel | PV | PA | PP | esquiva |
 |---|---|---|---|---|---|---|
 | `sumo` | **Bárbaro** | tanque | 150 | 6 | 3 | 5 |
-| `arqueiro` | **Batedor** | atirador | 100 | 6 | 3 | 25 |
+| `arqueiro` | **Caçador** | atirador | 100 | 6 | 3 | 25 |
 | `bruxo` | **Bruxo** | mago | 95 | 6 | 3 | 15 |
 | `espadachim` | **Ladino** | assassino | 95 | 6 | **4** | 30 |
-| `curandeiro` | **Paladina** | suporte | 110 | 6 | 3 | 20 |
+| `curandeiro` | **Curandeiro** | suporte | 110 | 6 | 3 | 20 |
 | `invocador` | **Xamã** | invocador | 105 | 6 | 3 | 12 |
+| `minotauro` | **Minotauro** | guardião | 145 | 6 | 3 | 8 |
 
 > O `id` no código não bate com o nome na tela — `sumo` virou Bárbaro,
-> `curandeiro` virou Paladina, `espadachim` virou Ladino. É dívida de renomeação
+> `arqueiro` virou Caçador, `espadachim` virou Ladino. É dívida de renomeação
 > antiga; **os ids são o que importa** para quem mexe no código.
 
 ### O que cada uma veste
@@ -262,18 +273,17 @@ carregue duas peças.
 
 ### O equilíbrio (leia com atenção)
 
-`equilibrio_fusao.html` mostra **18 de 30** duplas dentro de ±20%.
+Medido e cobrado por `node tests/equilibrio.js`; o método, as faixas e cada ajuste estão em
+[`docs/EQUILIBRIO.md`](EQUILIBRIO.md). Em uma frase: a fundida fica a **±20% dos dois
+heróis separados em cada nível**, com o mesmo orçamento (três rodadas inteiras de cada lado).
 
-Isso **não é regressão recente**. A bancada de medição antiga tinha quatro
-defeitos que sustentavam o "30/30": media a fusão com 4 PA contra 12 dos dois
-heróis separados; pegava o canto do alcance como alvo; não restaurava estado nem
-semente entre medições; e media "melhor feitiço repetido" quando 92 das 105
-formas só podem ser lançadas uma vez por turno.
+O que segura isso é o `Fusion.PAIR_TUNE`, que desde 03/10 tem **nível**: `[k5, k12, k30]` por
+dupla, ajustado nos níveis 5, 12, 20 e 30 e conferido no 16 e no 25 (`Fusion.tuneDe`). Um
+número só por dupla não fechava os dois lados — a razão fundida/separados muda com o nível,
+e em seis duplas ia de 1,52 a 2,90 entre o 12 e o 30.
 
-Com a bancada corrigida, **seis duplas estão fora por construção**: um
-coeficiente constante multiplica nível 12 e nível 30 juntos, e só cabe em ±20%
-nos dois se a razão entre eles for ≤ 1,5. Nessas seis vai de 1,52 a 2,90 — e a
-inclinação **troca de sinal** entre elas, então nenhum valor global resolve.
+O que ainda escapa (§6 do documento): alguns degraus no 16 e no 25, entre 20% e 25%, que vêm
+do lado dos separados (o quarto feitiço do caminho chega no 15).
 
 ---
 
@@ -491,7 +501,7 @@ Tem um "Desfazer tudo" que restaura o save copiado na abertura da página.
 
 | assunto | estado |
 |---|---|
-| **Equilíbrio da fusão** | 18 de 30. Seis duplas fora por limite matemático — ver §5 |
+| **Equilíbrio** | classes, caminhos, fusões e duelos medidos — ver `docs/EQUILIBRIO.md` (o Minotauro na régua da IA e a paridade de 5 níveis são decisão do dono, §6 de lá) |
 | **Efeitos** | 21 famílias e placas ligadas; falta julgar no tamanho real do tabuleiro |
 | **Fogo na arma** | proposto, depende do resultado das placas |
 | **Nomes das classes** | confirmados pelo dono — ficam como estão |

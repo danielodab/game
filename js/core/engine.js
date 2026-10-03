@@ -2698,7 +2698,7 @@ var JOGO = (typeof window !== 'undefined')
    * e o lance {a:'po'} que chegar de uma página velha ou forjada é recusado pelo Game
    * (executa) e derruba a sala no juiz (servidor/juiz/sala.js). */
 
-  /* O FEITIÇO MISTO (03/10, a bancada do equilíbrio — docs/EQUILIBRIO.md §5).
+  /* O FEITIÇO MISTO (03/10, a bancada do equilíbrio — docs/EQUILIBRIO.md §3).
    *
    * Feitiço de classe segue a convenção de spells.js: área que fere carrega
    * SÓ efeito contra o inimigo, e o bônus próprio mora num feitiço de 'self'.
