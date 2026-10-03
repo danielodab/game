@@ -230,8 +230,8 @@ nunca ALTER. Um advogado revisa os textos antes de abrir ao público (`docs/REVI
   `data-versao` das duas páginas: `tests/privacidade_api.py` pega a deriva.
 - **Excluir a conta.** `POST /api/conta/excluir {nome, senha}`: o nome EXATO da conta e a senha
   (o `_confere_senha` da troca de senha, com o freio por IP no balde `excluir`). Recusa 409 com
-  `motivo`: `mestre` (a conta com a marca; tire no Terminal antes), `luta-aberta` (sala em grupo
-  aberta, Arena ou guerra casada/pronta, das últimas 6 h) e `pagamento-aberto` (link do Mercado
+  `motivo`: `mestre` (a conta com a marca; tire no Terminal antes), `luta-aberta` (duelo aberto
+  sem resultado da última 1 h, sala em grupo aberta, Arena ou guerra casada/pronta, das últimas 6 h) e `pagamento-aberto` (link do Mercado
   Pago das últimas 2 h sem resposta, ou pagamento pendente/em disputa). Numa transação: a guilda
   se resolve (o membro mais antigo herda; sozinho, ela se desfaz), os eventos da conta saem
   (menos os `pagamento-*`), as tabelas que guardam o id sem chave estrangeira são limpas

@@ -221,6 +221,22 @@ class ProvaDaPrivacidade(unittest.TestCase):
 
     def test_luta_e_pagamento_abertos_seguram(self):
         a, b = self.novo('Luta Aberta'), self.novo('Luta Outro')
+        # 03/10 (revisão): o DUELO aberto (duelo/abrir guardou a vida) e ainda sem resultado segura — sem isso o
+        # fechamento do outro lado caía em 404 para sempre (a conta do duelo virou lápide banida)
+        t = int(time.time())
+        self.sql("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES ('d-priv-duelo', ?, '[]', NULL, ?)",
+                 a.conta['id'], t)
+        self.sql("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES ('d-priv-duelo', ?, '[]', NULL, ?)",
+                 b.conta['id'], t)
+        st, r = self.exclui(a)
+        self.assertEqual((st, r.get('motivo')), (409, 'luta-aberta'), r)
+        self.assertIn('duelo', r['erro'])
+        # com o resultado guardado, o duelo acabou e não segura mais
+        self.sql("INSERT INTO duelos(did, a_id, b_id, fase, criado_em) VALUES ('d-priv-duelo', ?, ?, 'won', ?)",
+                 a.conta['id'], b.conta['id'], t)
+        # e o duelo aberto há mais tempo que a janela, sem resultado, foi largado pelos dois: também não segura
+        self.sql("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES ('d-priv-largado', ?, '[]', NULL, ?)",
+                 a.conta['id'], t - privacidade.EXCLUIR_DUELO_JANELA - 60)
         agora_ms = int(time.time() * 1000)
         self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, "
                  "b_nivel, a_desde_ms, criada_ms, prazo_ms, estado) VALUES ('d-luta-1', ?, ?, '[]', '[]', '[]', '[]', "

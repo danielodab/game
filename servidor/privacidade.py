@@ -46,12 +46,12 @@ com a conta; não é duplicação). A peça que ela PEGOU volta a ser só do don
 ouro e vinténs que sobrarem somem com a conta: os Termos dizem isso, e o arrependimento
 de 7 dias se pede ANTES de excluir.
 
-RECUSA A EXCLUSÃO (409) enquanto há: uma luta com outra pessoa no meio (sala em grupo
-aberta, partida da Arena casada ou pronta, guerra casada ou pronta) — a luta dos outros
-cairia junto —; ou um pagamento no Mercado Pago ainda aberto (o dinheiro chegaria a uma
-conta que não existe: pagamento.py só loga e não credita). A conta do Mestre também não
-sai por aqui: perder a última marca de Mestre trancaria o painel; tire a marca no
-Terminal antes (admin tirar-mestre).
+RECUSA A EXCLUSÃO (409) enquanto há: uma luta com outra pessoa no meio (duelo aberto sem
+resultado, sala em grupo aberta, partida da Arena casada ou pronta, guerra casada ou
+pronta) — a luta dos outros cairia junto —; ou um pagamento no Mercado Pago ainda aberto
+(o dinheiro chegaria a uma conta que não existe: pagamento.py só loga e não credita). A
+conta do Mestre também não sai por aqui: perder a última marca de Mestre trancaria o
+painel; tire a marca no Terminal antes (admin tirar-mestre).
 
 Só biblioteca padrão. Tabelas NOVAS, nunca ALTER (o rolling update divide o banco).
 """
@@ -77,6 +77,9 @@ FRASE_TERMOS_VELHOS = 'os Termos de Uso mudaram: recarregue a página, leia a ve
 
 MEUS_DADOS_POR_HORA = 5          # cada pedido monta um JSON grande: o freio segura quem pede em laço
 EXCLUIR_LUTA_JANELA = 6 * 3600   # a luta mais velha que isso está largada (o bilhete vence em 6 h): não segura
+# 03/10 (revisão): o duelo dura minutos e a espera mais longa dele (a desistência, o W.O.) é de 2 min;
+# aberto há mais de 1 h e sem resultado, os dois largaram — não segura a exclusão de ninguém
+EXCLUIR_DUELO_JANELA = 3600
 PAGAMENTO_ABERTO = 2 * 3600      # o link de pagamento vale 2 h (pagamento.PREFERENCIA_VALIDADE)
 PENDENTES_MP = ('pending', 'in_process', 'authorized', 'in_mediation')
 # o teto de linhas de cada lista do "baixar meus dados" (a conta mais ativa tem dezenas de
@@ -222,9 +225,16 @@ class PrivacidadeMixin:
             "SELECT 1 FROM guerra_jogadores j JOIN guerra_partidas p ON p.gid = j.gid WHERE j.conta_id = ? "
             "AND p.estado IN ('casada', 'pronta') AND p.criada_ms > ?",
             (cid, ms - EXCLUIR_LUTA_JANELA * 1000)).fetchone()
+        # 03/10 (revisão): o DUELO (desafio da praça, Campo ou Arena) aberto e ainda sem resultado. Sem esta
+        # linha a exclusão passava no meio dele, e o fechamento do OUTRO lado caía para sempre em 404 ("conta
+        # do duelo não encontrada": a lápide é banida, grupo.py _conta_viva) — a luta dele nunca fechava
+        luta = luta or self.con.execute(
+            "SELECT 1 FROM duelo_vida v WHERE v.conta_id = ? AND v.criado_em > ? "
+            "AND NOT EXISTS (SELECT 1 FROM duelos d WHERE d.did = v.did)",
+            (cid, t - EXCLUIR_DUELO_JANELA)).fetchone()
         if luta:
-            return ('luta-aberta', 'há uma luta com outros jogadores em andamento (sala em grupo, Arena ou guerra): '
-                                   'termine ou largue a luta antes de excluir a conta')
+            return ('luta-aberta', 'há uma luta com outros jogadores em andamento (duelo, sala em grupo, Arena ou '
+                                   'guerra): termine ou largue a luta antes de excluir a conta')
         pag = self.con.execute(
             "SELECT 1 FROM pagamentos p WHERE p.conta_id = ? AND ("
             "  (p.estado IN ('criado', 'aberto') AND p.criado_em > ? "
