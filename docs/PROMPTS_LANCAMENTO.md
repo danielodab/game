@@ -725,14 +725,25 @@ câmara circular sobre o vazio, pilares quebrados de cobertura.
 
 Arquivo: `...\O Eco Primordial\itens mapa\pilar quebrado-entulho-borda do abismo-cristal do eco.glb`.
 
-`ce_pilar_quebrado` (**alto**: os pares cardeais e as diagonais do mapa, ~3,1 m)
-· `ce_entulho` (**baixo**, ~1 m: o entulho que dá meia cobertura) ·
+`ce_pilar_quebrado` (**alto**: os pares cardeais e as diagonais do mapa) ·
+`ce_entulho` (**baixo**: o entulho que dá meia cobertura) ·
 `ce_borda_abismo` (**borda**: rochedo da beira do círculo, quebrado para o
-vazio) · `ce_cristal_eco` (**sotaque**: cristal com o mesmo núcleo do Eco
+vazio) · `ce_cristal_eco` (**borda** também: cristal com o mesmo núcleo do Eco
 preso dentro).
 
+**Por que o "pilar" vem largo e o entulho comprido.** Na Câmara os `#` são
+pares e casas soltas, nunca uma fileira de 3. Então quem os veste é o papel
+`alto`, e não o `pilar`. O `alto` é esticado para uma caixa de **3 m de
+largura por 3,10 m de altura** (`muroDaCasa`, `LARG_MURO`). Uma coluna fina
+esticada a 3 m vira um bloco gordo. Por isso a peça é pedida já com a
+proporção da caixa: um trecho de colunata quebrada **mais ou menos tão largo
+quanto alto**. Pelo mesmo motivo, o `baixo` vira **3 m por 0,92 m**, e o
+entulho é pedido **umas três vezes mais largo que alto**. O cristal vai para a
+`borda` porque esta sala não tem fileira `=` de 3 casas. Sem essa fileira, um
+`sotaque` nunca aparece.
+
 ```
-A game asset reference sheet: four separate stylized fantasy ruin props arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. From left to right: (1) a tall broken stone column snapped off at an angle near the top, a jagged break, cracks with a faint pale line inside them, much taller than it is wide; (2) a waist-high heap of fallen column drums and broken stone blocks fused together into one solid pile; (3) a rough rock outcrop broken off sharply on one side like the edge of a cliff, layered stone with a few pale crystals growing out of it; (4) a chest-high cluster of large crystals growing from a stone base, a small round core of pale light visible inside the biggest crystal. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top, no loose stones. All four seen from the same three-quarter view about thirty degrees above eye level, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey stone, deep indigo shadows, tarnished old gold, pale glow in the cracks and in the core. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no letters, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
+A game asset reference sheet: four separate stylized fantasy ruin props arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. From left to right: (1) a short ruined stretch of colonnade: two thick broken stone column shafts of different heights standing close together on one shared square plinth, both snapped off at an angle with jagged breaks, a cracked stone lintel fallen diagonally across them and fused to both, cracks with a faint pale line inside them, about as wide as it is tall; (2) a long low heap of fallen column drums and broken stone blocks fused together into one solid pile, about three times as wide as it is tall; (3) a rough rock outcrop broken off sharply on one side like the edge of a cliff, layered stone with a few pale crystals growing out of it; (4) a chest-high cluster of large crystals growing from a stone base, a small round core of pale light visible inside the biggest crystal. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top, no loose stones. All four seen from the same three-quarter view about thirty degrees above eye level, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Colors: violet-grey stone, deep indigo shadows, tarnished old gold, pale glow in the cracks and in the core. Soft even studio lighting, no cast shadows, no dramatic highlights. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no letters, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
 ```
 
 ---
