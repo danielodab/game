@@ -14,6 +14,11 @@ entraram no jogo (monstros + cenário + salas novas, portais abertos). As seçõ
 1, 2 e 6.1 ficam como registro do que foi pedido; o que ainda falta gerar é a
 Mina Trêmula (seção 3 + 6.3) e o Coração Partido (seção 4 + 6.4).
 
+**03/10/2026:** os prompts do conteúdo novo do lançamento — Sala de Guerra,
+Colossos do Poço, Eco Primordial e Santuário dos Elementos — estão em
+`docs/PROMPTS_LANCAMENTO.md`, já no caminho Gemini → Meshy e com o recorte dos
+personagens.
+
 ---
 
 ## As cinco regras que valem para todos os monstros
