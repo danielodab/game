@@ -219,7 +219,10 @@ var JOGO = (typeof window !== 'undefined')
     return A.LUTA_CHAVE + ((C && C.sufixo) ? C.sufixo() : '');
   }
   function armario() { try { return window.localStorage || null; } catch (e) { return null; } }
-  var TIPOS_LUTA = { sala: true, grupo: true, guerra: true };   // 19/09: a guerra de guilda pronta também é luta aberta
+  // 19/09: a guerra de guilda pronta também é luta aberta; 03/10 (revisão): e a tentativa do Eco — sem registro, a
+  // tentativa que ainda estava sendo conferida morria no próximo "Enfrentar o Eco" (o abrir vence a aberta) e a
+  // da aba fechada antes da resposta nunca fechava: o dano sumia e a vez do dia ficava gasta
+  var TIPOS_LUTA = { sala: true, grupo: true, guerra: true, eco: true };
   A.lutaAberta = function () {
     var ls = armario();
     if (!ls) return null;
@@ -233,7 +236,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!ls) return;
     try { if (v) ls.setItem(chaveLuta(), JSON.stringify(v)); else ls.removeItem(chaveLuta()); } catch (e) {}
   }
-  /* a luta nasceu: 'sala' com o bilhete, 'grupo' e 'guerra' com o gid */
+  /* a luta nasceu: 'sala' com o bilhete, 'grupo' e 'guerra' com o gid, 'eco' com a tentativa */
   A.abreLuta = function (tipo, ref) {
     if (TIPOS_LUTA[tipo] !== true || typeof ref !== 'string' || !ref || !A.ligada()) return;
     var v = A.lutaAberta();
@@ -271,6 +274,10 @@ var JOGO = (typeof window !== 'undefined')
       p = v.saiu ? A.saiDaGuerra(v.ref)
         : A.fechaGuerra((v.corpo && v.corpo.gid === v.ref) ? v.corpo
                         : { gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false });
+    } else if (v.tipo === 'eco') {
+      // 03/10: a tentativa do Eco pendente fecha com os lances guardados; o hash do fim só se ela acabou de fato
+      p = A.fechaEco({ tentativa: v.ref, lances: v.lances || [],
+                       hashFinal: (v.fim && v.corpo && typeof v.corpo.hashFinal === 'number') ? v.corpo.hashFinal : null });
     } else p = A.fechaGrupo({ gid: v.ref, lances: v.lances || [], hashFinal: null, fotografada: false, largou: !v.fim });
     return p.then(function (r) {
       A.esqueceLuta(v.ref);
@@ -296,15 +303,19 @@ var JOGO = (typeof window !== 'undefined')
   /* O ECO PRIMORDIAL (02/10, servidor/supremo.py): a tentativa abre com a semente do servidor (as ops na fila
    * sobem antes: o juiz monta o grupo do estado de lá) e fecha com os lances — o juiz refaz e o placar é o dele.
    * Resolve sempre: {ok, tentativa, semente, restantes} / {ok, dano, pontos, eu…} ou {ok:false, erro, motivo}.
-   * A tentativa não é luta aberta (não mexe na vida única): sem registro em soterra-luta-aberta. */
+   * A tentativa não mexe na vida única, mas é luta aberta (03/10, revisão): o registro em soterra-luta-aberta
+   * guarda os lances, e a abertura seguinte espera a pendente fechar (a de antes, ainda sendo conferida, não
+   * pode vencer como 'outra-aberta'). */
   A.abreEco = function (corpo) {
-    return descarregaFila().then(function () { return api('/api/supremo/abrir', comVersao(corpo)); }).then(function (r) {
+    return A.fechaPendente().then(null, function () { return null; }).then(function () { return descarregaFila(); })
+      .then(function () { return api('/api/supremo/abrir', comVersao(corpo)); }).then(function (r) {
       if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
       if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
       if (!r.ok) {
         return { ok: false, erro: r.erro || 'o servidor não abriu a tentativa', motivo: r.motivo || null,
                  liberaEm: r.liberaEm };
       }
+      if (typeof r.tentativa === 'string') A.abreLuta('eco', r.tentativa);
       return r;
     }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
   };
@@ -432,6 +443,7 @@ var JOGO = (typeof window !== 'undefined')
    * pendente espera por ele (fechandoLuta), e a resposta de vez apaga o registro */
   function fechaEm(rota, corpo, extra) {
     var ref = (rota === '/api/sala/fechar' && corpo && corpo.bilhete) ||
+              (rota === '/api/supremo/fechar' && corpo && corpo.tentativa) ||
               ((rota === '/api/grupo/fechar' || rota === '/api/guerra/fechar' || rota === '/api/guerra/sair') && corpo && corpo.gid) || null;
     var p = fechaEmBruto(rota, corpo, extra).then(function (r) {
       if (ref) {

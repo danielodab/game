@@ -224,7 +224,10 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
   SEMENTE é do servidor; heróis conferidos no estado do servidor (o Mestre não entra: leva qualquer
   feitiço); versão das regras conferida como no bilhete (§4.1, 409 `regras-velhas`); **3 por dia** de
   Brasília por conta (429 `sem-tentativas`, com `liberaEm`). Abrir conta como usada; abrir outra vence a
-  aberta (`outra-aberta`). A tentativa não é luta aberta: não mexe na vida única.
+  aberta (`outra-aberta`). A tentativa não mexe na vida única, mas é **luta aberta** no cliente (03/10): o
+  registro `soterra-luta-aberta` guarda os lances, o `abreEco` espera a pendente fechar antes de abrir outra (a
+  que ainda estava sendo conferida não vence como `outra-aberta`) e a aba fechada antes da resposta fecha na
+  volta. O estado da conta NA ABERTURA fica em `supremo_estados` até a tentativa fechar.
 - `POST /api/supremo/fechar` `{tentativa, lances, hashFinal}` → o juiz (`POST /supremo/fecha`, §5.4)
   refaz a Câmara pelo MESMO refazer da sala e devolve `Engine.ecoPlacar`. O que vale é esse número:
   lance trocado, hash do fim mentido ou outra semente = 422 `divergiu` e a tentativa fica `recusada`, sem
@@ -617,7 +620,8 @@ Panóplia do Mestre ou índice sem peça devolvem `false` com o estado igual (n�
 ### 5.4 `POST /supremo/fecha` (02/10, `servidor/juiz/supremo.js`)
 
 `{conta, tentativa: {semente, herois, regras}, lances, hashFinal, progress, db, contexto}`. O grupo sai do
-`Progress.battleParty` do estado do servidor (todos cheios: a tentativa não usa a vida única), a Câmara do
+`Progress.battleParty` do estado do servidor DA ABERTURA (`supremo_estados`, 03/10: uma peça equipada entre o fim
+e o fechar refeito mudava o grupo e a tentativa caía como `divergiu`) (todos cheios: a tentativa não usa a vida única), a Câmara do
 Eco é refeita pelo `refazEm` da sala (a vez, o resultado de cada lance, os hashes; a versão das regras) e
 sai `{ok, fase, rodada, turnosJogador, hash, placar}` — `placar = Engine.ecoPlacar(estado)`. Nenhum campo
 do pedido vira placar. Prova: `tests/juiz_supremo.js`.

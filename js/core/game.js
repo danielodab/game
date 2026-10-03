@@ -530,7 +530,10 @@ var JOGO = (typeof window !== 'undefined')
       var hashFinal = null;
       try { hashFinal = largou ? null : E().hash(st); } catch (e2) { hashFinal = null; }
       var meu = fimEco;
-      JOGO.Autoridade.fechaEco({ tentativa: eco.tentativa, lances: ata.lances, hashFinal: hashFinal })
+      var corpoEco = { tentativa: eco.tentativa, lances: ata.lances, hashFinal: hashFinal };
+      // 03/10: o registro da luta aberta guarda o fim — a aba que fechar antes da resposta reenvia este corpo
+      try { if (JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(eco.tentativa, ata.lances, !largou, corpoEco); } catch (eA) {}
+      JOGO.Autoridade.fechaEco(corpoEco)
         .then(function (r) {
           meu.conferindo = false;
           if (r && r.ok) meu.oficial = r;
@@ -1785,7 +1788,8 @@ var JOGO = (typeof window !== 'undefined')
     if (ataSolo && !rede) {
       ataSolo.lances.push(l);
       // 15/09: o registro da luta aberta (autoridade.js) — a aba que fechar no meio fecha a sala daqui na volta
-      try { if (JOGO.Autoridade && JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(ataSolo.bilhete, ataSolo.lances); } catch (e) {}
+      // (a tentativa do Eco não tem bilhete: o registro dela é pela tentativa, 03/10)
+      try { if (JOGO.Autoridade && JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(ataSolo.bilhete || ataSolo.eco, ataSolo.lances); } catch (e) {}
     }
   }
   function castSolo(uid, spellId, x, y) {

@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS supremo_tentativas(
 );
 CREATE INDEX IF NOT EXISTS supremo_tentativas_conta ON supremo_tentativas(conta_id, dia);
 CREATE INDEX IF NOT EXISTS supremo_tentativas_semana ON supremo_tentativas(semana, estado, pontos);
+-- 03/10 (revisão): o estado da conta NA ABERTURA da tentativa. O juiz refaz o grupo com ele, e não com o de
+-- quando o fechar chega: uma peça equipada na praça entre o fim e o fechar refeito (sem rede) mudava o grupo e a
+-- tentativa legítima caía como 'divergiu'. Sai quando a tentativa fecha; a que vence sai no próximo abrir
+CREATE TABLE IF NOT EXISTS supremo_estados(
+  tentativa  TEXT PRIMARY KEY REFERENCES supremo_tentativas(id) ON DELETE CASCADE,
+  progress   TEXT NOT NULL,
+  db         TEXT
+);
 -- a semana fechada: a PORTA dos prêmios (uma linha por semana, gravada na mesma transação que eles)
 CREATE TABLE IF NOT EXISTS supremo_semanas(
   semana     INTEGER PRIMARY KEY,
@@ -380,6 +388,11 @@ class SupremoMixin:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
                 (tid, cid, semana, dia, semente, json.dumps(herois),
                  regras_juiz if _inteiro_puro(regras_juiz) else None, int(instante * 1000)))
+            # o estado da abertura (03/10): o das tentativas que já fecharam ou venceram sai
+            self.con.execute("DELETE FROM supremo_estados WHERE tentativa IN (SELECT id FROM supremo_tentativas "
+                             "WHERE conta_id = ? AND estado != 'aberta')", (cid,))
+            self.con.execute("INSERT INTO supremo_estados(tentativa, progress, db) VALUES (?, ?, ?)",
+                             (tid, estado['progress_txt'], json.dumps(estado['db'])))
             self._evento(cid, 'supremo-abre', {'tentativa': tid, 'semana': semana, 'herois': herois})
         return 200, {'ok': True, 'tentativa': tid, 'semente': semente, 'restantes': TENTATIVAS_POR_DIA - usadas - 1,
                      'semana': semana_publica(semana)}
@@ -389,6 +402,7 @@ class SupremoMixin:
         with self._escrita():
             n = self.con.execute("UPDATE supremo_tentativas SET estado = ?, motivo = ?, fechada_em = ? "
                                  "WHERE id = ? AND estado = 'aberta'", (estado, motivo, t, tid)).rowcount
+            self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
             if n:
                 r = self.con.execute("SELECT conta_id FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
                 self._evento(r['conta_id'], 'supremo-' + estado, {'tentativa': tid, 'motivo': motivo})
@@ -425,6 +439,13 @@ class SupremoMixin:
                                  "WHERE id = ?", (vencida, t, tid))
             else:
                 estado = self._estado_exige(cid)
+                # 03/10: o grupo é o da ABERTURA (supremo_estados); a tentativa de antes da tabela usa o de agora
+                foto = self.con.execute("SELECT progress, db FROM supremo_estados WHERE tentativa = ?", (tid,)).fetchone()
+                if foto is not None:
+                    try:
+                        estado = {'progress': json.loads(foto['progress']), 'db': json.loads(foto['db'] or '{}')}
+                    except (TypeError, ValueError):
+                        pass
         if vencida:
             raise Recusa(410, 'essa tentativa venceu (%s)' % vencida, motivo='vencida')
         if decorrido < SALA_MIN_S:
@@ -465,6 +486,7 @@ class SupremoMixin:
                  tid)).rowcount
             if not n:                                        # dois fechar juntos: só um conta
                 raise Recusa(409, 'essa tentativa já foi fechada')
+            self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
             self._evento(cid, 'supremo-conferida', {'tentativa': tid, 'dano': placar['dano'], 'pontos': placar['pontos'],
                                                     'derrubou': bool(placar.get('derrubou')), 'turnos': turnos})
             minha = self._supremo_minha(cid, t)

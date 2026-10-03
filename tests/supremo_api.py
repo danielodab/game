@@ -350,6 +350,28 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(S.semana_de(dom), S.semana_de(seg))
         self.assertEqual(S.dia_de(seg) - S.dia_de(seg - 1), 1)
 
+    def test_12_o_grupo_e_o_da_abertura(self):
+        """03/10 (revisão): o fechar refeito (sem rede) sobe a fila de ops antes; uma peça equipada ou um nível
+        ganho na praça entre o fim e o fechar mudava o grupo que o juiz montava, e a tentativa legítima caía como
+        'divergiu'. O juiz refaz com o estado da ABERTURA (supremo_estados)."""
+        c = self.conta_pronta('Mexe Depois')
+        st, r = self.abre_eco(c)
+        self.assertEqual(st, 200, r)
+        tid = r['tentativa']
+        self.assertEqual(len(self.sql("SELECT 1 FROM supremo_estados WHERE tentativa = ?", tid)), 1)
+        jogo = self.joga_eco(c, tid)
+        # o estado do servidor muda depois do fim (o herói sobe 10 níveis)
+        linha = self.sql("SELECT progress FROM saves WHERE conta_id = ?", c.conta['id'])[0]
+        prog = json.loads(linha['progress'])
+        h = prog['heroes']['sumo']
+        h['level'] = min(30, int(h.get('level') or 1) + 10)
+        h['xp'] = int(h.get('xp') or 0) + 50000
+        self.sql("UPDATE saves SET progress = ? WHERE conta_id = ?", json.dumps(prog), c.conta['id'])
+        st, r = self.fecha_eco(c, tid, jogo)
+        self.assertEqual(st, 200, r)
+        self.assertTrue(r['dano'] > 0, r)
+        self.assertEqual(self.sql("SELECT 1 FROM supremo_estados WHERE tentativa = ?", tid), [], 'a foto sai ao fechar')
+
     def test_11_banimento_vencido_nao_tira_do_ranking(self):
         """03/10 (revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta. O
         banimento com prazo que já venceu (a conta não pediu nada depois) não tira a conta do ranking nem

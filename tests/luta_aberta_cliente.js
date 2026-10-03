@@ -284,6 +284,48 @@ async function algunsLances(c) {
   check('o jogo reaberto com a saída pendente declara a saída (POST /api/guerra/sair {gid}), não o fechar, e esquece o registro',
         do5.length === 1 && do5[0].rota === '/api/guerra/sair' && do5[0].corpo.gid === G2 && !registroDe(cinco), JSON.stringify(do5.map((p) => p.rota)));
 
+  // ---- 03/10 (revisão): a tentativa do Eco é luta aberta. A que ainda está sendo conferida não pode morrer no
+  // próximo "Enfrentar o Eco" (o abrir do servidor vence a aberta como 'outra-aberta'), e a da aba fechada antes
+  // da resposta fecha na volta com os lances guardados
+  const srvE = servidor(inicial);
+  let nTent = 0, soltaFechar = null;
+  srvE.respostas['/api/supremo/abrir'] = () => ({ ok: true, status: 200, tentativa: 'eco-tent-' + (++nTent), semente: 77,
+                                                  restantes: 3 - nTent });
+  srvE.respostas['/api/supremo/fechar'] = () => new Promise((res) => {
+    soltaFechar = () => res({ ok: true, status: 200, dano: 10, pontos: 10, derrubou: false, bonus: 0, rodada: 1 });
+  });
+  const seis = cliente(inicial, srvE);
+  const rE = seis.J.Game.startEco(['sumo']);
+  for (let i = 0; i < 60 && seis.J.Game.screen !== 'battle'; i++) await espera(5);
+  let regE = registroDe(seis);
+  check('a tentativa do Eco nasce no registro da conta como luta aberta', rE === 'esperando' && seis.J.Game.screen === 'battle' &&
+        !!regE && regE.tipo === 'eco' && regE.ref === 'eco-tent-1', rE + ' ' + seis.J.Game.screen + ' ' + JSON.stringify(regE));
+  seis.J.Game.abandonar();                       // o fechar sai e fica sem resposta (o servidor "pensando")
+  await espera(10);
+  const r2 = seis.J.Game.startEco(['sumo']);
+  await espera(30);
+  const rotasE = srvE.rotas().filter((r) => r.indexOf('/api/supremo/') === 0);
+  check('com o fechar a caminho, o "Enfrentar o Eco" seguinte ESPERA: nenhum abrir sai antes da resposta',
+        r2 === 'esperando' && rotasE.join(' ') === '/api/supremo/abrir /api/supremo/fechar', r2 + ' ' + rotasE.join(' '));
+  soltaFechar();
+  for (let i = 0; i < 60 && nTent < 2; i++) await espera(5);
+  await espera(10);
+  const rotasE2 = srvE.rotas().filter((r) => r.indexOf('/api/supremo/') === 0);
+  regE = registroDe(seis);
+  check('respondido o fechar, o abrir sai e o registro passa a ser a tentativa nova',
+        rotasE2.join(' ') === '/api/supremo/abrir /api/supremo/fechar /api/supremo/abrir' && !!regE && regE.ref === 'eco-tent-2',
+        rotasE2.join(' ') + ' ' + JSON.stringify(regE));
+  // a aba fechada antes da resposta: o jogo reaberto (o mesmo armário) fecha a tentativa guardada
+  const guardado = seis.ctx.localStorage.getItem(CHAVE);
+  srvE.respostas['/api/supremo/fechar'] = () => ({ ok: true, status: 200, dano: 5, pontos: 5, derrubou: false, bonus: 0, rodada: 1 });
+  const antes = srvE.pedidos.length;
+  const sete = cliente(inicial, srvE, guardado);
+  await sete.J.Autoridade.fechaPendente();
+  const depoisE = srvE.pedidos.slice(antes).filter((p) => p.rota === '/api/supremo/fechar');
+  check('o jogo reaberto fecha a tentativa guardada, com a tentativa e os lances, e esquece o registro',
+        depoisE.length === 1 && depoisE[0].corpo.tentativa === 'eco-tent-2' && Array.isArray(depoisE[0].corpo.lances) &&
+        !registroDe(sete), JSON.stringify(depoisE.map((p) => p.corpo.tentativa)));
+
   console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);
 })().catch((e) => { console.log('a prova estourou:', e && e.stack); process.exit(1); });
