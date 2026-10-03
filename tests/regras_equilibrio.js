@@ -513,7 +513,10 @@ const doMuro = (evs, u) => evs.filter((e) => e.type === 'muroFere' && e.uid === 
   st.phase = 'playing';
   const eco = E2.findUnit(st, st.eco.uid);
   const h = st.units.find((u) => u.kind === 'hero');
-  for (let i = 0; i < 40 && E2.activeUnit(st) !== h; i++) E2.endTurn(st);
+  /* a virada da Câmara para esperando o sal da rodada (engine.js "O SORTEIO RODADA A RODADA"): na espera,
+   * passar a vez é dar o sal — senão o laço gira parado e a vez nunca chega */
+  const passa = () => { const r = E2.ecoEsperaSal(st); if (r) E2.ecoSal(st, r, 7 + r); else E2.endTurn(st); };
+  for (let i = 0; i < 40 && E2.activeUnit(st) !== h; i++) passa();
   h.x = eco.x + 4; h.y = eco.y + 1; h.pa = 30; h.castsThisTurn = {}; h.cooldowns = {};
   if (h.spells.indexOf('minotauro-neutro-3') < 0) h.spells.push('minotauro-neutro-3');
   // a pedra a leste da casa (x+1, y+1) do Eco — encosta na casa de baixo à direita
@@ -523,7 +526,7 @@ const doMuro = (evs, u) => evs.filter((e) => e.type === 'muroFere' && e.uid === 
   const ok2 = E2.cast(st, h.uid, 'minotauro-neutro-3', eco.x + 2, eco.y + 2);
   const prev = E2.muroFerePrevisto(st, eco, eco.x, eco.y);
   const dano0 = st.eco.dano, hp0 = eco.hp;
-  for (let i = 0; i < 40 && E2.activeUnit(st) !== eco; i++) E2.endTurn(st);
+  for (let i = 0; i < 40 && E2.activeUnit(st) !== eco; i++) passa();
   E2.events.length = 0;
   E2.endTurn(st);
   const f = E2.events.filter((e) => e.type === 'muroFere' && e.uid === eco.uid);
