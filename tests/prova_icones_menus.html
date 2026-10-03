@@ -664,6 +664,29 @@
       desligaGM();
     });
 
+    // ---- 12b) A TECLA M com a HUD e o painel juntos (03/10, revisão): a HUD ouve no document e o painel na
+    // window — a mesma batida passa pelos dois, e o M que abria pela HUD não pode ser fechado pelo painel logo atrás
+    p(function () {
+      ligaGM();
+      UI.closeSheet();
+      JOGO.PainelMestre.fechar();
+      function m(alvo) {
+        (alvo || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true }));
+      }
+      m();
+      check('tecla M (HUD + painel): abre o painel único', JOGO.PainelMestre.aberto());
+      m();
+      check('tecla M de novo: fecha', !JOGO.PainelMestre.aberto());
+      JOGO.PainelMestre.abrir('itens');          // a busca de peças da Caixa: slot, raridade, elemento, estrelas, forja
+      var sel = q1('.pm-capa .pm-corpo select');
+      if (sel) sel.focus();
+      m(sel);
+      check('o "m" numa lista de escolha do painel (a busca por letra do select) não fecha o painel',
+            !!sel && JOGO.PainelMestre.aberto());
+      JOGO.PainelMestre.fechar();
+      desligaGM();
+    });
+
     // ---- 13) BARRAQUINHA: a escolha do elemento do traje, redonda
     p(function () {
       abre('loteria');
