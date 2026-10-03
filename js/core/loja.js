@@ -51,6 +51,13 @@
  *             conhece): aqui só se pagam os vinténs do `preco` pelo lojaAplica,
  *             e a entrega não mexe em mais nada. O servidor credita as barras
  *             quando o pedido fecha 'entregue'.
+ * O PRÊMIO DO ECO PRIMORDIAL (02/10, servidor/supremo.py): no fechamento da
+ * semana o servidor põe na fila, para cada conta do ranking, os vinténs da
+ * faixa ({tipo:'vintens'}, o crédito de sempre) e, quando há, um pedido
+ *   premio-eco {alvo:'eco', qtd:1, semana, posicao, selos:{fogo,agua,terra,ar},
+ *               titulo: 'Voz do Eco'|null}
+ * de preço 0: os selos entram por Progress.addSelo e o título por
+ * Progress.addTituloEco (só os do catálogo JOGO.Titulos.ECO). Origem 'eco'.
  * AS ORIGENS: o pedido pode trazer `origem` — 'presente' (o Mestre deu, pelo
  * painel dele: preço 0, o MESMO caminho, nenhuma regra à parte) ou 'pagamento'
  * (os vinténs de um pacote pago). Sem ela, ou com outra coisa, é compra da
@@ -77,7 +84,10 @@
   L._semTrava = false;
 
   // as entregas que esta versão sabe aplicar (a tabela 4.6 do plano da loja 2)
-  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1 };
+  var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1,
+                'premio-eco': 1 };   // 02/10: o prêmio da semana do Eco Primordial
+  var ELEMENTOS_SELO = ['fogo', 'agua', 'terra', 'ar'];
+  var TETO_SELOS = 999;           // selos de um elemento numa entrega do Eco
   var TETO_DIAS = 366;            // bônus de XP: dias numa entrega
   var TETO_VINTENS = 10000000;    // crédito de vinténs: por pedido
   var TETO_BARRAS = 1000000;      // 13/09: barras de ouro compradas com vinténs, por pedido
@@ -192,7 +202,7 @@
    * de um pacote pago) ou 'loja' (a compra de sempre — e qualquer outra coisa) */
   function origemDe(p) {
     var o = (p && typeof p === 'object') ? p.origem : null;
-    return (o === 'presente' || o === 'pagamento') ? o : 'loja';
+    return (o === 'presente' || o === 'pagamento' || o === 'eco') ? o : 'loja';   // 02/10: 'eco', o prêmio da semana
   }
   function registra(p, tipo, motivo) {
     historico.push({ id: p && p.id, sku: (p && p.sku) || null, nome: (p && p.nome) || null,
@@ -256,6 +266,24 @@
       if (ent.alvo !== 'conta' || !inteiroPos(ent.qtd, TETO_BARRAS)) return 'item-invalido';
       return null;
     }
+    // 02/10: o prêmio do Eco — selos dos quatro elementos e o título do catálogo, pelo menos um dos dois
+    if (ent.tipo === 'premio-eco') {
+      if (ent.alvo !== 'eco' || ent.qtd !== 1) return 'item-invalido';
+      var sl = ent.selos, algum = false;
+      if (sl != null && (typeof sl !== 'object' || Object.prototype.toString.call(sl) === '[object Array]')) return 'item-invalido';
+      for (var el in (sl || {})) {
+        if (!Object.prototype.hasOwnProperty.call(sl, el)) continue;
+        if (ELEMENTOS_SELO.indexOf(el) < 0 || !inteiroPos(sl[el], TETO_SELOS)) return 'item-invalido';
+        algum = true;
+      }
+      if (ent.titulo != null) {
+        var T = JOGO.Titulos, ok = false;
+        ((T && T.ECO) || []).forEach(function (d) { if (d && d.titulo === ent.titulo) ok = true; });
+        if (!ok || !prog.addTituloEco) return 'item-invalido';
+        algum = true;
+      }
+      return algum ? null : 'item-invalido';
+    }
     return 'item-invalido';
   }
   /* 5. a entrega — lança se o Progress não aceitar (o chamador desfaz); o
@@ -290,6 +318,15 @@
       return;
     }
     if (ent.tipo === 'barras') return;   // os vinténs já saíram no lojaAplica; as barras, o servidor credita
+    if (ent.tipo === 'premio-eco') {     // 02/10: os selos e o título do pódio da semana do Eco
+      var sl2 = ent.selos || {};
+      for (var e2 = 0; e2 < ELEMENTOS_SELO.length; e2++) {
+        var q2 = sl2[ELEMENTOS_SELO[e2]];
+        if (q2 && !prog.addSelo(ELEMENTOS_SELO[e2], q2)) throw new Error('os selos não entraram');
+      }
+      if (ent.titulo != null && !prog.addTituloEco(ent.titulo)) throw new Error('o título não entrou');
+      return;
+    }
     throw new Error('tipo sem entrega');
   }
   function recusa(p, id, motivo) {

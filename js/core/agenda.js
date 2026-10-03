@@ -297,7 +297,10 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------ a busca
   function aplica(r) {
     if (!r || typeof r !== 'object' || r.ok === false) return false;
-    var bruto = [].concat(isArr(r.ativos) ? r.ativos : [], isArr(r.proximos) ? r.proximos : []);
+    // 02/10: `semanais` = os eventos FIXOS do mundo (a semana do Eco Primordial, servidor/supremo.py) — tipo
+    // 'aviso', fator 1: entram na faixa com a contagem regressiva e não mexem em recompensa nenhuma
+    var bruto = [].concat(isArr(r.ativos) ? r.ativos : [], isArr(r.proximos) ? r.proximos : [],
+                          isArr(r.semanais) ? r.semanais : []);
     var vistos = {}, nova = [];
     for (var i = 0; i < bruto.length; i++) {
       var n = normaliza(bruto[i]);

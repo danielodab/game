@@ -1,0 +1,472 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""O ECO PRIMORDIAL — a tentativa contra o chefe supremo e o ranking semanal de dano (02/10).
+
+O pedido do dono, na lista de antes de divulgar o jogo: "um mapa BEM difícil com chefe supremo e
+placar de quem tirou mais dano". O chefe e as regras dele moram em js/core/data/eco.js e no motor
+(engine.js, "O ECO PRIMORDIAL"); a arena é a Câmara do Eco (js/core/data/arenas.js). Aqui mora o que
+é do SERVIDOR: a tentativa, o placar conferido e a semana.
+
+Entra no cartório como mixin (`class Api(..., SupremoMixin)` no api.py), com a mesma conexão e a
+mesma tranca. Importa só de comum.py e de salas.py (as réguas de tempo e o formato do bilhete).
+
+AS ROTAS:
+  GET  /api/supremo           público — a semana (início, fim, agora), o ranking (os 20 primeiros),
+                              as faixas de prêmio; com token, a parte da conta (tentativas de hoje,
+                              o melhor da semana e a posição)
+  GET  /api/supremo/ranking   público — o ranking de uma semana (?semana=N; sem, a de agora), 100 linhas
+  POST /api/supremo/abrir     {herois, versaoRegras} → {tentativa, semente, restantes}: a SEMENTE é do
+                              servidor, como a do bilhete da sala (salas.py)
+  POST /api/supremo/fechar    {tentativa, lances, hashFinal} → o juiz refaz a tentativa
+                              (servidor/juiz/supremo.js) e o placar é o DANO DO REPLAY — o número que o
+                              navegador mostrou não entra em conta nenhuma; replay que diverge não pontua
+
+AS RÉGUAS:
+  - TENTATIVAS_POR_DIA por conta, no dia de BRASÍLIA (o mesmo das missões). Abrir conta como usada:
+    a tentativa largada no meio (a aba fechada) não volta. Abrir outra com uma aberta vence a de antes.
+  - a SEMANA vai de segunda 00:00 a domingo 23:59:59 de Brasília (UTC−3, sem horário de verão desde
+    2019). A tentativa é da semana em que ABRIU.
+  - o RANKING é por conta: a melhor tentativa conferida da semana (pontos = dano + o bônus de quem
+    derruba); empate fica com quem chegou primeiro. A equipe (contas.gm) e quem está banido não entram
+    — jogam, mas não disputam. O herói da classe do Mestre não abre tentativa.
+  - o FECHAMENTO DA SEMANA acontece sozinho, preguiçoso: a primeira rota do Eco (ou o retirar da loja,
+    que o jogo chama a cada 5 min) depois de domingo 23:59 + FOLGA_FECHO fecha as semanas que faltam.
+    A folga é a validade da tentativa: quem abriu no domingo às 23:50 ainda fecha a dela e entra.
+  - os PRÊMIOS saem pela FILA DE ENTREGAS da loja (loja.py) — o mesmo caminho do presente do Mestre:
+    um pedido de preço 0 com os vinténs e outro com os selos e o título, entregues pelo juiz no estado
+    da conta (op 'lojaEntregar'). UMA VEZ SÓ: a linha de supremo_semanas é a porta (o fechamento todo
+    numa transação), supremo_premios tem chave (semana, conta) e o pedido tem `idem` único por conta.
+    Nada é comprável: nem tentativa a mais, nem prêmio, nem título.
+"""
+import calendar
+import json
+import logging
+import secrets
+import time
+
+from comum import Recusa, agora, classe_do_heroi
+from salas import LANCES_MAX, RE_BILHETE, SALA_MIN_S, SALA_S_POR_TURNO, _inteiro_puro
+
+log = logging.getLogger('api')
+
+TENTATIVAS_POR_DIA = 3            # o espelho mora em js/core/data/eco.js (DATA.eco.tentativasPorDia)
+VALIDADE_S = 2 * 3600             # uma tentativa aberta vale 2 h (12 rodadas cabem com folga)
+FOLGA_FECHO = VALIDADE_S          # a semana fecha 2 h depois do domingo 23:59:59
+FUSO_S = -3 * 3600                # Brasília
+SEMANA_S = 7 * 86400
+EPOCA = calendar.timegm((2026, 1, 5, 0, 0, 0))   # uma SEGUNDA-feira, 00:00 no relógio de Brasília
+RANKING_JOGO = 20                 # as linhas que a ficha do jogo mostra
+RANKING_SITE = 100                # e as que o site mostra
+TITULO_ECO = 'Voz do Eco'         # o espelho mora em js/core/titulos.js (T.ECO); tests/supremo_api.py confere
+ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar')
+# AS FAIXAS DE PRÊMIO (o dono troca aqui). A régua de vinténs de loja.py: a semana típica rende ~1.316
+# vinténs; o pódio leva quase quatro semanas disso. Os selos são os de chefe (a roleta do Colecionador
+# gira com 10 de qualquer elemento) — o Eco é chefe, e o selo dele é coerente com o que os chefes dão.
+# `ate` None = todo o resto que pontuou (a participação: pelo menos 1 de dano numa tentativa conferida).
+FAIXAS = (
+    {'id': 'podio', 'de': 1, 'ate': 3, 'nome': '1º ao 3º', 'vintens': 5000, 'selos': 20, 'titulo': TITULO_ECO},
+    {'id': 'elite', 'de': 4, 'ate': 10, 'nome': '4º ao 10º', 'vintens': 2500, 'selos': 10, 'titulo': None},
+    {'id': 'cem', 'de': 11, 'ate': 100, 'nome': '11º ao 100º', 'vintens': 1000, 'selos': 4, 'titulo': None},
+    {'id': 'participacao', 'de': 101, 'ate': None, 'nome': 'participação', 'vintens': 150, 'selos': 0, 'titulo': None},
+)
+SKU_VINTENS = 'eco-vintens'       # loja.py reconhece o prefixo 'eco-' (a origem 'eco' e o nome do pedido)
+SKU_PREMIO = 'eco-premio'
+
+ESQUEMA_SUPREMO = """
+-- O ECO PRIMORDIAL (02/10, supremo.py). Tabelas NOVAS, nunca ALTER: no rolling update do Coolify o
+-- contêiner velho e o novo sobem juntos no mesmo banco
+CREATE TABLE IF NOT EXISTS supremo_tentativas(
+  id          TEXT PRIMARY KEY,
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  semana      INTEGER NOT NULL,
+  dia         INTEGER NOT NULL,
+  semente     INTEGER NOT NULL,
+  herois      TEXT NOT NULL,
+  regras      INTEGER,
+  aberta_ms   INTEGER NOT NULL,
+  fechada_em  INTEGER,
+  estado      TEXT NOT NULL DEFAULT 'aberta'
+    CHECK (estado IN ('aberta', 'conferida', 'recusada', 'vencida')),
+  dano        INTEGER,
+  pontos      INTEGER,
+  derrubou    INTEGER,
+  rodada      INTEGER,
+  turnos      INTEGER,
+  motivo      TEXT
+);
+CREATE INDEX IF NOT EXISTS supremo_tentativas_conta ON supremo_tentativas(conta_id, dia);
+CREATE INDEX IF NOT EXISTS supremo_tentativas_semana ON supremo_tentativas(semana, estado, pontos);
+-- a semana fechada: a PORTA dos prêmios (uma linha por semana, gravada na mesma transação que eles)
+CREATE TABLE IF NOT EXISTS supremo_semanas(
+  semana     INTEGER PRIMARY KEY,
+  fechada_em INTEGER NOT NULL,
+  contas     INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS supremo_premios(
+  semana     INTEGER NOT NULL,
+  conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  posicao    INTEGER NOT NULL,
+  faixa      TEXT NOT NULL,
+  pontos     INTEGER NOT NULL,
+  vintens    INTEGER NOT NULL,
+  selos      TEXT NOT NULL,
+  titulo     TEXT,
+  pedidos    TEXT NOT NULL,
+  criado_em  INTEGER NOT NULL,
+  PRIMARY KEY (semana, conta_id)
+);
+"""
+
+
+# ---- o relógio de Brasília ------------------------------------------------------------------
+def semana_de(t):
+    """O número da semana (segunda a domingo, Brasília) do instante t (epoch em segundos)."""
+    return (int(t) + FUSO_S - EPOCA) // SEMANA_S
+
+
+def inicio_da_semana(semana):
+    """O instante (epoch) da segunda 00:00 de Brasília que abre a semana."""
+    return EPOCA + int(semana) * SEMANA_S - FUSO_S
+
+
+def dia_de(t):
+    """O dia de Brasília (o mesmo das missões e do Calabouço do Dia)."""
+    return (int(t) + FUSO_S) // 86400
+
+
+def semana_publica(semana):
+    ini = inicio_da_semana(semana)
+    return {'id': semana, 'inicio': ini, 'fim': ini + SEMANA_S - 1}
+
+
+def faixa_de(posicao):
+    for f in FAIXAS:
+        if posicao >= f['de'] and (f['ate'] is None or posicao <= f['ate']):
+            return f
+    return None
+
+
+def selos_da_faixa(n):
+    """Os `n` selos repartidos pelos quatro elementos, na ordem fogo → água → terra → ar (a das fases)."""
+    base, resto = divmod(max(0, int(n)), len(ELEMENTOS_SELO))
+    fora = {}
+    for i, el in enumerate(ELEMENTOS_SELO):
+        q = base + (1 if i < resto else 0)
+        if q:
+            fora[el] = q
+    return fora
+
+
+def faixas_publicas():
+    return [{'id': f['id'], 'de': f['de'], 'ate': f['ate'], 'nome': f['nome'], 'vintens': f['vintens'],
+             'selos': f['selos'], 'titulo': f['titulo']} for f in FAIXAS]
+
+
+# o melhor de cada conta numa semana: pontos, depois quem chegou primeiro, depois o id (determinístico)
+MELHORES = """
+SELECT conta_id, pontos, dano, derrubou, rodada, fechada_em, nome FROM (
+  SELECT t.conta_id, t.pontos, t.dano, t.derrubou, t.rodada, t.fechada_em,
+         COALESCE(r.nome, c.nome) AS nome,
+         ROW_NUMBER() OVER (PARTITION BY t.conta_id ORDER BY t.pontos DESC, t.fechada_em ASC, t.id) AS ordem
+  FROM supremo_tentativas t JOIN contas c ON c.id = t.conta_id LEFT JOIN resumos r ON r.conta_id = t.conta_id
+  WHERE t.semana = ? AND t.estado = 'conferida' AND c.banido = 0 AND c.gm = 0
+) WHERE ordem = 1
+ORDER BY pontos DESC, fechada_em ASC, conta_id ASC
+"""
+
+
+def _linha_publica(r, pos):
+    return {'posicao': pos, 'nome': r['nome'] or '—', 'pontos': r['pontos'] or 0, 'dano': r['dano'] or 0,
+            'derrubou': bool(r['derrubou']), 'rodada': r['rodada']}
+
+
+class SupremoMixin:
+
+    # -- o fechamento da semana ---------------------------------------------------------------
+    def _supremo_ranking(self, semana, limite=None):
+        """Dentro da tranca: as linhas do ranking da semana, em ordem (sem limite = todas)."""
+        sql = MELHORES + (" LIMIT %d" % int(limite) if limite else "")
+        return self.con.execute(sql, (semana,)).fetchall()
+
+    def _supremo_fecha_vencidas(self, t=None):
+        """Fecha toda semana que já acabou (mais a folga) e ainda não tem linha em supremo_semanas. Barato
+        quando não há nada: uma consulta. Nunca derruba quem chamou — o fechamento tenta de novo na próxima."""
+        t = agora() if t is None else t
+        ultima_fechavel = semana_de(t - FOLGA_FECHO) - 1   # a semana W fecha quando t ≥ fim(W) + folga
+        try:
+            with self.tranca:
+                pendentes = [r[0] for r in self.con.execute(
+                    "SELECT DISTINCT semana FROM supremo_tentativas WHERE semana <= ? "
+                    "AND semana NOT IN (SELECT semana FROM supremo_semanas) ORDER BY semana", (ultima_fechavel,))]
+        except Exception:
+            log.exception("supremo: não consegui listar as semanas a fechar")
+            return
+        for w in pendentes:
+            try:
+                self._supremo_fecha_semana(w, t)
+            except Exception:
+                log.exception("supremo: o fechamento da semana %d falhou (tenta de novo no próximo pedido)", w)
+
+    def _supremo_fecha_semana(self, semana, t):
+        """Numa transação: a semana fecha, as tentativas abertas dela vencem e cada conta do ranking recebe o
+        prêmio da faixa pela fila da loja. A linha de supremo_semanas é a porta — duas chamadas juntas, só uma
+        passa; e o prêmio tem chave (semana, conta) e idem único por conta, então não sai duas vezes."""
+        with self._escrita():
+            if self.con.execute("SELECT 1 FROM supremo_semanas WHERE semana = ?", (semana,)).fetchone():
+                return 0
+            self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'semana-fechou' "
+                             "WHERE semana = ? AND estado = 'aberta'", (t, semana))
+            lista = self._supremo_ranking(semana)
+            dados = 0
+            for pos, r in enumerate(lista, 1):
+                f = faixa_de(pos)
+                if f is None or not (r['pontos'] or 0) > 0:
+                    continue
+                cid, pedidos = r['conta_id'], []
+                if f['vintens'] > 0:
+                    pedidos.append(self._supremo_pedido(cid, SKU_VINTENS, {'tipo': 'vintens', 'alvo': 'carteira',
+                                                                            'qtd': f['vintens']},
+                                                        'eco-%d-v' % semana, t))
+                selos = selos_da_faixa(f['selos'])
+                if selos or f['titulo']:
+                    pedidos.append(self._supremo_pedido(cid, SKU_PREMIO, {
+                        'tipo': 'premio-eco', 'alvo': 'eco', 'qtd': 1, 'semana': semana, 'posicao': pos,
+                        'selos': selos, 'titulo': f['titulo']}, 'eco-%d-p' % semana, t))
+                self.con.execute(
+                    "INSERT INTO supremo_premios(semana, conta_id, posicao, faixa, pontos, vintens, selos, titulo, "
+                    "pedidos, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (semana, cid, pos, f['id'], r['pontos'], f['vintens'], json.dumps(selos), f['titulo'],
+                     json.dumps(pedidos), t))
+                self._evento(cid, 'supremo-premio', {'semana': semana, 'posicao': pos, 'faixa': f['id'],
+                                                     'pontos': r['pontos'], 'pedidos': pedidos})
+                dados += 1
+            self.con.execute("INSERT INTO supremo_semanas(semana, fechada_em, contas) VALUES (?, ?, ?)",
+                             (semana, t, len(lista)))
+        log.info("supremo: a semana %d fechou — %d contas no ranking, %d premiadas", semana, len(lista), dados)
+        return dados
+
+    def _supremo_pedido(self, cid, sku, entrega, idem, t):
+        """Dentro da _escrita: um pedido de preço 0 na fila de entregas da loja (loja.py). O `idem` é único por
+        conta: o mesmo prêmio não nasce duas vezes nem se o fechamento for chamado de novo."""
+        ja = self.con.execute("SELECT id FROM loja_pedidos WHERE conta_id = ? AND idem = ?", (cid, idem)).fetchone()
+        if ja is not None:
+            return ja['id']
+        cur = self.con.execute("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) "
+                               "VALUES (?, ?, ?, 0, 'pendente', ?, ?)", (cid, sku, json.dumps(entrega), idem, t))
+        return cur.lastrowid
+
+    # -- a parte de uma conta -------------------------------------------------------------------
+    def _supremo_minha(self, cid, t):
+        """Dentro da tranca: as tentativas de hoje, o melhor da semana e a posição."""
+        semana, dia = semana_de(t), dia_de(t)
+        usadas = self.con.execute("SELECT COUNT(*) FROM supremo_tentativas WHERE conta_id = ? AND dia = ?",
+                                  (cid, dia)).fetchone()[0]
+        melhor = self.con.execute(
+            "SELECT pontos, dano, derrubou, fechada_em, id FROM supremo_tentativas WHERE conta_id = ? AND semana = ? "
+            "AND estado = 'conferida' ORDER BY pontos DESC, fechada_em ASC, id LIMIT 1", (cid, semana)).fetchone()
+        conta = self.con.execute("SELECT gm, banido FROM contas WHERE id = ?", (cid,)).fetchone()
+        fora = bool(conta and (conta['gm'] or conta['banido']))
+        posicao = None
+        if melhor is not None and not fora:
+            posicao = 1 + self.con.execute(
+                "SELECT COUNT(*) FROM (" + MELHORES + ") WHERE pontos > ? OR (pontos = ? AND "
+                "(fechada_em < ? OR (fechada_em = ? AND conta_id < ?)))",
+                (semana, melhor['pontos'], melhor['pontos'], melhor['fechada_em'], melhor['fechada_em'], cid)).fetchone()[0]
+        premios = [{'semana': r['semana'], 'posicao': r['posicao'], 'faixa': r['faixa'], 'pontos': r['pontos'],
+                    'vintens': r['vintens'], 'selos': json.loads(r['selos'] or '{}'), 'titulo': r['titulo']}
+                   for r in self.con.execute("SELECT * FROM supremo_premios WHERE conta_id = ? "
+                                             "ORDER BY semana DESC LIMIT 5", (cid,))]
+        return {'tentativasHoje': usadas, 'restantes': max(0, TENTATIVAS_POR_DIA - usadas),
+                'melhor': ({'pontos': melhor['pontos'], 'dano': melhor['dano'], 'derrubou': bool(melhor['derrubou'])}
+                           if melhor is not None else None),
+                'posicao': posicao,
+                # a equipe joga mas não disputa: a ficha diz isso em vez de mostrar uma posição que não existe
+                'foraDoRanking': fora,
+                'premios': premios,
+                'amanhaEm': (dia + 1) * 86400 - FUSO_S}
+
+    # -- GET /api/supremo -----------------------------------------------------------------------
+    def supremo_ler(self, conta, corpo):
+        t = agora()
+        self._supremo_fecha_vencidas(t)
+        token = corpo.get('_token')
+        eu = self.conta_do_token(token) if token else None
+        semana = semana_de(t)
+        with self.tranca:
+            linhas = self._supremo_ranking(semana, RANKING_JOGO)
+            minha = self._supremo_minha(eu['id'], t) if eu is not None else None
+        return 200, {'ok': True, 'agora': t, 'semana': semana_publica(semana),
+                     'tentativasPorDia': TENTATIVAS_POR_DIA, 'faixas': faixas_publicas(),
+                     'ranking': [_linha_publica(r, i) for i, r in enumerate(linhas, 1)],
+                     'eu': minha}
+
+    # -- GET /api/supremo/ranking ---------------------------------------------------------------
+    def supremo_ranking(self, conta, corpo):
+        t = agora()
+        self._supremo_fecha_vencidas(t)
+        q = (corpo.get('_query') or {}).get('semana')
+        atual = semana_de(t)
+        if q in (None, ''):
+            semana = atual
+        else:
+            try:
+                semana = int(q)
+            except (TypeError, ValueError):
+                raise Recusa(400, 'semana precisa ser um número')
+            if not -10000 < semana <= atual:
+                raise Recusa(400, 'essa semana não existe ainda')
+        with self.tranca:
+            linhas = self._supremo_ranking(semana, RANKING_SITE)
+            fechada = self.con.execute("SELECT fechada_em FROM supremo_semanas WHERE semana = ?", (semana,)).fetchone()
+            semanas = [r[0] for r in self.con.execute(
+                "SELECT semana FROM supremo_semanas ORDER BY semana DESC LIMIT 12")]
+        return 200, {'ok': True, 'agora': t, 'semana': semana_publica(semana), 'atual': atual,
+                     'fechada': fechada is not None, 'semanasFechadas': semanas, 'faixas': faixas_publicas(),
+                     'ranking': [_linha_publica(r, i) for i, r in enumerate(linhas, 1)]}
+
+    # -- POST /api/supremo/abrir ----------------------------------------------------------------
+    def supremo_abrir(self, conta, corpo):
+        cid = conta['id']
+        herois = corpo.get('herois')
+        if (not isinstance(herois, list) or not 1 <= len(herois) <= 2
+                or any(not isinstance(h, str) or not 0 < len(h) <= 64 for h in herois) or len(set(herois)) != len(herois)):
+            raise Recusa(400, 'herois precisa ser uma lista de 1 ou 2 heróis diferentes')
+        self._supremo_fecha_vencidas()
+        # a versão das regras da página contra a do juiz, como na sala (salas.py, §4.1 de docs/SEGURANCA.md):
+        # página velha refaria a tentativa com outro resultado e cairia como 'divergiu'
+        regras = self._confere_versao_cliente(corpo, self._regras())
+        regras_juiz = regras.get('regras')
+        instante = time.time()
+        t = int(instante)
+        semana, dia = semana_de(t), dia_de(t)
+        with self._escrita():
+            estado = self._estado_exige(cid)
+            self._confere_herois(conta, estado['progress'], herois)
+            fichas = estado['progress'].get('heroes') if isinstance(estado['progress'], dict) else {}
+            for hid in herois:
+                if classe_do_heroi(hid, (fichas or {}).get(hid) or {}) is None:
+                    raise Recusa(400, 'o Mestre do Fundo não enfrenta o Eco: ele leva qualquer feitiço do jogo',
+                                 motivo='mestre')
+            # a aberta de antes vence (já contou como usada ao abrir)
+            self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'outra-aberta' "
+                             "WHERE conta_id = ? AND estado = 'aberta'", (t, cid))
+            usadas = self.con.execute("SELECT COUNT(*) FROM supremo_tentativas WHERE conta_id = ? AND dia = ?",
+                                      (cid, dia)).fetchone()[0]
+            if usadas >= TENTATIVAS_POR_DIA:
+                raise Recusa(429, 'as %d tentativas de hoje acabaram — o Eco volta a ouvir amanhã' % TENTATIVAS_POR_DIA,
+                             motivo='sem-tentativas', liberaEm=(dia + 1) * 86400 - FUSO_S)
+            semente = secrets.randbits(31)
+            tid = secrets.token_urlsafe(18)
+            self.con.execute(
+                "INSERT INTO supremo_tentativas(id, conta_id, semana, dia, semente, herois, regras, aberta_ms, estado) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
+                (tid, cid, semana, dia, semente, json.dumps(herois),
+                 regras_juiz if _inteiro_puro(regras_juiz) else None, int(instante * 1000)))
+            self._evento(cid, 'supremo-abre', {'tentativa': tid, 'semana': semana, 'herois': herois})
+        return 200, {'ok': True, 'tentativa': tid, 'semente': semente, 'restantes': TENTATIVAS_POR_DIA - usadas - 1,
+                     'semana': semana_publica(semana)}
+
+    # -- POST /api/supremo/fechar ---------------------------------------------------------------
+    def _supremo_marca(self, tid, estado, motivo, t):
+        with self._escrita():
+            n = self.con.execute("UPDATE supremo_tentativas SET estado = ?, motivo = ?, fechada_em = ? "
+                                 "WHERE id = ? AND estado = 'aberta'", (estado, motivo, t, tid)).rowcount
+            if n:
+                r = self.con.execute("SELECT conta_id FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
+                self._evento(r['conta_id'], 'supremo-' + estado, {'tentativa': tid, 'motivo': motivo})
+        return n
+
+    def supremo_fechar(self, conta, corpo):
+        cid = conta['id']
+        tid, lances, hash_final = corpo.get('tentativa'), corpo.get('lances'), corpo.get('hashFinal')
+        if not isinstance(tid, str) or not RE_BILHETE.match(tid):
+            raise Recusa(400, 'tentativa inválida')
+        if not isinstance(lances, list) or len(lances) > LANCES_MAX:
+            raise Recusa(400, 'lances precisa ser uma lista de até %d lances' % LANCES_MAX)
+        if hash_final is not None and not _inteiro_puro(hash_final):
+            raise Recusa(400, 'hashFinal precisa ser um inteiro ou null')
+        self._supremo_fecha_vencidas()
+        instante = time.time()
+        t = int(instante)
+        vencida = None
+        with self._escrita():
+            s = self.con.execute("SELECT * FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
+            if s is None or s['conta_id'] != cid:            # a de outra conta: a mesma resposta
+                raise Recusa(404, 'tentativa não encontrada')
+            if s['estado'] == 'vencida':
+                raise Recusa(410, 'essa tentativa venceu (%s)' % (s['motivo'] or 'prazo'), motivo='vencida')
+            if s['estado'] != 'aberta':
+                raise Recusa(409, 'essa tentativa já foi fechada (%s)' % s['estado'])
+            decorrido = instante - s['aberta_ms'] / 1000.0
+            if self.con.execute("SELECT 1 FROM supremo_semanas WHERE semana = ?", (s['semana'],)).fetchone():
+                vencida = 'semana-fechou'
+            elif decorrido > VALIDADE_S:
+                vencida = 'prazo'
+            if vencida:
+                self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', motivo = ?, fechada_em = ? "
+                                 "WHERE id = ?", (vencida, t, tid))
+            else:
+                estado = self._estado_exige(cid)
+        if vencida:
+            raise Recusa(410, 'essa tentativa venceu (%s)' % vencida, motivo='vencida')
+        if decorrido < SALA_MIN_S:
+            self._supremo_marca(tid, 'recusada', 'rapido-demais', t)
+            raise Recusa(422, 'a tentativa fechou rápido demais para ser de verdade', motivo='rapido-demais')
+        pedido = {'conta': {'id': cid, 'gm': bool(conta['gm'])},
+                  'tentativa': {'semente': s['semente'], 'herois': json.loads(s['herois']),
+                                # a versão das regras com que abriu: o juiz confere contra a dele
+                                'regras': s['regras'] if _inteiro_puro(s['regras']) else 1},
+                  'lances': lances, 'hashFinal': hash_final,
+                  'progress': estado['progress'], 'db': estado['db'],
+                  'contexto': {'agoraMs': int(instante * 1000)}}
+        try:
+            saida = self.juiz.pede('POST', '/supremo/fecha', pedido)
+        except Recusa as e:
+            if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                self._regras_esquece()
+                self._supremo_marca(tid, 'vencida', 'regras-mudaram', t)
+                raise Recusa(410, 'as regras do jogo mudaram no meio da tentativa — ela não conta, e a de hoje '
+                                  'continua valendo para a próxima', motivo='regras-mudaram')
+            if e.status == 422:                              # o replay não fecha: não pontua
+                self._supremo_marca(tid, 'recusada', e.extra.get('motivo') or 'juiz', t)
+            raise
+        placar = saida.get('placar') if isinstance(saida, dict) else None
+        if (not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(placar, dict)
+                or not all(_inteiro_puro(placar.get(k)) and placar.get(k) >= 0 for k in ('dano', 'pontos', 'rodada'))):
+            raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
+        turnos = saida.get('turnosJogador') if _inteiro_puro(saida.get('turnosJogador')) else 0
+        minimo = max(SALA_MIN_S, SALA_S_POR_TURNO * turnos)
+        if decorrido < minimo:
+            self._supremo_marca(tid, 'recusada', 'rapido-demais', t)
+            raise Recusa(422, 'a tentativa fechou rápido demais para ser de verdade', motivo='rapido-demais')
+        with self._escrita():
+            n = self.con.execute(
+                "UPDATE supremo_tentativas SET estado = 'conferida', fechada_em = ?, dano = ?, pontos = ?, derrubou = ?, "
+                "rodada = ?, turnos = ? WHERE id = ? AND estado = 'aberta'",
+                (t, placar['dano'], placar['pontos'], 1 if placar.get('derrubou') else 0, placar['rodada'], turnos,
+                 tid)).rowcount
+            if not n:                                        # dois fechar juntos: só um conta
+                raise Recusa(409, 'essa tentativa já foi fechada')
+            self._evento(cid, 'supremo-conferida', {'tentativa': tid, 'dano': placar['dano'], 'pontos': placar['pontos'],
+                                                    'derrubou': bool(placar.get('derrubou')), 'turnos': turnos})
+            minha = self._supremo_minha(cid, t)
+        log.info("supremo: #%d tirou %d do Eco (%d pontos)", cid, placar['dano'], placar['pontos'])
+        return 200, {'ok': True, 'dano': placar['dano'], 'pontos': placar['pontos'],
+                     'derrubou': bool(placar.get('derrubou')), 'bonus': placar.get('bonus') or 0,
+                     'rodada': placar['rodada'], 'fase': saida.get('fase'), 'eu': minha,
+                     'semana': semana_publica(semana_de(t))}
+
+    # -- o evento da semana na agenda do mundo (GET /api/eventos, api.py) ------------------------
+    def _supremo_eventos(self, t):
+        """O Eco como EVENTO DO MUNDO: a semana de agora (no ar, com a contagem regressiva que a faixa do jogo
+        e o site já mostram) e a próxima. Tipo 'aviso' (fator 1: não mexe em recompensa nenhuma) e id 'eco-N',
+        que não é de agenda_eventos — ninguém cancela (o painel do Mestre não o lista para cancelar)."""
+        fora = []
+        for w in (semana_de(t), semana_de(t) + 1):
+            ini = inicio_da_semana(w)
+            fora.append({'id': 'eco-%d' % w, 'origem': 'supremo', 'regra': None, 'tipo': 'aviso', 'multiplicador': 1,
+                         'calabouco': None, 'titulo': 'O Eco Primordial',
+                         'texto': 'O chefe supremo da semana: 3 tentativas por dia, placar de dano conferido pelo '
+                                  'servidor e prêmios para o ranking no fechamento (domingo, 23:59).',
+                         'inicio': ini, 'fim': ini + SEMANA_S})
+        return fora
