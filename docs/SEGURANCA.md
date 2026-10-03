@@ -745,7 +745,9 @@ fala; o `cala` por endereço de cada jogador (11/09) continua sendo a defesa con
 `outro` (este pede ao menos 10 caracteres de texto); texto até 500; até 20 falas do alvo **que o denunciante viu**,
 guardadas com `relato: 'cliente'` (o servidor não guarda o chat: é a palavra do denunciante, e o painel diz isso).
 Freios no banco: **10 por dia** por denunciante e **1 por alvo por hora** (429 com `liberaEm`). Não se denuncia a si
-mesmo. Estados: `aberta` → `em-analise` → `procedente` | `improcedente`; fechada é final. Na procedente o Mestre
+mesmo nem a lápide de uma conta excluída (404), e a resposta não devolve o nome do alvo (03/10: virava um jeito de
+saber o nome de qualquer número de conta). No "Baixar meus dados", os `dados` dos eventos trocam o número de outra
+conta (`por`, `com`, `vendedor`, `comprador`, `alvo`…) por "a Equipe" ou "outro jogador" (`privacidade.OUTRA_CONTA`). Estados: `aberta` → `em-analise` → `procedente` | `improcedente`; fechada é final. Na procedente o Mestre
 pode ligar a ação (`acao: {tipo: 'silenciar' | 'banir', duracao, ate?, motivo?}`) na mesma transação — o banimento
 guarda o id da denúncia. Ao fechar, o denunciante recebe uma **carta da Equipe** (`moderacao_cartas`,
 `GET /api/correio`, `POST /api/correio/lida`) e, com o correio do servidor ligado, um e-mail; a carta diz se a Equipe

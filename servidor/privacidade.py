@@ -143,6 +143,26 @@ def confere_aceite(corpo):
     return v
 
 
+
+# 03/10 (revisão): as chaves dos `dados` de um evento que apontam para OUTRA conta. O número da outra conta é dado
+# de outra pessoa (a mesma regra dos duelos, que só dizem o lado) e, no caso do Mestre, diz quem puniu — a regra
+# do moderacao.punicao_publica e da SEGURANCA §10.1 é "nunca quem aplicou". Vira um rótulo.
+OUTRA_CONTA = ('por', 'com', 'vendedor', 'comprador', 'alvo', 'lider', 'a', 'b')
+EVENTOS_DA_EQUIPE = ('banido', 'silenciado', 'desbanido', 'dessilenciado', 'mestre-dar', 'presente-admin',
+                     'presente-cancela', 'alerta-visto')
+
+
+def _sem_outras_contas(tipo, dados, cid):
+    if not isinstance(dados, dict):
+        return dados
+    rotulo = 'a Equipe' if tipo in EVENTOS_DA_EQUIPE else 'outro jogador'
+    fora = dict(dados)
+    for k in OUTRA_CONTA:
+        v = fora.get(k)
+        if isinstance(v, int) and not isinstance(v, bool) and v != cid:
+            fora[k] = rotulo
+    return fora
+
 class PrivacidadeMixin:
 
     # -- a faxina dos prazos que a Política de Privacidade promete ----------------------------
@@ -363,7 +383,7 @@ class PrivacidadeMixin:
             save['progress'], save['db'] = _json(save['progress']), _json(save['db'])
         eventos = self._lista("SELECT tipo, criado_em, dados FROM eventos WHERE conta_id = ? ORDER BY id DESC", (cid,))
         for e in eventos['itens']:
-            e['dados'] = _json(e['dados'])
+            e['dados'] = _sem_outras_contas(e['tipo'], _json(e['dados']), cid)
         guilda = um("SELECT g.nome, g.emblema, m.cargo, m.entrou_em, (g.lider_id = m.conta_id) AS lider "
                     "FROM guilda_membros m JOIN guildas g ON g.id = m.guilda_id WHERE m.conta_id = ?")
         dados = {

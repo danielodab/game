@@ -502,6 +502,24 @@ class ProvaDaPrivacidade(unittest.TestCase):
         self.assertEqual([x['motivo'] for x in d['moderacao']['banimentos']], ['prova'])
         self.assertEqual([x['texto'] for x in d['moderacao']['denuncias_feitas']['itens']], ['vendendo conta'])
         self.assertNotIn('denunciante_id', json.dumps(d['moderacao']))
+        # 03/10 (revisão): os eventos não dizem o número de outra conta — nem quem puniu, nem com quem trocou
+        self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
+        st, r = m.pede('POST', '/api/mestre/silenciar', {'conta': cid, 'duracao': '1h', 'motivo': 'prova do por'})
+        self.assertEqual(st, 201, r)
+        self.sql("UPDATE contas SET gm = 0 WHERE id = ?", m.conta['id'])
+        self.sql("INSERT INTO eventos(conta_id, tipo, dados, criado_em) VALUES (?, 'troca', ?, ?)",
+                 cid, json.dumps({'com': m.conta['id'], 'dou': {}, 'recebo': {}}), t)
+        self.sql("DELETE FROM limites WHERE chave = ?", 'meus-dados:%d' % cid)
+        st, r = a.pede('GET', '/api/conta/meus-dados')
+        self.assertEqual(st, 200, r)
+        ev = {e['tipo']: e['dados'] for e in r['dados']['eventos']['itens']}
+        self.assertEqual(ev['silenciado']['por'], 'a Equipe', ev['silenciado'])
+        self.assertEqual(ev['troca']['com'], 'outro jogador', ev['troca'])
+        # a denúncia não devolve o nome de um número (era o caminho do "por" até o nome do Mestre)
+        self.sql("UPDATE moderacao_denuncias SET criado_em = ? WHERE denunciante_id = ?", t - 7200, cid)   # o freio de 1 h
+        st, r = a.pede('POST', '/api/denuncia', {'alvo': m.conta['id'], 'categoria': 'ofensa'})
+        self.assertEqual(st, 201, r)
+        self.assertNotIn('nome', r['denuncia']['alvo'], r)
         st, r = self.exclui(a)
         self.assertEqual(st, 200, r)
         self.assertIsNone(self.um("SELECT 1 FROM supremo_tentativas WHERE conta_id = ?", cid), 'o Eco sai junto')
@@ -515,6 +533,8 @@ class ProvaDaPrivacidade(unittest.TestCase):
         self.assertEqual(st, 200, r)
         self.assertNotIn(cid, [x['conta']['id'] for x in r['legado']], 'a lápide não é banimento')
         self.sql("UPDATE contas SET gm = 0 WHERE id = ?", m.conta['id'])
+        st, r = m.pede('POST', '/api/denuncia', {'alvo': cid, 'categoria': 'ofensa'})
+        self.assertEqual(st, 404, r)                       # a lápide não se denuncia
 
 
 class ProvaDaFaxina(unittest.TestCase):

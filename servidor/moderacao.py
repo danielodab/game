@@ -700,7 +700,7 @@ class ModeracaoMixin:
         t = agora()
         with self._escrita():
             alvo = self.con.execute("SELECT id, nome FROM contas WHERE id = ?", (alvo_id,)).fetchone()
-            if alvo is None:
+            if alvo is None or self._e_lapide(alvo_id):   # 03/10 (revisão): a lápide 'excluída#id' não se denuncia
                 raise Recusa(404, 'essa conta não existe mais')
             # os freios no BANCO (valem entre os dois processos do rolling update)
             dia = [r[0] for r in self.con.execute(
@@ -713,7 +713,7 @@ class ModeracaoMixin:
                 "SELECT MAX(criado_em) FROM moderacao_denuncias WHERE denunciante_id = ? AND alvo_id = ? AND criado_em > ?",
                 (conta['id'], alvo_id, t - DENUNCIA_ALVO_S)).fetchone()[0]
             if ja is not None:
-                raise Recusa(429, 'você já denunciou %s na última hora: a Equipe já está olhando' % alvo['nome'],
+                raise Recusa(429, 'você já denunciou essa pessoa na última hora: a Equipe já está olhando',
                              liberaEm=ja + DENUNCIA_ALVO_S)
             did = self.con.execute(
                 "INSERT INTO moderacao_denuncias(denunciante_id, denunciante_nome, alvo_id, alvo_nome, categoria, "
@@ -722,7 +722,9 @@ class ModeracaoMixin:
                  json.dumps(falas, ensure_ascii=False) if falas else None, onde, t, t)).lastrowid
             self._evento(conta['id'], 'denuncia', {'id': did, 'alvo': alvo_id, 'categoria': categoria})
         log.info("moderação: #%d denunciou #%d (%s, denúncia %d)", conta['id'], alvo_id, categoria, did)
-        return 201, {'ok': True, 'denuncia': {'id': did, 'estado': 'aberta', 'alvo': {'id': alvo_id, 'nome': alvo['nome']}}}
+        # 03/10 (revisão): sem o nome — a resposta transformava qualquer número de conta em nome (o "por" de
+        # um evento antigo dizia quem puniu); o denunciante já sabe de quem fala
+        return 201, {'ok': True, 'denuncia': {'id': did, 'estado': 'aberta', 'alvo': {'id': alvo_id}}}
 
     def _denuncia_json(self, r, contra=None):
         acao = _json(r['acao'])
