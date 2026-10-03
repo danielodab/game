@@ -219,6 +219,10 @@ var JOGO = (typeof window !== 'undefined')
     // nao passa por aqui. De quebra `roomKey` para de mudar quando um muro sobe,
     // e o tabuleiro inteiro deixa de ser reconstruido a cada escudo.
     if (t.invocado) return t.deco ? 'deco' : 'floor';
+    // 02/10: o CHÃO RACHADO do Poço que desabou é buraco para a regra, mas o
+    // desenho segue o de antes e o poço preto vem por fora (rebuildPerigos) —
+    // senão a `roomKey` mudava e o cenário inteiro era refeito no meio da luta
+    if (t.desabou) return 'floor';
     var ty = t.type || t.kind || 'floor';
     if (ty === 'wall' || ty === 'high' || ty === 'obstacle') return 'high';
     if (ty === 'cover' || ty === 'low' || ty === 'half') return 'low';
@@ -3934,6 +3938,209 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ------------------------------------------------- O CHÃO DO POÇO (02/10)
+  /* Os perigos do andar (js/core/poco.js) moram em `state.perigos` e são TODOS
+   * à vista: a regra é que nada fere sem ter sido visto e avisado. Cada tipo tem
+   * uma silhueta própria, que não se confunde com o laço de urso da armadilha
+   * nem com a coluna de luz do evento de chão:
+   *   placa   — chapa de bronze com uma SETA para o lado em que atira; a linha
+   *             dela fica riscada de leve no chão o tempo todo, e acende em
+   *             VERMELHO quando a placa é armada;
+   *   jato    — um respiro: aro grosso na cor do elemento em volta de um
+   *             buraco escuro;
+   *   rachado — riscos escuros em zigue-zague; o buraco, depois de cair, é um
+   *             poço preto com a borda quebrada;
+   *   runa    — dois anéis lilás que giram em sentidos opostos;
+   *   poça    — o espelho d'água do Colosso da Maré.
+   * O AVISO é a casa pintada, pulsando, com um "!" em cima da origem — a cor diz
+   * de onde vem (vermelho = setas, laranja = desabamento, a cor do elemento =
+   * jato). Pinta para todo mundo: perigo de ambiente não tem dono nem lado. */
+  var perNodes = [];
+  var perSig = '';
+  var PER_AVISO = { placa: '#ff4a3a', rachado: '#ff9a3a' };
+  var perMatCache = {};
+  function perMat(cor, op, aditivo) {
+    var k = cor + '|' + op + '|' + (aditivo ? 1 : 0);
+    if (!perMatCache[k]) {
+      perMatCache[k] = new THREE.MeshBasicMaterial({
+        color: col3(cor), transparent: true, opacity: op, depthWrite: false,
+        side: THREE.DoubleSide, blending: aditivo ? THREE.AdditiveBlending : THREE.NormalBlending
+      });
+    }
+    return perMatCache[k];
+  }
+  function perCasa(x, y, cor, op, yOff) {
+    var m = new THREE.Mesh(M.tileFlatGeo(), new THREE.MeshBasicMaterial({
+      color: col3(cor), transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide
+    }));
+    m.position.set(wx(x), yOff == null ? 0.07 : yOff, wz(y));
+    m.scale.setScalar(0.94);
+    m.renderOrder = 4;
+    return m;
+  }
+  function montaPlaca(p) {
+    var g = new THREE.Group();
+    var chapa = new THREE.Mesh(
+      M.geo('perPlaca', function () { return new THREE.BoxGeometry(CELL * 0.62, 0.06, CELL * 0.62); }),
+      new THREE.MeshStandardMaterial({ color: col3('#8a7448'), roughness: 0.45, metalness: 0.6,
+                                       emissive: col3('#3a2a10'), emissiveIntensity: 0.4 }));
+    chapa.position.y = 0.04; chapa.castShadow = false; chapa.receiveShadow = true;
+    g.add(chapa);
+    // a seta: um cone deitado apontando para a linha
+    var seta = new THREE.Mesh(
+      M.geo('perSeta', function () { var c = new THREE.ConeGeometry(0.22, 0.55, 3); c.rotateX(Math.PI / 2); return c; }),
+      new THREE.MeshStandardMaterial({ color: col3('#ffcf6a'), emissive: col3('#ff9a2a'), emissiveIntensity: 0.6,
+                                       roughness: 0.4, metalness: 0.3 }));
+    seta.position.y = 0.14;
+    var ang = { n: Math.PI, s: 0, l: Math.PI / 2, o: -Math.PI / 2 }[p.dir] || 0;
+    seta.rotation.y = ang;
+    g.add(seta);
+    g.userData.brilho = seta;
+    return g;
+  }
+  function montaJato(p) {
+    var g = new THREE.Group();
+    var cor = R.elementColor(p.elemento);
+    var boca = new THREE.Mesh(M.geo('perBoca', function () { var c = new THREE.CircleGeometry(0.42, 18); c.rotateX(-Math.PI / 2); return c; }),
+      perMat('#07080a', 0.92));
+    boca.position.y = 0.05; boca.renderOrder = 5;
+    g.add(boca);
+    var aro = new THREE.Mesh(M.geo('perAro', function () { var t = new THREE.TorusGeometry(0.5, 0.09, 6, 22); t.rotateX(-Math.PI / 2); return t; }),
+      new THREE.MeshStandardMaterial({ color: col3(cor), emissive: col3(cor), emissiveIntensity: 0.5, roughness: 0.5 }));
+    aro.position.y = 0.08;
+    g.add(aro);
+    g.userData.brilho = aro;
+    return g;
+  }
+  function montaRachado(p) {
+    var g = new THREE.Group();
+    if (p.caiu) {
+      var poco = new THREE.Mesh(M.geo('perPoco', function () { var c = new THREE.CircleGeometry(CELL * 0.46, 20); c.rotateX(-Math.PI / 2); return c; }),
+        perMat('#020203', 0.97));
+      poco.position.y = 0.06; poco.renderOrder = 5;
+      g.add(poco);
+      var borda = new THREE.Mesh(M.geo('perBorda', function () { var t = new THREE.TorusGeometry(CELL * 0.46, 0.08, 4, 14); t.rotateX(-Math.PI / 2); return t; }),
+        new THREE.MeshStandardMaterial({ color: col3('#3a3430'), roughness: 0.95 }));
+      borda.position.y = 0.07;
+      g.add(borda);
+      return g;
+    }
+    var mat = perMat('#140f0c', 0.85);
+    var riscos = [[-0.55, -0.35, 0.5], [-0.15, 0.05, -0.6], [0.3, -0.25, 0.4], [0.05, 0.45, -0.3]];
+    for (var i = 0; i < riscos.length; i++) {
+      var r = new THREE.Mesh(M.geo('perRisco', function () { var b = new THREE.PlaneGeometry(0.62, 0.06); b.rotateX(-Math.PI / 2); return b; }), mat);
+      r.position.set(riscos[i][0], 0.075, riscos[i][1]);
+      r.rotation.y = riscos[i][2];
+      r.renderOrder = 5;
+      g.add(r);
+    }
+    return g;
+  }
+  function montaRuna() {
+    var g = new THREE.Group();
+    var cor = '#b98cff';
+    var a1 = new THREE.Mesh(M.geo('perRuna1', function () { var t = new THREE.RingGeometry(0.52, 0.6, 24); t.rotateX(-Math.PI / 2); return t; }),
+      perMat(cor, 0.85, true));
+    var a2 = new THREE.Mesh(M.geo('perRuna2', function () { var t = new THREE.RingGeometry(0.26, 0.32, 5); t.rotateX(-Math.PI / 2); return t; }),
+      perMat(cor, 0.9, true));
+    a1.position.y = 0.08; a2.position.y = 0.09; a1.renderOrder = 6; a2.renderOrder = 6;
+    g.add(a1); g.add(a2);
+    g.userData.gira = [a1, a2];
+    return g;
+  }
+  function montaPoca() {
+    var g = new THREE.Group();
+    var d = new THREE.Mesh(M.geo('perPoca', function () { var c = new THREE.CircleGeometry(CELL * 0.4, 20); c.rotateX(-Math.PI / 2); return c; }),
+      perMat('#57c8ec', 0.42));
+    d.position.y = 0.06; d.renderOrder = 5;
+    g.add(d);
+    return g;
+  }
+
+  function limpaPerigos() {
+    var cache = {};
+    for (var ck in perMatCache) if (Object.prototype.hasOwnProperty.call(perMatCache, ck)) cache[perMatCache[ck].uuid] = true;
+    for (var q = perNodes.length - 1; q >= 0; q--) {
+      var n = perNodes[q];
+      if (n.parent) n.parent.remove(n);
+      // a cada rodada isto se refaz: material próprio (e a textura do "!") vai
+      // embora junto, senão a aba engorda uma pilha por rodada
+      n.traverse(function (o) {
+        var mt = o.material;
+        if (!mt || cache[mt.uuid]) return;
+        if (mt.map) mt.map.dispose();
+        mt.dispose();
+      });
+    }
+    perNodes.length = 0;
+    perSig = '';
+  }
+
+  function rebuildPerigos(st) {
+    var ps = (st && st.perigos) || [];
+    var sig = String(st && st.round);
+    for (var i = 0; i < ps.length; i++) {
+      var p = ps[i];
+      sig += '|' + p.id + ':' + p.x + ',' + p.y + ':' + (p.armada ? 1 : 0) + (p.caiu ? 1 : 0) + ':' + (p.aviso || 0);
+    }
+    if (sig === perSig) return;
+    limpaPerigos();
+    perSig = sig;
+    for (var k = 0; k < ps.length; k++) {
+      var pg = ps[k], node = null;
+      if (pg.tipo === 'placa') node = montaPlaca(pg);
+      else if (pg.tipo === 'jato') node = montaJato(pg);
+      else if (pg.tipo === 'rachado') node = montaRachado(pg);
+      else if (pg.tipo === 'runa') node = montaRuna(pg);
+      else if (pg.tipo === 'poca') node = montaPoca(pg);
+      if (!node) continue;
+      node.position.set(wx(pg.x), 0, wz(pg.y));
+      node.userData.ph = (pg.x * 7 + pg.y * 13) % 10;
+      node.userData.perigo = pg.tipo; node.userData.papel = 'peca';
+      scene.add(node);
+      perNodes.push(node);
+      // a linha da placa desarmada: risco fraco, para o jogador ler o alcance
+      if (pg.tipo === 'placa' && !pg.armada && pg.casas) {
+        for (var c = 0; c < pg.casas.length; c++) {
+          var lin = perCasa(pg.casas[c].x, pg.casas[c].y, '#ffcf6a', 0.10, 0.06);
+          lin.scale.set(0.30, 1, 0.30);
+          lin.userData.perigo = pg.tipo; lin.userData.papel = 'linha';
+          scene.add(lin); perNodes.push(lin);
+        }
+      }
+      // O AVISO: as casas que levam o golpe, pulsando, e o "!" na origem
+      if (pg.aviso && pg.casas) {
+        var cor = PER_AVISO[pg.tipo] || R.elementColor(pg.elemento);
+        var urgente = pg.aviso === (st.round + 1);
+        for (var a = 0; a < pg.casas.length; a++) {
+          var casa = perCasa(pg.casas[a].x, pg.casas[a].y, cor, urgente ? 0.42 : 0.26, 0.08);
+          casa.userData.aviso = true;
+          casa.userData.perigo = pg.tipo; casa.userData.papel = 'aviso';
+          casa.userData.ph = a * 0.7;
+          casa.userData.base = urgente ? 0.42 : 0.26;
+          scene.add(casa); perNodes.push(casa);
+        }
+        var icone = makeIconSprite('!', cor);
+        icone.position.set(wx(pg.x), 1.35, wz(pg.y));
+        icone.userData.aviso = true;
+        icone.userData.perigo = pg.tipo; icone.userData.papel = 'sinal';
+        scene.add(icone); perNodes.push(icone);
+      }
+    }
+  }
+
+  /* respiração: o aviso pulsa forte (é para o olho achar), o resto devagar */
+  function updatePerigos() {
+    for (var i = 0; i < perNodes.length; i++) {
+      var n = perNodes[i], ud = n.userData;
+      var p = 0.5 + 0.5 * Math.sin(nowT * 4.0 + (ud.ph || 0));
+      if (ud.aviso && n.material && ud.base != null) n.material.opacity = ud.base * (0.55 + 0.45 * p);
+      else if (ud.aviso && n.isSprite) n.position.y = 1.35 + 0.12 * p;
+      if (ud.brilho && ud.brilho.material) ud.brilho.material.emissiveIntensity = 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(nowT * 2 + (ud.ph || 0)));
+      if (ud.gira) { ud.gira[0].rotation.y = nowT * 0.5; ud.gira[1].rotation.y = -nowT * 0.9; }
+    }
+  }
+
   // ------------------------------------------------- MURO INVOCADO
   // O verbo do Minotauro. O motor ja o guardava em `state.walls` e ja trocava
   // o tipo da celula para 'wall' — mas o tabuleiro so se redesenha quando a
@@ -4655,6 +4862,7 @@ var JOGO = (typeof window !== 'undefined')
     unitNodes = {};
     boardKey = null; ovSig = ''; evSig = '~init~';
     limpaMuros();
+    limpaPerigos();
     weather.id = '';
     if (st && st.grid) {
       buildBoard(st);
@@ -4903,6 +5111,7 @@ var JOGO = (typeof window !== 'undefined')
       if (sig !== ovSig) { ovSig = sig; rebuildOverlays(st); }
       rebuildTileEvents(st);
       rebuildTraps(st);
+      rebuildPerigos(st);                 // 02/10: o chão do Poço
       rebuildWalls(st);
       vigiaAreaUtil(st);                  // 15/09: a HUD cresceu? reenquadra (só no desktop)
       var en = engine();
@@ -4920,6 +5129,7 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     updateTraps();
+    updatePerigos();
     updateWalls();
     updateWeather(dtv);
     updateRot(dtv);
@@ -4958,6 +5168,8 @@ var JOGO = (typeof window !== 'undefined')
     return n && n.userData ? n.userData.height : 1.7;
   };
   R.unitNode = function (uid) { return unitNodes[uid] || null; };
+  // 02/10: o que o chão do Poço desenhou agora (as provas CONTAM, não olham foto)
+  R.perigosNaTela = function () { return perNodes.slice(); };
   R.fxLayers = function () {
     return { scene: scene, fx: fxG, decal: decalG, weather: weatherG,
              THREE: THREE, renderer: renderer, camera: camera, renderer3d: R };

@@ -1755,6 +1755,48 @@ var JOGO = (typeof window !== 'undefined')
         burst(p.x, 0.2, p.z, 20, { color: '#ffd76b', speed: 3.0, life: 0.6 });
         break;
 
+      /* 02/10 — O CHÃO DO POÇO (js/core/poco.js). O aviso é um anel baixo na
+       * origem (o resto é a casa pintada, no renderer); o disparo varre as
+       * casas marcadas com a cor de quem fere: vermelho das setas, a cor do
+       * elemento do jato, poeira escura do chão que cai. */
+      case 'perigoAviso':
+        if (ev.x != null) shockRing(cellPos(ev.x, ev.y, 0.15), ev.tipo === 'placa' ? '#ff4a3a' : (ev.tipo === 'rachado' ? '#ff9a3a' : ecol(ev.elemento)), 0.2, 1.4, 0.6);
+        break;
+
+      case 'perigoDispara':
+        (function (ev2) {
+          var cor = ev2.tipo === 'placa' ? '#ff6a4a' : (ev2.tipo === 'rachado' ? '#4a3a2a' : ecol(ev2.elemento));
+          var casas = ev2.casas || [];
+          for (var ci = 0; ci < casas.length; ci++) {
+            var cp = cellPos(casas[ci].x, casas[ci].y, 0.2);
+            burst(cp.x, 0.2, cp.z, ev2.tipo === 'jato' ? 22 : 12, {
+              color: cor, speed: ev2.tipo === 'jato' ? 4.2 : 3.0, life: 0.55, up: ev2.tipo === 'jato' ? 3.2 : 0.6, size: 0.26
+            });
+          }
+          if (ev2.x != null) shockRing(cellPos(ev2.x, ev2.y, 0.15), cor, 0.3, 2.4, 0.5);
+          addShake(ev2.tipo === 'rachado' ? 6 : 3);
+        })(ev);
+        break;
+
+      case 'perigoRuna':
+        p = unitPos(ev.uid, 0.3);
+        shockRing(p, '#b98cff', 0.3, 1.6, 0.5);
+        floater(unitPos(ev.uid, 1.0), '−' + (ev.pp || 0) + ' PP', '#b98cff');
+        break;
+
+      case 'couracaCaiu':
+        p = unitPos(ev.uid, 0.6);
+        burst(p.x, p.y, p.z, 36, { color: '#8a8278', speed: 3.6, life: 0.8, size: 0.32, grav: 1.6, spread: 0.5 });
+        floater(unitPos(ev.uid, 1.1), 'couraça caiu!', '#e8dcc8', true);
+        addShake(5);
+        break;
+
+      case 'ventania':
+        p = unitPos(ev.uid, 0.6);
+        shockRing(p, '#c8b6ff', 0.4, 2.6, 0.45);
+        burst(p.x, p.y, p.z, 18, { color: '#e6ddff', speed: 4.0, life: 0.4, size: 0.2, flat: true });
+        break;
+
       case 'summon':
         if (ev.unit) {
           p = cellPos(ev.unit.x, ev.unit.y, 0.3);

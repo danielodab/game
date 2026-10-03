@@ -258,6 +258,18 @@ var JOGO = (typeof window !== 'undefined')
         case 'pushed':        Audio.play('impacto', { gain: 0.6 }); break;
         case 'poison':        Audio.play('dano', { gain: 0.4, rate: 0.85 }); break;
 
+        // 02/10: o chão do Poço, com os sons que já existem — o aviso é um
+        // zumbido baixo de magia, o disparo tem a voz de quem fere
+        case 'perigoAviso':   Audio.play('magia', { gain: 0.45, rate: 0.7 }); break;
+        case 'perigoDispara':
+          if (ev.tipo === 'jato') Audio.play('fogo', { gain: 0.8, rate: ev.elemento === 'fogo' ? 1 : 1.2 });
+          else if (ev.tipo === 'rachado') Audio.play('impacto', { gain: 0.9, rate: 0.7 });
+          else Audio.play('golpe', { gain: 0.8, rate: 1.3 });
+          break;
+        case 'perigoRuna':    Audio.play('magia', { gain: 0.5, rate: 1.35 }); break;
+        case 'couracaCaiu':   Audio.play('impacto', { gain: 0.9, rate: 0.6 }); break;
+        case 'ventania':      Audio.play('golpe', { gain: 0.6, rate: 0.75 }); break;
+
         case 'battleEnd':
           Audio.play(ev.winner === 'player' ? 'vitoria' : 'derrota');
           break;
