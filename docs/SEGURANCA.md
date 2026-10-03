@@ -234,7 +234,8 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
   pontuar. Prazo de 2 h, semana já fechada e regras trocadas no meio = 410 (`vencida`, não fraude); a das regras
   trocadas (`regras-mudaram`, o deploy no meio dela) é a única que DEVOLVE a vez do dia. A
   régua de tempo mínimo da sala vale aqui (`SALA_MIN_S`, `SALA_S_POR_TURNO`). A tentativa largada no meio
-  pontua o dano até onde foi (os lances conferidos são de verdade).
+  pontua o dano até onde foi (os lances conferidos são de verdade). Limite conhecido: com a semente na
+  mão, dá para ensaiar a tentativa fora do jogo e mandar só a melhor sequência (§9, "Limites conhecidos").
 - `GET /api/supremo` (público; com token traz `eu`: tentativas de hoje, o melhor, a posição, os últimos
   prêmios) e `GET /api/supremo/ranking?semana=N` (público, 100 linhas, as semanas fechadas). O ranking é
   a melhor tentativa conferida de cada conta; a equipe (`contas.gm`) e quem está banido não entram.
@@ -701,6 +702,15 @@ do pedido vira placar. Prova: `tests/juiz_supremo.js`.
   conhecidas".
 - A configuração de PA/PP do Mestre (`soterra-gm-v1`) mora no navegador: batalha da conta do
   Mestre com PA/PP mudado pode divergir no servidor.
+- **O ensaio da tentativa do Eco** (03/10): a semente vai ao navegador no abrir, antes da luta, e a
+  tentativa inteira depende só dela e dos lances (o sorteio de dano, o lugar dos Ecos Menores, cada
+  decisão da IA). Quem tem a semente roda o motor do próprio jogo
+  (`Engine.createBattle('camara_eco', 0, grupo, {seed, dificuldade: 'normal', escolhePosicao: true})`)
+  quantas vezes quiser dentro das 2 h de validade e manda só a melhor sequência — o juiz confere e o
+  placar entra. O limite de 3 por dia e a disputa do pódio não seguram isso. Fechar de fato pede
+  revelar a aleatoriedade por rodada (sementes encadeadas, a da rodada r+1 só depois dos lances da r)
+  ou tirar o sorteio que mais decide (dano e lugar dos Menores fixos); fica para o dono decidir
+  (README §7.0).
 
 ## 10. A moderação: banimento, silêncio, denúncias e a auditoria do Mestre (02/10)
 
