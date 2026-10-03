@@ -25,7 +25,7 @@
  *     trecho; a do próprio lado não para nem dispara;
  *   · a IA não desvia da armadilha do outro lado (antes: −60 e nunca pisava);
  *   · a marca do turno some no fim do turno e entra no hash enquanto vive;
- *   · Engine.VERSAO_REGRAS = 5;
+ *   · Engine.VERSAO_REGRAS ≥ 5 (a que trouxe estas regras; 02/10 o Eco a levou a 6);
  *   · a TELA: Game.ocultoNaTela / veArmadilha / eventoParaTela no solo (o lado
  *     'player' é o meu) — o monstro invisível some, a armadilha do monstro não
  *     aparece, a minha aparece, o lance de armadilha do outro lado perde a casa,
@@ -114,7 +114,8 @@ const J = mundo([]).JOGO;
 prepara(J);
 const E = J.Engine, AI = J.AI;
 
-check('Engine.VERSAO_REGRAS é 5 (a invisibilidade e a armadilha mudaram o fim de uma sala)', E.VERSAO_REGRAS === 5, E.VERSAO_REGRAS);
+// 02/10: a versão só SOBE (o Eco Primordial a levou a 6) — a regra é "a que trouxe a invisibilidade, ou depois"
+check('Engine.VERSAO_REGRAS é 5 ou mais (a invisibilidade e a armadilha mudaram o fim de uma sala)', E.VERSAO_REGRAS >= 5, E.VERSAO_REGRAS);
 check('Sombra Curta: invisível por 2 no dado (era 1)',
   (J.DATA.spells['espadachim-neutro-2'].effects || []).some((e) => e.type === 'invisible' && e.duration === 2));
 

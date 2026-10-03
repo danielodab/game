@@ -38,6 +38,8 @@
     '../js/core/data/elements.js',
     '../js/core/data/monsters.js',
     '../js/core/data/dungeons.js',
+    '../js/core/data/arenas.js',     // 02/10: a Câmara do Eco mora lá (seção 9)
+    '../js/core/data/eco.js',        // 02/10: o Eco Primordial (seção 9)
     '../js/core/data/items.js',      // dono: Criativo Fusão (só leitura, p/ cruzar lootTable)
     '../js/core/data/items_extra.js', // dono: Criativo Itens (aditivo; idem)
     '../js/core/data/spells.js',     // dono: Criativo Classes (só leitura, p/ cruzar summons)
@@ -1107,6 +1109,112 @@
     } else {
       check('código-fonte: varredura de "pm" (requer http://, ' + scanned + '/3 lidos)', scanned === srcs.length,
         'abra a página pelo servidor para esta checagem');
+    }
+  })();
+
+  // =========================================================================
+  // 9. O ECO PRIMORDIAL (02/10) — o chefe supremo e a Câmara do Eco
+  // =========================================================================
+  // O elenco dele mora em DATA.ecoMonstros, fora do bestiário (js/core/data/eco.js diz por quê), e por
+  // isso as réguas da seção 4 não o veem: aqui ele passa pelas MESMAS (campos, feitiços, a roda) e pelas
+  // que só ele tem (porte 2, imóvel, as fases na ordem do dono, um golpe por fase, a câmara).
+  (function () {
+    var C = D.eco, EM = D.ecoMonstros || {};
+    if (!check('DATA.eco e DATA.ecoMonstros existem', !!C && keys(EM).length > 0)) { return; }
+    var FASES = ['fogo', 'agua', 'terra', 'ar'];
+    check('Eco: as fases são Fogo → Água → Terra → Ar (a ordem do dono)', JSON.stringify(C.fases) === JSON.stringify(FASES),
+      JSON.stringify(C.fases));
+    check('Eco: 12 rodadas por tentativa', C.rodadas === 12, String(C.rodadas));
+    check('Eco: nenhum id do elenco colide com o bestiário de calabouço',
+      keys(EM).every(function (id) { return !has(MON, id); }), keys(EM).filter(function (id) { return has(MON, id); }).join(', '));
+    keys(EM).forEach(function (id) {
+      var m = EM[id], L = 'eco ' + id, st = m.stats || {};
+      check(L + ': id bate com a chave', m.id === id);
+      check(L + ': nome e descrição', typeof m.name === 'string' && m.name.length > 0 &&
+        typeof m.description === 'string' && m.description.length > 20);
+      check(L + ': element válido', inList(m.element, ELEMENTS), String(m.element));
+      check(L + ': ai válida', inList(m.ai, AIS), String(m.ai));
+      check(L + ': stats completos', ['hp', 'pa', 'pp', 'initiative', 'power', 'dodge', 'lock'].every(function (f) {
+        return typeof st[f] === 'number'; }) && st.hp > 0 && st.pa >= 1);
+      check(L + ': resists com as 5 chaves', !!st.resists && ELEMENTS.every(function (e) { return typeof st.resists[e] === 'number'; }));
+      check(L + ': feitiços existem em DATA.monsterSpells', Array.isArray(m.spells) && m.spells.length > 0 &&
+        m.spells.every(function (sid) { return has(MS, sid); }), JSON.stringify(m.spells));
+      check(L + ': traços do vocabulário fechado', Array.isArray(m.traits) &&
+        m.traits.every(function (t) { return has(TRAIT_REQ, t.type); }));
+      check(L + ': não derruba pedra nem dá XP (o Eco paga pelo placar)', m.stoneDrop === null && m.xp === 0);
+      if (id !== C.chefe && D.beats && D.beats[m.element]) {
+        check(L + ': resiste ao que seu elemento vence e é fraco contra quem o vence (a roda)',
+          st.resists[D.beats[m.element]] > 0 && st.resists[D.beatenBy[m.element]] < 0 && !(st.resists[m.element] > 0),
+          JSON.stringify(st.resists));
+      }
+    });
+    var eco = EM[C.chefe];
+    if (check('Eco: o chefe (' + C.chefe + ') existe no elenco', !!eco)) {
+      check('Eco: ocupa 2×2 (porte 2) e não anda (PP 0)', eco.porte === 2 && eco.stats.pp === 0);
+      check('Eco: é chefe supremo, não invocação', eco.boss === true && eco.supremo === true && eco.summonOnly === false);
+      check('Eco: imune a empurrão por escrito (a IA lê o traço)',
+        eco.traits.some(function (t) { return t.type === 'pushImmune'; }));
+      check('Eco: a fase de começo é a do elemento dele (Fogo)', eco.element === FASES[0]);
+    }
+    (C.comuns || []).forEach(function (sid) { check('Eco: o feitiço comum ' + sid + ' existe', has(MS, sid)); });
+    FASES.forEach(function (el) {
+      var fs = (C.feiticosFase || {})[el] || [];
+      check('Eco/' + el + ': feitiços da fase existem e são do elemento dela', fs.length > 0 &&
+        fs.every(function (sid) { return has(MS, sid) && MS[sid].element === el; }), JSON.stringify(fs));
+      var mid = (C.menores || {})[el];
+      check('Eco/' + el + ': o Eco Menor da fase existe, é do elemento e é só invocação',
+        has(EM, mid) && EM[mid].element === el && EM[mid].summonOnly === true, String(mid));
+      var g = (C.golpes || {})[el];
+      check('Eco/' + el + ': o golpe grande tem padrão conhecido, nome e dano', !!g &&
+        inList(g.padrao, ['alvos', 'onda', 'cruz', 'anel']) && typeof g.nome === 'string' && g.nome.length > 2 &&
+        typeof g.min === 'number' && g.max >= g.min && g.min > 0, JSON.stringify(g));
+      if (g && (g.padrao === 'onda' || g.padrao === 'anel')) {
+        check('Eco/' + el + ': a faixa do golpe é 1 ≤ de ≤ ate', g.de >= 1 && g.ate >= g.de, JSON.stringify(g));
+      }
+    });
+    check('Eco: o aviso tem ritmo (golpeACada ≥ 1) e o bônus de derrubar é uma fração',
+      C.golpeACada >= 1 && C.bonusDerrubada > 0 && C.bonusDerrubada <= 1);
+
+    // a Câmara do Eco
+    var ar = null;
+    (D.arenas || []).forEach(function (a) { if (a && a.id === C.arena) { ar = a; } });
+    if (!check('Câmara: ' + C.arena + ' existe em DATA.arenas, marcada modo eco', !!ar && ar.modo === 'eco')) { return; }
+    check('Câmara: não é calabouço (não vira portal nem palco do Poço)',
+      !(D.dungeons || []).some(function (d) { return d.id === C.arena; }));
+    var r = ar.rooms && ar.rooms[0], lay = r && r.layout;
+    if (!check('Câmara: uma sala com layout', Array.isArray(lay) && lay.length > 0)) { return; }
+    var w = lay[0].length;
+    check('Câmara: retângulo', lay.every(function (row) { return row.length === w; }));
+    var letras = [], Ps = [], ok = true;
+    lay.forEach(function (row, y) {
+      for (var x = 0; x < row.length; x++) {
+        var ch = row.charAt(x);
+        if ('.,#=~P'.indexOf(ch) < 0 && !/^[a-z]$/.test(ch)) { ok = false; }
+        if (ch === 'P') { Ps.push([x, y]); }
+        if (/^[a-z]$/.test(ch)) { letras.push([ch, x, y]); }
+      }
+    });
+    check('Câmara: só caracteres da legenda', ok);
+    check('Câmara: uma letra só, e ela é o Eco', letras.length === 1 && r.monsters[letras[0][0]] === C.chefe,
+      JSON.stringify(letras));
+    if (letras.length === 1) {
+      var ax = letras[0][1], ay = letras[0][2], p = eco ? eco.porte : 2, livres = true;
+      for (var dy = 0; dy < p; dy++) {
+        for (var dx = 0; dx < p; dx++) {
+          if (dx === 0 && dy === 0) { continue; }
+          var c = (lay[ay + dy] || '').charAt(ax + dx);
+          if (c !== '.' && c !== ',') { livres = false; }
+        }
+      }
+      check('Câmara: as outras casas do corpo 2×2 são chão (a letra marca o canto noroeste)', livres);
+      check('Câmara: 4 nascimentos de herói, todos a 6 ou mais passos do corpo', Ps.length === 4 &&
+        Ps.every(function (q) {
+          var cx = Math.max(ax, Math.min(ax + p - 1, q[0])), cy = Math.max(ay, Math.min(ay + p - 1, q[1]));
+          return Math.abs(cx - q[0]) + Math.abs(cy - q[1]) >= 6;
+        }), JSON.stringify(Ps));
+      var altos = 0;
+      lay.forEach(function (row) { for (var i = 0; i < row.length; i++) { if (row.charAt(i) === '#') { altos++; } } });
+      check('Câmara: tem pilares altos para abrigar do golpe (≥ 8)', altos >= 8, String(altos));
     }
   })();
 
