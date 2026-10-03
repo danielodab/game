@@ -1588,7 +1588,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-neutro-alarme', duration: 3 } ],
-    description: 'Arma uma estaca na célula escolhida por 3 rodadas: quem pisar leva 16–22 de dano e perde 1 PP.',
+    description: 'Arma uma estaca na célula escolhida por 3 rodadas: quem pisar leva 11–15 de dano e perde 1 PP.',
     flavor: 'O mundo enterrado é cheio de corredores. Corredor é lugar de armadilha.',
     fxKey: 'alarmStake'
   },
@@ -1600,7 +1600,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-fogo-brasa', duration: 3 } ],
-    description: 'Enterra carvão vivo por 3 rodadas: quem pisar sofre 24–30 de fogo em raio 1 e queima por 2 turnos.',
+    description: 'Enterra carvão vivo por 3 rodadas: quem pisar sofre 17–21 de fogo em raio 1 e queima por 2 turnos.',
     flavor: 'Planta brasa em fila, como quem semeia cebola.',
     fxKey: 'emberTrapSet'
   },
@@ -1640,7 +1640,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-fogo-pira', duration: 3 } ],
-    description: 'Dobra uma pira inteira dentro de uma célula por 3 rodadas: 52–62 de fogo em raio 1 e queimadura de 12–16 em quem pisar.',
+    description: 'Dobra uma pira inteira dentro de uma célula por 3 rodadas: 39–47 de fogo em raio 1 e queimadura de 9–12 em quem pisar.',
     flavor: 'Ele avisa os aliados por onde não andar. Uma vez. Baixinho.',
     fxKey: 'pyreTrapSet'
   },
@@ -1662,7 +1662,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-agua-redemoinho', duration: 3 } ],
-    description: 'Abre um funil de água por 3 rodadas: 20–26 de dano e 2 células de sucção em quem pisar.',
+    description: 'Abre um funil de água por 3 rodadas: 14–18 de dano e 2 células de sucção em quem pisar.',
     flavor: 'Um ralo com opinião própria sobre por onde as pessoas deviam andar.',
     fxKey: 'whirlTrapSet'
   },
@@ -1702,7 +1702,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-agua-sorvedouro', duration: 3 } ],
-    description: 'Um ralo do mundo antigo, armado por 3 rodadas: 46–56 de água em raio 1 e 3 células de sucção.',
+    description: 'Um ralo do mundo antigo, armado por 3 rodadas: 35–42 de água em raio 1 e 3 células de sucção.',
     flavor: 'Ele destampou uma coisa que os construtores tinham tampado de propósito.',
     fxKey: 'maelstromTrapSet'
   },
@@ -1724,7 +1724,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-terra-laco', duration: 3 } ],
-    description: 'Esconde um laço de raízes por 3 rodadas: 18–24 de terra e 0 PP por 2 turnos em quem pisar.',
+    description: 'Esconde um laço de raízes por 3 rodadas: 13–17 de terra e 0 PP por 2 turnos em quem pisar.',
     flavor: 'O micélio adora um pedido desses. Faz de graça.',
     fxKey: 'snareTrapSet'
   },
@@ -1764,7 +1764,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-terra-tremor', duration: 3 } ],
-    description: 'Enfraquece a laje por 3 rodadas: quem pisar sofre 48–58 de terra em raio 1 e fica 2 turnos sem PP.',
+    description: 'Enfraquece a laje por 3 rodadas: quem pisar sofre 36–44 de terra em raio 1 e fica 2 turnos sem PP.',
     flavor: 'A mina trêmula ensinou: nem todo chão é obrigado a continuar sendo chão.',
     fxKey: 'quakeTrapSet'
   },
@@ -1786,7 +1786,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-ar-rajada', duration: 3 } ],
-    description: 'Tampa um respiradouro por 3 rodadas: quem pisar leva 16–22 de ar e voa 3 células.',
+    description: 'Tampa um respiradouro por 3 rodadas: quem pisar leva 13–18 de ar e voa 3 células.',
     flavor: 'Ar velho, guardado com raiva. Vale por um chute.',
     fxKey: 'gustTrapSet'
   },
@@ -1826,7 +1826,7 @@ JOGO.DATA.spells = {
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
     effects: [ { type: 'trap', trapId: 'trap-ar-vortice', duration: 3 } ],
-    description: 'Ata um nó de vento na célula por 3 rodadas: 42–52 de ar em raio 1 e 4 células de arremesso em quem pisar.',
+    description: 'Ata um nó de vento na célula por 3 rodadas: 38–47 de ar em raio 1 e 4 células de arremesso em quem pisar.',
     flavor: 'Desatar é fácil: basta pisar. É sempre fácil, do lado errado.',
     fxKey: 'vortexTrapSet'
   },
