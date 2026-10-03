@@ -20,8 +20,13 @@
 > `dungeonId` em `monsters.js`, e os Colossos têm `dungeonId: null` e o Eco
 > mora em `js/core/data/eco.js`. O manifesto se escreve à mão (o modelo está
 > naquele documento), com o `id` igual à **chave do modelo** (`colosso-fogo`,
-> `boss-eco-primordial`), que é a que o corpo provisório espera. Do passo 2 em
-> diante é igual.
+> `boss-eco-primordial`), que é a que o corpo provisório espera. Os passos 2 a
+> 4 são iguais, com `--calabouco colossos` / `eco`, mas no 4 a pasta nova
+> tem de entrar no `GRUPO_DA_PASTA` do `tools/extrai_assets.py`. Pasta que não
+> está lá cai no grupo `base`, que todo jogador baixa ao abrir o jogo. O passo
+> 5 não serve: o bestiário também filtra pelo `dungeonId`, então reprova na
+> primeira linha sem conferir nenhum bicho. O 6 e o 7 não existem aqui, porque não há cenário de
+> calabouço nem portal.
 
 Este é o caminho do lote, do mesmo jeito que os cinco anteriores entraram, só
 que agora com ferramenta genérica em vez de script copiado.

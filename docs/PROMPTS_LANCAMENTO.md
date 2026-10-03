@@ -163,7 +163,8 @@ você saber o que conferir na imagem do Gemini ANTES de gastar crédito no Meshy
    hit (reação) · death. Exporte um GLB por animação com os nomes da árvore.
 
 **A altura não se controla no Meshy** — o código acerta depois (`MONSTER_LOOK`,
-`scale = altura ÷ 1,80`). O que você controla é a **proporção**, e é isso que
+`scale = altura ÷ 1,80` para monstro comum e `altura ÷ 2,95` para chefe, que
+é o caso do Eco: escala 2,00 = 5,90 m). O que você controla é a **proporção**, e é isso que
 cada ficha pede. Para calibrar o olho: herói 2,05 m, casa 2,0 m, muro 3,10 m,
 chefe de calabouço 2,95 a 3,60 m.
 
@@ -312,7 +313,9 @@ escreva o manifesto à mão em `tools/monstros/<lote>.json`. O campo `id` é a
 **chave do modelo** (`colosso-fogo`, não `colosso_fogo`), porque é com ela que o
 embutidor escreve `JOGO.MODELS[...]` e é por ela que o corpo provisório sai de
 cena sozinho. Depois é o caminho de sempre: `--raio-x`, a fusão, o
-`index.html` e o `extrai_assets.py`.
+`index.html` e o `extrai_assets.py`, com as duas exceções que estão em
+*Pendências do código* no fim (o grupo de download no `extrai_assets.py` e a
+régua do bestiário, que não serve para quem não tem calabouço).
 
 ```json
 {
@@ -352,17 +355,17 @@ nascimentos, então a PROPORÇÃO pedida no prompt importa.
 | `tronoDaSede` | o fundo da sala do trono | 3×1 | ~4,2 m (painel) | alto, mais largo que alto |
 | `lareiraDaSede` | uma em cada ala | 1×3 na parede | 2,3 m + chaminé até a parede | a chaminé e o fogo continuam no código |
 | `estandarteDaSede` | 4, com a bandeira de cada guilda | 1×1 | 4,74 m | o PANO é do código (cor e emblema da guilda) |
-| `pilarDaSede` | 30 no mapa, cobertura alta | 1×1 | **2,64 m, no máximo** | mais alto que isso esconde casa de nascimento |
+| `pilarDaSede` | 42 no mapa, cobertura alta | 1×1 | **2,64 m, no máximo** | mais alto que isso esconde casa de nascimento |
 | `armaduraDaSede` | 4 (colunata e átrio) | 1×1 | 3,98 m | conta como pilar ('#') |
-| `mesaDaSede` | a mesa do conselho, no centro | 3×3 | **≤ 1,2 m** | baixa: herói vê por cima |
-| `bancoDaSede` | 8, cobertura baixa | 1×1 | 0,51 m | baixo ('=') |
+| `mesaDaSede` | a mesa do conselho, no centro | 3×3 | **≤ 1,2 m** | baixa: herói vê por cima; hoje traz os DOIS bancos corridos dentro da pegada |
+| `bancoDaSede` | 6, cobertura baixa | 1×1 | 0,51 m | baixo ('=') |
 | `estatuaDaSede` | 2, o busto do fundador | 1×1 | **≤ 1,2 m** | baixa ('='), não é estátua de corpo inteiro |
 | `bauDaSede` | 6, a 2 casas dos nascimentos | 1×1 | 0,9 m | baixo ('=') |
 
 **Duas peças a mais**, que enriquecem a sala sem mexer na régua tática porque
 cada uma entra NO LUGAR de uma peça da mesma altura:
 - `sd_rack_armas` — um cavalete de armas, ALTO como o pilar (≤ 2,64 m): pode
-  trocar alguns dos 30 pilares nas alas, para a sala parecer quartel e não
+  trocar alguns dos 42 pilares nas alas, para a sala parecer quartel e não
   floresta de colunas;
 - `sd_trofeu` — um pedestal de troféu (crânio de monstro e lanças partidas),
   BAIXO como o baú (≤ 1,2 m): pode trocar baús nos cantos.
@@ -503,8 +506,8 @@ Arquivo: `muros\muro fogo-muro agua-muro terra-muro ar.glb`.
 
 `el_muro_fogo` · `el_muro_agua` · `el_muro_terra` · `el_muro_ar` — o mesmo
 módulo (duas vezes mais largo que alto, topo reto, pontas retas) em quatro
-pedras. O renderizador usa a 0,95 m como divisória e estica a 3,10 m como
-parede.
+pedras. O renderizador usa a 0,92 m (`LOW_H`) como divisória e estica a
+3,10 m como parede, sempre com 3 m de largura (`LARG_MURO`).
 
 ```
 A game asset reference sheet: four separate stylized fantasy sanctuary wall sections arranged in one horizontal row, evenly spaced, with a wide clear empty gap between every object, none touching and none overlapping. All four are the same modular low wall shape, about twice as wide as it is tall, with a flat straight top edge and straight vertical flush ends, each carved with one small elemental symbol in the middle, and each built from a different stone. From left to right: (1) near-black volcanic basalt blocks with thin dark ember-red veins in the joints, a dark iron band along the top, a small carved flame symbol; (2) blue-grey wet-looking stone blocks with a carved water channel running along the face, verdigris bronze trim along the top, patches of water moss, a small carved wave symbol; (3) huge rough ochre granite and sandstone blocks fitted without mortar, moss in the joints, a thin root crossing the face and sunk into the stone, a small carved mountain symbol; (4) pale weathered marble with round openings carved clean through the wall where the wind passes, polished bronze trim along the top, a small carved spiral symbol. Every part of every object is solidly attached to it: no free-floating rings, no loose chain links, no separate pieces resting on top. All four seen from a straight-on front view at eye level, flat orthographic framing with no perspective distortion, the same camera for every object, all standing on the same invisible ground line with their bases aligned. Stylized hand-painted low-poly game art, matte surfaces, clean readable silhouettes. Soft even frontal studio lighting, no cast shadows, no dramatic highlights. No fire, no smoke, no glow, no flowing water. Plain solid white background, completely empty, no floor, no horizon, no gradient, no shadow on the background. Every object fully visible, nothing cropped at the edges. No text, no labels, no letters, no numbers, no watermark, no frame, no people. Wide landscape 16:9 image.
@@ -651,6 +654,13 @@ itens mapa\  --conta 3,4,4,4,4,4,4           (altar…, grelha…, pilar da mare
 
 35 peças em 9 folhas.
 
+As alturas em metros das fichas acima são **proposta para o mapa novo**. O
+renderizador de hoje não as respeita: ele põe todo `sotaque` a 0,95 m e todo
+`sotaque_alto` a 3,10 m. Por isso o braseiro (~1,4 m), a régua da maré
+(~1,5 m) e a flâmula (~1,4 m) só saem na altura pedida se o código do
+Santuário der a elas uma altura própria. O que a imagem tem de acertar é a
+PROPORÇÃO de cada peça, e essa os prompts já pedem.
+
 ### Os oito monstros do Santuário
 
 Dois por quadrante, tingidos pelo elemento do quadrante (então vêm cinza). Os
@@ -755,13 +765,30 @@ Nada disto é para fazer agora — é o que o lote vai pedir quando chegar:
 - **Colossos e Eco**: manifesto à mão (acima), `--raio-x`, fusão, o embutido no
   `index.html`, `extrai_assets.py` e conferir o porte. A troca do provisório é
   automática (a chave própria vence); a linha do `M.CORPO_PROVISORIO` de cada um
-  pode ser apagada depois.
+  pode ser apagada depois. Duas armadilhas do caminho de sempre:
+  · o `tools/extrai_assets.py` só sabe QUANDO baixar um embutido pela tabela
+    `GRUPO_DA_PASTA`. Pasta que não está lá cai no grupo `base`, que todo
+    jogador baixa ao abrir o jogo. Antes de rodar, acrescente
+    `models-meshy-colossos` e `models-meshy-eco` com um grupo próprio (o Poço
+    e a Câmara do Eco), senão os nove kits engordam a primeira carga (ver a
+    pré-busca em `js/assets_bundle.js`);
+  · o `tests/bestiario.html?calabouco=…` escolhe os bichos pelo `dungeonId` e
+    procura o kit pelo id do MONSTRO (`colosso_fogo`), não pela chave do
+    modelo (`colosso-fogo`). Os Colossos e o Eco não têm calabouço, então a
+    régua reprova logo na primeira linha e não confere nada. O porte e os
+    clipes destes dois lotes se conferem de outro jeito: o relatório da fusão
+    e uma foto no jogo (ou uma régua nova).
 - **Sala de Guerra**: o salão hoje não lê catálogo nenhum — monta as
   primitivas direto (`montaPecaDaSede`). A arte pede um `cenario-sede.js`
   (catálogo `JOGO.CENARIO['sede']`, nome `cenario-*` obrigatório para o jogo
   servido o achar) e um ramo em `montaPecaDaSede` que use a peça quando ela
-  existir e caia na primitiva quando não. As alturas medidas da tabela da seção 3
-  (pilar 2,64, mesa e estátua ≤ 1,2) continuam sendo a régua da prova da Sede.
+  existir e caia na primitiva quando não. A régua continua a da
+  `tests/prova_sede_tatica.html`: peça alta ≥ 2,6 m e peça baixa ≤ 1,3 m. Mais
+  a da câmera, que a prova não cobra sozinha: o pilar (e o cavalete que o
+  substituir) não passa de 2,64 m. A mesa da arte vem sem bancos, e a de hoje
+  tem os dois bancos corridos dentro da pegada 3×3. O ramo novo tem de pôr
+  `sd_banco` dos dois lados compridos da mesa, senão a mesa do conselho fica
+  sem bancos.
 - **Santuário dos Elementos**: tudo — o mapa, as quatro regras de terreno, os
   oito monstros nos dados. A arte fica pronta esperando.
 
