@@ -17,6 +17,14 @@ var JOGO = (typeof window !== 'undefined')
 // AVISO: ele ESCREVE no save de verdade (`localStorage['soterra-save-v2']`).
 // Guarda uma cópia antes de cada mudança, e o botão "desfazer" devolve o save
 // como estava quando o painel foi aberto.
+//
+// 02/10 — COM A SESSÃO DO SITE o dono da economia é o servidor, e mexer no save
+// daqui era desfeito na primeira adoção do estado dele. Liberar classe, nível e
+// elemento passam pelas funções do Mestre (js/core/gm.js), que a Autoridade
+// sobe como op e o juiz refaz no estado do servidor; o que não tem op (encher o
+// saco, desfazer, a Brasa) fica só para o jogo local e aparece apagado. O mesmo
+// corpo é desenhado na aba Ferramentas do painel do Mestre (js/ui/painel_mestre.js,
+// JOGO.Debug.desenhaEm): uma tela só, sem cópia.
 // ============================================================================
 
 (function () {
@@ -55,17 +63,30 @@ var JOGO = (typeof window !== 'undefined')
   function maxNivel() { return ((D().leveling || {}).maxLevel) || 30; }
   function nivelDaEscolha() { return ((D().leveling || {}).elementChoiceLevel) || 5; }
 
-  // Sobe o herói até o nível pedido. `addXp` é a porta oficial, mas ela exige
-  // XP acumulada; aqui cravamos o nível e ressincronizamos os feitiços, que é
-  // o que o painel de teste precisa.
+  /* No servidor? (sessão do site com a autoridade ligada: o estado dele manda) */
+  function noServidor() {
+    var A = JOGO.Autoridade;
+    try { return !!(A && A.ligada && A.ligada()); } catch (e) { return false; }
+  }
+  function mestre() {
+    var G = JOGO.GM;
+    try { return !!(G && G.ativo && G.ativo()); } catch (e) { return false; }
+  }
+  // Sobe o herói até o nível pedido (a regra mora em gm.js, GM.nivelCru). Com o
+  // Mestre, pela porta dele (GM.poeNivel): no ar ela vira op e o servidor refaz.
   function poeNivel(heroId, nivel) {
-    var h = P().hero(heroId);
-    if (!h) return;
-    h.level = Math.max(1, Math.min(maxNivel(), nivel | 0));
-    var tab = (D().leveling || {}).xpTable || [];
-    h.xp = tab[h.level - 1] != null ? tab[h.level - 1] : h.xp;
-    h.spells = P().spellsFor(heroId);
-    P().save();
+    var G = JOGO.GM;
+    if (!G) return false;
+    return mestre() ? G.poeNivel(heroId, nivel) : G.nivelCru(heroId, nivel);
+  }
+  function poeElemento(heroId, el) {
+    var G = JOGO.GM;
+    if (!G) return false;
+    return mestre() ? G.poeElemento(heroId, el) : G.elementoCru(heroId, el);
+  }
+  function libera(classId) {
+    var G = JOGO.GM;
+    try { return mestre() ? G.liberaClasse(classId) : P().unlockClass(classId); } catch (e) { return false; }
   }
 
   function linhaDoHeroi(classId) {
@@ -82,7 +103,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!liberada) {
       var bLib = el('button', 'dbg-b dbg-b-ok', 'Liberar');
       bLib.type = 'button';
-      bLib.onclick = function () { guardaCopia(); P().unlockClass(classId); desenha(); };
+      bLib.onclick = function () { guardaCopia(); libera(classId); desenha(); };
       linha.appendChild(bLib);
       return linha;
     }
@@ -111,13 +132,8 @@ var JOGO = (typeof window !== 'undefined')
     });
     sel.onchange = function () {
       guardaCopia();
-      // `chooseElement` recusa se já houver elemento ou se o nível for baixo —
-      // no painel de teste queremos trocar à vontade, então gravamos direto e
-      // ressincronizamos os feitiços pela porta oficial.
-      var hh = P().hero(classId);
-      hh.element = sel.value;
-      hh.spells = P().spellsFor(classId);
-      P().save();
+      // a troca livre (sem a recusa do chooseElement) mora em gm.js: GM.elementoCru
+      poeElemento(classId, sel.value);
       desenha();
     };
     cxE.appendChild(sel);
@@ -135,10 +151,13 @@ var JOGO = (typeof window !== 'undefined')
     try { return !!(g && g.modoRede && g.modoRede()); } catch (e) { return false; }
   }
 
-  function desenha() {
-    if (!painel) return;
-    var corpo = painel.querySelector('.dbg-corpo');
+  var corpoAtual = null;        // onde o corpo foi desenhado da última vez (o painel daqui ou a aba do Mestre)
+  function desenha(alvo) {
+    if (alvo) corpoAtual = alvo;
+    var corpo = (corpoAtual && corpoAtual.isConnected) ? corpoAtual : (painel ? painel.querySelector('.dbg-corpo') : null);
+    if (!corpo) return;
     corpo.innerHTML = '';
+    var online = noServidor();
     if (emRede()) {
       corpo.appendChild(el('div', 'dbg-info',
         'Em grupo ou duelo pela Rede o painel de teste fica desligado: mexer no estado daqui separaria as duas batalhas.'));
@@ -150,9 +169,7 @@ var JOGO = (typeof window !== 'undefined')
     bTudo.type = 'button';
     bTudo.onclick = function () {
       guardaCopia();
-      Object.keys(D().classes || {}).forEach(function (c) {
-        try { P().unlockClass(c); } catch (e) {}
-      });
+      Object.keys(D().classes || {}).forEach(function (c) { libera(c); });
       desenha();
     };
     topo.appendChild(bTudo);
@@ -168,7 +185,9 @@ var JOGO = (typeof window !== 'undefined')
 
     var bPedras = el('button', 'dbg-b', 'Encher o saco');
     bPedras.type = 'button';
+    if (online) apaga(bPedras, 'No ar o saco é do servidor: use a aba Itens do painel do Mestre');
     bPedras.onclick = function () {
+      if (noServidor()) return;
       guardaCopia();
       Object.keys(D().stones || {}).forEach(function (s) {
         try { P().addStones(s, 50); } catch (e) {}
@@ -188,7 +207,9 @@ var JOGO = (typeof window !== 'undefined')
     var bUndo = el('button', 'dbg-b dbg-b-warn', 'Desfazer tudo');
     bUndo.type = 'button';
     bUndo.title = 'Devolve o save como estava quando você abriu este painel';
+    if (online) apaga(bUndo, 'No ar o save é do servidor: não há cópia local para devolver');
     bUndo.onclick = function () {
+      if (noServidor()) return;
       if (desfaz()) desenha();
       else alert('Nada para desfazer nesta sessão.');
     };
@@ -315,14 +336,27 @@ var JOGO = (typeof window !== 'undefined')
     corpo.appendChild(linhaBr2);
     pintaBrasa();
 
-    corpo.appendChild(el('p', 'dbg-aviso',
-      'Este painel grava no save de verdade. Ao abrir, uma cópia foi guardada — ' +
-      '"Desfazer tudo" devolve tudo como estava. O caminho elemental abre no nível ' +
-      nivelDaEscolha() + ', mas aqui você troca em qualquer nível.'));
+    if (online) {
+      [].forEach.call(linhaBr.querySelectorAll('button'), function (b) { apaga(b, 'A Brasa é do servidor no ar'); });
+      [].forEach.call(linhaBr2.querySelectorAll('button'), function (b) { apaga(b, 'A Brasa é do servidor no ar'); });
+    }
+    corpo.appendChild(el('p', 'dbg-aviso', online
+      ? 'Com a sua conta no ar, liberar classe, nível e elemento vão ao servidor (ele refaz e o jogo adota). ' +
+        'O que só existe no jogo local aparece apagado. O caminho elemental abre no nível ' + nivelDaEscolha() +
+        ', mas aqui você troca em qualquer nível.'
+      : 'Este painel grava no save de verdade. Ao abrir, uma cópia foi guardada — ' +
+        '"Desfazer tudo" devolve tudo como estava. O caminho elemental abre no nível ' +
+        nivelDaEscolha() + ', mas aqui você troca em qualquer nível.'));
 
     Object.keys(D().classes || {}).forEach(function (c) {
       corpo.appendChild(linhaDoHeroi(c));
     });
+  }
+
+  function apaga(b, porque) {
+    b.disabled = true;
+    b.classList.add('is-apagado');
+    b.title = porque;
   }
 
   // ====================================================== MODO TESTE DE EFEITOS
@@ -397,7 +431,7 @@ var JOGO = (typeof window !== 'undefined')
     b.onclick = function () {
       monta();
       guardaCopia();
-      desenha();
+      desenha(painel.querySelector('.dbg-corpo'));
       painel.classList.add('is-on');
     };
     document.body.appendChild(b);
@@ -428,6 +462,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   JOGO.Debug = { modoEfeitos: ligaModo, bloqueado: bloqueado,
-                 abrir: function () { if (bloqueado()) return false; monta(); guardaCopia(); desenha(); painel.classList.add('is-on'); return true; },
-                 desfazer: desfaz, poeNivel: poeNivel };
+                 abrir: function () { if (bloqueado()) return false; monta(); guardaCopia(); desenha(painel.querySelector('.dbg-corpo')); painel.classList.add('is-on'); return true; },
+                 // 02/10: o MESMO corpo na aba Ferramentas do painel do Mestre (js/ui/painel_mestre.js)
+                 desenhaEm: function (alvo) { if (bloqueado() || !alvo) return false; guardaCopia(); desenha(alvo); return true; },
+                 desfazer: desfaz, poeNivel: poeNivel, poeElemento: poeElemento, libera: libera };
 })();

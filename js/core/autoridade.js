@@ -629,6 +629,10 @@ var JOGO = (typeof window !== 'undefined')
       em(G, 'pegaCartas', 'gmPegaCartas', function (cid, n) { return { classId: cid, n: n }; });
       em(G, 'pegaPergaminho', 'gmPegaPergaminho', function (tipo, n) { return { tipo: tipo, n: n }; });
       em(G, 'pegaBonusXp', 'gmPegaBonusXp', function (dias) { return { dias: dias }; });
+      // 02/10: as ferramentas do painel do Mestre (gm.js; o painel de teste, js/ui/debug.js)
+      em(G, 'liberaClasse', 'gmLiberaClasse', function (cid) { return { classId: cid }; });
+      em(G, 'poeNivel', 'gmNivel', function (hid, n) { return { heroId: hid, nivel: Math.max(1, Math.min(999, Math.floor(Number(n)) || 1)) }; });
+      em(G, 'poeElemento', 'gmElemento', function (hid, el) { return { heroId: hid, elemento: el }; });
     }
   };
   // os módulos do jogo já carregaram (index.html põe este arquivo depois deles)
