@@ -131,6 +131,17 @@ Herdado da v1 (implementado e testado) — mantido igual:
 **Dano**: `roll(min..max) * (100+power)/100 * (100−resist[element])/100 * (1 + marcas*0.05)`,
 arredondado. Escudo absorve antes do PV.
 
+**De que lado cai cada efeito (03/10, `docs/EQUILIBRIO.md` §3).** Efeito **hostil** (`damage`,
+`poison`, `root`, `push`, `pull`, `mark`, `detonateMarks`, `dispelShield`, `chain`, `buff`/`resist`
+negativos) pega quem estiver nas casas da área, menos o conjurador — o fogo amigo existe. Efeito
+**a favor** (`heal`, `shield`, `regen`, `reflect`, `cleanse`, `buff`/`resist` positivos) pega quem
+estiver nas casas. **Feitiço misto** — tem dos dois (`summon` conta como a favor): o hostil só pega o
+OUTRO lado e o a favor só pega o lado de quem lança, e quem lança sempre, esteja ou não na área
+(`Engine.feiticoMisto`). E a `trap` que cairia numa casa que o MESMO lance acabou de murar vai para a
+primeira vizinha de chão livre (norte, sul, oeste, leste). Feitiço de `targetSide: 'self'` cuja área
+é só a casa de quem lança: o hostil é o PREÇO e cai em quem lança (o `poison` do `sumo-fogo-15` e do
+`espadachim-fogo-12`). Os três sobem `Engine.VERSAO_REGRAS` para 6.
+
 ## 4. Fusão — sistema de composição
 
 ```js
@@ -624,7 +635,17 @@ as formas de tier 20 e 30, desproporcionalmente fortes em relação às de baixo
 anotada em `tests/equilibrio_fusao.html` para que o teste continue reprovando
 regressão nova em vez de reprovar sempre.
 
-**Tripwire.** `tests/equilibrio_fusao.html` mede as 15 duplas nos níveis 12 e 30
+**ATUALIZAÇÃO 03/10 — o coeficiente ganhou nível (`docs/EQUILIBRIO.md`).** A régua acima
+tinha quatro defeitos (README §7.1) e media um turno só; refeita, mostrou que um número por
+dupla não fecha os dois níveis quando a razão fundida/separados muda com o nível. Desde 03/10
+`Fusion.PAIR_TUNE[dupla] = [k5, k12, k30]` (`Fusion.tuneDe`: vale k5 até o 5, k30 do 30 em
+diante, linha reta no logaritmo entre as âncoras), ajustado nos níveis 5, 12, 20 e 30 e
+conferido no 16 e no 25. As "exceções aceitas" abaixo deixaram de existir: o tripwire agora é
+`node tests/equilibrio.js` (fusão em ±20% em cada nível, para as 21 duplas), e
+`tests/equilibrio_fusao.html` mostra a mesma conta no navegador. O texto abaixo fica como
+registro do que valia em v2.7.
+
+**Tripwire (v2.7).** `tests/equilibrio_fusao.html` mede as 15 duplas nos níveis 12 e 30
 e falha se alguma sair de ±20%. Sem ele, o próximo ajuste em qualquer feitiço
 desfaz o equilíbrio sem ninguém perceber — foi o que aconteceu três vezes com a
 calibração do mundo. Os testes que cravavam `+2 PA` e o resultado do fator de

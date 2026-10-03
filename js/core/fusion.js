@@ -27,10 +27,11 @@ var JOGO = (typeof window !== 'undefined')
  *  - Resistências = média aritmética arredondada, elemento a elemento.
  *  - `elemPower` (v2.2) = média arredondada dos dois, valendo para os DOIS
  *    elementos da mistura (via `unit.elements`, lido por Engine.elementalBonus).
- *  - Escala de poder dos feitiços compostos:
- *        fator = (100 + tier*5 + nível*3) / 100
+ *  - Escala de poder dos feitiços compostos (Fusion.powerFactor):
+ *        fator = (100 + nível*1,2 + tier*1) / 100 × POWER_MULT × tuneDe(dupla, nível)
  *    aplicada a min/max de damage/heal/poison/chain e a shield.value. É a
- *    leitura de "poder escala pelo tier e pelo nível da fusão" (contrato §4).
+ *    leitura de "poder escala pelo tier e pelo nível da fusão" (contrato §4);
+ *    o coeficiente da dupla varia com o nível desde 03/10 (PAIR_TUNE).
  *  - Se DATA.fusionForms/fusionBlends ainda não existirem (ou não cobrirem a
  *    dupla), a fusão AINDA acontece e a unidade fica com a UNIÃO dos feitiços
  *    dos dois fundidos — nunca com um kit vazio.
@@ -49,64 +50,50 @@ var JOGO = (typeof window !== 'undefined')
   Fusion.BONUS_SHIELD = 50;
   Fusion.POWER_MULT = 1.144;
 
-  // AJUSTE FINO POR DUPLA. Depois de acertar a media com POWER_MULT, sobra
-  // dispersao POR DUPLA, porque as formas de fusao de cada par nao valem o mesmo
-  // em relacao aos dois kits de classe que elas substituem. O coeficiente abaixo
-  // e medido em tests/equilibrio_fusao.html — cada dupla puxada para 100%.
-  // Chave em ORDEM ALFABETICA, igual a de DATA.fusionForms.
+  // AJUSTE FINO POR DUPLA, NO NÍVEL DA FUSÃO. Depois de acertar a média com
+  // POWER_MULT, sobra dispersão POR DUPLA, porque as formas de fusão de cada par
+  // não valem o mesmo em relação aos dois kits de classe que elas substituem.
+  // Chave em ORDEM ALFABÉTICA, igual à de DATA.fusionForms; valor = [k5, k12,
+  // k30] (ver Fusion.tuneDe).
   //
-  // RECALIBRADO (v2.8) depois que a area passou a mirar o CHAO (engine.js,
-  // `validTargetCell`). A recalibragem so foi possivel porque o banco de medicao
-  // tinha quatro defeitos que se anulavam, todos consertados agora:
-  //   1. a fusao era medida com 4 PA — a sobra da declaracao — contra dois
-  //      herois com 6+6=12 PA. Os coeficientes antigos (ate 1,656) existiam em
-  //      boa parte para tapar isso.
-  //   2. o feitico era mirado na primeira celula da varredura, o canto do
-  //      alcance: com area mirando o chao, media zero.
-  //   3. o instantaneo nao restaurava efeitos nem a semente, entao marcas de um
-  //      feitico inflavam o seguinte (27% de diferenca so por ordem).
-  //   4. o turno usava um feitico so, repetido; com `castsPerTurn: 1` em 92 das
-  //      106 formas, a fusao gastava 4 dos 10 PA dela.
-  // Medido o banco corrigido, a fusao estava ~2,4x acima, e POWER_MULT desceu de
-  // 2,30 para 1,144 — o valor antigo carregava, junto com os coeficientes, a
-  // compensacao daquele handicap de PA. A mudanca foi uma RENORMALIZACAO: o
-  // produto POWER_MULT x coeficiente ficou o mesmo (desvio maximo 0,07%), e com
-  // ela cada coeficiente volta a se ler como desvio em torno de 1,0, que e o que
-  // este bloco diz que ele e.
-  //
-  // LIMITE CONHECIDO: um coeficiente CONSTANTE por dupla nao fecha as duas
-  // pontas quando a razao muda muito com o nivel. Para caber em +-20% nos dois
-  // niveis e preciso razaoMax/razaoMin <= 1,5 (de k*max<=1,2 e k*min>=0,8).
-  // Seis duplas passam disso — de 1,52 (bruxo+espadachim) a 2,90
-  // (espadachim+invocador) — e ficam fora por construcao, nao por falta de
-  // ajuste. A inclinacao tambem troca de sinal entre duplas (arqueiro+curandeiro
-  // rende MAIS fundida no 30, espadachim+invocador rende MENOS), entao nenhum
-  // valor global de POWER_MULT nem do peso de nivel em `powerFactor` conserta:
-  // so um coeficiente que varie COM O NIVEL, por dupla, fecharia — e isso seria
-  // ajustar dois parametros a dois pontos medidos, ou seja, o teste passaria por
-  // construcao. Fica registrado em vez de escondido.
+  // 03/10 — A DIMENSÃO DE NÍVEL (docs/EQUILIBRIO.md §1.3 e §5). O coeficiente
+  // era um número só por dupla, e um número só não fecha os dois lados quando
+  // a razão fundida/separados muda com o nível: para caber em ±20% no 12 e no
+  // 30 era preciso que a razão entre eles fosse ≤ 1,5, e em seis duplas ia de
+  // 1,52 a 2,90 (README §7.1, a dívida antiga). Agora são três âncoras, nos
+  // níveis 5, 12 e 30, ajustadas por mínimos quadrados (no logaritmo) sobre a
+  // medida de tests/equilibrio.js nos níveis 5, 12, 20 e 30 — e CONFERIDAS no 16
+  // e no 25, que o ajuste nunca viu. Três parâmetros para quatro pontos não
+  // passam por construção, e os dois níveis de fora dizem se a linha entre as
+  // âncoras é verdade ou decoreba.
+  // A medida é a da bancada nova: três rodadas inteiras de cada lado, um alvo e
+  // um grupo de três, as dezesseis misturas de elemento (os quatro defeitos antigos e o
+  // quinto — medir um turno só — estão em tests/equilibrio_bancada.js). Ela foi
+  // refeita DEPOIS do acerto das classes (o lado "separados" mudou) e depois do
+  // conserto do feitiço misto (engine.js, feiticoMisto): o 3,83 do Muro Vivo
+  // existia para tapar a Sentinela que matava o próprio ídolo.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        1.091,
-    'arqueiro+curandeiro':   0.697,
-    'arqueiro+espadachim':   1.251,
-    'arqueiro+invocador':    1.219,
-    'arqueiro+minotauro':    1.682,
-    'arqueiro+sumo':         0.755,
-    'bruxo+curandeiro':      1.007,
-    'bruxo+espadachim':      1.245,
-    'bruxo+invocador':       1.607,
-    'bruxo+minotauro':       0.888,
-    'bruxo+sumo':            1.013,
-    'curandeiro+espadachim': 0.569,
-    'curandeiro+invocador':  1.500,
-    'curandeiro+minotauro':  1.159,
-    'curandeiro+sumo':       0.638,
-    'espadachim+invocador':  1.112,
-    'espadachim+minotauro':  1.027,
-    'espadachim+sumo':       0.454,
-    'invocador+minotauro':   3.830,
-    'invocador+sumo':        1.080,
-    'minotauro+sumo':        1.104
+    'arqueiro+bruxo':        [0.951, 0.813, 0.641],
+    'arqueiro+curandeiro':   [0.917, 0.600, 0.739],
+    'arqueiro+espadachim':   [1.832, 1.208, 1.269],
+    'arqueiro+invocador':    [0.838, 0.661, 0.669],
+    'arqueiro+minotauro':    [1.141, 1.065, 1.008],
+    'arqueiro+sumo':         [1.371, 1.014, 0.773],
+    'bruxo+curandeiro':      [0.913, 0.677, 0.490],
+    'bruxo+espadachim':      [1.236, 0.857, 0.688],
+    'bruxo+invocador':       [1.095, 0.900, 0.634],
+    'bruxo+minotauro':       [1.131, 0.971, 0.812],
+    'bruxo+sumo':            [1.384, 1.184, 0.714],
+    'curandeiro+espadachim': [1.432, 0.759, 0.837],
+    'curandeiro+invocador':  [0.630, 0.399, 0.595],
+    'curandeiro+minotauro':  [2.224, 1.550, 1.295],
+    'curandeiro+sumo':       [0.933, 0.722, 1.125],
+    'espadachim+invocador':  [1.237, 0.716, 0.540],
+    'espadachim+minotauro':  [2.416, 1.911, 1.249],
+    'espadachim+sumo':       [1.875, 1.426, 0.963],
+    'invocador+minotauro':   [3.138, 1.664, 0.648],
+    'invocador+sumo':        [1.046, 0.861, 0.723],
+    'minotauro+sumo':        [1.717, 1.296, 0.984]
   };
 
   function E() { return JOGO.Engine; }
@@ -229,8 +216,36 @@ var JOGO = (typeof window !== 'undefined')
   // — é o que faz uma forma tier 0 valer a pena numa fusão de nível 30 sem
   // contar o tier duas vezes.
   Fusion.powerFactor = function (tier, level, pairKey) {
-    var tune = (pairKey && Fusion.PAIR_TUNE[pairKey]) || 1;
+    var tune = Fusion.tuneDe(pairKey, level);
     return (100 + (level || 0) * 1.2 + (tier || 0) * 1) / 100 * Fusion.POWER_MULT * tune;
+  };
+
+  /* O COEFICIENTE DA DUPLA NO NÍVEL DA FUSÃO (03/10). Um trio [k5, k12, k30]
+   * vale k5 até o nível 5, k30 do 30 em diante e anda em linha reta NO
+   * LOGARITMO entre os vizinhos (a razão fundida/separados é multiplicativa:
+   * o meio do caminho entre 0,8 e 1,25 é 1,0, não 1,025). Um número sozinho
+   * vale para todos os níveis (o formato antigo).
+   * Por que três pontos e não dois: a razão de várias duplas NÃO anda em linha
+   * reta com o nível — no 5 a fusão só tem as formas de degrau 0 e 5, e a
+   * dupla que não tem golpe de base repetível despenca ali e se recupera no
+   * 12. Com dois pontos o resíduo passava de 50% (medido). Os três são
+   * ajustados nos níveis 5, 12, 20 e 30 e CONFERIDOS no 16 e no 25, que o
+   * ajuste nunca viu (docs/EQUILIBRIO.md §1.3). */
+  Fusion.TUNE_NIVEIS = [5, 12, 30];
+  Fusion.tuneDe = function (pairKey, level) {
+    var t = pairKey ? Fusion.PAIR_TUNE[pairKey] : null;
+    if (t == null) return 1;
+    if (typeof t === 'number') return t;
+    var N = Fusion.TUNE_NIVEIS, lv = level || 0;
+    if (lv <= N[0]) return t[0];
+    if (lv >= N[N.length - 1]) return t[t.length - 1];
+    for (var i = 1; i < N.length; i++) {
+      if (lv <= N[i]) {
+        var f = (lv - N[i - 1]) / (N[i] - N[i - 1]);
+        return t[i - 1] * Math.pow(t[i] / t[i - 1], f);
+      }
+    }
+    return t[t.length - 1];
   };
 
   Fusion.spellsFor = function (classPair, elemPair, level) {

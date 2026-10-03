@@ -15,7 +15,8 @@ var JOGO = (typeof window !== 'undefined')
  *  - Papéis: melee aproxima e bate; ranged mantém a distância ideal e recua se
  *    colado; support cura/bufa o aliado mais ferido; boss avalia tudo.
  *  - O plano nunca excede PA/PP e SEMPRE termina com {action:'end'}.
- *  - teleport/swap não são planejados (valor 0).
+ *  - swap não é planejado (valor 0). O teleporte vale como a investida
+ *    (03/10): aproximar, para quem bate de perto.
  *
  * Novidades v2 (decisões de design documentadas):
  *  - Todos os feitiços são resolvidos por `Engine.spell(id)` (classes, monstros,
@@ -214,6 +215,19 @@ var JOGO = (typeof window !== 'undefined')
       if (u && u.alive) unitsHit.push(u);
     }
 
+    /* 03/10: O FEITIÇO MISTO (engine.js, feiticoMisto). Num feitiço que tem
+     * efeito a favor E efeito hostil, o motor manda o hostil só no outro lado
+     * e o a favor só no lado de quem lança — e em quem lança sempre. A IA
+     * mede com a mesma régua: sem fogo amigo nesses, e sem descontar a cura
+     * "dada ao inimigo" que o motor já não dá. */
+    var misto = !!(E().feiticoMisto && E().feiticoMisto(spell));
+    var hitHostil = unitsHit, hitFavor = unitsHit;
+    if (misto) {
+      hitHostil = unitsHit.filter(function (w) { return w.side !== unit.side; });
+      hitFavor = unitsHit.filter(function (w) { return w.side === unit.side; });
+      if (hitFavor.indexOf(unit) < 0) hitFavor.push(unit);
+    }
+
     var effs = spell.effects || [];
     var value = 0;
     // v2.2/v2.3: o que a engine somará ao poder nesta conjuração, e o quanto a
@@ -226,8 +240,8 @@ var JOGO = (typeof window !== 'undefined')
       var t, u2, dmg;
       switch (eff.type) {
         case 'damage':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue; // engine exclui o conjurador
             dmg = expectDamage(unit, u2, eff, elemBonus);
             if (u2.side !== unit.side) {
@@ -245,8 +259,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'poison':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue;
             dmg = expectDamage(unit, u2, eff, elemBonus) * eff.duration;
             if (u2.side !== unit.side) { if (!isInvisible(u2)) value += dmg * 0.8; }
@@ -254,32 +268,33 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'heal':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             var healed = Math.min(((eff.min + eff.max) / 2) * healScale, u2.hpMax - u2.hp);
             if (u2.side === unit.side) value += healed * (ctx.role === 'support' ? 1.3 : 0.9);
             else value -= healed;
           }
           break;
         case 'regen':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             value += Math.min(((eff.min + eff.max) / 2) * eff.duration * healScale,
                               u2.hpMax - u2.hp) * 0.6;
           }
           break;
         case 'shield':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             var engaged = ctx.nearestEnemyDistTo(u2.x, u2.y) <= 3;
             value += eff.value * ((engaged || u2.hp < u2.hpMax) ? 0.6 : 0.05);
           }
           break;
         case 'buff':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          var lista = eff.value < 0 ? hitHostil : hitFavor;   // o sinal decide o lado
+          for (t = 0; t < lista.length; t++) {
+            u2 = lista[t];
             if (eff.value >= 0) {
               if (u2.side !== unit.side) { value -= 10; continue; }
               value += (eff.stat === 'power') ? 10 : 5;
@@ -291,23 +306,24 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'resist':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          lista = eff.value < 0 ? hitHostil : hitFavor;
+          for (t = 0; t < lista.length; t++) {
+            u2 = lista[t];
             if (eff.value >= 0) value += (u2.side === unit.side) ? 4 : -4;
             else value += (u2.side !== unit.side && !isInvisible(u2)) ? 5 : -4;
           }
           break;
         case 'push':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             if (E().unitHasTrait(u2, 'pushImmune')) continue;
             value += 3 + shoveCollision(state, cx, cy, u2, eff.tiles, ctx);
           }
           break;
         case 'pull':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             if (E().unitHasTrait(u2, 'pushImmune')) continue;
             var gain = Math.min(eff.tiles, Math.max(0, manhattan(cx, cy, u2.x, u2.y) - 1));
@@ -329,11 +345,14 @@ var JOGO = (typeof window !== 'undefined')
         case 'invisible':
           if (!isInvisible(unit)) value += (unit.hp / unit.hpMax < 0.6) ? 8 : 1;
           break;
+        case 'wall':
+          value += valorDoMuro(state, unit, cx, cy, tiles, ctx);
+          break;
 
         // ---------------------------------------------------------------- v2
         case 'root':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue;
             if (u2.side === unit.side) { value -= 14; continue; }
             if (isInvisible(u2)) continue;
@@ -343,8 +362,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'mark':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             var maxSt = eff.max || 5;
             var cur = E().markStacks(u2);
@@ -353,8 +372,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'detonateMarks':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             var st = E().markStacks(u2);
             if (st <= 0) continue;                         // sem marcas, não vale
@@ -374,8 +393,8 @@ var JOGO = (typeof window !== 'undefined')
           value += weatherShiftValue(state, unit, eff.weather, ctx);
           break;
         case 'cleanse':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             var kinds = eff.kinds || [];
             var n = 0;
@@ -386,22 +405,27 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'reflect':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) { value -= 6; continue; }
             if (E().unitHasEffect(u2, 'reflect')) continue;
             value += (ctx.nearestEnemyDistTo(u2.x, u2.y) <= 2 ? 12 : 3) + (eff.pct || 0) * 0.1;
           }
           break;
         case 'dispelShield':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             value += u2.shield * 0.8;
           }
           break;
         case 'moveTo':
-          // investida: aproximar interessa a quem bate de perto
+        case 'teleport':
+          // investida: aproximar interessa a quem bate de perto. 03/10: o
+          // TELEPORTE entra pela mesma régua — valia zero, e o Ladino do Ar
+          // (Passo do Vento) e o Bruxo do Ar nunca saltavam: o caminho inteiro
+          // jogava sem o verbo dele quando a IA conduzia (o herói que caiu da
+          // rede, a bancada do equilíbrio). Nenhum monstro teleporta (medido).
           if (ctx.role === 'melee' || ctx.role === 'boss') {
             var before = ctx.nearestEnemyDistTo(cx, cy);
             var after = ctx.nearestEnemyDistTo(tx, ty);
@@ -411,7 +435,7 @@ var JOGO = (typeof window !== 'undefined')
         case 'chain':
           value += chainValue(state, unit, eff, occ, ctx, elemBonus);
           break;
-        // teleport/swap: valor 0 — a IA não os planeja
+        // swap: valor 0 — a IA não o planeja
       }
     }
     return value;
@@ -442,6 +466,61 @@ var JOGO = (typeof window !== 'undefined')
       cur = next;
     }
     return total;
+  }
+
+  /* 03/10 — O MURO DO MINOTAURO VALIA ZERO PARA A IA. O `switch` de castValue
+   * não tinha o caso 'wall', então o muro puro (Primeira Pedra, Menir, Muralha…) nunca
+   * saía, e o muro que vem junto de dano valia só o dano: o verbo inteiro da
+   * classe (BARRAR, docs/CLASSES_V3.md) sumia de toda batalha jogada pela IA —
+   * o herói que caiu da rede (`ia`) e a bancada do equilíbrio, que mede as
+   * classes com a IA dos dois lados. Monstro nenhum ergue muro (medido), então
+   * o PvE não muda.
+   * O que o muro vale aqui é o que ele faz de fato no motor: cortar a VISÃO de
+   * um inimigo até um dos nossos (o tiro que não sai no turno dele) e fechar a
+   * casa ao lado de um inimigo (o passo que ele não dá). Mede a visão com o
+   * muro posto de verdade na grade e devolve a casa como estava — a função
+   * continua pura para quem a chama. Teto de 30: um feitiço de dano médio. */
+  function valorDoMuro(state, unit, cx, cy, tiles, ctx) {
+    var novas = [], i, j;
+    for (i = 0; i < tiles.length; i++) {
+      var c = tiles[i];
+      if (!isFloor(state, c.x, c.y)) continue;
+      var occ = ctx.uAt(c.x, c.y);
+      if (occ && occ !== unit) continue;
+      if (c.x === cx && c.y === cy) continue;
+      novas.push(c);
+    }
+    if (!novas.length) return 0;
+    var meus = [{ u: unit, x: cx, y: cy }];
+    for (i = 0; i < ctx.allies.length; i++) meus.push({ u: ctx.allies[i], x: ctx.allies[i].x, y: ctx.allies[i].y });
+    var pares = [];
+    for (i = 0; i < ctx.enemies.length; i++) {
+      for (j = 0; j < meus.length; j++) {
+        var e = ctx.enemies[i], a = meus[j];
+        if (E().los(state, e.x, e.y, a.x, a.y)) pares.push([e, a]);
+      }
+    }
+    var antes = [];
+    for (i = 0; i < novas.length; i++) {
+      antes.push(state.grid.tiles[novas[i].y][novas[i].x].type);
+      state.grid.tiles[novas[i].y][novas[i].x].type = 'wall';
+    }
+    var v = 0;
+    try {
+      for (i = 0; i < pares.length; i++) {
+        if (!E().los(state, pares[i][0].x, pares[i][0].y, pares[i][1].x, pares[i][1].y)) {
+          v += pares[i][1].u === unit ? 6 : 8;
+        }
+      }
+      for (i = 0; i < novas.length; i++) {
+        for (j = 0; j < ctx.enemies.length; j++) {
+          if (manhattan(novas[i].x, novas[i].y, ctx.enemies[j].x, ctx.enemies[j].y) === 1) v += 2;
+        }
+      }
+    } finally {
+      for (i = 0; i < novas.length; i++) state.grid.tiles[novas[i].y][novas[i].x].type = antes[i];
+    }
+    return Math.min(30, v);
   }
 
   // v2: saldo elemental de trocar o clima

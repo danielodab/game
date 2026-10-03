@@ -8,7 +8,8 @@ build, sem instalação.
 > — as 7 classes, fusão, feitiços, visão, calabouços, chefes, itens, forja, inventário —
 > estão em [`docs/SISTEMAS.md`](docs/SISTEMAS.md). As regras de quem-manda-em-quê
 > estão em [`docs/CONTRACT_V2.md`](docs/CONTRACT_V2.md); a intenção de design em
-> [`docs/GDD.md`](docs/GDD.md). Se os dois discordarem do código, **o código
+> [`docs/GDD.md`](docs/GDD.md); o equilíbrio de classes e fusões — a régua, as faixas e
+> cada ajuste — em [`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md). Se os dois discordarem do código, **o código
 > está certo e o documento está velho** — corrija o documento.
 
 ---
@@ -157,6 +158,13 @@ casa na ordem de iniciativa** do herói A; B sai do tabuleiro
 feitiços da fusão são gerados de `forma × mistura` — a forma decide a mecânica
 **e o desenho**, a mistura decide o sabor elemental.
 
+**Feitiço misto (03/10).** O que fere pega quem estiver na área, menos quem lança (o fogo
+amigo existe); o que ajuda pega quem estiver na área. O feitiço que fere E ajuda — meia
+tabela das formas de fusão — fere só o outro lado e ajuda só o próprio, e quem lança sempre
+recebe a parte que ajuda (`Engine.feiticoMisto`; `docs/EQUILIBRIO.md` §3). No feitiço de
+alvo próprio e casa única, o efeito hostil é o **preço** e cai em quem lança (a queimadura do
+Sangue Fervente e das Veias em Chamas). A prova direta das regras é `node tests/regras_equilibrio.js`.
+
 **Clima** (chuva, vento, tremor) favorece ou prejudica, e é por sala.
 
 ---
@@ -197,12 +205,12 @@ jogador. Página nova sem essa linha é bug.
 | bateria | resultado |
 |---|---|
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
-| `test_progress_v2.html` | 174 passaram / 0 falharam |
-| `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |
+| `test_progress_v2.html` | **118 passaram / 56 falharam** (medido 03/10 na base `39a6ae9` e depois — iguais). O "174 / 0" que estava aqui veio de um conserto de 21/09 que nunca entrou em ramo nenhum (`git log --all -- tests/test_progress_v2.html`) |
+| `validate_fusion.html` | 6.607 checagens, **51 falhas** (3.675 composições) — saque e pedras, nenhuma de fusão; as mesmas antes e depois de 03/10 |
 | `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 210 passaram / 0 falharam — 20 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
 | **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1 |
-| `validate_classes.html` | 6.204 checagens, 0 falhas |
+| `validate_classes.html` | 7.088 checagens, **7 falhas** — o teste crava `starCosts = [5,15,30,55,90]` e o dado é `[5,15,35,65,110]` (a escada de 30/08); as mesmas antes e depois de 03/10 |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
@@ -212,7 +220,10 @@ jogador. Página nova sem essa linha é bug.
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`texturas_prova.py`** (Python) | 16 de 16 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta (também quando divide o bufferView com o relevo), `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
 | `texturas_abrem.html` | passou (03/10) — 333/333 `.glb` do bundle abrem no three e desenham, 0 erros de GL |
-| **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |
+| **`equilibrio.js`** (Node) | a prova do equilíbrio ([`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md)); medida completa de 03/10: **399 de 436** — perfis 198/198, fusão 119/126 (sobram degraus nos níveis de conferência 16 e 25), duelos em dupla 62 de 84 células em 40–60% (o Minotauro é a maior parte do que sobra); depois da revisão (preço no próprio corpo) os duelos completos dão 60 de 84 células e 21 de 28 médias. Ver §7.1 |
+| `equilibrio_fusao.html` | a mesma conta da fusão no navegador (8 misturas) |
+| `equilibrio_pve.js` (Node) | mostra, não cobra: o calabouço por classe no nível recomendado (docs/EQUILIBRIO.md §6.6) |
+| `regras_equilibrio.js` (Node) | 29 de 29 — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA |
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
@@ -251,30 +262,25 @@ Fora do Git de propósito:
 
 ## 7. O que está em aberto — leia antes de prometer qualquer coisa
 
-### 7.1 O equilíbrio da fusão está quebrado, e o teste antigo mentia
+### 7.1 O equilíbrio: medido, acertado, e o que sobrou
 
-`equilibrio_fusao.html` mostra **18 de 30** duplas dentro de ±20%. Isso **não é
-regressão nova**: a bancada de medição tinha quatro defeitos que sustentavam o
-"30/30" anterior —
+Até 02/10 só a fusão tinha régua (`equilibrio_fusao.html`, "18 de 30 duplas na faixa"), e ela
+media um turno só, com quatro defeitos que já tinham sustentado um "30/30" falso. Desde 03/10
+a bancada `node tests/equilibrio.js` mede **classes, caminhos, fusões e duelos** com a mesma
+régua, determinística, e o documento [`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md) diz as faixas,
+o porquê de cada uma e cada ajuste feito. Em resumo:
 
-1. a fusão era medida com **4 PA** contra 12 dos dois heróis separados;
-2. com área mirando o chão, o teste pegava o **canto do alcance** como alvo, e o
-   bruxo de nível 12 marcava **zero** com os três feitiços de área;
-3. o instantâneo não restaurava estado nem semente — a mesma dupla dava 264 ou
-   335 **só dependendo da ordem** de medição;
-4. media "melhor feitiço repetido", mas 92 das 105 formas só podem ser lançadas
-   uma vez por turno, então a fusão largava 6 dos 10 PA sem usar.
+- a medida achou **regras erradas**, não só números: o feitiço misto (efeito a favor E hostil)
+  acertava o lado errado em dezoito formas de fusão, a armadilha do Minotauro caía em cima do
+  próprio muro, e a IA dava valor zero ao muro e ao teleporte — consertados, `VERSAO_REGRAS` 6;
+- nos duelos em dupla com a IA dos dois lados, o **alcance** decidia: o Caçador e o Bruxo
+  venciam 66–80%. Alcance −2 neles (−1 no Xamã) e uma potência por classe e degrau;
+- o `PAIR_TUNE` ganhou **nível** (`[k5, k12, k30]`), e a fusão ficou a ±20% em 119 de 126
+  medidas (era 53 de 126 com a régua nova).
 
-Com a bancada corrigida, **6 duplas estão fora por construção**: um coeficiente
-constante multiplica nível 12 e nível 30 juntos, e só cabe em ±20% nos dois se a
-razão entre eles for ≤ 1,5. Nessas seis vai de **1,52 a 2,90**, e a inclinação
-**troca de sinal** entre elas — nenhum valor global resolve.
-
-As saídas honestas: dar ao `PAIR_TUNE` uma **dimensão de nível** (medindo num
-terceiro nível, para não virar ajuste exato a dois pontos), ou tratar como
-**conteúdo** — as formas de fusão têm bem menos área grande no topo que os
-feitiços de classe (`circle:3` aparece 2 vezes em 105 formas contra 13 nos
-feitiços).
+**O que ficou aberto** (§6 do documento): o **Minotauro** na régua da IA (35–44%; números
+sozinhos não o trazem — decisão do dono), degraus de fusão no 16 e no 25, e a **paridade de 5
+níveis** do PvP (o lado mais alto vence 65–80%).
 
 ### 7.2 O elenco é chibi, e isso tem chão
 

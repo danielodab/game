@@ -201,8 +201,19 @@ var JOGO = (typeof window !== 'undefined')
    *       anda esbarra nele e para antes; raio, veneno, empurrão e cia. também
    *       tiram das sombras, a armadilha do dono não; pisar em armadilha do
    *       outro lado PARA o passo na casa dela, e a carga dela não pega mais o
-   *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga */
-  Engine.VERSAO_REGRAS = 5;
+   *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga
+   *   6 — 03/10: o EQUILÍBRIO (docs/EQUILIBRIO.md). O feitiço misto (efeito a
+   *       favor E hostil) manda o hostil só no outro lado e o a favor só no
+   *       lado de quem lança (feiticoMisto); a armadilha do lance que muralhou
+   *       a casa vai para a vizinha livre; dano, cura, escudo e alcance das
+   *       classes mudaram (spells.js), as formas Sentinela/Vigia/Guarnição,
+   *       Bote e Encontrão também (fusions.js), o PAIR_TUNE ganhou nível
+   *       (fusion.js) e a IA passou a valorar muro e teleporte (ai.js); e o
+   *       feitiço de alvo próprio e casa única cobra o preço hostil de quem
+   *       lança (precoProprio: a queimadura do Sangue Fervente e das Veias em
+   *       Chamas nunca pegava) — uma sala aberta antes termina diferente se
+   *       refeita aqui */
+  Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -2690,6 +2701,50 @@ var JOGO = (typeof window !== 'undefined')
    * e o lance {a:'po'} que chegar de uma página velha ou forjada é recusado pelo Game
    * (executa) e derruba a sala no juiz (servidor/juiz/sala.js). */
 
+  /* O FEITIÇO MISTO (03/10, a bancada do equilíbrio — docs/EQUILIBRIO.md §3).
+   *
+   * Feitiço de classe segue a convenção de spells.js: área que fere carrega
+   * SÓ efeito contra o inimigo, e o bônus próprio mora num feitiço de 'self'.
+   * As formas de FUSÃO não seguem — e de propósito: "área que fere inimigo e
+   * cura aliado dentro dela" é o desenho de meia tabela de duplas
+   * (docs/CLASSES_V3.md §4). O motor aplicava cada efeito em QUEM estivesse na
+   * área, de qualquer lado, e a medida achou o estrago: o Contrapeso dava
+   * escudo e fixação ao inimigo que apanhava; o Hospício e a Botica feriam os
+   * aliados que deviam curar; o Recuo e o Rastro davam esquiva e passo ao ALVO
+   * do golpe; e a Sentinela cravava o ídolo e o matava no mesmo gesto (o dano
+   * da cravada caía na casa do recém-nascido). Dezoito formas, e o PAIR_TUNE
+   * de 3,83 do Muro Vivo existia para tapar isso.
+   *
+   * A regra, no mesmo espírito da invisibilidade de 22/09 ("no feitiço que
+   * fere, quem some é o conjurador, esteja ele na área ou não"): num feitiço
+   * que tem efeito A FAVOR (cura, escudo, regeneração, bênção ou resistência
+   * positiva, reflexo, limpeza, invocação) E efeito HOSTIL, o hostil só pega o
+   * outro lado, e o a favor só pega o lado de quem lança — e quem lança sempre,
+   * esteja ou não na área. Feitiço só hostil continua com fogo amigo (a área do
+   * Bruxo queima o parceiro, como sempre); feitiço só a favor continua pegando
+   * quem estiver na área. Monstro, pet e invocação não têm feitiço misto
+   * (medido), então o PvE dos monstros não muda. */
+  var EF_A_FAVOR = { heal: 1, shield: 1, regen: 1, reflect: 1, cleanse: 1, summon: 1 };
+  var EF_HOSTIL = { damage: 1, poison: 1, root: 1, push: 1, pull: 1, mark: 1,
+                    detonateMarks: 1, dispelShield: 1, chain: 1 };
+  function efeitoAFavor(ef) {
+    return !!ef && (!!EF_A_FAVOR[ef.type] || ((ef.type === 'buff' || ef.type === 'resist') && ef.value > 0));
+  }
+  function efeitoHostil(ef) {
+    return !!ef && (!!EF_HOSTIL[ef.type] || ((ef.type === 'buff' || ef.type === 'resist') && ef.value < 0));
+  }
+  function feiticoMisto(spell) {
+    var efs = sEffects(spell), bom = false, mau = false;
+    for (var i = 0; i < efs.length; i++) {
+      if (efeitoAFavor(efs[i])) bom = true;
+      if (efeitoHostil(efs[i])) mau = true;
+    }
+    return bom && mau;
+  }
+  Engine.feiticoMisto = feiticoMisto;
+  Engine.efeitoAFavor = efeitoAFavor;
+  Engine.efeitoHostil = efeitoHostil;
+
   function applyEffects(state, caster, spell, x, y, opts) {
     opts = opts || {};
     var cx = opts.casterX != null ? opts.casterX : caster.x;
@@ -2715,6 +2770,22 @@ var JOGO = (typeof window !== 'undefined')
     }
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
+    /* O PREÇO NO PRÓPRIO CORPO (03/10, a revisão do equilíbrio). O Sangue
+     * Fervente (sumo-fogo-15) e as Veias em Chamas (espadachim-fogo-12) dão
+     * poder "ao preço de queimadura própria por turno": alvo próprio, casa
+     * única, um bônus e um veneno. Só que o efeito hostil nunca pega quem
+     * lança (hostileTargets) e a casa única É a de quem lança — a queimadura
+     * nunca pegou ninguém desde a v2, e os dois eram bônus de graça (a
+     * bancada do equilíbrio mediu os caminhos de Fogo do Bárbaro e do Ladino
+     * sem o preço). No feitiço de alvo próprio cuja área é SÓ a casa de quem
+     * lança, o efeito hostil é o preço e cai nele. A área em volta do corpo
+     * (o Rodopio, o Halo, a Fortaleza) continua sem ferir quem lança: ali
+     * as casas da área não incluem a dele, ou incluem outras. */
+    var precoProprio = !opts.selfHarm && spell.targetSide === 'self' && tiles.length === 1 &&
+      tiles[0].x === caster.x && tiles[0].y === caster.y;
+    // armadilha e evento de chão (selfHarm) têm a vítima como "conjurador":
+    // ali não há lado a respeitar; e o preço próprio não é feitiço misto
+    var misto = !opts.selfHarm && !precoProprio && feiticoMisto(spell);
     // v2.2/v2.3: calculado UMA vez por conjuração — depende do conjurador e do
     // feitiço, não do alvo. Inclui buffs, bônus elemental e fúria da sala.
     var castPower = Engine.castPower(state, caster, spell);
@@ -2733,7 +2804,23 @@ var JOGO = (typeof window !== 'undefined')
     }
     // efeitos ofensivos não atingem o conjurador — exceto armadilha/evento de
     // terreno, em que o "conjurador" é justamente a vítima (selfHarm).
-    function hostileTargets() { return unitsInTiles(!!opts.selfHarm); }
+    // 03/10: no feitiço misto, também não atingem o lado dele.
+    function hostileTargets() {
+      var l = unitsInTiles(!!opts.selfHarm || precoProprio);
+      return misto ? l.filter(function (w) { return w.side !== caster.side; }) : l;
+    }
+    // 03/10: o efeito a favor de um feitiço misto vai para o lado de quem
+    // lança, e para quem lança sempre (ver feiticoMisto)
+    function favorTargets() {
+      var l = unitsInTiles(true);
+      if (!misto) return l;
+      l = l.filter(function (w) { return w.side === caster.side; });
+      if (caster.alive && !caster.offBoard && l.indexOf(caster) < 0) l.push(caster);
+      return l;
+    }
+    // buff e resistência valem pelos dois lados: o sinal decide
+    function porSinal(ef) { return (misto && ef.value < 0) ? hostileTargets() : favorTargets(); }
+    var muroDesteLance = {};   // 03/10: as casas que este lance acabou de murar (a armadilha vai ao pé delas)
 
     for (var e = 0; e < effects.length; e++) {
       if (state.phase !== 'playing') break;
@@ -2761,14 +2848,14 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'heal':
-          targets = unitsInTiles(true);
+          targets = favorTargets();
           for (t = 0; t < targets.length; t++) {
             applyHeal(state, targets[t], Math.round(rollInt(state, eff.min, eff.max) * petMult));
           }
           break;
 
         case 'shield':
-          targets = unitsInTiles(true);
+          targets = favorTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var vSh = Math.round(eff.value * petMult);
@@ -2782,7 +2869,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'buff':
-          targets = unitsInTiles(true);
+          targets = porSinal(eff);
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var vBf = Math.round(eff.value * petMult);
@@ -2798,7 +2885,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'resist':
-          targets = unitsInTiles(true);
+          targets = porSinal(eff);
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             applied = { type: 'resist', element: eff.element, value: eff.value,
@@ -2824,7 +2911,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'regen':
-          targets = unitsInTiles(true);
+          targets = favorTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             applied = { type: 'regen', min: eff.min, max: eff.max,
@@ -3022,6 +3109,7 @@ var JOGO = (typeof window !== 'undefined')
             cel.type = 'wall';
             cel.deco = false;
             cel.invocado = true;
+            muroDesteLance[wx2 + ',' + wy2] = true;
             emit({ type: 'wallRaised', uid: caster.uid, x: wx2, y: wy2,
                    element: elMuro, duration: durMuro });
             subiram++;
@@ -3047,9 +3135,29 @@ var JOGO = (typeof window !== 'undefined')
            * depois, e essa pessoa nao vai desconfiar do engine — vai desconfiar
            * do proprio feitico. */
           var nArm = 0;
+          /* AO PÉ DO MURO (03/10). "Muro que deixa brasa acesa em volta", "deixa o
+           * laço armado ao pé": o feitiço ergue o muro na casa e arma a
+           * armadilha no MESMO lance — e a armadilha caía na casa que acabara de
+           * virar pedra (isFloor falso) e sumia. Os três feitiços de nível 5 do
+           * Minotauro e a Guarita do Muro Vivo nunca armaram nada. Agora a casa
+           * murada por ESTE lance passa a armadilha para a primeira vizinha de
+           * chão livre (norte, sul, oeste, leste — ordem fixa, o juiz refaz
+           * igual), sem repetir casa. */
+          var usadasArm = {};
           for (var tt = 0; tt < tiles.length; tt++) {
             var tx2 = tiles[tt].x, ty2 = tiles[tt].y;
-            if (!isFloor(state, tx2, ty2)) continue;
+            if (muroDesteLance[tx2 + ',' + ty2]) {
+              var pe = null;
+              for (var dq = 0; dq < DIRS.length && !pe; dq++) {
+                var px2 = tx2 + DIRS[dq][0], py2 = ty2 + DIRS[dq][1];
+                if (!isFloor(state, px2, py2) || usadasArm[px2 + ',' + py2] || Engine.trapsAt(state, px2, py2).length) continue;
+                pe = { x: px2, y: py2 };
+              }
+              if (!pe) continue;
+              tx2 = pe.x; ty2 = pe.y;
+            }
+            if (!isFloor(state, tx2, ty2) || usadasArm[tx2 + ',' + ty2]) continue;
+            usadasArm[tx2 + ',' + ty2] = true;
             var trap = { x: tx2, y: ty2, trapId: eff.trapId, ownerUid: caster.uid,
                          side: caster.side, remaining: eff.duration || 3 };
             state.traps.push(trap);
@@ -3067,7 +3175,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'cleanse':
-          targets = unitsInTiles(true);
+          targets = favorTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             var kinds = eff.kinds || [];
@@ -3084,7 +3192,7 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'reflect':
-          targets = unitsInTiles(true);
+          targets = favorTargets();
           for (t = 0; t < targets.length; t++) {
             u = targets[t];
             applied = { type: 'reflect', pct: eff.pct, duration: eff.duration, sourceUid: caster.uid };
