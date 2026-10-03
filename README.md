@@ -173,6 +173,10 @@ recebe a parte que ajuda (`Engine.feiticoMisto`; `docs/EQUILIBRIO.md` §3). No f
 alvo próprio e casa única, o efeito hostil é o **preço** e cai em quem lança (a queimadura do
 Sangue Fervente e das Veias em Chamas). A prova direta das regras é `node tests/regras_equilibrio.js`.
 
+**PvP ranqueado (03/10).** A Arena (quadro de inscritos, vale coroa) aceita até **3 níveis** entre o
+herói mais forte de cada lado — o servidor confere no desafio e no fechamento. O Campo de PvP (10) e
+a guerra de guilda (10) seguem como estavam.
+
 **Clima** (chuva, vento, tremor) favorece ou prejudica, e é por sala.
 
 ---

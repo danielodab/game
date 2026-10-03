@@ -1732,7 +1732,7 @@ var JOGO = (typeof window !== 'undefined')
   /* O pedido do dono: "na inscrição de pvp onde ele se inscreve na arena para esperar que alguém aceite o
    * desafio... esse ele pré-seleciona as duas classes já e quem vai desafiar consegue ver.. essa inscrição dá
    * ranking na coroa também". Quem se inscreve deixa a dupla PÚBLICA no quadro; quem desafia escolhe um
-   * inscrito (a paridade de 5 níveis e a vida conferidas pelo servidor) e mostra a dele; os dois confirmam em
+   * inscrito (a paridade de 3 níveis e a vida conferidas pelo servidor) e mostra a dele; os dois confirmam em
    * 30 s. Daqui sai o pedido, a consulta do estado a cada CONSULTA_MS SÓ enquanto inscrito ou casado, e a
    * entrega da partida pronta ao Duelo (Duelo.iniciaArena: sem escolha às cegas — as duplas do quadro). Quem
    * entra em batalha, sala ou grupo sai. Sem o jogo servido, sem a conta do site ou sem o relé novo, fica
@@ -1740,7 +1740,10 @@ var JOGO = (typeof window !== 'undefined')
   var Arena = {};
   JOGO.Arena = Arena;
   Arena.CONSULTA_MS = 2500;
-  Arena.PARIDADE = 5;
+  /* 03/10 (o dono): 3 níveis entre os heróis mais fortes de cada lado — eram 5, e a bancada do equilíbrio mediu o
+   * lado 5 acima vencendo 65–80% (docs/EQUILIBRIO.md §6.3). Espelha PARIDADE['arena'] de servidor/grupo.py, que é
+   * quem decide; o quadro devolve o número do servidor em `paridade` e a HUD usa aquele quando chega. */
+  Arena.PARIDADE = 3;
   Arena._agora = function () { return Date.now(); };
   var ast = null;
   function zeraArena() {

@@ -46,7 +46,7 @@ from grupo import PARIDADE, _herois, _nivel_forte
 
 log = logging.getLogger('api')
 
-ARENA_PARIDADE = PARIDADE['arena']   # 5 níveis entre os mais fortes (o dono)
+ARENA_PARIDADE = PARIDADE['arena']   # 3 níveis entre os mais fortes (o dono, 03/10; eram 5)
 ARENA_CONFIRMA_MS = 30000            # o tempo de os dois confirmarem
 ARENA_VISTO_MS = 20000               # o inscrito que não consulta há tanto sai do quadro
 ARENA_PRONTA_MS = 180000             # a partida pronta aparece no estado por tanto (a luta já começou bem antes)

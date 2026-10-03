@@ -1330,9 +1330,12 @@
       sec('arena', 'Arena e Brasa',
         '<p>Há três jeitos de lutar contra outro jogador. O <b>desafio amistoso</b>: toque em alguém na praça — a luta é no mapa da praça, ' +
         'cada um leva 1 ou 2 heróis escolhidos às cegas, e a coroa não muda. A <b>Arena</b>: inscreva os seus dois heróis no quadro de ' +
-        'inscritos (todos veem as classes) e espere um desafio, ou desafie um inscrito com até 5 níveis de diferença; os dois confirmam em 30 s ' +
+        'inscritos (todos veem as classes) e espere um desafio, ou desafie um inscrito com até ' +
+        // 03/10: a Arena é 3 (o dono); o número mora em js/core/grupo.js, que esta página não carrega — o mesmo jeito da guerra
+        num((JG.Arena && JG.Arena.PARIDADE) || 3) + ' níveis de diferença; os dois confirmam em 30 s ' +
         'e a luta é numa sala sorteada dos calabouços — vale coroa. O <b>Campo de PvP</b>: só se entra com a coroa ligada, escolhendo dois ' +
-        'heróis em ordem (o 1º é a aparência, o 2º é a surpresa); lá dentro qualquer um ataca sem aviso quem estiver a até 10 níveis — também vale coroa.</p>' +
+        'heróis em ordem (o 1º é a aparência, o 2º é a surpresa); lá dentro qualquer um ataca sem aviso quem estiver a até ' +
+        num((JG.Duelo && JG.Duelo.PARIDADE_CAMPO) || 10) + ' níveis — também vale coroa.</p>' +
         '<p class="apoio">O tabuleiro do desafio amistoso tem mapa próprio: ' + link('tabuleiro', 'praca', 'A Praça') + '.</p>' +
         '<p>A pontuação é a Brasa: todo mundo começa com ' + SITE.num(Br.INICIAL) +
         ', ganhar de quem vale menos paga pouco, perder devolve o que se subiu, e ninguém cai abaixo de ' + SITE.num(Br.PISO) + '. A cada ' + num(Br.TEMPORADA_DIAS) +

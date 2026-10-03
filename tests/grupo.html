@@ -1162,12 +1162,12 @@ JOGO.DATA = {
       Du._reset(); Aq._reset();
       respostas['/api/arena/desafiar'] = { ok: true, status: 200, agoraMs: 1000, fase: 'casada', papel: 'desafiante', lado: 'B', prazoMs: 31000,
         herois: ['arqueiro', 'sumo'], classes: [], nivel: 12, adversario: { conta: 33, nome: 'Cris', nivel: 11, brasa: 1000, herois: ['x', 'y'], classes: [] } };
-      respostas['/api/arena/quadro'] = { ok: true, status: 200, agoraMs: 2000, paridade: 5,
+      respostas['/api/arena/quadro'] = { ok: true, status: 200, agoraMs: 2000, paridade: 3,
         inscritos: [{ conta: 33, nome: 'Cris', nivel: 11, brasa: 1000, classes: classesQ, desdeMs: 1500, eu: false }] };
       return Aq.quadro();
     }).then(function (q) {
       check('arena · o quadro: os inscritos com as classes e o tempo no relógio daqui', q.ok && q.inscritos.length === 1 && q.inscritos[0].classes.length === 2 &&
-            q.inscritos[0].desdeMs === 1500 - (2000 - 3600) && q.paridade === 5, JSON.stringify(q));
+            q.inscritos[0].desdeMs === 1500 - (2000 - 3600) && q.paridade === 3 && Aq.PARIDADE === 3, JSON.stringify(q));
       return Aq.desafiar(33, ['arqueiro', 'sumo']);
     }).then(function (r4) {
       var pd = pedidos[pedidos.length - 1];

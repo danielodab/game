@@ -1,7 +1,7 @@
 # O equilíbrio — classes, caminhos, fusões e duelos
 
 > Pedido do dono (02/10/2026): *"isso é importantíssimo. equilibre todas as classes e
-> fusões"* — vale para PvE e para PvP (paridade de 5 níveis).
+> fusões"* — vale para PvE e para PvP (paridade de 5 níveis na época; 3 desde 03/10, §6.3).
 >
 > Este documento diz **o que se mede, com que régua, qual é a faixa-alvo de cada coisa e
 > por quê**, e registra cada ajuste feito nos dados com o motivo. A prova que cobra tudo
@@ -486,6 +486,15 @@ dois lados trocados, 84 jogos por faixa): o lado 5 níveis acima vence **73%** (
 **80%** (17 contra 12), **65%** (25 contra 20) e **76%** (30 contra 25). Cinco níveis são uma
 vantagem grande. Se o dono quiser o PvP ranqueado mais justo: paridade de 3, ou o lado mais
 alto descer ao nível do mais baixo durante a luta.
+
+**Decidido (03/10, o dono): a paridade do PvP RANQUEADO caiu para 3 níveis** — a Arena (o quadro de
+inscritos e o duelo que vale coroa: `PARIDADE['arena']` em `servidor/grupo.py`, que o
+`/api/arena/desafiar` e o fechamento do duelo conferem nos estados do servidor; `Arena.PARIDADE` no
+cliente só espelha, e a tela usa o número que o quadro devolve). O **Campo de PvP** (10, regra do
+próprio dono: lá se ataca sem aviso quem passa) e a **guerra de guilda** (10) não mudaram. Provas:
+`tests/arena_api.py` (desafiar com 3 de diferença vale, com 4 não — dos dois lados),
+`tests/grupo_duelo_api.py` (o fechamento ranqueia com 3 e não com 4, mesmo com a partida pronta) e
+`tests/pvp_hud.html` (o quadro apaga quem está 4 acima e diz "até 3 níveis").
 
 **6.4 A régua é a IA.** Tudo o que §5 fez nas classes foi medido com a IA do jogo dos dois
 lados (§1.5). Os ajustes grandes — o Ladino e o Bárbaro com até +40% de dano, o Caçador e o

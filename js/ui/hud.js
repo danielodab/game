@@ -12574,7 +12574,7 @@ var JOGO = (typeof window !== 'undefined')
     var m = r.motivo;
     if (m === 'vida-zero') return 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.';
     if (m === 'vida-zero-alvo') return 'Um herói dessa inscrição está sem vida agora.';
-    if (m === 'paridade') return 'A diferença de nível entre os heróis mais fortes passa de 5: não vale.';
+    if (m === 'paridade') return 'A diferença de nível entre os heróis mais fortes passa de ' + paridadeArena() + ': não vale.';
     if (m === 'sem-inscricao') return 'Essa inscrição saiu do quadro.';
     if (m === 'inscrito') return 'Saia da sua inscrição antes de desafiar outra.';
     if (m === 'casada') return 'Você já tem uma partida da Arena em andamento.';
@@ -12618,10 +12618,16 @@ var JOGO = (typeof window !== 'undefined')
         });
       } });
   }
-  var quadroArena = { lista: null, erro: null, pedindo: false, t: 0 };
+  var quadroArena = { lista: null, erro: null, pedindo: false, t: 0, paridade: null };
+  /* 03/10 (o dono): a paridade da Arena é 3 níveis. Quem decide é o servidor (PARIDADE['arena'] em
+   * servidor/grupo.py): o número que o quadro devolveu vale primeiro, o do cliente (Arena.PARIDADE) até ele
+   * chegar — nenhum texto da tela crava o número. */
+  function paridadeArena() {
+    return quadroArena.paridade || (Ar() && Ar().PARIDADE) || 3;
+  }
   function sheetArenaQuadro(semPedir) {
     var A = Ar();
-    var body = sheetShell('Quadro da Arena', 'Quem espera desafio. Vale coroa: até 5 níveis entre os heróis mais fortes de cada lado.');
+    var body = sheetShell('Quadro da Arena', 'Quem espera desafio. Vale coroa: até ' + paridadeArena() + ' níveis entre os heróis mais fortes de cada lado.');
     sheetName = 'arenaQuadro';
     var caixa = el('div', 'ms-caixa arena-quadro');
     body.appendChild(caixa);
@@ -12645,13 +12651,16 @@ var JOGO = (typeof window !== 'undefined')
     quadroArena.t = Date.now();
     A.quadro().then(function (r) {
       quadroArena.pedindo = false;
-      if (r && r.ok) { quadroArena.lista = r.inscritos; quadroArena.erro = null; }
+      if (r && r.ok) {
+        quadroArena.lista = r.inscritos; quadroArena.erro = null;
+        if (typeof r.paridade === 'number' && r.paridade > 0) quadroArena.paridade = r.paridade;
+      }
       else quadroArena.erro = (r && r.erro) || 'o servidor não respondeu';
       if (sheetName === 'arenaQuadro') sheetArenaQuadro(true);
     });
   }
   function linhaQuadro(x, meu, e) {
-    var par = (Ar() && Ar().PARIDADE) || 5;
+    var par = paridadeArena();
     var fora = !x.eu && Math.abs(meu - x.nivel) > par;
     var ln = el('div', 'aq-linha' + (x.eu ? ' is-eu' : '') + (fora ? ' is-fora' : ''));
     ln.setAttribute('data-conta', String(x.conta));
@@ -12680,7 +12689,7 @@ var JOGO = (typeof window !== 'undefined')
       inicial: selHeroes.slice(),
       aoEscolher: function (ids) {
         var nv = forteDeIds(ids);
-        if (Math.abs(nv - x.nivel) > ((Ar() && Ar().PARIDADE) || 5)) {
+        if (Math.abs(nv - x.nivel) > paridadeArena()) {
           toast('Com essa dupla (nv ' + nv + ') a diferença para nv ' + x.nivel + ' passa do limite.');
           return null;
         }

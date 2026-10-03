@@ -6,7 +6,8 @@
 
 Sobe o juiz (servidor/juiz/juiz.js) e a API com --juiz num banco descartável. Cobre: inscrever (os heróis da
 conta, os DOIS quando a conta tem dois, em ordem; nenhum a 0 PV; o nível do mais forte no estado do servidor),
-o quadro público (as classes de cada inscrito), desafiar com diferença de nível até 5 (e não com 6), a vida do
+o quadro público (as classes de cada inscrito), desafiar com diferença de nível até 3 (e não com 4 — o dono baixou
+de 5 para 3 em 03/10), a vida do
 inscrito, confirmar (os dois = pronta com did; o inscrito é o lado A), recusar e o prazo de 30 s (o inscrito
 volta ao quadro com o lugar de antes, quem desafiou fica livre), sair, e a inscrição parada que some do quadro.
 Os processos rodam com prioridade abaixo do normal (a máquina é dividida com quem joga).
@@ -159,7 +160,8 @@ class ProvaDaArena(unittest.TestCase):
                          'inscrever de novo troca a dupla sem perder o lugar')
         q = self.quadro(ana)
         self.assertEqual(len(q['inscritos']), 1)
-        self.assertEqual((q['paridade'], q['inscritos'][0]['eu'], q['inscritos'][0]['nome']), (5, True, ana.conta['nome']))
+        self.assertEqual((q['paridade'], q['inscritos'][0]['eu'], q['inscritos'][0]['nome']), (3, True, ana.conta['nome']),
+                         'o quadro diz a paridade de agora: 3 níveis (o dono, 03/10)')
         status, r = ana.pede('POST', '/api/arena/sair', {})
         self.assertEqual((status, r['fase']), (200, 'livre'))
         self.assertEqual((self.estado(ana)['fase'], self.quadro(ana)['inscritos']), ('livre', []))
@@ -189,8 +191,8 @@ class ProvaDaArena(unittest.TestCase):
     def test_03_quadro_e_paridade(self):
         self.limpa()
         ana = self.conta('Ana Nivel', {'sumo': 20, 'curandeiro': 3})
-        bia = self.conta('Bia Nivel', {'sumo': 14, 'curandeiro': 14})       # 6 abaixo: não desafia
-        cris = self.conta('Cris Nivel', {'sumo': 3, 'curandeiro': 15})      # 5 abaixo: desafia
+        bia = self.conta('Bia Nivel', {'sumo': 16, 'curandeiro': 16})       # 4 abaixo: não desafia (03/10: eram 6)
+        cris = self.conta('Cris Nivel', {'sumo': 3, 'curandeiro': 17})      # 3 abaixo: desafia (03/10: eram 5)
         self.assertEqual(self.inscreve(ana)[0], 200)
         q = self.quadro(bia)
         linha = q['inscritos'][0]
@@ -199,7 +201,7 @@ class ProvaDaArena(unittest.TestCase):
         self.assertEqual(linha['classes'], [{'classId': 'sumo', 'nivel': 20}, {'classId': 'curandeiro', 'nivel': 3}],
                          'quem vai desafiar vê as duas classes do inscrito')
         status, r = self.desafia(bia, ana)
-        self.assertEqual((status, r.get('motivo'), r.get('nivel'), r.get('nivelDele')), (409, 'paridade', 14, 20), r)
+        self.assertEqual((status, r.get('motivo'), r.get('nivel'), r.get('nivelDele')), (409, 'paridade', 16, 20), r)
         self.assertEqual(self.desafia(ana, ana)[0], 400, 'a própria inscrição não se desafia')
         self.assertEqual(self.desafia(bia, cris)[1].get('motivo'), 'sem-inscricao')
         status, r = self.desafia(cris, ana, ['curandeiro', 'sumo'])
@@ -209,7 +211,7 @@ class ProvaDaArena(unittest.TestCase):
         self.assertEqual((ea['fase'], ea['papel'], ea['lado'], ea['confirmei'], ea['eleConfirmou']),
                          ('casada', 'inscrito', 'A', False, False))
         self.assertEqual((ea['adversario']['nome'], ea['adversario']['nivel'], ea['adversario']['herois']),
-                         (cris.conta['nome'], 15, ['curandeiro', 'sumo']), 'as classes de quem desafia aparecem ao inscrito')
+                         (cris.conta['nome'], 17, ['curandeiro', 'sumo']), 'as classes de quem desafia aparecem ao inscrito')
         self.assertTrue(0 < ea['prazoMs'] - ea['agoraMs'] <= 30000, ea)
         self.assertNotIn('did', ea, 'o did só aparece com a partida pronta')
         self.assertEqual(self.quadro(bia)['inscritos'], [], 'o inscrito desafiado sai do quadro')
@@ -219,6 +221,13 @@ class ProvaDaArena(unittest.TestCase):
         dani = self.conta('Dani Nivel', {'sumo': 14, 'curandeiro': 14})
         self.inscreve(dani)
         self.assertEqual(self.desafia(bia, dani)[1].get('motivo'), 'inscrito')
+        # a borda vale para os dois lados: quem está 4 ACIMA do inscrito também não desafia, 3 acima desafia
+        eva = self.conta('Eva Nivel', {'sumo': 18, 'curandeiro': 2})
+        status, r = self.desafia(eva, dani)
+        self.assertEqual((status, r.get('motivo'), r.get('nivel'), r.get('nivelDele')), (409, 'paridade', 18, 14), r)
+        fran = self.conta('Fran Nivel', {'sumo': 17, 'curandeiro': 2})
+        status, r = self.desafia(fran, dani)
+        self.assertEqual((status, r.get('fase')), (200, 'casada'), r)
 
     def test_04_confirmar_os_dois_pronta(self):
         self.limpa()

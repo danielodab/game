@@ -62,10 +62,13 @@ TETO = {'fase': 'teto', 'venc': None, 'ranqueado': False, 'motivo': 'teto'}
 #   arena    a fila da Arena (servidor/arena.py): ranqueia só com a partida pronta desse did entre essas duas contas
 #   campo    o Campo de PvP: ranqueia com a paridade larga
 # A PARIDADE é a diferença de nível entre o herói MAIS FORTE de cada lado, lida nos estados do SERVIDOR (o dono: até
-# 5 na Arena, 10 no Campo). Sem `modo` (a página de antes do deploy) o duelo vale como amistoso.
+# 3 na Arena, 10 no Campo). Sem `modo` (a página de antes do deploy) o duelo vale como amistoso.
+# 03/10, O DONO BAIXOU A ARENA DE 5 PARA 3: a bancada do equilíbrio (docs/EQUILIBRIO.md §6.3) mediu o lado 5 níveis
+# acima vencendo 65–80% — cinco níveis decidiam a coroa antes da luta. O Campo (10, regra dele: lá se ataca sem
+# aviso quem passa) e a guerra de guilda (GUERRA_PARIDADE, 10) ficam como estão.
 MODOS_DUELO = ('desafio', 'arena', 'campo')
 MAPA_DESAFIO = 'praca'
-PARIDADE = {'arena': 5, 'campo': 10}
+PARIDADE = {'arena': 3, 'campo': 10}
 RE_DONO = re.compile(r'^[\x21-\x7e]{1,64}$')
 RE_DID = re.compile(r'^[A-Za-z0-9_:-]{8,64}$')
 NAO_CONFERIDA = 'a sala em grupo teve uma sincronização por foto e não pôde ser conferida'
