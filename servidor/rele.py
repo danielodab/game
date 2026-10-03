@@ -1735,12 +1735,14 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                         # Os textos novos passam antes pelo juiz da regra, com
                         # orçamento e fila (o laço não para por eles); o
                         # carimba só lê os veredictos. Re-serializa se mudou
+                        anonimo = par.conta is None and VERIFICADOR.caminho is not None   # 03/10: fala sem conta = nome de troca
                         if m['t'] in rele_ident.JULGADOS:
-                            await rele_ident.prepara(m, par.conta, par.freio_nome)
+                            await rele_ident.prepara(m, par.conta, par.freio_nome, anonimo=anonimo)
                         dirigido = m['t'] in DIRIGIDOS
                         if dirigido:
                             m['cx'] = par.cx             # 11/09: a conexão que mandou, por cima do que o cliente pôs
-                        novo = rele_ident.carimba(m, par.conta, par.freio_nome, time.monotonic(), so_cache=True)
+                        novo = rele_ident.carimba(m, par.conta, par.freio_nome, time.monotonic(), so_cache=True,
+                                                  anonimo=anonimo)
                         if novo is not None or dirigido or m['t'] == 'gchat':   # o gchat sempre sai refeito (_gchat)
                             msg = json.dumps(m, separators=(',', ':'))
             except Exception as e:

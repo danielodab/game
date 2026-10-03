@@ -142,6 +142,11 @@ CLASSE_MESTRE = 'gm'          # o corpo do Mestre do Fundo, o Cavaleiro Negro (j
 CLASSE_TROCA = 'sumo'         # o que veste quem não é o Mestre (o mesmo padrão do rede.js)
 COM_NOME = ('oi', 'eco', 'chat', 'sussurro', 'gchat')   # os envelopes que levam o nome de quem manda (o sussurro: 11/09; o chat da guilda: 13/09)
 COM_PERFIL = ('oi', 'eco')            # os que levam título, classe, resumo (guilda) e nuvem
+# 03/10 (revisão): com o banco ligado, a fala da conexão SEM conta conferida sai
+# com o nome de troca ('Aventureiro-xxxx'), nunca com o nome que o cliente
+# escolheu — senão a conta banida ou silenciada voltava a falar com o próprio
+# nome (ou com o de outro jogador) abrindo uma conexão sem ident
+FALAS_ANONIMAS = ('chat', 'sussurro')
 JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro', 'gchat')   # os que levam texto para a regra (o relé só chama o prepara neles)
 
 SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
@@ -598,7 +603,7 @@ def textos_a_julgar(m, conta):
     return fora
 
 
-async def prepara(m, conta, freio=None, juiz=None):
+async def prepara(m, conta, freio=None, juiz=None, anonimo=False):
     """Julga ANTES do carimbo, pelo Juiz, os textos novos do envelope — o
     caminho do relé: o laço segue livre enquanto isso, e o carimba depois
     (com so_cache=True) só lê os veredictos. O texto novo gasta uma ficha do
@@ -616,19 +621,21 @@ async def prepara(m, conta, freio=None, juiz=None):
         if not await j.pede(texto, prioridade):
             return
     nome = m.get('nome') if m.get('t') in COM_NOME else None
-    if nome is not None and nome != '' and reservado(nome, so_cache=True):
+    if (anonimo and m.get('t') in FALAS_ANONIMAS) or (nome is not None and nome != '' and reservado(nome, so_cache=True)):
         candidato = candidato_de_troca(m.get('de'))   # o nome de troca também passa pela regra
         if candidato and candidato not in _VEREDITOS:
             await j.pede(candidato, True)
 
 
-def carimba(m, conta, freio=None, agora=None, so_cache=False):
+def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
     """O envelope `m` (o dict já aberto; mexido no lugar) como deve sair do
     relé, ou None quando sai como chegou — aí o relé repassa o texto original,
     sem re-serializar. `conta` é a conta CONFERIDA desta conexão ({'id',
     'nome', 'gm'}) ou None; o id da troca de nome é o `de` do envelope (o relé
     já garantiu que é o da conexão). `so_cache`: não julga nada aqui — o que
-    o prepara não julgou fecha por padrão."""
+    o prepara não julgou fecha por padrão. `anonimo`: a conexão não tem conta
+    conferida e o banco está ligado — a fala (FALAS_ANONIMAS) sai com o nome
+    de troca, seja qual for o nome que veio."""
     mudou = False
     if 'mestre' in m:                            # a marca é do relé, nunca do cliente
         del m['mestre']
@@ -652,7 +659,12 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False):
     def cai(s):
         return reservado(s, freio, agora, so_cache)
 
-    if t in COM_NOME and 'nome' in m and cai(m['nome']):
+    if anonimo and conta is None and t in FALAS_ANONIMAS:
+        troca = nome_de_troca(m.get('de'), so_cache)
+        if m.get('nome') != troca:
+            m['nome'] = troca
+            mudou = True
+    elif t in COM_NOME and 'nome' in m and cai(m['nome']):
         m['nome'] = nome_de_troca(m.get('de'), so_cache)
         mudou = True
     if t in COM_PERFIL:

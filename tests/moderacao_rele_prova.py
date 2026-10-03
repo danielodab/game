@@ -20,7 +20,8 @@ Api), como o painel os grava:
   - a sessão só revogada (sem banimento) NÃO ouve 'banido': segue a regra antiga;
   - o SILENCIADO: chat, sussurro e /g não chegam a ninguém; quem falou ouve
     {t:'silenciado', silencio}; desfeito o silêncio, a fala volta a sair;
-  - quem não está silenciado e a conexão sem conta falam como sempre.
+  - quem não está silenciado e a conexão sem conta falam como sempre — a sem
+    conta, com o nome de troca ('Aventureiro-xxxx'), nunca com o que escolheu.
 """
 import json
 import os
@@ -206,6 +207,16 @@ def prova_ao_vivo(a, banco, contas):
         oe = junta(we, 0.6)
         check(R + 'quem não está silenciado (com conta ou sem) fala como sempre — e a silenciada ouve',
               sorted(x['texto'] for x in do_tipo(oe, 'chat')) == ['bom dia', 'oi gente'], repr(oe))   # a ordem é da thread do banco
+        # 03/10 (revisão): a conexão sem conta não fala com o nome que escolheu — senão a conta
+        # silenciada ou banida voltava com o PRÓPRIO nome (ou com o de outro jogador)
+        manda(wn, t='chat', de='janon001', nome='Prova Fabio', texto='sou o fabio')
+        manda(wn, t='sussurro', de='janon001', para='jfab0002', nome='Prova Eva', texto='psiu, sou a eva')
+        of = junta(wf, 0.6)
+        falas = [x for x in of if isinstance(x, dict) and x.get('de') == 'janon001' and x.get('t') in ('chat', 'sussurro')
+                 and x.get('texto') in ('sou o fabio', 'psiu, sou a eva')]
+        check(R + 'sem conta: o chat e o sussurro saem com o nome de troca, nunca com o nome escolhido',
+              len(falas) == 2 and all(x['nome'] == 'Aventureiro-n001' and 'nuvem' not in x for x in falas)
+              and sorted(x['t'] for x in falas) == ['chat', 'sussurro'], repr(of))
         a.mestre_dessilenciar(m, {'conta': eva})
         time.sleep(0.7)                               # o cache do silêncio (encurtado para 0,5 s) vence
         manda(we, t='chat', de='jeva0001', nome='Eva', texto='voltei')

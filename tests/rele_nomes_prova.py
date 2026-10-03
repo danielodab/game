@@ -890,7 +890,9 @@ def _prova_banco_ausente(R, pasta, contas):
         r = recebe(w, 3)
         cru = '{"t":"chat","de":"jausente","nome":"Rui","texto":"ainda de pé"}'
         w.send(cru)
-        chegou = cru in crus(obs, 0.5)
+        # 03/10: com --banco, a fala sem conta conferida sai com o nome de troca (rele_ident.FALAS_ANONIMAS)
+        chegou = any(c.get('texto') == 'ainda de pé' and c.get('nome') == 'Aventureiro-ente'
+                     for c in (json.loads(x) for x in crus(obs, 0.5)))
         vivo = rl.proc.poll() is None
     finally:
         texto_log = rl.fecha()

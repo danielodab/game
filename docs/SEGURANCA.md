@@ -732,8 +732,11 @@ registrada**. O código do servidor mora em `servidor/moderacao.py` (mixin da Ap
 A mesma forma, em `moderacao_silencios`, sem chave geral: vale pela linha. Quem para a fala é o **relé**: o chat da
 praça, o sussurro e o `/g` da conta silenciada não saem, e quem falou ouve `{t:'silenciado', silencio}` (pagando o
 balde do chat). O relé relê o silêncio a cada 15 s (`rele.SILENCIO_S`); banco que não responde não cala ninguém.
-Limite conhecido: o cliente que não se identifica na praça fala como anônimo ("Aventureiro"), e o silêncio é por
-conta — o `cala` por endereço de cada jogador (11/09) continua sendo a defesa contra quem foge da conta.
+O cliente que não se identifica na praça fala como anônimo: com o banco ligado, o chat e o sussurro da conexão sem
+conta conferida saem com o nome de troca (`Aventureiro-xxxx`, as quatro últimas letras do id), seja qual for o nome
+que vieram (`rele_ident.FALAS_ANONIMAS`, 03/10) — senão a conta banida ou silenciada voltava a falar com o próprio
+nome, ou com o de outro jogador, abrindo uma conexão sem ident. Limite conhecido: o silêncio é por conta, e o anônimo
+fala; o `cala` por endereço de cada jogador (11/09) continua sendo a defesa contra quem foge da conta.
 
 ### 10.3 A denúncia
 `POST /api/denuncia {alvo, categoria, texto?, falas?, onde?}` — categorias `ofensa`, `trapaca`, `nome`, `spam`,
