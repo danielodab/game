@@ -887,7 +887,7 @@ var JOGO = (typeof window !== 'undefined')
     // O GAME MASTER (31/08): o botão só EXISTE com a chave do dono virada —
     // é a porta do Mestre e não entra na conta do "menu enxuto"
     if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) {
-      acts.appendChild(btn('⚔ Painel do Mestre', 'btn-gold btn-big', function () {
+      acts.appendChild(btn('⚔ Grimório e Caixa do Mestre', 'btn-gold btn-big', function () {
         openSheet('gm');
       }));
     }
@@ -1272,7 +1272,7 @@ var JOGO = (typeof window !== 'undefined')
     // 12/09: o Painel do Mestre abre daqui, sem voltar ao Menu (também na batalha e na tecla M)
     if (mestreAtivo()) {
       var bGm = btn('⚔ Mestre', 'btn-mini btn-gold hub-gm', function () { alternaPainelMestre(); });
-      bGm.title = 'Painel do Mestre (M)';
+      bGm.title = 'Grimório e Caixa do Mestre (M)';
       acts.insertBefore(bGm, acts.firstChild);
     }
     top.appendChild(acts);
@@ -2658,7 +2658,7 @@ var JOGO = (typeof window !== 'undefined')
     // O PAINEL DO MESTRE no meio da luta (12/09): só existe para o Mestre
     if (mestreAtivo()) {
       bt.gm = btn('⚔', 'bt-gm', function () { alternaPainelMestre(); });
-      bt.gm.title = 'Painel do Mestre (M)';
+      bt.gm.title = 'Grimório e Caixa do Mestre (M)';
       top.appendChild(bt.gm);
     }
 
@@ -5794,6 +5794,17 @@ var JOGO = (typeof window !== 'undefined')
     return (r.semana.fim + 1) * 1000 - agoraSrv;
   }
   function ecoNum(n) { return lojaMilhar(n); }
+  /* 03/10 (revisão): a semana do prêmio pelas datas (de Brasília), não pelo número interno do servidor — um
+   * contador desde 05/01/2026 (servidor/supremo.py EPOCA) que não é a semana do calendário */
+  function ecoDatasDaSemana(w) {
+    var epoca = Date.UTC(2026, 0, 5) / 1000, semana = 7 * 86400, fuso = -3 * 3600;
+    var ini = epoca + w * semana - fuso;
+    function dia(t) {
+      var d = new Date((t + fuso) * 1000);
+      return ('0' + d.getUTCDate()).slice(-2) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2);
+    }
+    return dia(ini) + '–' + dia(ini + semana - 1);
+  }
   function ecoOficial() {
     var A = JOGO.Autoridade;
     return !!safe(function () { return A && A.ligada && A.ligada(); }, false);
@@ -5912,7 +5923,7 @@ var JOGO = (typeof window !== 'undefined')
         } else status.appendChild(el('p', 'eco-linha', 'Você ainda não tem tentativa conferida nesta semana.'));
         bEnt.disabled = !eu.restantes && ecoOficial();
         (eu.premios || []).slice(0, 2).forEach(function (pr) {
-          status.appendChild(el('p', 'eco-linha eco-premio-meu', '🏅 Semana ' + pr.semana + ': ' + pr.posicao + 'º lugar' +
+          status.appendChild(el('p', 'eco-linha eco-premio-meu', '🏅 Semana de ' + ecoDatasDaSemana(pr.semana) + ': ' + pr.posicao + 'º lugar' +
             (pr.titulo ? ' — o título “' + esc(pr.titulo) + '”' : '') + ' (o prêmio chega pela fila de entregas).'));
         });
       } else if (ecoOficial()) {
@@ -9252,7 +9263,8 @@ var JOGO = (typeof window !== 'undefined')
       var lista = el('dl', 'cfg-atalhos');
       [['I', 'abre e fecha o inventário'], ['Esc', 'fecha a ficha aberta'],
        ['Tab', 'anda pelos botões da ficha; Enter ou Espaço aperta']]
-        .concat(mestreAtivo() ? [['M', 'abre o Painel do Mestre']] : [])
+        .concat(mestreAtivo() ? [['M', 'abre o Grimório e a Caixa do Mestre (PA/PP, feitiços, itens, eventos)'],
+                                 ['F9', 'abre o Painel do Mestre (jogadores, denúncias, banimentos, auditoria)']] : [])
         .forEach(function (a) {
           lista.appendChild(el('dt', null, '<kbd class="tecla">' + a[0] + '</kbd>'));
           lista.appendChild(el('dd', null, a[1]));
@@ -9435,7 +9447,7 @@ var JOGO = (typeof window !== 'undefined')
     var acts = el('div', 'confirm-acts');
     acts.appendChild(btn('Voltar', 'btn-ghost', function () { sheetContas(); }));
     var vai = btn('Excluir para sempre', 'btn-warn', function () {
-      if (ocupado || !Sx || !Sx.excluir) return;
+      if (desligado() || !Sx || !Sx.excluir) return;   // 03/10 (revisão): o apagado não dispara
       ocupado = true;
       confere();
       aviso.textContent = 'excluindo…';
@@ -9458,8 +9470,13 @@ var JOGO = (typeof window !== 'undefined')
     });
     acts.appendChild(vai);
     body.appendChild(acts);
+    function desligado() { return ocupado || !nomeConta || nome.value.trim() !== nomeConta || !senha.value; }
+    // 03/10 (revisão): o is-off é só aparência (sem pointer-events: none); o disabled faz o botão apagado não
+    // disparar e o leitor de tela anunciar que está desligado — como o site (site/conta_privacidade.js)
     function confere() {
-      vai.classList.toggle('is-off', ocupado || !nomeConta || nome.value.trim() !== nomeConta || !senha.value);
+      var off = desligado();
+      vai.classList.toggle('is-off', off);
+      vai.disabled = off;
     }
     nome.addEventListener('input', confere);
     senha.addEventListener('input', confere);
@@ -10701,7 +10718,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     busca.addEventListener('input', function () { gmCaixaBusca = busca.value; pinta(); });
     pinta();
-    body.appendChild(btn('Voltar ao Painel do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
+    body.appendChild(btn('Voltar ao Grimório do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
   }
 
   /* OS EVENTOS DO MUNDO (10/09, pedido do dono: "eventos ligados pelo jogo +
@@ -10732,7 +10749,7 @@ var JOGO = (typeof window !== 'undefined')
       'Liga agora, agenda ou põe no calendário de toda semana — vale para todos os jogadores, no jogo e no site.');
     sheetName = 'gmagenda';
     function voltar() {
-      body.appendChild(btn('Voltar ao Painel do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
+      body.appendChild(btn('Voltar ao Grimório do Mestre', 'btn-ghost btn-block', function () { openSheet('gm'); }));
     }
     if (!Ag || !Ag.fator) {
       body.appendChild(el('p', 'inv-dica', 'A agenda do mundo não carregou nesta página.'));
@@ -11049,7 +11066,9 @@ var JOGO = (typeof window !== 'undefined')
   function sheetGM() {
     var GMod = JOGO.GM;
     if (!GMod || !GMod.ativo || !GMod.ativo()) { closeSheet(); return; }
-    var body = sheetShell('Painel do Mestre',
+    // 03/10 (revisão): "Painel do Mestre" é o painel novo por cima de tudo (F9, js/ui/painel_mestre.js) — esta
+    // ficha, a da tecla M, é o grimório e a Caixa, como o painel novo já a chama
+    var body = sheetShell('Grimório e Caixa do Mestre',
       'O mundo é seu. PA/PP à sua palavra, o grimório inteiro à mão, e o cofre sem fundo.');
     sheetName = 'gm';
 

@@ -180,12 +180,13 @@ iframe{width:1280px;height:800px;border:0}</style>
             '; erros ' + JSON.stringify(errosDoJogo));
       if (campos.length !== 2 || !vai) return relata();
       digita(campos[0], Q.nome.toUpperCase()); digita(campos[1], Q.senha);
-      check('com o nome em outra caixa, segue apagado', vai.classList.contains('is-off'));
+      check('com o nome em outra caixa, segue apagado — e desligado de verdade (disabled, 03/10)',
+            vai.classList.contains('is-off') && vai.disabled === true);
       vai.click();
       await espera(300);
       check('o clique no botão apagado não manda nada', !!w.JOGO.Sessao.ativa());
       digita(campos[0], Q.nome);
-      check('o nome exato e a senha acendem o botão', !vai.classList.contains('is-off'));
+      check('o nome exato e a senha acendem o botão', !vai.classList.contains('is-off') && vai.disabled === false);
       vai.click();
       var fim = await ate(function () { var h = d.querySelector('.sheet-head h2'); return h && /Conta excluída/.test(h.textContent); }, 20000);
       check('excluída: a ficha "Conta excluída" aparece', fim, d.querySelector('.sheet-head h2') && d.querySelector('.sheet-head h2').textContent);

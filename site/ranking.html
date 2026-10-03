@@ -260,6 +260,18 @@
    * já fechada, escolhida nas abas. O site só mostra: a posição, o placar e os
    * prêmios são do servidor (servidor/supremo.py). */
   var ecoSemana = null, ecoResp = null;
+  /* 03/10 (revisão): as datas no relógio de Brasília (o fuso de quem olha punha a semana de Manaus começando no
+   * domingo), e a semana pelas datas, não pelo número interno do servidor (um contador desde 05/01/2026 que não é
+   * a semana do calendário). O espelho de servidor/supremo.py: EPOCA, SEMANA_S e FUSO_S */
+  var ECO_EPOCA = Date.UTC(2026, 0, 5) / 1000, ECO_SEMANA = 7 * 86400, ECO_FUSO = -3 * 3600;
+  function ecoDia(t) {
+    var d = new Date((t + ECO_FUSO) * 1000);
+    return ('0' + d.getUTCDate()).slice(-2) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2);
+  }
+  function ecoDatas(w) {
+    var ini = ECO_EPOCA + w * ECO_SEMANA - ECO_FUSO;
+    return ecoDia(ini) + '–' + ecoDia(ini + ECO_SEMANA - 1);
+  }
   function ecoFaixas(fx) {
     document.getElementById('eco-faixas').innerHTML = (fx || []).map(function (f) {
       var partes = [];
@@ -272,15 +284,13 @@
   function ecoDesenha(r) {
     var corpo = document.getElementById('rk-eco');
     var cab = document.getElementById('eco-semana');
-    var ini = new Date(r.semana.inicio * 1000), fim = new Date(r.semana.fim * 1000);
-    var dia = function (d) { return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); };
-    cab.textContent = 'Semana de ' + dia(ini) + ' a ' + dia(fim) + ' · ' +
+    cab.textContent = 'Semana de ' + ecoDia(r.semana.inicio) + ' a ' + ecoDia(r.semana.fim) + ' · ' +
       (r.semana.id === r.atual ? SITE.falta(r.semana.fim + 1, 'fecha em') + ' (domingo, 23:59 de Brasília)'
                                : (r.fechada ? 'fechada — os prêmios já saíram' : 'fechando'));
     var abas = [r.atual].concat((r.semanasFechadas || []).filter(function (w) { return w !== r.atual; }));
     document.getElementById('eco-semanas').innerHTML = abas.slice(0, 6).map(function (w) {
       return '<button type="button" role="tab" data-semana="' + w + '" class="' + (w === r.semana.id ? 'ligada' : '') + '">' +
-        (w === r.atual ? 'esta semana' : 'semana ' + w) + '</button>';
+        (w === r.atual ? 'esta semana' : 'semana de ' + ecoDatas(w)) + '</button>';
     }).join('');
     corpo.innerHTML = '';
     var lista = r.ranking || [];

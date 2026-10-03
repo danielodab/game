@@ -451,8 +451,12 @@ def prova_ranking(abre):
           '7.500' in eco and '6.000' in eco and '★' in eco and 'Bruno' in eco, eco[:120])
     check('ranking (cheia): o nome do placar do Eco passa pelo SITE.esc', '&lt;i&gt;Brava&lt;/i&gt;' in bloco(h, 'tbody', 'rk-eco'))
     check('ranking (cheia): a semana de agora e a fechada em abas, e as faixas com o título',
-          'esta semana' in texto(bloco(h, 'div', 'eco-semanas')) and 'semana 39' in texto(bloco(h, 'div', 'eco-semanas'))
+          'esta semana' in texto(bloco(h, 'div', 'eco-semanas')) and 'semana de 05/10–11/10' in texto(bloco(h, 'div', 'eco-semanas'))
           and 'Voz do Eco' in texto(bloco(h, 'ul', 'eco-faixas')))
+    # 03/10 (revisão): as datas no relógio de Brasília, não no fuso de quem olha
+    ini_br, fim_br = (time.strftime('%d/%m', time.gmtime(SUPREMO_CHEIA['semana'][k] - 3 * 3600)) for k in ('inicio', 'fim'))
+    check('ranking (cheia): a semana do Eco em datas de Brasília', 'Semana de %s a %s' % (ini_br, fim_br) in texto(h),
+          ini_br + ' ' + fim_br)
 
     h = abre('ranking.html', 'cheia', '#classe=bruxo')
     bt = re.search(r'<button[^>]*data-classe="bruxo"[^>]*>', h)

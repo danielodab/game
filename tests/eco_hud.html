@@ -115,7 +115,8 @@
       { posicao: 3, nome: 'Cris', pontos: 3900, dano: 3900, derrubou: false, rodada: 12 }
     ],
     eu: { tentativasHoje: 1, restantes: 2, melhor: { pontos: 4100, dano: 4100, derrubou: false }, posicao: 2,
-          foraDoRanking: false, premios: [], amanhaEm: AGORA + 50000 }
+          foraDoRanking: false, amanhaEm: AGORA + 50000,
+          premios: [{ semana: 38, posicao: 2, faixa: 'podio', pontos: 4100, vintens: 5000, selos: {}, titulo: 'Voz do Eco' }] }
   };
   var pedidos = [];
   function poeSessao() {
@@ -225,6 +226,9 @@
     var st = txt(q1('.eco-status', f));
     check('a semana fecha em… (a contagem regressiva do relógio do servidor)', /A semana fecha em/.test(st), st);
     check('as tentativas de hoje e o melhor com a posição', /2 de 3/.test(st) && /4\.100 pontos/.test(st) && /2º lugar/.test(st), st);
+    // 03/10 (revisão): a semana do prêmio pelas datas de Brasília, não pelo número interno do servidor
+    check('o prêmio diz a semana pelas datas (28/09–04/10), e não "Semana 38"',
+          /Semana de 28\/09–04\/10: 2º lugar/.test(st) && !/Semana 38/.test(st), st);
     check('os 3 primeiros da semana, com a estrela de quem derrubou', qa('.eco-rank-linha', f).length === 3 &&
           !!q1('.eco-rank-linha .eco-nome i', f) && qa('.eco-rank-linha.is-podio', f).length === 3);
     check('as 4 faixas de prêmio, com o título do pódio', qa('.eco-faixa', f).length === 4 && /Voz do Eco/.test(txt(q1('.eco-premios', f))));
