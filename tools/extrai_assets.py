@@ -42,6 +42,11 @@ O QUE ELE ESCREVE
     de base64 da Estufa e 12 MB da Cisterna, alem dos binarios do bundle. A
     tabela e o embutido MENOS as atribuicoes de modelo, entao roda igual.
 
+A TEXTURA (02/10): o relevo e o metal/rugosidade dos modelos ficam em 512 e
+a cor em 1024 — quem reduz e `tools/reduz_texturas.py`, ANTES daqui (ele mexe
+nos embutidos). Este script so avisa quando acha algo acima de 512 fora das
+excecoes; nao reduz sozinho.
+
 USO
 ---
     python tools/extrai_assets.py            # extrai e escreve o manifesto
@@ -275,6 +280,21 @@ def principal(conferir=False):
     total_b64 = 0
     total_bin = 0
     escritos = 0
+    # 02/10: o relevo e o brilho dos modelos ficam em 512 (tools/reduz_texturas.py).
+    # Este e o passo que TODO lote atravessa, entao e aqui que o esquecimento
+    # aparece: so avisa (nao reduz sozinho — mexer nos embutidos e decisao de
+    # quem esta embutindo) e a tests/texturas_prova.py reprova. Sem Pillow, pula
+    # o aviso: o reduz_texturas importa sem ele (o Pillow so entra dentro das
+    # funcoes), entao testar so o `import reduz_texturas` deixava o extrai_assets
+    # — que ate aqui era so biblioteca padrao — morrer com ModuleNotFoundError no
+    # primeiro .glb de uma maquina sem Pillow.
+    try:
+        import reduz_texturas
+        import PIL.Image  # noqa: F401  (o aviso le o cabecalho de cada imagem)
+    except Exception:
+        reduz_texturas = None
+        print('(sem Pillow: o aviso de relevo/brilho acima de 512 px fica de fora)')
+    sem_reduzir = []
     faltando = []
     tabelas = {}                 # caminho relativo -> texto
 
@@ -295,6 +315,8 @@ def principal(conferir=False):
             os.makedirs(destino_pasta, exist_ok=True)
         for alvo, chave, bruto, n_b64 in itens:
             ext = extensao(bruto)
+            if reduz_texturas is not None and reduz_texturas.pendentes_no_glb(pasta, chave, bruto):
+                sem_reduzir.append(pasta + '/' + chave)
             # a chave vira nome de arquivo: so o que sobrevive a qualquer sistema
             seguro = re.sub(r'[^A-Za-z0-9._-]', '_', chave)
             rel = pasta + '/' + seguro + ext
@@ -335,6 +357,11 @@ def principal(conferir=False):
         n.pop('gerado', None)
         if a == n and antigo.get('gerado'):
             manifesto['gerado'] = antigo['gerado']
+
+    if sem_reduzir:
+        print('AVISO: %d modelo(s) com relevo/brilho acima de 512 px (%s%s) — rode '
+              'python tools/reduz_texturas.py e extraia de novo'
+              % (len(sem_reduzir), ', '.join(sem_reduzir[:4]), '...' if len(sem_reduzir) > 4 else ''))
 
     if conferir:
         for rel_tab, texto in sorted(tabelas.items()):

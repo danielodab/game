@@ -206,10 +206,12 @@ jogador. Página nova sem essa linha é bug.
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
-| `carga.html` | passou — 23,87 MB servido contra 30,84 MB embutido |
+| `carga.html` | passou (03/10) — 40,02 MB na primeira visita servida, 92 `.glb` (eram 40,88 MB antes do relevo/brilho a 512) |
 | `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
 | `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
+| **`texturas_prova.py`** (Python) | 16 de 16 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta (também quando divide o bufferView com o relevo), `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
+| `texturas_abrem.html` | passou (03/10) — 333/333 `.glb` do bundle abrem no three e desenham, 0 erros de GL |
 | **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
@@ -330,6 +332,19 @@ cravava `1,10×` em vez de ler `starCfg()`, e uma mudança legítima de curva
 **Julgar por foto não vale.** Testes de aparência precisam contar o que o
 renderizador criou — peças visíveis, nós na cena, formas medidas. Conferir na
 imagem já deixou passar quatro variantes secretamente idênticas.
+
+**A memória da aba é textura, e o relevo e o brilho vivem em 512.** Cada
+imagem 1024 vira ~4 MB de ImageBitmap no navegador (o `.glb` não diz nada
+sobre isso: 1 MB de JPEG). Desde 02/10 o relevo e o metal/rugosidade dos
+modelos ficam em 512 e a cor em 1024 — menos nos heróis, fusões, pets,
+chefes e coroas (`tools/reduz_texturas.py`; o caminho do lote está em
+[`docs/RECEBER_LOTE.md`](docs/RECEBER_LOTE.md), seção *A textura*). Arte
+nova que entrar sem o passo reprova em `tests/texturas_prova.py`.
+
+**Trocar a imagem de uma textura por outra de OUTRO tamanho exige
+`texture.dispose()` antes.** Sem isso o three grava a imagem nova dentro da
+memória já alocada para a antiga (`texStorage`) e mistura as duas — deu
+manchas pretas falsas no pilar da Cisterna na comparação de 02/10.
 
 ---
 

@@ -57,8 +57,13 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --factory-startup --python tools/embute_monstros.py -- --calabouco emberlock
    ```
 4. **Ligar no jogo**: acrescente `'assets/embedded/models-meshy-emberlock.js'`
-   na lista de modelos do `index.html` (ao lado de `models-meshy-cisterna.js`)
-   e rode `python tools/extrai_assets.py` para o bundle servido.
+   na lista de modelos do `index.html` (ao lado de `models-meshy-cisterna.js`),
+   rode `python tools/reduz_texturas.py` (relevo e metal/rugosidade a 512 px,
+   a cor fica em 1024 — ver *A textura* abaixo) e depois
+   `python tools/extrai_assets.py` para o bundle servido. A fusão roda no
+   Blender, cujo Python não tem Pillow, por isso a redução é um passo à parte
+   aqui; no cenário (passo 6) o próprio `embute_cenario_*.py` já a chama no
+   fim.
 5. **A régua**: abra `tests/bestiario.html?calabouco=emberlock`. Ela cobra kit
    próprio para todo monstro **gerado**, clipe por papel, porte entre 0,8 e
    3,6 m e o chefe como o maior.
@@ -84,6 +89,8 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    próprio trocando a pasta e o tema (`scaffold`, `mine`, `heart`) e
    registre `JOGO.CENARIO[tema]` com os papéis `alto`, `pilar`, `marco`,
    `sotaque`, `sotaque_alto`, `chao`, `borda` (+ `chao_alt`, `alto_corpo`).
+   A cópia herda as duas linhas do fim que chamam
+   `reduz_texturas.reduz_arquivo(SAIDA)` — não as tire.
 
    O separador: `separa_pecas.py -- <pasta>` (ensaio) agrupa por
    proximidade de VÉRTICE e lê no nome do arquivo quantas peças a folha tem
@@ -113,6 +120,33 @@ Se a pasta ou o prefixo saírem diferentes, é só editar o manifesto.
    injeta `D.portaisFechados`, cobra a recusa da descida, o Dia, o Poço e o
    vazamento de peça como antes, e devolve a lista no fim. É assim que o
    mecanismo continua coberto sem fingir que há portal trancado.
+
+## A textura: cor em 1024, relevo e brilho em 512 (02/10)
+
+Cada modelo do Meshy traz três imagens 1024: cor, relevo (`normalTexture`) e
+metal/rugosidade. No `.glb` são ~1 MB de JPEG; no navegador viram ~12 MB de
+textura descompactada, e era isso que levava a aba a 2 GB. O dono comparou
+fotos lado a lado e aprovou: **a cor fica em 1024, relevo e metal/rugosidade
+(e oclusão, se vier em imagem separada) caem para 512**. Medido no jogo
+servido, mesma praça e mesma vitrine (143 modelos): 1,58 GB → 0,88 GB de
+textura decodificada, e a foto difere da anterior menos que duas fotos
+seguidas da MESMA versão (o ruído da animação). Os `.glb` reduzidos caíram
+de 106,1 para 99,0 MB.
+
+- Quem faz é `tools/reduz_texturas.py` (Lanczos, mesmo formato; JPEG a 90 com
+  croma 4:4:4, porque no relevo e no brilho os canais não são cor). Imagem que
+  serve de cor em algum material nunca cai. Rodar de novo não muda nada.
+- **Ficam em 1024**: heróis (KayKit, `meshy_<classe>`, `meshy_gm`, o escudo
+  do Minotauro), corpos e invocações de fusão (`fusao:*`), pets, chefes
+  (`boss-*` e os do Quaternius) e coroas. Todo o resto reduz — é por exclusão,
+  então lote novo de cenário ou de monstro entra reduzido sem lista nova.
+- `python tools/reduz_texturas.py --conferir` lista o que reduziria; o
+  `extrai_assets.py` avisa quando sobrou algo, e `tests/texturas_prova.py`
+  reprova. `tests/texturas_abrem.html` (jogo servido) abre cada `.glb` no three
+  e desenha um quadro.
+- Os originais em 1024 ficam no histórico do git (o commit anterior à
+  redução); para voltar um modelo, tire-o do git velho e ponha-o na lista de
+  exceções (`FICA_PASTA`/`fica_inteiro`).
 
 ## O que NÃO precisa mudar
 
