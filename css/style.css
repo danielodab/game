@@ -3176,6 +3176,10 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
                text-shadow: 0 2px 14px rgba(154,122,216,.45); }
 .eco-fim-estado { font: 13.5px/1.5 var(--ui-sans, system-ui); color: #dfe6ee; margin: 10px 0 14px; }
 .eco-fim-estado.is-erro { color: #ff8a7a; }
+/* 03/10: a rodada do Eco esperando o sorteio do servidor (a barra) e a tentativa que parou sem ele (o fim) */
+.bt-wait.eco-sal { color: #d9c8ff; }
+.bt-wait.eco-sal.is-sem-rede { color: #ffb19c; }
+.eco-fim-sal { font: 13px/1.45 var(--ui-sans, system-ui); color: #ffb19c; margin: 8px 0 0; }
 .eco-chip, .eco-fase, .eco-aviso {
   display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 9px;
   font: 700 11px var(--ui-sans, system-ui); letter-spacing: .02em; cursor: default;

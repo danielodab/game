@@ -320,6 +320,21 @@ var JOGO = (typeof window !== 'undefined')
     }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
   };
   A.fechaEco = function (corpo) { return fechaEm('/api/supremo/fechar', corpo); };
+  /* O SAL DA RODADA (03/10, engine.js "O SORTEIO RODADA A RODADA"): corpo {tentativa, rodada, caminho}. Resolve
+   * sempre: {ok, rodada, sal} ou {ok:false, foraDoAr} (sem rede: quem chama tenta de novo — o mesmo caminho
+   * recebe o mesmo sal) ou {ok:false, erro, motivo} (a recusa de vez: vencida, 'caminho-preso', 'rodada-fora').
+   * Não espera a fila de ops: a tentativa refaz o grupo do estado da ABERTURA, e a rodada não pode parar atrás
+   * de uma op lenta. */
+  A.salEco = function (corpo) {
+    return Promise.resolve(api('/api/supremo/sal', corpo)).then(function (r) {
+      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (!r.ok || typeof r.sal !== 'number' || !isFinite(r.sal) || Math.floor(r.sal) !== r.sal) {
+        return { ok: false, erro: r.erro || 'o servidor não deu o sorteio da rodada', motivo: r.motivo || null };
+      }
+      return { ok: true, rodada: r.rodada, sal: r.sal };
+    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+  };
   /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata (15/09: depois de fechar a luta pendente) */
   A.abreGrupo = function (corpo) {
     return A.fechaPendente().then(function () { return api('/api/grupo/abrir', comVersao(corpo)); })

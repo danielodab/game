@@ -2788,6 +2788,11 @@ var JOGO = (typeof window !== 'undefined')
         parts.push(ef.type + (ef.stat || '') + (ef.value != null ? ef.value : '') + 'x' + ef.duration);
       }
     }
+    // 03/10: a rodada do Eco esperando o sal do servidor (e a rede que caiu no meio) muda a barra
+    if (s.eco) {
+      var sal = safe(function () { return G().ecoSalEstado(); }, null);
+      parts.push('sal:' + (sal ? sal.rodada + (sal.semRede ? 'x' + sal.tentativas : '') : 0));
+    }
     return parts.join('|');
   }
 
@@ -5883,6 +5888,9 @@ var JOGO = (typeof window !== 'undefined')
      'Ele ocupa 2×2 casas no centro da Câmara e não anda. A cada 25% da vida perdida troca de elemento ' +
        '(Fogo → Água → Terra → Ar), fica fraco a quem vence o elemento novo e chama dois Ecos Menores.',
      'O golpe grande é AVISADO: as casas marcadas no chão explodem no começo da vez seguinte dele. Os pilares abrigam.',
+     // 03/10: o sal de cada rodada (engine.js, "O SORTEIO RODADA A RODADA") — quem joga precisa saber que a rede conta
+     'A sorte de cada rodada vem do servidor quando ela começa: a tentativa precisa de internet do começo ao fim ' +
+       '(sem rede ela espera, não acaba).',
      'Vale a melhor tentativa da semana (de segunda a domingo, 23:59). Derrubá-lo soma ' +
        Math.round((cfg.bonusDerrubada || 0) * 100) + '% da vida dele aos pontos.'
     ].forEach(function (t) { regras.appendChild(el('li', null, esc(t))); });
@@ -5965,7 +5973,9 @@ var JOGO = (typeof window !== 'undefined')
     ((st0 && st0.units) || []).forEach(function (u) {
       if ((u.kind === 'hero' || u.kind === 'fusion') && u.side === 'player' && u.alive && !u.offBoard) heroisVivos++;
     });
-    var titulo = data.largou ? 'Você saiu da Câmara'
+    // 03/10: a rodada que o servidor não deu (a tentativa venceu, a semana fechou) encerra a tentativa ali
+    var titulo = data.parouNaRodada ? 'A tentativa parou na rodada ' + data.parouNaRodada
+      : data.largou ? 'Você saiu da Câmara'
       : pl.derrubou ? 'O Eco Primordial caiu!'
       : (!heroisVivos ? 'O seu grupo caiu' : 'As ' + (pl.rodadas || cfg.rodadas || 12) + ' rodadas acabaram');
     var box = el('div', 'game-over eco-fim' + (pl.derrubou ? ' is-derrubou' : ''));
@@ -5975,6 +5985,10 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(el('div', 'eco-fim-num', ecoNum(dano)));
     box.appendChild(el('p', 'game-sub', 'de dano no Eco' + (pl.derrubou ? ' · ' + ecoNum(pontos) + ' pontos com o bônus de quem derruba' : '') +
       ' · rodada ' + (pl.rodada || 0) + ' de ' + (pl.rodadas || cfg.rodadas || 12)));
+    if (data.semSal) {
+      box.appendChild(el('p', 'eco-fim-sal', 'O servidor não deu o sorteio da rodada ' + (data.parouNaRodada || '') +
+        ': ' + esc(data.semSal) + '. O que você jogou até ali foi junto para a conferência.'));
+    }
     var linha = el('p', 'eco-fim-estado');
     if (data.treino) {
       linha.innerHTML = 'Treino: sem conexão com o servidor, esta tentativa <b>não conta no placar</b>.';
@@ -12243,7 +12257,18 @@ var JOGO = (typeof window !== 'undefined')
    * está fora (o turno dele passa), ou o turno de sempre */
   function esperaNaBarra(u) {
     bt.espera = null;
-    if (!u) return el('div', 'bt-wait', 'Aguarde…');
+    if (!u) {
+      /* 03/10: a vez de ninguém na Câmara do Eco é a rodada esperando o sorteio dela, que vem do servidor
+       * (engine.js, "O SORTEIO RODADA A RODADA"): dizer isso, e dizer quando a rede caiu — a tentativa
+       * espera, não acabou */
+      var sal = safe(function () { return G().ecoSalEstado(); }, null);
+      if (sal && !sal.treino) {
+        return el('div', 'bt-wait eco-sal' + (sal.semRede ? ' is-sem-rede' : ''), sal.semRede
+          ? 'Sem resposta do servidor — a rodada ' + sal.rodada + ' espera, tentando de novo…'
+          : 'A rodada ' + sal.rodada + ' vem do servidor…');
+      }
+      return el('div', 'bt-wait', 'Aguarde…');
+    }
     if (modoRede() && (u.kind === 'hero' || u.kind === 'fusion')) {
       if (donoDe(u) === 'parceiro') {
         bt.espera = el('div', 'bt-wait bt-espera', '');

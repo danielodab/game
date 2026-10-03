@@ -14,7 +14,10 @@
  *   - lance de quem não tem a vez, ou de uma unidade que não é a da vez;
  *   - lance cujo resultado (ok) diverge do que o cliente anotou;
  *   - hash do meio ou do fim diferente do que o cliente viu;
- *   - lance depois do fim, ou uma sala que não termina (teto de passos).
+ *   - lance depois do fim, ou uma sala que não termina (teto de passos);
+ *   - na tentativa do Eco (03/10), a rodada jogada sem o sal dela, o sal fora
+ *     da rodada que espera, ou o sal que o `confereSal` de quem chama não
+ *     reconhece (o lance { a: 'r', r: rodada, s: sal }).
  * O cliente honesto nunca cai aqui: ele roda o mesmo motor com a mesma semente. */
 const { mundo } = require('./motor');
 
@@ -95,6 +98,7 @@ function executa(J, st, l) {
   if (l.a === 'm') return !!E.move(st, l.u, l.x, l.y);
   if (l.a === 'c') return !!E.cast(st, l.u, l.s, l.x, l.y);
   if (l.a === 'e') { if (st.phase === 'playing') E.endTurn(st); return true; }
+  if (l.a === 'r') return !!E.ecoSal(st, l.r, l.s);     // 03/10: o sal da rodada (o Eco), já conferido
   if (l.a === 'f') {
     const fa = E.findUnit(st, l.u), fb = E.findUnit(st, l.alvo);
     const donoA = fa ? (fa.dono || null) : null, donoB = fb ? (fb.dono || null) : null;
@@ -244,12 +248,30 @@ function refazEm(J, entrada) {
       E.events.length = 0;
       continue;
     }
-    if (l.a === 'p') {
+    if (l.a === 'r') {
+      /* O SAL DA RODADA (03/10, o Eco Primordial: docs/SEGURANCA.md §4.8). A rodada nova parou na
+       * virada esperando o sal (Engine.ecoEsperaSal); este lance o traz. Só vale onde quem chama sabe
+       * conferir o sal (`confereSal`: o juiz do Eco recalcula o caminho e o sal com a chave do servidor)
+       * e só na rodada que espera — sal adiantado, atrasado ou fora da parada é ensaio, não jogo */
+      if (typeof c.confereSal !== 'function') throw recusa('sal de rodada numa sala que não sorteia por rodada', 'lance');
+      rodaIA();
+      if (FIM[st.phase]) throw recusa('lance depois do fim da sala', 'depois-do-fim');
+      const espera = E.ecoEsperaSal ? E.ecoEsperaSal(st) : 0;
+      if (!espera || l.r !== espera) {
+        throw recusa('sal da rodada ' + String(l.r) + (espera ? ' com a rodada ' + espera + ' esperando' : ' sem rodada esperando'),
+                     'sal-fora-da-hora');
+      }
+      const falta = c.confereSal(l, i, lances);
+      if (falta) throw recusa(String(falta.msg || falta), falta.motivo || 'sal-forjado');
+    } else if (l.a === 'p') {
       if (st.phase !== 'placing') throw recusa('colocação fora da hora', 'vez');
       if (emRede && c.colocador && l.de !== c.colocador) throw recusa('a colocação é de quem lidera', 'vez');
     } else {
       rodaIA();
       if (FIM[st.phase]) throw recusa('lance depois do fim da sala', 'depois-do-fim');
+      // 03/10: a rodada do Eco parada no sal não aceita lance nenhum — jogar sem o sal é pular a trava
+      const semSal = E.ecoEsperaSal ? E.ecoEsperaSal(st) : 0;
+      if (semSal) throw recusa('a rodada ' + semSal + ' começou sem o sal do servidor', 'sal-faltando');
       const ativo = E.activeUnit(st);
       const daVez = emRede ? (ehDeGente(ativo) && !ativo.ia && ativo.dono === l.de) : ehDoJogador(st, ativo);
       if (st.phase !== 'playing' || !daVez) throw recusa('lance fora da vez', 'vez');

@@ -346,6 +346,7 @@ ROTAS = {
     ('GET',  '/api/supremo'):                 ('supremo_ler', False),
     ('GET',  '/api/supremo/ranking'):         ('supremo_ranking', False),
     ('POST', '/api/supremo/abrir'):           ('supremo_abrir', True),
+    ('POST', '/api/supremo/sal'):             ('supremo_sal', True),      # 03/10: o sorteio de cada rodada, travado
     ('POST', '/api/supremo/fechar'):          ('supremo_fechar', True),
     # 14/09: a fila da Arena (arena.py)
     ('POST', '/api/arena/inscrever'):         ('arena_inscrever', True),
