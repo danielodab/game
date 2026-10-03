@@ -109,7 +109,12 @@
     split: ['monsterId', 'count'],
     enrage: ['hpPct', 'power'],
     pushImmune: [],
-    regenAura: ['value', 'radius']
+    regenAura: ['value', 'radius'],
+    // 02/10: os quatro traços dos Colossos do Poço (a regra em js/core/poco.js)
+    rastroBrasa: ['spellId', 'duration'],
+    mare: ['cura', 'duration'],
+    couraca: ['pontos', 'reducao'],
+    ventania: ['tiles']
   };
 
   function has(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined && o[k] !== null; }
@@ -333,6 +338,9 @@
         TRAIT_REQ[t.type].forEach(function (f) { check(tag + ' (' + t.type + '): campo ' + f, has(t, f)); });
         if (t.type === 'split') {
           check(tag + ': monsterId ' + t.monsterId + ' existe', has(MON, t.monsterId));
+        }
+        if (t.type === 'rastroBrasa') {
+          check(tag + ': o feitiço do rastro ' + t.spellId + ' existe em DATA.monsterSpells', has(MS, t.spellId));
         }
         if (t.type === 'explodeOnDeath') {
           check(tag + ': element válido', inList(t.element, ELEMENTS), String(t.element));
