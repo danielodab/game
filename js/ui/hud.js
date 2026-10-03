@@ -3170,14 +3170,16 @@ var JOGO = (typeof window !== 'undefined')
       });
       // toque longo/segunda toque no nome abre a explicação
       var q = el('span', 'sp-info', 'i');
-      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid, u), d2 ? elemColor(d2.element) : '#ffd08a');
       cell.appendChild(q);
       bt.spells.appendChild(cell);
     });
     // 13/09: a barra da batalha não tem mais poção — ela se bebe fora da luta (vidaBloco, 14/09)
   }
 
-  function spellTipBody(d2, sid) {
+  // `quem` (opcional): a unidade que vai lançar — só a barra da batalha o passa
+  UI._spellTipBody = function (d2, sid, quem) { return spellTipBody(d2, sid, quem); };   // provas (muro_visual.html)
+  function spellTipBody(d2, sid, quem) {
     if (!d2) return 'Este feitiço não pôde ser carregado.';
     var out = '<i>' + (d2.paCost || 0) + ' PA';
     if (d2.range) out += ' · alcance ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
@@ -3192,6 +3194,14 @@ var JOGO = (typeof window !== 'undefined')
     if (muroEf && d2.fusion) {
       out += '<br><b>Espinhos:</b> a pedra fere ' + muroEf.fere + ' (mais o poder) quem do outro lado terminar a vez ' +
              'encostado nela ou for jogado contra ela.';
+    }
+    /* 03/10 (revisão): o 30 da descrição é a BASE, como o "16–22" de qualquer golpe; o espinho que a
+     * pedra leva é ele vezes o poder de quem ergue (34 no nível 5, 56 no 30). Na barra da batalha,
+     * com quem vai erguer na mão, a ficha diz o número que a pedra vai ferir AGORA — a mesma conta do
+     * motor (Engine.fereDoMuro), e não uma cópia dela. */
+    if (muroEf && quem) {
+      var fereAgora = safe(function () { return E().fereDoMuro(G().state, quem, d2, muroEf); }, 0);
+      if (fereAgora > 0) out += '<br><b>Espinhos agora:</b> com o seu poder, a pedra fere ' + fereAgora + '.';
     }
     if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
       out += '<br>Área: ' + esc(d2.aoe.shape) + ' ' + (d2.aoe.size || '');

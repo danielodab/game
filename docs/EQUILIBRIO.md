@@ -302,7 +302,9 @@ boneco preso ao lado da pedra sangra mede o boneco, não o kit — como a armadi
 escudo, que gira para encarar o inimigo), as casas vizinhas pintadas de leve na cor do elemento, a
 casa de passo que termina encostada no muro do outro lado em **vermelho**, o golpe com lascas e a
 palavra "espinhos", o som seco, e uma torrada na primeira vez que um dos seus se fere. A ficha do
-feitiço de fusão ganha a linha "Espinhos: a pedra fere 30 (mais o poder)"; o site
+feitiço de fusão ganha a linha "Espinhos: a pedra fere 30 (mais o poder)", e na barra da batalha a
+ficha de todo muro diz o espinho de AGORA, com o poder de quem vai erguer ("Espinhos agora: … fere 56" no
+nível 30 — o 30 do texto é a base, como o "16–22" de qualquer golpe); o site
 (`site/wiki.js`, `site/fusoes.js`) descreve o efeito com o número.
 
 **O que a regra não abre** (provado em `tests/regras_equilibrio.js` e nas provas de cada sistema —

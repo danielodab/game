@@ -269,6 +269,18 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
             sid ? sid + ' (' + (D.spells[sid].element || '?') + ')' : '');
       if (!sid) return fecha();
 
+      // 03/10 (revisão): a ficha do feitiço na barra da batalha diz o espinho de AGORA — o 30 da
+      // descrição é a base, e a pedra deste Minotauro do nível 30 fere mais (o poder dele)
+      (function () {
+        var efM = (D.spells[sid].effects || []).filter(function (ef) { return ef.type === 'wall'; })[0];
+        var nAgora = E.fereDoMuro(st, heroi, D.spells[sid], efM);
+        var corpo = (JOGO.UI && JOGO.UI._spellTipBody) ? JOGO.UI._spellTipBody(D.spells[sid], sid, heroi) : '';
+        var semQuem = (JOGO.UI && JOGO.UI._spellTipBody) ? JOGO.UI._spellTipBody(D.spells[sid], sid) : '';
+        check('espinhos: a ficha na batalha diz o número de agora (fere ' + nAgora + ', não só a base ' + efM.fere + ')',
+              nAgora > efM.fere && corpo.indexOf('a pedra fere ' + nAgora + '.') >= 0 && semQuem.indexOf('Espinhos agora') < 0,
+              corpo.slice(-160));
+      })();
+
       heroi.spells = (heroi.spells || []).slice();
       if (heroi.spells.indexOf(sid) < 0) heroi.spells.push(sid);
 
