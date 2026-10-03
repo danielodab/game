@@ -215,6 +215,39 @@ anunciar|comprar|propor|cancelar|responder|confirmar|retirar|visto`.
   coisas raras juntas — lote criado offline, primeiro login e a janela do deploy —; o contêiner
   novo devolve o lote ao estoque.
 
+### 4.8 O Eco Primordial (02/10, `servidor/supremo.py`)
+
+O chefe supremo da semana (docs/SISTEMAS.md §6-B). O placar é o dano refeito pelo juiz — o pedido do
+dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cliente).
+
+- `POST /api/supremo/abrir` `{herois, versaoRegras}` → `{tentativa, semente, restantes, semana}`. A
+  SEMENTE é do servidor; heróis conferidos no estado do servidor (o Mestre não entra: leva qualquer
+  feitiço); versão das regras conferida como no bilhete (§4.1, 409 `regras-velhas`); **3 por dia** de
+  Brasília por conta (429 `sem-tentativas`, com `liberaEm`). Abrir conta como usada; abrir outra vence a
+  aberta (`outra-aberta`). A tentativa não é luta aberta: não mexe na vida única.
+- `POST /api/supremo/fechar` `{tentativa, lances, hashFinal}` → o juiz (`POST /supremo/fecha`, §5.4)
+  refaz a Câmara pelo MESMO refazer da sala e devolve `Engine.ecoPlacar`. O que vale é esse número:
+  lance trocado, hash do fim mentido ou outra semente = 422 `divergiu` e a tentativa fica `recusada`, sem
+  pontuar. Prazo de 2 h, semana já fechada e regras trocadas no meio = 410 (`vencida`, não fraude). A
+  régua de tempo mínimo da sala vale aqui (`SALA_MIN_S`, `SALA_S_POR_TURNO`). A tentativa largada no meio
+  pontua o dano até onde foi (os lances conferidos são de verdade).
+- `GET /api/supremo` (público; com token traz `eu`: tentativas de hoje, o melhor, a posição, os últimos
+  prêmios) e `GET /api/supremo/ranking?semana=N` (público, 100 linhas, as semanas fechadas). O ranking é
+  a melhor tentativa conferida de cada conta; a equipe (`contas.gm`) e quem está banido não entram.
+- **O fechamento da semana** é preguiçoso: a primeira rota do Eco — ou o `POST /api/loja/retirar`, que o
+  jogo chama a cada 5 min — depois de domingo 23:59:59 + 2 h de folga (a validade da tentativa) fecha as
+  semanas que faltam, cada uma numa transação: as abertas vencem, cada conta do ranking recebe o prêmio
+  da faixa e a linha de `supremo_semanas` é gravada. **Uma vez só**: essa linha é a porta, `supremo_premios`
+  tem chave (semana, conta) e o pedido tem `idem` único por conta (`eco-<semana>-v|p`).
+- **Os prêmios** saem pela fila de entregas da loja (§4.5), o caminho do presente do Mestre: um pedido de
+  preço 0 com os vinténs (`{tipo:'vintens'}`) e outro `{tipo:'premio-eco', selos, titulo}` entregue pelo
+  juiz (op `lojaEntregar` → `Loja.aplicar` → `Progress.addSelo`/`addTituloEco`, só títulos do catálogo
+  `JOGO.Titulos.ECO`). Os pedidos `eco-…` ficam fora dos limites de compra do jogador e chegam com a
+  origem `eco` (o aviso "Prêmio do Eco Primordial").
+- **O evento do mundo**: `GET /api/eventos` ganhou `semanais` (a semana de agora e a próxima, tipo
+  `aviso`, fator 1, id `eco-<semana>`), num campo à parte — `ativos`/`proximos` seguem sendo a agenda do
+  Mestre, que ele liga e cancela. O jogo (`agenda.js`) e o site (`site.js`) juntam os dois.
+
 ## 5. O juiz (Node, só 127.0.0.1)
 
 ### 5.1 `GET /saude` → `{ok, versao}`; `GET /regras` → `{versao, calaboucos: {id: nSalas}}`
@@ -531,6 +564,14 @@ A quebra (22/09): `quebrarPeca {invIndex, n?}` (n de 1 a 99, ausente = 1) chama
 como qualquer consumo) e a cópia emprestada da guilda cai com `emprestada`. Cópia a menos, a
 Panóplia do Mestre ou índice sem peça devolvem `false` com o estado igual (não é 422).
 
+### 5.4 `POST /supremo/fecha` (02/10, `servidor/juiz/supremo.js`)
+
+`{conta, tentativa: {semente, herois, regras}, lances, hashFinal, progress, db, contexto}`. O grupo sai do
+`Progress.battleParty` do estado do servidor (todos cheios: a tentativa não usa a vida única), a Câmara do
+Eco é refeita pelo `refazEm` da sala (a vez, o resultado de cada lance, os hashes; a versão das regras) e
+sai `{ok, fase, rodada, turnosJogador, hash, placar}` — `placar = Engine.ecoPlacar(estado)`. Nenhum campo
+do pedido vira placar. Prova: `tests/juiz_supremo.js`.
+
 ## 6. O cliente
 
 - `js/core/economia.js`: o hash (§3).
@@ -591,6 +632,9 @@ Panóplia do Mestre ou índice sem peça devolvem `false` com o estado igual (n�
       (`servidor/grupo.py`, `servidor/juiz/duelo.js`, `servidor/presenca.py`; `tests/grupo_duelo_api.py`,
       `tests/rele_presenca_prova.py`, K11 de `tests/coop_motor.html`) e a luta largada
       (`servidor/salas.py`, `js/core/autoridade.js`; `tests/luta_largada_api.py`, `tests/luta_aberta_cliente.js`)
+
+- [x] O Eco Primordial (02/10): a tentativa, o placar refeito pelo juiz, a semana e os prêmios uma vez só
+      (`servidor/supremo.py`, `servidor/juiz/supremo.js`; `tests/supremo_api.py`, `tests/juiz_supremo.js`)
 
 ### Limites conhecidos
 

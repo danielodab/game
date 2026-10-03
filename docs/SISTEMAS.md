@@ -105,7 +105,8 @@ O que "obstáculos atrapalham" quer dizer no motor, medido em **todas** as salas
   dois heróis, como o motor já permitia ao jogador.
 
 O juiz refaz a sala com esta mesma função, então mudar a visão muda o fim de
-salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1).
+salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **6**
+(02/10: o corpo grande e o Eco Primordial, §6-B).
 
 ### Alcance e área
 
@@ -298,6 +299,65 @@ chefes ficam entre **5,16 e 5,46 m**, e nenhum passa de 3,7 células de largura.
 Isso teve de ser medido, não estimado: os chefes antigos **reprovaram**. Dois
 eram o mesmo T-Rex, e o triceratops da Mina declarava 3,84 m mas de pé media
 **1,81 m** — menor que o Bárbaro sozinho.
+
+---
+
+## 6-B. O Eco Primordial — o chefe supremo da semana (02/10)
+
+O pedido do dono: "um mapa BEM difícil com chefe supremo e placar de quem tirou mais dano". O dado
+mora em `js/core/data/eco.js` (o elenco, os feitiços, as fases e os golpes, com o porquê de cada
+número), a arena em `js/core/data/arenas.js` (`camara_eco`) e a regra no motor (`engine.js`, "O ECO
+PRIMORDIAL" e a decisão de design 19). O servidor está em `servidor/supremo.py` e no juiz
+(`servidor/juiz/supremo.js`); a SEGURANCA §4.8 conta o lado de lá.
+
+**A Câmara do Eco.** Circular (18×18, raio 8,4 sobre o vazio), com quatro pares de pilares altos a 5
+passos do corpo dele (o do sul trocado por entulho baixo: quem chega vê o Eco por cima da mureta), quatro
+pilares nas diagonais a 4 passos e entulho baixo na borda. Os quatro `P` ficam ao sul, a 6+ passos.
+
+**O corpo 2×2.** O Eco ocupa 2×2 casas no centro e não anda (PP 0). Qualquer das quatro casas é
+alvo; a área que cobre várias acerta UMA vez; o corpo bloqueia passagem e fixa quem encosta em qualquer
+casa; não é empurrado, puxado, trocado nem teleportado; não tem cobertura baixa; quando ele conjura, o
+golpe sai da casa dele que tem alcance e visão do alvo — e, sendo a visão simétrica, ninguém acerta sem
+poder ser acertado. O raio em cadeia mede o salto pela casa mais perto e não o acerta duas vezes. A regra
+é do motor (`unit.porte`), não do Eco: um corpo grande futuro herda tudo.
+
+**As fases.** A cada 25% da vida perdida ele troca de elemento, Fogo → Água → Terra → Ar, e a
+resistência troca pela roda (`DATA.beats`): resiste (+30) ao que o elemento da fase vence e fica fraco
+(−30) a quem o vence. Os feitiços passam a ser os da fase (mais o Pulso do Núcleo, neutro). A troca é
+conferida depois do golpe inteiro (fim do feitiço, começo de vez) e chama dois Ecos Menores do elemento
+novo, nas casas livres mais perto do corpo. Um golpe que atravessa dois limiares troca uma vez, direto
+para a fase de chegada. A fase nunca volta.
+
+**O golpe grande, avisado.** No fim da 1ª, 3ª, 5ª… vez dele as casas do golpe da fase ficam marcadas
+no chão (vermelhas, pulsando); o golpe cai no começo da vez seguinte dele, em qualquer um que esteja nelas
+(menos ele — o chão não escolhe lado, e atrair um Eco Menor para a marca é jogada). Os desenhos:
+
+| fase | golpe | o que marca |
+|---|---|---|
+| Fogo | Chuva do Núcleo | um círculo de 1 casa em volta de cada herói que ele VÊ (o invisível não é marcado) |
+| Água | Maré Funda | toda casa a 3–6 passos do corpo com visão do núcleo — o pilar abriga |
+| Terra | Rachadura | as faixas de 2 casas que saem do corpo nos 4 sentidos, até o primeiro muro alto |
+| Ar | Correntes Rompidas | toda casa a 1–2 passos com visão — quem está colado se afasta |
+
+**A tentativa e o placar.** 12 rodadas ou até o grupo cair; a 13ª não começa. O placar é a vida que o
+GRUPO tirou do Eco (herói, fusão, pet, invocação do lado do jogador): o excedente do golpe que mata, o
+clima e o golpe de quem é do lado dele ferem mas não pontuam. Derrubá-lo encerra a tentativa e soma 25% da
+vida máxima (6.000) aos pontos. A tentativa NÃO usa nem gasta a vida única (todos entram cheios), não tem
+desafio de sala, é sempre na dificuldade normal e é só da dupla da própria conta. Medido: a dupla de nível
+30 jogada pela IA tira ~1/3 da vida em 12 rodadas — derrubar exige jogar bem (`tests/eco_motor.js`).
+
+**A semana.** 3 tentativas por dia (o dia de Brasília); vale a melhor da semana, de segunda 00:00 a
+domingo 23:59 de Brasília. O ranking é por conta (empate: quem chegou primeiro); a equipe joga mas não
+entra. No fechamento, por faixa: 1º–3º 5.000 vinténs, 20 selos de chefe e o título **Voz do Eco** (para
+sempre, como o de chefe); 4º–10º 2.500 e 10 selos; 11º–100º 1.000 e 4 selos; participação 150 vinténs.
+Nada disso se compra. A semana aparece como evento do mundo (a faixa da praça e o site/eventos.html) com a
+contagem regressiva, e o ranking está na ficha do Eco (o cais da praça) e em site/ranking.html#eco.
+
+**A arte é provisória.** O Eco veste o Coração Partido com o porte dobrado e a tinta do elemento da fase;
+os Ecos Menores, os quatro Arautos do Coração. Cada um tem chave de modelo própria
+(`boss-eco-primordial`, `eco-menor-*`): a arte final do dono entra embutida com essa chave e passa na
+frente sozinha; para aposentar o provisório, apaga-se a linha dele em `M.CORPO_PROVISORIO`
+(`js/render3d/models3d_v2.js`).
 
 ---
 

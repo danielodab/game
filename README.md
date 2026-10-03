@@ -82,6 +82,8 @@ js/
       items.js          itens e conjuntos
       items_extra.js    ADITIVO: 3º conjunto por calabouço + avulsos
       dungeons.js       6 calabouços, salas, eventos de terreno, clima
+      arenas.js         os mapas que não são calabouço: a Praça, o Salão da Sede e a Câmara do Eco
+      eco.js            o Eco Primordial (02/10): o chefe supremo da semana, os Ecos Menores, as fases
       progression.js    curva de nível e desbloqueio
       pets.js           bichos de estimação
     engine.js           REGRA PURA de batalha. Não conhece DOM nem Three.js.
@@ -200,8 +202,12 @@ jogador. Página nova sem essa linha é bug.
 | `test_progress_v2.html` | 174 passaram / 0 falharam |
 | `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |
 | `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
-| **`visao_mapas.js`** (Node) | 210 passaram / 0 falharam — 20 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
-| **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1 |
+| **`visao_mapas.js`** (Node) | 218 passaram / 0 falharam (02/10: + a Câmara do Eco) — 21 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
+| **`eco_motor.js`** (Node) | 57 de 57 (02/10) — o corpo 2×2 (as quatro casas, a área que acerta uma vez, passagem, fixação, nada de empurrão), a visão simétrica em toda casa da Câmara, invisível/armadilha/raio sem brecha, as quatro fases, o golpe avisado, o placar (só o que o grupo tirou), o bônus de derrubar, a 13ª rodada, o hash, e a IA jogando a tentativa inteira |
+| **`juiz_supremo.js`** (Node) | 13 de 13 (02/10) — o juiz refaz a tentativa e chega ao mesmo dano do cliente; um "dano" mandado é ignorado; a largada pontua até onde foi; lance trocado, hash mentido e outra semente = `divergiu`; outra versão = `regras-mudaram` |
+| **`supremo_api.py`** (Python, juiz + API) | 10 do Eco + as 15 do palco da autoridade (02/10) — 3 por dia, versão das regras, o Mestre fora, o placar do replay, recusada/vencida/regras-mudaram, a semana que fecha uma vez só com os prêmios entregues pelo juiz (vinténs, selos, o título), o evento semanal em `/api/eventos` |
+| **`eco_hud.html`** | a ficha do Eco, a linha da sala na batalha, a tela do fim (treino e conferido pelo servidor), o aviso do prêmio |
+| **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1. `Engine.VERSAO_REGRAS` é **6** desde 02/10 (o corpo grande e o Eco Primordial) |
 | `validate_classes.html` | 6.204 checagens, 0 falhas |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
