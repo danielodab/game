@@ -28,7 +28,8 @@
          servidor, "Conferindo…" e depois o dano CONFERIDO, a posição e as tentativas que restam (e a
          nota quando o número daqui era outro: vale o do servidor); o lance anotado (o `p` da
          preparação) foi junto no fechar; a tela decide pointer-events e os botões respondem;
-       · o aviso da loja para o prêmio do Eco (o título e os selos);
+       · o aviso da loja para o prêmio do Eco (o título e os selos), e o título ganho no menu da ficha do
+         Personagem, livre para pendurar;
        · nenhum erro na página e o save de verdade intocado. -->
 <div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
 <div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
@@ -279,6 +280,35 @@
           /1º da semana/.test(a.texto) && /Voz do Eco/.test(a.texto) && /20 selos/.test(a.texto), a && a.texto);
     var v = UI.avisoLojaTexto({ tipo: 'entregue', origem: 'eco', pedido: { nome: 'x', entrega: { tipo: 'vintens', qtd: 5000 } } });
     check('o aviso dos vinténs do prêmio', !!v && /Prêmio do Eco Primordial: 5\.000 vinténs/.test(v.texto), v && v.texto);
+  });
+
+  // ---- 6) o título do pódio na ficha do Personagem (03/10, a revisão: o menu não tinha o grupo 'eco' e o
+  // título ganho não aparecia para pendurar). A conta local de mentira: só o que a ficha lê.
+  var penduro = [];
+  p(function () {
+    G.init('menu');
+    JOGO.DB = {
+      jogador: function () { return Promise.resolve({ id: 'prova-eco', nome: 'Ana', titulo: null }); },
+      brasaVer: function () { return Promise.resolve(null); },
+      placarLista: function () { return Promise.resolve([]); },
+      chefesVer: function () { return Promise.resolve({}); },
+      definirTitulo: function (t) { penduro.push(t); return Promise.resolve({ ok: true, titulo: t }); }
+    };
+    check('o prêmio entra no estado da conta (Progress.addTituloEco)', P.addTituloEco('Voz do Eco') === true &&
+          P.titulosEco().indexOf('Voz do Eco') >= 0);
+    UI.openSheet('char');
+    return espera(60);
+  });
+  p(function () {
+    var itens = qa('.tit-lista .tit-item').filter(function (b) { return /Voz do Eco/.test(txt(b)); });
+    check('o menu de títulos lista "Voz do Eco" e ele está livre para escolher', itens.length === 1 && !itens[0].disabled,
+          String(itens.length) + ' · ' + qa('.tit-lista .tit-grupo').map(txt).join(' | '));
+    if (itens[0]) itens[0].click();
+    return espera(30);
+  });
+  p(function () {
+    check('escolher pendura o título do Eco (DB.definirTitulo)', penduro[0] === 'Voz do Eco', JSON.stringify(penduro));
+    if (ficha()) UI.closeSheet && UI.closeSheet();
   });
 
   try {

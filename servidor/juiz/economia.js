@@ -162,8 +162,11 @@ const OPS = {
         if (cid !== 'gm' && d && d.name) nomesClasse[cid] = d.name;
       });
       const pc = (x.contexto.porClasse && typeof x.contexto.porClasse === 'object') ? x.contexto.porClasse : {};
+      // 03/10: o título do pódio do Eco Primordial mora no PRÓPRIO estado da conta (Progress.titulosEco, entregue
+      // pela fila da loja) — sem esta linha a régua não o via e o servidor recusava "Voz do Eco" a quem o ganhou
+      const eco = (J.Progress && J.Progress.titulosEco) ? J.Progress.titulosEco() : [];
       const estado = { chefes: chefes || {}, pvm: x.contexto.pvm || null, pvp: x.contexto.pvp || null,
-                       porClasse: pc, classeNomes: nomesClasse };
+                       porClasse: pc, classeNomes: nomesClasse, eco };
       if (!J.Titulos || !J.Titulos.valido(t, estado)) return { ok: false, erro: 'título não conquistado' };
       return J.DB.definirTitulo(t);
     });

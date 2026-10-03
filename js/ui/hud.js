@@ -5289,8 +5289,9 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         var catal = Tt.catalogo(estT);
         var ganhos = catal.filter(function (t) { return t.ganho; });
+        // 03/10: e o pódio do Eco Primordial — sem o grupo 'eco' no menu o título ganho não tinha onde ser escolhido
         var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', classe: 'Ranking por classe',
-                         chefe: 'Chefes, no difícil e sozinho' };
+                         eco: 'O Eco Primordial (pódio da semana)', chefe: 'Chefes, no difícil e sozinho' };
         /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
          * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
          * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
@@ -5330,7 +5331,7 @@ var JOGO = (typeof window !== 'undefined')
           return b;
         }
         listaT.appendChild(itemT('', '— sem título —', '', true));
-        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
           listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
           // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
           var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
@@ -5358,7 +5359,7 @@ var JOGO = (typeof window !== 'undefined')
         var comoT = document.createElement('details');
         comoT.className = 'tit-como';
         comoT.appendChild(el('summary', null, 'Como ganhar cada título'));
-        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
           comoT.appendChild(el('div', 'char-fonte',
             '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
           if (f === 'classe') {
