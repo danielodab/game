@@ -222,6 +222,21 @@ nunca saía. Agora o muro vale a visão que corta e a casa que fecha ao lado de 
 teleporte vale como a investida (aproximar, para quem bate de perto). Nenhum monstro ergue
 muro nem teleporta (medido).
 
+**3.5 O preço no próprio corpo nunca era cobrado** (`engine.js`, `precoProprio` — achado na
+revisão). O Sangue Fervente (`sumo-fogo-15`) e as Veias em Chamas (`espadachim-fogo-12`) dão
++35/+40 de poder "ao preço de queimadura própria por turno": alvo próprio, casa única, um bônus e
+um veneno. Mas o efeito hostil nunca pega quem lança, e a casa única é a dele — a queimadura não
+pegava ninguém desde a v2, e as primeiras medidas desta rodada viram os caminhos de Fogo do
+Bárbaro e do Ladino com um bônus de graça. São os dois únicos feitiços de classe com efeito a
+favor e hostil juntos (a "convenção" do topo de `spells.js` vale para todo o resto). Agora, no
+feitiço de alvo próprio cuja área é só a casa de quem lança, o hostil é o preço e cai nele; a
+área em volta do corpo (o Rodopio, o Halo, a Fortaleza) continua sem ferir quem lança. Medido
+depois: perfis 198/198, os oito caminhos dos dois a ±25% (Fogo do Bárbaro 0,94–1,17, do Ladino
+1,07–1,13), fusão igual.
+
+Cada regra desta seção tem prova direta, num lance só: `node tests/regras_equilibrio.js`
+(29 de 29; na base `39a6ae9` 15 de 28, uma falha por regra).
+
 ## 4. Antes e depois
 
 Medida completa (`node tests/equilibrio.js --completo`) nas duas árvores: **antes** é a base

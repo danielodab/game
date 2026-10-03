@@ -131,7 +131,11 @@ menos quem lança — a área do Bruxo queima o parceiro, de propósito. O que a
 inimigo e cura o aliado no mesmo gesto") — fere só o outro lado e ajuda só o
 próprio lado, e quem lança sempre recebe a parte que ajuda. E a armadilha que o
 mesmo lance arma na casa onde acabou de erguer muro vai para a vizinha livre
-("deixa o laço armado ao pé"). Ver `docs/EQUILIBRIO.md` §3.
+("deixa o laço armado ao pé"). E o feitiço de alvo próprio cuja área é só a
+casa de quem lança cobra o efeito hostil dele mesmo — é o preço escrito na
+descrição ("+35 de poder, ao preço de queimadura própria"); a área em volta do
+corpo continua sem ferir quem lança. Ver `docs/EQUILIBRIO.md` §3; a prova é
+`tests/regras_equilibrio.js`.
 
 ### Esquiva e fixação
 

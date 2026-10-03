@@ -138,7 +138,9 @@ negativos) pega quem estiver nas casas da área, menos o conjurador — o fogo a
 estiver nas casas. **Feitiço misto** — tem dos dois (`summon` conta como a favor): o hostil só pega o
 OUTRO lado e o a favor só pega o lado de quem lança, e quem lança sempre, esteja ou não na área
 (`Engine.feiticoMisto`). E a `trap` que cairia numa casa que o MESMO lance acabou de murar vai para a
-primeira vizinha de chão livre (norte, sul, oeste, leste). Os dois sobem `Engine.VERSAO_REGRAS` para 6.
+primeira vizinha de chão livre (norte, sul, oeste, leste). Feitiço de `targetSide: 'self'` cuja área
+é só a casa de quem lança: o hostil é o PREÇO e cai em quem lança (o `poison` do `sumo-fogo-15` e do
+`espadachim-fogo-12`). Os três sobem `Engine.VERSAO_REGRAS` para 6.
 
 ## 4. Fusão — sistema de composição
 

@@ -161,7 +161,9 @@ feitiços da fusão são gerados de `forma × mistura` — a forma decide a mec�
 **Feitiço misto (03/10).** O que fere pega quem estiver na área, menos quem lança (o fogo
 amigo existe); o que ajuda pega quem estiver na área. O feitiço que fere E ajuda — meia
 tabela das formas de fusão — fere só o outro lado e ajuda só o próprio, e quem lança sempre
-recebe a parte que ajuda (`Engine.feiticoMisto`; `docs/EQUILIBRIO.md` §3).
+recebe a parte que ajuda (`Engine.feiticoMisto`; `docs/EQUILIBRIO.md` §3). No feitiço de
+alvo próprio e casa única, o efeito hostil é o **preço** e cai em quem lança (a queimadura do
+Sangue Fervente e das Veias em Chamas). A prova direta das regras é `node tests/regras_equilibrio.js`.
 
 **Clima** (chuva, vento, tremor) favorece ou prejudica, e é por sala.
 
@@ -218,6 +220,7 @@ jogador. Página nova sem essa linha é bug.
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`equilibrio.js`** (Node) | a prova do equilíbrio ([`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md)); medida completa de 03/10: **399 de 436** — perfis 198/198, fusão 119/126 (sobram degraus nos níveis de conferência 16 e 25), duelos em dupla 62 de 84 células em 40–60% (o Minotauro é a maior parte do que sobra). Ver §7.1 |
 | `equilibrio_fusao.html` | a mesma conta da fusão no navegador (8 misturas) |
+| `regras_equilibrio.js` (Node) | 29 de 29 — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA |
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).

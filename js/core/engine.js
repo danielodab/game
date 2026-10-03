@@ -208,8 +208,11 @@ var JOGO = (typeof window !== 'undefined')
    *       a casa vai para a vizinha livre; dano, cura, escudo e alcance das
    *       classes mudaram (spells.js), as formas Sentinela/Vigia/Guarnição,
    *       Bote e Encontrão também (fusions.js), o PAIR_TUNE ganhou nível
-   *       (fusion.js) e a IA passou a valorar muro e teleporte (ai.js) — uma
-   *       sala aberta antes termina diferente se refeita aqui */
+   *       (fusion.js) e a IA passou a valorar muro e teleporte (ai.js); e o
+   *       feitiço de alvo próprio e casa única cobra o preço hostil de quem
+   *       lança (precoProprio: a queimadura do Sangue Fervente e das Veias em
+   *       Chamas nunca pegava) — uma sala aberta antes termina diferente se
+   *       refeita aqui */
   Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
@@ -2744,9 +2747,6 @@ var JOGO = (typeof window !== 'undefined')
 
   function applyEffects(state, caster, spell, x, y, opts) {
     opts = opts || {};
-    // armadilha e evento de chão (selfHarm) têm a vítima como "conjurador":
-    // ali não há lado a respeitar
-    var misto = !opts.selfHarm && feiticoMisto(spell);
     var cx = opts.casterX != null ? opts.casterX : caster.x;
     var cy = opts.casterY != null ? opts.casterY : caster.y;
     /* 19/09: DE ONDE O GOLPE SAI, para a cobertura. A armadilha e o evento de
@@ -2770,6 +2770,22 @@ var JOGO = (typeof window !== 'undefined')
     }
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
     var effects = sEffects(spell);
+    /* O PREÇO NO PRÓPRIO CORPO (03/10, a revisão do equilíbrio). O Sangue
+     * Fervente (sumo-fogo-15) e as Veias em Chamas (espadachim-fogo-12) dão
+     * poder "ao preço de queimadura própria por turno": alvo próprio, casa
+     * única, um bônus e um veneno. Só que o efeito hostil nunca pega quem
+     * lança (hostileTargets) e a casa única É a de quem lança — a queimadura
+     * nunca pegou ninguém desde a v2, e os dois eram bônus de graça (a
+     * bancada do equilíbrio mediu os caminhos de Fogo do Bárbaro e do Ladino
+     * sem o preço). No feitiço de alvo próprio cuja área é SÓ a casa de quem
+     * lança, o efeito hostil é o preço e cai nele. A área em volta do corpo
+     * (o Rodopio, o Halo, a Fortaleza) continua sem ferir quem lança: ali
+     * as casas da área não incluem a dele, ou incluem outras. */
+    var precoProprio = !opts.selfHarm && spell.targetSide === 'self' && tiles.length === 1 &&
+      tiles[0].x === caster.x && tiles[0].y === caster.y;
+    // armadilha e evento de chão (selfHarm) têm a vítima como "conjurador":
+    // ali não há lado a respeitar; e o preço próprio não é feitiço misto
+    var misto = !opts.selfHarm && !precoProprio && feiticoMisto(spell);
     // v2.2/v2.3: calculado UMA vez por conjuração — depende do conjurador e do
     // feitiço, não do alvo. Inclui buffs, bônus elemental e fúria da sala.
     var castPower = Engine.castPower(state, caster, spell);
@@ -2790,7 +2806,7 @@ var JOGO = (typeof window !== 'undefined')
     // terreno, em que o "conjurador" é justamente a vítima (selfHarm).
     // 03/10: no feitiço misto, também não atingem o lado dele.
     function hostileTargets() {
-      var l = unitsInTiles(!!opts.selfHarm);
+      var l = unitsInTiles(!!opts.selfHarm || precoProprio);
       return misto ? l.filter(function (w) { return w.side !== caster.side; }) : l;
     }
     // 03/10: o efeito a favor de um feitiço misto vai para o lado de quem
