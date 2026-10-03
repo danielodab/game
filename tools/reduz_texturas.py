@@ -219,6 +219,17 @@ def papeis(js):
             for v in t['extensions'].values():
                 if isinstance(v, dict) and 'source' in v:
                     uso.setdefault(v['source'], set()).add('outro')
+    # duas imagens podem apontar para o MESMO bufferView (um exportador que
+    # deduplica bytes iguais): a reducao troca o bufferView, entao trocava a cor
+    # junto com o relevo que mora nos mesmos bytes. O papel vale pelo bufferView.
+    por_vista = {}
+    imagens = js.get('images', [])
+    for i, im in enumerate(imagens):
+        if 'bufferView' in im:
+            por_vista.setdefault(im['bufferView'], set()).update(uso.get(i, set()))
+    for i, im in enumerate(imagens):
+        if 'bufferView' in im and por_vista[im['bufferView']]:
+            uso[i] = set(por_vista[im['bufferView']])
     return uso
 
 

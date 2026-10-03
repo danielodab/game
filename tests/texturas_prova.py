@@ -11,6 +11,8 @@ dono aprovou em 02/10, nao um numero de MB:
      - relevo e metal/rugosidade 1024 caem para 512, no MESMO formato;
      - oclusao fora do quadrado cai pelo lado maior (800x400 -> 512x256);
      - imagem que serve de brilho num material e de COR em outro NAO cai;
+     - cor e relevo em imagens diferentes mas nos MESMOS bytes (o mesmo
+       bufferView) nao caem: a troca e por bufferView;
      - a cor nunca cai;
      - o que ja esta em 512 nao e tocado, e rodar duas vezes da o mesmo .glb;
      - cada bufferView sai alinhado a 4 bytes, o binario dos acessores
@@ -143,6 +145,22 @@ def parte_sintetica():
     check('fora dos bufferViews e do buffer, o JSON e o mesmo', js0 == js1)
 
 
+def parte_vista_partilhada():
+    # um exportador que deduplica bytes iguais pode por a cor e o relevo no
+    # mesmo bufferView; a reducao troca o bufferView, entao levava a cor junto
+    d = _img('JPEG', (1024, 1024))
+    binario = d + b'\0' * ((-len(d)) % 4)
+    js = {'asset': {'version': '2.0'}, 'buffers': [{'byteLength': len(binario)}],
+          'bufferViews': [{'buffer': 0, 'byteOffset': 0, 'byteLength': len(d)}],
+          'images': [{'mimeType': 'image/jpeg', 'bufferView': 0}, {'mimeType': 'image/jpeg', 'bufferView': 0}],
+          'textures': [{'source': 0}, {'source': 1}],
+          'materials': [{'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}}, 'normalTexture': {'index': 1}}]}
+    bruto = rt.escreve_glb(js, binario)
+    novo, feitos = rt.reduz_glb(bruto)
+    check('cor e relevo no MESMO bufferView: nada cai (a cor mora nos mesmos bytes)',
+          novo == bruto and not feitos, [f['papel'] for f in feitos])
+
+
 def _papel_lados(bruto):
     js, binario = rt.le_glb(bruto)
     uso = rt.papeis(js)
@@ -205,6 +223,7 @@ def main():
     except Exception:
         pass
     parte_sintetica()
+    parte_vista_partilhada()
     parte_embutidos()
     parte_bundle()
     falhas = RESULTADOS.count(False)
