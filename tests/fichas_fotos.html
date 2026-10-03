@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOTERRA — as fichas para foto</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* o placar mora fora da tela: a foto é a janela inteira, como no jogo */
+  #topo { position: fixed; left: -9999px; top: 0; font: 12px monospace; }
+  /* a praça sem o 3D: um chão escuro no lugar do mapa, para a ficha ter o
+     que cobrir (o véu da ficha é o que se quer ver na foto) */
+  #game-canvas { background: radial-gradient(ellipse 70% 60% at 50% 40%, #2a3340 0%, #10151b 100%); }
+</style>
+</head>
+<body>
+<!-- AS FICHAS PARA FOTO (02/10, a frente dos menus). Página LEVE — sem
+     index.html, sem WebGL: o CSS, os dados, o miolo, o Art, os ícones e a HUD
+     de verdade num #app do tamanho da janela, com uma conta semeada (saco
+     variado, pedras, poções, bichos, cofre, balcão, guilda, selos, missões) e
+     mesas de mentira para o que precisa de servidor (amigos, arena, troca,
+     mensagem particular). Abre UMA ficha por ?ficha= e marca window.__pronto.
+
+     É a régua das fotos antes|depois dos menus: as mesmas fichas, a mesma
+     semente, as duas larguras (1600×900 e 390×844). Quem fotografa é
+     tools/fotos_fichas.py (uma janela de Chrome só, ficha por ficha).
+
+     ?ficha= personagem | heroi | inventario | forja | feiticos | colecao |
+             banco | guilda | mercado | loteria | missoes | placar | amigos |
+             perfil | troca | contas | duelo | dupla | quadro | sussurro |
+             pausa | confirma | config | praca | praca-poco | praca-sede |
+             praca-arena
+     ?foco=1 — põe o foco de teclado no primeiro botão da ficha (a foto do
+              anel de foco). -->
+<div id="topo"><div id="summary">rodando…</div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js','js/core/data/arenas.js',
+    'js/core/data/campo_pvp.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
+    'js/core/vida.js','js/core/economia.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/gm.js','js/core/nomes.js','js/core/db.js',
+    'js/core/missoes.js','js/core/diario.js','js/core/agenda.js','js/core/poco.js',
+    'js/core/guilda.js','js/ui/brasao.js','js/core/mercado.js','js/core/rede.js','js/core/brasa.js',
+    'js/core/titulos.js','assets/embedded/coroas-pvp.js','js/core/troca.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/core/coop.js','js/core/grupo.js','js/core/amigos.js',
+    'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
+    'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
+    'js/audio.js','js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    erros.push('promessa: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function q1(s, r) { return (r || document).querySelector(s); }
+
+  var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI, DB = JOGO.DB, Gd = JOGO.Guilda;
+  var A = JOGO.Art;
+  function slotDe(id) { var s = (D.items[id] || {}).slot; return (A && A.slotKey) ? A.slotKey(s) : s; }
+  function elDe(id) { return (D.items[id] || {}).element || 'neutro'; }
+
+  // ------------------------------------------------------------ a semente
+  // a mesma da prova dos ícones (uma peça por espaço|elemento|raridade, na
+  // ordem do dado): a foto sai igual em toda máquina
+  var QUERO = ['punho|fogo|epico', 'passo|fogo|raro', 'casca|fogo|comum', 'lume|fogo|raro',
+               'punho|agua|comum', 'casca|agua|raro', 'lume|agua|raro',
+               'punho|terra|epico', 'passo|terra|raro', 'casca|ar|comum', 'lume|ar|raro',
+               'punho|neutro|lendario', 'casca|neutro|lendario'];
+  var SACO = [];
+  QUERO.forEach(function (k) {
+    var ids = Object.keys(D.items);
+    for (var i = 0; i < ids.length; i++) {
+      var it = D.items[ids[i]];
+      if (slotDe(ids[i]) + '|' + elDe(ids[i]) + '|' + it.rarity === k && SACO.indexOf(ids[i]) < 0) { SACO.push(ids[i]); return; }
+    }
+  });
+  var hids;
+  function semeia() {
+    P.load(); P.reset();
+    hids = P.heroIds();
+    var XP = D.leveling.xpTable;
+    P.addXp(hids[0], XP[11]);
+    if (hids[1]) P.addXp(hids[1], XP[7]);
+    SACO.forEach(function (id, i) {
+      var lv = [0, 3, 0, 7, 1, 0, 5, 10, 0, 2, 0, 4, 0][i] || 0;
+      var st = [0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 1, 0, 0][i] || 0;
+      P.state.inventory.push(P.novaCopia ? P.novaCopia(id, 'foto', lv, st) : { itemId: id, level: lv, stars: st });
+    });
+    for (var r = 0; r < 2; r++) P.state.inventory.push(P.novaCopia ? P.novaCopia(SACO[4], 'foto', 1, 2) : { itemId: SACO[4], level: 1, stars: 2 });
+    P.save();
+    Object.keys(D.stones).forEach(function (sid, i) { P.addStones(sid, [24, 9, 31, 5, 60, 2][i] || 3); });
+    P.poeConsumivel('pocao-pequena', 3); P.poeConsumivel('pocao-media', 5); P.poeConsumivel('pocao-grande', 2);
+    Object.keys(D.pets).slice(0, 3).forEach(function (pid) { P.addPet(pid); });
+    P.state.insignias = 20; P.save();
+    UI.init();
+    UI.selection(hids.slice(0, 2));
+    var BANCO = [SACO[0], SACO[5], SACO[8], SACO[12]];
+    var outros = [SACO[1], SACO[3], SACO[6], SACO[7], SACO[9], SACO[11]];
+    Gd._servidor = false;
+    try { localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
+    return DB._zerar().then(function () {
+      return DB.batizar('Provador');
+    }).then(function () {
+      return DB.ganharMoedas(1240);
+    }).then(function () {
+      return BANCO.reduce(function (pr, id, i) {
+        return pr.then(function () { return DB.depositarItem({ itemId: id, level: i, stars: i % 2 }); });
+      }, Promise.resolve());
+    }).then(function () {
+      return DB.mercadoGravar({ dia: null, ofertas: outros.map(function (id, i) {
+        return { id: 'pv-' + i, vendedor: 'c' + i, vendedorNome: ['Fulano', 'Beltrano', 'Ciclano'][i % 3],
+                 itemId: id, level: i % 4, stars: i % 2, preco: 40 + i * 35 };
+      }).concat([{ id: 'pv-meu', vendedor: 'jogador', itemId: SACO[10], level: 0, stars: 0, preco: 90 }]) });
+    }).then(function () {
+      return DB.jogador();
+    }).then(function (j) {
+      Gd.contaAtiva(j.id, j.nome || 'Provador');
+      return Gd.criar('Forja do Vale', '⚑');
+    }).then(function () {
+      return [SACO[2], SACO[7], SACO[11]].reduce(function (pr, id, i) {
+        return pr.then(function () { return Gd.bancoDepositar({ itemId: id, level: i * 2, stars: 0 }); });
+      }, Promise.resolve());
+    });
+  }
+
+  // ---- as mesas de mentira (o que no jogo depende de servidor ou de outra aba)
+  var CLS = Object.keys(D.classes);
+  function ligaAmigos() {
+    var lista = { amigos: [{ conta: 11, nome: 'Beltrano', nivel: 14 }, { conta: 12, nome: 'Marta Ferro', nivel: 9 },
+                           { conta: 13, nome: 'Ciclano', nivel: 21 }],
+                  inimigos: [{ conta: 21, nome: 'Rato do Poço', nivel: 18 }] };
+    var st = { 11: { online: true, id: 'b1' }, 13: { online: true, luta: true, id: 'c1' } };
+    JOGO.Amigos = { pode: function () { return true; }, lista: function () { return JSON.parse(JSON.stringify(lista)); },
+      status: function (c) { return st[c] || null; }, liga: function () {}, aoMudar: null,
+      carrega: function () { return Promise.resolve({ ok: true }); },
+      definir: function () { return Promise.resolve({ ok: true }); },
+      ehAmigo: function () { return false; }, ehInimigo: function () { return false; } };
+  }
+  function ligaArena() {
+    var Ar = JOGO.Arena;
+    Ar.estado = function () { return { fase: 'livre', herois: null, classes: null, nivel: null }; };
+    Ar.quadro = function () {
+      var agora = Date.now();
+      return Promise.resolve({ ok: true, inscritos: [
+        { conta: 31, nome: 'Marta Ferro', nivel: 13, brasa: 1320, classes: [{ classId: CLS[1] }, { classId: CLS[3] }], desdeMs: agora - 125000 },
+        { conta: 32, nome: 'Beltrano', nivel: 11, brasa: 1180, classes: [{ classId: CLS[2] }, { classId: CLS[0] }], desdeMs: agora - 40000 },
+        { conta: 33, nome: 'Ciclano', nivel: 26, brasa: 1610, classes: [{ classId: CLS[4] }, { classId: CLS[5] }], desdeMs: agora - 600000 }] });
+    };
+  }
+  var TROCA_FALSA = {
+    _est: null,
+    estado: function () { return this._est; },
+    descrevePet: function (of) { return { nome: ((D.pets[of.petId] || {}).name || of.petId), nivel: 3, estrelas: 1 }; },
+    jaTenhoPet: function () { return false; },
+    porItem: function () { return true; }, tiraItem: function () {}, porPet: function () { return true; },
+    tiraPet: function () {}, porMoedas: function () {}, travar: function () {}, confirmar: function () {},
+    cancelar: function () {}
+  };
+  function ligaTroca() {
+    JOGO.Troca = TROCA_FALSA;
+    TROCA_FALSA._est = { fase: 'aberta', nomePar: 'Beltrano', mesmaConta: false,
+      minha: { itens: [{ itemId: SACO[9], level: 2, stars: 0 }], moedas: 0, pets: [], travada: false, confirmada: false },
+      dele: { itens: [{ itemId: SACO[1], level: 3, stars: 1 }], moedas: 120,
+              pets: [{ petId: Object.keys(D.pets)[4] }], travada: true, confirmada: false } };
+  }
+  function ligaSussurro() {
+    var S = JOGO.Sussurros;
+    var agora = Date.now();
+    S.pode = function () { return true; };
+    S.lista = function () {
+      return [{ de: 'b1', para: 'eu', nome: 'Beltrano', texto: 'Vai descer no Fecho hoje?', t: agora - 300000 },
+              { de: 'eu', para: 'b1', nome: 'Provador', texto: 'Vou sim, falta uma pedra de brasa.', t: agora - 240000 },
+              { de: 'b1', para: 'eu', nome: 'Beltrano', texto: 'Te espero na porta da Arena.', t: agora - 60000 }];
+    };
+  }
+  // a praça sem 3D: o Hub vira um dublê que só guarda o aoAproximar da HUD
+  function ligaPraca() {
+    JOGO.Hub = { entrar: function () { return false; }, sair: function () {}, aoAproximar: null };
+  }
+  function perfilFalso() {
+    return { id: 'b1', nome: 'Beltrano', titulo: 'Quebra-Muros', classe: CLS[2], nuvem: 11,
+             resumo: { nivel: 14, brasa: 1180, vitorias: 9, derrotas: 4, classes: [CLS[2], CLS[0]],
+                       poco: { recorde: 17, semanaMelhor: 12 } } };
+  }
+
+  var FICHAS = {
+    personagem: function () { UI.openSheet('char'); },
+    heroi: function () { UI.openSheet('heroSheet', hids[0]); },
+    inventario: function () { UI.openSheet('inventory'); },
+    forja: function () { UI.openSheet('forge'); },
+    feiticos: function () { UI.openSheet('spells'); },
+    colecao: function () { UI.openSheet('collection'); },
+    banco: function () { UI.openSheet('banco'); },
+    guilda: function () { UI.openSheet('guilda'); },
+    mercado: function () { UI.openSheet('mercado'); },
+    loteria: function () { UI.openSheet('loteria'); },
+    missoes: function () { UI.openSheet('missoes'); },
+    placar: function () { UI.openSheet('placar'); },
+    amigos: function () { ligaAmigos(); UI.openSheet('amigos'); },
+    perfil: function () { UI.openSheet('perfil', perfilFalso()); },
+    troca: function () { ligaTroca(); UI.openSheet('troca'); },
+    contas: function () { UI.openSheet('contas'); },
+    duelo: function () { UI.openSheet('duelo'); },
+    dupla: function () { ligaArena(); UI.openSheet('escolheDupla', { titulo: 'Inscrição na Arena', rotulo: 'Inscrever no quadro',
+      sub: 'Escolha os dois heróis que entram no quadro.', aoEscolher: function () {} }); },
+    quadro: function () { ligaArena(); UI.openSheet('arenaQuadro'); },
+    sussurro: function () { ligaSussurro(); UI.openSheet('sussurro', { id: 'b1', nome: 'Beltrano' }); },
+    pausa: function () { UI.openSheet('battleMenu'); },
+    // a pergunta de confirmação não tem porta própria: nasce do "Abandonar" da pausa
+    confirma: function () {
+      UI.openSheet('battleMenu');
+      var b = q1('.ui-sheet.is-on .btn-warn');
+      if (b) b.click();
+    },
+    config: function () { UI.openSheet('config'); },
+    praca: function () { ligaPraca(); UI.showScreen('hub'); },
+    'praca-poco': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'poco', nome: 'Poço sem Fundo' }); },
+    'praca-sede': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'sede', nome: 'Sede das Guildas' }); },
+    'praca-arena': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'arena', nome: 'Arena' }); }
+  };
+  function lugar(l) {
+    return espera(300).then(function () { if (JOGO.Hub.aoAproximar) JOGO.Hub.aoAproximar(l); });
+  }
+
+  semeia().then(function () {
+    var f = FICHAS[Q.ficha];
+    if (!f) { erros.push('ficha desconhecida: ' + Q.ficha); return; }
+    // fora da praça, a tela de fundo é o menu (o jogo abre nele)
+    if (!/^praca/.test(Q.ficha)) UI.showScreen('menu');
+    return f();
+  }).then(function () {
+    return espera(900);
+  }).then(function () {
+    if (Q.foco) {
+      var b = q1('.ui-sheet.is-on .sheet-body button, .ui-sheet.is-on .sheet-body [tabindex]');
+      if (b) b.focus();
+    }
+    // o tutor e os balões de primeira visita não são carregados aqui: a foto é a ficha
+    var abertas = document.querySelectorAll('.ui-sheet.is-on').length;
+    document.getElementById('summary').textContent = 'foto: ' + Q.ficha + ' · fichas abertas ' + abertas +
+      ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
+    window.__erros = erros;
+    window.__pronto = true;
+  }).catch(function (e) {
+    erros.push('semente: ' + (e && e.message || e));
+    window.__erros = erros;
+    window.__pronto = true;
+  });
+})();
+</script>
+</body>
+</html>
