@@ -1,5 +1,5 @@
 {
- "gerado": "2026-10-02T23:36:39",
+ "gerado": "2026-10-03T19:17:51",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1965,6 +1965,62 @@
   },
   {
    "alvo": "MODELS",
+   "chave": "colosso-fogo",
+   "arquivo": "models-meshy-colossos/colosso-fogo.glb",
+   "bytes": 1650172,
+   "hash": "5e8d53bcca89",
+   "grupo": "poco:colossos"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "colosso-agua",
+   "arquivo": "models-meshy-colossos/colosso-agua.glb",
+   "bytes": 1762660,
+   "hash": "9846ed64d75b",
+   "grupo": "poco:colossos"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "colosso-terra",
+   "arquivo": "models-meshy-colossos/colosso-terra.glb",
+   "bytes": 1451220,
+   "hash": "f99b6f131fa2",
+   "grupo": "poco:colossos"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "colosso-ar",
+   "arquivo": "models-meshy-colossos/colosso-ar.glb",
+   "bytes": 1745624,
+   "hash": "6bc58e29fc9d",
+   "grupo": "poco:colossos"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "eco-menor-fogo",
+   "arquivo": "models-meshy-eco/eco-menor-fogo.glb",
+   "bytes": 1393612,
+   "hash": "7291ee601e01",
+   "grupo": "evento:eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "eco-menor-agua",
+   "arquivo": "models-meshy-eco/eco-menor-agua.glb",
+   "bytes": 1418496,
+   "hash": "5f988f1d9d70",
+   "grupo": "evento:eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "eco-menor-terra",
+   "arquivo": "models-meshy-eco/eco-menor-terra.glb",
+   "bytes": 1432788,
+   "hash": "870b5523783d",
+   "grupo": "evento:eco"
+  },
+  {
+   "alvo": "MODELS",
    "chave": "ember-imp",
    "arquivo": "models-meshy-emberlock/ember-imp.glb",
    "bytes": 1218400,
@@ -2178,6 +2234,70 @@
    "bytes": 1261556,
    "hash": "f3d2f42f0672",
    "grupo": "calabouco:quakemine"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-fogo-1",
+   "arquivo": "models-meshy-santuario/el-fogo-1.glb",
+   "bytes": 1370848,
+   "hash": "5e6bed401c10",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-fogo-2",
+   "arquivo": "models-meshy-santuario/el-fogo-2.glb",
+   "bytes": 1507372,
+   "hash": "44a945f41390",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-agua-1",
+   "arquivo": "models-meshy-santuario/el-agua-1.glb",
+   "bytes": 1423880,
+   "hash": "57a9ef545656",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-agua-2",
+   "arquivo": "models-meshy-santuario/el-agua-2.glb",
+   "bytes": 1382332,
+   "hash": "2244d20d0dc0",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-terra-1",
+   "arquivo": "models-meshy-santuario/el-terra-1.glb",
+   "bytes": 1415520,
+   "hash": "828ef8778c48",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-terra-2",
+   "arquivo": "models-meshy-santuario/el-terra-2.glb",
+   "bytes": 1631304,
+   "hash": "d0de02b7e9c2",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-ar-1",
+   "arquivo": "models-meshy-santuario/el-ar-1.glb",
+   "bytes": 1610112,
+   "hash": "059a06b95555",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el-ar-2",
+   "arquivo": "models-meshy-santuario/el-ar-2.glb",
+   "bytes": 1473720,
+   "hash": "016e319eade7",
+   "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
@@ -2968,6 +3088,13 @@
    "run",
    "walk"
   ],
+  "colosso-fogo": [],
+  "colosso-agua": [],
+  "colosso-terra": [],
+  "colosso-ar": [],
+  "eco-menor-fogo": [],
+  "eco-menor-agua": [],
+  "eco-menor-terra": [],
   "ember-imp": [],
   "walking-anvil": [],
   "ash-wraith": [],
@@ -3047,6 +3174,14 @@
   "shaft-bat": [],
   "damp-seeper": [],
   "boss-deepknock": [],
+  "el-fogo-1": [],
+  "el-fogo-2": [],
+  "el-agua-1": [],
+  "el-agua-2": [],
+  "el-terra-1": [],
+  "el-terra-2": [],
+  "el-ar-1": [],
+  "el-ar-2": [],
   "sum_familiar": [
    "HitReact",
    "attack",
@@ -3248,8 +3383,8 @@
   "cenario-mina.js": "tabelas/cenario-mina.js",
   "cenario-pvp.js": "tabelas/cenario-pvp.js"
  },
- "totalBytes": 221663480,
- "totalBase64": 295551764,
+ "totalBytes": 244333140,
+ "totalBase64": 325777996,
  "grupos": {
   "base": {
    "itens": 92,
@@ -3262,6 +3397,10 @@
   "calabouco:cistern": {
    "itens": 23,
    "bytes": 18606528
+  },
+  "calabouco:elementsanctum": {
+   "itens": 8,
+   "bytes": 11815088
   },
   "calabouco:emberlock": {
    "itens": 29,
@@ -3290,6 +3429,10 @@
   "coroas": {
    "itens": 10,
    "bytes": 5496484
+  },
+  "evento:eco": {
+   "itens": 3,
+   "bytes": 4244896
   },
   "fechados": {
    "itens": 26,
@@ -3382,6 +3525,10 @@
   "fusao:minotauro+sumo": {
    "itens": 2,
    "bytes": 1888288
+  },
+  "poco:colossos": {
+   "itens": 4,
+   "bytes": 6609676
   }
  }
 }

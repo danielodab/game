@@ -118,6 +118,8 @@ CASCA = {
 #                       (herois, corpos das classes, pets, a praca, o kit do
 #                       cenario, o banco de animacoes) e as 8 pecas do jardim
 #                       que enfeitam a praca (hub3d.js, montaEnfeites);
+#   poco:colossos     — os quatro Colossos: descem com o andar do Poco que os tem;
+#   evento:eco        — os Ecos Menores: descem com a Camara do Eco;
 #   calabouco:<id>    — o cenario e os monstros de um calabouco: descem na hora
 #                       de descer, ou antes, na pre-busca dos ABERTOS;
 #   classe:invocador  — o rebanho do Xama: desce com a dupla que o leva;
@@ -138,6 +140,11 @@ GRUPO_DA_PASTA = {
     'cenario-andaimes': 'calabouco:windscaffold', 'models-meshy-windscaffold': 'calabouco:windscaffold',
     'cenario-mina': 'calabouco:quakemine', 'models-meshy-quakemine': 'calabouco:quakemine',
     'cenario-coracao': 'calabouco:brokenheart', 'models-meshy-brokenheart': 'calabouco:brokenheart',
+    # 03/10, o lote do lancamento: os Colossos so aparecem nos andares multiplos
+    # de 5 do Poco e os Ecos Menores so na Camara do Eco. Sem linha aqui cairiam
+    # na BASE e todo jogador baixaria 15 MB a mais antes do menu.
+    'models-meshy-colossos': 'poco:colossos', 'models-meshy-eco': 'evento:eco',
+    'models-meshy-santuario': 'calabouco:elementsanctum',
     'coroas-pvp-3d': 'coroas', 'models-meshy-sum': 'classe:invocador',
     'models-monsters': 'fechados', 'models-bosses': 'fechados', 'models-summons': 'fechados',
 }

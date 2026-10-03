@@ -447,18 +447,38 @@ var JOGO = (typeof window !== 'undefined')
     'stone-herald':   { model: 'stone-herald',   scale: 1.28 },  // 2,30 m — a armadura cheia de alicerce; o tanque
     'heartroot':      { model: 'heartroot',      scale: 1.33 },  // 2,39 m — a raiz que veio abracar o Coracao
     'boss-riftheart': { model: 'boss-riftheart', scale: 1.22 },  // 3,60 m — o maior bicho do jogo, o teto da regua
-    // --- Os COLOSSOS DO POÇO (02/10) — ainda SEM a arte do dono.
+    // --- Os COLOSSOS DO POÇO — A ARTE E DO USUARIO (03/10).
     //
-    // Cada um tem chave de modelo PRÓPRIA ('colosso-fogo'...): quando o lote
-    // dele for embutido com essa chave, ele veste o corpo dele sozinho. Até lá
-    // a chave cai no CORPO PROVISÓRIO (M.CORPO_PROVISORIO, logo abaixo da
-    // tabela) — um monstro de arte própria do calabouço do MESMO elemento.
+    // Os quatro sairam do Meshy (tools/embute_monstros.py, lote `colossos`,
+    // manifesto a mao porque nao tem calabouco) e moram em
+    // assets/embedded/models-meshy-colossos.js com a chave PROPRIA
+    // ('colosso-fogo'...). Enquanto a arte nao existia, a chave caia num corpo
+    // provisorio (M.CORPO_PROVISORIO); as quatro linhas de la sairam junto.
+    // A arte veio CINZA de proposito: sao irmaos de corpo e quem diz o elemento
+    // e a tinta do jogo (52% da cor do elemento) — laranja, azul, verde, lilas.
     // Porte: 1,6× um monstro comum (1,80 m × 1,6 = 2,88 m) — maior que todo
     // comum e ainda abaixo dos chefes (2,95 a 3,60 m).
-    'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — rocha vulcânica com fendas de lava
-    'colosso_agua':   { model: 'colosso-agua',   scale: 1.60 },  // 2,88 m — coral e água viva
-    'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraça de lajes
+    'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — basalto rachado com a crista de vulcao nos ombros
+    'colosso_agua':   { model: 'colosso-agua',   scale: 1.60 },  // 2,88 m — coral e agua viva
+    'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraca de lajes
     'colosso_ar':     { model: 'colosso-ar',     scale: 1.60 },  // 2,88 m — correntes de vento preso
+    // --- O SANTUARIO DOS ELEMENTOS (calabouco 'elementsanctum') — A ARTE E DO USUARIO (03/10).
+    //
+    // Os OITO sairam do Meshy (lote `santuario`, models-meshy-santuario.js),
+    // dois por quadrante. O id do monstro usa '_' e a chave do modelo usa '-'
+    // (o mesmo par dos Colossos), por isso cada um precisa da linha: sem ela o
+    // `proprio` do monsterLook procuraria o kit pelo id com '_' e nao acharia.
+    // Escala = altura do briefing ÷ 1,80 (docs/PROMPTS_LANCAMENTO.md).
+    // A Arraia PLANA em vez de andar: o `walk` dela e o clipe de nado do
+    // Meshy (Swim_Forward), o corpo deita e desliza — foi o dono que escolheu.
+    'el_fogo_1':  { model: 'el-fogo-1',  scale: 1.17 },  // 2,11 m — Vigia de Pavio: cabeca de vela com um olho so; distancia
+    'el_fogo_2':  { model: 'el-fogo-2',  scale: 0.83 },  // 1,49 m — Mariposa de Cinza: as asas sao os bracos; rapida
+    'el_agua_1':  { model: 'el-agua-1',  scale: 1.06 },  // 1,91 m — Caramujo-Comporta: a concha de bronze rebitado; tanque (sem correr)
+    'el_agua_2':  { model: 'el-agua-2',  scale: 1.11 },  // 2,00 m — Garca de Galeria: arpoa de longe
+    'el_terra_1': { model: 'el-terra-1', scale: 1.22 },  // 2,20 m — Pilarete: um pedaco do pilar vivo que andou; tanque
+    'el_terra_2': { model: 'el-terra-2', scale: 0.89 },  // 1,60 m — Toupeira-Sentinela: garras de pa
+    'el_ar_1':    { model: 'el-ar-1',    scale: 1.28 },  // 2,30 m — Cata-Vento: empurra de longe
+    'el_ar_2':    { model: 'el-ar-2',    scale: 1.00, loco: 'walk' },  // 1,80 m — Arraia de Rajada: plana (walk = nado; `loco` o poe na frente da corrida)
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
     // Seis das sete estavam erradas no CONCEITO — cao de brasa era um lobo,
@@ -492,12 +512,15 @@ var JOGO = (typeof window !== 'undefined')
      * corpo cai no provisório de M.CORPO_PROVISORIO (logo abaixo). `tintaDaFase`: o Eco troca de
      * elemento a cada fase, e a tinta vem do elemento da UNIDADE, não do dado (o renderizador
      * refaz o corpo quando ele troca). Porte: chefe é 2,95 m × escala; o Eco é ~2× um chefe
-     * (ocupa 2×2 casas) e o Menor, um monstro comum. */
+     * (ocupa 2×2 casas) e o Menor, um monstro comum.
+     * 03/10: chegaram TRÊS Menores com corpo próprio (lote `eco`, models-meshy-eco.js): Brasa,
+     * Coral e Rocha. O de Rocha é o tanque e fica um pouco maior (2,00 m contra 1,80 m). O Eco
+     * Primordial e o Menor de Vento NÃO vieram: seguem no provisório, e a linha deles lá fica. */
     'eco_primordial':  { model: 'boss-eco-primordial', scale: 2.00, tintaDaFase: true },   // 5,90 m
-    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },
-    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },
-    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.00 },
-    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }
+    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },   // 1,80 m — lava que esfriou e ganhou pernas
+    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },   // 1,80 m — galho de coral com água presa
+    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.11 },   // 2,00 m — o irmão atarracado, o tanque (sem correr)
+    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }    // ainda SEM arte: veste o Arauto do Vento (provisório)
   };
 
 
@@ -515,37 +538,27 @@ var JOGO = (typeof window !== 'undefined')
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
 
   /* O CORPO PROVISÓRIO (02/10): quem veste o quê enquanto a arte final não
-   * chega. UMA tabela só para o Eco Primordial (frente do supremo) e para os
-   * Colossos do Poço (frente do poço) — as duas frentes criaram cada uma a sua
-   * `M.CORPO_PROVISORIO` em formatos diferentes, e na junção de 03/10 a segunda
-   * apagava a primeira (o Eco ficava sem corpo, e a linha do colosso, que era
-   * só um texto, quebrava o `base.model` do monsterLook).
+   * chega. Nasceu como UMA tabela para o Eco Primordial (frente do supremo) e
+   * para os Colossos do Poço (frente do poço) — as duas frentes criaram cada
+   * uma a sua `M.CORPO_PROVISORIO` em formatos diferentes, e na junção de
+   * 03/10 a segunda apagava a primeira.
    * Cada linha é { model, scale?, tintaDaFase? }: `model` é o corpo emprestado;
-   * `scale`/`tintaDaFase`, quando vierem, trocam os da linha do MONSTER_LOOK
-   * (sem eles vale a escala da linha — a do colosso, 1,60).
+   * `scale`/`tintaDaFase`, quando vierem, trocam os da linha do MONSTER_LOOK.
    * Para a arte final entrar basta embutir o kit com a chave própria (ela passa
    * na frente: temKitDe); para aposentar o provisório de vez, apaga-se UMA
    * linha daqui.
+   * 03/10, o lote do lançamento: os quatro Colossos e os Ecos Menores de
+   * Brasa, Coral e Rocha ganharam corpo próprio, e as sete linhas deles
+   * saíram. Sobram os dois que o dono ainda NÃO gerou:
    * ECO: o Coração Partido é o maior chefe e já é feito de quatro elementos —
    * o melhor dublê de "pedaços dos seis calabouços"; com 2,44 ele mede 7,2 m,
-   * o dobro dele (1,22). Os Menores vestem os quatro Arautos do Coração, a
-   * mesma armadura com recheio de cada elemento, no porte que já têm.
-   * COLOSSOS: um monstro de arte própria do calabouço do mesmo elemento, já no
-   * porte de colosso, escolhido pela silhueta:
-   *   fogo  → Monte de Escória (Fecho de Brasa): pedra que escorre;
-   *   água  → Golem de Salmoura (Cisterna): "um colosso de sal";
-   *   terra → Boca do Túnel (Mina Trêmula): peito e boca de rocha;
-   *   ar    → Nuvem-Enxame (Andaimes do Vento): vento com forma de gente. */
+   * o dobro dele (1,22).
+   * ECO MENOR DE VENTO: veste o Arauto do Vento do Coração, no porte que já
+   * tem. Ele é do MESMO elemento do dono do corpo, mas os dois nunca dividem
+   * uma sala (o Arauto mora no Coração, o Menor na Câmara do Eco). */
   M.CORPO_PROVISORIO = {
     'boss-eco-primordial': { model: 'boss-riftheart', scale: 2.44, tintaDaFase: true },
-    'eco-menor-fogo':      { model: 'cinder-herald', scale: 1.17 },
-    'eco-menor-agua':      { model: 'tide-herald',   scale: 1.17 },
-    'eco-menor-terra':     { model: 'stone-herald',  scale: 1.28 },
-    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 },
-    'colosso-fogo':        { model: 'slag-mound' },
-    'colosso-agua':        { model: 'brine-golem' },
-    'colosso-terra':       { model: 'cave-jaw' },
-    'colosso-ar':          { model: 'mote-swarm' }
+    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 }
   };
   // a chave própria já tem arte? (embutida, no manifesto do servido, ou no bundle)
   function temKitDe(chave) {
