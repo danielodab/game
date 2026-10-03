@@ -423,7 +423,8 @@ var JOGO = (typeof window !== 'undefined')
     M.estilo();
     fechaMenu();
     var v = vistas[de] || {};
-    var nome = linha.getAttribute('data-nome') || v.nome || 'o jogador';
+    // o nome que a Rede deu (a linha do /g leva "[Guilda] Nome" no data-nome)
+    var nome = v.nome || linha.getAttribute('data-nome') || 'o jogador';
     var menu = M.el('div', 'mod-menu');
     menu.appendChild(M.botao('Denunciar ' + nome, null, function () {
       fechaMenu();
