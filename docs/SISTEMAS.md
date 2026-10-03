@@ -299,6 +299,62 @@ Isso teve de ser medido, não estimado: os chefes antigos **reprovaram**. Dois
 eram o mesmo T-Rex, e o triceratops da Mina declarava 3,84 m mas de pé media
 **1,81 m** — menor que o Bárbaro sozinho.
 
+### O Poço sem Fundo (`js/core/poco.js`)
+
+A torre infinita, só para quem desce sozinho. Cada andar empresta o **palco** de
+uma sala real (layout, clima, cenário) e troca o elenco por uma mistura dos
+comuns de todos os calabouços abertos; os inimigos ganham **+10% de PV por
+andar** e o XP paga no mesmo fator. Com sessão do site o andar sai da **semente
+do bilhete** (`Poco.salaSemeada`) e o juiz refaz a mesma sala para pagar. O
+recorde é semanal.
+
+**Andar múltiplo de 5 (02/10):** **um** chefe e **um** Colosso. O chefe toma
+**uma** casa de monstro com letra própria — antes tomava uma letra do palco, e
+a letra se repete (no Fecho de Brasa 3 a letra `c` tem cinco casas: saíam até
+cinco chefes). O colosso toma outra casa, girando por andar:
+
+| andar | colosso | id | o que faz |
+|---|---|---|---|
+| 5, 25, 45… | Colosso de Brasa | `colosso_fogo` | as casas por onde passa ficam **em brasa** por 2 rodadas (armadilha do lado dele: queima e para quem pisa) |
+| 10, 30… | Colosso da Maré | `colosso_agua` | onde termina a vez nasce uma **poça**; terminando a vez **parado** em cima dela, recupera 8% da vida |
+| 15, 35… | Colosso de Rocha | `colosso_terra` | **couraça** de 6 placas: corta cada golpe pela metade; cada golpe arranca uma placa, golpe de **ar** arranca duas |
+| 20, 40… | Colosso da Ventania | `colosso_ar` | quem o golpeia **de perto**, na própria vez, é soprado 2 casas; anda 5 |
+
+Os colossos **não** entram no sorteio comum (`colosso: true`), **não** são
+chefes (selo, insígnia e roleta seguem só de chefe), pagam mais que qualquer
+comum (XP 45; pedras sempre, 4 a 6 — o teto do não-chefe) e sobem de vida com o
+andar como todo o resto. Porte: **1,6×** um monstro comum (2,88 m). Sem a arte
+do dono ainda, cada um tem chave de modelo própria (`colosso-fogo`…) que cai
+no **corpo provisório** de um monstro do calabouço do mesmo elemento
+(`M.CORPO_PROVISORIO` em `models3d_v2.js`: Monte de Escória, Golem de
+Salmoura, Boca do Túnel, Nuvem-Enxame). Arte final: embutir com a chave e
+apagar a linha do provisório.
+
+**Os perigos do chão (02/10).** Todo andar tem perigos sorteados pela MESMA
+semente, todos **à vista desde o começo** e todos **avisados antes de ferir**:
+
+| perigo | desde o andar | o que faz | aviso |
+|---|---|---|---|
+| **placa de setas** | 1 | quem pisa (herói ou monstro) arma; setas varrem até 5 casas numa direção (até o primeiro obstáculo); a placa não está na linha | a linha acende ao armar; dispara no começo da **2ª rodada depois** |
+| **runa de exaustão** | 1 | prende o passo em cima dela e tira 2 PP | ela mesma (não fere) |
+| **jato** (fogo, água, terra ou ar) | 2 | a casa do respiro e as 4 vizinhas, a cada 3 rodadas a partir da 3ª; a resistência conta | a área acende no começo da rodada anterior |
+| **chão rachado** | 3 | desaba na rodada 3 a 5 e vira buraco; quem está em cima se fere e sobe na casa livre mais perto | range no começo da rodada anterior |
+
+O dano é **fração da vida máxima** da vítima (setas 12%, jato 15%, queda 10%;
+chefe e colosso levam metade): o Poço recebe herói de qualquer nível, e número
+fixo seria cócega no 30 e morte no 5. Quantos: 1 no andar 1 e mais um a cada 3
+andares, até 7. Nenhum perigo alcança a **zona de entrada** (o chão a até 3
+casas de um P, a mesma régua da escolha da posição) nem nasce em casa de
+monstro, dois não dividem casa, e o chão rachado só nasce onde o buraco **não
+separa o mapa**. O chão do Poço não gasta o sorteio da sala.
+
+**A IA sabe:** a casa que leva golpe no começo da próxima rodada pesa −80 (mais
+que armadilha), a da rodada seguinte −30, placa e runa −15/−20; e, em todo andar
+do Poço, o caminho de **mesmo custo** desvia de placa, runa e armadilha que quem
+anda enxerga (vale para o jogador também — o clique não leva o herói por cima
+da placa se há outro caminho igual). Prova: `node tests/poco_perigos.js`; a tela,
+`tests/poco_chao_tela.html`.
+
 ---
 
 ## 7. Invocações do Xamã

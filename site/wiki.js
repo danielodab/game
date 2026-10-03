@@ -244,7 +244,14 @@
       var m = MONSTROS[e.monsterId];
       return 'ao morrer, se divide em ' + num(e.count) + ' ' + (m ? link('monstro', e.monsterId, m.name) : 'pedaços');
     },
-    regenAura: function (e) { return 'aura: os aliados até ' + casas(e.radius) + ' recuperam ' + num(e.value) + ' PV por turno'; }
+    regenAura: function (e) { return 'aura: os aliados até ' + casas(e.radius) + ' recuperam ' + num(e.value) + ' PV por turno'; },
+    // 02/10: os quatro dos Colossos do Poço (js/core/poco.js)
+    rastroBrasa: function (e) { return 'deixa em brasa as casas por onde passa, por ' + turnos(e.duration) + ': queima quem pisa'; },
+    mare: function (e) { return 'deixa uma poça onde termina a vez; parado em cima dela, recupera ' + pct(e.cura) + ' da vida'; },
+    couraca: function (e) {
+      return 'couraça: corta ' + pct(e.reducao) + ' de cada golpe até perder ' + num(e.pontos) + ' placas (golpe de ar arranca duas)';
+    },
+    ventania: function (e) { return 'quem o golpeia de perto é soprado ' + casas(e.tiles) + ' para longe'; }
   };
   function efeito(e) { var f = e && EFEITO[e.type]; return f ? f(e) : 'efeito especial'; }
   function alcance(r) {
@@ -860,7 +867,10 @@
       if (!lista2.length) return;
       h += '<h2>' + link('calabouco', d.id, d.name) + '</h2><div class="wk-grade">' + lista2.map(cartaoMonstro).join('') + '</div>';
     });
-    var inv = valores(MONSTROS).filter(function (m) { return !m.dungeonId; }).sort(ordemBichos);
+    // 02/10: os Colossos do Poço também não têm calabouço — e não são invocação de herói
+    var col = valores(MONSTROS).filter(function (m) { return m.colosso; }).sort(ordemBichos);
+    if (col.length) h += '<h2>Colossos do Poço</h2><div class="wk-grade">' + col.map(cartaoMonstro).join('') + '</div>';
+    var inv = valores(MONSTROS).filter(function (m) { return !m.dungeonId && !m.colosso; }).sort(ordemBichos);
     if (inv.length) h += '<h2>Invocações dos heróis</h2><div class="wk-grade">' + inv.map(cartaoMonstro).join('') + '</div>';
     var fechados = DGS.filter(function (d) { return !aberto(d.id); });
     if (fechados.length) {
@@ -900,7 +910,8 @@
     h += '<header class="wk-cabeca">' + bustoMonstro(m) + '<div class="wk-cabeca-tx"><h1>' + E(m.name) + '</h1><p class="wk-chips">' + elem(m.element) +
       (m.boss ? '<span class="wk-selo chefe">chefe</span>' : '') + (m.family ? '<span class="wk-selo">' + E(m.family) + '</span>' : '') +
       (IA[m.ai] && m.ai !== 'boss' ? '<span class="wk-selo">' + IA[m.ai] + '</span>' : '') +
-      (m.dungeonId ? '<span class="wk-selo">' + link('calabouco', m.dungeonId, nomeDg(m.dungeonId)) + '</span>' : '') + '</p>' +
+      (m.dungeonId ? '<span class="wk-selo">' + link('calabouco', m.dungeonId, nomeDg(m.dungeonId)) + '</span>' : '') +
+      (m.colosso ? '<span class="wk-selo">' + link('tabuleiro', 'poco', 'O Poço sem Fundo') + '</span>' : '') + '</p>' +
       '<p>' + E(m.description) + '</p>' + (sabor ? '<p class="wk-lore">' + E(sabor) + '</p>' : '') + '</div></header>';
     if (jeito) h += '<div class="wk-nota"><b>Como luta.</b> ' + E(jeito) + '</div>';
     h += '<h2>A ficha</h2><div class="wk-rolagem"><table class="wk-tabela"><tbody>' +
@@ -1309,8 +1320,11 @@
     if (Po) {
       sec('poco', 'O Poço sem Fundo',
         '<p>A torre infinita, com entrada pelo poço da praça, a leste da Árvore-Mundo, para quem desce sozinho. Cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros ' +
-        pct(Po.FATOR_POR_ANDAR) + ' mais duros. A cada ' + num(Po.CHEFE_A_CADA) + ' andares, um chefe. O recorde da semana fica anotado.</p>' +
-        '<p class="apoio">De quais salas ele empresta: ' + link('tabuleiro', 'poco', 'O Poço sem Fundo') + '.</p>', 'poco torre infinita andar');
+        pct(Po.FATOR_POR_ANDAR) + ' mais duros. A cada ' + num(Po.CHEFE_A_CADA) + ' andares, um chefe — e um Colosso, girando fogo, água, terra e ar. O recorde da semana fica anotado.</p>' +
+        '<p>O chão de cada andar tem perigos à vista desde o começo, e nenhum fere sem aviso: a <b>placa de setas</b> arma quando alguém pisa e atira na linha marcada duas rodadas depois; ' +
+        'o <b>chão rachado</b> range uma rodada antes de virar buraco; o <b>jato</b> do elemento marca o chão uma rodada antes de explodir, a cada três rodadas; ' +
+        'a <b>runa de exaustão</b> prende o passo e tira PP. Quanto mais fundo, mais perigos. Nenhum nasce na entrada, e nenhum buraco corta o mapa.</p>' +
+        '<p class="apoio">De quais salas ele empresta: ' + link('tabuleiro', 'poco', 'O Poço sem Fundo') + '.</p>', 'poco torre infinita andar colosso perigo placa setas runa jato rachado');
     }
 
     sec('dupla', 'Em dupla',

@@ -87,6 +87,8 @@ js/
     engine.js           REGRA PURA de batalha. Não conhece DOM nem Three.js.
     fusion.js           compõe os feitiços de fusão e resolve a fusão
     ai.js               inimigos
+    poco.js             o Poço sem Fundo: andar semeado, perigos do chão e Colossos
+                        (a regra deles; o motor só chama — ver docs/SISTEMAS.md §6)
     progress.js         save, inventário, forja, estrelas, coleção
     game.js             a máquina de estados entre telas
   render3d/
@@ -201,6 +203,8 @@ jogador. Página nova sem essa linha é bug.
 | `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |
 | `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 210 passaram / 0 falharam — 20 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
+| **`poco_perigos.js`** (Node) | 41 passaram / 0 falharam (02/10) — o chão do Poço e os Colossos: semente decide tudo, perigo nunca na entrada nem em casa de monstro, buraco nunca separa o mapa, todo disparo avisado com uma vez inteira para sair, a IA não para em casa avisada (0 em 1.303 decisões), um colosso e um chefe por andar múltiplo de 5, os quatro traços, o juiz refaz andares com perigo e colosso e chega ao mesmo hash |
+| `poco_chao_tela.html` | passou (02/10) — 7 perigos desenhados, avisos acendem e apagam, nada vaza; o colosso mede ~1,5× um comum de escala 1,0 |
 | **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1 |
 | `validate_classes.html` | 6.204 checagens, 0 falhas |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
