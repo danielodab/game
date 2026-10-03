@@ -86,7 +86,10 @@ async function pede(base, metodo, rota, corpo, token) {
 
     // ---- a conta e o primeiro save (o estado inicial do jogo, Bárbaro nível 22)
     const nome = 'Ponta' + nodeCrypto.randomBytes(3).toString('hex');
-    const cad = await pede(base, 'POST', '/api/cadastro', { nome, email: nome.toLowerCase() + '@soterra.test', senha: 'segredo-bom-8' });
+    // 02/10: o cadastro exige o aceite dos Termos (a versão de agora, lida do servidor/privacidade.py)
+    const versaoTermos = /VERSAO_TERMOS = '([^']+)'/.exec(fs.readFileSync(path.join(__dirname, '..', 'servidor', 'privacidade.py'), 'utf8'))[1];
+    const cad = await pede(base, 'POST', '/api/cadastro', { nome, email: nome.toLowerCase() + '@soterra.test', senha: 'segredo-bom-8',
+                                                            aceiteTermos: versaoTermos });
     check('a conta nasce', cad.ok && !!cad.token, JSON.stringify(cad));
     const token = cad.token;
     const w0 = est.mundoEconomico({ agoraMs: Date.now(), semente: 1 });

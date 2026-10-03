@@ -46,6 +46,7 @@ sys.path.insert(0, AQUI)
 from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402  (põe servidor/ no sys.path)
 import comum  # noqa: E402
 import conta as conta_mod  # noqa: E402
+import privacidade  # noqa: E402  (02/10: o aceite dos Termos que o cadastro exige)
 import correio as correio_mod  # noqa: E402
 
 try:
@@ -862,7 +863,8 @@ class ProvaDaConta(unittest.TestCase):
         nome = 'Xff Dobrado %d' % ProvaDaConta._n
         email = nome.replace(' ', '').lower() + '@soterra.test'
         dobrado = [('X-Forwarded-For', '8.8.8.8'), ('X-Forwarded-For', '189.34.12.7, 172.18.0.5')]
-        status, r = pede_cru(self.base, 'POST', '/api/cadastro', {'nome': nome, 'email': email, 'senha': SENHA}, dobrado)
+        status, r = pede_cru(self.base, 'POST', '/api/cadastro', {'nome': nome, 'email': email, 'senha': SENHA,
+                                                                  'aceiteTermos': privacidade.VERSAO_TERMOS}, dobrado)
         self.assertEqual(status, 201, r)
         c = Jogador(self.base)
         c.token, c.conta, c.email = r['token'], r['conta'], email

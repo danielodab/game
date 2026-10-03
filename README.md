@@ -89,6 +89,7 @@ js/
     ai.js               inimigos
     progress.js         save, inventário, forja, estrelas, coleção
     game.js             a máquina de estados entre telas
+    registro_erros.js   02/10: o erro no navegador de quem joga chega ao Mestre (o 1º script)
   render3d/
     models3d_v2.js      modelos, "looks" de classe, enxerto de peça, retratos
     renderer3d_v2.js    tabuleiro, câmera, clima, sobreposições, armadilhas
@@ -201,6 +202,9 @@ jogador. Página nova sem essa linha é bug.
 | `validate_fusion.html` | 5.767 checagens, 0 falhas (2.625 composições) |
 | `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 210 passaram / 0 falharam — 20 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
+| **`privacidade_api.py`** (Python, API) | 11 de 11 (02/10) — o cadastro exige o aceite da versão de agora e o grava; excluir pede o nome exato e a senha e espera luta e pagamento abertos; depois, NENHUMA linha do esquema aponta para a conta (lido do `sqlite_master`), fica só o dinheiro sem a conta, a guilda passa ao mais antigo; baixar meus dados; a faxina dos prazos no boot; cada número das páginas `site/termos.html` e `privacidade.html` bate com a constante |
+| **`registros_api.py`** (Python, API) | 9 de 9 (02/10) — o registro de erros: repetidos numa linha, nada de e-mail/IP/token no banco, cortes, freio por endereço, 30 dias, o painel do Mestre e a exceção da própria API |
+| **`registro_erros.js`** (Node) | 40 de 40 (02/10) — o cliente (`js/core/registro_erros.js`): junta, limita, limpa a pilha, nada em `file://`, e é o primeiro script do `index.html` |
 | **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1 |
 | `validate_classes.html` | 6.204 checagens, 0 falhas |
 | `validate_data.html` | 2.631 checagens, 0 falhas |

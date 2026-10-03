@@ -26,6 +26,12 @@
  * Administrador…) não sai da página. Sem a lei, o pedido sai como antes e o
  * servidor decide. O Entrar não passa por ela: conta antiga segue entrando.
  *
+ * O ACEITE (02/10): criar conta exige marcar "Li e aceito os Termos de Uso e a
+ * Política de Privacidade"; o pedido leva `aceiteTermos` = SITE.VERSAO_TERMOS e o
+ * servidor grava a versão e o dia (servidor/privacidade.py). O bloco "Privacidade e
+ * dados" da Minha conta (o aceite que falta, baixar os dados, excluir a conta) mora em
+ * conta_privacidade.js, que só olha quando a Minha conta aparece.
+ *
  * Rotas de hash: #criar, #entrar, #esqueci, #conta. Só o estado da tela vai no
  * endereço; e-mail, código e senha vão só no corpo do POST (SITE.api). Tudo que
  * vem do servidor passa pelo SITE.esc, ou entra por textContent. */
@@ -526,14 +532,19 @@
       marca($('c-email'), !emailParece(email));
       marca($('c-senha'), senha.length < 8);
       marca($('c-senha2'), senha2 !== senha);
+      // 02/10: o aceite dos Termos e da Política (o servidor recusa sem ele, e grava a versão)
+      var aceitou = !!$('c-aceite').checked;
+      $('c-aceite').parentNode.classList.toggle('invalido', !aceitou);
       if (!vn.ok) erro = vn.motivo;
       else if (!emailParece(email)) erro = 'Esse e-mail não parece um e-mail.';
       else if (senha.length < 8) erro = 'A senha precisa ter pelo menos 8 caracteres.';
       else if (senha2 !== senha) erro = 'As duas senhas não batem.';
+      else if (!aceitou) erro = 'Para criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade.';
       if (erro) { aviso('c-aviso', erro); return; }
       aviso('c-aviso', 'Criando a conta…', 'neutro');
       $('c-bt').disabled = true;
-      SITE.api('/api/cadastro', { method: 'POST', semToken: true, body: { nome: nome, email: email, senha: senha } })
+      SITE.api('/api/cadastro', { method: 'POST', semToken: true,
+                                  body: { nome: nome, email: email, senha: senha, aceiteTermos: SITE.VERSAO_TERMOS } })
         .then(function (r) {
           $('c-bt').disabled = false;
           if (!r.ok) { aviso('c-aviso', SITE.erro(r, 'não deu para criar a conta')); return; }

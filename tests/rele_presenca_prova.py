@@ -34,6 +34,7 @@ sys.dont_write_bytecode = True            # sem .pyc em servidor/
 sys.path.insert(0, SERVIDOR)
 sys.path.insert(0, AQUI)
 import api as cartorio  # noqa: E402  (o banco nasce pela Api de verdade)
+import privacidade  # noqa: E402  (02/10: o cadastro exige o aceite dos Termos)
 import presenca  # noqa: E402
 from rele_prova import manda, recebe  # noqa: E402
 from rele_nomes_prova import Rele  # noqa: E402  (o relé de verdade num subprocesso de prioridade baixa)
@@ -109,7 +110,7 @@ def cria_banco(pasta):
     contas = {}
     for i, (rotulo, nome) in enumerate((('ana', 'Presenca Ana'), ('bia', 'Presenca Bia'))):
         st, r = a.cadastro(None, {'nome': nome, 'email': 'presenca-%s-%d@prova.test' % (rotulo, i),
-                                  'senha': 'senha-de-prova-%d' % i})
+                                  'senha': 'senha-de-prova-%d' % i, 'aceiteTermos': privacidade.VERSAO_TERMOS})
         assert st == 201, (st, r)
         contas[rotulo] = (r['conta']['id'], r['token'])
     return a, caminho, contas

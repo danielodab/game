@@ -45,6 +45,7 @@ SERVIDOR = os.path.join(RAIZ, 'servidor')
 sys.dont_write_bytecode = True            # sem .pyc em servidor/
 sys.path.insert(0, SERVIDOR)
 import api as cartorio  # noqa: E402  (o banco nasce pela Api de verdade)
+import privacidade  # noqa: E402  (02/10: o cadastro exige o aceite dos Termos)
 import comum  # noqa: E402
 import rele_ident  # noqa: E402
 from rele_prova import junta, manda, recebe  # noqa: E402
@@ -80,7 +81,7 @@ def cria_banco(pasta):
                'mestre': 'Prova Vigia'}                 # o cadastro recusa nome reservado ("Mestre"): o gm entra à mão
     for i, (rotulo, nome) in enumerate(neutros.items()):
         st, r = a.cadastro(None, {'nome': nome, 'email': 'amigos-%s-%d@prova.test' % (rotulo, i),
-                                  'senha': 'senha-de-prova-%d' % i})
+                                  'senha': 'senha-de-prova-%d' % i, 'aceiteTermos': privacidade.VERSAO_TERMOS})
         assert st == 201, (st, r)
         contas[rotulo] = (r['conta']['id'], r['token'])
     t = comum.agora()

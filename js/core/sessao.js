@@ -135,10 +135,24 @@
         return r;
       });
   };
-  S.cadastrar = function (nome, email, senha) {
-    return S.api('/api/cadastro', { method: 'POST', semToken: true, body: { nome: nome, email: email, senha: senha } })
+  /* 02/10: `aceite` é a versão dos Termos de Uso e da Política de Privacidade que a
+   * pessoa leu e aceitou (o servidor recusa o cadastro sem ela, e grava a versão) */
+  S.cadastrar = function (nome, email, senha, aceite) {
+    return S.api('/api/cadastro', { method: 'POST', semToken: true,
+                                    body: { nome: nome, email: email, senha: senha, aceiteTermos: aceite } })
       .then(function (r) {
         if (r.ok && r.token && r.conta) S.guarda({ token: r.token, conta: r.conta });
+        return r;
+      });
+  };
+  /* 02/10, OS DIREITOS DO TITULAR (servidor/privacidade.py): baixar os dados (o
+   * JSON de tudo o que o servidor guarda) e excluir a conta (o nome EXATO e a senha;
+   * excluída, a sessão local sai junto — o token já morreu no servidor). */
+  S.meusDados = function () { return S.api('/api/conta/meus-dados'); };
+  S.excluir = function (nome, senha) {
+    return S.api('/api/conta/excluir', { method: 'POST', body: { nome: nome, senha: senha } })
+      .then(function (r) {
+        if (r.ok) S.esquece();
         return r;
       });
   };
@@ -395,4 +409,7 @@
   /* A porta de SAÍDA do jogo (11/09): a capa do site, onde se cuida da conta,
    * da loja e do ranking. O save já está gravado a cada passo — sair é sair. */
   S.paginaSite = function () { return raizDoSite() + 'site/index.html'; };
+  /* 02/10: os Termos de Uso e a Política de Privacidade (o link da ficha Contas) */
+  S.paginaTermos = function () { return raizDoSite() + 'site/termos.html'; };
+  S.paginaPrivacidade = function () { return raizDoSite() + 'site/privacidade.html'; };
 })();

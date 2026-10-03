@@ -115,7 +115,10 @@
     AGUA = (cat['pedras-agua'] || {}).alvo || AGUA;
     FOGO = (cat['pedras-fogo'] || {}).alvo || FOGO;
     carteira0 = preco('pedras-agua') + preco('bonus-xp-1') + preco('insignia-1') + preco('pedras-agua-50') + SOBRA;
-    return S.cadastrar(nome, nome + '@prova.local', senha);
+    return S.api('/api/termos', { semToken: true }).then(function (t) {
+      // 02/10: o cadastro exige o aceite dos Termos — a versão de agora vem do próprio servidor
+      return S.cadastrar(nome, nome + '@prova.local', senha, t.versaoTermos);
+    });
   }).then(function (r) {
     check('cadastro de conta descartável (' + nome + ')', r.ok && r.token && S.ativa(), r.erro);
     return compra('pedras-agua');

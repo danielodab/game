@@ -71,6 +71,7 @@ CHROMES = [r'C:\Program Files\Google\Chrome\Application\chrome.exe',
 sys.dont_write_bytecode = True            # sem .pyc em servidor/
 sys.path.insert(0, SERVIDOR)
 import api as cartorio  # noqa: E402  (o banco nasce pela Api de verdade)
+import privacidade  # noqa: E402  (02/10: o cadastro exige o aceite dos Termos)
 import comum  # noqa: E402
 import nomes  # noqa: E402
 import rele_ident  # noqa: E402
@@ -100,7 +101,7 @@ def cria_banco(pasta):
                      'bento': 'Prova Bento'}
     for i, (rotulo, nome) in enumerate(nomes_neutros.items()):
         st, r = a.cadastro(None, {'nome': nome, 'email': 'prova-%s-%d@prova.test' % (rotulo, i),
-                                  'senha': 'senha-de-prova-%d' % i})
+                                  'senha': 'senha-de-prova-%d' % i, 'aceiteTermos': privacidade.VERSAO_TERMOS})
         assert st == 201, (st, r)
         contas[rotulo] = (r['conta']['id'], r['token'])
     t = comum.agora()

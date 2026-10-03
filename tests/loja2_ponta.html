@@ -164,7 +164,10 @@
           [1, 3, 7].every(function (d) { var i = CAT['bonus-xp-' + d] || {}; return i.tipo === 'bonus-xp' && i.qtd === d && i.limite === null; }) &&
           !CAT['pergaminho-xp'], js([CAT['bonus-xp-1'], CAT['pergaminho-xp']]));
     check('o jogo espelha o fator do bônus (DATA.bonusXp.fator = 1,5)', JOGO.DATA.bonusXp && JOGO.DATA.bonusXp.fator === 1.5);
-    return S.cadastrar(nome, nome + '@prova.local', senha);
+    return S.api('/api/termos', { semToken: true }).then(function (t) {
+      // 02/10: o cadastro exige o aceite dos Termos — a versão de agora vem do próprio servidor
+      return S.cadastrar(nome, nome + '@prova.local', senha, t.versaoTermos);
+    });
   }).then(function (r) {
     X.conta = S.contaId();
     check('cadastro de conta descartável (' + nome + ', #' + X.conta + ')', r.ok && r.token && S.ativa() && X.conta > 0, r.erro);

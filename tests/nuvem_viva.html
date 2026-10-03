@@ -72,7 +72,10 @@
   check('a API está apontada (' + S.base() + ')', /^https?:\/\//.test(S.base()));
   S.api('/api/saude', { semToken: true }).then(function (r) {
     check('a API responde em /api/saude', r.ok === true, JSON.stringify(r));
-    return S.cadastrar(nome, nome + '@prova.local', senha);
+    return S.api('/api/termos', { semToken: true }).then(function (t) {
+      // 02/10: o cadastro exige o aceite dos Termos — a versão de agora vem do próprio servidor
+      return S.cadastrar(nome, nome + '@prova.local', senha, t.versaoTermos);
+    });
   }).then(function (r) {
     check('cadastro de conta descartável (' + nome + ')', r.ok && r.token && r.conta && S.ativa(), r.erro);
     P.reset();
