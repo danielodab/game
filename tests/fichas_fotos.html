@@ -426,14 +426,35 @@
       b.click();
       var f = painel();
       check('Contas: abrem pelo menu, com o foco dentro da ficha', !!f && f.contains(document.activeElement));
-      // o anel de teclado: sem mouse nem toque nesta página, o foco posto por
-      // script conta como de teclado (:focus-visible) e tem de desenhar o anel
+      // O ANEL DE TECLADO. Script não consegue fingir um Tab de verdade (o
+      // :focus-visible depende de como o foco chegou), então a prova lê a
+      // REGRA: existe no style.css uma regra de :focus-visible com contorno
+      // sólido de >= 2 px, e o fechar (e um campo, e o interruptor) são
+      // alcançados pelo seletor dela sem o :focus-visible
       var x = q1('.btn-close', f);
+      var regra = null;
+      [].forEach.call(document.styleSheets, function (ss) {
+        var rs; try { rs = ss.cssRules; } catch (e) { return; }
+        [].forEach.call(rs || [], function (r) {
+          if (regra || !r.selectorText || r.selectorText.indexOf(':focus-visible') < 0) return;
+          // o contorno vem como `outline: 2px solid var(--foco)` — com var() o
+          // navegador não abre o atalho em outline-style/width, então lê o texto
+          var m = /outline:\s*([\d.]+)px solid/.exec(r.style.cssText);
+          if (!m || parseFloat(m[1]) < 2) return;
+          var sel = r.selectorText.replace(/:focus-visible/g, '');
+          try { if (x.matches(sel)) regra = r; } catch (e) {}
+        });
+      });
+      check('o foco de teclado desenha o anel: uma regra :focus-visible de contorno sólido >= 2 px alcança os controles da ficha',
+            !!regra && ['input', 'button.btn-tab', 'summary'].every(function (t) {
+              var n = document.createElement(t.split('.')[0]);
+              if (t.indexOf('.') > 0) n.className = t.split('.')[1];
+              f.appendChild(n);
+              var ok = n.matches(regra.selectorText.replace(/:focus-visible/g, ''));
+              f.removeChild(n);
+              return ok;
+            }), regra ? regra.selectorText.slice(0, 120) : 'nenhuma regra');
       x.focus();
-      var cs = getComputedStyle(x);
-      check('o foco de teclado desenha o anel (outline sólido de 2 px) no fechar',
-            x.matches(':focus-visible') && cs.outlineStyle === 'solid' && parseFloat(cs.outlineWidth) >= 2,
-            cs.outlineStyle + ' ' + cs.outlineWidth + ' focus-visible=' + x.matches(':focus-visible'));
       x.click();
       check('fechar a ficha devolve o foco a quem a abriu', document.activeElement === b,
             document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
