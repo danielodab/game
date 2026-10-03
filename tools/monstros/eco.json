@@ -1,0 +1,52 @@
+{
+  "calabouco": "eco",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Eco Primordial\\monstros",
+  "saida": "assets/embedded/models-meshy-eco.js",
+  "monstros": [
+    {
+      "id": "eco-menor-fogo",
+      "nome": "Eco Menor de Brasa",
+      "boss": false,
+      "pasta": "Eco Menor de Brasa",
+      "prefixo": "Eco Menor de Brasa",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "eco-menor-agua",
+      "nome": "Eco Menor de Coral",
+      "boss": false,
+      "pasta": "Eco Menor de Coral",
+      "prefixo": "Eco Menor de Coral",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "eco-menor-terra",
+      "nome": "Eco Menor de Rocha",
+      "boss": false,
+      "pasta": "Eco menor de rocha",
+      "prefixo": "Eco Menor de Rocha",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    }
+  ]
+}
