@@ -46,6 +46,7 @@ import secrets
 import time
 
 from comum import Recusa, agora, classe_do_heroi
+import moderacao
 from salas import LANCES_MAX, RE_BILHETE, SALA_MIN_S, SALA_S_POR_TURNO, _inteiro_puro
 
 log = logging.getLogger('api')
@@ -163,14 +164,24 @@ def faixas_publicas():
              'selos': f['selos'], 'titulo': f['titulo']} for f in FAIXAS]
 
 
-# o melhor de cada conta numa semana: pontos, depois quem chegou primeiro, depois o id (determinístico)
+# a conta banida AGORA (03/10, revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta
+# (moderacao._ban_atual), então o banimento com prazo que já venceu ainda tirava a conta do ranking — e no
+# fechamento ela perdia o prêmio para sempre. A mesma regra do moderacao.banimento_lido: banida = o 0/1 em 1 E
+# (uma linha aberta em vigor OU nenhuma linha aberta — o banimento de antes da tabela, e a lápide). O `?` é o agora.
+BANIDA_AGORA = (
+    "(c.banido = 1 AND (NOT EXISTS (SELECT 1 FROM moderacao_banimentos b WHERE b.conta_id = c.id "
+    "AND b.encerrado_em IS NULL) OR EXISTS (SELECT 1 FROM moderacao_banimentos b WHERE b.conta_id = c.id "
+    "AND b.encerrado_em IS NULL AND (b.fim IS NULL OR b.fim > ?))))")
+
+# o melhor de cada conta numa semana: pontos, depois quem chegou primeiro, depois o id (determinístico).
+# Parâmetros: (semana, agora)
 MELHORES = """
 SELECT conta_id, pontos, dano, derrubou, rodada, fechada_em, nome FROM (
   SELECT t.conta_id, t.pontos, t.dano, t.derrubou, t.rodada, t.fechada_em,
          COALESCE(r.nome, c.nome) AS nome,
          ROW_NUMBER() OVER (PARTITION BY t.conta_id ORDER BY t.pontos DESC, t.fechada_em ASC, t.id) AS ordem
   FROM supremo_tentativas t JOIN contas c ON c.id = t.conta_id LEFT JOIN resumos r ON r.conta_id = t.conta_id
-  WHERE t.semana = ? AND t.estado = 'conferida' AND c.banido = 0 AND c.gm = 0
+  WHERE t.semana = ? AND t.estado = 'conferida' AND NOT """ + BANIDA_AGORA + """ AND c.gm = 0
 ) WHERE ordem = 1
 ORDER BY pontos DESC, fechada_em ASC, conta_id ASC
 """
@@ -191,10 +202,11 @@ def _linha_publica(r, pos):
 class SupremoMixin:
 
     # -- o fechamento da semana ---------------------------------------------------------------
-    def _supremo_ranking(self, semana, limite=None):
-        """Dentro da tranca: as linhas do ranking da semana, em ordem (sem limite = todas)."""
+    def _supremo_ranking(self, semana, limite=None, t=None):
+        """Dentro da tranca: as linhas do ranking da semana, em ordem (sem limite = todas). `t`: o agora
+        em que se lê o prazo dos banimentos."""
         sql = MELHORES + (" LIMIT %d" % int(limite) if limite else "")
-        return self.con.execute(sql, (semana,)).fetchall()
+        return self.con.execute(sql, (semana, agora() if t is None else t)).fetchall()
 
     def _supremo_fecha_vencidas(self, t=None):
         """Fecha toda semana que já acabou (mais a folga) e ainda não tem linha em supremo_semanas. Barato
@@ -224,7 +236,7 @@ class SupremoMixin:
                 return 0
             self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'semana-fechou' "
                              "WHERE semana = ? AND estado = 'aberta'", (t, semana))
-            lista = self._supremo_ranking(semana)
+            lista = self._supremo_ranking(semana, t=t)
             dados = 0
             for pos, r in enumerate(lista, 1):
                 f = faixa_de(pos)
@@ -272,13 +284,13 @@ class SupremoMixin:
             "SELECT pontos, dano, derrubou, fechada_em, id FROM supremo_tentativas WHERE conta_id = ? AND semana = ? "
             "AND estado = 'conferida' ORDER BY pontos DESC, fechada_em ASC, id LIMIT 1", (cid, semana)).fetchone()
         conta = self.con.execute("SELECT gm, banido FROM contas WHERE id = ?", (cid,)).fetchone()
-        fora = bool(conta and (conta['gm'] or conta['banido']))
+        fora = bool(conta and (conta['gm'] or moderacao.banimento_lido(self.con, cid, conta['banido'], t) is not None))
         posicao = None
         if melhor is not None and not fora:
             posicao = 1 + self.con.execute(
                 "SELECT COUNT(*) FROM (" + MELHORES + ") WHERE pontos > ? OR (pontos = ? AND "
                 "(fechada_em < ? OR (fechada_em = ? AND conta_id < ?)))",
-                (semana, melhor['pontos'], melhor['pontos'], melhor['fechada_em'], melhor['fechada_em'], cid)).fetchone()[0]
+                (semana, t, melhor['pontos'], melhor['pontos'], melhor['fechada_em'], melhor['fechada_em'], cid)).fetchone()[0]
         premios = [{'semana': r['semana'], 'posicao': r['posicao'], 'faixa': r['faixa'], 'pontos': r['pontos'],
                     'vintens': r['vintens'], 'selos': json.loads(r['selos'] or '{}'), 'titulo': r['titulo']}
                    for r in self.con.execute("SELECT * FROM supremo_premios WHERE conta_id = ? "

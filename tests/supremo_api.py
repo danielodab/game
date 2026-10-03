@@ -350,6 +350,34 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(S.semana_de(dom), S.semana_de(seg))
         self.assertEqual(S.dia_de(seg) - S.dia_de(seg - 1), 1)
 
+    def test_11_banimento_vencido_nao_tira_do_ranking(self):
+        """03/10 (revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta. O
+        banimento com prazo que já venceu (a conta não pediu nada depois) não tira a conta do ranking nem
+        do prêmio; o em vigor, o permanente e o de antes da tabela (sem linha) tiram."""
+        agora_s = int(time.time())
+        semana = S.semana_de(agora_s) - 2                   # duas semanas atrás: a test_07 fecha a passada
+        contas = [self.conta_pronta('Vencido%d' % i) for i in range(4)]
+        venceu, vigor, perm, legado = contas
+        fim = S.inicio_da_semana(semana) + 2 * 86400
+        for i, (c, pts) in enumerate(zip(contas, (900, 800, 700, 600))):
+            self.sql("INSERT INTO supremo_tentativas(id, conta_id, semana, dia, semente, herois, regras, aberta_ms, "
+                     "fechada_em, estado, dano, pontos, derrubou, rodada, turnos) VALUES "
+                     "(?, ?, ?, ?, 1, '[\"sumo\"]', NULL, ?, ?, 'conferida', ?, ?, 0, 12, 20)",
+                     'v%d-%d' % (semana, i), c.conta['id'], semana, S.dia_de(fim), (fim - 600) * 1000,
+                     fim + i, pts, pts)
+        for c, ini, fim_ban in ((venceu, agora_s - 7200, agora_s - 3600), (vigor, agora_s - 60, agora_s + 3600),
+                                (perm, agora_s - 60, None)):
+            self.sql("INSERT INTO moderacao_banimentos(conta_id, motivo, inicio, fim) VALUES (?, 'prova', ?, ?)",
+                     c.conta['id'], ini, fim_ban)
+        self.sql("UPDATE contas SET banido = 1 WHERE id IN (?, ?, ?, ?)", *[c.conta['id'] for c in contas])
+        st, r = Cliente(self.base).pede('GET', '/api/supremo/ranking?semana=%d' % semana, token=None)
+        self.assertEqual(st, 200, r)
+        self.assertTrue(r['fechada'], r)
+        self.assertEqual([l['pontos'] for l in r['ranking']], [900])   # só a do banimento vencido
+        prem = self.sql("SELECT conta_id, posicao FROM supremo_premios WHERE semana = ?", semana)
+        self.assertEqual([(p['conta_id'], p['posicao']) for p in prem], [(venceu.conta['id'], 1)])
+        self.assertEqual(self.sql("SELECT banido FROM contas WHERE id = ?", venceu.conta['id'])[0]['banido'], 1)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

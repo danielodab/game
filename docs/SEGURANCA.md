@@ -708,7 +708,9 @@ registrada**. O código do servidor mora em `servidor/moderacao.py` (mixin da Ap
 - Tabela `moderacao_banimentos` (motivo, início, fim — `NULL` = permanente —, quem aplicou, a denúncia que o causou, e
   como acabou: `expirou`, `desfeito`, `trocado` — a linha cujo prazo já tinha passado fecha como `expirou`, no fim
   dela, mesmo quando quem a fecha é um banir/desbanir posterior). `contas.banido` continua sendo a **chave geral**: com 0 a conta não
-  está banida, ponto (o `admin desbanir` do Terminal e o ranking, a guilda, os amigos e a troca leem esse 0/1).
+  está banida, ponto (o `admin desbanir` do Terminal e o ranking, a guilda, os amigos e a troca leem esse 0/1). O
+  ranking e o fechamento da semana do Eco leem também o prazo da linha (`supremo.BANIDA_AGORA`, 03/10): o banimento
+  vencido que a conta ainda não zerou não lhe tira o prêmio.
 - Banida = `contas.banido = 1` **e** (uma linha aberta em vigor **ou** nenhuma linha aberta — o banimento de antes
   desta tabela, que é permanente sem motivo registrado: `banimento.legado`).
 - **O prazo vence sozinho, sem relógio de fundo**: o próximo pedido da conta (o login ou qualquer rota) fecha a linha
