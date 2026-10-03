@@ -220,6 +220,7 @@ jogador. Página nova sem essa linha é bug.
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`equilibrio.js`** (Node) | a prova do equilíbrio ([`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md)); medida completa de 03/10: **399 de 436** — perfis 198/198, fusão 119/126 (sobram degraus nos níveis de conferência 16 e 25), duelos em dupla 62 de 84 células em 40–60% (o Minotauro é a maior parte do que sobra). Ver §7.1 |
 | `equilibrio_fusao.html` | a mesma conta da fusão no navegador (8 misturas) |
+| `equilibrio_pve.js` (Node) | mostra, não cobra: o calabouço por classe no nível recomendado (docs/EQUILIBRIO.md §6.6) |
 | `regras_equilibrio.js` (Node) | 29 de 29 — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA |
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos

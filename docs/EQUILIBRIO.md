@@ -215,6 +215,15 @@ livre (norte, sul, oeste, leste — ordem fixa, o juiz refaz igual).
 ídolo que acabou de nascer; o dano "de quem estava do lado" caía nele. A área virou o círculo
 de 1 em volta da cravada.
 
+*Efeito de tabela que a revisão achou:* a **Guarnição** também tem muro (`wl(3)`), e o muro sobe
+em toda casa livre da área. Na casa única ele nunca subia (o ídolo nascia primeiro e ocupava a
+casa: 0 muros, medido na base); no círculo de 1 ele sobe nas **quatro** vizinhas livres e fecha o
+ídolo numa caixa por 3 turnos — e o Muro-Vigia bate só a 1 casa, com 1 PP, então só alcança quem
+já estava encostado na hora da cravada. A régua da fusão não pontua muro, então nada disto entrou
+na medida. Fica como está (é "ídolo, muro e escudo de uma vez", e a caixa barra a passagem), mas
+é decisão de desenho do dono: se a Guarnição deve erguer um muro só, o motor precisa de um teto
+de muros por lance, que hoje não existe.
+
 **3.4 A IA não sabia usar dois verbos** (`ai.js`). O **muro** valia zero (o `switch` não
 tinha o caso): o Minotauro conduzido pela IA nunca erguia a Muralha, e o verbo inteiro da
 classe sumia de toda batalha da IA. O **teleporte** valia zero: o Passo do Vento do Ladino
@@ -482,6 +491,30 @@ gente, vale jogar e observar (§7).
 `[5,15,35,65,110]`, a escada que o dono pediu em 30/08). As três listas de falha são
 idênticas antes e depois desta rodada.
 
+**6.6 O PvE (medido na revisão).** O pedido vale para o calabouço também, e o acerto das classes
+foi calibrado só nos duelos. `node tests/equilibrio_pve.js [raiz]` mede o calabouço: cada classe nos
+seis calabouços, no nível recomendado de cada um, nas três salas e nos quatro caminhos, em dupla (o
+parceiro gira) e sozinha, nua e conduzida pela IA do jogo; mostra, não cobra. Base `39a6ae9` →
+esta branch, 2 sementes (144 salas por classe em cada modo):
+
+| classe | vida dos monstros tirada (dupla) | vitória (dupla) | tirada sozinho |
+|---|---|---|---|
+| Caçador | 45% → 39% | 27% → 23% | 27% → 18% |
+| Bruxo | 41% → 36% | 25% → 17% | 22% → 16% |
+| Curandeiro | 40% → 40% | 28% → 27% | 9% → 10% |
+| Ladino | 34% → 36% | 17% → 17% | 14% → 19% |
+| Xamã | 45% → 39% | 31% → 24% | 25% → 17% |
+| Minotauro | 36% → 36% | 20% → 18% | 12% → 15% |
+| Bárbaro | 39% → 38% | 22% → 22% | 15% → 20% |
+| **média** | **40% → 38%** | **25% → 21%** | **18% → 16%** |
+
+Leitura: as classes ficaram **mais parecidas** no calabouço também (a vida tirada em dupla ia de 34%
+a 45% e agora vai de 36% a 40%), e o calabouço ficou **um pouco mais difícil** — a vitória em dupla
+caiu de 25% para 21% (o número absoluto é de herói nu na mão da IA; o que vale é a comparação). Quem
+mais perdeu foi quem atira de longe **sozinho**: o Caçador tira um terço a menos (27% → 18%), o Bruxo
+e o Xamã um quarto. Ninguém foi medido com item, estrela e pet. **Decisão do dono:** aceitar o
+calabouço um pouco mais duro, ou baixar a vida dos monstros (um número só, que não mexe no PvP).
+
 ## 7. Como rodar e o que observar jogando
 
 **Jogando, observe** (o que a régua da IA pode ter errado para mais ou para menos):
@@ -499,6 +532,8 @@ node tests/equilibrio.js perfis          # só os perfis (~1 min)
 node tests/equilibrio.js fusao           # só a fusão (~1 min)
 node tests/equilibrio.js duelos          # só os duelos (~8 min)
 node tests/equilibrio.js --completo      # a medida deste documento (~35 min com 4 filhos; ~2 h de CPU)
+node tests/regras_equilibrio.js          # as regras de §3, lance a lance (segundos)
+node tests/equilibrio_pve.js [raiz]      # o calabouço (§6.6), mostra e não cobra (~2 min)
 # recortes para calibrar: --niveis 5,30  --classes minotauro  --sementes 4
 # experimentar sem tocar nos dados: --ajuste arquivo.json (formato no topo de tests/equilibrio.js)
 ```
