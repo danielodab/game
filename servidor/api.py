@@ -78,6 +78,7 @@ from arena import ESQUEMA_ARENA, ArenaMixin   # 14/09: a fila da Arena (o PvP ra
 from guerra import ESQUEMA_GUERRA, GuerraMixin   # 15/09: a guerra de guilda 2x2 na Sede (a fila e o XP da guilda)
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
+from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin   # 02/10: o registro de erros
 import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -371,6 +372,7 @@ ROTAS = {
     ('POST', '/api/mercado/confirmar'):       ('mercado_confirmar', True),
     ('POST', '/api/mercado/retirar'):         ('mercado_retirar', True),
 }
+ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
@@ -722,7 +724,7 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin, ArenaMixin, GuerraMixin):
+          AmigosMixin, ArenaMixin, GuerraMixin, RegistrosMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -750,7 +752,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_ARENA)    # 14/09: a fila da Arena (arena.py) — idem
         self.con.executescript(ESQUEMA_GUERRA)   # 15/09: a guerra de guilda 2x2 (guerra.py) — idem
         self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
+        self.con.executescript(ESQUEMA_REGISTROS)  # 02/10: o registro de erros (registros.py) — idem
         self.tranca = threading.RLock()
+        self._registros_init()   # 02/10: o freio do registro de erros (registros.py), em memória
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
         self._fila = {}          # chave do balde do IP → pedidos esperando uma dessas vagas voltar
@@ -1683,6 +1687,7 @@ class Atendente(BaseHTTPRequestHandler):
             resposta.update(r.extra)
         except Exception:
             log.exception("erro em %s %s", metodo, caminho)
+            self.api.registra_excecao_api(metodo, caminho, self._token())   # 02/10: o painel do Mestre vê (registros.py)
             status, resposta = 500, {'ok': False, 'erro': 'erro interno do servidor'}
         self._responde(status, resposta)
 

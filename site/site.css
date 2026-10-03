@@ -823,3 +823,19 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
   /* no celular a linha quebra: o estado e o botão descem inteiros, sem aperto */
   .ms-lado .lista-pedidos .direita, .ms-ficha .lista-pedidos .direita, .ms-ultimos .lista-pedidos .direita { max-width: none; }
 }
+
+/* o registro de erros no painel do Mestre (mestre_erros.js) */
+.er-resumo { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--texto-2); margin: 4px 0 10px; }
+.er-lista { list-style: none; margin: 0; padding: 0; }
+.er-lista > li { padding: 12px 0; border-bottom: 1px solid var(--linha); min-width: 0; }
+.er-lista > li:last-child { border-bottom: 0; }
+.er-cab { display: flex; gap: 8px 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.er-msg { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.er-conta { font-variant-numeric: tabular-nums; color: var(--ouro); font-weight: 700; white-space: nowrap; }
+.er-meta { display: block; color: var(--texto-2); font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.er-origem { font-size: 11px; padding: 1px 7px; margin-right: 6px; }
+.er-pilha {
+  margin: 8px 0 0; padding: 8px 10px; background: var(--fundo-3); border-radius: 8px; font: 12px/1.45 ui-monospace, Consolas, monospace;
+  color: var(--texto-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto;
+}
+.er-lista details summary { cursor: pointer; color: var(--ouro-2); font-size: 13px; margin-top: 6px; }
