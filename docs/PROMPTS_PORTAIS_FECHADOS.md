@@ -16,8 +16,8 @@ Mina Trêmula (seção 3 + 6.3) e o Coração Partido (seção 4 + 6.4).
 
 **03/10/2026:** os prompts do conteúdo novo do lançamento — Sala de Guerra,
 Colossos do Poço, Eco Primordial e Santuário dos Elementos — estão em
-`docs/PROMPTS_LANCAMENTO.md`, já no caminho Gemini → Meshy e com o recorte dos
-personagens.
+`docs/PROMPTS_LANCAMENTO.md`, já no caminho Gemini → Meshy e na regra que o dono
+fixou em 03/10: um prompt por personagem, um por muro e de 3 a 4 itens por folha.
 
 ---
 
