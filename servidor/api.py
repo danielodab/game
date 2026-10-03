@@ -78,6 +78,7 @@ from arena import ESQUEMA_ARENA, ArenaMixin   # 14/09: a fila da Arena (o PvP ra
 from guerra import ESQUEMA_GUERRA, GuerraMixin   # 15/09: a guerra de guilda 2x2 na Sede (a fila e o XP da guilda)
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
+from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a tentativa, o placar e a semana)
 import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -335,6 +336,12 @@ ROTAS = {
     ('POST', '/api/grupo/pocao'):             ('grupo_pocao', True),      # 13/09: cada um cura os próprios
     ('POST', '/api/duelo/abrir'):             ('duelo_abrir', True),      # 14/09: a vida com que cada lado entra
     ('POST', '/api/duelo/fechar'):            ('duelo_fechar', True),
+    # 02/10: o Eco Primordial (supremo.py) — ler é público (com token traz a parte da conta); a tentativa
+    # abre com a semente do servidor e fecha pelo juiz
+    ('GET',  '/api/supremo'):                 ('supremo_ler', False),
+    ('GET',  '/api/supremo/ranking'):         ('supremo_ranking', False),
+    ('POST', '/api/supremo/abrir'):           ('supremo_abrir', True),
+    ('POST', '/api/supremo/fechar'):          ('supremo_fechar', True),
     # 14/09: a fila da Arena (arena.py)
     ('POST', '/api/arena/inscrever'):         ('arena_inscrever', True),
     ('GET',  '/api/arena/quadro'):            ('arena_quadro', True),
@@ -722,7 +729,7 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin, ArenaMixin, GuerraMixin):
+          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -750,6 +757,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_ARENA)    # 14/09: a fila da Arena (arena.py) — idem
         self.con.executescript(ESQUEMA_GUERRA)   # 15/09: a guerra de guilda 2x2 (guerra.py) — idem
         self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
+        self.con.executescript(ESQUEMA_SUPREMO)   # 02/10: o Eco Primordial (supremo.py) — idem
         self.tranca = threading.RLock()
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
@@ -1504,9 +1512,14 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         futuros = [e for e in lista if e['inicio'] > t]
         cal = sorted((e for e in futuros if e.get('origem') == 'calendario'), key=ordem)[:PROXIMOS_MAX]
         proximos = sorted([e for e in futuros if e.get('origem') != 'calendario'] + cal, key=ordem)
+        # 02/10: a semana do Eco Primordial (supremo.py) é um evento do mundo FIXO — a de agora e a próxima —,
+        # num campo à parte: `ativos`/`proximos` continuam sendo a agenda do Mestre (o que ele liga e cancela),
+        # e o jogo (agenda.js) e o site (site.js) juntam os dois para mostrar a contagem regressiva
+        semanais = [e for e in self._supremo_eventos(t) if e['fim'] > t and e['inicio'] < ate]
         return 200, {'ok': True, 'agora': t, 'fusoMin': FUSO_MIN, 'janelaDias': JANELA_DIAS,
                      'tetos': dict(AGENDA_TETOS), 'ativos': ativos, 'proximos': proximos,
-                     'regras': [regra_publica(rg) for rg in regras], 'fatores': resolve_fatores(ativos, t)}
+                     'regras': [regra_publica(rg) for rg in regras], 'fatores': resolve_fatores(ativos, t),
+                     'semanais': semanais}
 
     def evento_criar(self, conta, corpo):
         """O Mestre liga um evento pontual: agora (sem `inicio`) ou agendado."""

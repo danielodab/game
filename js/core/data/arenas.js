@@ -296,6 +296,67 @@ JOGO.DATA.arenas = [
   }
 ];
 
+/* A CÂMARA DO ECO (02/10) — o único mapa daqui que NÃO é entre jogadores: a arena do chefe supremo
+ * da semana (js/core/data/eco.js). Mora nesta lista pelo mesmo motivo da Praça: não é calabouço — não
+ * vira portal, não empresta palco ao Poço, não entra no Calabouço do Dia nem no sorteio do PvP — e o
+ * motor já procura aqui (engine.js getDungeon). `modo: 'eco'` separa dos mapas de duelo quem precisa
+ * (o enquadramento de duelo do tabuleiro 3D, a wiki); a letra `e` É monstro aqui, não o lado B.
+ *
+ * ANATOMIA (18×18; o centro do círculo fica entre as casas 8 e 9, e o Eco ocupa 8..9 × 8..9 — a letra
+ * marca o canto noroeste do corpo 2×2, as outras três casas dele são chão). Câmara CIRCULAR (raio 8,4
+ * a partir do centro) sobre o vazio (`~`), com PILARES QUEBRADOS de cobertura:
+ *   · quatro pares altos nos pontos cardeais a 5 passos do corpo dele — (8,3)(9,3), (3,8)(3,9),
+ *     (14,8)(14,9) — e o do sul trocado por entulho BAIXO (8,14)(9,14): o lado de quem chega vê o Eco
+ *     por cima da mureta e leva o −25% da cobertura, mas não fica cego;
+ *   · quatro pilares altos nas diagonais a 4 passos — (6,6), (11,6), (6,11), (11,11) — que abrigam da
+ *     Maré Funda (a onda de 3 a 6 passos só pega quem o núcleo VÊ);
+ *   · entulho baixo na borda — (6,2)(11,2), (2,6)(15,6), (2,11)(15,11) — para quem recua.
+ * Os quatro `P` ficam ao sul, a 6 ou mais passos do corpo: a preparação (30 s) escolhe entre casas
+ * a 3 ou mais dele. Tudo isso passa pela régua de tests/visao_mapas.js (simetria, muro reto, fresta
+ * de canto) como as outras salas. */
+JOGO.DATA.arenas.push({
+  id: 'camara_eco',
+  name: 'A Câmara do Eco',
+  modo: 'eco',
+  theme: 'heart',
+  palette: {
+    primary: '#9a7ad8', secondary: '#241f38', accent: '#ffcf6b',
+    floor1: '#2b2838', floor2: '#332f44', wall: '#191624', lowWall: '#4a4160', voidColor: '#07050d'
+  },
+  defaultWeather: 'calmo',
+  weatherCycle: ['calmo'],
+  weatherShiftEveryRounds: 0,
+  tileEventRate: 0,
+  rooms: [
+    {
+      name: 'A Câmara do Eco',
+      weather: 'calmo',
+      sceneryTheme: 'heart',
+      layout: [
+        '~~~~~~~~~~~~~~~~~~',
+        '~~~~~........~~~~~',
+        '~~~~..=....=..~~~~',
+        '~~~.....##.....~~~',
+        '~~..............~~',
+        '~................~',
+        '~.=...#....#...=.~',
+        '~................~',
+        '~..#....e.....#..~',
+        '~..#..........#..~',
+        '~................~',
+        '~.=...#....#...=.~',
+        '~................~',
+        '~~..............~~',
+        '~~~.....==.....~~~',
+        '~~~~..P....P..~~~~',
+        '~~~~~..P..P..~~~~~',
+        '~~~~~~~~~~~~~~~~~~'
+      ],
+      monsters: { e: 'eco_primordial' }
+    }
+  ]
+});
+
 /* o mapa de luta pelo id (null se não existe) */
 JOGO.DATA.arena = function (id) {
   var l = JOGO.DATA.arenas || [];

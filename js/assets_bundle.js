@@ -460,6 +460,13 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === id) return ds[i];
     return null;
   }
+  /* 02/10: o mapa de luta que não é calabouço (DATA.arenas) e que tem monstro — a Câmara do Eco. Os de
+   * duelo seguem pelo `cenario` de sempre (o pedido de duelo nem passa por aqui). */
+  function mapaPve(id) {
+    var ar = lista(D().arenas);
+    for (var i = 0; i < ar.length; i++) if (ar[i] && ar[i].id === id && ar[i].modo === 'eco') return ar[i];
+    return null;
+  }
   /* Tudo o que um objeto de dados manda INVOCAR (efeito summon), a qualquer
    * profundidade — formas de fusao guardam o efeito dentro de `mechanic`. */
   function invocacoes(obj, fora, fundo) {
@@ -485,9 +492,14 @@ var JOGO = (typeof window !== 'undefined')
   function doMonstro(id, fora) {
     var mdl = modeloDe(id);
     if (mdl) fora.push(mdl);
-    var d = D(), md = (d.monsters && d.monsters[id]) || (d.fusionSummons && d.fusionSummons[id]) || null;
+    var d = D(), md = (d.monsters && d.monsters[id]) || (d.fusionSummons && d.fusionSummons[id]) ||
+                     (d.ecoMonstros && d.ecoMonstros[id]) || null;
     var inv = [];
     ((md && md.spells) || []).forEach(function (sid) { invocacoes(feitico(sid), inv, 0); });
+    // 02/10: o Eco não invoca por feitiço — ele CHAMA os Ecos Menores na troca de fase (DATA.eco.menores)
+    if (md && md.supremo && d.eco && d.eco.menores) {
+      Object.keys(d.eco.menores).forEach(function (el) { inv.push(d.eco.menores[el]); });
+    }
     inv.forEach(function (sid) { var m = modeloDe(sid); if (m) fora.push(m); });
   }
   function doTema(tema, fora) {
@@ -548,7 +560,7 @@ var JOGO = (typeof window !== 'undefined')
   B.plano = function (pedido) {
     pedido = pedido || {};
     var fora = [];
-    var dg = pedido.dungeonId ? calabouco(pedido.dungeonId) : null;
+    var dg = pedido.dungeonId ? (calabouco(pedido.dungeonId) || (pedido.duelo ? null : mapaPve(pedido.dungeonId))) : null;
     if (pedido.duelo && !dg) dg = calabouco(pedido.cenario || 'greenhouse');
     var salas = [];
     if (dg && !pedido.duelo) {

@@ -114,9 +114,8 @@ const J = mundo([]).JOGO;
 prepara(J);
 const E = J.Engine, AI = J.AI;
 
-// 02/10: a regra é "subiu com esta mudança" (≥ 5), não o número cravado — o
-// chão do Poço levou a 6 e este teste reprovava uma subida legítima
-check('Engine.VERSAO_REGRAS ≥ 5 (a invisibilidade e a armadilha mudaram o fim de uma sala)', E.VERSAO_REGRAS >= 5, E.VERSAO_REGRAS);
+// 02/10: a versão só SOBE (o pacote de 03/10 — equilíbrio, chão do Poço, Eco — a levou a 6)
+check('Engine.VERSAO_REGRAS é 5 ou mais (a invisibilidade e a armadilha mudaram o fim de uma sala)', E.VERSAO_REGRAS >= 5, E.VERSAO_REGRAS);
 check('Sombra Curta: invisível por 2 no dado (era 1)',
   (J.DATA.spells['espadachim-neutro-2'].effects || []).some((e) => e.type === 'invisible' && e.duration === 2));
 

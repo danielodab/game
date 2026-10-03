@@ -140,7 +140,7 @@ embaixo é só para o dono olhar.</div>
       var comum = bt.units.filter(function (u) { return u.side === 'enemy' && u.defId === 'thorn-lasher'; })[0];
       var lk = M.lookFor('colosso_fogo');
       check('o Colosso de Brasa veste o corpo provisório (Monte de Escória) pela chave própria',
-            !!lk && lk.model === 'slag-mound' && M.CORPO_PROVISORIO['colosso-fogo'] === 'slag-mound', lk && lk.model);
+            !!lk && lk.model === 'slag-mound' && (M.CORPO_PROVISORIO['colosso-fogo'] || {}).model === 'slag-mound', lk && lk.model);
       var nc = col && R.unitNode(col.uid), nm = comum && R.unitNode(comum.uid);
       if (nc && nm) {
         var hc = altura(nc), hm = altura(nm);

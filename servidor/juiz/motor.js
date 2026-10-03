@@ -29,7 +29,9 @@ const DADOS = [
   'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js',
   'js/core/data/items_extra.js', 'js/core/data/items_selos.js',
   // 13/09: as poções de vida — o motor cura com o número daqui e a banca cobra o preço daqui
-  'js/core/data/consumiveis.js'
+  'js/core/data/consumiveis.js',
+  // 02/10: o Eco Primordial (o elenco, os feitiços e as fases): o juiz refaz a tentativa com eles
+  'js/core/data/eco.js'
 ];
 // o poco.js entra com o combate: o andar do Poço é montado da semente antes da batalha
 const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js', 'js/core/poco.js'];

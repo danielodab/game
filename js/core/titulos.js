@@ -15,6 +15,8 @@ var JOGO = (typeof window !== 'undefined')
  *   PVP     top 1, 2 e 3 do ranking da arena, a Brasa ("Top 1 Pvp")
  *   CHEFE   dez quedas do MESMO chefe, no DIFÍCIL e SOZINHO — um título por
  *           chefe, seis ao todo
+ *   ECO     (02/10) o pódio (1º ao 3º) de uma semana do Eco Primordial — o
+ *           chefe supremo, placar de dano conferido pelo servidor
  *
  * A diferença entre eles importa: os de ranking são EMPRESTADOS (perdeu a
  * posição, perdeu o título — e quem o estiver usando volta a andar só com o
@@ -71,6 +73,14 @@ var JOGO = (typeof window !== 'undefined')
     { pos: 3, titulo: 'Top 3 Pvp' }
   ];
   T.MEDALHA_PVM = { 1: 'ouro', 2: 'prata', 3: 'bronze' };
+  /* O TÍTULO DO ECO PRIMORDIAL (02/10): o pódio de UMA semana leva — e é para
+   * sempre, como o de chefe (a semana passou, o feito fica). Quem dá é o
+   * servidor, no fechamento da semana, pela fila de entregas da loja
+   * (servidor/supremo.py, TITULO_ECO — o mesmo texto, que a prova confere); a
+   * conta guarda em Progress.titulosEco(). Não se compra. */
+  T.ECO = [
+    { titulo: 'Voz do Eco', de: 'o pódio de uma semana do Eco Primordial' }
+  ];
 
   function num(v) { return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : 0; }
   function posValida(p) { return p === 1 || p === 2 || p === 3; }
@@ -100,9 +110,9 @@ var JOGO = (typeof window !== 'undefined')
 
   /* O CATÁLOGO INTEIRO com o estado de cada título, na ordem em que a ficha
    * o mostra. `estado` = { chefes: {bossId: quedas}, pvm: posição|null,
-   * pvp: posição|null }. Cada linha sai como:
+   * pvp: posição|null, eco: [títulos do Eco já ganhos] }. Cada linha sai como:
    *
-   *   { titulo, fonte: 'pvm'|'pvp'|'chefe', de, ganho, prog, alvo, comoGanhar }
+   *   { titulo, fonte: 'pvm'|'pvp'|'classe'|'eco'|'chefe', de, ganho, prog, alvo, comoGanhar }
    *
    * `ganho` é o que vale para pendurar; `prog`/`alvo` só existem no chefe (é
    * o único que tem meio caminho). */
@@ -130,6 +140,13 @@ var JOGO = (typeof window !== 'undefined')
                     ganho: porClasse[cid] === pos, emprestado: true,
                     comoGanhar: 'Seja o ' + pos + 'º do ranking de ' + nomesClasse[cid] + ' (a XP dessa classe).' });
       });
+    });
+    // 02/10: o do Eco — `estado.eco` = os títulos que a conta já ganhou (Progress.titulosEco)
+    var ecoGanhos = Object.prototype.toString.call(estado.eco) === '[object Array]' ? estado.eco : [];
+    T.ECO.forEach(function (d) {
+      fora.push({ titulo: d.titulo, fonte: 'eco', de: d.de, ganho: ecoGanhos.indexOf(d.titulo) >= 0,
+                  emprestado: false,
+                  comoGanhar: 'Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.' });
     });
     T.CHEFES.forEach(function (c) {
       var n = Math.max(0, num(chefes[c.chefe]));

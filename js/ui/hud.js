@@ -380,7 +380,22 @@ var JOGO = (typeof window !== 'undefined')
     var nome = ped.nome ? String(ped.nome) : 'um pedido';
     var ent = (ped.entrega && typeof ped.entrega === 'object') ? ped.entrega : {};
     var origem = (d.origem === 'presente' || ped.origem === 'presente') ? 'presente'
-      : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento' : 'loja');
+      : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento'
+      : ((d.origem === 'eco' || ped.origem === 'eco') ? 'eco' : 'loja'));
+    // 02/10: o prêmio da semana do Eco Primordial (servidor/supremo.py) — vinténs, selos e o título
+    if (origem === 'eco') {
+      if (d.tipo !== 'entregue') return { texto: 'O prêmio do Eco não entrou aqui: ele volta na próxima abertura', tipo: null };
+      if (ent.tipo === 'vintens') return { texto: 'Prêmio do Eco Primordial: ' + lojaMilhar(ent.qtd) + ' vinténs', tipo: 'good' };
+      var partesEco = [];
+      if (ent.titulo) partesEco.push('o título “' + String(ent.titulo) + '”');
+      var nSelos = 0;
+      if (ent.selos && typeof ent.selos === 'object') {
+        Object.keys(ent.selos).forEach(function (k) { nSelos += Math.max(0, Math.floor(Number(ent.selos[k]) || 0)); });
+      }
+      if (nSelos) partesEco.push(nSelos + (nSelos === 1 ? ' selo' : ' selos') + ' de chefe');
+      return { texto: 'Prêmio do Eco Primordial' + (ent.posicao ? ' (' + ent.posicao + 'º da semana)' : '') + ': ' +
+                      (partesEco.join(' e ') || nome), tipo: 'good' };
+    }
     if (d.tipo === 'entregue') {
       // 13/09: a troca de vinténs por barras de ouro não traz nada para o jogo — as barras vão para a conta do site
       var txt = (origem === 'pagamento') ? 'Chegaram ' + lojaMilhar(ent.qtd) + ' vinténs do seu pacote'
@@ -496,7 +511,8 @@ var JOGO = (typeof window !== 'undefined')
   // ESQUELETO
   // ==========================================================================
   var SCREEN_NAMES = ['menu', 'heroSelect', 'hub', 'dungeonSelect', 'elementChoice', 'duelFim',
-                      'battle', 'roomClear', 'dungeonComplete', 'defeat', 'antessala'];
+                      'battle', 'roomClear', 'dungeonComplete', 'defeat', 'antessala',
+                      'ecoFim'];       // 02/10: o fim da tentativa do Eco Primordial
 
   UI.init = function () {
     root = document.getElementById('ui-root');
@@ -636,6 +652,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'battle') { logLines = []; buildBattle(); }
     else if (name === 'roomClear' || name === 'dungeonComplete') buildRewards(name, data);
     else if (name === 'defeat') buildDefeat();
+    else if (name === 'ecoFim') buildEcoFim(data);
     socialNaTela(name);
   };
 
@@ -1283,7 +1300,9 @@ var JOGO = (typeof window !== 'undefined')
      // continuam só lá).
      { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true },
      // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
-     { ic: '👥', rot: 'Amigos', abre: 'amigos' }
+     { ic: '👥', rot: 'Amigos', abre: 'amigos' },
+     // 02/10: o Eco Primordial — a porta é a ficha, não uma construção nova (o dono: "não amontoe a praça")
+     { ic: '💠', rot: 'Eco', abre: 'eco' }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
@@ -2827,6 +2846,8 @@ var JOGO = (typeof window !== 'undefined')
     clear(bt.room);
     var dg = null, ds = dungeons();
     for (var i = 0; i < ds.length; i++) if (ds[i].id === s.dungeonId) dg = ds[i];
+    // 02/10: os mapas de DATA.arenas (a Câmara do Eco, a Praça, o Salão da Sede) também têm nome
+    if (!dg) dg = safe(function () { return D().arena ? D().arena(s.dungeonId) : null; }, null);
     var room = dg && dg.rooms && dg.rooms[s.roomIndex];
     bt.room.appendChild(el('b', null, esc((room && room.name) || (dg && dg.name) || 'Sala')));
     var wd = (D().weathers && D().weathers[s.weather]) || null;
@@ -2839,7 +2860,8 @@ var JOGO = (typeof window !== 'undefined')
         wd.favors ? elemColor(wd.favors) : '#ffd08a');
       bt.room.appendChild(wc);
     }
-    bt.room.appendChild(el('span', 'round-chip', 'Rodada ' + s.round));
+    bt.room.appendChild(el('span', 'round-chip', 'Rodada ' + s.round + (s.eco ? ' de ' + s.eco.rodadas : '')));
+    if (s.eco) pintaEcoNaSala(s);
     // O DESAFIO DA SALA: dourado enquanto vale, riscado quando se perde.
     // Mora aqui porque esta linha já é redesenhada a cada atualização.
     if (s.desafio) {
@@ -5267,8 +5289,9 @@ var JOGO = (typeof window !== 'undefined')
       } else {
         var catal = Tt.catalogo(estT);
         var ganhos = catal.filter(function (t) { return t.ganho; });
+        // 03/10: e o pódio do Eco Primordial — sem o grupo 'eco' no menu o título ganho não tinha onde ser escolhido
         var porFonte = { pvm: 'Ranking de XP (PvM)', pvp: 'Ranking PvP', classe: 'Ranking por classe',
-                         chefe: 'Chefes, no difícil e sozinho' };
+                         eco: 'O Eco Primordial (pódio da semana)', chefe: 'Chefes, no difícil e sozinho' };
         /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
          * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
          * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
@@ -5308,7 +5331,7 @@ var JOGO = (typeof window !== 'undefined')
           return b;
         }
         listaT.appendChild(itemT('', '— sem título —', '', true));
-        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
           listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
           // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
           var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
@@ -5336,7 +5359,7 @@ var JOGO = (typeof window !== 'undefined')
         var comoT = document.createElement('details');
         comoT.className = 'tit-como';
         comoT.appendChild(el('summary', null, 'Como ganhar cada título'));
-        ['pvm', 'pvp', 'classe', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
           comoT.appendChild(el('div', 'char-fonte',
             '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
           if (f === 'classe') {
@@ -5671,6 +5694,256 @@ var JOGO = (typeof window !== 'undefined')
     s.appendChild(box);
   }
 
+  // ==========================================================================
+  // O ECO PRIMORDIAL (02/10) — a ficha, a linha da batalha e o fim da tentativa
+  // ==========================================================================
+  /* A PORTA é a ficha 'eco', aberta pelo cais — a praça não ganha construção
+   * nova (o dono: "não amontoe a praça"). Ela mostra a semana com a contagem
+   * regressiva no relógio do SERVIDOR (GET /api/supremo), as tentativas de
+   * hoje, o melhor e a posição, os 10 primeiros, as faixas de prêmio e o botão
+   * que leva a dupla de "Quem desce" para a Câmara do Eco. Sem servidor (em
+   * casa, file://) ela oferece o TREINO, que não conta no placar. O jogo nunca
+   * calcula posição nem prêmio: só mostra o que o servidor disse. */
+  var ecoResp = null, ecoPedido = null, ecoEm = 0;
+  function ecoLer(forca) {
+    var S = JOGO.Sessao;
+    if (!S || typeof S.api !== 'function') return Promise.resolve(null);
+    var emCasa = safe(function () { return location.protocol === 'file:'; }, true);
+    if (emCasa && !safe(function () { return S.ativa && S.ativa(); }, false)) return Promise.resolve(null);
+    if (!forca && ecoResp && Date.now() - ecoEm < 20000) return Promise.resolve(ecoResp);
+    if (ecoPedido) return ecoPedido;
+    var p = null;
+    try { p = S.api('/api/supremo'); } catch (e) { p = null; }
+    if (!p || typeof p.then !== 'function') return Promise.resolve(ecoResp);
+    ecoPedido = p.then(function (r) {
+      ecoPedido = null;
+      if (r && r.ok === true && r.semana) { r._recebidoEm = Date.now(); ecoResp = r; ecoEm = Date.now(); }
+      return ecoResp;
+    }, function () { ecoPedido = null; return ecoResp; });
+    return ecoPedido;
+  }
+  UI._ecoLer = ecoLer;                      // provas
+  // o que falta até o fim da semana, pelo relógio do servidor da última resposta
+  function ecoFaltaMs(r) {
+    if (!r || !r.semana) return 0;
+    var agoraSrv = r.agora * 1000 + (Date.now() - (r._recebidoEm || Date.now()));
+    return (r.semana.fim + 1) * 1000 - agoraSrv;
+  }
+  function ecoNum(n) { return lojaMilhar(n); }
+  function ecoOficial() {
+    var A = JOGO.Autoridade;
+    return !!safe(function () { return A && A.ligada && A.ligada(); }, false);
+  }
+
+  /* a linha da sala na batalha do Eco: o placar ao vivo, a fase e o golpe marcado */
+  function pintaEcoNaSala(s) {
+    var e = s.eco, eco = unitByUid(e.uid);
+    var pct = (e.hpMax > 0) ? Math.round(100 * e.dano / e.hpMax) : 0;
+    var chip = el('span', 'eco-chip', '💠 Dano no Eco: <b>' + ecoNum(e.dano) + '</b> (' + pct + '%)');
+    tipOn(chip, 'O placar da tentativa', 'A vida que o seu grupo tirou do Eco Primordial. O servidor refaz a ' +
+      'tentativa com os seus lances e é o número DELE que entra no ranking.' +
+      (e.derrubou ? '<br><b>Derrubado:</b> +' + Math.round((D().eco || {}).bonusDerrubada * 100) + '% da vida máxima nos pontos.' : ''),
+      '#9a7ad8');
+    bt.room.appendChild(chip);
+    if (eco) {
+      var fase = el('span', 'eco-fase', esc(ELEM_PT[eco.element] || eco.element));
+      fase.style.setProperty('--ec', elemColor(eco.element));
+      var vence = (D().beatenBy || {})[eco.element];
+      tipOn(fase, 'A fase do Eco: ' + (ELEM_PT[eco.element] || eco.element),
+        'A cada 25% de vida perdida ele troca de elemento (Fogo → Água → Terra → Ar) e chama dois Ecos Menores.' +
+        (vence ? '<br>Agora ele é <b>fraco a ' + esc(ELEM_PT[vence] || vence) + '</b>.' : ''), elemColor(eco.element));
+      bt.room.appendChild(fase);
+    }
+    if (e.aviso) {
+      var av = el('span', 'eco-aviso', '⚠ ' + esc(e.aviso.nome));
+      tipOn(av, e.aviso.nome, 'As casas marcadas no chão explodem no começo da próxima vez do Eco. ' +
+        'Saia delas — o pilar alto abriga da onda.', '#ff7a5a');
+      bt.room.appendChild(av);
+    }
+  }
+
+  function sheetEco() {
+    var body = sheetShell('O Eco Primordial',
+      'O chefe supremo da semana. O placar é o dano que o seu grupo tira dele — conferido pelo servidor.');
+    sheetName = 'eco';
+    var cfg = D().eco || {};
+    var status = el('div', 'eco-status');
+    body.appendChild(status);
+
+    // a dupla de "Quem desce" e o botão
+    var dupla = el('p', 'eco-dupla', '');
+    body.appendChild(dupla);
+    var rotulo = ecoOficial() ? 'Enfrentar o Eco' : 'Treinar contra o Eco (não conta no placar)';
+    var bEnt = btn(rotulo, 'btn-warn btn-block eco-entra', function () { entra(); });
+    body.appendChild(bEnt);
+    function entra() {
+      if (!selHeroes.length) { toast('Escolha a sua dupla em "Quem desce" primeiro.'); return; }
+      var r = safe(function () {
+        return G().startEco(selHeroes.slice(), function (res) {
+          if (res && res.ok) { if (sheetName === 'eco') closeSheet(); return; }
+          bEnt.disabled = false;
+          bEnt.textContent = rotulo;
+          toast((res && res.erro) || 'A Câmara do Eco não abriu.');
+          ecoLer(true).then(function (r2) { if (sheetName === 'eco' && body.isConnected) pinta(r2); });
+        });
+      }, false);
+      if (r === 'esperando') { bEnt.disabled = true; bEnt.textContent = 'Abrindo a Câmara…'; return; }
+      if (!r) { toast('Essa dupla não enfrenta o Eco: o Mestre fica de fora, e em grupo pela Rede ainda não.'); return; }
+      if (sheetName === 'eco') closeSheet();
+    }
+    function pintaDupla() {
+      var nomes = selHeroes.map(function (hid) {
+        var h = hero(hid);
+        return esc(className((h && h.classId) || hid)) + (h && h.level ? ' <small>nv ' + h.level + '</small>' : '');
+      });
+      dupla.innerHTML = nomes.length ? 'Vai a dupla de <b>Quem desce</b>: ' + nomes.join(' e ') +
+        '. Todos entram com a vida cheia (a tentativa não gasta a vida dos heróis).'
+        : 'Escolha a dupla em <b>Quem desce</b> para entrar.';
+    }
+    pintaDupla();
+
+    var regras = el('ul', 'eco-regras');
+    [(cfg.rodadas || 12) + ' rodadas por tentativa, ou até o grupo cair. ' + (cfg.tentativasPorDia || 3) +
+       ' tentativas por dia (o dia de Brasília).',
+     'Ele ocupa 2×2 casas no centro da Câmara e não anda. A cada 25% da vida perdida troca de elemento ' +
+       '(Fogo → Água → Terra → Ar), fica fraco a quem vence o elemento novo e chama dois Ecos Menores.',
+     'O golpe grande é AVISADO: as casas marcadas no chão explodem no começo da vez seguinte dele. Os pilares abrigam.',
+     'Vale a melhor tentativa da semana (de segunda a domingo, 23:59). Derrubá-lo soma ' +
+       Math.round((cfg.bonusDerrubada || 0) * 100) + '% da vida dele aos pontos.'
+    ].forEach(function (t) { regras.appendChild(el('li', null, esc(t))); });
+    body.appendChild(regras);
+
+    var rank = el('div', 'eco-rank');
+    body.appendChild(rank);
+    var premios = el('div', 'eco-premios');
+    body.appendChild(premios);
+    var site = el('a', 'eco-site', 'ver o ranking completo no site');
+    site.href = safe(function () { return paginaEventos().replace(/eventos\.html$/, 'ranking.html#eco'); }, 'site/ranking.html#eco');
+    site.target = '_blank';
+    site.rel = 'noopener';
+    body.appendChild(site);
+
+    function pinta(r) {
+      clear(status);
+      clear(rank);
+      clear(premios);
+      if (!r) {
+        status.appendChild(el('p', 'eco-linha', ecoOficial()
+          ? 'O servidor não respondeu agora — o placar volta com ele.'
+          : 'Sem conexão com o servidor: dá para TREINAR contra o Eco, mas o treino não conta no placar.'));
+        return;
+      }
+      var falta = ecoFaltaMs(r);
+      status.appendChild(el('p', 'eco-linha eco-semana', '⏳ A semana fecha em <b>' +
+        esc(safe(function () { return JOGO.Agenda.falta(falta); }, null) || bonusFalta(falta)) +
+        '</b> (domingo, 23:59 de Brasília).'));
+      var eu = r.eu;
+      if (eu) {
+        status.appendChild(el('p', 'eco-linha', 'Tentativas de hoje: <b>' + eu.restantes + ' de ' +
+          r.tentativasPorDia + '</b>' + (eu.restantes ? '' : ' — o Eco volta a ouvir amanhã.')));
+        if (eu.foraDoRanking) status.appendChild(el('p', 'eco-linha', 'Conta da equipe: você joga, mas não entra no ranking.'));
+        else if (eu.melhor) {
+          status.appendChild(el('p', 'eco-linha', 'Seu melhor da semana: <b>' + ecoNum(eu.melhor.pontos) + ' pontos</b>' +
+            (eu.melhor.derrubou ? ' (derrubou!)' : '') + (eu.posicao ? ' · <b>' + eu.posicao + 'º</b> lugar' : '')));
+        } else status.appendChild(el('p', 'eco-linha', 'Você ainda não tem tentativa conferida nesta semana.'));
+        bEnt.disabled = !eu.restantes && ecoOficial();
+        (eu.premios || []).slice(0, 2).forEach(function (pr) {
+          status.appendChild(el('p', 'eco-linha eco-premio-meu', '🏅 Semana ' + pr.semana + ': ' + pr.posicao + 'º lugar' +
+            (pr.titulo ? ' — o título “' + esc(pr.titulo) + '”' : '') + ' (o prêmio chega pela fila de entregas).'));
+        });
+      } else if (ecoOficial()) {
+        status.appendChild(el('p', 'eco-linha', 'Entre na sua conta para ver as suas tentativas.'));
+      }
+      rank.appendChild(el('h3', 'hs-sec', 'Os primeiros da semana'));
+      var linhas = (r.ranking || []).slice(0, 10);
+      if (!linhas.length) rank.appendChild(el('p', 'empty', 'Ninguém pontuou ainda nesta semana. O primeiro lugar está livre.'));
+      linhas.forEach(function (l) {
+        var li = el('div', 'eco-rank-linha' + (l.posicao <= 3 ? ' is-podio' : ''));
+        li.appendChild(el('span', 'eco-pos', l.posicao + 'º'));
+        li.appendChild(el('span', 'eco-nome', esc(l.nome) + (l.derrubou ? ' <i title="derrubou o Eco">★</i>' : '')));
+        li.appendChild(el('span', 'eco-pts', ecoNum(l.pontos)));
+        rank.appendChild(li);
+      });
+      premios.appendChild(el('h3', 'hs-sec', 'Os prêmios no fechamento'));
+      (r.faixas || []).forEach(function (f) {
+        var partes = [];
+        if (f.vintens) partes.push(ecoNum(f.vintens) + ' vinténs');
+        if (f.selos) partes.push(f.selos + ' selos de chefe');
+        if (f.titulo) partes.push('o título “' + esc(f.titulo) + '”');
+        premios.appendChild(el('p', 'eco-faixa', '<b>' + esc(f.nome) + '</b>: ' + partes.join(' · ')));
+      });
+      premios.appendChild(el('p', 'inv-dica', 'Nada disso se compra. Os prêmios chegam pela fila de entregas da conta, ' +
+        'como os presentes do Mestre.'));
+    }
+    pinta(ecoResp);
+    ecoLer(true).then(function (r) { if (sheetName === 'eco' && body.isConnected) pinta(r); });
+  }
+
+  /* O FIM DA TENTATIVA: o dano daqui na hora; o conferido, a posição e as tentativas que restam quando o
+   * servidor responder (Game.ecoFim, que a própria tela relê — UI.repaint não precisa guardar nada). */
+  function buildEcoFim(data) {
+    var s = screens.ecoFim;
+    clear(s);
+    data = data || safe(function () { return G().ecoFim(); }, null) || {};
+    var pl = data.placar || {}, of = data.oficial, cfg = D().eco || {};
+    var st0 = st(), heroisVivos = 0;
+    ((st0 && st0.units) || []).forEach(function (u) {
+      if ((u.kind === 'hero' || u.kind === 'fusion') && u.side === 'player' && u.alive && !u.offBoard) heroisVivos++;
+    });
+    var titulo = data.largou ? 'Você saiu da Câmara'
+      : pl.derrubou ? 'O Eco Primordial caiu!'
+      : (!heroisVivos ? 'O seu grupo caiu' : 'As ' + (pl.rodadas || cfg.rodadas || 12) + ' rodadas acabaram');
+    var box = el('div', 'game-over eco-fim' + (pl.derrubou ? ' is-derrubou' : ''));
+    box.appendChild(el('h1', null, esc(titulo)));
+    var dano = of ? of.dano : (pl.dano || 0);
+    var pontos = of ? of.pontos : (pl.pontos || 0);
+    box.appendChild(el('div', 'eco-fim-num', ecoNum(dano)));
+    box.appendChild(el('p', 'game-sub', 'de dano no Eco' + (pl.derrubou ? ' · ' + ecoNum(pontos) + ' pontos com o bônus de quem derruba' : '') +
+      ' · rodada ' + (pl.rodada || 0) + ' de ' + (pl.rodadas || cfg.rodadas || 12)));
+    var linha = el('p', 'eco-fim-estado');
+    if (data.treino) {
+      linha.innerHTML = 'Treino: sem conexão com o servidor, esta tentativa <b>não conta no placar</b>.';
+    } else if (data.conferindo) {
+      linha.innerHTML = 'Conferindo com o servidor… (ele refaz a tentativa com os seus lances)';
+    } else if (of) {
+      var eu = of.eu || {};
+      linha.innerHTML = 'Conferido pelo servidor: <b>' + ecoNum(of.pontos) + ' pontos</b>.' +
+        (eu.foraDoRanking ? ' Conta da equipe: fora do ranking.'
+          : (eu.melhor ? ' Seu melhor da semana: <b>' + ecoNum(eu.melhor.pontos) + '</b>' +
+             (eu.posicao ? ' · <b>' + eu.posicao + 'º lugar</b>' : '') + '.' : '')) +
+        (typeof eu.restantes === 'number' ? ' Tentativas de hoje: ' + eu.restantes + '.' : '');
+      if (of.dano !== pl.dano && pl.dano != null) {
+        linha.innerHTML += '<br><small>O número desta tela era ' + ecoNum(pl.dano) + '; vale o do servidor.</small>';
+      }
+    } else if (data.erro) {
+      linha.className = 'eco-fim-estado is-erro';
+      linha.innerHTML = 'O servidor não contou esta tentativa: ' + esc(data.erro);
+    }
+    box.appendChild(linha);
+    var acts = el('div', 'menu-acts');
+    var restam = data.treino ? 1 : (of && of.eu && typeof of.eu.restantes === 'number' ? of.eu.restantes : 0);
+    if (restam > 0 && selHeroes.length) {
+      acts.appendChild(btn('Tentar de novo', 'btn-primary', function () {
+        var r = safe(function () {
+          return G().startEco(selHeroes.slice(), function (res) {
+            if (!(res && res.ok)) toast((res && res.erro) || 'A Câmara do Eco não abriu.');
+          });
+        }, false);
+        if (!r) toast('Essa dupla não enfrenta o Eco.');
+      }));
+    }
+    acts.appendChild(btn('Ver o ranking', 'btn-ghost', function () {
+      safe(function () { return G().restart('hub'); }, null);
+      openSheet('eco');
+    }));
+    acts.appendChild(btn('Voltar à praça', 'btn-ghost', function () {
+      safe(function () { return G().restart('hub'); }, null);
+    }));
+    box.appendChild(acts);
+    s.appendChild(box);
+  }
+  UI._buildEcoFim = buildEcoFim;            // provas
+
   function sheetShell(title, sub) {
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
@@ -5715,6 +5988,7 @@ var JOGO = (typeof window !== 'undefined')
     // o cais do Acampamento e o menu inicial chamam cada porta pelo nome.
     if (name === 'char') { sheetChar(); return; }   // 11/09: a ficha da conta
     if (name === 'amigos') { sheetAmigos(); return; }   // 13/09: amigos e inimigos
+    if (name === 'eco') { sheetEco(); return; }         // 02/10: o Eco Primordial (o chefe supremo da semana)
     if (name === 'gm') { sheetGM(); return; }
     if (name === 'gmcaixa') { sheetGMCaixa(); return; }
     if (name === 'gmagenda') { sheetGMAgenda(); return; }   // 10/09: os eventos do mundo
@@ -6565,6 +6839,8 @@ var JOGO = (typeof window !== 'undefined')
         });
         tituloEstado = {
           chefes: chefes,
+          // 02/10: o título do pódio do Eco Primordial é da conta, para sempre (Progress.titulosEco)
+          eco: safe(function () { return P().titulosEco ? P().titulosEco() : []; }, []),
           porClasse: porClasseEu,
           classeNomes: nomesClasse,
           // com o ranking do servidor é ELE que manda (o do site); sem, o placar da praça

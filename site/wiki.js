@@ -55,6 +55,9 @@
   var ISPELLS = D.itemSpells || {};
   var PSPELLS = D.petSpells || {};
   var MONSTROS = D.monsters || {};
+  // 02/10: o elenco do Eco Primordial mora à parte (js/core/data/eco.js) — fora do bestiário de calabouço
+  var ECO_MONSTROS = D.ecoMonstros || {};
+  function monstroDe(id) { return own.call(MONSTROS, id) ? MONSTROS[id] : (own.call(ECO_MONSTROS, id) ? ECO_MONSTROS[id] : null); }
   var ITENS = D.items || {};
   var SETS = D.sets || {};
   var PETS = D.pets || {};
@@ -641,7 +644,7 @@
         else if (ch === 'P') cls = duelo ? 'heroi' : 'heroi';
         else if (duelo && ch >= 'a' && ch <= 'z') cls = 'ladob';
         else if (own.call(mons, ch)) {
-          var m = MONSTROS[mons[ch]];
+          var m = monstroDe(mons[ch]);
           cls = 'bicho' + (m && m.boss ? ' chefe' : '');
           if (m) extra = estiloCor(corEl(m.element)) + ' title="' + E(m.name) + '"';
         }
@@ -711,6 +714,10 @@
       resumo: 'O salão do trono da Sede, onde duas guildas medem forças 2×2 — quatro heróis de cada lado, as duplas por fila.' });
     if (Po) out.push({ id: 'poco', nome: 'O Poço sem Fundo', selo: 'na praça',
       resumo: 'A torre infinita: cada andar é uma sala emprestada de um calabouço, andar após andar, cada vez mais dura.' });
+    // 02/10: a arena do chefe supremo da semana
+    var ce = D.eco ? arena(D.eco.arena) : null;
+    if (ce) out.push({ id: ce.id, nome: ce.name, selo: 'chefe supremo da semana',
+      resumo: 'A arena do Eco Primordial: 12 rodadas para tirar dele o máximo de dano. O placar é semanal, conferido pelo servidor, e o pódio leva prêmio.' });
     return out;
   }
   function calaboucos() {
@@ -759,6 +766,26 @@
 
     var a = arena(id);
     var sala = (a.rooms || [])[0];
+    if (a.modo === 'eco' && D.eco) {
+      // 02/10: a Câmara do Eco — PvE: a letra É o Eco, e as regras moram em js/core/data/eco.js
+      var C = D.eco, eco = monstroDe(C.chefe) || {};
+      h += '<span class="wk-selo">' + num(C.rodadas) + ' rodadas</span><span class="wk-selo">' + num(C.tentativasPorDia) +
+        ' tentativas por dia</span></p><p>' + E(t.resumo) + '</p></div></header>';
+      h += '<h2>O tabuleiro</h2>' + blocoSala(sala, {
+        titulo: E(sala.name), legenda: true,
+        elenco: '<li><b>' + E(eco.name || C.chefe) + '</b> ' + elem(eco.element) + ' <span class="wk-selo chefe">chefe supremo</span> · ' +
+          num(eco.stats && eco.stats.hp) + ' PV · ocupa 2×2 casas e não anda</li>' +
+          ['fogo', 'agua', 'terra', 'ar'].map(function (el) {
+            var mn = monstroDe((C.menores || {})[el]);
+            return mn ? '<li>' + E(mn.name) + ' ' + elem(mn.element) + ' — chamado na troca para ' + E(nomeEl(el)) + '</li>' : '';
+          }).join(''),
+        depois: '<p class="apoio">A cada 25% da vida perdida ele troca de elemento (Fogo → Água → Terra → Ar), fica fraco a quem vence o ' +
+          'elemento novo e chama dois Ecos Menores. O golpe grande é avisado: as casas marcadas no chão explodem na vez seguinte ' +
+          'dele, e os pilares altos abrigam. Derrubá-lo soma ' + Math.round((C.bonusDerrubada || 0) * 100) + '% da vida dele aos pontos.</p>'
+      });
+      h += '<p class="apoio">O placar da semana: <a href="ranking.html#eco">Ranking → O Eco Primordial</a>.</p>';
+      return { titulo: t.nome, html: h };
+    }
     h += '<span class="wk-selo">clima: ' + E(nomeClima(a.defaultWeather)) + '</span>' +
       (sala ? '<span class="wk-selo">' + (sala.layout[0] || '').length + '×' + sala.layout.length + ' casas</span>' : '') +
       '</p><p>' + E(t.resumo) + '</p></div></header>';

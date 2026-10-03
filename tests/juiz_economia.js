@@ -257,6 +257,17 @@ async function tenta(base, ops, extra) {
   check('com o 1º lugar de Xamã vindo do servidor, "Top 1 Xamã" entra', t4.ok && t4.db.jogador.titulo === 'Top 1 Xamã',
         JSON.stringify(t4.ok ? t4.db.jogador.titulo : t4));
 
+  // ---- o título do pódio do Eco Primordial (03/10): é da CONTA (Progress.titulosEco, entregue pela fila da
+  // loja), e o servidor tem de aceitar pendurar o que a conta ganhou — e só isso
+  const tEco = 'Voz do Eco';
+  const t5 = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: tEco } }]);
+  check('o título do Eco sem tê-lo ganho não entra', t5.ok && t5.resultados[0].ok === false && !t5.db.jogador.titulo,
+        JSON.stringify(t5.resultados || t5));
+  const comEco = conta((J, P) => { P.addTituloEco(tEco); });
+  const t6 = await tenta(comEco, [{ nome: 'definirTitulo', args: { titulo: tEco } }]);
+  check('com o título do Eco no estado da conta, "' + tEco + '" entra', t6.ok && t6.db.jogador.titulo === tEco,
+        JSON.stringify(t6.ok ? t6.resultados : t6));
+
   // ---- o LOTE de pedras no mercadinho (22/09): as internas tiram e põem pedra, só com contexto.interno
   const INTERNO = { contexto: { agoraMs: AGORA, interno: true } };
   const lp1 = await tenta(base, [{ nome: 'mercadoTiraPedras', args: { stoneId: 'stone-ember', qtd: 10 } }]);

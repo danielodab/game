@@ -274,6 +274,13 @@ tique de clima no `turnStart`, `Engine.runPetTurn(state, ownerUid)`, `Engine.tri
 `createBattle(dungeonId, roomIndex, party)` onde `party = [{heroId, classId, element, level, spells, pet, items}]`
 vem de `Progress.battleParty()`.
 
+**Corpo grande (02/10)**: `unit.porte` (padrão 1; o Eco Primordial é 2) — `Engine.ocupa(u,x,y)`,
+`Engine.casasDe(u)`, `Engine.distA(u,x,y)`, `Engine.distEntre(a,b)`, `Engine.pontoDe(u,x,y)`,
+`Engine.ligacao(state,a,b)` e `Engine.origemPara(state,uid,spellId,x,y)`. Toda pergunta "quem está nesta casa"
+e "a que distância" passa por elas (decisão de design 19 do engine.js). **O Eco** (`state.eco`, `Engine.ecoPlacar`)
+está em docs/SISTEMAS.md §6-B; eventos `ecoFase{uid,fase,element}` · `ecoAviso{uid,golpe,nome,element,casas}` ·
+`ecoGolpe{…}` · `ecoDano{uid,perda,total}` · `ecoTempo{rodadas}`.
+
 **Novos eventos**: `weatherTick{uid,amount}` · `weatherShift{weather}` · `dodgeFail{uid,lockerUid}` ·
 `dodgeOk{uid}` · `fusion{…}` · `petAct{uid,action}` · `tileEvent{uid,eventId,text}` ·
 `trapTriggered{uid,trapId}` · `markStack{uid,stacks}` · `timerTick{remaining,banked}`.
@@ -290,7 +297,8 @@ Save `localStorage['soterra-save-v2']`, migrando/ignorando o v1 com segurança.
 v1 mais: **cronômetro** — `Game.turnTime` (30 s), `Game.banked` (acumulado), `Game.timeLeft()`,
 expiração encerra o turno automaticamente; `Game.declareFusion(uidA, uidB)`;
 `Game.selectSpell` com **cancelamento**: clique fora da zona válida ⇒ desmarca o feitiço e
-devolve o modo de movimento (nunca gasta a ação).
+devolve o modo de movimento (nunca gasta a ação). 02/10: `Game.startEco(heroIds, aoAbrir)` (a tentativa do Eco:
+semente do servidor com sessão, treino sem), `Game.ecoTentativa()`, `Game.ecoFim()` e a tela `ecoFim`.
 
 ### `JOGO.Renderer` (Designer Render) — PixiJS
 `init(canvasOuContainer)` · `render(dt)` · `handleEvent(ev)` · `isBusy()` · `project(x,y)` ·

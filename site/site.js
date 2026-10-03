@@ -541,7 +541,8 @@
     r = r || {};
     t = (t == null) ? SITE.agora() : t;
     var tetos = r.tetos || {}, vistos = {}, todos = [];
-    [].concat(r.ativos || [], r.proximos || []).forEach(function (e) {
+    // 02/10: e os eventos fixos (`semanais`: a semana do Eco Primordial, servidor/supremo.py)
+    [].concat(r.ativos || [], r.proximos || [], r.semanais || []).forEach(function (e) {
       if (!e || SITE.TIPOS.indexOf(e.tipo) < 0) return;
       var ini = Number(e.inicio), fim = Number(e.fim);
       if (!isFinite(ini) || !isFinite(fim) || fim <= ini) return;

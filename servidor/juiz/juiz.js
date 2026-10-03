@@ -11,6 +11,7 @@
  *   GET  /saude           { ok, versao }       — a API confere antes de confiar
  *   POST /refaz           a sala refeita da semente e dos lances (sala.js)
  *   POST /op              uma operação de economia no estado da conta (economia.js)
+ *   POST /supremo/fecha   a tentativa do Eco Primordial refeita e o placar de dano (supremo.js)
  *
  * Cada pedido roda num MUNDO novo (motor.js) e tem teto de tempo: um lance
  * torto que fizesse o motor girar para sempre não pode travar o juiz — o
@@ -83,7 +84,8 @@ function versaoDosDados() {
 }
 
 // os módulos das rotas grandes se registram sozinhos (existem a partir das fases seguintes)
-for (const mod of ['./sala', './recompensa', './economia', './duelo', './guerra']) {   // 15/09: a guerra de guilda
+for (const mod of ['./sala', './recompensa', './economia', './duelo', './guerra',   // 15/09: a guerra de guilda
+                   './supremo']) {   // 02/10: a tentativa do Eco Primordial
   try {
     const m = require(mod);
     if (m && typeof m.rotas === 'function') m.rotas(registra);

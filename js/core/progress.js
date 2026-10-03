@@ -887,6 +887,18 @@ var JOGO = (typeof window !== 'undefined')
     // linha o sanitize engoliria o saldo calado no primeiro reload
     var qi = Math.floor(num(raw.insignias, 0));
     if (qi > 0) st.insignias = qi;
+    // ---- os TÍTULOS DO ECO PRIMORDIAL (02/10) — o prêmio do pódio da semana (servidor/supremo.py),
+    // para sempre. A mesma armadilha: sem estas linhas o título sumiria calado no primeiro reload. Só
+    // passa o que está no catálogo (JOGO.Titulos.ECO); a conta sem nenhum guarda o mesmo estado (e o
+    // mesmo hash da economia) de antes do Eco.
+    var te = tituloEcoValido;
+    if (Object.prototype.toString.call(raw.titulosEco) === '[object Array]') {
+      var tes = [];
+      for (var ti = 0; ti < raw.titulosEco.length; ti++) {
+        if (te(raw.titulosEco[ti]) && indexOf(tes, raw.titulosEco[ti]) < 0) tes.push(raw.titulosEco[ti]);
+      }
+      if (tes.length) st.titulosEco = tes;
+    }
     // ---- as POÇÕES DE VIDA da banca do mercador (13/09) — a mesma armadilha: sem estas
     // linhas o saldo sumiria calado no primeiro reload. Só existe com alguma poção: a conta
     // sem nenhuma guarda o mesmo estado (e o mesmo hash) de antes das poções.
@@ -2014,6 +2026,26 @@ var JOGO = (typeof window !== 'undefined')
     st.selos[elemento] = Math.max(0, Math.floor(num(st.selos[elemento], 0))) + amount;
     Progress.save();
     return true;
+  };
+  /* OS TÍTULOS DO ECO PRIMORDIAL (02/10): o pódio da semana (1º ao 3º) ganha o título pela fila de
+   * entregas da loja (loja.js, 'premio-eco'), e ele é da conta para sempre — como os de chefe, não como
+   * os de ranking (js/core/titulos.js). Só o que o catálogo conhece. */
+  function tituloEcoValido(t) {
+    var T = JOGO.Titulos, lista = (T && T.ECO) || [];
+    for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].titulo === t) return true;
+    return false;
+  }
+  Progress.addTituloEco = function (titulo) {
+    var st = Progress.state;
+    if (!st || !tituloEcoValido(titulo)) return false;
+    if (Object.prototype.toString.call(st.titulosEco) !== '[object Array]') st.titulosEco = [];
+    if (indexOf(st.titulosEco, titulo) < 0) st.titulosEco.push(titulo);
+    Progress.save();
+    return true;
+  };
+  Progress.titulosEco = function () {
+    var st = Progress.state;
+    return (st && Object.prototype.toString.call(st.titulosEco) === '[object Array]') ? st.titulosEco.slice() : [];
   };
   Progress.selosVer = function () {
     var st = Progress.state;

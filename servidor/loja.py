@@ -187,8 +187,11 @@ CREATE TABLE IF NOT EXISTS loja_barras(
 # os filtros dos limites do JOGADOR: créditos (pacote pago, presente de vinténs)
 # e presentes do Mestre não contam nos abertos, nas compras por hora, nas
 # linhas por hora nem nas janelas — cada um tem o teto dele
+# 02/10: e os PRÊMIOS do Eco Primordial (supremo.py, sku 'eco-…'): o fechamento da semana não pode encher
+# os 5 abertos de quem ficou no pódio e travar a compra dele até o jogo retirar
 SEM_EXTRA = ("id NOT IN (SELECT pedido_id FROM loja_presentes) "
-             "AND id NOT IN (SELECT pedido_id FROM loja_creditos)")
+             "AND id NOT IN (SELECT pedido_id FROM loja_creditos) "
+             "AND sku NOT LIKE 'eco-%'")
 # um pedido com as marcas de presente e de crédito (para _loja_pedido e o retirar)
 COLUNAS_PEDIDO = ("p.*, (pr.pedido_id IS NOT NULL) AS presente, cr.vintens AS credito_vintens, "
                   "cr.origem AS credito_origem, lb.custo AS barras_custo, lb.ganho AS barras_ganho")
@@ -374,6 +377,12 @@ def nome_do_pedido(sku, entrega=None, vintens=None):
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
         if isinstance(n, int) and not isinstance(n, bool) and n > 0:
             return '%s vinténs' % milhar(n)
+    # 02/10: os prêmios da semana do Eco Primordial (supremo.py)
+    if isinstance(sku, str) and sku.startswith('eco-'):
+        n = entrega.get('qtd') if isinstance(entrega, dict) else None
+        if sku == 'eco-vintens' and isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return '%s vinténs (Eco Primordial)' % milhar(n)
+        return 'Prêmio do Eco Primordial'
     return sku
 
 
@@ -397,9 +406,13 @@ _liberadas = liberadas               # (comum.py) as classes liberadas no progre
 
 
 def origem_do_pedido(r):
-    """'presente' (linha em loja_presentes), 'pagamento' (crédito de pacote) ou
-    None (compra da loja). `r` vem de uma consulta com COLUNAS_PEDIDO."""
+    """'presente' (linha em loja_presentes), 'pagamento' (crédito de pacote), 'eco'
+    (prêmio da semana do Eco Primordial, sku 'eco-…') ou None (compra da loja).
+    `r` vem de uma consulta com COLUNAS_PEDIDO."""
     chaves = r.keys()
+    # 02/10: o prêmio da semana do Eco Primordial (supremo.py) — o jogo avisa "Prêmio do Eco"
+    if 'sku' in chaves and isinstance(r['sku'], str) and r['sku'].startswith('eco-'):
+        return 'eco'
     if 'presente' in chaves and r['presente']:
         return 'presente'
     if 'credito_origem' in chaves and r['credito_origem'] == 'pagamento':
@@ -834,6 +847,11 @@ class LojaMixin:
 
         13/09 (docs/SEGURANCA.md §4.5): com a autoridade ligada, o servidor ENTREGA
         aqui mesmo (_loja_retirar_no_servidor) e o PUT não confirma mais nada."""
+        # 02/10: a semana do Eco que acabou fecha aqui também — o jogo retira a cada 5 min, então o prêmio
+        # chega sem ninguém precisar abrir a ficha do Eco nem o ranking do site (supremo.py)
+        fecha_eco = getattr(self, '_supremo_fecha_vencidas', None)
+        if fecha_eco is not None:
+            fecha_eco()
         if getattr(self, '_autoridade_ligada', lambda: False)():
             return self._loja_retirar_no_servidor(conta)
         cid, t = conta['id'], agora()

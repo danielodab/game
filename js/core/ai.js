@@ -41,6 +41,11 @@ var JOGO = (typeof window !== 'undefined')
  *    (1 − chance de esquiva), usando `Engine.dodgeChance`.
  *  - A IA NÃO declara fusões: a Fusão é uma decisão do jogador (o auto-play
  *    IA×IA continua determinístico e comparável com a v1).
+ *  - CORPO GRANDE (02/10, o Eco Primordial 2×2): o mapa de unidades marca as
+ *    QUATRO casas dele (mirar qualquer uma vale), a área que cobre várias
+ *    conta ele uma vez, as distâncias medem da casa mais perto (Engine.distA,
+ *    Engine.distEntre) e, quando ELE conjura, o golpe sai da casa que o motor
+ *    escolheria (Engine.origemPara) — a IA nunca planeja o que o motor recusa.
  *  - GANHO ELEMENTAL (v2.2): o valor de um feitiço de dano usa o MESMO
  *    `Engine.elementalBonus` da engine, então a IA prefere naturalmente os
  *    feitiços do próprio caminho elemental — sem regra ad hoc.
@@ -131,10 +136,21 @@ var JOGO = (typeof window !== 'undefined')
       state.grid.tiles[y][x].type === 'floor';
   }
 
+  /* 02/10: de onde a unidade conjura. O corpo grande (que não anda) conjura da
+   * casa que o motor escolhe; os outros, da casa hipotética de sempre. */
+  function origem(state, unit, spell, cx, cy, tx, ty) {
+    var En = E();
+    if (!En.porteDe || En.porteDe(unit) === 1 || cx !== unit.x || cy !== unit.y) return { x: cx, y: cy };
+    return En.origemPara(state, unit.uid, spell.id, tx, ty) || { x: cx, y: cy };
+  }
+  function distAte(u, x, y) { return E().distA ? E().distA(u, x, y) : manhattan(u.x, u.y, x, y); }
+
   // valida se `unit`, hipoteticamente em (cx,cy), pode conjurar spell em (tx,ty)
   function validFrom(state, unit, spell, cx, cy, tx, ty, ctx) {
     if (!isFloor(state, tx, ty)) return false;
     var rg = sRange(spell);
+    var o0 = origem(state, unit, spell, cx, cy, tx, ty);
+    cx = o0.x; cy = o0.y;
     var d = manhattan(cx, cy, tx, ty);
     if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
     if (rg.line && !(tx === cx || ty === cy)) return false;
@@ -211,11 +227,14 @@ var JOGO = (typeof window !== 'undefined')
     // nunca mirar diretamente um invisível
     if (occ && occ.side !== unit.side && isInvisible(occ)) return -1;
 
+    var o0 = origem(state, unit, spell, cx, cy, tx, ty);    // 02/10: o corpo grande conjura daqui
+    cx = o0.x; cy = o0.y;
     var tiles = E().aoeTiles(state, spell.id, cx, cy, tx, ty);
     var unitsHit = [];
     for (var i = 0; i < tiles.length; i++) {
       var u = ctx.uAt(tiles[i].x, tiles[i].y);
-      if (u && u.alive) unitsHit.push(u);
+      // 02/10: o corpo 2×2 conta uma vez, como no motor (unitsInTiles)
+      if (u && u.alive && unitsHit.indexOf(u) < 0) unitsHit.push(u);
     }
 
     /* 03/10: O FEITIÇO MISTO (engine.js, feiticoMisto). Num feitiço que tem
@@ -462,9 +481,11 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < ctx.enemies.length; i++) {
         var u = ctx.enemies[i];
         if (hit[u.uid]) continue;
-        var d = manhattan(cur.x, cur.y, u.x, u.y);
-        // 19/09: o motor só salta para quem a vítima de agora vê (chainDamage)
-        if (d <= range && d < best && E().los(state, cur.x, cur.y, u.x, u.y)) { best = d; next = u; }
+        // 19/09: o motor só salta para quem a vítima de agora vê (chainDamage); 02/10: pela casa
+        // mais perto entre os dois corpos, a mesma Engine.ligacao do motor
+        var lg = E().ligacao ? E().ligacao(state, cur, u)
+               : { d: manhattan(cur.x, cur.y, u.x, u.y), los: E().los(state, cur.x, cur.y, u.x, u.y) };
+        if (lg.los && lg.d <= range && lg.d < best) { best = lg.d; next = u; }
       }
       cur = next;
     }
@@ -567,9 +588,13 @@ var JOGO = (typeof window !== 'undefined')
     }
     for (i = 0; i < ctx.living.length; i++) {
       u = ctx.living[i];
-      add(u.x, u.y);
-      if (sAoe(spell).shape !== 'single' && u.side !== unit.side) {
-        add(u.x + 1, u.y); add(u.x - 1, u.y); add(u.x, u.y + 1); add(u.x, u.y - 1);
+      // 02/10: toda casa do corpo é alvo (a do canto noroeste pode estar sem visão)
+      var cs = E().casasDe ? E().casasDe(u) : [{ x: u.x, y: u.y }];
+      for (var ci = 0; ci < cs.length; ci++) {
+        add(cs[ci].x, cs[ci].y);
+        if (sAoe(spell).shape !== 'single' && u.side !== unit.side) {
+          add(cs[ci].x + 1, cs[ci].y); add(cs[ci].x - 1, cs[ci].y); add(cs[ci].x, cs[ci].y + 1); add(cs[ci].x, cs[ci].y - 1);
+        }
       }
     }
     if ((rg.min || 0) === 0) add(cx, cy); // auto-alvo
@@ -614,7 +639,9 @@ var JOGO = (typeof window !== 'undefined')
       u = state.units[i];
       if (!u.alive || u.offBoard) continue;
       living.push(u);
-      unitMap[u.x + ',' + u.y] = u;
+      // 02/10: o corpo grande aparece nas quatro casas dele
+      var csm = E().casasDe ? E().casasDe(u) : [{ x: u.x, y: u.y }];
+      for (var cm = 0; cm < csm.length; cm++) unitMap[csm[cm].x + ',' + csm[cm].y] = u;
       if (u === unit) continue;
       if (u.side === unit.side) allies.push(u);
       else if (!isInvisible(u)) {
@@ -647,7 +674,7 @@ var JOGO = (typeof window !== 'undefined')
       nearestEnemyDistTo: function (x, y) {
         var m = 999;
         for (var k = 0; k < enemies.length; k++) {
-          var d = manhattan(x, y, enemies[k].x, enemies[k].y);
+          var d = distAte(enemies[k], x, y);
           if (d < m) m = d;
         }
         return m;
@@ -659,7 +686,7 @@ var JOGO = (typeof window !== 'undefined')
     var primary = pool[0], bestKey = Infinity;
     for (i = 0; i < pool.length; i++) {
       u = pool[i];
-      var key = manhattan(unit.x, unit.y, u.x, u.y) * 2 + (u.hp / u.hpMax) * 10;
+      var key = (E().distEntre ? E().distEntre(unit, u) : manhattan(unit.x, unit.y, u.x, u.y)) * 2 + (u.hp / u.hpMax) * 10;
       if (key < bestKey) { bestKey = key; primary = u; }
     }
     var field = distField(state, primary.x, primary.y);
@@ -686,7 +713,7 @@ var JOGO = (typeof window !== 'undefined')
     // v2: risco de esquiva ao deixar a célula atual (pior fixador)
     var worstDodge = 1;
     for (i = 0; i < enemies.length; i++) {
-      if (manhattan(unit.x, unit.y, enemies[i].x, enemies[i].y) !== 1) continue;
+      if (distAte(enemies[i], unit.x, unit.y) !== 1) continue;
       var ch = E().dodgeChance(state, unit.uid, enemies[i].uid);
       if (ch < worstDodge) worstDodge = ch;
     }

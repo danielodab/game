@@ -486,8 +486,20 @@ var JOGO = (typeof window !== 'undefined')
     'sum-storm-falcon':   { model: 'sum_storm_falcon',   scale: 0.64 },  // 1,15 m
     // as duas novas, que fecham o buraco de nivel 30 na Agua e no Ar
     'sum-drowned-cistern': { model: 'sum_drowned_cistern', scale: 1.44 }, // 2,60 m
-    'sum-storm-eye':       { model: 'sum_storm_eye',       scale: 1.50 }  // 2,70 m
+    'sum-storm-eye':       { model: 'sum_storm_eye',       scale: 1.50 }, // 2,70 m
+    /* O ECO PRIMORDIAL E OS ECOS MENORES (02/10). Chave de modelo PRÓPRIA para cada um — a arte
+     * final do dono entra embutida com estes nomes e ganha sozinha. Enquanto o kit não existe, o
+     * corpo cai no provisório de M.CORPO_PROVISORIO (logo abaixo). `tintaDaFase`: o Eco troca de
+     * elemento a cada fase, e a tinta vem do elemento da UNIDADE, não do dado (o renderizador
+     * refaz o corpo quando ele troca). Porte: chefe é 2,95 m × escala; o Eco é ~2× um chefe
+     * (ocupa 2×2 casas) e o Menor, um monstro comum. */
+    'eco_primordial':  { model: 'boss-eco-primordial', scale: 2.00, tintaDaFase: true },   // 5,90 m
+    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },
+    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },
+    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.00 },
+    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }
   };
+
 
   // Familias: rede de seguranca quando um id novo aparecer nos dados.
   M.FAMILY_LOOK = {
@@ -502,31 +514,49 @@ var JOGO = (typeof window !== 'undefined')
   };
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
 
-  /* O CORPO PROVISÓRIO DOS COLOSSOS (02/10). A chave própria de cada colosso
-   * ainda não tem arte; enquanto `JOGO.MODELS` / o manifesto não a conhecerem,
-   * ele veste o monstro daqui — de arte própria do calabouço do mesmo
-   * elemento, já no porte de colosso (a escala é a da linha do MONSTER_LOOK, e
-   * a altura sai da escala, não do modelo). Escolhidos pela silhueta:
+  /* O CORPO PROVISÓRIO (02/10): quem veste o quê enquanto a arte final não
+   * chega. UMA tabela só para o Eco Primordial (frente do supremo) e para os
+   * Colossos do Poço (frente do poço) — as duas frentes criaram cada uma a sua
+   * `M.CORPO_PROVISORIO` em formatos diferentes, e na junção de 03/10 a segunda
+   * apagava a primeira (o Eco ficava sem corpo, e a linha do colosso, que era
+   * só um texto, quebrava o `base.model` do monsterLook).
+   * Cada linha é { model, scale?, tintaDaFase? }: `model` é o corpo emprestado;
+   * `scale`/`tintaDaFase`, quando vierem, trocam os da linha do MONSTER_LOOK
+   * (sem eles vale a escala da linha — a do colosso, 1,60).
+   * Para a arte final entrar basta embutir o kit com a chave própria (ela passa
+   * na frente: temKitDe); para aposentar o provisório de vez, apaga-se UMA
+   * linha daqui.
+   * ECO: o Coração Partido é o maior chefe e já é feito de quatro elementos —
+   * o melhor dublê de "pedaços dos seis calabouços"; com 2,44 ele mede 7,2 m,
+   * o dobro dele (1,22). Os Menores vestem os quatro Arautos do Coração, a
+   * mesma armadura com recheio de cada elemento, no porte que já têm.
+   * COLOSSOS: um monstro de arte própria do calabouço do mesmo elemento, já no
+   * porte de colosso, escolhido pela silhueta:
    *   fogo  → Monte de Escória (Fecho de Brasa): pedra que escorre;
    *   água  → Golem de Salmoura (Cisterna): "um colosso de sal";
    *   terra → Boca do Túnel (Mina Trêmula): peito e boca de rocha;
-   *   ar    → Nuvem-Enxame (Andaimes do Vento): vento com forma de gente.
-   * QUANDO A ARTE CHEGAR: embuta com a chave da esquerda e APAGUE A LINHA
-   * dela aqui — é a única linha a mexer (sem apagar ela também funciona: a
-   * chave própria, existindo, vence). */
+   *   ar    → Nuvem-Enxame (Andaimes do Vento): vento com forma de gente. */
   M.CORPO_PROVISORIO = {
-    'colosso-fogo':  'slag-mound',
-    'colosso-agua':  'brine-golem',
-    'colosso-terra': 'cave-jaw',
-    'colosso-ar':    'mote-swarm'
+    'boss-eco-primordial': { model: 'boss-riftheart', scale: 2.44, tintaDaFase: true },
+    'eco-menor-fogo':      { model: 'cinder-herald', scale: 1.17 },
+    'eco-menor-agua':      { model: 'tide-herald',   scale: 1.17 },
+    'eco-menor-terra':     { model: 'stone-herald',  scale: 1.28 },
+    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 },
+    'colosso-fogo':        { model: 'slag-mound' },
+    'colosso-agua':        { model: 'brine-golem' },
+    'colosso-terra':       { model: 'cave-jaw' },
+    'colosso-ar':          { model: 'mote-swarm' }
   };
-  function temModelo(k) {
-    return !!((JOGO.MODELS && JOGO.MODELS[k]) || (JOGO.MESHY_CLIPS && JOGO.MESHY_CLIPS[k]) ||
-              (JOGO.Bundle && JOGO.Bundle.conhece && JOGO.Bundle.conhece(k)));
+  // a chave própria já tem arte? (embutida, no manifesto do servido, ou no bundle)
+  function temKitDe(chave) {
+    return !!((JOGO.MODELS && JOGO.MODELS[chave]) || (JOGO.MESHY_CLIPS && JOGO.MESHY_CLIPS[chave]) ||
+              (JOGO.Bundle && JOGO.Bundle.conhece && JOGO.Bundle.conhece(chave)));
   }
+  M.temKitDe = temKitDe;
+  // o corpo que a chave veste AGORA: o provisório enquanto ela não tiver arte
   M.corpoDe = function (chave) {
     var prov = M.CORPO_PROVISORIO[chave];
-    return (prov && !temModelo(chave)) ? prov : chave;
+    return (prov && !temKitDe(chave)) ? prov.model : chave;
   };
 
   // OS PETS SÃO DO USUÁRIO (31/08) — os seis do Meshy aposentam o
@@ -1183,7 +1213,8 @@ var JOGO = (typeof window !== 'undefined')
 
   function monsterLook(defId) {
     var D = DATA();
-    var md = (D.monsters && D.monsters[defId]) || null;
+    // 02/10: o elenco do Eco mora à parte (js/core/data/eco.js)
+    var md = (D.monsters && D.monsters[defId]) || (D.ecoMonstros && D.ecoMonstros[defId]) || null;
     // 10/09, preparando os lotes dos portais fechados: um monstro cujo kit
     // PRÓPRIO já está embutido (JOGO.MODELS[defId], pelo embute_monstros.py)
     // veste o próprio corpo mesmo sem linha no MONSTER_LOOK — a linha só
@@ -1196,13 +1227,21 @@ var JOGO = (typeof window !== 'undefined')
     var base = MONSTER_LOOK[defId] || proprio ||
                (md && md.family && M.FAMILY_LOOK[md.family]) ||
                M.MONSTER_FALLBACK;
+    // 02/10: sem o kit da chave própria, o corpo provisório (M.CORPO_PROVISORIO)
+    var provB = base && base.model && M.CORPO_PROVISORIO[base.model];
+    if (provB && !temKitDe(base.model)) {
+      base = { model: provB.model, scale: provB.scale || base.scale, show: base.show, proc: base.proc,
+               tintaDaFase: provB.tintaDaFase != null ? provB.tintaDaFase : base.tintaDaFase };
+    }
     var boss = !!(md && md.boss);
+    var tintaFase = !!(base && base.tintaDaFase);
     return {
-      model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o colosso sem arte veste o provisório
+      model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o corpo provisório já foi trocado acima; corpoDe é a rede de segurança
       proc: !!base.proc, procId: defId,
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
-      tint: M.elementColor((md && md.element) || 'neutro'),
-      accent: M.elementColor((md && md.element) || 'neutro'),
+      // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
+      tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
+      accent: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
       family: md && md.family, boss: boss
     };
   }

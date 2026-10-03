@@ -136,6 +136,29 @@ var JOGO = (typeof window !== 'undefined')
  *     hp 40 · pa 3 · pp 3 · iniciativa do dono · power 0 · sem resistências.
  *     Os BÔNUS ao dono são responsabilidade de `Progress.battleParty()`, que
  *     entrega os stats já somados — a engine não os aplica duas vezes.
+ * 19. CORPO GRANDE (02/10, o Eco Primordial: "imóvel no centro da arena,
+ *     ocupa 2×2 casas"). `unit.porte` (padrão 1) é o lado do quadrado e
+ *     (x, y) o canto noroeste. TODA pergunta "quem está nesta casa" e "a que
+ *     distância ele está" passa por `ocupa`/`distA`/`ligacao`, que com porte 1
+ *     dão exatamente o que davam antes:
+ *       - mirar qualquer das casas acerta; a área que cobre várias acerta UMA
+ *         vez (unitsInTiles não repete); o corpo inteiro bloqueia passagem;
+ *       - nunca é empurrado, puxado, trocado de lugar nem teleportado: mover um
+ *         quadrado exigiria quatro casas livres e o "para onde" não tem regra
+ *         boa — o motor recusa, como o pushImmune;
+ *       - a visão é de casa a casa, como sempre: quem vê UMA casa dele pode
+ *         mirá-la; quando ELE conjura, o golpe sai da casa dele mais perto do
+ *         alvo que tenha alcance e visão (origemPara) — e, sendo a visão
+ *         simétrica, ninguém acerta sem poder ser acertado;
+ *       - não tem cobertura baixa (um colosso não se esconde atrás de mureta);
+ *       - o raio em cadeia mede o salto pela casa mais perto, com visão, e
+ *         não o acerta duas vezes (o `hit` é por uid).
+ * 20. O ECO PRIMORDIAL (02/10): fases, Ecos Menores, golpe avisado, teto de
+ *     12 rodadas e a contagem do dano — o bloco "O ECO PRIMORDIAL" mais abaixo
+ *     e o dado em js/core/data/eco.js.
+ *     As decisões 19 e 20 subiram Engine.VERSAO_REGRAS para 6: a tentativa
+ *     refeita no juiz (servidor/juiz/supremo.js) só bate com estas regras, e a
+ *     área que cobre a mesma unidade em duas casas deixou de repetir.
  * ==========================================================================*/
 
 (function () {
@@ -220,7 +243,10 @@ var JOGO = (typeof window !== 'undefined')
    *       runa de exaustão — js/core/poco.js), o andar múltiplo de 5 chama um
    *       Colosso (rastro de brasa, maré, couraça, ventania), o chefe do andar
    *       é UM só, e onde há perigo o caminho de mesmo custo prefere a casa
-   *       sem perigo. */
+   *       sem perigo.
+   *       (c) o ECO PRIMORDIAL: o corpo grande 2×2 e o chefe supremo
+   *       (decisões 19 e 20 no topo deste arquivo; dado em js/core/data/eco.js;
+   *       a tentativa refeita em servidor/juiz/supremo.js). */
   Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
@@ -320,10 +346,68 @@ var JOGO = (typeof window !== 'undefined')
   }
   function clamp(lo, hi, v) { return v < lo ? lo : (v > hi ? hi : v); }
 
+  /* O CORPO GRANDE (02/10, decisão de design 19). O porte é o lado do
+   * quadrado; (x, y) é o canto noroeste. Estas quatro funções substituem o
+   * `u.x === x && u.y === y` e o `manhattan(u.x, u.y, …)` onde a pergunta é
+   * sobre o CORPO — com porte 1 dão o mesmo número de antes, então o resto do
+   * jogo não sente nada. Um `if (eco)` espalhado pelo motor esqueceria uma
+   * porta (a fixação, o salto do raio, a casa livre da preparação…). */
+  function porteDe(u) { return (u && u.porte > 1) ? Math.floor(u.porte) : 1; }
+  function ocupa(u, x, y) {
+    var p = porteDe(u);
+    return x >= u.x && y >= u.y && x < u.x + p && y < u.y + p;
+  }
+  // a casa do corpo mais perto de (x, y): no quadrado, prender cada eixo dá a única
+  function pontoDe(u, x, y) {
+    var p = porteDe(u);
+    return { x: clamp(u.x, u.x + p - 1, x), y: clamp(u.y, u.y + p - 1, y) };
+  }
+  // a distância de Manhattan de uma casa até o corpo
+  function distA(u, x, y) {
+    var c = pontoDe(u, x, y);
+    return manhattan(c.x, c.y, x, y);
+  }
+  // a distância entre dois corpos (as casas mais perto, sem olhar visão)
+  function distEntre(a, b) {
+    var pa = porteDe(a), pb = porteDe(b);
+    var dx = Math.max(0, a.x - (b.x + pb - 1), b.x - (a.x + pa - 1));
+    var dy = Math.max(0, a.y - (b.y + pb - 1), b.y - (a.y + pa - 1));
+    return dx + dy;
+  }
+  // as casas do corpo, em ordem de leitura
+  function casasDe(u) {
+    var p = porteDe(u), out = [];
+    for (var dy = 0; dy < p; dy++) for (var dx = 0; dx < p; dx++) out.push({ x: u.x + dx, y: u.y + dy });
+    return out;
+  }
+  /* A LIGAÇÃO entre dois corpos: o par de casas mais perto que se VÊ (o raio
+   * salta por ele, a explosão fere por ele). Sem par com visão, devolve o par
+   * mais perto com `los: false`. Desempate pela ordem de leitura das casas —
+   * determinístico nos dois motores e no juiz. Com porte 1 é o par (a, b). */
+  function ligacao(state, a, b) {
+    var ca = casasDe(a), cb = casasDe(b), melhor = null, semVisao = null;
+    for (var i = 0; i < ca.length; i++) {
+      for (var j = 0; j < cb.length; j++) {
+        var d = manhattan(ca[i].x, ca[i].y, cb[j].x, cb[j].y);
+        if (!semVisao || d < semVisao.d) semVisao = { d: d, de: ca[i], para: cb[j], los: false };
+        if (melhor && d >= melhor.d) continue;
+        if (Engine.los(state, ca[i].x, ca[i].y, cb[j].x, cb[j].y)) melhor = { d: d, de: ca[i], para: cb[j], los: true };
+      }
+    }
+    return melhor || semVisao;
+  }
+  Engine.porteDe = porteDe;
+  Engine.ocupa = ocupa;
+  Engine.pontoDe = pontoDe;
+  Engine.distA = distA;
+  Engine.distEntre = distEntre;
+  Engine.casasDe = casasDe;
+  Engine.ligacao = function (state, a, b) { return ligacao(state, a, b); };
+
   Engine.unitAt = function (state, x, y) {
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.alive && !u.offBoard && u.x === x && u.y === y) return u;
+      if (u.alive && !u.offBoard && ocupa(u, x, y)) return u;
     }
     return null;
   };
@@ -442,6 +526,8 @@ var JOGO = (typeof window !== 'undefined')
     var D = DATA();
     if (D.monsters && D.monsters[id]) return D.monsters[id];
     if (D.fusionSummons && D.fusionSummons[id]) return D.fusionSummons[id];
+    // 02/10: o Eco Primordial e os Ecos Menores moram à parte (js/core/data/eco.js diz por quê)
+    if (D.ecoMonstros && D.ecoMonstros[id]) return D.ecoMonstros[id];
     return null;
   };
 
@@ -633,7 +719,7 @@ var JOGO = (typeof window !== 'undefined')
     var srcRes = st.resists || {};
     for (var k in srcRes) resists[k] = srcRes[k];
     var spells = (opts.spells || def.spells || def.baseSpells || []).slice();
-    return {
+    var nova = {
       uid: 'u' + state._uidCounter,
       defId: def.id,
       kind: kind,                     // 'hero' | 'monster' | 'summon' | 'pet' | 'fusion'
@@ -679,6 +765,9 @@ var JOGO = (typeof window !== 'undefined')
       fusionIntent: null,              // v2
       _birth: state._uidCounter
     };
+    // 02/10: só o corpo grande ganha o campo — a foto e o save das outras unidades não mudam
+    if (def.porte > 1) nova.porte = Math.floor(def.porte);
+    return nova;
   }
 
   function getDungeon(dungeonId) {
@@ -871,6 +960,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!md) throw new Error('Engine.createBattle: monstro desconhecido: ' + mid);
       state.units.push(makeUnit(state, md, 'monster', 'enemy', ms.x, ms.y, { element: md.element }));
     }
+    iniciaEco(state);                 // 02/10: só faz algo na sala do Eco Primordial
 
     // ordem por iniciativa (desc); desempate estável pela ordem de criação.
     // v2: pets NÃO entram na ordem — agem no fim do turno do dono.
@@ -884,7 +974,9 @@ var JOGO = (typeof window !== 'undefined')
     // v2: pets entram junto do dono, em célula livre adjacente
     for (i = 0; i < pets.length; i++) spawnPet(state, pets[i].ownerUnit, pets[i].petId, pets[i]);
 
-    sorteiaDesafio(state);
+    // 02/10: a tentativa do Eco não tem desafio de sala — o desafio paga XP e saque, e o Eco paga
+    // pelo placar; o contrato na tela só confundiria o que conta ali
+    if (!state.eco) sorteiaDesafio(state);
 
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
@@ -929,7 +1021,7 @@ var JOGO = (typeof window !== 'undefined')
         for (i = 0; i < state.units.length; i++) {
           var u = state.units[i];
           if (u.side !== 'enemy' || !u.alive) continue;
-          if (Math.abs(u.x - x) + Math.abs(u.y - y) < 3) longe = false;
+          if (distA(u, x, y) < 3) longe = false;      // 02/10: do corpo inteiro (o Eco é 2×2)
         }
         if (!longe) continue;
         out.push({ x: x, y: y });
@@ -941,7 +1033,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
       if (!u.alive || u.offBoard || u.uid === ignoraUid) continue;
-      if (u.x === x && u.y === y) return false;
+      if (ocupa(u, x, y)) return false;
     }
     return true;
   }
@@ -970,7 +1062,7 @@ var JOGO = (typeof window !== 'undefined')
       for (var j = 0; j < state.units.length; j++) {
         var u = state.units[j];
         if (!u.alive || u.offBoard || meus[u.uid]) continue;
-        if (u.x === c.x && u.y === c.y) return false;
+        if (ocupa(u, c.x, c.y)) return false;
       }
       return true;
     });
@@ -1222,7 +1314,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!e.alive || e.offBoard || e === unit) continue;
       if (e.side === unit.side) continue;
       if (soVistos && ocultoDe(unit, e)) continue;
-      if (manhattan(x, y, e.x, e.y) === 1) out.push(e);
+      if (distA(e, x, y) === 1) out.push(e);       // 02/10: colado em QUALQUER casa do corpo
     }
     return out;
   }
@@ -1261,7 +1353,7 @@ var JOGO = (typeof window !== 'undefined')
     var worst = null, worstChance = 2;
     for (var i = 0; i < cand.length; i++) {
       var e = cand[i];
-      if (manhattan(destX, destY, e.x, e.y) === 1) continue;  // continua colado nele
+      if (distA(e, destX, destY) === 1) continue;  // continua colado nele
       var c = Engine.dodgeChance(state, unit.uid, e.uid);
       if (c < worstChance) { worstChance = c; worst = e; }
     }
@@ -1282,7 +1374,7 @@ var JOGO = (typeof window !== 'undefined')
       var cx = parseInt(parts[0], 10), cy = parseInt(parts[1], 10);
       var risky = false;
       for (var i = 0; i < lockers.length; i++) {
-        if (manhattan(cx, cy, lockers[i].x, lockers[i].y) !== 1) { risky = true; break; }
+        if (distA(lockers[i], cx, cy) !== 1) { risky = true; break; }
       }
       out.push({ x: cx, y: cy, cost: c, risky: risky });
     }
@@ -1808,6 +1900,14 @@ var JOGO = (typeof window !== 'undefined')
       p.push('D', st.desafio.vivo ? 1 : 0, nh(st.desafio.passos), st.desafio.executado ? 1 : 0,
              st.desafio.cumprido ? 1 : 0);
     }
+    // 02/10: a sala do Eco — fase, placar, ritmo e o golpe marcado (só quando existe: o hash
+    // das outras salas não muda)
+    if (st.eco) {
+      p.push('ECO', nh(st.eco.fase), nh(st.eco.dano), nh(st.eco.vezes), st.eco.derrubou ? 1 : 0);
+      if (st.eco.aviso) {
+        p.push('AV', st.eco.aviso.golpe, (st.eco.aviso.casas || []).map(function (c) { return c.x + '.' + c.y; }).join(';'));
+      }
+    }
     return hashStr(p.join('|'));
   };
 
@@ -1954,16 +2054,43 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
+  /* DE ONDE SAI O GOLPE DE UM CORPO GRANDE (02/10, decisão de design 19). O
+   * quadrado conjura da casa dele mais perto do alvo que tenha alcance, linha e
+   * visão — o Eco não fica cego para um herói só porque o canto noroeste dele
+   * está atrás de um pilar. Nenhuma serve: a mais perto (e a validação recusa).
+   * Desempate pela ordem de leitura: o mesmo nos dois motores e no juiz. Com
+   * porte 1 é a própria casa, sem conta nenhuma. */
+  function origemPara(state, unit, spell, tx, ty) {
+    if (porteDe(unit) === 1) return { x: unit.x, y: unit.y };
+    var rg = sRange(spell), cs = casasDe(unit);
+    cs.sort(function (a, b) {
+      return (manhattan(a.x, a.y, tx, ty) - manhattan(b.x, b.y, tx, ty)) || (a.y - b.y) || (a.x - b.x);
+    });
+    for (var i = 0; i < cs.length; i++) {
+      var c = cs[i], d = manhattan(c.x, c.y, tx, ty);
+      if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
+      if (rg.line && !(tx === c.x || ty === c.y)) continue;
+      if (rg.los && !Engine.los(state, c.x, c.y, tx, ty)) continue;
+      return c;
+    }
+    return cs[0];
+  }
+  Engine.origemPara = function (state, uid, spellId, tx, ty) {
+    var u = Engine.findUnit(state, uid), sp = spellDef(spellId);
+    return (u && sp) ? origemPara(state, u, sp, tx, ty) : null;
+  };
+
   // `vazia` (22/09, só para a tela): julga a casa como se não houvesse ninguém
   // nela — é como quem mira vê a casa de um invisível do outro lado
   function validTargetCell(state, unit, spell, tx, ty, vazia) {
     if (!inBounds(state, tx, ty)) return false;
     if (!isFloor(state, tx, ty)) return false;
     var rg = sRange(spell);
-    var d = manhattan(unit.x, unit.y, tx, ty);
+    var o = origemPara(state, unit, spell, tx, ty);     // 02/10: o corpo grande mira da casa certa
+    var d = manhattan(o.x, o.y, tx, ty);
     if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
-    if (rg.line && !(tx === unit.x || ty === unit.y)) return false;
-    if (rg.los && !Engine.los(state, unit.x, unit.y, tx, ty)) return false;
+    if (rg.line && !(tx === o.x || ty === o.y)) return false;
+    if (rg.los && !Engine.los(state, o.x, o.y, tx, ty)) return false;
     var occupant = vazia ? null : Engine.unitAt(state, tx, ty);
     // o corpo existe (a casa não está vazia para invocar ou saltar), mas quem
     // mira não vê inimigo invisível: para ele a casa está sem ninguém (22/09)
@@ -2010,10 +2137,11 @@ var JOGO = (typeof window !== 'undefined')
     for (var y = 0; y < state.grid.h; y++) {
       for (var x = 0; x < state.grid.w; x++) {
         if (!isFloor(state, x, y)) continue;
-        var d = manhattan(u.x, u.y, x, y);
+        var o = origemPara(state, u, spell, x, y);
+        var d = manhattan(o.x, o.y, x, y);
         if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
-        if (rg.line && !(x === u.x || y === u.y)) continue;
-        if (rg.los && !Engine.los(state, u.x, u.y, x, y)) continue;
+        if (rg.line && !(x === o.x || y === o.y)) continue;
+        if (rg.los && !Engine.los(state, o.x, o.y, x, y)) continue;
         out.push({ x: x, y: y });
       }
     }
@@ -2036,10 +2164,11 @@ var JOGO = (typeof window !== 'undefined')
     for (var y = 0; y < state.grid.h; y++) {
       for (var x = 0; x < state.grid.w; x++) {
         if (!isFloor(state, x, y)) continue;
-        var d = manhattan(u.x, u.y, x, y);
+        var o = origemPara(state, u, spell, x, y);
+        var d = manhattan(o.x, o.y, x, y);
         if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
-        if (rg.line && !(x === u.x || y === u.y)) continue;
-        var muro = Engine.muroNaLinha(state, u.x, u.y, x, y);
+        if (rg.line && !(x === o.x || y === o.y)) continue;
+        var muro = Engine.muroNaLinha(state, o.x, o.y, x, y);
         if (muro) out.push({ x: x, y: y, muro: muro });
       }
     }
@@ -2168,6 +2297,8 @@ var JOGO = (typeof window !== 'undefined')
    * cortava o dano cru e o 1,35× vinha depois, arredondando duas vezes. Um
    * lugar só, com o número de verdade. */
   function cobre(state, cx, cy, target) {
+    // 02/10: o corpo grande não tem cobertura — um colosso de 2×2 não se esconde atrás de mureta
+    if (porteDe(target) > 1) return false;
     return Engine.coberto(state, cx, cy, target.x, target.y);
   }
 
@@ -2235,7 +2366,10 @@ var JOGO = (typeof window !== 'undefined')
       var qd2 = Engine.findUnit(state, sourceUid);
       if (qd2 && qd2.side === 'enemy') desafioFalha(state, target.name + ' foi ferido');
     }
+    var hpAntes = target.hp;
     target.hp = Math.max(0, target.hp - hpLoss);
+    // 02/10: o PLACAR do Eco — a vida que ele perdeu para o grupo (dealDamage é o funil de todo dano)
+    if (state.eco && target.uid === state.eco.uid) contaDanoEco(state, target, hpAntes - target.hp, sourceUid);
     var evDano = { type: 'damage', uid: target.uid, amount: amount, element: element,
                    absorbed: absorbed, hpLoss: hpLoss, sourceUid: sourceUid || null };
     if (cobertura) { evDano.coberto = true; evDano.reducao = cobertura.reducao; }
@@ -2357,6 +2491,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!unit.alive) return;
     unit.alive = false;
     unit.hp = 0;
+    if (state.eco && unit.uid === state.eco.uid) state.eco.derrubou = true;   // 02/10: o bônus do placar
     emit({ type: 'death', uid: unit.uid });
     log(unit.name + ' morre.');
 
@@ -2384,8 +2519,9 @@ var JOGO = (typeof window !== 'undefined')
         // 19/09: "obstáculos atrapalham" vale para a explosão também — quem
         // está atrás de um muro não é ferido (a revisão pegou a bomba ferindo
         // através de um '#'). A mesma Engine.los da área dos feitiços.
-        if (v.alive && !v.offBoard && manhattan(unit.x, unit.y, v.x, v.y) <= explode.radius &&
-            Engine.los(state, unit.x, unit.y, v.x, v.y)) victims.push(v);
+        if (!v.alive || v.offBoard) continue;
+        var lgE = ligacao(state, unit, v);              // 02/10: do corpo inteiro, pela casa mais perto com visão
+        if (lgE.los && lgE.d <= explode.radius) victims.push(v);
       }
       for (var j = 0; j < victims.length; j++) {
         var resist = Engine.effResist(victims[j], explode.element);
@@ -2423,7 +2559,8 @@ var JOGO = (typeof window !== 'undefined')
   function checkBattleEnd(state) {
     if (state.phase !== 'playing') return;
     var playerAlive = sideHasCore(state, 'player');
-    var enemyAlive = sideHasCore(state, 'enemy');
+    // 02/10: derrubado o Eco, a tentativa acaba — os Ecos Menores de pé não seguram a sala
+    var enemyAlive = sideHasCore(state, 'enemy') && !(state.eco && state.eco.derrubou);
     if (!playerAlive) {
       state.phase = 'lost';
       emit({ type: 'battleEnd', winner: 'enemy' });
@@ -2461,9 +2598,16 @@ var JOGO = (typeof window !== 'undefined')
   // --------------------------------------------------------------- push/pull
   function forcedMove(state, caster, target, tiles, mode) {
     if (!target.alive || tiles <= 0) return;
-    if (Engine.unitHasTrait(target, 'pushImmune')) {
+    // 02/10: o corpo grande nunca é arrastado (decisão de design 19), com ou sem o traço
+    if (Engine.unitHasTrait(target, 'pushImmune') || porteDe(target) > 1) {
       log(target.name + ' não se move um palmo.', target.uid);
       return;
+    }
+    // 02/10: quem empurra sendo grande empurra da casa dele mais perto da vítima — o eixo
+    // dominante medido do canto noroeste mandava o herói para o lado errado
+    if (porteDe(caster) > 1) {
+      var pc = pontoDe(caster, target.x, target.y);
+      caster = { x: pc.x, y: pc.y, uid: caster.uid };
     }
     var fromX = target.x, fromY = target.y;
     var moved = 0, collisionDmg = 0;
@@ -2703,7 +2847,10 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
-    castCore(state, caster, spell, x, y, {});
+    // 02/10: o corpo grande conjura da casa dele que mira (origemPara) — a linha, o cone, o
+    // empurrão e a cobertura saem dali, e não do canto noroeste
+    var oc = porteDe(caster) > 1 ? origemPara(state, caster, spell, x, y) : null;
+    castCore(state, caster, spell, x, y, oc ? { casterX: oc.x, casterY: oc.y } : {});
     return true;
   };
 
@@ -2745,6 +2892,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!opts.silent) log(caster.name + ' conjura ' + spell.name + '.', (oculto && !saiDasSombras) ? caster.uid : undefined);
     if (saiDasSombras) log(caster.name + ' sai das sombras!');
     applyEffects(state, caster, spell, x, y, opts);
+    if (state.eco) ecoConfere(state);              // 02/10: a troca de fase só depois do golpe inteiro
   }
   Engine.castCore = castCore;
 
@@ -2818,7 +2966,7 @@ var JOGO = (typeof window !== 'undefined')
      * visão dali) — a revisão pegou uma mureta atrás de um '#' que o
      * conjurador nem via dando −25% a quem a explosão alcançava por outro lado. */
     function cobreDe(u) {
-      var o = (u.x === x && u.y === y) ? deOnde() : { x: x, y: y };
+      var o = ocupa(u, x, y) ? deOnde() : { x: x, y: y };
       return cobre(state, o.x, o.y, u);
     }
     var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
@@ -2847,11 +2995,14 @@ var JOGO = (typeof window !== 'undefined')
     // Só para pets: mexer nisso para heróis mudaria o balanço das curas.
     var petMult = (caster.kind === 'pet') ? (100 + castPower) / 100 : 1;
 
+    /* 02/10: a área que cobre VÁRIAS casas do mesmo corpo (o Eco ocupa 2×2)
+     * acerta UMA vez — sem isto um círculo de raio 1 em cima dele batia quatro.
+     * Com corpos de uma casa nada muda: cada casa só tem uma unidade. */
     function unitsInTiles(includeCaster) {
       var list = [];
       for (var i = 0; i < tiles.length; i++) {
         var u = Engine.unitAt(state, tiles[i].x, tiles[i].y);
-        if (u && u.alive && (includeCaster || u !== caster)) list.push(u);
+        if (u && u.alive && (includeCaster || u !== caster) && list.indexOf(u) < 0) list.push(u);
       }
       return list;
     }
@@ -2991,7 +3142,8 @@ var JOGO = (typeof window !== 'undefined')
           break;
 
         case 'teleport':
-          if (!Engine.unitAt(state, x, y) && isFloor(state, x, y)) {
+          // 02/10: o corpo grande não salta (precisaria de 2×2 livres, decisão de design 19)
+          if (porteDe(caster) === 1 && !Engine.unitAt(state, x, y) && isFloor(state, x, y)) {
             var tfx = caster.x, tfy = caster.y;
             caster.x = x; caster.y = y;
             emit({ type: 'teleport', uid: caster.uid, fromX: tfx, fromY: tfy, toX: x, toY: y });
@@ -3000,6 +3152,10 @@ var JOGO = (typeof window !== 'undefined')
 
         case 'swap':
           u = Engine.unitAt(state, x, y);
+          if (u && u !== caster && (porteDe(u) > 1 || porteDe(caster) > 1)) {
+            log(u.name + ' não troca de lugar com ninguém.', u.uid);   // 02/10: o quadrado não cabe na casa do outro
+            break;
+          }
           if (u && u !== caster) {
             var sx2 = caster.x, sy2 = caster.y;
             caster.x = u.x; caster.y = u.y;
@@ -3286,6 +3442,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // v2: investida — desliza por eixo dominante até maxTiles
   function slideTo(state, caster, x, y, maxTiles) {
+    if (porteDe(caster) > 1) return;                  // 02/10: o corpo grande não desliza
     var path = [];
     var steps = 0;
     while (steps < maxTiles && !(caster.x === x && caster.y === y)) {
@@ -3327,6 +3484,7 @@ var JOGO = (typeof window !== 'undefined')
       if (state.phase !== 'playing') break;
       mult *= falloff;
       de = { x: cur.x, y: cur.y };                        // o próximo salto sai desta vítima
+      var deProx = null;
       // próximo salto: inimigo vivo mais próximo ainda não atingido — e que a
       // vítima de agora VÊ (19/09: o raio não salta por cima de muro; a revisão
       // pegou o salto ferindo quem estava atrás de um '#' cheio. A IA valora o
@@ -3337,12 +3495,211 @@ var JOGO = (typeof window !== 'undefined')
         if (!u.alive || u.offBoard || hit[u.uid]) continue;
         if (u.side === caster.side) continue;
         if (ocultoDe(caster, u)) continue;               // 22/09: o raio não acha quem não se vê
-        var d = manhattan(cur.x, cur.y, u.x, u.y);
-        if (d <= Engine.CHAIN_JUMP_RANGE && d < bestD && Engine.los(state, cur.x, cur.y, u.x, u.y)) { bestD = d; next = u; }
+        // 02/10: o salto mede da casa mais perto, com visão, entre os dois corpos (ligacao) — com
+        // porte 1 é o manhattan e o los de sempre
+        var lg = ligacao(state, cur, u);
+        if (lg.los && lg.d <= Engine.CHAIN_JUMP_RANGE && lg.d < bestD) { bestD = lg.d; next = u; deProx = lg.de; }
       }
+      // o próximo salto sai da casa da vítima de onde ele foi visto (a cobertura mede dali)
+      if (next && deProx) de = { x: deProx.x, y: deProx.y };
       cur = next;
     }
   }
+
+  // ------------------------------------------------- O ECO PRIMORDIAL (02/10)
+  /* O chefe supremo da semana (o dado e o porquê de cada número em
+   * js/core/data/eco.js; o placar refeito em servidor/juiz/supremo.js). Tudo
+   * aqui é derivado do ESTADO e do sorteio da sala — o juiz refaz a tentativa
+   * com estas mesmas funções e chega ao mesmo dano.
+   *
+   * `state.eco` = { uid, fase (0..3), dano, derrubou, aviso, vezes, rodadas, hpMax }:
+   *   dano     a vida que ele perdeu para o GRUPO (fonte do lado do jogador:
+   *            herói, fusão, pet, invocação). Clima e golpe de aliado dele
+   *            ferem mas não pontuam — o placar é do que o grupo fez;
+   *   fase     derivada da vida PERDIDA (a cada 25%), e nunca volta: uma cura
+   *            não desfaz a troca de elemento já anunciada;
+   *   aviso    o golpe grande marcado no chão: { golpe, el, nome, casas } —
+   *            cai no começo da vez seguinte dele;
+   *   vezes    quantas vezes ele já agiu (o ritmo do aviso). */
+  function ecoCfg() { return DATA().eco || null; }
+  function iniciaEco(state) {
+    var cfg = ecoCfg();
+    if (!cfg || !cfg.chefe) return;
+    var u = null;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].defId === cfg.chefe && state.units[i].side === 'enemy') { u = state.units[i]; break; }
+    }
+    if (!u) return;
+    state.eco = { uid: u.uid, fase: 0, dano: 0, derrubou: false, aviso: null, vezes: 0,
+                  rodadas: cfg.rodadas || 12, hpMax: u.hpMax };
+    aplicaFaseEco(state, u, 0);
+  }
+  /* O ELEMENTO DA FASE e a resistência pela RODA (DATA.beats): resiste ao que
+   * o elemento vence, fraco a quem o vence — a convenção do bestiário inteiro
+   * (tests/validate_world.html cobra a mesma). O resto das resistências fica
+   * a do dado (o neutro), e os feitiços passam a ser os da fase. */
+  function aplicaFaseEco(state, u, idx) {
+    var cfg = ecoCfg(), el = cfg.fases[idx] || cfg.fases[0];
+    var def = Engine.monster(u.defId) || {};
+    var base = (def.stats && def.stats.resists) || {}, r = {}, k;
+    for (k in base) if (Object.prototype.hasOwnProperty.call(base, k)) r[k] = base[k];
+    var vence = (DATA().beats || {})[el], perde = (DATA().beatenBy || {})[el];
+    if (vence) r[vence] = cfg.resisteFase;
+    if (perde) r[perde] = cfg.fracoFase;
+    u.element = el;
+    u.resists = r;
+    u.spells = (cfg.comuns || []).concat((cfg.feiticosFase || {})[el] || []);
+  }
+  // a fase que a vida de agora pede (0..3), em inteiros: (perdido × 4) / máximo
+  function faseDaVidaEco(state, u) {
+    var max = Math.max(1, u.hpMax), perdido = Math.max(0, max - Math.max(0, u.hp));
+    return Math.min(ecoCfg().fases.length - 1, Math.floor(perdido * 4 / max));
+  }
+  function contaDanoEco(state, u, perda, sourceUid) {
+    if (!(perda > 0)) return;
+    var src = sourceUid ? Engine.findUnit(state, sourceUid) : null;
+    if (src && src.side === 'player') {
+      state.eco.dano += perda;
+      emit({ type: 'ecoDano', uid: u.uid, perda: perda, total: state.eco.dano });
+    }
+  }
+  /* A TROCA DE FASE, conferida DEPOIS do golpe (fim do castCore, começo de
+   * vez): trocar no meio de um feitiço de área faria os Ecos Menores nascerem
+   * dentro da área que ainda estava sendo aplicada e levarem o resto dela.
+   * Um golpe que atravessa dois limiares troca UMA vez, direto para a fase
+   * de chegada (a vida diz qual), e chama os Menores dela. */
+  function ecoConfere(state) {
+    var e = state.eco;
+    if (!e || state.phase !== 'playing') return;
+    var u = Engine.findUnit(state, e.uid);
+    if (!u || !u.alive) return;
+    var nova = faseDaVidaEco(state, u);
+    if (nova <= e.fase) return;
+    e.fase = nova;
+    aplicaFaseEco(state, u, nova);
+    var cfg = ecoCfg(), el = u.element;
+    var nomeEl = ((DATA().elementInfo || {})[el] || {}).name || el;
+    emit({ type: 'ecoFase', uid: u.uid, fase: nova, element: el });
+    log(u.name + ' muda de fase: agora é ' + nomeEl + '!', u.uid);
+    chamaMenores(state, u, (cfg.menores || {})[el], cfg.menoresPorTroca || 0);
+  }
+  /* OS ECOS MENORES nascem nas casas livres em volta do corpo dele, das mais
+   * perto para as mais longe (até 3 passos), sorteadas pelo rng da sala entre
+   * as de mesma distância. Invocação do lado inimigo: não sustenta o lado
+   * (sideHasCore) — derrubado o Eco, a tentativa acaba com eles de pé. */
+  function chamaMenores(state, u, monsterId, n) {
+    if (!monsterId || !(n > 0) || !Engine.monster(monsterId)) return;
+    var aneis = [[], [], []], x, y;
+    for (y = 0; y < state.grid.h; y++) {
+      for (x = 0; x < state.grid.w; x++) {
+        var d = distA(u, x, y);
+        if (d < 1 || d > 3 || !isFloor(state, x, y) || Engine.unitAt(state, x, y)) continue;
+        aneis[d - 1].push({ x: x, y: y });
+      }
+    }
+    var postos = 0;
+    for (var a = 0; a < aneis.length && postos < n; a++) {
+      var anel = aneis[a];
+      while (anel.length && postos < n) {
+        var c = anel.splice(Math.floor(nextRand(state) * anel.length), 1)[0];
+        var m = spawnMonsterUnit(state, monsterId, c.x, c.y, 'summon', u.side, u.uid);
+        if (m) postos++;
+      }
+    }
+    if (postos) log(u.name + ' chama ' + postos + (postos === 1 ? ' Eco Menor.' : ' Ecos Menores.'), u.uid);
+  }
+  /* AS CASAS DO GOLPE GRANDE (o desenho de cada `padrao` está em eco.js).
+   * Só chão; nunca as casas do próprio Eco; ordem de leitura, sem repetir. */
+  function casasDoGolpe(state, u, g) {
+    var fora = [], visto = {}, x, y, i;
+    function poe(cx, cy) {
+      var k = cx + ',' + cy;
+      if (visto[k] || !isFloor(state, cx, cy) || ocupa(u, cx, cy)) return;
+      visto[k] = true;
+      fora.push({ x: cx, y: cy });
+    }
+    function viuDoNucleo(cx, cy) { var p = pontoDe(u, cx, cy); return Engine.los(state, p.x, p.y, cx, cy); }
+    if (g.padrao === 'alvos') {
+      var r = g.raio || 1;
+      for (i = 0; i < state.units.length; i++) {
+        var h = state.units[i];
+        if (!h.alive || h.offBoard || h.side === u.side || (h.kind !== 'hero' && h.kind !== 'fusion')) continue;
+        if (ocultoDe(u, h)) continue;                    // o invisível não é marcado: o Eco não o vê
+        for (var dy = -r; dy <= r; dy++) {
+          for (var dx = -r; dx <= r; dx++) if (Math.abs(dx) + Math.abs(dy) <= r) poe(h.x + dx, h.y + dy);
+        }
+      }
+    } else if (g.padrao === 'onda' || g.padrao === 'anel') {
+      for (y = 0; y < state.grid.h; y++) {
+        for (x = 0; x < state.grid.w; x++) {
+          var d = distA(u, x, y);
+          if (d >= (g.de || 1) && d <= (g.ate || 1) && viuDoNucleo(x, y)) poe(x, y);
+        }
+      }
+    } else if (g.padrao === 'cruz') {
+      var p = porteDe(u), k, j;
+      for (k = 0; k < p; k++) {
+        // as faixas saem do corpo e param no primeiro muro alto (a mureta baixa não as para)
+        for (j = u.x - 1; j >= 0 && !blocksSight(state, j, u.y + k); j--) poe(j, u.y + k);
+        for (j = u.x + p; j < state.grid.w && !blocksSight(state, j, u.y + k); j++) poe(j, u.y + k);
+        for (j = u.y - 1; j >= 0 && !blocksSight(state, u.x + k, j); j--) poe(u.x + k, j);
+        for (j = u.y + p; j < state.grid.h && !blocksSight(state, u.x + k, j); j++) poe(u.x + k, j);
+      }
+    }
+    fora.sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); });
+    return fora;
+  }
+  Engine._casasDoGolpe = casasDoGolpe;     // provas
+  function golpeDaFase(el) { return ((ecoCfg() || {}).golpes || {})[el] || null; }
+  /* O FIM DA VEZ DELE: no ritmo de `golpeACada`, marca o golpe grande da fase. */
+  function ecoFimDaVez(state, u) {
+    var e = state.eco, cfg = ecoCfg();
+    if (!e || !u.alive || state.phase !== 'playing') return;
+    e.vezes++;
+    var cada = Math.max(1, cfg.golpeACada || 2);
+    if (e.aviso || (e.vezes - 1) % cada !== 0) return;
+    var g = golpeDaFase(u.element);
+    if (!g) return;
+    var casas = casasDoGolpe(state, u, g);
+    e.aviso = { golpe: g.id, el: u.element, nome: g.nome, casas: casas };
+    emit({ type: 'ecoAviso', uid: u.uid, golpe: g.id, nome: g.nome, element: u.element, casas: casas.slice() });
+    log(u.name + ' prepara ' + g.nome + ': as casas marcadas explodem na próxima vez dele.', u.uid);
+  }
+  /* O COMEÇO DA VEZ DELE: o golpe avisado cai. Pega QUALQUER UM nas casas
+   * (menos ele): herói, pet, invocação e Eco Menor — o chão não escolhe lado.
+   * O dano é o do contrato (rollDamageAmount, com o poder dele e a
+   * resistência de cada um) e passa por dealDamage (dificuldade, escudo). */
+  function ecoGolpe(state, u) {
+    var e = state.eco, av = e && e.aviso;
+    if (!av) return;
+    e.aviso = null;
+    var g = golpeDaFase(av.el) || {};
+    emit({ type: 'ecoGolpe', uid: u.uid, golpe: av.golpe, nome: av.nome, element: av.el, casas: av.casas.slice() });
+    log(av.nome + ' cai sobre a câmara!', u.uid);
+    var poder = Engine.castPower(state, u, { element: av.el });
+    var vitimas = [];
+    for (var i = 0; i < av.casas.length; i++) {
+      var v = Engine.unitAt(state, av.casas[i].x, av.casas[i].y);
+      if (v && v !== u && v.alive && vitimas.indexOf(v) < 0) vitimas.push(v);
+    }
+    for (var j = 0; j < vitimas.length && state.phase === 'playing'; j++) {
+      var alvo = vitimas[j];
+      if (!alvo.alive) continue;
+      var amt = rollDamageAmount(state, g.min || 0, g.max || 0, poder,
+                                 Engine.effResist(alvo, av.el), Engine.markMultiplier(alvo));
+      dealDamage(state, alvo, amt, av.el, u.uid, false, false);
+    }
+  }
+  /* O PLACAR da tentativa: o dano, e o bônus de quem derruba. */
+  Engine.ecoPlacar = function (state) {
+    var e = state && state.eco;
+    if (!e) return null;
+    var cfg = ecoCfg() || {};
+    var bonus = e.derrubou ? Math.round((e.hpMax || 0) * (cfg.bonusDerrubada || 0)) : 0;
+    return { dano: e.dano, derrubou: !!e.derrubou, bonus: bonus, pontos: e.dano + bonus,
+             fase: e.fase, rodada: Math.min(state.round || 0, e.rodadas), rodadas: e.rodadas,
+             hpMax: e.hpMax };
+  };
 
   // --------------------------------------------------------------- turnos
   // Tiques de início de turno compartilhados por unidades da ordem e por pets.
@@ -3355,7 +3712,7 @@ var JOGO = (typeof window !== 'undefined')
       for (var i = 0; i < state.units.length; i++) {
         var ally = state.units[i];
         if (ally.alive && !ally.offBoard && ally !== u && ally.side === u.side &&
-            manhattan(u.x, u.y, ally.x, ally.y) <= aura.radius && ally.hp < ally.hpMax) {
+            distEntre(u, ally) <= aura.radius && ally.hp < ally.hpMax) {
           applyHeal(state, ally, aura.value);
         }
       }
@@ -3433,6 +3790,12 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'turnStart', uid: u.uid });
 
     runStartTicks(state, u);
+    // 02/10: o veneno e o clima também trocam a fase dele; e, na vez DELE, o golpe avisado cai
+    if (state.eco) {
+      ecoConfere(state);
+      if (u.alive && u.uid === state.eco.uid && state.phase === 'playing') ecoGolpe(state, u);
+      if (state.phase !== 'playing') return;
+    }
 
     if (!u.alive) advanceTurn(state, guard + 1);
   }
@@ -3465,6 +3828,15 @@ var JOGO = (typeof window !== 'undefined')
   // v2: início de rodada — clima automático, armadilhas e eventos de terreno
   function onRoundStart(state) {
     var i;
+    /* 02/10: a tentativa do Eco dura `rodadas` (12) — começar a 13ª encerra. Não é a fúria: lá a
+     * demora é derrota; aqui o placar (o dano) fica como está, derrubado ou não. */
+    if (state.eco && state.round > state.eco.rodadas) {
+      state.phase = 'lost';
+      emit({ type: 'ecoTempo', rodadas: state.eco.rodadas });
+      emit({ type: 'battleEnd', winner: 'enemy', reason: 'eco-tempo' });
+      log('As ' + state.eco.rodadas + ' rodadas acabaram: o Eco Primordial se cala até a próxima tentativa.');
+      return;
+    }
     // v2.3: a sala esquenta. Avisa a interface a cada degrau para o jogador ver
     // a pressão subindo, e corta a batalha no teto — sem teto, uma sala em que
     // ninguém consegue matar ninguém ainda seria um beco sem saída.
@@ -3565,6 +3937,7 @@ var JOGO = (typeof window !== 'undefined')
       if (state.perigos && Pg()) Pg().fimTurno(state, u, INTERNO);
       if (state.phase !== 'playing') return;
       tickDownEffects(state, u);
+      if (state.eco && u.uid === state.eco.uid) ecoFimDaVez(state, u);   // 02/10: o aviso do golpe grande
       // v2: a fusão declarada resolve no FIM do turno de quem declarou
       if (JOGO.Fusion && JOGO.Fusion.resolve && state.pendingFusion &&
           state.pendingFusion.a === u.uid) {
@@ -3649,7 +4022,7 @@ var JOGO = (typeof window !== 'undefined')
         } else { // attack
           var dEnemy = 99;
           for (var q = 0; q < enemies.length; q++) {
-            d = manhattan(c.x, c.y, enemies[q].x, enemies[q].y);
+            d = distA(enemies[q], c.x, c.y);              // 02/10: até o corpo inteiro
             if (d < dEnemy) dEnemy = d;
           }
           score -= 1.0 * Math.abs(Math.min(dEnemy, 99) - Math.min(reach, 99));
@@ -3674,13 +4047,15 @@ var JOGO = (typeof window !== 'undefined')
         spell = petBestSpell(state, pet, ['damage', 'poison', 'push', 'mark', 'root', 'chain']);
         var bd = 999;
         for (i = 0; i < enemies.length; i++) {
-          d = manhattan(pet.x, pet.y, enemies[i].x, enemies[i].y);
+          d = distA(enemies[i], pet.x, pet.y);
           if (d <= reach && d < bd) { bd = d; target = enemies[i]; }
         }
       }
-      if (spell && target && manhattan(pet.x, pet.y, target.x, target.y) <= reach &&
-          validTargetCell(state, pet, spell, target.x, target.y)) {
-        if (Engine.cast(state, pet.uid, spell.id, target.x, target.y)) {
+      // 02/10: a casa mirada é a do corpo mais perto do pet (o Eco tem quatro)
+      var tc = target ? pontoDe(target, pet.x, pet.y) : null;
+      if (spell && target && manhattan(pet.x, pet.y, tc.x, tc.y) <= reach &&
+          validTargetCell(state, pet, spell, tc.x, tc.y)) {
+        if (Engine.cast(state, pet.uid, spell.id, tc.x, tc.y)) {
           emit({ type: 'petAct', uid: pet.uid, action: 'cast', spellId: spell.id,
                  targetUid: target.uid, ownerUid: ownerUid });
           acted = true;
