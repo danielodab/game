@@ -111,7 +111,7 @@
 /* a cor da moldura de cada personagem vem do próprio jogo (classes.js, mesma
  * origem); cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
 (function () {
-  ['site.js', '../js/core/data/classes.js', 'loja.js'].forEach(function (s) {
+  ['site.js', 'banimento.js', '../js/core/data/classes.js', 'loja.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

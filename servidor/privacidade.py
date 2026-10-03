@@ -463,6 +463,26 @@ class PrivacidadeMixin:
         except sqlite3.OperationalError:   # um banco de antes do Eco
             dados['eco_tentativas'] = []
             dados['eco_premios'] = []
+        # 03/10 (junção com a moderação, servidor/moderacao.py): as punições desta conta (sem quem
+        # puniu), as denúncias que ELA fez e as cartas da Equipe. A denúncia contra ela fica de fora:
+        # mostraria quem denunciou, que é dado de outra pessoa
+        try:
+            dados['moderacao'] = {
+                'banimentos': [dict(r) for r in self.con.execute(
+                    "SELECT motivo, inicio, fim, encerrado_em, encerrado_como FROM moderacao_banimentos "
+                    "WHERE conta_id = ? ORDER BY inicio DESC", (cid,))],
+                'silencios': [dict(r) for r in self.con.execute(
+                    "SELECT motivo, inicio, fim, encerrado_em, encerrado_como FROM moderacao_silencios "
+                    "WHERE conta_id = ? ORDER BY inicio DESC", (cid,))],
+                'denuncias_feitas': self._lista(
+                    "SELECT alvo_nome, categoria, onde, texto, estado, resposta, criado_em, fechado_em "
+                    "FROM moderacao_denuncias WHERE denunciante_id = ? ORDER BY criado_em DESC", (cid,)),
+                'cartas': self._lista(
+                    "SELECT assunto, texto, criado_em, lida_em FROM moderacao_cartas WHERE conta_id = ? "
+                    "ORDER BY id DESC", (cid,)),
+            }
+        except sqlite3.OperationalError:   # um banco de antes da moderação
+            dados['moderacao'] = {'banimentos': [], 'silencios': [], 'denuncias_feitas': [], 'cartas': []}
         try:   # a tabela é do servidor/registros.py; sem ela (um banco de antes), a lista fica vazia
             dados['registros_de_erro'] = [dict(r) for r in self.con.execute(
                 "SELECT e.origem, e.mensagem, e.ultima_em FROM erros_registro_contas x JOIN erros_registro e "

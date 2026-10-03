@@ -793,7 +793,7 @@ def _prova_com_banco(R, banco, contas):
                 pass
 
         # ------------------------------------ os tokens que não conferem
-        for rotulo, token in (('falso', falso), ('vencido', contas['vencido'][1]), ('banido', contas['banido'][1])):
+        for rotulo, token in (('falso', falso), ('vencido', contas['vencido'][1])):
             w, _ = rl.liga('marca' + rotulo + '1')
             manda(w, t='ident', de='j' + rotulo, token=token)
             r = recebe(w, 3)
@@ -802,6 +802,21 @@ def _prova_com_banco(R, banco, contas):
             check(R + 'token %s: ident-nao, e o nome reservado dele sai trocado' % rotulo,
                   r == '{"t":"ident-nao"}' and ch.get('nome', '').startswith('Aventureiro') and 'mestre' not in ch,
                   '%r %r' % (r, ch))
+        # 02/10 (servidor/moderacao.py, pedido do dono: "o relé recusa/derruba a conta banida"): o token
+        # de conta BANIDA não vira mais anônimo da praça — ouve o porquê ({t:'banido'}; aqui o banimento
+        # de antes da tabela, pelo SQL: permanente e sem motivo) e a conexão fecha; a fala dele não sai
+        w, _ = rl.liga('marcabanido1')
+        manda(w, t='ident', de='jbanido', token=contas['banido'][1])
+        r = recebe(w, 3)
+        manda(w, t='chat', de='jbanido', nome='GM Banido', texto='x')
+        ch = primeiro(junta(obs, 0.5), 'chat', 'jbanido')
+        try:
+            rb = json.loads(r) if r else {}
+        except Exception:
+            rb = {}
+        check(R + 'token banido: ouve {t:banido} (permanente) em vez de ident-nao, e a fala dele não chega a ninguém',
+              rb.get('t') == 'banido' and (rb.get('banimento') or {}).get('permanente') is True and not ch,
+              '%r %r' % (r, ch))
         w, _ = rl.liga()
         for _ in range(rele_ident.IDENT_MAX + 2):
             manda(w, t='ident', de='jteimoso', token=falso)

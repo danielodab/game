@@ -160,6 +160,7 @@ import secrets
 import sqlite3
 import time
 
+import moderacao                                # 02/10: o banimento e o silêncio da Equipe (servidor/moderacao.py)
 import presenca                                 # 15/09: a queda e a volta de cada conta, a prova do W.O. do duelo
 import rele_ident                               # a identidade na praça (10/09): o token, o Mestre e os nomes
 from comum import ip_do_pedido, ip_e_publico, le_ip   # o IP de quem conectou, lido como no cartório (api.py)
@@ -259,6 +260,16 @@ LEITURA_PRAZO_S = 3.0                    # a thread que passa disso não é espe
 SEM_INIMIGOS = ('sussurro', 'troca')     # os dirigidos que o inimigo não entrega (o desafio de duelo passa: é o PvP)
 AMIGOS_TIPOS = ('amigos', 'amigos-muda') # nunca repassados: quem responde é o próprio relé
 
+# ------------------- a moderação (02/10, servidor/moderacao.py)
+# O BANIDO: o token de conta banida não confere (rele_ident.confere); quando é por banimento,
+# a conexão ouve {t:'banido', banimento:{motivo, fim…}} e fecha com FECHA_BANIDO — no ident e na
+# conferência de novo (a conta banida com a praça aberta cai em até ~2 min). O rede.js não religa.
+# O SILENCIADO: chat, sussurro e /g da conta silenciada não saem; quem fala ouve {t:'silenciado'}
+# (pagando o balde do chat: insistir não vira enxurrada de vozes). Lido do banco a cada SILENCIO_S.
+FECHA_BANIDO = 4003
+FALAS_DA_EQUIPE = ('chat', 'sussurro', 'gchat')   # o que o silêncio da Equipe cala
+SILENCIO_S = 15.0
+
 log = logging.getLogger("rele")
 PARES = {}                   # ws -> Par (todas as conexões vivas)
 POR_ID = {}                  # id -> set(Par) (a mesma conta em duas abas = dois Par)
@@ -271,6 +282,7 @@ CALADOS = {}                 # 11/09 (achado 21): id de quem silenciou -> {id ca
 POR_CONTA = {}               # 13/09: id da conta conferida -> set(Par) (as abas da mesma conta)
 GUILDA = {}                  # 13/09: id da conta -> (lida em, (gid, nome, frozenset dos membros) ou None = sem guilda)
 INIMIGOS = {}                # 13/09: id da conta -> (lida em, frozenset das contas inimigas, nos dois sentidos)
+SILENCIOS = {}               # 02/10: id da conta -> (lida em, o silêncio em vigor ou None)
 _LEITURAS = 0                # 13/09: leituras do banco em voo (_le_banco)
 _NADA = object()
 VERIFICADOR = rele_ident.Verificador(None)   # liga_banco(--banco); sem banco ninguém é conferido
@@ -925,6 +937,8 @@ def _poda_contas(agora):
         del GUILDA[k]
     for k in [k for k, (t0, _) in INIMIGOS.items() if agora - t0 >= INIMIGOS_VELHO_S]:
         del INIMIGOS[k]
+    for k in [k for k, (t0, _) in SILENCIOS.items() if agora - t0 >= SILENCIO_S]:
+        del SILENCIOS[k]
 
 
 def _indexa_conta(par, antes, depois):
@@ -1019,6 +1033,61 @@ async def _busca(par, m, agora):
             agora = time.monotonic()
             for c, s in lidos.items():
                 _guarda_da_conta(INIMIGOS, c, s, agora, INIMIGOS_VELHO_S)
+
+
+async def _silenciado(par, agora):
+    """02/10: o silêncio da Equipe em vigor para a conta desta conexão (dict) ou None.
+    Do cache (SILENCIO_S) ou do banco numa thread; banco que não responde não cala
+    ninguém (o silêncio é a exceção, a fala é a regra) e não fica guardado."""
+    if par.conta is None or VERIFICADOR.caminho is None:
+        return None
+    cid = par.conta['id']
+    achado = SILENCIOS.get(cid)
+    if achado is None or agora - achado[0] >= SILENCIO_S:
+        sil, definitivo = await _le_banco(moderacao.le_silencio, cid)
+        if not definitivo:
+            return None
+        _guarda_da_conta(SILENCIOS, cid, sil, time.monotonic(), SILENCIO_S)
+        achado = SILENCIOS[cid]
+    sil = achado[1]
+    if sil is not None and sil.get('fim') is not None and sil['fim'] <= time.time():
+        return None                                  # venceu enquanto estava guardado
+    return sil
+
+
+def _cala_pela_equipe(par, sil, agora):
+    """A fala da conta silenciada não sai; quem falou ouve o porquê — se o balde do
+    chat deixa (None = descartado, e conta como abuso, como o chat que estoura)."""
+    if not par.balde_chat.tira(agora):
+        return None
+    CONTA['envios'] += manda_a_todos([par.ws], json.dumps({'t': 'silenciado', 'silencio': sil}, ensure_ascii=False,
+                                                          separators=(',', ':')))
+    return []
+
+
+async def _banido_de_fato(par, token):
+    """02/10: o token que a conferência recusou é de uma conta BANIDA (e não só uma
+    sessão morta)? Se é, a conexão ouve o motivo e o fim e fecha com FECHA_BANIDO.
+    Banco que não responde não derruba ninguém por isto."""
+    if VERIFICADOR.caminho is None or not rele_ident.token_ok(token) or not par.vivo or par.derrubado:
+        return False
+    ban, definitivo = await _le_banco(moderacao.le_banimento_do_token, token)
+    if not definitivo or ban is None or not par.vivo or par.derrubado:
+        return False
+    cid = par.conta['id'] if par.conta is not None else None
+    par.derrubado = True
+    _poe_conta(par, None, time.monotonic())
+    log.info("conta banida fora da praça: conta #%s", cid)
+    _em_tarefa(_despede_banido(par.ws, ban))
+    return True
+
+
+async def _despede_banido(ws, ban):
+    await _manda(ws, json.dumps({'t': 'banido', 'banimento': ban}, ensure_ascii=False, separators=(',', ':')))
+    try:
+        await ws.close(FECHA_BANIDO, 'conta banida')
+    except Exception:
+        pass
 
 
 def _inimigos(a, b):
@@ -1489,6 +1558,8 @@ async def _ident(par, m, agora):
     token = m.get('token')
     conta, definitivo = await VERIFICADOR.consulta(token)
     agora = time.monotonic()
+    if conta is None and definitivo and await _banido_de_fato(par, token):
+        return True                                  # 02/10: banida — ouviu o motivo e a conexão fecha
     _poe_conta(par, conta, agora)
     if conta is not None:
         par.token, par.falhas = token, 0
@@ -1576,6 +1647,8 @@ async def _revista(par):
             return
         conta = None
     par.falhas = 0
+    if conta is None and definitivo and par.token is not None and await _banido_de_fato(par, par.token):
+        return                                       # 02/10: banida com a praça aberta — cai com o motivo
     if conta is None and definitivo and par.conta is not None and par.token is not None:
         # 13/09: a sessão sumiu do banco. Se foi um login em outro aparelho —
         # inclusive o que se identificou no relé do OUTRO contêiner, que este
@@ -1645,6 +1718,9 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                         # 13/09: quem está online, respondido só a quem pediu —
                         # nunca repassado (dest é [] ou None: nada a entregar)
                         dest = [] if await _amigos(par, m, agora) else None
+                    elif par.conta is not None and m['t'] in FALAS_DA_EQUIPE and await _silenciado(par, agora):
+                        # 02/10: a conta silenciada pela Equipe não fala (moderacao.py); ouve o porquê
+                        dest = _cala_pela_equipe(par, SILENCIOS[par.conta['id']][1], time.monotonic())
                     else:
                         if par.conta is not None and (m['t'] == 'gchat' or m['t'] in SEM_INIMIGOS):
                             # 13/09: a guilda e os inimigos vêm do banco numa thread

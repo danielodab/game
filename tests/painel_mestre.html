@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o painel do Mestre, a denúncia e a tela do banido</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- 02/10, pedido do dono: o painel do Mestre por cima de qualquer tela (js/ui/painel_mestre.js),
+     a denúncia (perfil, linha do chat) e a tela clara do banido (js/ui/moderacao.js). O servidor é
+     de mentira (JOGO.Moderacao._fetch e JOGO.Sessao._fetch): esta página prova a TELA — o que ela
+     mostra, que camada recebe clique e o que ela manda ao servidor. A regra está em
+     tests/moderacao_api.py e tests/moderacao_rele_prova.py. Conta o que existe no DOM, não foto. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="ui-root" class="ui-root"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  try { localStorage.setItem('soterra-gm-v1', JSON.stringify({ ligado: false, pa: 12, pp: 8, spells: [] })); } catch (e) {}
+  try { localStorage.removeItem('soterra-sessao'); } catch (e) {}
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/gm.js','js/core/db.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'js/ui/debug.js', 'js/ui/moderacao.js', 'js/ui/painel_mestre.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__pronto = true;
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function q(sel, raiz) { return (raiz || document).querySelector(sel); }
+  function qq(sel, raiz) { return Array.prototype.slice.call((raiz || document).querySelectorAll(sel)); }
+  function botaoCom(texto, raiz) {
+    return qq('button', raiz).filter(function (b) { return b.textContent.indexOf(texto) === 0; })[0] || null;
+  }
+  function pe(n) { return n ? getComputedStyle(n).pointerEvents : 'sem-camada'; }
+  function tecla(key, extra) {
+    var ev = new KeyboardEvent('keydown', Object.assign({ key: key, bubbles: true, cancelable: true }, extra || {}));
+    window.dispatchEvent(ev);
+    return ev;
+  }
+
+  var M = JOGO.Moderacao, PM = JOGO.PainelMestre, S = JOGO.Sessao, P = JOGO.Progress;
+  if (P && P.reset) P.reset();
+
+  // ---- o servidor de mentira: guarda cada pedido e responde por rota
+  var pedidos = [];
+  var respostas = {};
+  M._fetch = function (rota, op) {
+    pedidos.push({ rota: rota, op: op || {} });
+    var base = rota.split('?')[0];
+    var r = respostas[base];
+    return Promise.resolve(typeof r === 'function' ? r(rota, op) : (r || { ok: false, status: 404, erro: 'sem resposta na prova' }));
+  };
+  function ultimo(rota) {
+    for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota.split('?')[0] === rota) return pedidos[i];
+    return null;
+  }
+  var adotados = [];
+  JOGO.Autoridade = { adotaResposta: function (r) { adotados.push(r); return true; } };
+
+  check('os módulos carregaram (Moderacao, PainelMestre, Denuncia, Banimento, CorreioEquipe)',
+        !!M && !!PM && !!JOGO.Denuncia && !!JOGO.Banimento && !!JOGO.CorreioEquipe);
+
+  (async function () {
+    // ============================================================ quem vê o painel
+    PM.pintaBotao();
+    check('sem sessão e sem a chave do Mestre: nenhum botão do painel', !q('.pm-abrir'));
+    tecla('F9');
+    check('e o F9 não abre nada', !PM.aberto());
+    S.guarda({ token: 'tok-comum', conta: { id: 7, nome: 'Curioso', gm: false } });
+    PM.pintaBotao();
+    check('conta sem a marca do servidor: nenhum botão', !q('.pm-abrir') && !PM.ehMestre());
+
+    S.guarda({ token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } });
+    PM.pintaBotao();
+    var b = q('.pm-abrir');
+    check('a conta que o servidor marcou (gm:true): o botão discreto aparece e recebe clique',
+          !!b && pe(b) === 'auto' && PM.noServidor() === true);
+    var ev = tecla('F9');
+    check('F9 abre o painel, e a tecla não segue para o jogo (preventDefault)', PM.aberto() && ev.defaultPrevented);
+    var capa = q('.pm-capa');
+    check('o painel recebe clique (pointer-events: auto; fora do #ui-root)',
+          pe(capa) === 'auto' && !document.getElementById('ui-root').contains(capa));
+    check('as sete abas', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
+          'Itens,Moedas,Jogadores,Denúncias,Banimentos,Auditoria,Ferramentas');
+    capa.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    check('Esc fecha', !PM.aberto());
+    tecla('m', { ctrlKey: true, altKey: true });
+    check('Ctrl+Alt+M também abre', PM.aberto());
+
+    // ============================================================ Itens
+    PM.abrir('itens');
+    var todos = PM.itensFiltrados().length;
+    var sel = qq('.pm-corpo select')[0];
+    sel.value = 'punho'; sel.dispatchEvent(new Event('change'));
+    var linhas = qq('.pm-corpo .pm-item');
+    var slots = linhas.map(function (l) { return JOGO.DATA.items[l.getAttribute('data-item')].slot; });
+    check('o filtro de slot: só punho na lista, e menos que o total',
+          linhas.length > 0 && slots.every(function (s) { return s === 'punho'; }) && PM.itensFiltrados().length < todos,
+          linhas.length + ' de ' + todos);
+    var busca = q('.pm-corpo input[type=search]');
+    var alvoItem = PM.itensFiltrados()[0];
+    busca.value = alvoItem.name.slice(0, 6); busca.dispatchEvent(new Event('input'));
+    check('a busca por nome acha a peça', qq('.pm-corpo .pm-item').some(function (l) { return l.getAttribute('data-item') === alvoItem.id; }));
+    var nv = q('.pm-corpo input[type=number]');
+    nv.value = '0'; nv.dispatchEvent(new Event('change'));
+    check('o filtro de nível de uso (até 0): só as de nível 0',
+          PM.itensFiltrados().every(function (it) { return (it.nivelUso || 0) <= 0; }));
+    nv.value = ''; nv.dispatchEvent(new Event('change'));
+    busca.value = ''; busca.dispatchEvent(new Event('input'));
+    var sels = qq('.pm-corpo select');
+    sels[3].value = '3'; sels[3].dispatchEvent(new Event('change'));     // estrelas
+    sels[4].value = '2'; sels[4].dispatchEvent(new Event('change'));     // forja
+    var qtdIn = qq('.pm-corpo input[type=number]')[1];
+    qtdIn.value = '2'; qtdIn.dispatchEvent(new Event('change'));
+    respostas['/api/mestre/dar'] = { ok: true, status: 201, versao: 9, hash: 'h9', progress: { inventory: [] }, db: {} };
+    var primeiraLinha = q('.pm-corpo .pm-item');
+    var idDaLinha = primeiraLinha.getAttribute('data-item');
+    botaoCom('Pôr no meu inventário', primeiraLinha).click();
+    await espera(30);
+    var pd = ultimo('/api/mestre/dar');
+    check('"Pôr no meu inventário" vai ao SERVIDOR com peça, estrelas, forja, quantidade e um idem',
+          pd && pd.op.method === 'POST' && pd.op.body.tipo === 'item' && pd.op.body.itemId === idDaLinha &&
+          pd.op.body.estrelas === 3 && pd.op.body.nivel === 2 && pd.op.body.qtd === 2 && /^[0-9a-f]{24}$/.test(pd.op.body.idem),
+          JSON.stringify(pd && pd.op.body));
+    check('e o jogo ADOTA o estado que o servidor devolveu (sem recarregar)', adotados.length === 1 && adotados[0].versao === 9);
+    var invAntes = P.state.inventory.length;
+    check('nada entrou no save local por fora do servidor', P.state.inventory.length === invAntes);
+
+    // ============================================================ Jogadores, ficha e punições
+    respostas['/api/mestre/contas'] = { ok: true, contas: [{ id: 42, nome: 'Bia', email: 'bi***@x.test', gm: false, banido: false }], mais: false };
+    respostas['/api/mestre/conta'] = { ok: true, conta: { id: 42, nome: 'Bia', email: 'bia@x.test', criadoEm: 1790000000, gm: false,
+      banido: false, ultimaSessao: 1790990000 }, save: { nivelMax: 12, vintens: 300 }, classes: [{ id: 'sumo', nivel: 12 }],
+      catalogo: [{ sku: 'classe-bruxo', nome: 'Bruxo', secao: 'classes', pode: true }], barras: { saldo: 5 },
+      moderacao: { banimento: null, silencio: null, banimentos: [], silencios: [], denuncias: { aberta: 2 } } };
+    PM.abrir('jogadores');
+    var bq = q('.pm-corpo input[type=search]');
+    bq.value = 'Bia';
+    botaoCom('Buscar').click();
+    await espera(30);
+    check('a busca de conta vai por POST (o e-mail não vai na URL)', ultimo('/api/mestre/contas').op.body.q === 'Bia');
+    botaoCom('Abrir ficha').click();
+    await espera(30);
+    var corpo = q('.pm-corpo');
+    check('a ficha mostra a conta, o e-mail inteiro e as denúncias contra',
+          corpo.textContent.indexOf('Bia · #42') >= 0 && corpo.textContent.indexOf('bia@x.test') >= 0 &&
+          corpo.textContent.indexOf('2 (aberta 2)') >= 0);
+    var cartoes = qq('.pm-cartao', corpo);
+    var cBan = cartoes.filter(function (c) { return c.querySelector('h3') && c.querySelector('h3').textContent === 'Banir'; })[0];
+    var selD = q('select', cBan);
+    selD.value = '7d'; selD.dispatchEvent(new Event('change'));
+    q('input[type=text]', cBan).value = 'xingou na praça';
+    respostas['/api/mestre/banir'] = { ok: true, status: 201, banimento: { motivo: 'xingou na praça', fim: 1791600000, permanente: false } };
+    var bBan = botaoCom('Banir', cBan);
+    bBan.click();
+    await espera(10);
+    check('banir pede confirmação (a primeira batida só arma)', !ultimo('/api/mestre/banir') && bBan.textContent.indexOf('Confirmar') === 0);
+    bBan.click();
+    await espera(30);
+    var pb = ultimo('/api/mestre/banir');
+    check('a segunda batida bane: conta, duração e motivo', pb && pb.op.body.conta === 42 && pb.op.body.duracao === '7d' &&
+          pb.op.body.motivo === 'xingou na praça', JSON.stringify(pb && pb.op.body));
+    // o personalizado: a data é lida em hora de Brasília
+    check('a data do personalizado é hora de Brasília (UTC−3)',
+          M.deBrasilia('2026-10-05T14:00') === Date.UTC(2026, 9, 5, 17, 0) / 1000 && M.quando(Date.UTC(2026, 9, 5, 17, 0) / 1000) === '05/10/2026 às 14:00');
+    PM.abreFicha(42);
+    await espera(30);
+    cBan = qq('.pm-cartao').filter(function (c) { return c.querySelector('h3') && c.querySelector('h3').textContent === 'Banir'; })[0];
+    selD = q('select', cBan);
+    selD.value = 'personalizado'; selD.dispatchEvent(new Event('change'));
+    q('input[type=datetime-local]', cBan).value = '2026-12-25T10:30';
+    q('input[type=text]', cBan).value = 'até o natal';
+    bBan = botaoCom('Banir', cBan); bBan.click(); bBan.click();
+    await espera(30);
+    pb = ultimo('/api/mestre/banir');
+    check('personalizado: manda `ate` (epoch) convertido de Brasília', pb.op.body.duracao === 'personalizado' &&
+          pb.op.body.ate === Date.UTC(2026, 11, 25, 13, 30) / 1000, JSON.stringify(pb.op.body));
+    // a própria conta: sem banir
+    respostas['/api/mestre/conta'] = Object.assign({}, respostas['/api/mestre/conta'], { conta: { id: 1, nome: 'Dono', email: 'd@x', gm: true } });
+    PM.abreFicha(1);
+    await espera(30);
+    check('na ficha do próprio Mestre não há banir nem silenciar', !botaoCom('Banir', q('.pm-corpo')) &&
+          q('.pm-corpo').textContent.indexOf('O Mestre não silencia nem bane a si mesmo') >= 0);
+
+    // ============================================================ Denúncias
+    respostas['/api/mestre/denuncias'] = { ok: true, contagem: { aberta: 1, 'em-analise': 0, procedente: 0, improcedente: 0 }, denuncias: [{
+      id: 5, estado: 'aberta', categoria: 'ofensa', categoriaNome: 'ofensa ou assédio', texto: 'me xingou', onde: 'chat',
+      criadoEm: 1790990000, denunciante: { id: 3, nome: 'Ana' }, alvo: { id: 42, nome: 'Bia', banido: false, silenciado: false },
+      falas: [{ texto: 'seu lixo', em: 1790989000, relato: 'cliente' }], contraAlvo: 2, mestre: null, acao: null }] };
+    PM.abrir('denuncias');
+    await espera(30);
+    var cd = q('[data-denuncia="5"]');
+    check('a fila mostra a denúncia, as falas e o aviso de que são relato do cliente',
+          cd && cd.textContent.indexOf('seu lixo') >= 0 && cd.textContent.indexOf('relato do cliente') >= 0 &&
+          cd.textContent.indexOf('2 denúncias contra') >= 0);
+    var selA = qq('select', cd)[0];
+    selA.value = 'banir'; selA.dispatchEvent(new Event('change'));
+    var selDur = qq('select', cd)[1];
+    selDur.value = '30d'; selDur.dispatchEvent(new Event('change'));
+    q('textarea', cd).value = 'Obrigado pelo aviso.';
+    respostas['/api/mestre/denuncia'] = { ok: true, denuncia: { id: 5, estado: 'procedente' } };
+    var bp = botaoCom('Procedente', cd); bp.click(); bp.click();
+    await espera(30);
+    var pdn = ultimo('/api/mestre/denuncia');
+    check('procedente com a ação ligada: banir 30 dias, com a resposta ao denunciante',
+          pdn && pdn.op.body.estado === 'procedente' && pdn.op.body.acao.tipo === 'banir' && pdn.op.body.acao.duracao === '30d' &&
+          pdn.op.body.resposta === 'Obrigado pelo aviso.', JSON.stringify(pdn && pdn.op.body));
+
+    // ============================================================ Banimentos e auditoria
+    respostas['/api/mestre/banimentos'] = { ok: true, banimentos: [{ id: 9, conta: { id: 42, nome: 'Bia' }, motivo: 'golpe',
+      inicio: 1790990000, fim: null, permanente: true, ativo: true, porNome: 'Dono' }], silencios: [], legado: [] };
+    PM.abrir('banimentos');
+    await espera(30);
+    respostas['/api/mestre/desbanir'] = { ok: true };
+    var bd = botaoCom('Desbanir', q('.pm-corpo')); bd.click(); bd.click();
+    await espera(30);
+    check('banimentos em vigor: desbanir manda a conta', ultimo('/api/mestre/desbanir').op.body.conta === 42 &&
+          q('.pm-corpo').textContent.indexOf('golpe') >= 0);
+    respostas['/api/mestre/auditoria'] = { ok: true, registros: [{ id: 1, acao: 'banir', criadoEm: 1790990000,
+      mestre: { id: 1, nome: 'Dono' }, alvo: { id: 42, nome: 'Bia' }, dados: { duracao: '7d' } }] };
+    PM.abrir('auditoria');
+    await espera(30);
+    check('a auditoria lista as ações', qq('.pm-tabela tr').length === 2 && q('.pm-tabela').textContent.indexOf('banir') >= 0);
+
+    // ============================================================ Ferramentas (o MESMO painel de teste)
+    PM.abrir('ferramentas');
+    check('Ferramentas desenha o corpo do painel de teste (JOGO.Debug.desenhaEm), sem cópia',
+          qq('.pm-corpo .dbg-acoes').length >= 1 && !!botaoCom('Liberar as 6 classes', q('.pm-corpo')) &&
+          !!q('.pm-corpo .pm-cartao h3') && q('.pm-corpo').textContent.indexOf('PA e PP do Mestre') >= 0);
+    PM.fechar();
+
+    // ============================================================ a denúncia do jogador
+    S.guarda({ token: 'tok-ana', conta: { id: 3, nome: 'Ana', gm: false } });
+    PM.pintaBotao();
+    check('trocou para uma conta comum: o botão do painel some', !q('.pm-abrir'));
+    JOGO.Rede = { pares: function () { return [{ id: 'hbia', nome: 'Bia', nuvem: 42 }]; } };
+    ['oi', 'seu lixo', 'vou te achar'].forEach(function (t) { JOGO.Denuncia.anota('hbia', 'Bia', t); });
+    var linha = document.createElement('div');
+    linha.className = 'hub-chat-linha';
+    linha.setAttribute('data-de', 'hbia');
+    linha.setAttribute('data-nome', 'Bia');
+    linha.textContent = 'Bia: vou te achar';
+    document.getElementById('ui-root').appendChild(linha);
+    linha.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 }));
+    var menu = q('.mod-menu');
+    check('clique direito numa linha do chat abre o menu, e ele recebe clique', !!menu && pe(menu) === 'auto');
+    botaoCom('Denunciar Bia', menu).click();
+    var jan = q('.mod-capa');
+    check('o menu abre a janela da denúncia, que recebe clique', !!jan && pe(jan) === 'auto' && jan.textContent.indexOf('Denunciar Bia') >= 0);
+    var envia = botaoCom('Enviar denúncia', jan);
+    check('sem categoria, não envia', envia.disabled === true);
+    q('input[value=ofensa]', jan).click();
+    check('com a categoria, envia', envia.disabled === false);
+    q('textarea', jan).value = 'ameaçou';
+    respostas['/api/denuncia'] = { ok: true, status: 201, denuncia: { id: 77 } };
+    envia.click();
+    await espera(30);
+    var pdj = ultimo('/api/denuncia');
+    check('a denúncia vai com a conta do alvo (o nuvem do relé), a categoria, o texto e as 3 falas vistas',
+          pdj && pdj.op.body.alvo === 42 && pdj.op.body.categoria === 'ofensa' && pdj.op.body.texto === 'ameaçou' &&
+          pdj.op.body.onde === 'chat' && pdj.op.body.falas.length === 3 && pdj.op.body.falas[1].texto === 'seu lixo',
+          JSON.stringify(pdj && pdj.op.body));
+    check('e a janela fecha', !q('.mod-capa'));
+    var bt = JOGO.Denuncia.botao({ conta: 3, nome: 'Ana', onde: 'perfil' });
+    document.body.appendChild(bt);
+    bt.click();
+    check('denunciar a si mesmo nem chega ao formulário', !!q('.mod-capa') && q('.mod-capa').textContent.indexOf('Essa conta é a sua') >= 0);
+    q('.mod-capa').click();
+    JOGO.Denuncia.abrir({ heroId: 'hfantasma', nome: 'Sem Conta' });
+    check('jogador sem conta conferida: explica e não oferece enviar', !botaoCom('Enviar denúncia', q('.mod-capa')));
+    q('.mod-capa').click();
+    check('o aviso do silêncio sai uma vez a cada 10 s', JOGO.Denuncia.silenciado({ fim: 1790999999, motivo: 'spam' }) === true &&
+          JOGO.Denuncia.silenciado({ fim: 1790999999, motivo: 'spam' }) === false);
+
+    // ============================================================ o correio da Equipe
+    respostas['/api/correio'] = { ok: true, naoLidas: 2, cartas: [
+      { id: 2, assunto: 'Sua denúncia foi analisada', texto: 'A Equipe concordou com você.', criadoEm: 1790990000, lida: false },
+      { id: 1, assunto: 'Sua denúncia foi analisada', texto: 'Não encontrou violação.', criadoEm: 1790900000, lida: false }] };
+    respostas['/api/correio/lida'] = { ok: true, marcadas: 2 };
+    await JOGO.CorreioEquipe.confere();
+    var bc = q('.mod-carta-botao');
+    check('cartas não lidas: o envelope aparece, com o número, e recebe clique', !!bc && bc.textContent.indexOf('2 cartas') >= 0 && pe(bc) === 'auto');
+    bc.click();
+    await espera(40);
+    check('abrir mostra as cartas e marca todas como lidas', qq('.mod-carta').length === 2 &&
+          ultimo('/api/correio/lida').op.body.todas === true && !q('.mod-carta-botao'));
+    q('.mod-capa').click();
+
+    // ============================================================ a tela do banido (por último: ela prende as teclas)
+    JOGO.Banimento.semNavegar = true;
+    S._fetch = function () {
+      return Promise.resolve({ status: 403, json: function () {
+        return Promise.resolve({ ok: false, erro: 'conta banida', banimento: { id: 3, motivo: 'trapaça na arena', inicio: 1790990000,
+                                                                               fim: Date.UTC(2026, 9, 9, 21, 0) / 1000, permanente: false } }); } });
+    };
+    var r = await S.api('/api/eu');
+    var ban = q('.mod-ban');
+    check('o 403 com banimento derruba o jogo com a tela do banido', r.status === 403 && S.derrubadaJa() === true && !!ban);
+    check('a tela diz o motivo e a data do fim em hora de Brasília',
+          ban.textContent.indexOf('trapaça na arena') >= 0 && ban.textContent.indexOf('09/10/2026 às 18:00') >= 0 &&
+          ban.textContent.indexOf('Brasília') >= 0);
+    check('e recebe clique, por cima de tudo', pe(ban) === 'auto' && +getComputedStyle(ban).zIndex >= 2147483000);
+    var evT = tecla('i');
+    check('as teclas não chegam mais ao jogo', evT.defaultPrevented === true);
+    botaoCom('Sair da conta', ban).click();
+    check('"Sair da conta" esquece a sessão', S.ativa() === false);
+    fim();
+  })().catch(function (e) { check('a prova não quebrou', false, e && (e.stack || e.message)); fim(); });
+})();
+</script>
+</body>
+</html>

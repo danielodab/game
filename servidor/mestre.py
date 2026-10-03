@@ -209,6 +209,8 @@ class MestreMixin:
             alertas = self._alertas_da_conta(alvo_id)
             presentes = [self._presente_json(r, t) for r in presentes]
             barras = self._barras_publico(alvo_id)     # 13/09: o saldo de barras de ouro e o extrato
+            # 02/10: o banimento e o silêncio em vigor, o histórico e as denúncias contra (moderacao.py)
+            moderacao = self._moderacao_da_conta(alvo_id, t)
         db = save['db'] if save else None
         cart = db.get('carteira') if isinstance(db, dict) else None
         lib = liberadas(progress)
@@ -231,6 +233,7 @@ class MestreMixin:
             'barras': barras,
             'pagamentos': pagamentos,
             'alertas': alertas,
+            'moderacao': moderacao,
         }
 
     # -- POST /api/mestre/presentear {conta, idem, sku | vintens} ------------------------------------

@@ -139,6 +139,7 @@ var JOGO = (typeof window !== 'undefined')
   var identMandado = false;         // esta conexão mandou o ident: só então a resposta do relé vale
   var tokenIdent = null;            // 13/09: o token que foi no ident (a queda por outro aparelho compara)
   R.FECHA_DERRUBADO = 4001;         // 13/09: o código com que o relé fecha a conta que entrou em outro aparelho (rele_ident.py)
+  R.FECHA_BANIDO = 4003;            // 02/10: o código com que o relé fecha a conta banida pela Equipe (rele.py)
   var cxRele = null;                // 11/09: o id DESTA conexão, do anúncio do relé novo (null: religando, canal, antigo)
   var releNovo = false;             // este transporte já ouviu um anúncio com cx (o relé que não espalha dirigidos)
   var cxLocal = null;               // no canal de abas não há relé: o cx é da página ('l' + 7)
@@ -323,6 +324,11 @@ var JOGO = (typeof window !== 'undefined')
           aoDerrubado();
           if (fechado) return;
         }
+        // 02/10: banida pela Equipe — não religa (a Sessao derruba o jogo com a tela do motivo)
+        if (ev && ev.code === R.FECHA_BANIDO) {
+          banidoPeloRele(null);
+          if (fechado) return;
+        }
         if (!abriu) { falha(); return; }
         pronto = false;
         clearTimeout(espera);
@@ -486,6 +492,13 @@ var JOGO = (typeof window !== 'undefined')
     // 13/09 (um aparelho só): a conta desta conexão entrou em outro aparelho. Só
     // vale para a conexão que mandou o token (o relé só o manda a ela)
     if (m.t === 'derrubado') { if (identMandado) derrubadoPeloRele(m); return null; }
+    // 02/10 (servidor/moderacao.py): a conta banida (só a conexão que mandou o token ouve) e a
+    // fala que o silêncio da Equipe calou — o aviso é do js/ui/moderacao.js
+    if (m.t === 'banido') { if (identMandado) banidoPeloRele(m); return null; }
+    if (m.t === 'silenciado') {
+      try { if (JOGO.Denuncia && JOGO.Denuncia.silenciado) JOGO.Denuncia.silenciado(m.silencio || null); } catch (eS) {}
+      return null;
+    }
     if (m.t === 'ausente') { vozAusente(m); return null; }     // 11/09
     // 13/09: o online dos amigos e inimigos (JOGO.Amigos) e a recusa do chat da guilda
     if (m.t === 'amigos') {
@@ -516,6 +529,13 @@ var JOGO = (typeof window !== 'undefined')
     var S = JOGO.Sessao;
     if (!S || typeof S.derrubada !== 'function') { R.sair(); return; }
     S.derrubada((m && m.motivo) || 'outro-aparelho', tokenIdent);
+  }
+  var banimentoDoRele = null;
+  function banidoPeloRele(m) {
+    if (m && m.banimento && typeof m.banimento === 'object') banimentoDoRele = m.banimento;
+    var S = JOGO.Sessao;
+    if (!S || typeof S.banida !== 'function') { R.sair(); return; }
+    S.banida(banimentoDoRele || {});
   }
   function mesmaIdentidade(a, b) {
     return (a === false && b === false) || (!!a && !!b && a.mestre === b.mestre);

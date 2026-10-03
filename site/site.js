@@ -108,6 +108,8 @@
       return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
         .then(function (j) {
           j.status = r.status;
+          // 02/10 (servidor/moderacao.py): a conta banida — a tela do motivo e do fim (site/banimento.js)
+          if (r.status === 403 && j.banimento && typeof j.banimento === 'object' && window.SITE_BANIMENTO) SITE_BANIMENTO.mostra(j.banimento);
           // 13/09, UM APARELHO SÓ: o token desta página caiu por um login em
           // outro aparelho (o token explícito do sair não entra aqui)
           if (r.status === 401 && j.motivo === SITE.MOTIVO_OUTRO_APARELHO && token && !op.token) {
@@ -314,6 +316,7 @@
   SITE.erro = function (r, padrao) {
     r = r || {};
     if (r.status === 503 && r.correio === false) return 'o envio de e-mails ainda não foi ligado neste servidor';
+    if (r.status === 403 && r.banimento && window.SITE_BANIMENTO) return SITE_BANIMENTO.frase(r.banimento);   // 02/10
     var t = String(r.erro || padrao || 'algo deu errado');
     if (r.status === 429 && Number(r.liberaEm) > SITE.agora()) t += ' (' + SITE.deNovo(r.liberaEm) + ')';
     if (typeof r.restam === 'number' && r.restam >= 0) {

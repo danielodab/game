@@ -17,6 +17,8 @@
  *   Sessao.derrubada(motivo, token)  13/09, UM APARELHO SÓ: a conta entrou em
  *                              outro aparelho — o jogo cai aqui (ver o bloco)
  *   Sessao.vigiaOutroAparelho()  a olhada leve em /api/eu a cada 30 s
+ *   Sessao.banida(banimento)  02/10: a conta foi banida pela Equipe — o jogo
+ *                              cai como no outro aparelho, com a tela do motivo
  *   Sessao.paginaConta()       o endereço da página de conta do site
  *
  * Só biblioteca do navegador. Sem sessão o jogo é o de sempre (local). */
@@ -118,6 +120,9 @@
               }
               j.derrubada = derrubadaJa;
             }
+            // 02/10 (servidor/moderacao.py): a conta banida — toda rota responde 403 com o
+            // motivo e o fim, e o jogo cai aqui com a tela deles (S.banida)
+            if (j.status === 403 && j.banimento && typeof j.banimento === 'object' && tokenUsado) S.banida(j.banimento);
             return j;
           });
       }).catch(function () {
@@ -285,6 +290,21 @@
     encerraTudo();
     avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivo || S.MOTIVO_OUTRO_APARELHO });
     S.mostraDerrubada();
+    return true;
+  };
+
+  /* A CONTA BANIDA (02/10, servidor/moderacao.py): o mesmo "cai o jogo" do outro
+   * aparelho — nada mais sobe, a Rede sai sem religar, o laço para —, com a capa do
+   * motivo e do fim (JOGO.Banimento, js/ui/moderacao.js; sem ela, a capa da queda). */
+  S.banida = function (banimento) {
+    if (derrubadaJa) return true;
+    derrubadaJa = true;
+    encerraTudo();
+    avisaPagina('soterra:sessao', { tipo: 'banida', banimento: banimento || null });
+    try {
+      if (JOGO.Banimento && JOGO.Banimento.mostra) JOGO.Banimento.mostra(banimento || {});
+      else S.mostraDerrubada();
+    } catch (e) {}
     return true;
   };
 

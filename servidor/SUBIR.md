@@ -77,6 +77,15 @@ mudam alguns rótulos.
   `admin contas` e depois `admin mestre "SEU-NOME"`; abra o jogo de novo. A
   Nuvem confere a marca com o servidor a cada abertura: a sua conta vira o
   Mestre (Cavaleiro Negro, Panóplia, Caixa) sem chave no endereço.
+- **Moderar sem sair do jogo** (02/10): logado na conta do Mestre, o botão ⚖
+  (canto de baixo à direita) ou a tecla **F9** abre o painel do Mestre por cima
+  de qualquer tela: buscar contas, presentear, **silenciar** e **banir** (1 h,
+  24 h, 7 dias, 30 dias, permanente ou até uma data, sempre com motivo — o
+  jogador vê o motivo e a data do fim), a **fila de denúncias**, quem está banido
+  agora e a **auditoria** de toda ação do Mestre. O site do Mestre
+  (`/site/mestre.html`) mostra a mesma fila, os banidos e a auditoria. No
+  Terminal: `admin denuncias` e `admin auditoria`. Detalhes em
+  `docs/SEGURANCA.md` §10.
 - **Outros comandos** no Terminal: `admin` (a ajuda), `admin banir "NOME"`,
   `admin eventos 50`, `admin agenda`, `admin backup`, `admin email-teste
   SEU@gmail.com`, `admin trocar-email "NOME" certo@exemplo.com`, `admin loja`
@@ -489,8 +498,18 @@ curl -s https://SEU-ENDERECO/api/saude
   3. no site, **saia e entre de novo** (a sessão pega a marca no login);
   4. abra uma vez `https://SEU-ENDERECO/index.html?gm=SUA-CHAVE` (`?gm=off` desliga).
   Para tirar a marca, o mesmo comando com `gm=0`.
-- **Banir** uma conta (a sessão dela passa a levar 403):
-  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set banido=1 where nome='NOME'"`
+- **Banir** uma conta: de preferência pelo painel do Mestre (F9 no jogo), que
+  guarda o motivo e o prazo. Pelo banco, para sempre (a sessão dela passa a
+  levar 403). NÃO basta o `update contas set banido=1`: se a conta tiver uma
+  linha de banimento com prazo ainda aberta (um banimento do Mestre desfeito
+  só pelo 0/1), a API mostra o motivo e o fim DELA e, quando o prazo vence,
+  zera o banimento sozinha. O comando abaixo fecha a linha velha e grava a
+  permanente, como o `admin banir` do Coolify (a tabela existe depois que a
+  API nova subiu uma vez):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "begin; update moderacao_banimentos set encerrado_em = cast(strftime('%s','now') as integer), encerrado_como = 'trocado' where encerrado_em is null and conta_id = (select id from contas where nome='NOME'); insert into moderacao_banimentos(conta_id, motivo, inicio) select id, 'banida pelo banco', cast(strftime('%s','now') as integer) from contas where nome='NOME'; update contas set banido=1 where nome='NOME'; commit;"`
+  Para **desbanir** pelo banco, feche as linhas abertas junto (senão elas
+  aparecem como "em vigor" na lista do Mestre e voltam no próximo `banido=1`):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "begin; update moderacao_banimentos set encerrado_em = cast(strftime('%s','now') as integer), encerrado_como = 'desfeito', encerrado_motivo = 'pelo banco' where encerrado_em is null and conta_id = (select id from contas where nome='NOME'); update contas set banido=0 where nome='NOME'; commit;"`
 - **Olhar a trilha de auditoria** (cadastros, logins, peças nascidas, saves recusados):
   `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db 'select tipo, dados from eventos order by id desc limit 20'`
 

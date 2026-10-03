@@ -105,6 +105,9 @@ js/
   ui/
     hud.js              TODA a interface
     debug.js            painel de teste (libera classes, nível, modo de efeitos)
+    moderacao.js        a tela do banido, a denúncia e o correio da Equipe (02/10)
+    painel_mestre.js    o painel do Mestre por cima de qualquer tela (F9): contas,
+                        denúncias, banimentos, itens e moedas pelo servidor
   main.js               o laço de quadro
 assets/embedded/*.js    modelos em base64 (o caminho file://)
 assets/models/bundle/   os MESMOS modelos em .glb de verdade + manifest.json
@@ -212,6 +215,9 @@ jogador. Página nova sem essa linha é bug.
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
 | `test_progress_v2.html` | **118 passaram / 56 falharam** (medido 03/10 na base `39a6ae9` e depois — iguais). O "174 / 0" que estava aqui veio de um conserto de 21/09 que nunca entrou em ramo nenhum (`git log --all -- tests/test_progress_v2.html`) |
 | `validate_fusion.html` | 6.607 checagens, **51 falhas** (3.675 composições) — saque e pedras, nenhuma de fusão; as mesmas antes e depois de 03/10 |
+| **`moderacao_api.py`** (Python, API + juiz) | 12 de 12 — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |
+| **`moderacao_rele_prova.py`** (Python, relé de verdade) | 18 de 18 — o token banido ouve `banido` e cai com 4003 (no ident e com a praça aberta), o silenciado não fala, o banimento vencido confere |
+| **`painel_mestre.html`** (navegador) | 45 de 45 — o painel do Mestre (quem vê, F9, abas, filtros de item, o que vai ao servidor, a adoção do estado), a denúncia pela linha do chat, o correio e a tela do banido — contando o DOM e as camadas que recebem clique |
 | `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 218 passaram / 0 falharam (02/10: + a Câmara do Eco) — 21 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
 | **`poco_perigos.js`** (Node) | 42 passaram / 0 falharam (02/10) — o chão do Poço e os Colossos: semente decide tudo, perigo nunca na entrada nem em casa de monstro, buraco nunca separa o mapa (nem o rachado debaixo de muro invocado deixa de virar buraco), todo disparo avisado com uma vez inteira para sair, a IA não para em casa avisada (0 em 1.303 decisões), um colosso e um chefe por andar múltiplo de 5, os quatro traços, o juiz refaz andares com perigo e colosso e chega ao mesmo hash |

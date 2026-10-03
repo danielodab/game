@@ -481,6 +481,41 @@ class ProvaDaPrivacidade(unittest.TestCase):
         st, r = Cliente(self.base).pede('GET', '/api/conta/meus-dados')
         self.assertEqual(st, 401)
 
+    def test_juncao_eco_moderacao_e_a_lapide(self):
+        """03/10, a junção das frentes da noite: "Baixar meus dados" traz o Eco Primordial e a moderação
+        desta conta, e a lápide da conta excluída não se desbane nem aparece entre os banidos do Mestre."""
+        a, m = self.novo('Joga Eco'), self.novo('Guarda Lapide')
+        cid, t = a.conta['id'], int(time.time())
+        self.sql("INSERT INTO supremo_tentativas(id, conta_id, semana, dia, semente, herois, aberta_ms, estado, dano, pontos) "
+                 "VALUES (?, ?, 1, 1, 7, '[]', ?, 'conferida', 900, 900)", 'eco-prova-%d' % cid, cid, t * 1000)
+        self.sql("INSERT INTO moderacao_banimentos(conta_id, motivo, inicio, fim, encerrado_em, encerrado_como) "
+                 "VALUES (?, 'prova', ?, ?, ?, 'expirou')", cid, t - 100, t - 50, t - 50)
+        self.sql("INSERT INTO moderacao_denuncias(denunciante_id, denunciante_nome, alvo_id, alvo_nome, categoria, "
+                 "texto, criado_em, atualizado_em) VALUES (?, ?, ?, ?, 'spam', 'vendendo conta', ?, ?)",
+                 cid, a.nome, m.conta['id'], m.nome, t, t)
+        self.sql("DELETE FROM limites WHERE chave = ?", 'meus-dados:%d' % cid)
+        st, r = a.pede('GET', '/api/conta/meus-dados')
+        self.assertEqual(st, 200, r)
+        d = r['dados']
+        self.assertEqual([x['pontos'] for x in d['eco_tentativas']['itens']], [900])
+        self.assertIn('eco_premios', d)
+        self.assertEqual([x['motivo'] for x in d['moderacao']['banimentos']], ['prova'])
+        self.assertEqual([x['texto'] for x in d['moderacao']['denuncias_feitas']['itens']], ['vendendo conta'])
+        self.assertNotIn('denunciante_id', json.dumps(d['moderacao']))
+        st, r = self.exclui(a)
+        self.assertEqual(st, 200, r)
+        self.assertIsNone(self.um("SELECT 1 FROM supremo_tentativas WHERE conta_id = ?", cid), 'o Eco sai junto')
+        self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
+        st, r = m.pede('POST', '/api/mestre/desbanir', {'conta': cid})
+        self.assertEqual(st, 409, r)
+        self.assertEqual(self.um("SELECT banido FROM contas WHERE id = ?", cid)['banido'], 1, 'a lápide segue banida')
+        st, r = m.pede('POST', '/api/mestre/silenciar', {'conta': cid, 'duracao': '1h', 'motivo': 'prova'})
+        self.assertEqual(st, 409, r)
+        st, r = m.pede('GET', '/api/mestre/banimentos')
+        self.assertEqual(st, 200, r)
+        self.assertNotIn(cid, [x['conta']['id'] for x in r['legado']], 'a lápide não é banimento')
+        self.sql("UPDATE contas SET gm = 0 WHERE id = ?", m.conta['id'])
+
 
 class ProvaDaFaxina(unittest.TestCase):
     """A faxina dos prazos da Política roda no boot da API (sem subprocesso: o Api direto)."""

@@ -550,6 +550,99 @@
     check('ranking.html sem gm: nenhum link "Mestre"', !p2.q('nav a[href="mestre.html"]'));
   }
 
+  /* ======================================================================
+   * 02/10: a moderação no site do Mestre (site/mestre_moderacao.js) e a
+   * tela do banido no site (site/banimento.js). A regra é do servidor
+   * (tests/moderacao_api.py); aqui, o que a página mostra e o que ela manda.
+   * ==================================================================== */
+  async function cenaModeracao() {
+    var c = { sessao: MESTRE, hash: 'conta=7', rotas: {
+      'GET /api/eu': EU_MESTRE, 'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': CATALOGO_PUBLICO,
+      'GET /api/mestre/presentes': [200, { ok: true, agora: AGORA, conta: null, presentes: [] }],
+      'GET /api/mestre/alertas': [200, { ok: true, alertas: [] }],
+      'GET /api/mestre/conta': [200, ficha({ moderacao: { banimento: null, silencio: null, banimentos: [], silencios: [],
+                                                          denuncias: { aberta: 1 } } })],
+      'GET /api/mestre/denuncias': [200, { ok: true, agora: AGORA, contagem: { aberta: 1, 'em-analise': 0, procedente: 0, improcedente: 0 },
+        denuncias: [{ id: 5, estado: 'aberta', categoria: 'ofensa', categoriaNome: 'ofensa ou assédio', texto: 'me xingou <b>feio</b>',
+          falas: [{ texto: 'seu lixo', em: AGORA - 60, relato: 'cliente' }], onde: 'chat', criadoEm: AGORA - 120,
+          denunciante: { id: 3, nome: 'Ana' }, alvo: { id: 7, nome: 'Pia', banido: false, silenciado: false },
+          mestre: null, nota: null, resposta: null, acao: null, contraAlvo: 2 }] }],
+      'GET /api/mestre/banimentos': [200, { ok: true, agora: AGORA, silencios: [], legado: [],
+        banimentos: [{ id: 9, conta: { id: 9, nome: 'Rui' }, motivo: 'golpe na troca', inicio: AGORA - DIA, fim: null,
+                       permanente: true, ativo: true, porNome: 'Dono' }] }],
+      'GET /api/mestre/auditoria': [200, { ok: true, registros: [{ id: 1, acao: 'banir', criadoEm: AGORA - DIA,
+        mestre: { id: 1, nome: 'Dono' }, alvo: { id: 9, nome: 'Rui' }, dados: { duracao: 'permanente' } }] }],
+      'POST /api/mestre/denuncia': function (b) { return [200, { ok: true, denuncia: { id: b.id, estado: b.estado } }]; },
+      'POST /api/mestre/desbanir': [200, { ok: true, conta: { id: 9, nome: 'Rui' } }],
+      'POST /api/mestre/banir': function (b) { return [201, { ok: true, banimento: { motivo: b.motivo, fim: AGORA + DIA, permanente: false } }]; }
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return p.q('#ms-denuncias [data-denuncia="5"]') && p.q('#ms-banimentos [data-desfaz]') &&
+                                   /banir/.test(texto(p.$('ms-auditoria'))) && p.q('#ms-moderacao-conta [data-punir]'); });
+    var d5 = p.q('#ms-denuncias [data-denuncia="5"]');
+    check('moderação: a fila mostra a denúncia, as falas como relato do cliente e quantas há contra o alvo',
+          /seu lixo/.test(texto(d5)) && /relato do cliente/.test(texto(d5)) && /2 denúncias contra/.test(texto(d5)) &&
+          /abertas 1/.test(texto(p.$('ms-denuncias-total'))));
+    check('moderação: o texto do jogador entra escapado (nenhum <b> vindo da denúncia)', !d5.querySelector('p b') && /<b>feio<\/b>/.test(texto(d5)));
+    d5.querySelector('[data-acao]').value = 'banir';
+    d5.querySelector('[data-duracao]').value = '7d';
+    d5.querySelector('[data-resposta]').value = 'Obrigado pelo aviso.';
+    d5.querySelector('[data-estado="procedente"]').click();
+    var m1 = await modal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/denuncia').length === 1; });
+    var pd = pedidos(c, 'POST', '/api/mestre/denuncia')[0].corpo;
+    check('moderação: procedente com a ação pede confirmação e manda {id, estado, acao, resposta}',
+          /carta da Equipe/.test(m1) && pd.id === 5 && pd.estado === 'procedente' && pd.acao.tipo === 'banir' &&
+          pd.acao.duracao === '7d' && pd.resposta === 'Obrigado pelo aviso.', JSON.stringify(pd));
+    var bRui = p.q('#ms-banimentos [data-desfaz="desbanir"]');
+    var formAntes = p.q('#ms-moderacao-conta [data-punir]');
+    check('moderação: os banidos de agora, com o motivo e quem baniu', /Rui/.test(texto(p.$('ms-banimentos'))) &&
+          /golpe na troca/.test(texto(p.$('ms-banimentos'))) && /por Dono/.test(texto(p.$('ms-banimentos'))));
+    bRui.click();
+    await modal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/desbanir').length === 1; });
+    check('moderação: desbanir confirma e manda a conta', pedidos(c, 'POST', '/api/mestre/desbanir')[0].corpo.conta === 9);
+    // desfeito um banimento, a ficha aberta se lê de novo (e se redesenha): o formulário é outro nó.
+    // 03/10 (revisão): esperar só o PEDIDO da ficha e mais 60 ms era corrida — com a máquina ocupada a
+    // ficha ainda estava em "carregando" e o formulário não existia (TypeError no querySelector)
+    await ate(function () {
+      var f = p.q('#ms-moderacao-conta [data-punir]');
+      return pedidos(c, 'GET', '/api/mestre/conta').length >= 2 && !!f && f !== formAntes;
+    });
+    // a ficha da conta (#conta=7): banir com duração e motivo
+    var form = p.q('#ms-moderacao-conta [data-punir]');
+    form.querySelector('[data-tipo]').value = 'banir';
+    form.querySelector('[data-motivo]').value = 'x';
+    envia(form);
+    await new Promise(function (r) { setTimeout(r, 60); });
+    check('moderação: na ficha, motivo curto não chega ao servidor', !pedidos(c, 'POST', '/api/mestre/banir').length);
+    form.querySelector('[data-motivo]').value = 'xingou na praça';
+    envia(form);
+    await modal(p, true);
+    await ate(function () { return pedidos(c, 'POST', '/api/mestre/banir').length === 1; });
+    var pb = pedidos(c, 'POST', '/api/mestre/banir')[0].corpo;
+    check('moderação: na ficha, banir manda {conta, duracao, motivo}', pb.conta === 7 && pb.duracao === '24h' &&
+          pb.motivo === 'xingou na praça', JSON.stringify(pb));
+    check('moderação: toda rota com o token do Mestre', doMestre(c).every(function (x) { return x.auth === 'Bearer tok-mestre'; }));
+  }
+  async function cenaBanido() {
+    var c = { rotas: { 'GET /api/saude': SAUDE,
+      'POST /api/login': [403, { ok: false, erro: 'conta banida', banimento: { id: 4, motivo: 'trapaça na arena', inicio: AGORA - DIA,
+                                                                                fim: Date.UTC(2026, 9, 9, 21, 0) / 1000, permanente: false } }] } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return !!p.$('painel-entrar') && !!p.w.SITE_BANIMENTO; });
+    p.$('e-login').value = 'Pia';
+    p.$('e-senha').value = 'segredo-bom-8';
+    envia(p.$('painel-entrar'));
+    await ate(function () { return !!p.q('.modal.ban-site'); });
+    var t = texto(p.q('.modal.ban-site'));
+    check('banido no site: a janela diz o motivo e o fim em hora de Brasília',
+          /Sua conta está banida/.test(t) && /trapaça na arena/.test(t) && /09\/10\/2026 às 18:00/.test(t) && /Brasília/.test(t), t);
+    check('banido no site: o aviso do formulário diz o mesmo (não só "conta banida")',
+          /banida até 09\/10\/2026 às 18:00/.test(texto(p.$('e-aviso'))) && /trapaça na arena/.test(texto(p.$('e-aviso'))));
+    check('banido no site: nenhuma sessão gravada', !p.w.SITE.sessao());
+  }
+
   async function roda(nome, fn) {
     try { await fn(); } catch (e) { check(nome + ': o roteiro não estoura', false, String(e && (e.stack || e.message) || e).slice(0, 300)); }
   }
@@ -565,6 +658,8 @@
       await roda('429', cena429);
       await roda('escape', cenaEscape);
       await roda('menu', cenaMenu);
+      await roda('moderação', cenaModeracao);   // 02/10
+      await roda('banido', cenaBanido);         // 02/10
     } finally {
       palco.innerHTML = '';
       try {

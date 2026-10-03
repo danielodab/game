@@ -697,3 +697,73 @@ do pedido vira placar. Prova: `tests/juiz_supremo.js`.
   conhecidas".
 - A configuração de PA/PP do Mestre (`soterra-gm-v1`) mora no navegador: batalha da conta do
   Mestre com PA/PP mudado pode divergir no servidor.
+
+## 10. A moderação: banimento, silêncio, denúncias e a auditoria do Mestre (02/10)
+
+Pedido do dono, para o lançamento: o Mestre age **sem sair do jogo** (o painel do Mestre, `js/ui/painel_mestre.js`),
+bane por um tempo ou para sempre com motivo, silencia no chat, recebe denúncias numa fila, e **toda ação dele fica
+registrada**. O código do servidor mora em `servidor/moderacao.py` (mixin da Api; tabelas novas, nunca ALTER).
+
+### 10.1 O banimento
+- Tabela `moderacao_banimentos` (motivo, início, fim — `NULL` = permanente —, quem aplicou, a denúncia que o causou, e
+  como acabou: `expirou`, `desfeito`, `trocado` — a linha cujo prazo já tinha passado fecha como `expirou`, no fim
+  dela, mesmo quando quem a fecha é um banir/desbanir posterior). `contas.banido` continua sendo a **chave geral**: com 0 a conta não
+  está banida, ponto (o `admin desbanir` do Terminal e o ranking, a guilda, os amigos e a troca leem esse 0/1).
+- Banida = `contas.banido = 1` **e** (uma linha aberta em vigor **ou** nenhuma linha aberta — o banimento de antes
+  desta tabela, que é permanente sem motivo registrado: `banimento.legado`).
+- **O prazo vence sozinho, sem relógio de fundo**: o próximo pedido da conta (o login ou qualquer rota) fecha a linha
+  vencida (`expirou`) e zera o 0/1, na mesma transação. O relé, que só lê, confere o prazo na linha
+  (`moderacao.banida_de_fato`, chamada pelo `rele_ident.confere`).
+- **Toda rota com conta** responde `403 {erro: 'conta banida', banimento: {motivo, inicio, fim, permanente}}` (nunca
+  quem aplicou). O **login** também — só **depois** da senha conferida: sem a senha, nem o motivo nem o "banida" saem.
+  Passam só `POST /api/logout` e `GET /api/moderacao/eu` (o porquê, para a tela do jogo e do site).
+- O jogo cai com a tela própria (`JOGO.Sessao.banida` → `JOGO.Banimento`, `js/ui/moderacao.js`): o motivo e a data do
+  fim em hora de Brasília; nada mais sobe (Nuvem, Autoridade e Rede param, como no "outro aparelho").
+- **O relé**: o token de conta banida não confere; quando é por banimento, a conexão ouve
+  `{t:'banido', banimento}` e fecha com **4003** (o `rede.js` não religa) — no ident e na conferência de novo (a
+  conta banida com a praça aberta cai em até ~2 min: o `rele_ident.CACHE_S` mais o próximo pulso).
+- Regras: o Mestre **não bane a si mesmo** nem outra conta com a marca de Mestre (`admin tirar-mestre` primeiro);
+  banir quem já está banido troca a linha (a velha fecha como `trocado`). Durações: `1h`, `24h`, `7d`, `30d`,
+  `permanente` ou `personalizado` com `ate` (de 1 minuto a 10 anos). Motivo de 3 a 300 caracteres.
+- O Terminal (`admin banir` / `admin desbanir`, `servidor/coolify/admin.sh`) grava e fecha a linha também, quando a
+  tabela existe: o banimento pelo Terminal é permanente com o motivo "banida pelo Terminal".
+
+### 10.2 O silêncio
+A mesma forma, em `moderacao_silencios`, sem chave geral: vale pela linha. Quem para a fala é o **relé**: o chat da
+praça, o sussurro e o `/g` da conta silenciada não saem, e quem falou ouve `{t:'silenciado', silencio}` (pagando o
+balde do chat). O relé relê o silêncio a cada 15 s (`rele.SILENCIO_S`); banco que não responde não cala ninguém.
+Limite conhecido: o cliente que não se identifica na praça fala como anônimo ("Aventureiro"), e o silêncio é por
+conta — o `cala` por endereço de cada jogador (11/09) continua sendo a defesa contra quem foge da conta.
+
+### 10.3 A denúncia
+`POST /api/denuncia {alvo, categoria, texto?, falas?, onde?}` — categorias `ofensa`, `trapaca`, `nome`, `spam`,
+`outro` (este pede ao menos 10 caracteres de texto); texto até 500; até 20 falas do alvo **que o denunciante viu**,
+guardadas com `relato: 'cliente'` (o servidor não guarda o chat: é a palavra do denunciante, e o painel diz isso).
+Freios no banco: **10 por dia** por denunciante e **1 por alvo por hora** (429 com `liberaEm`). Não se denuncia a si
+mesmo. Estados: `aberta` → `em-analise` → `procedente` | `improcedente`; fechada é final. Na procedente o Mestre
+pode ligar a ação (`acao: {tipo: 'silenciar' | 'banir', duracao, ate?, motivo?}`) na mesma transação — o banimento
+guarda o id da denúncia. Ao fechar, o denunciante recebe uma **carta da Equipe** (`moderacao_cartas`,
+`GET /api/correio`, `POST /api/correio/lida`) e, com o correio do servidor ligado, um e-mail; a carta diz se a Equipe
+achou que procedia e leva a resposta do Mestre — **nunca a punição** (é da conta de outra pessoa) nem a nota interna.
+
+### 10.4 A auditoria
+`moderacao_auditoria`: uma linha por ação do Mestre. As rotas de `moderacao.py` e as ops da Caixa e das ferramentas
+do Mestre (`gm*`, pelo `/api/op`) gravam a sua **na mesma transação da ação**. As outras rotas do Mestre (presentes,
+barras, alertas, eventos do mundo, a busca de contas, a ficha da conta — ela mostra o e-mail inteiro) passam pelo
+gancho do `despacha` (`_audita_rota`): a linha é gravada **logo depois** de a rota dar certo, numa transação própria —
+se essa gravação falhar, a ação fica feita e a falha vai ao log. As listas (denúncias, banimentos, auditoria,
+presentes, alertas) não deixam linha; o e-mail buscado vai mascarado. Lida em
+`GET /api/mestre/auditoria[?alvo=N][&acao=x][&limite=N]` e no `admin auditoria`.
+
+### 10.5 O "pôr no inventário" do painel do Mestre
+`POST /api/mestre/dar {conta?, tipo, idem, ...}` roda **no juiz, no estado do servidor** (ops internas
+`mestreDarItem {itemId, estrelas, nivel, qtd}` e `mestreDarSelos {elemento, n}` em `servidor/juiz/economia.js`), como a
+entrega da loja — nunca no save local. A peça só entra no inventário do **próprio Mestre** (para um jogador, o presente
+do catálogo da ficha); os selos, em qualquer conta. As séries nascem com a origem `caixa` e entram no registro de
+instâncias; quando o alvo é o próprio Mestre, a resposta leva `{versao, hash, progress, db}` e o jogo adota sem
+recarregar. `idem` único por Mestre (o mesmo clique de novo devolve `repetido`); 120 por hora por Mestre; sem juiz,
+**503** (a autoridade e o juiz não podem divergir); conta banida ou sem estado no servidor, 409. As ferramentas do
+painel de teste (liberar classe, nível, elemento) viraram ops do Mestre (`gmLiberaClasse`, `gmNivel`, `gmElemento`):
+a mesma função de `js/core/gm.js` roda no jogo e no juiz.
+
+Provas: `tests/moderacao_api.py` (API + juiz, 12) e `tests/moderacao_rele_prova.py` (relé de verdade, 18).

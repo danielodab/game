@@ -5,8 +5,8 @@
 #   admin contas               lista as contas
 #   admin mestre "NOME"        marca a conta como Mestre (gm=1)
 #   admin tirar-mestre "NOME"  tira a marca de Mestre
-#   admin banir "NOME"         bane a conta (a sessão dela passa a levar 403)
-#   admin desbanir "NOME"      tira o banimento
+#   admin banir "NOME"         bane a conta para sempre (a sessão dela passa a levar 403)
+#   admin desbanir "NOME"      tira o banimento (o de prazo, dado pelo Mestre no jogo, também)
 #   admin trocar-email "NOME" novo@x   troca o e-mail da conta (antes, confirme quem é a pessoa)
 #   admin renomear "VELHO" "NOVO"  troca o nome da conta (a porta do dono: aceita até nome reservado à equipe)
 #   admin email-teste ENDERECO manda um e-mail de prova (confere o SMTP)
@@ -15,13 +15,15 @@
 #   admin loja [N]             os N últimos pedidos da loja (30 se omitir)
 #   admin loja-cancelar ID     cancela um pedido da loja que ainda não chegou ao jogo
 #   admin barras "NOME"        o saldo de barras de ouro da conta e os 20 últimos movimentos
+#   admin denuncias            as denúncias abertas e em análise (quem decide é o Mestre, no jogo ou no site)
+#   admin auditoria [N]        as N últimas ações do Mestre (30 se omitir)
 #   admin backup               faz um backup agora, em /dados/backups
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
 # =============================================================================
 set -eu
 BANCO=/dados/soterra.db
 
-ajuda() { sed -n '4,19p' "$0" | sed 's/^# \{0,1\}//'; }
+ajuda() { sed -n '4,21p' "$0" | sed 's/^# \{0,1\}//'; }
 sql() { su-exec soterra sqlite3 "$BANCO" "$@"; }
 texto() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 tem_tabela() { [ "$(sql "select count(*) from sqlite_master where type = 'table' and name = '$1'")" = "1" ]; }
@@ -66,8 +68,22 @@ case "$acao" in
   tirar-mestre)
     marca gm 0 "$nome" "\"$nome\" não é mais Mestre." ;;
   banir)
-    marca banido 1 "$nome" "\"$nome\" está banida: a sessão dela passa a levar 403." ;;
+    # 02/10 (servidor/moderacao.py): com a tabela de banimentos no banco, o do Terminal vira uma linha
+    # PERMANENTE com motivo (a que estava aberta fecha como 'trocado') — sem isto, uma linha de prazo
+    # vencida deixada aberta faria a API desfazer este banimento no próximo pedido da conta
+    if tem_tabela moderacao_banimentos; then
+      agora="cast(strftime('%s', 'now') as integer)"
+      sql "begin immediate; update moderacao_banimentos set encerrado_em = $agora, encerrado_como = 'trocado' where encerrado_em is null and conta_id = (select id from contas where nome = $(texto "$nome")); insert into moderacao_banimentos(conta_id, motivo, inicio) select id, 'banida pelo Terminal (admin banir)', $agora from contas where nome = $(texto "$nome"); commit;"
+    fi
+    marca banido 1 "$nome" "\"$nome\" está banida para sempre: a sessão dela passa a levar 403." ;;
   desbanir)
+    # 03/10: a lápide da conta excluída (servidor/privacidade.py) não se desbane — ela voltaria às listas
+    if tem_tabela contas_excluidas && [ "$(sql "select count(*) from contas_excluidas where conta_id = (select id from contas where nome = $(texto "$nome"))")" != "0" ]; then
+      echo "\"$nome\" é a lápide de uma conta excluída pelo titular: não se desbane."; exit 1
+    fi
+    if tem_tabela moderacao_banimentos; then
+      sql "update moderacao_banimentos set encerrado_em = cast(strftime('%s', 'now') as integer), encerrado_como = 'desfeito', encerrado_motivo = 'Terminal (admin desbanir)' where encerrado_em is null and conta_id = (select id from contas where nome = $(texto "$nome"))"
+    fi
     marca banido 0 "$nome" "\"$nome\" pode voltar a jogar." ;;
   trocar-email)
     # para quem se cadastrou com o e-mail errado (e por isso não recebe o código
@@ -158,6 +174,16 @@ case "$acao" in
     echo "Barras de ouro de \"$nome\": $(sql "select coalesce((select saldo from barras_saldo where conta_id = $id), 0)")"
     echo "Os 20 últimos movimentos (hora de Brasília):"
     sql -header -column "select m.id, datetime(m.criado_em, 'unixepoch', '-3 hours') as quando, m.delta, m.motivo, coalesce(m.ref, '') as ref, m.saldo_depois as saldo, coalesce(c.nome, '') as por from barras_movimentos m left join contas c on c.id = m.por where m.conta_id = $id order by m.id desc limit 20" ;;
+  denuncias)
+    # só leitura (02/10): quem decide é o Mestre, pelo painel do jogo ou pelo site
+    tem_tabela moderacao_denuncias || { echo "este banco ainda não tem as denúncias: a API nova cria as tabelas quando sobe"; exit 1; }
+    echo "Denúncias abertas e em análise, as mais novas primeiro (hora de Brasília):"
+    sql -header -column "select d.id, datetime(d.criado_em, 'unixepoch', '-3 hours') as quando, d.estado, d.categoria, coalesce(d.denunciante_nome, '-') as quem, coalesce(a.nome, d.alvo_nome, '-') as alvo, substr(coalesce(d.texto, ''), 1, 60) as texto from moderacao_denuncias d left join contas a on a.id = d.alvo_id where d.estado in ('aberta', 'em-analise') order by d.id desc limit 50" ;;
+  auditoria)
+    n="${2:-30}"
+    case "$n" in ''|*[!0-9]*) echo "N tem de ser um número"; exit 1 ;; esac
+    tem_tabela moderacao_auditoria || { echo "este banco ainda não tem a auditoria: a API nova cria as tabelas quando sobe"; exit 1; }
+    sql -header -column "select a.id, datetime(a.criado_em, 'unixepoch', '-3 hours') as quando, coalesce(m.nome, a.mestre_nome, '-') as mestre, a.acao, coalesce(c.nome, '-') as alvo, substr(coalesce(a.dados, ''), 1, 80) as dados from moderacao_auditoria a left join contas m on m.id = a.mestre_id left join contas c on c.id = a.alvo_id order by a.id desc limit $n" ;;
   *)
     echo "não conheço \"$acao\""; ajuda; exit 1 ;;
 esac

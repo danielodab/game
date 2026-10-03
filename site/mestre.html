@@ -127,6 +127,10 @@
 
             <h4>Alertas desta conta</h4>
             <ul class="lista-pedidos" id="ms-alertas-conta"></ul>
+
+            <!-- 02/10: o banimento, o silêncio e as denúncias desta conta (mestre_moderacao.js) -->
+            <h4>Moderação</h4>
+            <div id="ms-moderacao-conta"></div>
           </div>
         </section>
       </div>
@@ -146,6 +150,21 @@
         <div class="er-resumo" id="er-resumo"></div>
         <ul class="er-lista" id="er-lista"><li class="apoio">carregando…</li></ul>
       </section>
+
+      <!-- 02/10: a moderação (mestre_moderacao.js; a regra em servidor/moderacao.py). O mesmo que o
+           painel do Mestre no jogo (F9) mostra: a fila de denúncias, quem está banido ou silenciado
+           agora, e a auditoria de toda ação do Mestre -->
+      <section class="bloco ms-moderacao" id="ms-moderacao">
+        <div class="pedidos-cab"><h3>Denúncias</h3><small class="apoio" id="ms-denuncias-total"></small>
+          <button type="button" class="btn btn-mini" data-filtro="abertas">abertas</button>
+          <button type="button" class="btn btn-mini" data-filtro="todas">todas</button>
+          <button type="button" class="btn btn-mini" data-atualiza>atualizar</button></div>
+        <ul class="lista-pedidos" id="ms-denuncias"></ul>
+        <div class="pedidos-cab"><h3>Banidos e silenciados agora</h3></div>
+        <ul class="lista-pedidos" id="ms-banimentos"></ul>
+        <div class="pedidos-cab"><h3>Auditoria</h3><small class="apoio">as 50 últimas ações de todo Mestre</small></div>
+        <ul class="lista-pedidos" id="ms-auditoria"></ul>
+      </section>
     </div>
 
     <div class="aviso flutua" id="ms-aviso" role="status"></div>
@@ -161,7 +180,7 @@
 /* o nome e a cor das classes vêm do próprio jogo (classes.js, mesma origem);
  * cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
 (function () {
-  ['site.js', '../js/core/data/classes.js', 'mestre.js', 'mestre_erros.js'].forEach(function (s) {
+  ['site.js', 'banimento.js', '../js/core/data/classes.js', 'mestre.js', 'mestre_erros.js', 'mestre_moderacao.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

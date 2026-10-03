@@ -383,6 +383,48 @@ var JOGO = (typeof window !== 'undefined')
     return !!(r && r.ok);
   };
 
+  /* AS FERRAMENTAS DO PAINEL DE TESTE (02/10): liberar classe, cravar o nível e o
+   * elemento de um herói. Moravam só no js/ui/debug.js, mexendo direto no save —
+   * e, com a sessão do site, o servidor é o dono da economia: a mudança local era
+   * desfeita na primeira adoção do estado dele. Agora a regra mora AQUI, a mesma
+   * no jogo e no juiz (servidor/juiz/economia.js, ops gmLiberaClasse/gmNivel/
+   * gmElemento): a Autoridade embrulha GM.liberaClasse/poeNivel/poeElemento, que
+   * rodam na hora e sobem como op do Mestre. As versões `Cru` não pedem a marca:
+   * é o painel de teste em casa (file://, localhost), sem Mestre nenhum. */
+  var ELEMENTOS_TESTE = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+  GM.nivelCru = function (heroId, nivel) {
+    var P = JOGO.Progress, D = JOGO.DATA || {};
+    var h = P && P.hero ? P.hero(heroId) : null;
+    if (!h) return false;
+    var lv = D.leveling || {};
+    // `addXp` é a porta oficial, mas exige XP acumulada: aqui o nível é cravado e
+    // o XP vai ao piso dele (a tabela), com os feitiços ressincronizados
+    h.level = clampa(nivel, 1, lv.maxLevel || 30, h.level || 1);
+    var tab = lv.xpTable || [];
+    if (tab[h.level - 1] != null) h.xp = tab[h.level - 1];
+    h.spells = P.spellsFor(heroId);
+    P.save();
+    return true;
+  };
+  GM.elementoCru = function (heroId, elemento) {
+    var P = JOGO.Progress;
+    var h = P && P.hero ? P.hero(heroId) : null;
+    if (!h || ELEMENTOS_TESTE.indexOf(elemento) < 0) return false;
+    // `chooseElement` recusa se já houver elemento ou se o nível for baixo — no
+    // painel de teste a troca é livre, e os feitiços seguem pela porta oficial
+    h.element = elemento;
+    h.spells = P.spellsFor(heroId);
+    P.save();
+    return true;
+  };
+  GM.liberaClasse = function (classId) {
+    var P = JOGO.Progress;
+    if (!GM.ativo() || !P || !P.unlockClass) return false;
+    return P.unlockClass(classId) === true;
+  };
+  GM.poeNivel = function (heroId, nivel) { return GM.ativo() ? GM.nivelCru(heroId, nivel) : false; };
+  GM.poeElemento = function (heroId, elemento) { return GM.ativo() ? GM.elementoCru(heroId, elemento) : false; };
+
   /* O MESTRE NO GRUPO (11/09, pedido do dono: "o GM pode fazer parte de um
    * grupo.. mas só ele pode pedir grupo", com o Cavaleiro Negro). Na batalha em
    * dupla os DOIS motores rodam a mesma batalha — e o do parceiro não tem a

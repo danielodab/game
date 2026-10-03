@@ -83,6 +83,8 @@ from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a
 from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
 from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
 import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
+# 02/10: a moderação (servidor/moderacao.py): banimento com prazo, silêncio, denúncias, auditoria do Mestre
+from moderacao import DO_BANIDO, ESQUEMA_MODERACAO, FRASE_BANIDA, ModeracaoMixin
 
 log = logging.getLogger("api")
 
@@ -380,6 +382,21 @@ ROTAS = {
     ('POST', '/api/mercado/responder'):       ('mercado_responder', True),
     ('POST', '/api/mercado/confirmar'):       ('mercado_confirmar', True),
     ('POST', '/api/mercado/retirar'):         ('mercado_retirar', True),
+    # 02/10: a moderação (moderacao.py). O jogador denuncia, lê o correio da Equipe e (mesmo banido)
+    # pergunta por que está banido; o resto é do Mestre, com a marca lida do banco a cada pedido
+    ('POST', '/api/denuncia'):                ('denuncia_criar', True),
+    ('GET',  '/api/correio'):                 ('correio_ler', True),
+    ('POST', '/api/correio/lida'):            ('correio_lida', True),
+    ('GET',  '/api/moderacao/eu'):            ('moderacao_eu', True),
+    ('POST', '/api/mestre/banir'):            ('mestre_banir', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/desbanir'):         ('mestre_desbanir', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/silenciar'):        ('mestre_silenciar', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/dessilenciar'):     ('mestre_dessilenciar', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/banimentos'):       ('mestre_banimentos', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/denuncias'):        ('mestre_denuncias', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/denuncia'):         ('mestre_denuncia', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/auditoria'):        ('mestre_auditoria', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/dar'):              ('mestre_dar', True, True, FRASE_SO_MESTRE),
 }
 ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a conta, baixar os dados
 ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
@@ -734,7 +751,7 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin):
+          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -764,6 +781,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
         self.con.executescript(ESQUEMA_SUPREMO)   # 02/10: o Eco Primordial (supremo.py) — idem
         self.con.executescript(ESQUEMA_PRIVACIDADE + ESQUEMA_REGISTROS)   # 02/10: aceites e erros — idem
+        self.con.executescript(ESQUEMA_MODERACAO)  # 02/10: a moderação (moderacao.py) — idem
         self.tranca = threading.RLock()
         self._registros_init()   # 02/10: o freio do registro de erros (registros.py), em memória
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
@@ -862,13 +880,20 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 if token and self._sessao_derrubada(token):
                     raise Recusa(401, FRASE_OUTRO_APARELHO, motivo=MOTIVO_OUTRO_APARELHO)
                 raise Recusa(401, 'faça login (token ausente ou vencido)')
-            if conta['banido']:
-                raise Recusa(403, 'conta banida')
+            # 02/10: o banimento tem prazo e motivo (moderacao.py): o 403 leva os dois, o prazo
+            # vencido se fecha aqui mesmo, e sair/perguntar por quê passam (DO_BANIDO)
+            if conta['banido'] and nome not in DO_BANIDO:
+                ban = self._ban_atual(conta)
+                if ban is not None:
+                    raise Recusa(403, FRASE_BANIDA, banimento=ban)
             # a marca é do SERVIDOR (contas.gm, lida do banco a cada pedido): o
             # `gm` que o cliente guardou do login é só uma cópia (10/09)
             if so_mestre and not conta['gm']:
                 raise Recusa(403, rota[3] if len(rota) > 3 else 'só o Mestre do Fundo mexe nos eventos do mundo')
-        return getattr(self, nome)(conta, corpo)
+        resultado = getattr(self, nome)(conta, corpo)
+        if so_mestre:
+            self._audita_rota(conta, metodo, nome, corpo, resultado)   # 02/10: toda ação do Mestre deixa linha
+        return resultado
 
     # -- conta ------------------------------------------------------------------
     def cadastro(self, conta, corpo):
@@ -978,8 +1003,12 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 self._evento(c['id'] if c is not None else None, 'login-recusado', None)
                 self.con.commit()
                 raise Recusa(401, 'login ou senha errados')
-            if c['banido']:
-                raise Recusa(403, 'conta banida')
+        # 02/10: a conta banida ouve o motivo e o fim — só DEPOIS da senha conferida (sem a senha,
+        # o motivo não sai). O prazo vencido se fecha aqui (moderacao.py) e o login segue
+        ban = self._ban_atual(c, t) if c['banido'] else None
+        if ban is not None:
+            raise Recusa(403, FRASE_BANIDA, banimento=ban)
+        with self.tranca:
             self.tentativas.pop(c['id'], None)
             token = self._abre_sessao(c['id'], corpo)
             # UM APARELHO SÓ (13/09, pedido do dono): o login certo derruba todas as
