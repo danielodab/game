@@ -46,6 +46,10 @@ if '/api/supremo/abrir' not in Cliente.ABERTURAS:
 HEROIS = ['sumo']
 
 
+def linha_dia(prova, tid):
+    return prova.sql("SELECT dia FROM supremo_tentativas WHERE id = ?", tid)[0]['dia']
+
+
 class ProvaDoEco(A.ProvaDaAutoridade):
     """Herda o palco e os ajudantes (novo, poe_estado, sql, save, roda_node...)."""
 
@@ -176,10 +180,15 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(r['eu']['restantes'], 1)
         st, r2 = self.fecha_eco(c, tid, jogo)
         self.assertEqual(st, 409, r2)                      # não pontua duas vezes
+        # o ranking público mostra ESTA conta com o placar do juiz, na posição que a ficha dela diz (03/10: a
+        # checagem de antes passava com qualquer ranking não vazio)
         st, rk = Cliente(self.base).pede('GET', '/api/supremo', token=None)
-        nomes = [l['nome'] for l in rk['ranking']]
-        self.assertTrue(any(n.startswith('Batedor') or n == '—' for n in nomes) or rk['ranking'], rk)
-        self.assertTrue(any(l['pontos'] == r['pontos'] for l in rk['ranking']), rk['ranking'])
+        meu_nome = self.sql("SELECT COALESCE(r.nome, c.nome) AS nome FROM contas c LEFT JOIN resumos r "
+                            "ON r.conta_id = c.id WHERE c.id = ?", c.conta['id'])[0]['nome']
+        minhas = [l for l in rk['ranking'] if l['nome'] == meu_nome]
+        self.assertEqual(len(minhas), 1, rk['ranking'])
+        self.assertEqual((minhas[0]['pontos'], minhas[0]['dano'], minhas[0]['posicao']),
+                         (r['pontos'], r['dano'], r['eu']['posicao']), rk['ranking'])
 
     def test_05_largada_no_meio_pontua_ate_onde_foi(self):
         c = self.conta_pronta('Meio')
@@ -220,6 +229,15 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual((st, r.get('motivo')), (410, 'regras-mudaram'), r)
         linha = self.sql("SELECT estado, motivo FROM supremo_tentativas WHERE id = ?", tid)[0]
         self.assertEqual((linha['estado'], linha['motivo']), ('vencida', 'regras-mudaram'))
+        # ... e a vez do dia VOLTA (o 410 promete; 03/10): três abertas hoje, uma devolvida pelo deploy
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM supremo_tentativas WHERE conta_id = ? AND dia = ?",
+                                  c.conta['id'], linha_dia(self, tid))[0]['n'], 3)
+        st, r = c.pede('GET', '/api/supremo')
+        self.assertEqual((st, r['eu']['restantes']), (200, 1), r.get('eu'))
+        st, r = self.abre_eco(c)
+        self.assertEqual((st, r.get('restantes')), (200, 0), r)
+        st, r = self.abre_eco(c)
+        self.assertEqual((st, r.get('motivo')), (429, 'sem-tentativas'), r)
 
     def test_07_a_semana_fecha_uma_vez_e_os_premios_chegam(self):
         agora_s = int(time.time())

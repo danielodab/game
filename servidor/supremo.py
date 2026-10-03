@@ -24,6 +24,7 @@ AS ROTAS:
 AS RÉGUAS:
   - TENTATIVAS_POR_DIA por conta, no dia de BRASÍLIA (o mesmo das missões). Abrir conta como usada:
     a tentativa largada no meio (a aba fechada) não volta. Abrir outra com uma aberta vence a de antes.
+    A única que devolve a vez é a vencida por 'regras-mudaram' (o deploy no meio dela: USADAS_HOJE).
   - a SEMANA vai de segunda 00:00 a domingo 23:59:59 de Brasília (UTC−3, sem horário de verão desde
     2019). A tentativa é da semana em que ABRIU.
   - o RANKING é por conta: a melhor tentativa conferida da semana (pontos = dano + o bônus de quem
@@ -175,6 +176,13 @@ ORDER BY pontos DESC, fechada_em ASC, conta_id ASC
 """
 
 
+# as tentativas que GASTAM a vez do dia: toda aberta conta, menos a que venceu porque o deploy trocou as regras no
+# meio dela ('regras-mudaram') — essa não é culpa do jogador, e o 410 dela promete que a vez volta (03/10, a
+# revisão pegou a promessa sem a conta: a tentativa sumia do dia do mesmo jeito)
+USADAS_HOJE = ("SELECT COUNT(*) FROM supremo_tentativas WHERE conta_id = ? AND dia = ? "
+               "AND NOT (estado = 'vencida' AND motivo IS 'regras-mudaram')")
+
+
 def _linha_publica(r, pos):
     return {'posicao': pos, 'nome': r['nome'] or '—', 'pontos': r['pontos'] or 0, 'dano': r['dano'] or 0,
             'derrubou': bool(r['derrubou']), 'rodada': r['rodada']}
@@ -259,8 +267,7 @@ class SupremoMixin:
     def _supremo_minha(self, cid, t):
         """Dentro da tranca: as tentativas de hoje, o melhor da semana e a posição."""
         semana, dia = semana_de(t), dia_de(t)
-        usadas = self.con.execute("SELECT COUNT(*) FROM supremo_tentativas WHERE conta_id = ? AND dia = ?",
-                                  (cid, dia)).fetchone()[0]
+        usadas = self.con.execute(USADAS_HOJE, (cid, dia)).fetchone()[0]
         melhor = self.con.execute(
             "SELECT pontos, dano, derrubou, fechada_em, id FROM supremo_tentativas WHERE conta_id = ? AND semana = ? "
             "AND estado = 'conferida' ORDER BY pontos DESC, fechada_em ASC, id LIMIT 1", (cid, semana)).fetchone()
@@ -350,8 +357,7 @@ class SupremoMixin:
             # a aberta de antes vence (já contou como usada ao abrir)
             self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'outra-aberta' "
                              "WHERE conta_id = ? AND estado = 'aberta'", (t, cid))
-            usadas = self.con.execute("SELECT COUNT(*) FROM supremo_tentativas WHERE conta_id = ? AND dia = ?",
-                                      (cid, dia)).fetchone()[0]
+            usadas = self.con.execute(USADAS_HOJE, (cid, dia)).fetchone()[0]
             if usadas >= TENTATIVAS_POR_DIA:
                 raise Recusa(429, 'as %d tentativas de hoje acabaram — o Eco volta a ouvir amanhã' % TENTATIVAS_POR_DIA,
                              motivo='sem-tentativas', liberaEm=(dia + 1) * 86400 - FUSO_S)
@@ -425,8 +431,8 @@ class SupremoMixin:
             if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
                 self._regras_esquece()
                 self._supremo_marca(tid, 'vencida', 'regras-mudaram', t)
-                raise Recusa(410, 'as regras do jogo mudaram no meio da tentativa — ela não conta, e a de hoje '
-                                  'continua valendo para a próxima', motivo='regras-mudaram')
+                raise Recusa(410, 'as regras do jogo mudaram no meio da tentativa — ela não conta, e a vez de hoje '
+                                  'volta para você', motivo='regras-mudaram')
             if e.status == 422:                              # o replay não fecha: não pontua
                 self._supremo_marca(tid, 'recusada', e.extra.get('motivo') or 'juiz', t)
             raise

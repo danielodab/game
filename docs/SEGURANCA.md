@@ -228,7 +228,8 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
 - `POST /api/supremo/fechar` `{tentativa, lances, hashFinal}` → o juiz (`POST /supremo/fecha`, §5.4)
   refaz a Câmara pelo MESMO refazer da sala e devolve `Engine.ecoPlacar`. O que vale é esse número:
   lance trocado, hash do fim mentido ou outra semente = 422 `divergiu` e a tentativa fica `recusada`, sem
-  pontuar. Prazo de 2 h, semana já fechada e regras trocadas no meio = 410 (`vencida`, não fraude). A
+  pontuar. Prazo de 2 h, semana já fechada e regras trocadas no meio = 410 (`vencida`, não fraude); a das regras
+  trocadas (`regras-mudaram`, o deploy no meio dela) é a única que DEVOLVE a vez do dia. A
   régua de tempo mínimo da sala vale aqui (`SALA_MIN_S`, `SALA_S_POR_TURNO`). A tentativa largada no meio
   pontua o dano até onde foi (os lances conferidos são de verdade).
 - `GET /api/supremo` (público; com token traz `eu`: tentativas de hoje, o melhor, a posição, os últimos
