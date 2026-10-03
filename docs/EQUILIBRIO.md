@@ -266,6 +266,14 @@ A prova rápida (`node tests/equilibrio.js`, 2 sementes, a que se roda no dia a 
 59% de uma medida para a outra). A referência é a completa. No navegador,
 `tests/equilibrio_fusao.html` deu 118 de 126, o mesmo número da fusão na prova rápida.
 
+**Depois da revisão** (o preço no próprio corpo, §3.5, mudou a regra; os duelos completos foram
+refeitos, 11 sementes): **60 de 84** células em 40–60% (eram 62) e **21 de 28** médias em 45–55%
+(eram 20). O nível 5 não mudou (os dois feitiços são de nível 12 e 15). Médias que mexeram: Bárbaro
+54/54/54/56, Ladino 57/50/49/50, Minotauro 35/45/44/33 (níveis 5/12/20/30). Perfis 198/198 e a
+fusão da prova rápida 118/126 seguem iguais. A prova rápida de duelos foi de 102 para 97 de 112:
+qualquer mudança de regra muda a ordem do sorteio, e as cinco novas falhas estão na borda (55–56%)
+— julgue pela completa.
+
 ### 4.1 Duelos em dupla — a média de cada classe contra as outras seis
 
 924 jogos por classe e nível (154 por célula).
