@@ -831,3 +831,57 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
 .eco-rank .abas { margin: 8px 0 0; }
 .eco-faixas { margin: 12px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.55; }
 .eco-faixas .apoio { list-style: none; margin-left: -18px; margin-top: 6px; opacity: .75; font-size: 13px; }
+
+/* ---- 02/10: Termos, Privacidade e os direitos do titular -------------------------
+ * As duas páginas de texto (termos.html, privacidade.html): uma coluna de leitura,
+ * o índice em pílulas, os [PREENCHER] que saltam à vista (o advogado e o dono
+ * preenchem antes do lançamento) e a tabela do que se guarda. Na conta: a caixa do
+ * aceite no cadastro e o bloco "Privacidade e dados". No painel do Mestre: os erros. */
+.documento .miolo { max-width: 860px; }
+.indice { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 0 0 28px; }
+.indice a {
+  padding: 5px 11px; border: 1px solid var(--linha); border-radius: 999px; background: var(--fundo-2);
+  font-size: 13.5px; color: var(--texto-2);
+}
+.indice a:hover { color: var(--ouro); border-color: var(--ouro-esc); text-decoration: none; }
+.texto-legal h3 { margin: 30px 0 10px; color: var(--ouro-2); scroll-margin-top: 76px; }
+.texto-legal p, .texto-legal li { color: var(--texto); font-size: 15.5px; }
+.texto-legal ul { margin: 0 0 12px; padding-left: 22px; }
+.texto-legal li { margin-bottom: 6px; }
+.preencher {
+  background: rgba(255, 122, 107, .12); color: var(--erro); border: 1px dashed rgba(255, 122, 107, .5);
+  border-radius: 5px; padding: 0 5px; font-weight: 600; overflow-wrap: anywhere;
+}
+.tabela-legal { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela-legal th, .tabela-legal td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--linha); }
+.tabela-legal th { color: var(--ouro-2); font-family: var(--serif); font-weight: 600; background: var(--fundo-3); }
+.tabela-legal td:first-child { min-width: 200px; }
+.texto-legal .tabela-caixa { margin: 0 0 16px; }
+.rodape a[aria-current="page"] { color: var(--ouro); }
+
+.aceite { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; font-size: 14px; color: var(--texto-2); cursor: pointer; }
+.aceite input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--ouro); }
+.aceite.invalido span { color: var(--erro); }
+.aceite-pendente { margin: 8px 0 14px; padding: 12px 14px; border: 1px solid var(--ouro-a30); border-left: 3px solid var(--ouro); border-radius: 9px; background: var(--ouro-a10); }
+.aceite-pendente .btn { margin-top: 12px; }
+#bl-privacidade h4 { font: 600 16px var(--serif); color: var(--ouro); margin: 14px 0 6px; }
+.pv-linha { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.pv-linha .apoio { font-size: 14px; }
+.pv-excluir { margin-top: 18px; padding: 14px 16px; border: 1px solid rgba(255, 122, 107, .4); border-radius: 10px; background: rgba(255, 122, 107, .05); }
+.pv-excluir #pv-nome-conta { color: var(--ouro); overflow-wrap: anywhere; }
+
+/* o registro de erros no painel do Mestre (mestre_erros.js) */
+.er-resumo { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--texto-2); margin: 4px 0 10px; }
+.er-lista { list-style: none; margin: 0; padding: 0; }
+.er-lista > li { padding: 12px 0; border-bottom: 1px solid var(--linha); min-width: 0; }
+.er-lista > li:last-child { border-bottom: 0; }
+.er-cab { display: flex; gap: 8px 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.er-msg { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.er-conta { font-variant-numeric: tabular-nums; color: var(--ouro); font-weight: 700; white-space: nowrap; }
+.er-meta { display: block; color: var(--texto-2); font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.er-origem { font-size: 11px; padding: 1px 7px; margin-right: 6px; }
+.er-pilha {
+  margin: 8px 0 0; padding: 8px 10px; background: var(--fundo-3); border-radius: 8px; font: 12px/1.45 ui-monospace, Consolas, monospace;
+  color: var(--texto-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto;
+}
+.er-lista details summary { cursor: pointer; color: var(--ouro-2); font-size: 13px; margin-top: 6px; }

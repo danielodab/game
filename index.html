@@ -508,6 +508,7 @@
     // A ORDEM DESTA LISTA É A ÁRVORE DE DEPENDÊNCIAS. Não há bundler para avisar
     // se você errar: um arquivo que use JOGO.Engine tem de vir depois de engine.js.
     var arquivos = [
+      'js/core/registro_erros.js',     // 02/10: o PRIMEIRO — pega até o erro que derruba a carga de outro arquivo
       'js/mobile.js',                  // detecta toque/celular — todo o resto consulta
 
       'vendor/three.min.js', 'vendor/GLTFLoader.js', 'vendor/CopyShader.js',

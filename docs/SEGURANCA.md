@@ -249,6 +249,55 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
   `aviso`, fator 1, id `eco-<semana>`), num campo à parte — `ativos`/`proximos` seguem sendo a agenda do
   Mestre, que ele liga e cancela. O jogo (`agenda.js`) e o site (`site.js`) juntam os dois.
 
+### 4.9 Os direitos do titular e o registro de erros (02/10, `servidor/privacidade.py`, `servidor/registros.py`)
+Antes do lançamento: os Termos de Uso e a Política de Privacidade (`site/termos.html`,
+`site/privacidade.html`, escritos lendo este servidor), o aceite, excluir a conta, baixar os
+dados e o registro de erros. Módulos novos, com ganchos curtos no `api.py`; tabelas novas,
+nunca ALTER. Um advogado revisa os textos antes de abrir ao público (`docs/REVISAO_JURIDICA.md`).
+- **O aceite.** `POST /api/cadastro` exige `aceiteTermos` = `privacidade.VERSAO_TERMOS` (a data
+  dos documentos): sem ele 400 `sem-aceite`, com outra versão 409 `termos-velhos` + `versaoTermos`.
+  O aceite (`aceites(conta_id, documento, versao, aceito_em)`, os dois documentos) é gravado na
+  MESMA transação que cria a conta. `GET /api/termos` (público) diz a versão de agora;
+  `GET /api/conta/aceite` diz se a conta está em dia;
+  `POST /api/conta/aceite {versao}` é o aceite de quem tem conta de antes (a página da conta
+  mostra o pedido). A versão mora também em `site/site.js` (`SITE.VERSAO_TERMOS`) e no
+  `data-versao` das duas páginas: `tests/privacidade_api.py` pega a deriva.
+- **Excluir a conta.** `POST /api/conta/excluir {nome, senha}`: o nome EXATO da conta e a senha
+  (o `_confere_senha` da troca de senha, com o freio por IP no balde `excluir`). Recusa 409 com
+  `motivo`: `mestre` (a conta com a marca; tire no Terminal antes), `luta-aberta` (duelo aberto
+  sem resultado da última 1 h, sala em grupo aberta, Arena ou guerra casada/pronta, das últimas 6 h) e `pagamento-aberto` (link do Mercado
+  Pago das últimas 2 h sem resposta, ou pagamento pendente/em disputa). Numa transação: a guilda
+  se resolve (o membro mais antigo herda; sozinho, ela se desfaz), os eventos da conta saem
+  (menos os `pagamento-*`), as tabelas que guardam o id sem chave estrangeira são limpas
+  (`SEM_CHAVE`), a linha de `contas` sai — o CASCADE e o SET NULL do esquema fazem o resto: o
+  dinheiro (pagamentos, extrato das barras, alertas) fica sem a conta — e no MESMO id nasce a
+  **lápide** (`excluída#<id>`, e-mail `.invalid`, senha impossível, `banido = 1`): sem ela o
+  SQLite daria o maior id apagado à próxima conta criada. `contas_excluidas(conta_id,
+  excluida_em, guilda)` anota a exclusão. A cópia que a conta emprestou pelo banco da guilda fica
+  com quem pegou (a original some com a conta: não é duplicação). E-mail de confirmação ao
+  endereço que era da conta. A prova lê o esquema: nenhuma coluna com chave para `contas` (nem
+  `conta_id` sem chave) pode apontar para a conta depois.
+- **Baixar meus dados.** `GET /api/conta/meus-dados`: o JSON de tudo o que o servidor guarda da
+  conta (dados, aceites, save, sessões com IP, eventos, itens, salas, duelos, Arena, guerras,
+  salas em grupo, tentativas e prêmios do Eco Primordial, guilda — com as peças no banco, o XP doado, o mural, pedidos e convites —, amigos,
+  presença, barras, loja, pagamentos, mercadinho, erros; o adversário entra só como o lado A/B), listas longas com `total` e `incluidos`; 5 por hora.
+- **A faxina dos prazos** (`_faxina_privacidade`, no boot e a cada sessão aberta, no máximo 1
+  vez por hora): sessões sem uso há 30 dias (com o IP delas), o resumo das derrubadas, códigos e
+  contagens de freio de mais de 1 dia, erros quietos há 30 dias. Antes, a sessão vencida só
+  morria se o token voltasse.
+- **O registro de erros.** `POST /api/registro/erros {erros: [{tipo, mensagem, pilha, onde,
+  vezes}], versao, tela, navegador}`, com ou sem sessão (a conta sai do TOKEN; token morto não é
+  401 aqui). Até 20 por lote, 12 pedidos por minuto por endereço ou conta (429), campos
+  cortados; e-mail, IP, token e a consulta da URL viram marcadores antes de gravar. Uma linha por
+  erro distinto (`erros_registro`, chave = sha256 da origem, da mensagem e do 1º quadro) com
+  contador, primeira/última vez e as últimas versões/telas/navegadores; até 50 contas por erro
+  (`erros_registro_contas`, CASCADE); 5.000 erros distintos (sai o mais quieto); 30 dias sem
+  repetir e some. A exceção não tratada da própria API entra como origem `api` (o `except` do
+  Atendente chama `registra_excecao_api`; a pilha é só arquivo:linha em função). O Mestre lê em
+  `GET /api/mestre/erros` e apaga o resolvido em `POST /api/mestre/erros/apagar {chave}`
+  (`site/mestre_erros.js`). O cliente é `js/core/registro_erros.js`, o PRIMEIRO script do
+  `index.html`; em `file://` não faz nada.
+
 ## 5. O juiz (Node, só 127.0.0.1)
 
 ### 5.1 `GET /saude` → `{ok, versao}`; `GET /regras` → `{versao, calaboucos: {id: nSalas}}`

@@ -79,6 +79,9 @@ from guerra import ESQUEMA_GUERRA, GuerraMixin   # 15/09: a guerra de guilda 2x2
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
 from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a tentativa, o placar e a semana)
+# 02/10: os direitos do titular (aceite dos termos, excluir a conta, baixar os dados) e o registro de erros
+from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
+from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
 import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 
 log = logging.getLogger("api")
@@ -378,6 +381,8 @@ ROTAS = {
     ('POST', '/api/mercado/confirmar'):       ('mercado_confirmar', True),
     ('POST', '/api/mercado/retirar'):         ('mercado_retirar', True),
 }
+ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a conta, baixar os dados
+ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
@@ -729,7 +734,7 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin):
+          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -758,7 +763,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA_GUERRA)   # 15/09: a guerra de guilda 2x2 (guerra.py) — idem
         self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
         self.con.executescript(ESQUEMA_SUPREMO)   # 02/10: o Eco Primordial (supremo.py) — idem
+        self.con.executescript(ESQUEMA_PRIVACIDADE + ESQUEMA_REGISTROS)   # 02/10: aceites e erros — idem
         self.tranca = threading.RLock()
+        self._registros_init()   # 02/10: o freio do registro de erros (registros.py), em memória
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
         self._fila = {}          # chave do balde do IP → pedidos esperando uma dessas vagas voltar
@@ -779,6 +786,8 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self._migra_resumos_v2()
         self._migra_resumos_nomes()
         self._migra_guildas_antigas()      # 13/09: a foto das guildas de antes do servidor
+        with self._escrita():
+            self._faxina_privacidade(forcar=True)   # 02/10: sessões vencidas, códigos e freios velhos (privacidade.py)
 
     # -- miudezas -------------------------------------------------------------
     def _evento(self, conta_id, tipo, dados):
@@ -810,6 +819,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         conta mostra a lista, com o IP mascarado."""
         token = secrets.token_hex(32)
         t = agora()
+        self._faxina_privacidade(t)   # 02/10: as vencidas saem com o IP delas (privacidade.py), no máximo 1 vez por hora
         self.con.execute("INSERT INTO sessoes(token, conta_id, criado_em, ultimo_uso) VALUES (?, ?, ?, ?)",
                          (token, conta_id, t, t))
         if isinstance(corpo, dict):
@@ -881,6 +891,8 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
             raise Recusa(400, 'e-mail inválido')
         if not senha_valida(senha):
             raise Recusa(400, 'a senha precisa ter pelo menos 8 caracteres')
+        # 02/10: sem o aceite dos Termos e da Política de Privacidade (a versão de agora), não há conta
+        aceite = confere_aceite(corpo)
         # o freio por IP (10 por hora; conta.py) antes do PBKDF2 e do 409: sem
         # ele, "esse e-mail já tem conta" era um oráculo de graça de quem tem
         # conta, e cada pedido queimava 0,1 s de processador
@@ -900,6 +912,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 self.con.rollback()
                 raise Recusa(409, 'nome ou e-mail já usado')
             cid = cur.lastrowid
+            self._aceite_grava(cid, aceite, agora())   # na MESMA transação: não existe conta sem aceite
             token = self._abre_sessao(cid, corpo)
             self._evento(cid, 'cadastro', {'nome': nome})
             self.con.commit()
@@ -1696,6 +1709,7 @@ class Atendente(BaseHTTPRequestHandler):
             resposta.update(r.extra)
         except Exception:
             log.exception("erro em %s %s", metodo, caminho)
+            self.api.registra_excecao_api(metodo, caminho, self._token())   # 02/10: o painel do Mestre vê (registros.py)
             status, resposta = 500, {'ok': False, 'erro': 'erro interno do servidor'}
         self._responde(status, resposta)
 

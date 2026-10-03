@@ -135,6 +135,17 @@
         <div class="pedidos-cab"><h3>Últimos presentes</h3></div>
         <ul class="lista-pedidos" id="ms-presentes"></ul>
       </section>
+
+      <!-- 02/10: o registro de erros (mestre_erros.js; servidor/registros.py) -->
+      <section class="bloco ms-erros" id="ms-erros-bloco">
+        <div class="pedidos-cab">
+          <h3>Erros do jogo e da API</h3>
+          <button type="button" class="btn btn-mini" id="er-atualizar">atualizar</button>
+        </div>
+        <p class="apoio">O que quebrou no navegador dos jogadores e dentro da API, agrupado pela mensagem. Some sozinho depois de 30 dias sem acontecer; “resolvido” apaga o grupo (se voltar, nasce de novo).</p>
+        <div class="er-resumo" id="er-resumo"></div>
+        <ul class="er-lista" id="er-lista"><li class="apoio">carregando…</li></ul>
+      </section>
     </div>
 
     <div class="aviso flutua" id="ms-aviso" role="status"></div>
@@ -142,14 +153,15 @@
 </section>
 
 <footer class="rodape">
-  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado
+    <br><a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Privacidade</a></div>
 </footer>
 
 <script>
 /* o nome e a cor das classes vêm do próprio jogo (classes.js, mesma origem);
  * cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
 (function () {
-  ['site.js', '../js/core/data/classes.js', 'mestre.js'].forEach(function (s) {
+  ['site.js', '../js/core/data/classes.js', 'mestre.js', 'mestre_erros.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

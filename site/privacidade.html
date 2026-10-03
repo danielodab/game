@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — SOTERRA</title>
+<script>
+  // a folha com o hash do build (o mapa de js/versao.js); sem mapa (em casa), o
+  // carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  A Política de Privacidade (02/10, LGPD). Escrita LENDO o servidor: cada dado
+  listado aqui existe numa tabela de servidor/*.py, e cada prazo que tem dono no
+  código leva data-regua="NOME" (tests/privacidade_api.py confere com a constante:
+  SESSAO_DIAS, a faxina de 1 dia do conta.py, a presença de 24 h, os 30 dias do
+  registro de erros, os 14 dias do backup.sh…). O que a exclusão apaga e o que
+  fica é o que servidor/privacidade.py faz — a prova confere tabela por tabela.
+  Dados da empresa que não existem no código ficam como [PREENCHER: …]. Um
+  advogado revisa antes do lançamento (docs/REVISAO_JURIDICA.md).
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="wiki.html">Wiki</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao documento">
+  <div class="miolo">
+    <h2>Política de Privacidade</h2>
+    <p class="sub">Versão de <b>02/10/2026</b>. O que o SOTERRA guarda sobre você, para quê, por quanto tempo, com quem divide e como você exerce os seus direitos pela Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018). Vale junto com os <a href="termos.html">Termos de Uso</a>.</p>
+
+    <nav class="indice" aria-label="Índice">
+      <a href="#controlador">1. Quem cuida dos dados</a>
+      <a href="#dados">2. O que guardamos e por quê</a>
+      <a href="#nao-guardamos">3. O que não guardamos</a>
+      <a href="#aparelho">4. No seu aparelho</a>
+      <a href="#publico">5. O que fica público</a>
+      <a href="#compartilhamento">6. Com quem dividimos</a>
+      <a href="#seguranca">7. Segurança e cópias</a>
+      <a href="#direitos">8. Os seus direitos</a>
+      <a href="#excluir">9. Quando você exclui a conta</a>
+      <a href="#menores">10. Crianças e adolescentes</a>
+      <a href="#mudancas">11. Mudanças nesta política</a>
+      <a href="#encarregado">12. Encarregado e contato</a>
+    </nav>
+
+    <article class="texto-legal" id="documento" data-documento="privacidade" data-versao="2026-10-02">
+
+      <h3 id="controlador">1. Quem cuida dos dados</h3>
+      <p>O controlador dos dados é <span class="preencher">[PREENCHER: razão social]</span>, CNPJ <span class="preencher">[PREENCHER: CNPJ]</span>, contato <span class="preencher">[PREENCHER: e-mail de contato]</span>. O encarregado pelo tratamento de dados (DPO) está na seção 12.</p>
+
+      <h3 id="dados">2. O que guardamos e por quê</h3>
+      <p>Só guardamos o que o jogo precisa para funcionar, para proteger a sua conta e para cumprir a lei. A tabela abaixo é a lista completa do que o servidor guarda.</p>
+      <div class="tabela-caixa">
+        <table class="tabela-legal">
+          <thead><tr><th>O quê</th><th>Para quê (e a base na LGPD)</th><th>Por quanto tempo</th></tr></thead>
+          <tbody>
+            <tr><td><b>Conta:</b> nome de jogador, e-mail, senha (só a versão embaralhada — ver a seção 7), data de criação</td>
+                <td>Criar a conta, entrar, recuperar a senha. Execução do contrato (art. 7º, V).</td>
+                <td>Enquanto a conta existir.</td></tr>
+            <tr><td><b>Aceite</b> destes documentos: a versão e o dia</td>
+                <td>Provar o que foi combinado. Exercício regular de direitos (art. 7º, VI).</td>
+                <td>Enquanto a conta existir.</td></tr>
+            <tr><td><b>Sessões:</b> o endereço IP e o navegador de cada entrada, com as datas</td>
+                <td>Mostrar na página da conta onde ela está aberta, para você encerrar o que não reconhecer; manter um aparelho por vez. Legítimo interesse — segurança da conta (art. 7º, IX).</td>
+                <td>Até a sessão terminar (sair, entrar em outro aparelho, trocar a senha) e no máximo <b data-regua="SESSAO_DIAS">30</b> dias sem uso. De uma sessão derrubada por outro aparelho fica só um código embaralhado, sem IP, por até <b data-regua="SESSAO_DIAS">30</b> dias.</td></tr>
+            <tr><td><b>Freios contra abuso:</b> o endereço IP nas contagens de tentativas de entrar, de criar conta e de pedir código por e-mail, e o IP de quem pediu um código</td>
+                <td>Barrar quem tenta adivinhar senhas ou criar contas em massa. Legítimo interesse — segurança (art. 7º, IX).</td>
+                <td><b data-regua="FAXINA_DIAS">1</b> dia.</td></tr>
+            <tr><td><b>O jogo:</b> o save (heróis, níveis, itens, carteira de vinténs, missões, o nome e o visual no jogo), o registro de cada item (de onde veio, se ainda existe), as salas, duelos, Arena, guerras e tentativas do Eco Primordial jogados (a semente sorteada e o resultado, para o servidor conferir a batalha) e a vida dos heróis</td>
+                <td>Guardar o seu progresso e impedir trapaça e duplicação de itens. Execução do contrato (art. 7º, V) e legítimo interesse (art. 7º, IX).</td>
+                <td>Enquanto a conta existir.</td></tr>
+            <tr><td><b>Atividade da conta:</b> entradas (sem IP), senhas erradas, trocas de senha e de e-mail (com o e-mail novo pedido), compras, trocas, vendas e salas pagas</td>
+                <td>Segurança da conta, suporte e prevenção de fraude. Legítimo interesse (art. 7º, IX). As 10 últimas de segurança aparecem na página da conta.</td>
+                <td>Enquanto a conta existir.</td></tr>
+            <tr><td><b>Vida social:</b> amigos e inimigos, guilda (cargo, XP doado, mensagem do mural), anúncios e propostas do mercadinho</td>
+                <td>Fazer essas partes do jogo funcionarem. Execução do contrato (art. 7º, V).</td>
+                <td>Enquanto a conta existir (a mensagem do mural: ver a seção 9).</td></tr>
+            <tr><td><b>Presença:</b> quando a conexão de uma conta cai e volta</td>
+                <td>Provar quem abandonou um duelo ou uma guerra. Legítimo interesse (art. 7º, IX).</td>
+                <td><b data-regua="PRESENCA_HORAS">24</b> horas.</td></tr>
+            <tr><td><b>Compras:</b> o pacote, o valor, a situação do pagamento, as datas e os números do pagamento no Mercado Pago; o saldo e o extrato das barras de ouro; os pedidos da loja</td>
+                <td>Entregar o que foi comprado, tratar estorno e arrependimento, cumprir obrigações fiscais e de consumo. Execução do contrato e obrigação legal (art. 7º, II e V).</td>
+                <td>Enquanto a conta existir. Depois da exclusão, o registro do pagamento continua, <b>sem ligação com o seu nome e o seu e-mail</b>, pelo prazo que a lei exige (<span class="preencher">[PREENCHER: prazo de guarda definido com o advogado]</span>; hoje o servidor não apaga esses registros sozinho).</td></tr>
+            <tr><td><b>Registro de erros:</b> quando o jogo quebra no seu navegador, a mensagem do erro, a parte técnica cortada, a versão do jogo, a tela em que você estava, o tipo de navegador (por exemplo, “Chrome 120 · Windows”) e o número da conta, se você estiver logado. Também os erros do próprio servidor</td>
+                <td>Achar e consertar defeitos. Legítimo interesse (art. 7º, IX). Antes de gravar, o servidor apaga do texto e-mails, endereços IP e códigos.</td>
+                <td><b data-regua="ERROS_DIAS">30</b> dias depois da última vez que o erro aconteceu.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Os <b>e-mails</b> que mandamos são só os do funcionamento da conta: o código para trocar o e-mail ou redefinir a senha, o aviso de senha trocada, de e-mail trocado e de conta excluída. Não mandamos propaganda.</p>
+
+      <h3 id="nao-guardamos">3. O que não guardamos</h3>
+      <ul>
+        <li><b>O chat.</b> As mensagens da praça, os sussurros e o chat da guilda passam pelo servidor de mensagens só para chegar a quem deve recebê-las; <b>não são gravadas</b> — nem no banco de dados, nem nos registros do servidor. Quem recebe a mensagem, claro, pode guardá-la.</li>
+        <li><b>Dados de pagamento.</b> Número de cartão, dados do Pix, CPF e nome do pagador ficam com o Mercado Pago, na página dele. Também não mandamos ao Mercado Pago o seu nome nem o seu e-mail.</li>
+        <li><b>A senha em claro.</b> Nem a equipe consegue ver a sua senha.</li>
+        <li>Endereço, telefone, documento, foto, localização, contatos do aparelho: o jogo não pede nada disso.</li>
+      </ul>
+
+      <h3 id="aparelho">4. No seu aparelho</h3>
+      <p>O jogo guarda no navegador (no armazenamento local, o <i>localStorage</i>) o save desta máquina e a sessão da conta. O site e o jogo <b>não usam cookies</b>, nem ferramentas de análise ou de publicidade de terceiros, nem fontes ou scripts carregados de outros sites. Para apagar o que ficou no aparelho, limpe os dados do site no navegador.</p>
+      <p>O jogo aberto direto do disco (sem servidor) não manda nada para a internet: nem save, nem registro de erros.</p>
+
+      <h3 id="publico">5. O que fica público</h3>
+      <p>Qualquer pessoa vê, no site e no jogo: o <b>nome no jogo</b>, o retrato, as classes e níveis, o XP, a guilda, os pontos de PvP e o dano no Eco Primordial no <a href="ranking.html">ranking</a>; e, dentro do jogo, o seu personagem na praça e o que você escreve no chat. O <b>e-mail nunca</b> aparece para outros jogadores.</p>
+
+      <h3 id="compartilhamento">6. Com quem dividimos</h3>
+      <p>Não vendemos nem alugamos dados. Dividimos só o necessário com:</p>
+      <ul>
+        <li><b>Mercado Pago</b>, que processa os pagamentos com os dados que você digita na página dele, sob a política de privacidade dele;</li>
+        <li><b>a hospedagem</b>, <span class="preencher">[PREENCHER: empresa de hospedagem e país onde fica o servidor]</span>, onde ficam o servidor e o banco de dados;</li>
+        <li><b>o provedor de e-mail</b>, <span class="preencher">[PREENCHER: provedor de envio de e-mail]</span>, que recebe o seu e-mail e o texto da mensagem para entregá-la;</li>
+        <li><b>autoridades</b>, quando uma lei ou uma ordem judicial obrigar.</li>
+      </ul>
+      <p>Se a hospedagem ou o provedor de e-mail ficarem fora do Brasil, os dados atravessam a fronteira nas condições do art. 33 da LGPD: <span class="preencher">[PREENCHER: confirmar com o advogado a transferência internacional]</span>.</p>
+
+      <h3 id="seguranca">7. Segurança e cópias</h3>
+      <ul>
+        <li>Todo o tráfego entre o seu navegador e o servidor vai cifrado (HTTPS).</li>
+        <li>A senha é guardada só embaralhada (PBKDF2-SHA256 com <b data-regua="PBKDF2_VOLTAS">200.000</b> voltas e um sal próprio de cada conta). Os códigos mandados por e-mail são guardados embaralhados e valem 15 minutos.</li>
+        <li>O servidor confere as batalhas e a economia do jogo: o saque, o dano e as moedas não dependem do que o navegador diz.</li>
+        <li>Uma <b>cópia de segurança</b> do banco é feita uma vez por dia e cada cópia é guardada por <b data-regua="BACKUP_DIAS">14</b> dias. Por isso, um dado apagado pode continuar numa cópia por até <b data-regua="BACKUP_DIAS">14</b> dias, até ela vencer; as cópias só são usadas para recuperar o serviço depois de uma falha.</li>
+        <li>Se acontecer um incidente de segurança que possa trazer risco ou dano relevante a você, avisamos você e a Autoridade Nacional de Proteção de Dados (ANPD).</li>
+      </ul>
+
+      <h3 id="direitos">8. Os seus direitos</h3>
+      <p>Pela LGPD (art. 18) você pode, a qualquer momento:</p>
+      <ul>
+        <li><b>Confirmar e ver os seus dados</b> e <b>levá-los com você</b> (portabilidade): o botão <b>“Baixar meus dados”</b> na <a href="conta.html">página da conta</a> (ou na ficha <i>Contas</i> do jogo) entrega na hora um arquivo JSON com tudo o que o servidor guarda da conta;</li>
+        <li><b>Corrigir:</b> a senha e o e-mail se trocam na página da conta; para trocar o nome de jogador, escreva ao encarregado;</li>
+        <li><b>Excluir:</b> o botão <b>“Excluir conta”</b>, na página da conta ou no jogo (seção 9);</li>
+        <li>saber com quem dividimos (seção 6), pedir revisão de uma decisão, opor-se a um tratamento feito por legítimo interesse e reclamar à <b>ANPD</b>;</li>
+        <li>para o que não tiver botão, escreva ao encarregado (seção 12). Respondemos em até 15 dias.</li>
+      </ul>
+
+      <h3 id="excluir">9. Quando você exclui a conta</h3>
+      <p>A exclusão é feita pelo botão, com o nome da conta e a senha, e <b>não tem volta</b>. Na mesma hora o servidor <b>apaga</b>:</p>
+      <ul>
+        <li>o nome de jogador, o e-mail e a senha; as sessões (com os IPs) e os aceites;</li>
+        <li>o save, os itens, a vida dos heróis, as salas, duelos e partidas da Arena, as tentativas e prêmios do Eco Primordial, o ranking e o retrato;</li>
+        <li>amigos e inimigos, o lugar na guilda, as peças guardadas no banco da guilda, os anúncios do mercadinho (e as propostas que outros fizeram neles) e as propostas que você fez;</li>
+        <li>o saldo de barras de ouro e os pedidos da loja;</li>
+        <li>a atividade da conta, a presença e o número da conta nos registros de erro.</li>
+      </ul>
+      <p>E <b>resolve</b> o que envolve outras pessoas: se você lidera uma guilda, a liderança passa ao membro mais antigo (sozinho, a guilda se desfaz); a peça que você pegou emprestada do banco da guilda volta a ser só do dono; a peça que você emprestou fica com quem pegou.</p>
+      <p>Ficam, sem o seu nome e sem o seu e-mail: o <b>registro dos pagamentos</b> e do extrato das barras (obrigação legal, seção 2); a mensagem que você escreveu no mural de uma guilda que continua existindo, sem a autoria; nos registros de quem negociou com você, a venda ou a troca, sem dizer quem era; e, para que o número da conta nunca seja dado a outra pessoa, uma marca com o número e o dia da exclusão (“excluída#número”). As cópias de segurança vencem em até <b data-regua="BACKUP_DIAS">14</b> dias (seção 7). Quando o envio de e-mails do servidor está ligado, mandamos um último e-mail confirmando a exclusão.</p>
+      <p>A exclusão espera terminar uma luta com outros jogadores e um pagamento em andamento no Mercado Pago. Se quiser o arrependimento de uma compra, peça <b>antes</b> de excluir (<a href="termos.html#arrependimento">Termos, seção 6</a>).</p>
+
+      <h3 id="menores">10. Crianças e adolescentes</h3>
+      <p>A conta exige a idade mínima dos <a href="termos.html#idade">Termos de Uso</a>, e quem tem menos de 18 anos joga com a autorização dos pais ou responsáveis. Com todos os jogadores — e com crianças e adolescentes acima de tudo — o SOTERRA:</p>
+      <ul>
+        <li>pede só o nome de jogador e um e-mail, e nada mais;</li>
+        <li>não mostra propaganda de terceiros e não traça perfil para publicidade;</li>
+        <li>não grava o chat;</li>
+        <li>não vende sorteio: a roleta só aceita selos de chefe, ganhos jogando, e nunca será vendida por dinheiro;</li>
+        <li>atende os pais ou responsáveis que pedirem, pelo encarregado, o acesso aos dados ou a exclusão da conta de um menor.</li>
+      </ul>
+
+      <h3 id="mudancas">11. Mudanças nesta política</h3>
+      <p>Quando esta política mudar de um jeito que afete os seus direitos, a versão nova ganha outra data, avisamos na página da conta e pedimos o aceite de novo.</p>
+
+      <h3 id="encarregado">12. Encarregado e contato</h3>
+      <p>Encarregado pelo tratamento de dados pessoais: <span class="preencher">[PREENCHER: nome do encarregado (DPO)]</span>, pelo e-mail <span class="preencher">[PREENCHER: e-mail do encarregado]</span>. Outros assuntos: <span class="preencher">[PREENCHER: e-mail de contato]</span>.</p>
+    </article>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo">
+    <span class="marca">SOTERRA</span>
+    Ecos do Mundo Enterrado
+    <br><a href="termos.html">Termos de Uso</a> · <a href="privacidade.html" aria-current="page">Privacidade</a> · <a href="conta.html">Conta</a>
+  </div>
+</footer>
+
+<script>
+/* só o site.js: ele preenche o topo ("Olá, nome · sair") no DOMContentLoaded.
+ * A página é texto e não chama a API. */
+(function () {
+  ['site.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+</body>
+</html>

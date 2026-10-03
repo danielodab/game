@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — termos, privacidade e os direitos do titular no site</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#palco{position:absolute;left:-4000px;top:0;width:1000px;height:900px}</style>
+</head>
+<body>
+<!-- A PROVA DO SITE (02/10), sem servidor: as páginas de verdade (site/termos.html,
+     privacidade.html, conta.html com conta.js e conta_privacidade.js, mestre.html com
+     mestre_erros.js) escritas num iframe com um window.fetch FALSO que anota cada
+     pedido (o palco é o da tests/site_fase_c.html). Cobra:
+       - os dois documentos: a versão da página é a do site.js, nenhum pedido à API,
+         todo [PREENCHER] marcado, o índice aponta para seções que existem, nada de
+         undefined/NaN, o rodapé leva aos dois;
+       - criar conta: sem a caixa do aceite marcada, nada sai e o aviso pede o aceite;
+         marcada, o POST leva aceiteTermos = SITE.VERSAO_TERMOS; o 409 de termos
+         velhos aparece como o servidor diz;
+       - a Minha conta: o pedido de aceite aparece só quando o servidor diz pendente, e
+         Aceitar sem marcar não manda nada; Baixar meus dados entrega um arquivo;
+         excluir só acende com o nome EXATO e uma senha, pergunta antes, manda {nome,
+         senha} no CORPO, mostra o 409 do servidor e, excluída, a sessão sai;
+       - o painel do Mestre: a lista de erros, com a mensagem de fora escapada, e o
+         "resolvido" que manda a chave;
+       - nenhum pedido leva senha, e-mail ou token na URL.
+     Com ?relatar=1, o resultado vai por POST a /__resultado (o tests/privacidade_navegador.py
+     lê). A sessão do localStorage volta ao que era. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="../site/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0, linhas = [];
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var t = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    linhas.push(t);
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = t;
+    log.appendChild(d);
+  }
+  var CHAVE = 'soterra-sessao';
+  var sessaoAntes = null;
+  try { sessaoAntes = localStorage.getItem(CHAVE); } catch (e) { /* sem storage */ }
+  function fecha() {
+    try { if (sessaoAntes === null) localStorage.removeItem(CHAVE); else localStorage.setItem(CHAVE, sessaoAntes); } catch (e) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+    if (/[?&]relatar=1/.test(location.search)) {
+      try {
+        var x = new XMLHttpRequest();
+        x.open('POST', '/__resultado');
+        x.setRequestHeader('Content-Type', 'application/json');
+        x.send(JSON.stringify({ pagina: 'site_privacidade', total: total, falhas: falhas, linhas: linhas }));
+      } catch (e) {}
+    }
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ate(cond, ms) {
+    ms = ms || 4000;
+    return new Promise(function (r) {
+      var t = 0;
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) { ok = false; }
+        if (ok) return r(true);
+        if ((t += 20) > ms) return r(false);
+        setTimeout(volta, 20);
+      })();
+    });
+  }
+  var AGORA = Math.floor(Date.now() / 1000), DIA = 86400;
+  var BASE_SITE = new URL('../site/', location.href).href;
+  var SENHA = 'Senha-Da-Prova-9', EMAIL = 'teresa@exemplo.com';
+  var SESSAO = { token: 'tok-priv', conta: { id: 12, nome: 'Teresa Lima', gm: false } };
+  var SESSAO_MESTRE = { token: 'tok-mestre-priv', conta: { id: 1, nome: 'Guia', gm: true } };
+  var SEGREDOS = [SENHA, EMAIL, 'tok-priv', 'tok-mestre-priv'];
+  function copia(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /* ---- o palco (o mesmo da site_fase_c.html) ---- */
+  var TODOS = [];
+  function le(url) {
+    return new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + (url.indexOf('?') < 0 ? '?v=' : '&v=') + Date.now());
+      x.onload = function () { ok((x.status === 200 || x.status === 0) && x.responseText ? x.responseText : null); };
+      x.onerror = function () { ok(null); };
+      try { x.send(); } catch (e) { ok(null); }
+    });
+  }
+  function fetchFalso(pagina, cena) {
+    return function (url, op) {
+      op = op || {};
+      var u = String(url), m = /\/api\/[^?#]*/.exec(u), corpo = null;
+      try { corpo = op.body ? JSON.parse(op.body) : null; } catch (e) { corpo = op.body; }
+      var reg = { pagina: pagina, url: u, metodo: op.method || 'GET', rota: m ? m[0] : u, corpo: corpo,
+                  auth: (op.headers && op.headers.Authorization) || null };
+      TODOS.push(reg);
+      cena.pedidos.push(reg);
+      var h = cena.rotas[reg.metodo + ' ' + reg.rota];
+      var resp = typeof h === 'function' ? h(corpo || {}, reg) : h;
+      if (!resp) resp = [404, { ok: false, erro: 'rota desconhecida' }];
+      var status = resp[0], json = copia(resp[1]);
+      return new Promise(function (ok) {
+        setTimeout(function () {
+          ok({ status: status, ok: status >= 200 && status < 300, json: function () { return Promise.resolve(json); } });
+        }, 4);
+      });
+    };
+  }
+  function abre(pagina, cena) {
+    cena.pedidos = [];
+    return le(BASE_SITE + pagina).then(function (html) {
+      if (!html) throw new Error('não deu para ler site/' + pagina);
+      palco.innerHTML = '';
+      var fr = document.createElement('iframe');
+      fr.style.width = '1000px';
+      fr.style.height = '900px';
+      palco.appendChild(fr);
+      try {
+        if (cena.sessao) localStorage.setItem(CHAVE, JSON.stringify(cena.sessao));
+        else localStorage.removeItem(CHAVE);
+      } catch (e) { /* sem storage */ }
+      var d = fr.contentDocument;
+      d.open();
+      var w = fr.contentWindow;
+      w.fetch = fetchFalso(pagina, cena);
+      try { w.history.replaceState(null, '', w.location.href.split('#')[0] + (cena.hash ? '#' + cena.hash : '')); } catch (e) {}
+      d.write(html.replace(/<head>/i, '<head><base href="' + BASE_SITE + '">'));
+      d.close();
+      return {
+        w: w, d: d,
+        $: function (id) { return d.getElementById(id); },
+        q: function (s) { return d.querySelector(s); },
+        qq: function (s) { return [].slice.call(d.querySelectorAll(s)); }
+      };
+    });
+  }
+  function visivel(el) {
+    if (!el || !el.ownerDocument) return false;
+    var w = el.ownerDocument.defaultView;
+    for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      var cs = w.getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function digita(el, v) { el.value = v; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }
+  function texto(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function pedidos(cena, metodo, rota) { return cena.pedidos.filter(function (p) { return p.metodo === metodo && p.rota === rota; }); }
+  function lsSessao() { try { return JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) { return 'erro'; } }
+
+  var SAUDE = [200, { ok: true, contas: 3, agora: AGORA, correio: true }];
+  function respostaConta() {
+    return { ok: true, conta: { id: 12, nome: 'Teresa Lima', email: EMAIL, criadoEm: AGORA - 10 * DIA, gm: false }, correio: true,
+             sessoes: [], atividade: [], trocaEmail: null };
+  }
+  var AVATAR = [200, { ok: true, opcoes: [{ id: 'classe:sumo', tipo: 'classe', classe: 'sumo' }], escolha: null, efetivo: { avatar: null, classe: 'sumo' } }];
+
+  /* ======================================================================
+   * 1. os dois documentos
+   * ==================================================================== */
+  async function cenaDocumentos() {
+    for (var i = 0; i < 2; i++) {
+      var pag = ['termos.html', 'privacidade.html'][i];
+      var c = { rotas: {} };
+      var p = await abre(pag, c);
+      await ate(function () { return p.d.readyState === 'complete' && !!p.$('documento'); });
+      await espera(60);
+      var art = p.$('documento');
+      check(pag + ': a versão da página é a do site.js', art && art.getAttribute('data-versao') === SITE.VERSAO_TERMOS,
+            art && art.getAttribute('data-versao'));
+      check(pag + ': nenhum pedido à API (a página é texto)', c.pedidos.length === 0, c.pedidos.map(function (x) { return x.rota; }).join(' '));
+      var corpo = texto(p.d.body);
+      check(pag + ': nada de undefined, NaN ou null no texto', !/\bundefined\b|\bNaN\b|\bnull\b/.test(corpo));
+      var soltos = (p.d.body.innerHTML.match(/\[PREENCHER/g) || []).length,
+          marcados = p.qq('.preencher').filter(function (s) { return /^\[PREENCHER: [^\]]+\]$/.test(texto(s)); }).length;
+      check(pag + ': todo [PREENCHER] está marcado para saltar à vista (' + marcados + ')', soltos > 0 && soltos === marcados,
+            soltos + ' no HTML × ' + marcados + ' marcados');
+      var furos = p.qq('.indice a').filter(function (a) { return !p.d.getElementById(a.getAttribute('href').slice(1)); });
+      check(pag + ': o índice só aponta para seções que existem', p.qq('.indice a').length >= 10 && !furos.length,
+            furos.map(function (a) { return a.getAttribute('href'); }).join(' '));
+      check(pag + ': o rodapé leva aos dois documentos', !!p.q('.rodape a[href="termos.html"]') && !!p.q('.rodape a[href="privacidade.html"]'));
+      check(pag + ': Dofus não aparece', !/dofus/i.test(p.d.documentElement.innerHTML));
+    }
+  }
+
+  /* ======================================================================
+   * 2. criar a conta: o aceite
+   * ==================================================================== */
+  async function cenaCadastro() {
+    var resposta = [409, { ok: false, erro: 'os Termos de Uso mudaram: recarregue a página, leia a versão nova e aceite de novo',
+                           motivo: 'termos-velhos', versaoTermos: '2099-01-01' }];
+    var c = { hash: 'criar', rotas: { 'GET /api/saude': SAUDE, 'POST /api/cadastro': function () { return resposta; } } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('painel-criar')); });
+    var caixa = p.$('c-aceite');
+    check('cadastro: a caixa do aceite existe, desmarcada, com os links dos dois documentos',
+          !!caixa && !caixa.checked && !!p.q('label[for="c-aceite"] a[href="termos.html"]') && !!p.q('label[for="c-aceite"] a[href="privacidade.html"]'));
+    digita(p.$('c-nome'), 'Teresa Lima'); digita(p.$('c-email'), EMAIL);
+    digita(p.$('c-senha'), SENHA); digita(p.$('c-senha2'), SENHA);
+    p.$('c-bt').click();
+    await ate(function () { return /aceite/i.test(texto(p.$('c-aviso'))); });
+    check('cadastro: sem marcar, o aviso pede o aceite e nada sai', /aceite os Termos/.test(texto(p.$('c-aviso'))) &&
+          !pedidos(c, 'POST', '/api/cadastro').length, texto(p.$('c-aviso')));
+    caixa.checked = true;
+    p.$('c-bt').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/cadastro').length && /mudaram/.test(texto(p.$('c-aviso'))); });
+    var pc = pedidos(c, 'POST', '/api/cadastro');
+    check('cadastro: marcada, o POST leva aceiteTermos = SITE.VERSAO_TERMOS',
+          pc.length === 1 && pc[0].corpo.aceiteTermos === SITE.VERSAO_TERMOS && pc[0].corpo.nome === 'Teresa Lima',
+          JSON.stringify(pc.map(function (x) { return x.corpo && x.corpo.aceiteTermos; })));
+    check('cadastro: o 409 de termos velhos aparece como o servidor diz', /recarregue a página/.test(texto(p.$('c-aviso'))));
+  }
+
+  /* ======================================================================
+   * 3. a Minha conta: aceite, baixar, excluir
+   * ==================================================================== */
+  async function cenaMinhaConta() {
+    var aceitePendente = true, exclusao = [409, { ok: false, erro: 'há uma luta com outros jogadores em andamento', motivo: 'luta-aberta' }];
+    var c = { sessao: copia(SESSAO), hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': [200, respostaConta()],
+      'GET /api/avatar': AVATAR,
+      'GET /api/conta/aceite': function () {
+        return [200, { ok: true, versaoTermos: SITE.VERSAO_TERMOS, pendente: aceitePendente,
+                       aceite: aceitePendente ? null : { versao: SITE.VERSAO_TERMOS, em: AGORA } }];
+      },
+      'POST /api/conta/aceite': function () { aceitePendente = false; return [200, { ok: true, versaoTermos: SITE.VERSAO_TERMOS, pendente: false, aceite: { versao: SITE.VERSAO_TERMOS, em: AGORA } }]; },
+      'GET /api/conta/meus-dados': [200, { ok: true, dados: { conta: { id: 12, nome: 'Teresa Lima', email: EMAIL } } }],
+      'POST /api/conta/excluir': function () { return exclusao; }
+    } };
+    var p = await abre('conta.html', c);
+    // o arquivo baixado: o Blob e o clique no <a download> ficam anotados
+    var baixados = [];
+    p.w.URL.createObjectURL = function (b) { baixados.push({ blob: b }); return 'blob:prova'; };
+    p.w.URL.revokeObjectURL = function () {};
+    p.w.HTMLAnchorElement.prototype.click = function () { if (baixados.length) baixados[baixados.length - 1].nome = this.download; };
+    await ate(function () { return visivel(p.$('bl-privacidade')) && pedidos(c, 'GET', '/api/conta/aceite').length && visivel(p.$('pv-aceite')); });
+    check('conta: o bloco Privacidade e dados aparece, com o pedido de aceite (o servidor diz pendente)',
+          visivel(p.$('bl-privacidade')) && visivel(p.$('pv-aceite')));
+    p.$('pv-aceitar').click();
+    await espera(80);
+    check('conta: Aceitar sem marcar não manda nada', !pedidos(c, 'POST', '/api/conta/aceite').length && /Marque/.test(texto(p.$('pv-aviso'))));
+    p.$('pv-aceite-caixa').checked = true;
+    p.$('pv-aceitar').click();
+    await ate(function () { return !visivel(p.$('pv-aceite')); });
+    var pa = pedidos(c, 'POST', '/api/conta/aceite');
+    check('conta: marcada, o aceite vai com a versão e o pedido some', pa.length === 1 && pa[0].corpo.versao === SITE.VERSAO_TERMOS &&
+          !visivel(p.$('pv-aceite')) && /Você aceitou/.test(texto(p.$('pv-aceite-ok'))), texto(p.$('pv-aceite-ok')));
+
+    p.$('pv-baixar').click();
+    await ate(function () { return baixados.length && baixados[0].nome; });
+    check('conta: Baixar meus dados pede GET /api/conta/meus-dados e entrega um .json',
+          pedidos(c, 'GET', '/api/conta/meus-dados').length === 1 && baixados.length === 1 &&
+          /^soterra-Teresa-Lima-\d{8}\.json$/.test(baixados[0].nome) && baixados[0].blob.type === 'application/json',
+          JSON.stringify(baixados.map(function (b) { return b.nome; })));
+
+    // excluir: a confirmação forte
+    check('conta: o formulário de excluir começa fechado', !visivel(p.$('pv-excluir')));
+    p.$('pv-excluir-abre').click();
+    await ate(function () { return visivel(p.$('pv-excluir')); });
+    var bt = p.$('pv-excluir-bt');
+    check('conta: o nome da conta aparece para copiar, e o botão começa apagado',
+          texto(p.$('pv-nome-conta')) === 'Teresa Lima' && bt.disabled);
+    digita(p.$('pv-nome'), 'teresa lima'); digita(p.$('pv-senha'), SENHA);
+    check('conta: com o nome em outra caixa, segue apagado', bt.disabled);
+    digita(p.$('pv-nome'), 'Teresa Lima'); digita(p.$('pv-senha'), '');
+    check('conta: sem senha, segue apagado', bt.disabled);
+    digita(p.$('pv-senha'), SENHA);
+    check('conta: o nome exato e uma senha acendem o botão', !bt.disabled);
+    bt.click();
+    await ate(function () { return !!p.q('.modal [data-sim]'); });
+    check('conta: antes de mandar, a janelinha pergunta', !!p.q('.modal [data-sim]') && !pedidos(c, 'POST', '/api/conta/excluir').length);
+    p.q('.modal [data-nao]').click();
+    await espera(60);
+    check('conta: Voltar na janelinha não manda nada', !pedidos(c, 'POST', '/api/conta/excluir').length);
+    bt.click();
+    await ate(function () { return !!p.q('.modal [data-sim]'); });
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return pedidos(c, 'POST', '/api/conta/excluir').length && /luta/.test(texto(p.$('pv-aviso'))); });
+    var pe = pedidos(c, 'POST', '/api/conta/excluir');
+    check('conta: o pedido leva {nome, senha} no CORPO, com o token', pe.length === 1 && pe[0].corpo.nome === 'Teresa Lima' &&
+          pe[0].corpo.senha === SENHA && pe[0].auth === 'Bearer tok-priv' && pe[0].url.indexOf(SENHA) < 0);
+    check('conta: o 409 aparece como o servidor diz, e a conta segue aberta',
+          /luta com outros jogadores/.test(texto(p.$('pv-aviso'))) && visivel(p.$('minha-conta')) && lsSessao() && lsSessao().token === 'tok-priv');
+    exclusao = [200, { ok: true, excluida: true, guilda: null }];
+    digita(p.$('pv-senha'), SENHA);
+    bt.click();
+    await ate(function () { return !!p.q('.modal [data-sim]'); });
+    p.q('.modal [data-sim]').click();
+    await ate(function () { return visivel(p.$('conta-excluida')); });
+    check('conta: excluída, o aviso aparece, a Minha conta some e a sessão sai do navegador',
+          visivel(p.$('conta-excluida')) && !visivel(p.$('minha-conta')) && lsSessao() === null);
+  }
+
+  /* ======================================================================
+   * 4. o painel do Mestre: os erros
+   * ==================================================================== */
+  async function cenaMestre() {
+    var lista = [
+      { chave: 'a'.repeat(32), origem: 'cliente', tipo: 'erro', mensagem: 'TypeError: <img src=x onerror=window.__xss=1> sumiu',
+        onde: '/js/ui/hud.js:10:5', pilha: 'at f (/js/ui/hud.js:10:5)', contagem: 1234, primeiraEm: AGORA - DIA, ultimaEm: AGORA - 60,
+        versoes: ['3fa2b1c9d0e1'], telas: ['hub'], navegadores: ['Chrome 120 · Windows'], contas: 50, contasNoTeto: true },
+      { chave: 'b'.repeat(32), origem: 'api', tipo: 'excecao', mensagem: 'KeyError: x', onde: 'POST /api/sala/fechar',
+        pilha: 'salas.py:10 em fecha', contagem: 2, primeiraEm: AGORA - 2 * DIA, ultimaEm: AGORA - 3600, versoes: [], telas: [],
+        navegadores: [], contas: 0, contasNoTeto: false }
+    ];
+    var c = { sessao: copia(SESSAO_MESTRE), rotas: {
+      'GET /api/eu': [200, { ok: true, conta: { id: 1, nome: 'Guia', email: 'guia@exemplo.com', gm: true } }],
+      'GET /api/saude': SAUDE,
+      'GET /api/loja/catalogo': [200, { ok: true, itens: [], pacotes: [] }],
+      'GET /api/mestre/presentes': [200, { ok: true, presentes: [] }],
+      'GET /api/mestre/alertas': [200, { ok: true, alertas: [] }],
+      'GET /api/mestre/erros': function () { return [200, { ok: true, agora: AGORA, retencaoDias: 30, total: lista.length, vezes: 1236, ultimas24h: 2, mais: false, erros: copia(lista) }]; },
+      'POST /api/mestre/erros/apagar': function (corpo) { lista = lista.filter(function (e) { return e.chave !== corpo.chave; }); return [200, { ok: true, apagados: 1 }]; }
+    } };
+    var p = await abre('mestre.html', c);
+    await ate(function () { return visivel(p.$('ms-erros-bloco')) && p.qq('#er-lista li[data-chave]').length === 2; });
+    var itens = p.qq('#er-lista li[data-chave]');
+    check('mestre: a lista de erros aparece com o painel (os dois grupos)', itens.length === 2, itens.length + ' itens');
+    check('mestre: a mensagem que veio de fora é texto, não HTML', !p.q('#er-lista img') && !p.w.__xss &&
+          /<img src=x/.test(texto(itens[0])));
+    check('mestre: contagem, contas no teto, versões e a pilha', /×1\.234|×1234/.test(texto(itens[0])) && /50 ou mais conta/.test(texto(itens[0])) &&
+          /3fa2b1c9d0e1/.test(texto(itens[0])) && !!itens[0].querySelector('details pre'), texto(itens[0]).slice(0, 200));
+    check('mestre: a exceção da API leva a etiqueta API', /^API/.test(texto(itens[1].querySelector('.er-origem'))));
+    itens[1].querySelector('[data-resolver]').click();
+    await ate(function () { return p.qq('#er-lista li[data-chave]').length === 1; });
+    var pa = pedidos(c, 'POST', '/api/mestre/erros/apagar');
+    check('mestre: "resolvido" manda a chave e a lista se refaz', pa.length === 1 && pa[0].corpo.chave === 'b'.repeat(32) &&
+          p.qq('#er-lista li[data-chave]').length === 1);
+  }
+
+  (async function () {
+    try {
+      await cenaDocumentos();
+      await cenaCadastro();
+      await cenaMinhaConta();
+      await cenaMestre();
+      var vazados = TODOS.filter(function (r) { return SEGREDOS.some(function (s) { return r.url.indexOf(s) >= 0; }); });
+      check('nenhum pedido leva senha, e-mail ou token na URL (' + TODOS.length + ' pedidos)', TODOS.length > 10 && !vazados.length,
+            vazados.map(function (r) { return r.url; }).join(' '));
+    } catch (e) {
+      check('a prova rodou até o fim', false, e && (e.stack || e.message));
+    }
+    fecha();
+  })();
+})();
+</script>
+</body>
+</html>

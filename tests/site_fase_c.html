@@ -571,6 +571,7 @@
     p.$('c-aviso').className = 'aviso';
     digita(p.$('c-nome'), nome); digita(p.$('c-email'), 'joana@exemplo.com');
     digita(p.$('c-senha'), SENHA_NOVA); digita(p.$('c-senha2'), SENHA_NOVA);
+    if (p.$('c-aceite')) p.$('c-aceite').checked = true;   // 02/10: o aceite dos Termos é obrigatório
     envia(p.$('painel-criar'));
   }
   function avisoErro(p) { return /\berro\b/.test(p.$('c-aviso').className) && !!texto(p.$('c-aviso')); }

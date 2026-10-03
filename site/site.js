@@ -53,6 +53,11 @@
   var CHAVE_SESSAO = 'soterra-sessao';
   var CHAVE_API = 'soterra-api-base';
   var SITE = window.SITE = {};
+  /* 02/10: a versão dos Termos de Uso e da Política de Privacidade que estas
+   * páginas mostram (site/termos.html e privacidade.html, data-versao). O
+   * cadastro manda esta no `aceiteTermos`; o servidor (servidor/privacidade.py,
+   * VERSAO_TERMOS) recusa outra. tests/privacidade_api.py pega a deriva. */
+  SITE.VERSAO_TERMOS = '2026-10-02';
 
   function leLocal(chave) {
     try { return localStorage.getItem(chave); } catch (e) { return null; }

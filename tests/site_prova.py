@@ -765,6 +765,12 @@ def prova_mestre(abre):
 
 
 # ---- a integração com a API de verdade (--api-real) --------------------------------
+def versao_termos():
+    """02/10: a versão dos Termos de Uso que o cadastro exige aceitar (servidor/privacidade.py)."""
+    with open(os.path.join(RAIZ, 'servidor', 'privacidade.py'), encoding='utf-8') as f:
+        return re.search(r"VERSAO_TERMOS = '([^']+)'", f.read()).group(1)
+
+
 def pede(base, metodo, rota, corpo=None, token=None):
     dados = None if corpo is None else json.dumps(corpo).encode('utf-8')
     req = urllib.request.Request(base + rota, data=dados, method=metodo)
@@ -805,7 +811,7 @@ def prova_api_real(chrome, pasta, site):
         if not subiu:
             return
         st, r = pede(base, 'POST', '/api/cadastro', {'nome': 'Pia Forte', 'email': 'pia@soterra.test',
-                                                     'senha': 'segredo-bom-8'})
+                                                     'senha': 'segredo-bom-8', 'aceiteTermos': versao_termos()})
         check('api real: a conta nasce', st == 201, str(r)[:120])
         token = r.get('token')
         herois = {'sumo': {'classId': 'sumo', 'xp': 5000, 'level': 15, 'element': 'fogo', 'items': {}, 'itemVar': {}},
@@ -821,7 +827,7 @@ def prova_api_real(chrome, pasta, site):
         # o Mestre é OUTRA conta: desde 10/09 a equipe fica fora do ranking, e
         # Pia tem de continuar nas tabelas. A marca é do sqlite, como no teste da caixa
         st, r = pede(base, 'POST', '/api/cadastro', {'nome': 'Guia Firme', 'email': 'guia.firme@soterra.test',
-                                                     'senha': 'segredo-bom-8'})
+                                                     'senha': 'segredo-bom-8', 'aceiteTermos': versao_termos()})
         check('api real: a conta do Mestre nasce', st == 201, str(r)[:120])
         token_m, cid_m = r.get('token'), (r.get('conta') or {}).get('id')
         con = sqlite3.connect(banco)

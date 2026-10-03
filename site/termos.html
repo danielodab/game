@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termos de Uso — SOTERRA</title>
+<script>
+  // a folha com o hash do build (o mapa de js/versao.js); sem mapa (em casa), o
+  // carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  Os Termos de Uso (02/10). Texto VERDADEIRO ao código: cada número que tem dono
+  no servidor ou no jogo leva data-regua="NOME" e tests/privacidade_api.py confere
+  com a constante (SESSAO_DIAS, TETO_CENTAVOS_DIA, VINTENS_POR_BARRA…). O que não
+  existe no código (razão social, CNPJ, contato, foro, idade mínima) fica como
+  [PREENCHER: …] — nunca inventado. Um advogado revisa antes do lançamento
+  (docs/REVISAO_JURIDICA.md). A versão (data-versao) anda junto com a Política de
+  Privacidade, com servidor/privacidade.py (VERSAO_TERMOS) e com site/site.js.
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="wiki.html">Wiki</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao documento">
+  <div class="miolo">
+    <h2>Termos de Uso</h2>
+    <p class="sub">Versão de <b>02/10/2026</b>. Estas são as regras para usar o SOTERRA — Ecos do Mundo Enterrado: o jogo, o site e a conta. Leia junto com a <a href="privacidade.html">Política de Privacidade</a>, que diz o que guardamos sobre você e por quanto tempo.</p>
+
+    <nav class="indice" aria-label="Índice">
+      <a href="#quem">1. Quem oferece o jogo</a>
+      <a href="#aceite">2. O aceite e as mudanças</a>
+      <a href="#idade">3. Idade mínima e menores</a>
+      <a href="#conta">4. A sua conta</a>
+      <a href="#moedas">5. Barras de ouro, vinténs e compras</a>
+      <a href="#arrependimento">6. Arrependimento e estorno</a>
+      <a href="#sorteios">7. Sorteios no jogo</a>
+      <a href="#mercadinho">8. Mercadinho e trocas</a>
+      <a href="#conduta">9. Regras de conduta</a>
+      <a href="#punicoes">10. Suspensão e banimento</a>
+      <a href="#excluir">11. Excluir a conta</a>
+      <a href="#servico">12. O serviço e as mudanças no jogo</a>
+      <a href="#propriedade">13. Propriedade intelectual</a>
+      <a href="#responsabilidade">14. Responsabilidade</a>
+      <a href="#foro">15. Lei aplicável e foro</a>
+      <a href="#contato">16. Contato</a>
+    </nav>
+
+    <article class="texto-legal" id="documento" data-documento="termos" data-versao="2026-10-02">
+
+      <h3 id="quem">1. Quem oferece o jogo</h3>
+      <p>O SOTERRA é oferecido por <span class="preencher">[PREENCHER: razão social]</span>, inscrita no CNPJ <span class="preencher">[PREENCHER: CNPJ]</span>, que nestes termos chamamos de “nós”. O contato é <span class="preencher">[PREENCHER: e-mail de contato]</span>.</p>
+
+      <h3 id="aceite">2. O aceite e as mudanças</h3>
+      <p>Para criar uma conta você marca a caixa “Li e aceito os Termos de Uso e a Política de Privacidade”. O servidor guarda <b>qual versão</b> você aceitou e <b>quando</b>. Sem esse aceite a conta não é criada.</p>
+      <p>Se mudarmos estes termos de um jeito que mude os seus direitos ou deveres, a versão nova ganha outra data, avisamos na página da conta e pedimos o aceite de novo. Jogar sem conta (o jogo aberto direto do disco, sem servidor) não depende de aceite: nada sai do seu computador.</p>
+
+      <h3 id="idade">3. Idade mínima e menores</h3>
+      <p>Para criar uma conta é preciso ter pelo menos <span class="preencher">[PREENCHER: idade mínima — a confirmar com o advogado e com a classificação indicativa]</span>. Quem tem menos de 18 anos só pode criar conta e comprar com a autorização e o acompanhamento dos pais ou responsáveis, que respondem pelas compras feitas na conta.</p>
+      <p>O que fazemos para crianças e adolescentes, em linha com o Estatuto Digital da Criança e do Adolescente (Lei 15.211/2025) e com a LGPD:</p>
+      <ul>
+        <li>não há propaganda de terceiros no jogo nem no site, e não traçamos perfil de ninguém para publicidade;</li>
+        <li>a <b>roleta</b> do jogo (o único sorteio de prêmio) é paga <b>só com selos de chefe</b>, que se ganham vencendo chefes nos calabouços; selos e giros <b>não são vendidos</b> por dinheiro nem por barras de ouro, e <b>nunca serão</b> (ver a seção 7);</li>
+        <li>nenhum produto da loja tem conteúdo sorteado: quem compra sabe exatamente o que recebe;</li>
+        <li>o chat não é gravado no servidor (a Política de Privacidade explica);</li>
+        <li>pais e responsáveis podem pedir, pelo contato da seção 16, o acesso aos dados ou a exclusão da conta de um menor.</li>
+      </ul>
+
+      <h3 id="conta">4. A sua conta</h3>
+      <ul>
+        <li>Uma conta é de <b>uma pessoa só</b>. Guarde a senha: ninguém da equipe pede a sua senha, nunca.</li>
+        <li><b>Um aparelho por vez:</b> entrar em outro aparelho encerra a sessão do anterior.</li>
+        <li>O jogo desliga a sessão depois de <b data-regua="INATIVO_MIN">15</b> minutos sem jogar, para não ocupar o servidor à toa.</li>
+        <li>Uma sessão sem uso por <b data-regua="SESSAO_DIAS">30</b> dias vence; aí é preciso entrar de novo.</li>
+        <li>O nome de jogador não pode imitar a equipe do jogo (GM, Admin, Moderador, Mestre do Fundo e disfarces deles), nem ofender ninguém. O servidor recusa os nomes reservados; os ofensivos podem ser trocados ou punidos (seção 10).</li>
+        <li>Você responde pelo que for feito na sua conta. Se achar que alguém entrou nela, troque a senha na página da conta (isso encerra as outras sessões).</li>
+      </ul>
+
+      <h3 id="moedas">5. Barras de ouro, vinténs e compras</h3>
+      <p>O SOTERRA tem duas moedas, as duas <b>virtuais</b>:</p>
+      <ul>
+        <li><b>Barras de ouro</b> — compradas com dinheiro de verdade em pacotes na loja do site, ou trocadas por vinténs (<b data-regua="VINTENS_POR_BARRA_FARMADA">80</b> vinténs por barra). As barras ficam na conta e se gastam na loja do site.</li>
+        <li><b>Vinténs</b> — ganhos jogando (salas, missões, mercadinho), ou comprados na loja com barras (<b data-regua="VINTENS_POR_BARRA">20</b> vinténs por barra).</li>
+      </ul>
+      <p>Barras, vinténs, itens, personagens e tudo o que existe dentro do jogo <b>não têm valor em dinheiro fora do SOTERRA</b>: não se trocam por dinheiro, não se resgatam, não se transferem para fora do jogo e não são reembolsados em dinheiro, a não ser nos casos que a lei garante (seção 6). Você recebe uma licença de uso desses conteúdos dentro do jogo, enquanto a conta existir.</p>
+      <p>Os pagamentos são feitos no <b>Mercado Pago</b> (Pix ou cartão), na página dele. Nós não vemos nem guardamos o número do cartão nem os dados do pagamento. As barras entram na conta assim que o Mercado Pago confirma o pagamento. Para proteger a conta e quem paga, o servidor aceita no máximo <b data-regua="TETO_REAIS_DIA">R$ 400,00</b> em pacotes por conta a cada 24 horas; o que passar disso espera a análise da equipe. O link de pagamento vale <b data-regua="PAGAMENTO_HORAS">2</b> horas.</p>
+      <p>Os preços aparecem na loja, em reais, antes da compra. Podemos mudar preços e produtos para o futuro; uma compra já paga não muda.</p>
+
+      <h3 id="arrependimento">6. Arrependimento e estorno</h3>
+      <p>Você pode desistir de uma compra de barras de ouro em até <b>7 dias</b> depois do pagamento (Código de Defesa do Consumidor, art. 49), desde que as barras daquele pacote <b>não tenham sido usadas</b>. Peça pelo contato da seção 16, dizendo o nome da conta e a data da compra. O dinheiro volta pelo mesmo meio de pagamento, pelo Mercado Pago, e as barras do pacote saem da conta.</p>
+      <p>Se um pagamento for estornado ou contestado no banco ou no cartão, as barras daquele pagamento que ainda estiverem na conta saem dela, e a equipe analisa o que já tinha sido gasto.</p>
+      <p><b>Peça o arrependimento antes de excluir a conta:</b> depois da exclusão não há mais saldo para devolver nem como provar de quem era a compra (seção 11).</p>
+
+      <h3 id="sorteios">7. Sorteios no jogo</h3>
+      <ul>
+        <li><b>A roleta do Colecionador</b> sorteia uma peça do Traje do Colecionador. Cada giro custa <b data-regua="SELOS_POR_GIRO">10</b> selos de chefe, que só os chefes derrubam. Selos e giros não estão à venda — nem por dinheiro, nem por barras de ouro, nem por vinténs — e esse compromisso não muda: a roleta <b>nunca será vendida por dinheiro</b>.</li>
+        <li><b>O saque</b> dos monstros é sorteado, como em todo jogo de calabouço, e não se paga para sortear.</li>
+        <li><b>A forja</b> melhora uma peça usando pedras de forja e pode falhar. As pedras se ganham jogando e também se vendem na loja (em quantidade certa, sem sorteio na compra).</li>
+      </ul>
+
+      <h3 id="mercadinho">8. Mercadinho e trocas</h3>
+      <p>Entre jogadores, itens e pedras circulam só pelo mercadinho do jogo (em vinténs, com uma taxa de <b data-regua="TAXA_MERCADO">5</b>% do preço final) e pelas trocas dentro do jogo. É proibido vender, comprar ou trocar contas, itens, barras ou vinténs <b>por dinheiro de verdade</b> ou por qualquer coisa fora do SOTERRA. O servidor confere cada troca: não há como recuperar o que foi trocado com outra pessoa.</p>
+
+      <h3 id="conduta">9. Regras de conduta</h3>
+      <p>Não é permitido:</p>
+      <ul>
+        <li><b>trapacear</b>: alterar o jogo, o save ou os pedidos ao servidor, usar programas de terceiros, robôs ou automação para jogar;</li>
+        <li><b>abusar de defeito</b> (bug): usar de propósito uma falha para ganhar itens, moedas, XP ou vantagem. Achou uma falha? Conte pelo contato da seção 16 e não a use;</li>
+        <li><b>ofender</b>, ameaçar, assediar ou discriminar alguém, no chat, em nomes de personagem, de guilda ou no mural;</li>
+        <li>mandar spam, golpes ou links maliciosos; se passar pela equipe do jogo;</li>
+        <li>publicar dados pessoais de outras pessoas;</li>
+        <li><b>vender, comprar, emprestar ou compartilhar a conta</b>, ou negociar itens e moedas por dinheiro (seção 8);</li>
+        <li>atrapalhar de propósito o servidor ou o jogo dos outros.</li>
+      </ul>
+
+      <h3 id="punicoes">10. Suspensão e banimento</h3>
+      <p>Quem descumpre estes termos pode receber, conforme a gravidade e a repetição: um aviso; a remoção do que foi obtido de forma irregular (itens, moedas, posições no ranking); a suspensão da conta por um tempo; ou o <b>banimento</b> (a conta para de entrar). Trapaça, venda de conta e abuso de defeito para ganhar itens ou moedas podem levar ao banimento direto.</p>
+      <p>Itens, barras e vinténs de uma conta banida por descumprir estes termos não são devolvidos em dinheiro, a não ser quando a lei exigir. Se você acha que a medida foi um engano, escreva para o contato da seção 16: a equipe revê.</p>
+
+      <h3 id="excluir">11. Excluir a conta</h3>
+      <p>Você pode excluir a conta quando quiser, na <a href="conta.html">página da conta</a> ou no jogo (ficha <i>Contas</i>), digitando o nome da conta e a senha. A exclusão <b>não tem volta</b>: o save, os itens, os personagens, as barras de ouro e os vinténs que sobrarem somem junto. Se você lidera uma guilda, a liderança passa ao membro mais antigo; se for o único membro, a guilda se desfaz. O que é apagado e o pouco que a lei obriga a guardar estão na <a href="privacidade.html#excluir">Política de Privacidade</a>.</p>
+      <p>A exclusão espera terminar uma luta com outros jogadores (duelo, sala em grupo, Arena ou guerra) e um pagamento que ainda esteja em andamento no Mercado Pago.</p>
+
+      <h3 id="servico">12. O serviço e as mudanças no jogo</h3>
+      <p>O SOTERRA é um jogo vivo: regras, equilíbrio, calabouços, itens, preços e eventos mudam com o tempo, e uma mudança pode deixar um item ou personagem mais forte ou mais fraco. O jogo pode ficar fora do ar para manutenção ou por falha, e não garantimos que funcione sem interrupção nem em todo aparelho. Se um dia o SOTERRA for encerrado, avisaremos com antecedência no site.</p>
+
+      <h3 id="propriedade">13. Propriedade intelectual</h3>
+      <p>O jogo, a arte própria, os textos, os nomes e as marcas do SOTERRA são de <span class="preencher">[PREENCHER: razão social]</span> ou de quem os licenciou. Parte da arte vem de acervos livres (CC0) — KayKit, Quaternius e Kenney —, com os créditos no repositório do jogo. Você não pode copiar, vender ou distribuir o jogo nem partes dele fora do que estes termos permitem.</p>
+
+      <h3 id="responsabilidade">14. Responsabilidade</h3>
+      <p>Cuidamos do servidor, dos dados e da conta com o cuidado descrito na Política de Privacidade. Não respondemos por perdas causadas por quem você deixou entrar na sua conta, por trocas que você fez com outros jogadores, nem por falhas da sua conexão ou do seu aparelho. Nada nestes termos tira direitos que o Código de Defesa do Consumidor garante.</p>
+
+      <h3 id="foro">15. Lei aplicável e foro</h3>
+      <p>Estes termos seguem as leis do Brasil. Fica eleito o foro da comarca de <span class="preencher">[PREENCHER: cidade do foro]</span>, sem prejuízo do direito do consumidor de propor a ação no foro do próprio domicílio (Código de Defesa do Consumidor, art. 101, I).</p>
+
+      <h3 id="contato">16. Contato</h3>
+      <p>Dúvidas, pedidos de arrependimento, avisos de defeito e contestação de punição: <span class="preencher">[PREENCHER: e-mail de contato]</span>. Assuntos de dados pessoais: o encarregado indicado na <a href="privacidade.html#encarregado">Política de Privacidade</a>.</p>
+    </article>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo">
+    <span class="marca">SOTERRA</span>
+    Ecos do Mundo Enterrado
+    <br><a href="termos.html" aria-current="page">Termos de Uso</a> · <a href="privacidade.html">Privacidade</a> · <a href="conta.html">Conta</a>
+  </div>
+</footer>
+
+<script>
+/* só o site.js: ele preenche o topo ("Olá, nome · sair") no DOMContentLoaded.
+ * A página é texto e não chama a API. */
+(function () {
+  ['site.js'].forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+</body>
+</html>

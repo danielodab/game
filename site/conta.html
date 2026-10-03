@@ -87,6 +87,11 @@
       <p class="dica">Pelo menos 8 caracteres.</p>
       <label for="c-senha2">Repita a senha</label>
       <input type="password" id="c-senha2" autocomplete="new-password" required>
+      <!-- 02/10: o aceite (obrigatório; o servidor grava a versão e o dia) -->
+      <label class="aceite" for="c-aceite">
+        <input type="checkbox" id="c-aceite" required>
+        <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span>
+      </label>
       <div class="aviso" id="c-aviso"></div>
       <button type="submit" class="btn btn-ouro" id="c-bt">Criar conta e jogar</button>
       <div class="rodape-conta"><span class="apoio">Já tem conta?</span><a href="#entrar" id="ir-entrar">Entrar</a></div>
@@ -129,6 +134,16 @@
         <div class="aviso" id="eq-aviso2"></div>
         <button type="submit" class="btn btn-ouro" id="eq-bt2">Redefinir a senha e entrar</button>
       </form>
+    </div>
+  </div>
+
+  <!-- 02/10: depois de excluir a conta (conta_privacidade.js) -->
+  <div class="conta-caixa" id="conta-excluida" hidden>
+    <div class="painel ligado">
+      <h3>Conta excluída</h3>
+      <p>A sua conta saiu do servidor. Se o envio de e-mails estiver ligado, chega uma confirmação no e-mail que era da conta.</p>
+      <p class="apoio">O jogo neste navegador ainda pode ter um save local (só nesta máquina). Para apagá-lo, limpe os dados do site no navegador.</p>
+      <a class="btn" href="index.html">Voltar ao início</a>
     </div>
   </div>
 
@@ -222,12 +237,52 @@
         <ul class="lista-atividade" id="mc-atividade"></ul>
       </section>
 
+      <!-- 02/10: os direitos do titular (conta_privacidade.js): o aceite que falta,
+           baixar os dados e excluir a conta -->
+      <section class="bloco largo" id="bl-privacidade">
+        <h3>Privacidade e dados</h3>
+        <div class="aceite-pendente" id="pv-aceite" hidden>
+          <p><b>Os Termos de Uso e a Política de Privacidade foram publicados (ou mudaram).</b> Leia e aceite para seguir com a conta em dia.</p>
+          <label class="aceite" for="pv-aceite-caixa">
+            <input type="checkbox" id="pv-aceite-caixa">
+            <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span>
+          </label>
+          <button type="button" class="btn btn-ouro" id="pv-aceitar">Aceitar</button>
+        </div>
+        <p class="apoio" id="pv-aceite-ok"></p>
+        <div class="pv-linha">
+          <div>
+            <h4>Baixar meus dados</h4>
+            <p class="apoio">Um arquivo JSON com tudo o que o servidor guarda desta conta: os dados, o save, as sessões, a atividade, as compras.</p>
+            <button type="button" class="btn btn-borda" id="pv-baixar">Baixar meus dados</button>
+          </div>
+          <div>
+            <h4>Excluir a conta</h4>
+            <p class="apoio">Apaga a conta, o save, os itens, as barras e os vinténs, sem volta. Fica só o registro dos pagamentos, sem o seu nome e o seu e-mail (<a href="privacidade.html#excluir">o que sai e o que fica</a>).</p>
+            <button type="button" class="btn btn-perigo" id="pv-excluir-abre">Excluir a conta…</button>
+          </div>
+        </div>
+        <form id="pv-excluir" class="pv-excluir" novalidate hidden>
+          <p><b>Isto não tem volta.</b> Para confirmar, digite o nome da conta, <b id="pv-nome-conta"></b>, e a senha.</p>
+          <label for="pv-nome">Nome da conta</label>
+          <input type="text" id="pv-nome" autocomplete="off" spellcheck="false" maxlength="40">
+          <label for="pv-senha">Senha</label>
+          <input type="password" id="pv-senha" autocomplete="current-password">
+          <div class="botoes-linha">
+            <button type="button" class="btn" id="pv-excluir-volta">Voltar</button>
+            <button type="submit" class="btn btn-perigo" id="pv-excluir-bt" disabled>Excluir a conta para sempre</button>
+          </div>
+        </form>
+        <div class="aviso" id="pv-aviso"></div>
+      </section>
+
     </div>
   </div>
 </div>
 
 <footer class="rodape">
-  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado</div>
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado
+    <br><a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Privacidade</a></div>
 </footer>
 
 <script>
@@ -235,7 +290,7 @@
  * no cache não pode falar com o servidor novo — mudou, muda o endereço. O
  * nome e a cor das classes (os retratos) vêm do próprio jogo (classes.js). */
 (function () {
-  ['site.js', '../js/core/data/classes.js', 'conta.js'].forEach(function (s) {
+  ['site.js', '../js/core/data/classes.js', 'conta.js', 'conta_privacidade.js'].forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

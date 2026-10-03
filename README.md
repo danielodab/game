@@ -94,6 +94,7 @@ js/
                         (a regra deles; o motor só chama — ver docs/SISTEMAS.md §6)
     progress.js         save, inventário, forja, estrelas, coleção
     game.js             a máquina de estados entre telas
+    registro_erros.js   02/10: o erro no navegador de quem joga chega ao Mestre (o 1º script)
   render3d/
     models3d_v2.js      modelos, "looks" de classe, enxerto de peça, retratos
     renderer3d_v2.js    tabuleiro, câmera, clima, sobreposições, armadilhas
@@ -221,6 +222,10 @@ jogador. Página nova sem essa linha é bug.
 | **`eco_hud.html`** | a ficha do Eco, a linha da sala na batalha, a tela do fim (treino e conferido pelo servidor), o aviso do prêmio, e o título "Voz do Eco" ganho aparece no menu da ficha do Personagem e pendura, e o cais da praça com as 7 portas cabe a 320, 360 e 390 px (43 de 43) |
 | **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1. `Engine.VERSAO_REGRAS` é **6** desde 03/10 — uma subida só para o equilíbrio, o chão do Poço e o Eco Primordial |
 | `validate_classes.html` | 7.088 checagens, **7 falhas** — o teste crava `starCosts = [5,15,30,55,90]` e o dado é `[5,15,35,65,110]` (a escada de 30/08); as mesmas antes e depois de 03/10 |
+| **`privacidade_api.py`** (Python, API) | 11 de 11 (02/10) — o cadastro exige o aceite da versão de agora e o grava; excluir pede o nome exato e a senha e espera luta e pagamento abertos; depois, NENHUMA linha do esquema aponta para a conta (lido do `sqlite_master`), fica só o dinheiro sem a conta, a guilda passa ao mais antigo; baixar meus dados; a faxina dos prazos no boot; cada número das páginas `site/termos.html` e `privacidade.html` bate com a constante |
+| **`registros_api.py`** (Python, API) | 9 de 9 (02/10) — o registro de erros: repetidos numa linha, nada de e-mail/IP/token no banco, cortes, freio por endereço, 30 dias, o painel do Mestre e a exceção da própria API |
+| **`privacidade_navegador.py`** (Chrome, pela vez da máquina) | 11 de 11 (03/10) — `site_privacidade.html` 38/38 (termos, privacidade, o aceite no cadastro, o bloco da conta, o painel de erros, com fetch falso), `site_fase_c.html` 129/129 e `privacidade_jogo.html` 14/14: o jogo INTEIRO contra a API de verdade — o erro lançado chega ao banco, a ficha Contas baixa os dados e exclui a conta |
+| **`registro_erros.js`** (Node) | 40 de 40 (02/10) — o cliente (`js/core/registro_erros.js`): junta, limita, limpa a pilha, nada em `file://`, e é o primeiro script do `index.html` |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |

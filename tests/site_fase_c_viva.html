@@ -148,6 +148,7 @@
     await abre('conta.html', 'criar');
     await ate(function () { return visivel($('painel-criar')); });
     digita('c-nome', viva.nome); digita('c-email', viva.email); digita('c-senha', viva.senha1); digita('c-senha2', viva.senha1);
+    $('c-aceite').checked = true;   // 02/10: o aceite dos Termos é obrigatório
     envia('painel-criar');
     await ate(function () { var x = sessao(); return x && x.token; });
     var ses = sessao();

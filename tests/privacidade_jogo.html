@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a ficha Contas do jogo: privacidade e o registro de erros</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace}
+#summary{padding:6px 10px;margin:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:1280px;height:800px;border:0}</style>
+</head>
+<body>
+<!-- A PROVA DO JOGO DE VERDADE (02/10), contra a API de verdade. Quem a roda é o
+     tests/privacidade_navegador.py: ele sobe a API, cria a conta e abre esta página com
+     ?api=…&token=…&id=…&nome=…&senha=…&relatar=1. A página põe a sessão no navegador
+     (a chave que o site grava) e abre o index.html INTEIRO num iframe, com ?api=. Cobra:
+       - o registro de erros está ligado no jogo servido: um erro lançado de propósito
+         chega ao servidor (o driver confere a linha no banco, com a conta);
+       - a ficha Contas, logada, tem os links dos Termos e da Política, "Baixar meus
+         dados" e "Excluir conta…";
+       - Baixar meus dados entrega um .json com o e-mail da conta;
+       - a ficha de excluir só acende o botão com o nome EXATO e uma senha;
+       - excluída, a ficha "Conta excluída" aparece e a sessão sai do navegador; o
+         token velho leva 401 na API.
+     O resultado vai por POST a /__resultado. Não carrega o save_sandbox.js: o jogo
+     corre no iframe, com o armazenamento do perfil descartável do Chrome da prova. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<iframe id="f"></iframe>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.slice(1).split('&').forEach(function (kv) {
+    var i = kv.indexOf('=');
+    if (i > 0) Q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' '));   // o urlencode do Python põe '+' no espaço
+  });
+  var falhas = 0, total = 0, linhas = [];
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var t = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra ? ' — ' + extra : '');
+    linhas.push(t);
+    var d = document.createElement('div');
+    d.textContent = t;
+    document.getElementById('log').appendChild(d);
+  }
+  function relata(extra) {
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? 'FALHOU — ' + falhas + ' de ' + total : 'tudo passou (' + total + ')';
+    var x = new XMLHttpRequest();
+    x.open('POST', '/__resultado');
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.send(JSON.stringify({ pagina: 'privacidade_jogo', total: total, falhas: falhas, linhas: linhas, extra: extra || {} }));
+  }
+  function ate(cond, ms) {
+    return new Promise(function (r) {
+      var fim = Date.now() + (ms || 10000);
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() > fim) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var conta = { id: Number(Q.id), nome: Q.nome, gm: false };
+  localStorage.setItem('soterra-sessao', JSON.stringify({ token: Q.token, conta: conta }));
+  var f = document.getElementById('f');
+  f.src = '../index.html?api=' + encodeURIComponent(Q.api);
+
+  (async function () {
+    try {
+      var w, d;
+      var pronto = await ate(function () {
+        w = f.contentWindow; d = w.document;
+        return w.JOGO && w.JOGO.UI && w.JOGO.UI.openSheet && d.querySelector('.screen-menu.is-on, .screen.is-on');
+      }, 240000);
+      check('o jogo abriu (a tela inicial apareceu)', pronto);
+      if (!pronto) return relata();
+      // A NUVEM RECARREGA A PÁGINA ao adotar o save do servidor (js/core/nuvem.js): o window
+      // e o document de antes morrem, e um clique neles não chega a lugar nenhum. A prova
+      // espera o quadro ficar o MESMO por 5 s, com o menu e a Nuvem logada, e só então pega
+      // w, d e JOGO — de novo
+      var estavel = await (async function () {
+        var fim = Date.now() + 180000;
+        while (Date.now() < fim) {
+          var w0 = f.contentWindow;
+          await espera(5000);
+          var w1 = f.contentWindow, ok = false;
+          try {
+            var e = w1.JOGO && w1.JOGO.Nuvem && w1.JOGO.Nuvem.estado();
+            ok = w1 === w0 && w1.document === w0.document && !!w1.document.querySelector('.screen-menu.is-on, .screen.is-on') &&
+                 !!(e && e.sessao && e.conta);
+          } catch (eE) { ok = false; }
+          if (ok) return true;
+        }
+        return false;
+      })();
+      check('o jogo assentou (logado na Nuvem, e o quadro parou de recarregar)', estavel);
+      w = f.contentWindow; d = w.document;
+      var J = w.JOGO;
+      check('o registro de erros está ligado no jogo servido', !!(J.RegistroErros && J.RegistroErros.coletor));
+      // um erro de verdade, lançado fora de qualquer try: o window.onerror do jogo o pega. A
+      // função nasce DENTRO do quadro (eval dele): a exceção de uma função desta página iria
+      // para o window.onerror DESTA página, não para o do jogo
+      var marca = 'prova do registro ' + Q.id;
+      w.eval('setTimeout(function () { throw new Error(' + JSON.stringify(marca) + '); }, 0)');
+      await ate(function () { return J.RegistroErros.coletor.estado().envios >= 1; }, 15000);
+      check('o erro lançado virou um pedido ao servidor', J.RegistroErros.coletor.estado().envios >= 1,
+            JSON.stringify(J.RegistroErros.coletor.estado()));
+
+      await ate(function () { var e = J.Nuvem && J.Nuvem.estado(); return e && e.sessao && e.conta; }, 20000);
+      J.UI.openSheet('contas');
+      await ate(function () { return [].some.call(d.querySelectorAll('.nuvem-caixa button'), function (b) { return /Excluir conta/.test(b.textContent); }); }, 10000);
+      var caixa = d.querySelector('.nuvem-caixa');
+      var botoes = caixa ? [].map.call(caixa.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [];
+      check('a ficha Contas, logada, tem Baixar meus dados e Excluir conta…',
+            botoes.indexOf('Baixar meus dados') >= 0 && botoes.indexOf('Excluir conta…') >= 0, botoes.join(' | '));
+      var links = caixa ? [].map.call(caixa.querySelectorAll('.contas-legal a'), function (a) { return a.getAttribute('href'); }) : [];
+      check('os links dos Termos e da Política, noutra aba',
+            links.length === 2 && /site\/termos\.html$/.test(links[0]) && /site\/privacidade\.html$/.test(links[1]) &&
+            [].every.call(caixa.querySelectorAll('.contas-legal a'), function (a) { return a.target === '_blank'; }), links.join(' | '));
+
+      // baixar: o Blob e o clique no <a download> ficam anotados
+      var baixado = null, respostaDados = null, errosDoJogo = [];
+      w.addEventListener('error', function (ev) { errosDoJogo.push(String(ev.message)); });
+      var meusDadosOriginal = J.Sessao.meusDados;
+      J.Sessao.meusDados = function () {
+        return meusDadosOriginal.apply(this, arguments).then(function (r) { respostaDados = r; return r; });
+      };
+      function toastAgora() { var t = d.querySelector('.ui-toast'); return t ? t.textContent : '(sem toast)'; }
+      // só o Blob JSON é anotado: o jogo também usa createObjectURL (as texturas) e segue o original
+      var criaOriginal = w.URL.createObjectURL, clicaOriginal = w.HTMLAnchorElement.prototype.click;
+      w.URL.createObjectURL = function (b) {
+        if (b && b.type === 'application/json') { baixado = { blob: b }; return 'blob:prova-dados'; }
+        return criaOriginal.apply(this, arguments);
+      };
+      w.HTMLAnchorElement.prototype.click = function () {
+        if (baixado && this.download && this.href === 'blob:prova-dados') { baixado.nome = this.download; return; }
+        return clicaOriginal.call(this);
+      };
+      var toasts = [];
+      var tEl = d.querySelector('.ui-toast');
+      if (tEl) new w.MutationObserver(function () { toasts.push(tEl.textContent); }).observe(tEl, { childList: true, characterData: true, subtree: true });
+      var btBaixar = [].filter.call(caixa.querySelectorAll('button'), function (b) { return b.textContent.trim() === 'Baixar meus dados'; })[0];
+      var viuClique = false;
+      btBaixar.addEventListener('click', function () { viuClique = true; });
+      var diag = 'no DOM ' + d.contains(btBaixar) + ', disabled ' + btBaixar.disabled + ', classe ' + btBaixar.className;
+      btBaixar.click();
+      await espera(200);
+      diag += ', clique visto ' + viuClique + ', toasts ' + JSON.stringify(toasts);
+      await ate(function () { return baixado && baixado.nome; }, 15000);
+      var conteudo = baixado ? await baixado.blob.text() : '';
+      check('Baixar meus dados entrega um .json com o e-mail desta conta',
+            !!baixado && /^soterra-meus-dados-\d{8}\.json$/.test(baixado.nome) && conteudo.indexOf(Q.email) >= 0,
+            baixado ? baixado.nome + ' / ' + conteudo.slice(0, 120)
+                    : 'nada baixado; resposta ' + JSON.stringify(respostaDados && { status: respostaDados.status, ok: respostaDados.ok, erro: respostaDados.erro }) +
+                      '; ' + diag + '; toasts depois ' + JSON.stringify(toasts) + '; erros ' + JSON.stringify(errosDoJogo));
+      w.HTMLAnchorElement.prototype.click = clicaOriginal;
+      w.URL.createObjectURL = criaOriginal;
+      // a ficha pode ter sido redesenhada (os modelos terminando de abrir chamam UI.repaint): o botão
+      // de agora, não o de antes
+      J.UI.openSheet('contas');
+      await ate(function () { return [].some.call(d.querySelectorAll('.nuvem-caixa button'), function (b) { return /Excluir conta/.test(b.textContent); }); }, 10000);
+      caixa = d.querySelector('.nuvem-caixa');
+
+      // excluir
+      [].filter.call(caixa.querySelectorAll('button'), function (b) { return b.textContent.trim() === 'Excluir conta…'; })[0].click();
+      await ate(function () { return d.querySelectorAll('.excluir-campo').length === 2; }, 5000);
+      var campos = d.querySelectorAll('.excluir-campo');
+      var vai = [].filter.call(d.querySelectorAll('.confirm-acts button'), function (b) { return /Excluir para sempre/.test(b.textContent); })[0];
+      function digita(el, v) { el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); }
+      var titulo = d.querySelector('.sheet-head h2');
+      check('a ficha de excluir abre com o botão apagado', campos.length === 2 && !!vai && vai.classList.contains('is-off'),
+            'ficha: ' + (titulo && titulo.textContent) + '; campos ' + campos.length + '; toast ' + toastAgora() +
+            '; erros ' + JSON.stringify(errosDoJogo));
+      if (campos.length !== 2 || !vai) return relata();
+      digita(campos[0], Q.nome.toUpperCase()); digita(campos[1], Q.senha);
+      check('com o nome em outra caixa, segue apagado', vai.classList.contains('is-off'));
+      vai.click();
+      await espera(300);
+      check('o clique no botão apagado não manda nada', !!w.JOGO.Sessao.ativa());
+      digita(campos[0], Q.nome);
+      check('o nome exato e a senha acendem o botão', !vai.classList.contains('is-off'));
+      vai.click();
+      var fim = await ate(function () { var h = d.querySelector('.sheet-head h2'); return h && /Conta excluída/.test(h.textContent); }, 20000);
+      check('excluída: a ficha "Conta excluída" aparece', fim, d.querySelector('.sheet-head h2') && d.querySelector('.sheet-head h2').textContent);
+      check('excluída: a sessão saiu do navegador', !w.JOGO.Sessao.ativa() && localStorage.getItem('soterra-sessao') === null);
+      var r = await fetch(Q.api + '/api/eu', { headers: { Authorization: 'Bearer ' + Q.token } });
+      check('excluída: o token velho leva 401 na API', r.status === 401, String(r.status));
+      relata({ marca: marca });
+    } catch (e) {
+      check('a prova rodou até o fim', false, e && (e.stack || e.message));
+      relata();
+    }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -65,6 +65,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(AQUI, '..', 'servidor'))
 import api as cartorio  # noqa: E402
 import nomes  # noqa: E402  (a lei dos nomes: o motivo que o cadastro devolve)
+import privacidade  # noqa: E402  (02/10: a versão dos Termos que o cadastro exige aceitar)
 
 # o formato de um item de ativos/proximos e de uma regra (seção 1.3 do plano)
 CHAVES_EVENTO = {'id', 'origem', 'regra', 'tipo', 'multiplicador', 'calabouco', 'titulo', 'texto', 'inicio', 'fim'}
@@ -185,10 +186,16 @@ class Cliente:
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read().decode('utf-8'))
 
-    def cadastra(self, nome, email=None, senha='segredo-bom-8'):
-        status, r = self.pede('POST', '/api/cadastro',
-                              {'nome': nome, 'email': email or (nome.replace(' ', '') + '@soterra.test'),
-                               'senha': senha})
+    def cadastra(self, nome, email=None, senha='segredo-bom-8', aceite=True):
+        """02/10: o cadastro leva o aceite dos Termos de Uso e da Política de Privacidade
+        (a versão de agora, servidor/privacidade.py); `aceite=False` cadastra sem ele (a
+        página de antes dos documentos), e um texto manda essa versão."""
+        corpo = {'nome': nome, 'email': email or (nome.replace(' ', '') + '@soterra.test'), 'senha': senha}
+        if aceite is True:
+            corpo['aceiteTermos'] = privacidade.VERSAO_TERMOS
+        elif isinstance(aceite, str):
+            corpo['aceiteTermos'] = aceite
+        status, r = self.pede('POST', '/api/cadastro', corpo)
         if r.get('ok'):
             self.token, self.conta = r['token'], r['conta']
         return status, r
@@ -750,7 +757,7 @@ class ProvaDaApi(unittest.TestCase):
         try:
             self.assertFalse(api.correio.ligado)                 # sem correio: desligado
             status, r = api.cadastro(None, {'nome': 'Guarda Um', 'email': 'guarda.um@soterra.test',
-                                            'senha': 'segredo-bom-8'})
+                                            'senha': 'segredo-bom-8', 'aceiteTermos': privacidade.VERSAO_TERMOS})
             self.assertEqual(status, 201, r)
             conta = api.conta_do_token(r['token'])
             primeira = api.ranking(None, {})[1]
@@ -933,7 +940,7 @@ class ProvaDaApi(unittest.TestCase):
             ids = {}
             for rotulo, nome in (('zeca', 'Zeca Comum'), ('guia', 'Guia Velho'), ('lia', 'Lia Limpa')):
                 status, r = api.cadastro(None, {'nome': nome, 'email': '%s.vitrine@soterra.test' % rotulo,
-                                                'senha': 'segredo-bom-8'})
+                                                'senha': 'segredo-bom-8', 'aceiteTermos': privacidade.VERSAO_TERMOS})
                 self.assertEqual(status, 201, r)
                 ids[rotulo] = r['conta']['id']
             t = int(time.time())
@@ -1749,9 +1756,9 @@ class ProvaDoAdmin(unittest.TestCase):
         cls.banco_arq = os.path.join(cls.pasta, 'soterra.db')
         api = cartorio.Api(cls.banco_arq)
         try:
-            r = api.cadastro(None, {'nome': 'Ana Clara', 'email': 'ana.clara@soterra.test', 'senha': 'segredo-bom-8'})[1]
+            r = api.cadastro(None, {'nome': 'Ana Clara', 'email': 'ana.clara@soterra.test', 'senha': 'segredo-bom-8', 'aceiteTermos': privacidade.VERSAO_TERMOS})[1]
             cls.ana, cls.token_ana = r['conta']['id'], r['token']
-            r = api.cadastro(None, {'nome': 'Beto Firme', 'email': 'beto.firme@soterra.test', 'senha': 'segredo-bom-8'})[1]
+            r = api.cadastro(None, {'nome': 'Beto Firme', 'email': 'beto.firme@soterra.test', 'senha': 'segredo-bom-8', 'aceiteTermos': privacidade.VERSAO_TERMOS})[1]
             cls.beto = r['conta']['id']
             # a vitrine de quem salvou sem nome de batismo: o nome da conta
             api.con.execute("INSERT INTO resumos(conta_id, nome, atualizado_em) VALUES (?, 'Ana Clara', ?)",
