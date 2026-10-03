@@ -1778,6 +1778,34 @@ var JOGO = (typeof window !== 'undefined')
         })(ev);
         break;
 
+      /* 03/10 — OS ESPINHOS DO MURO (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). O número
+       * sai no `damage` que vem logo atrás; aqui o porquê: lascas na cor do elemento saindo
+       * da pedra para quem encostou, um anel baixo ao pé dela e a palavra miúda acima. A
+       * tela do outro lado nem recebe o evento quando quem sangra está invisível
+       * (Game.eventoParaTela: ele leva o uid da vítima). */
+      case 'muroFere':
+        (function (ev2) {
+          var cor = ecol(ev2.element || 'neutro');
+          var pv = unitPos(ev2.uid, 0.55);
+          var pm = (ev2.x != null) ? cellPos(ev2.x, ev2.y, 0.5) : null;
+          if (pm && pv) {
+            var dx = pv.x - pm.x, dz = pv.z - pm.z, dd = Math.max(0.001, Math.sqrt(dx * dx + dz * dz));
+            for (var k = 0; k < 14; k++) {
+              spawn({ x: pm.x + dx / dd * 0.8, y: 0.25 + Math.random() * 0.7, z: pm.z + dz / dd * 0.8,
+                      vx: dx / dd * (3.5 + Math.random() * 2) + (Math.random() - 0.5) * 1.2, vy: 0.6 + Math.random(),
+                      vz: dz / dd * (3.5 + Math.random() * 2) + (Math.random() - 0.5) * 1.2,
+                      life: 0.35, color: k % 3 ? cor : '#d8d2c8', size: 0.2, grav: 2.2, drag: 1.6 });
+            }
+            shockRing({ x: pm.x, y: 0.1, z: pm.z }, cor, 0.3, 1.5, 0.35);
+          }
+          if (pv) {
+            burst(pv.x, pv.y, pv.z, 12, { color: cor, speed: 2.6, life: 0.4, size: 0.22, spread: 0.35 });
+            floater({ x: pv.x, y: pv.y + 0.75, z: pv.z }, 'espinhos', '#ffb3b3', false);
+          }
+          addShake(3);
+        })(ev);
+        break;
+
       case 'perigoRuna':
         p = unitPos(ev.uid, 0.3);
         shockRing(p, '#b98cff', 0.3, 1.6, 0.5);

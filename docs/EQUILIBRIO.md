@@ -108,11 +108,16 @@ pelo número dela — é a tabela deste documento.
   quem anda. O que ela faz bem — atirar de longe e recuar — ela faz melhor que muita
   gente. A matriz de duelos mede *o kit nas mãos da IA*; confirme com gente jogando
   (§7).
-- **Muro** vale, para a IA, a visão que ele corta e a casa que fecha ao lado de um
-  inimigo (`ai.js`, `valorDoMuro`); o muro que muda o caminho do inimigo dois turnos
+- **Muro** vale, para a IA, a visão que ele corta, a casa que fecha ao lado de um
+  inimigo e, desde 03/10, os espinhos em quem vai ficar encostado e o aperto contra a
+  pedra (`ai.js`, `valorDoMuro`, §3.6); o muro que muda o caminho do inimigo dois turnos
   depois ela não enxerga.
 - **No perfil os bonecos não andam**, então armadilha não dispara ali (ela conta nos
-  duelos).
+  duelos). Pelo mesmo motivo os **espinhos do muro** (§3.6) não contam no perfil nem na fusão:
+  o boneco termina toda vez ao lado da pedra, e o espinho existe para quem decide ficar ou sair —
+  contado ali (medido), o Minotauro do nível 20 passava a bater 80% do Bárbaro num alvo só e o
+  caminho de Água ia a 1,32× da classe — o Dique empurra o boneco contra a própria pedra. Os espinhos contam nos duelos, onde a IA do outro lado
+  decide; a colisão do empurrão (10 por casa) conta em toda parte.
 - **Item, estrela e pet ficam fora.** Um Ladino com o conjunto dele não é o Ladino nu.
 
 ---
@@ -244,8 +249,74 @@ feitiço de alvo próprio cuja área é só a casa de quem lança, o hostil é o
 depois: perfis 198/198, os oito caminhos dos dois a ±25% (Fogo do Bárbaro 0,94–1,17, do Ladino
 1,07–1,13), fusão igual.
 
+**3.6 O muro que fere quem encosta** (`engine.js`, "O MURO QUE FERE QUEM ENCOSTA"; a escolha (c) do
+dono para o Minotauro, 03/10 — §6.1). O Minotauro perdia os duelos da IA em todos os níveis e
+nenhum número o trazia (§6.1). Faltava ao verbo dele, o muro, valer alguma coisa que os DOIS lados
+enxergam. A regra:
+
+- todo muro erguido por um feitiço que declara `fere` tem **espinhos** — os treze feitiços de muro
+  do Minotauro e as vinte e quatro formas de fusão com muro (todas de dupla dele; nenhum monstro,
+  pet ou item ergue muro);
+- quem é do **outro lado** e **termina a própria vez** numa casa vizinha do muro (norte, sul, leste,
+  oeste — de quina não) leva o dano dos espinhos; o pet também, no fim da vez dele;
+- quem é **jogado contra** o muro (empurrão ou puxão que bate na pedra) leva o dano dos espinhos
+  além dos 10 por casa da colisão;
+- **uma vez por vez**: encostado em dois ou três muros, vale o que fere mais (o anel em volta de
+  alguém não multiplica o castigo);
+- **nunca fere o próprio lado**; o número é o `fere` do efeito vezes o poder de quem ergueu **na
+  hora de erguer** (como o veneno congela o poder no lance), menos a resistência da vítima ao
+  elemento do muro; sem rolagem — a IA lê o número exato e o juiz refaz igual;
+- a fonte do dano é quem ergueu (o placar do Eco conta, a dificuldade escala como qualquer golpe),
+  mas o reflexo **não** volta pelo muro (ninguém bateu em ninguém) e quem sangra nos espinhos **não
+  sai das sombras** (como na armadilha); o invisível encostado sangra e a tela do outro lado não
+  vê o golpe (o evento leva o uid da vítima — `Game.eventoParaTela` o cala);
+- o corpo grande (o Eco, 2×2) encosta por qualquer das quatro casas; ele não é empurrado, então
+  a parte do empurrão não o alcança.
+
+**O número: 30** (`fere: 30` em cada muro de `spells.js`; o mesmo nas fusões, `MURO_FERE` em
+`fusions.js` — sem passar pelo fator da forma, cujo `PAIR_TUNE` chega a 3,1 e daria 120 de base
+no nível 5; o poder da fusão entra na hora de erguer, como em todo muro). Nível 5 com o muro de caminho: 30 × 1,12 = 34; nível 30: 30 × 1,87 = 56 —
+a vida também quase dobra no caminho (130 → 255). A Primeira Pedra é neutra e não ganha o poder do
+caminho (30 × 1,09 = 33 em qualquer nível). Achado pela bancada, um número só para a classe (o
+texto de cada feitiço o diz: *"Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for
+jogado contra a pedra."*). Tentativas, médias do Minotauro nos níveis 5/12/20/30 em 336 jogos por
+nível: espinhos de 12 sem o aperto da IA 37/42/46/33; de 24 com o aperto 43/–/–/44; de 30
+**46/51/58/47**; números por degrau (40 na pedra neutra, 15–20 nos de caminho, 36 no anel)
+45/51/56/48 — o nível 20 não cede a número nenhum, e um número só lê melhor. A medida completa
+está em §4.4. No perfil e na fusão os espinhos não contam (§1.5): os bonecos não andam, e o que um
+boneco preso ao lado da pedra sangra mede o boneco, não o kit — como a armadilha.
+
+**A IA dos dois lados** (`ai.js`):
+- **quem anda** pesa terminar a vez encostado: o dano previsto (`Engine.muroFerePrevisto`, a mesma
+  conta do motor) × 1,2, e muito mais quando mata. Ficar continua possível quando o golpe dali vale
+  mais que a ferida. O pet também desvia (`runPetTurn`);
+- **quem ergue** vê o dano em quem vai ficar encostado: inteiro em quem não pode sair (preso pela
+  raiz do mesmo lance ou de antes, ou sem passo nenhum) e um terço em quem pode;
+- **o aperto**: a pedra que sobe logo ATRÁS de um inimigo, na direção de um empurrão de quem ergue
+  que ainda sai neste turno, vale a colisão e os espinhos — e o valor a põe antes do empurrão na fila.
+  É a jogada de gente com o Minotauro: pedra, Marrada. Sem ele os espinhos quase não pegavam no
+  nível 5 (menos de uma vez por partida);
+- o empurrão (`shoveCollision`) soma os espinhos quando a vítima bate num muro do outro lado.
+
+**A tela**: um colar de doze estacas de ferro ao pé da pedra (três por face, presas à grade e não ao
+escudo, que gira para encarar o inimigo), as casas vizinhas pintadas de leve na cor do elemento, a
+casa de passo que termina encostada no muro do outro lado em **vermelho**, o golpe com lascas e a
+palavra "espinhos", o som seco, e uma torrada na primeira vez que um dos seus se fere. A ficha do
+feitiço de fusão ganha a linha "Espinhos: a pedra fere 30 (mais o poder)"; o site
+(`site/wiki.js`, `site/fusoes.js`) descreve o efeito com o número.
+
+**O que a regra não abre** (provado em `tests/regras_equilibrio.js` e nas provas de cada sistema —
+`poco_perigos.js` 42/42, `eco_motor.js` 57/57, `invisivel_armadilha.js` 106/106,
+`guerra_bancada.js` 96/96): invisibilidade (sangra sem
+aparecer, e a IA do outro lado não ergue pedra para quem não vê), armadilha (a armadilha ao pé do
+muro segue §3.2; a IA não desvia dela por causa da pedra — desvia da pedra, que todos veem), o Poço
+(a pedra sobre o chão rachado segue a regra de lá; os perigos e a pedra somam pesos separados), o
+Eco 2×2 (uma vez por vez, de quina não, o placar conta) e a guerra 2×2 (`tests/guerra_bancada.js`:
+os quatro clientes e o juiz chegam ao mesmo hash). Sobe nada em `VERSAO_REGRAS`: o 6 ainda não foi
+ao ar, e esta regra entra nele (o comentário do `engine.js` a lista).
+
 Cada regra desta seção tem prova direta, num lance só: `node tests/regras_equilibrio.js`
-(29 de 29; na base `39a6ae9` 15 de 28, uma falha por regra).
+(29 de 29 até §3.5; com os espinhos, 62 de 62).
 
 ## 4. Antes e depois
 
@@ -376,6 +447,47 @@ abrir o um contra um, ele é o primeiro a rever.
 | Xamã | 0.77 → **0.61** | 0.83 → **0.72** | 14 → **10** | 0.73 → **0.64** | 7.5 → **6.5** |
 | Minotauro | 0.36 → **0.50** | 0.35 → **0.51** | 78 → **156** | 1.43 → **1.90** | 2.8 → **2.8** |
 
+### 4.4 Depois dos espinhos (03/10, a escolha (c) do dono — §3.6 e §6.1)
+
+Medida completa dos duelos (11 sementes, 154 jogos por célula, 924 por média) na árvore com o muro
+de espinhos, contra a última medida completa de antes (a da revisão, §4 acima):
+
+| | antes (revisão) | depois dos espinhos |
+|---|---|---|
+| duelos em dupla: células em 40–60% | 60 de 84 | **70 de 84** |
+| duelos em dupla: médias de classe em 45–55% | 21 de 28 | **24 de 28** |
+| Minotauro, média nos níveis 5 / 12 / 20 / 30 | 35% / 45% / 44% / 33% | **44% / 55% / 55% / 47%** |
+| perfis (papel e caminhos) | 198 de 198 | **198 de 198** |
+| fusão a ±20% (prova rápida, 8 misturas) | 118 de 126 | **118 de 126** (as mesmas oito) |
+| a prova rápida inteira (`node tests/equilibrio.js`) | 413 de 436 | **423 de 436** |
+
+As médias de todas as classes, níveis 5 / 12 / 20 / 30 (em dupla, 924 jogos cada):
+
+| classe | média |
+|---|---|
+| Bárbaro (`sumo`) | 50 / 52 / 49 / 54 |
+| Caçador (`arqueiro`) | 50 / 54 / 51 / 53 |
+| Bruxo (`bruxo`) | 56 / 46 / 46 / 51 |
+| Ladino (`espadachim`) | 56 / 48 / 46 / 47 |
+| Curandeiro (`curandeiro`) | 48 / 49 / 50 / 47 |
+| Xamã (`invocador`) | 46 / 47 / 53 / 52 |
+| Minotauro (`minotauro`) | **44 / 55 / 55 / 47** |
+
+O Minotauro entrou na faixa do duelo (40–60%) nos quatro níveis; ficam fora da faixa das médias
+(45–55%) o nível 5 (43,9%) e o 20 (55,4%), a um ponto dela. As outras duas médias fora são de antes
+e melhoraram: o Bruxo e o Ladino no nível 5 (57% → 56%). As células que sobram com o Minotauro são as
+de quem atira de longe — Bruxo e Xamã no nível 5 (62%, 61%), o Bruxo no 12 e no 20 (39%, 39%), o Xamã
+no 30 (60,4%): contra quem nunca chega perto, o espinho pouco morde, e na dupla o muro corta a visão.
+No 12 e no 20 o Minotauro fica com a maior média do elenco por um ponto (55% contra 54% e 53%) — dentro
+do ruído desta medida (±1,6), mas é onde vale olhar primeiro se o PvP de gente mostrar o contrário:
+o número é um só, `fere: 30` em `spells.js` (e `MURO_FERE` em `fusions.js`).
+
+**Um contra um** (o kit cru, sem cobrança): o Minotauro foi de 34/40/41/28% para **42/52/57/48%**.
+
+**O calabouço** (`node tests/equilibrio_pve.js`, 2 sementes, mostra e não cobra): o Minotauro em dupla
+tira 36% → **37%** da vida dos monstros e vence 18% → **18%**; sozinho tira 15% → **18%**; a média do
+elenco não mudou (38% e 21–22% em dupla). Os monstros também enxergam os espinhos e desviam.
+
 ## 5. Os ajustes, um por um
 
 ### 5.1 O alcance decidia o duelo
@@ -475,6 +587,9 @@ Bárbaro, que é o que o desenho evita; (b) aceitar que ele vale mais nas mãos 
 na régua da IA; (c) dar ao muro uma mecânica que a IA também enxergue (por exemplo, muro que
 fere quem encosta).
 
+**Decidido (03/10): (c).** O muro do Minotauro ganhou espinhos (§3.6) e a IA dos dois lados passou
+a enxergá-los. O resultado está em §4.4.
+
 **6.2 A fusão nos níveis de conferência.** Os desvios que sobram ficam no 16 e no 25, entre 20%
 e 25%, e todos numa direção que o ajuste não alcança: o degrau vem do lado dos **separados**.
 No 15 a classe ganha o quarto feitiço do caminho; o do Minotauro é muro (que a régua da fusão
@@ -542,6 +657,9 @@ calabouço um pouco mais duro, ou baixar a vida dos monstros (um número só, qu
 - o **Bárbaro** com +40% nos feitiços de nível 0–5: no começo do jogo ele limpa a sala sozinho?
 - o **Caçador** e o **Bruxo** com 2 casas a menos: ainda dá para jogar de longe nos mapas grandes?
 - o **escudo do Minotauro** ×2: o calabouço ficou fácil demais com ele no grupo?
+- o **muro de espinhos** (30): gente desvia da pedra como a IA desvia, ou o aperto (pedra atrás,
+  Marrada) vira a jogada única do Minotauro? No 12 e no 20 ele ficou com a maior média do elenco por
+  um ponto (§4.4) — se o PvP de gente confirmar, o número é o `fere` de `spells.js`;
 - o **Xamã** a 0,7: as invocações dele ainda resolvem alguma coisa no calabouço?
 
 ```bash

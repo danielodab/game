@@ -3184,6 +3184,15 @@ var JOGO = (typeof window !== 'undefined')
     if (d2.cooldown) out += ' · recarga ' + d2.cooldown;
     if (d2.castsPerTurn) out += ' · ' + d2.castsPerTurn + '×/turno';
     out += '</i><br>' + esc(d2.description || '');
+    /* 03/10: OS ESPINHOS (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). O feitiço de classe já diz o
+     * número na descrição; a forma de fusão tem uma descrição só para todas as misturas e níveis, e
+     * o número dela muda com eles — a linha sai do próprio efeito, como o motor o usa. */
+    var muroEf = null;
+    (d2.effects || []).forEach(function (ef) { if (ef && ef.type === 'wall' && ef.fere > 0) muroEf = ef; });
+    if (muroEf && d2.fusion) {
+      out += '<br><b>Espinhos:</b> a pedra fere ' + muroEf.fere + ' (mais o poder) quem do outro lado terminar a vez ' +
+             'encostado nela ou for jogado contra ela.';
+    }
     if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
       out += '<br>Área: ' + esc(d2.aoe.shape) + ' ' + (d2.aoe.size || '');
     }
@@ -13392,11 +13401,25 @@ var JOGO = (typeof window !== 'undefined')
     bt.logList.scrollTop = bt.logList.scrollHeight;
   }
 
+  var avisouEspinhos = false;        // 03/10: o aviso dos espinhos sai uma vez por batalha
   UI.handleEvent = function (ev) {
     if (!ev || !ev.type) return;
     if (ev.type === 'timerTick') { paintTimer(); return; }
     if (ev.type === 'prepTick') { pintaPrep(); return; }      // 21/09: o relógio da preparação
+    if (ev.type === 'battleStart') avisouEspinhos = false;
     if (current !== 'battle') return;
+    /* 03/10 — OS ESPINHOS DO MURO. A primeira vez que um dos MEUS encosta no muro de espinhos do
+     * outro lado, o porquê vai à torrada (a linha do diário é miúda e o número parece só mais um
+     * golpe); depois disso o vermelho das casas de passo já ensina. */
+    if (ev.type === 'muroFere' && !avisouEspinhos) {
+      var vEsp = unitByUid(ev.uid);
+      var meuLado = safe(function () { return G().meuLado(); }, 'player');
+      if (vEsp && vEsp.side === meuLado) {
+        avisouEspinhos = true;
+        toast((vEsp.name || vEsp.defId) + (ev.motivo === 'empurrado' ? ' foi jogado contra o' : ' terminou a vez encostado no') +
+              ' muro de espinhos: −' + ev.amount + '. Casa vizinha de muro com espinhos fere no fim da vez.', 'bad');
+      }
+    }
     if (ev.type === 'log') { pushLog(esc(ev.text)); return; }
     var f = EV_TEXT[ev.type];
     if (f) {

@@ -126,6 +126,9 @@ Herdado da v1 (implementado e testado) — mantido igual:
 { type:'dispelShield' }                          // remove escudo do alvo
 { type:'moveTo', maxTiles }                     // conjurador desliza até a célula alvo (investida)
 { type:'chain', jumps, falloff, element, min, max } // salta entre inimigos próximos
+{ type:'wall', duration, element?, fere? }       // (v3, o verbo BARRAR) ergue muro em cada casa livre da área;
+                                                //   `fere` (03/10): espinhos — o inimigo que termina a vez numa casa
+                                                //   vizinha, ou é jogado contra a pedra, leva fere × (100+poder)/100
 ```
 
 **Dano**: `roll(min..max) * (100+power)/100 * (100−resist[element])/100 * (1 + marcas*0.05)`,

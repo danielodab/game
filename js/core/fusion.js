@@ -207,6 +207,12 @@ var JOGO = (typeof window !== 'undefined')
     if (out.type === 'shield' && typeof out.value === 'number') {
       out.value = Math.round(out.value * factor);
     }
+    // 03/10: os ESPINHOS do muro (`fere`) NÃO passam por aqui, de propósito. O fator
+    // traz o PAIR_TUNE, que compensa o quanto as formas de uma dupla rendem contra os
+    // dois kits separados — chega a 3,1 no nível 5 —, e a pedra da fusão do Minotauro
+    // feriria 120 de base onde a dele fere 30. O muro é o verbo DELE: o número é o da
+    // classe (MURO_FERE em fusions.js), e o poder da fusão entra na hora de erguer
+    // (engine.js, Engine.fereDoMuro), como em qualquer muro.
     return out;
   }
 

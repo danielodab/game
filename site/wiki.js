@@ -228,7 +228,11 @@
         (e.duration ? ' ' + turnos(e.duration) : '');
     },
     taunt: function (e) { return 'provoca os inimigos ' + turnos(e.duration); },
-    wall: function (e) { return 'ergue muro ' + turnos(e.duration); },
+    // 03/10: o muro do Minotauro tem espinhos (engine.js, "O MURO QUE FERE QUEM ENCOSTA")
+    wall: function (e) {
+      return 'ergue muro ' + turnos(e.duration) +
+        (num(e.fere) > 0 ? ', com espinhos: fere ' + num(e.fere) + ' quem termina a vez encostado nele ou é jogado contra ele' : '');
+    },
     invisible: function (e) { return 'fica invisível ' + turnos(e.duration); },
     reflect: function (e) { return 'devolve ' + num(e.pct) + '% do dano recebido ' + turnos(e.duration); },
     dispelShield: function () { return 'arranca o escudo do alvo'; },

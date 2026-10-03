@@ -41,6 +41,10 @@ var JOGO = (typeof window !== 'undefined')
  *    (1 − chance de esquiva), usando `Engine.dodgeChance`.
  *  - A IA NÃO declara fusões: a Fusão é uma decisão do jogador (o auto-play
  *    IA×IA continua determinístico e comparável com a v1).
+ *  - OS ESPINHOS DO MURO (03/10, engine.js "O MURO QUE FERE QUEM ENCOSTA"): quem
+ *    anda pesa terminar a vez encostado no muro de espinhos do outro lado; quem
+ *    ergue pesa quem vai ficar preso ao lado da pedra e o APERTO (a pedra atrás
+ *    do inimigo, antes do empurrão que o joga nela) — valorDoMuro.
  *  - CORPO GRANDE (02/10, o Eco Primordial 2×2): o mapa de unidades marca as
  *    QUATRO casas dele (mirar qualquer uma vale), a área que cobre várias
  *    conta ele uma vez, as distâncias medem da casa mais perto (Engine.distA,
@@ -190,19 +194,23 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // estimativa do dano de colisão de um empurrão (direção fixa, eixo dominante)
+  // 03/10: bater no muro de espinhos do lado de quem empurra soma o dano do muro
+  // (engine.js, "O MURO QUE FERE QUEM ENCOSTA") — é assim que o Minotauro aperta
   function shoveCollision(state, cx, cy, victim, tiles, ctx) {
     var ddx = victim.x - cx, ddy = victim.y - cy;
     if (ddx === 0 && ddy === 0) return 0;
     var sx = 0, sy = 0;
     if (Math.abs(ddx) >= Math.abs(ddy)) sx = ddx >= 0 ? 1 : -1;
     else sy = ddy > 0 ? 1 : -1;
-    var x = victim.x, y = victim.y, moved = 0;
+    var x = victim.x, y = victim.y, moved = 0, bateu = null;
     for (var i = 0; i < tiles; i++) {
       var nx = x + sx, ny = y + sy;
-      if (!isFloor(state, nx, ny) || ctx.uAt(nx, ny)) break;
+      if (!isFloor(state, nx, ny) || ctx.uAt(nx, ny)) { bateu = { x: nx, y: ny }; break; }
       x = nx; y = ny; moved++;
     }
-    return 10 * (tiles - moved);
+    var dano = 10 * (tiles - moved);
+    if (bateu && E().muroFereAoBater) dano += E().muroFereAoBater(state, victim, bateu.x, bateu.y);
+    return dano;
   }
 
   // v2: quanto o clima castiga/beneficia um elemento
@@ -368,7 +376,7 @@ var JOGO = (typeof window !== 'undefined')
           if (!isInvisible(unit)) value += (unit.hp / unit.hpMax < 0.6) ? 8 : 1;
           break;
         case 'wall':
-          value += valorDoMuro(state, unit, cx, cy, tiles, ctx);
+          value += valorDoMuro(state, unit, cx, cy, tiles, ctx, spell, eff, hitHostil);
           break;
 
         // ---------------------------------------------------------------- v2
@@ -503,8 +511,15 @@ var JOGO = (typeof window !== 'undefined')
    * um inimigo até um dos nossos (o tiro que não sai no turno dele) e fechar a
    * casa ao lado de um inimigo (o passo que ele não dá). Mede a visão com o
    * muro posto de verdade na grade e devolve a casa como estava — a função
-   * continua pura para quem a chama. Teto de 30: um feitiço de dano médio. */
-  function valorDoMuro(state, unit, cx, cy, tiles, ctx) {
+   * continua pura para quem a chama. Teto de 30: um feitiço de dano médio.
+   *
+   * 03/10 — OS ESPINHOS (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). O muro
+   * que fere vale também o dano em quem vai TERMINAR a vez encostado nele: o
+   * inimigo vizinho de uma pedra nova leva o dano inteiro se não puder sair
+   * (preso pela raiz do mesmo lance ou de antes, ou sem passo nenhum) e um
+   * terço dele se puder — sair custa a vez, ficar custa a vida, e a IA do
+   * outro lado pesa a mesma conta (planTurn). Fora do teto de 30: é dano. */
+  function valorDoMuro(state, unit, cx, cy, tiles, ctx, spell, eff, hitHostil) {
     var novas = [], i, j;
     for (i = 0; i < tiles.length; i++) {
       var c = tiles[i];
@@ -515,6 +530,7 @@ var JOGO = (typeof window !== 'undefined')
       novas.push(c);
     }
     if (!novas.length) return 0;
+    var espinhos = valorDosEspinhos(state, unit, cx, cy, novas, ctx, spell, eff, hitHostil);
     var meus = [{ u: unit, x: cx, y: cy }];
     for (i = 0; i < ctx.allies.length; i++) meus.push({ u: ctx.allies[i], x: ctx.allies[i].x, y: ctx.allies[i].y });
     var pares = [];
@@ -544,7 +560,81 @@ var JOGO = (typeof window !== 'undefined')
     } finally {
       for (i = 0; i < novas.length; i++) state.grid.tiles[novas[i].y][novas[i].x].type = antes[i];
     }
-    return Math.min(30, v);
+    return Math.min(30, v) + espinhos;
+  }
+
+  /* a parte dos espinhos de valorDoMuro: quem fica encostado numa pedra nova, e O APERTO.
+   *
+   * O APERTO: a pedra que sobe logo ATRÁS de um inimigo, na direção em que um empurrão de quem ergue
+   * ainda sai neste turno, vira bigorna — o empurrão o joga contra os espinhos (a colisão de sempre e
+   * o dano do muro, engine.js forcedMove). É a jogada que um jogador faz com o Minotauro: pedra,
+   * Marrada. A IA planeja os lances do estado do começo da vez (não simula o próprio golpe), então a
+   * pedra só vale isso aqui, onde ela ainda não existe; e o valor a põe ANTES do empurrão na fila
+   * (valendo mais que o golpe sozinho), que é a ordem em que a jogada funciona. Só o empurrão que
+   * ainda cabe no PA depois da pedra, fora de recarga e da cota do turno. */
+  var CHANCE_DE_FICAR = 1 / 3;
+  function empurroesQueSaem(unit, muro) {
+    var out = [], custoDoMuro = muro ? (muro.paCost || 0) : 0;
+    for (var s = 0; s < unit.spells.length; s++) {
+      var sp = spellOf(unit.spells[s]);
+      if (!sp || (muro && sp.id === muro.id)) continue;     // o próprio feitiço da pedra não sai de novo
+      if ((unit.cooldowns[sp.id] || 0) > 0) continue;
+      if ((sp.paCost || 0) + (custoDoMuro || 0) > unit.pa) continue;
+      var cpt = sp.castsPerTurn || 0;
+      if (cpt > 0 && ((unit.castsThisTurn || {})[sp.id] || 0) >= cpt) continue;
+      var tiles = 0;
+      (sp.effects || []).forEach(function (ef) { if (ef.type === 'push' && ef.tiles > tiles) tiles = ef.tiles; });
+      if (tiles > 0 && (sp.targetSide === 'enemy' || sp.targetSide === 'any' || !sp.targetSide)) out.push({ sp: sp, tiles: tiles });
+    }
+    return out;
+  }
+  function valorDosEspinhos(state, unit, cx, cy, novas, ctx, spell, eff, hitHostil) {
+    var En = E();
+    if (!eff || !(eff.fere > 0) || !En.fereDoMuro) return 0;
+    var fere = En.fereDoMuro(state, unit, spell, eff);
+    if (fere <= 0) return 0;
+    var prende = false, k;
+    var effs = (spell && spell.effects) || [];
+    for (k = 0; k < effs.length; k++) if (effs[k].type === 'root') prende = true;
+    var el = eff.element || (spell && spell.element) || 'neutro';
+    var nova = {};
+    for (k = 0; k < novas.length; k++) nova[novas[k].x + ',' + novas[k].y] = true;
+    var empurroes = null;
+    var v = 0;
+    for (var i = 0; i < ctx.enemies.length; i++) {
+      var e = ctx.enemies[i];
+      var encosta = false;
+      for (var j = 0; j < novas.length && !encosta; j++) {
+        if (distAte(e, novas[j].x, novas[j].y) === 1) encosta = true;
+      }
+      if (!encosta) continue;
+      // a mesma conta do motor (danoDoMuro): o `fere` da pedra menos a resistência ao elemento dela
+      var dano = Math.max(1, Math.round(fere * (100 - En.effResist(e, el)) / 100));
+      var semPasso = En.unitHasEffect(e, 'root') ||
+                     (prende && hitHostil && hitHostil.indexOf(e) >= 0) ||
+                     (e.ppMax || 0) <= 0;
+      var p = semPasso ? 1 : CHANCE_DE_FICAR;
+      var ve = dano * p;
+      if (dano >= e.hp + (e.shield || 0)) ve += 25 * p;
+      // O APERTO: o empurrão que sai depois joga o inimigo nesta pedra (corpo grande não é empurrado)
+      if ((!En.porteDe || En.porteDe(e) === 1) && !E().unitHasTrait(e, 'pushImmune')) {
+        if (empurroes === null) empurroes = empurroesQueSaem(unit, spell);
+        for (var q = 0; q < empurroes.length; q++) {
+          var ps = empurroes[q].sp, rg = sRange(ps);
+          var d = manhattan(cx, cy, e.x, e.y);
+          if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1) || d === 0) continue;
+          if (rg.line && !(e.x === cx || e.y === cy)) continue;
+          if (rg.los && !En.los(state, cx, cy, e.x, e.y)) continue;
+          // a direção do empurrão do motor: o eixo dominante de quem empurra até a vítima
+          var ddx = e.x - cx, ddy = e.y - cy, sx = 0, sy = 0;
+          if (Math.abs(ddx) >= Math.abs(ddy)) sx = ddx >= 0 ? 1 : -1; else sy = ddy > 0 ? 1 : -1;
+          if (!nova[(e.x + sx) + ',' + (e.y + sy)]) continue;
+          ve = Math.max(ve, 10 * empurroes[q].tiles + dano);
+        }
+      }
+      v += ve;
+    }
+    return v;
   }
 
   // v2: saldo elemental de trocar o clima
@@ -746,6 +836,16 @@ var JOGO = (typeof window !== 'undefined')
      * calabouço que não é o Poço) nada muda. */
     var PR = (state.perigos && JOGO.Poco && JOGO.Poco.regras) ? JOGO.Poco.regras : null;
     var pesoChao = PR ? PR.pesoCasas(state, unit) : null;
+    /* 03/10: OS ESPINHOS DO MURO do outro lado (engine.js, "O MURO QUE FERE QUEM
+     * ENCOSTA"). Terminar a vez encostado custa o dano do muro — pesado como
+     * dano que se toma (1,2×, um pouco mais que o que se dá, para o empate ir
+     * para longe da pedra), e muito mais quando mata. O muro está à vista de
+     * todos, então os dois lados pesam igual; ficar continua possível quando o
+     * golpe dali vale mais que a ferida. Sem muro que fere, nada muda. */
+    var temEspinhos = false;
+    for (i = 0; i < (state.walls || []).length; i++) {
+      if (state.walls[i].fere > 0 && state.walls[i].side !== unit.side) { temEspinhos = true; break; }
+    }
 
     // candidatos de posição: célula atual + alcançáveis com o PP atual
     var candidates = [{ x: unit.x, y: unit.y, cost: 0, risky: false }]
@@ -782,6 +882,10 @@ var JOGO = (typeof window !== 'undefined')
       var ev = eventCells[cell.x + ',' + cell.y];
       if (ev) score += ev;
       if (pesoChao && pesoChao[cell.x + ',' + cell.y]) score += pesoChao[cell.x + ',' + cell.y];
+      if (temEspinhos) {
+        var ferida = E().muroFerePrevisto(state, unit, cell.x, cell.y);
+        if (ferida > 0) score -= ferida * 1.2 + (ferida >= unit.hp + (unit.shield || 0) ? 60 : 0);
+      }
 
       if (score > bestScore) { bestScore = score; bestCell = cell; bestFirstCast = cast; }
     }

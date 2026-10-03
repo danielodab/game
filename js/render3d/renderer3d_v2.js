@@ -3683,6 +3683,7 @@ var JOGO = (typeof window !== 'undefined')
     ovUsed++;
     mesh.visible = true;
     mesh.material = ovMat(color, opacity);
+    mesh.userData.cor = color;              // 03/10: a cor pedida, para a prova ler (o material passa por espaço de cor)
     mesh.position.set(wx(x), (yOff == null ? 0.09 : yOff), wz(y));
     mesh.scale.setScalar(scale == null ? 0.92 : scale);
     return mesh;
@@ -3746,11 +3747,16 @@ var JOGO = (typeof window !== 'undefined')
     if (!spellId) {
       var reach = safe(function () { return en.reachable ? en.reachable(st, active.uid) : null; }, null);
       if (reach) {
+        var temEspinho = !!(st.walls && st.walls.length && en.muroFerePrevisto);
         for (var i = 0; i < reach.length; i++) {
           var t = reach[i];
           var risky = !!(t.risky || t.risk || t.dodgeRisk || t.locked);
+          // 03/10: terminar a vez aqui encosta no muro de espinhos do outro lado — vermelho, e vale
+          // mais que o âmbar da esquiva (o espinho é certo, a fixação é sorte)
+          var espinho = temEspinho && safe(function () { return en.muroFerePrevisto(st, active, t.x, t.y); }, 0) > 0;
           // células de RISCO DE ESQUIVA em âmbar (§2)
-          ovTile(t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.30 : 0.18, 0.09, 0.84);
+          if (espinho) ovTile(t.x, t.y, '#ff3b4a', 0.34, 0.09, 0.84);
+          else ovTile(t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.30 : 0.18, 0.09, 0.84);
         }
       }
       if (hv && hv.x >= 0) {
@@ -4317,7 +4323,7 @@ var JOGO = (typeof window !== 'undefined')
     return pedra;
   }
 
-  function montaMuro(el, defId) {
+  function montaMuro(el, defId, fere) {
     var cor = col3(R.elementColor(el));
     var g = new THREE.Group();
     var pedra = corpoDoMuro(cor, modeloDoMuro(defId));
@@ -4336,8 +4342,132 @@ var JOGO = (typeof window !== 'undefined')
     g.userData.faixa = faixa;
     // repassa a face para quem vai mirar o muro no inimigo
     g.userData.faceOffset = (pedra.userData && pedra.userData.faceEmX) ? Math.PI / 2 : 0;
+    // 03/10: o muro que fere quem encosta (engine.js) MOSTRA que fere — espinhos nas quatro faces
+    if (fere > 0) {
+      var esp = espinhosDoMuro(cor);
+      g.add(esp);
+      g.userData.espinhos = esp;
+    }
     return g;
   }
+
+  /* OS ESPINHOS DO MURO (03/10 — engine.js, "O MURO QUE FERE QUEM ENCOSTA").
+   *
+   * A regra fere quem TERMINA a vez numa das quatro casas vizinhas (norte, sul,
+   * leste, oeste), então o desenho aponta para elas: um colar de estacas de
+   * ferro cravadas no chão ao pé da pedra, três por face, inclinadas para fora
+   * e invadindo a casa vizinha, com o brilho do elemento. No chão e não na
+   * pedra: o corpo do muro é o escudo do Daniel (largo e FINO), e ponta presa à
+   * face fina flutuaria no ar. Ficam presas à GRADE, não ao escudo — o escudo
+   * gira para encarar o inimigo e os espinhos não podem girar junto, senão
+   * apontariam para a quina (rebuildWalls desfaz o giro). Uma malha instanciada
+   * por muro: o anel de oito pedras do nível 30 custa oito chamadas de desenho. */
+  var ESPINHO_POR_FACE = [-0.55, 0, 0.55];      // ao longo da face, em frações da meia largura
+  var ESPINHO_ALT = 0.9, ESPINHO_INCL = 0.72;   // comprimento; quanto sobe (rad acima do chão) — lê no celular
+  function espinhosDoMuro(cor) {
+    var geo = M.geo('muroEspinho', function () {
+      var c = new THREE.ConeGeometry(0.15, ESPINHO_ALT, 6);
+      // a ponta para +X (a face leste) e para cima; a base na origem — as outras faces giram daqui
+      c.rotateZ(-Math.PI / 2 + ESPINHO_INCL);
+      c.translate(Math.cos(ESPINHO_INCL) * ESPINHO_ALT / 2, Math.sin(ESPINHO_INCL) * ESPINHO_ALT / 2, 0);
+      return c;
+    });
+    var ferro = new THREE.Color('#3a3430').lerp(cor, 0.35);
+    var mat = new THREE.MeshStandardMaterial({ color: ferro, roughness: 0.42, metalness: 0.7,
+                                               emissive: cor, emissiveIntensity: 0.55 });
+    var n = ESPINHO_POR_FACE.length * 4;
+    var inst = new THREE.InstancedMesh(geo, mat, n);
+    var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
+    var p = new THREE.Vector3(), eixo = new THREE.Vector3(0, 1, 0), k = 0;
+    var meia = MURO_LARG / 2, pe = meia * 0.92;
+    for (var f = 0; f < 4; f++) {
+      var ang = f * Math.PI / 2;               // leste, norte, oeste, sul (giro em Y)
+      q.setFromAxisAngle(eixo, ang);
+      for (var i = 0; i < ESPINHO_POR_FACE.length; i++) {
+        var lat = ESPINHO_POR_FACE[i] * meia;
+        // a base do espinho no chão, ao pé da face, `lat` ao longo dela
+        p.set(pe * Math.cos(ang) + lat * Math.sin(ang), 0.04, -pe * Math.sin(ang) + lat * Math.cos(ang));
+        m4.compose(p, q, s);
+        inst.setMatrixAt(k++, m4);
+      }
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = true;
+    inst.userData.mat = mat;
+    return inst;
+  }
+
+  /* A ZONA DOS ESPINHOS: as casas de chão vizinhas de cada muro que fere,
+   * pintadas de leve na cor do elemento e respirando — onde o jogador NÃO quer
+   * terminar a vez. Refeita só quando a lista de muros muda (a mesma assinatura
+   * dos muros); uma casa encostada em dois muros pinta uma vez. Pública para os
+   * dois lados: a pedra está à vista de todos (a IA do outro lado a pesa igual). */
+  var zonaNodes = [], zonaSig = '', zonaMat = {};
+  function zonaMatDe(cor) {
+    if (!zonaMat[cor]) zonaMat[cor] = new THREE.MeshBasicMaterial({ color: col3(cor), transparent: true, opacity: 0.22,
+                                                                      depthWrite: false, side: THREE.DoubleSide });
+    return zonaMat[cor];
+  }
+  function limpaZona() {
+    for (var i = 0; i < zonaNodes.length; i++) if (zonaNodes[i].parent) zonaNodes[i].parent.remove(zonaNodes[i]);
+    zonaNodes.length = 0;
+    zonaSig = '';
+  }
+  function rebuildZonaEspinhos(st) {
+    var lista = (st && st.walls) || [], sig = '';
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].fere > 0) sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') + ';';
+    }
+    if (sig === zonaSig) return;
+    limpaZona();
+    zonaSig = sig;
+    if (!sig || !st.grid) return;
+    var feita = {}, VIZ = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    for (i = 0; i < lista.length; i++) {
+      var w = lista[i];
+      if (!(w.fere > 0)) continue;
+      for (var d = 0; d < 4; d++) {
+        var x = w.x + VIZ[d][0], y = w.y + VIZ[d][1], k = x + ',' + y;
+        if (feita[k] || x < 0 || y < 0 || x >= st.grid.w || y >= st.grid.h) continue;
+        var t = st.grid.tiles[y] && st.grid.tiles[y][x];
+        if (!t || t.type !== 'floor') continue;
+        feita[k] = true;
+        var casa = new THREE.Mesh(M.tileFlatGeo(), zonaMatDe(R.elementColor(w.element || 'neutro')));
+        casa.position.set(wx(x), 0.065, wz(y));
+        casa.scale.setScalar(0.9);
+        casa.renderOrder = 4;
+        casa.userData.espinho = { x: x, y: y };
+        scene.add(casa);
+        zonaNodes.push(casa);
+      }
+    }
+  }
+  // para as provas de tela: as casas da zona dos espinhos agora
+  R.zonaEspinhosNaTela = function () { return zonaNodes.map(function (n) { return n.userData.espinho; }); };
+  R.murosComEspinhos = function () {
+    var out = [];
+    for (var k in wallNodes) {
+      var esp = wallNodes[k].userData.espinhos;
+      if (!esp) continue;
+      // o giro do colar no MUNDO (tem de ser zero: preso à grade, não ao escudo)
+      var q = new THREE.Quaternion();
+      esp.getWorldQuaternion(q);
+      var giro = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+      out.push({ casa: k, pontas: esp.count, giro: giro, giroEscudo: wallNodes[k].rotation.y });
+    }
+    return out;
+  };
+  // para as provas de tela: as casas do destaque de agora (passo, alcance…), com a cor de cada uma
+  R.destaqueNaTela = function () {
+    var out = [];
+    for (var i = 0; i < ovUsed; i++) {
+      var m = ovPool[i];
+      if (!m || !m.visible) continue;
+      out.push({ x: Math.round(m.position.x / CELL + (gridW - 1) / 2), y: Math.round(m.position.z / CELL + (gridH - 1) / 2),
+                 cor: m.userData.cor || ('#' + m.material.color.getHexString()) });
+    }
+    return out;
+  };
 
   // PARA QUEM O ESCUDO OLHA.
   //
@@ -4387,26 +4517,32 @@ var JOGO = (typeof window !== 'undefined')
       // estava quando ele subiu — ficaria de perfil assim que o inimigo andasse.
       var av = alvoDoMuro(st, lista[i]);
       sig += lista[i].x + ',' + lista[i].y + ':' + (lista[i].element || '') +
-             ':' + (lista[i].defId || '-') +
+             ':' + (lista[i].defId || '-') + ':' + (lista[i].fere > 0 ? 'e' : '') +
              ':' + (av ? av.x + '_' + av.y : '-') + ';';
     }
+    rebuildZonaEspinhos(st);          // 03/10: as casas onde não se termina a vez
     if (sig === wallSig) return;
     wallSig = sig;
 
+    // 03/10: os espinhos ficam presos à grade — desfaz o giro da mira do escudo
+    function apruma(no, ang) {
+      no.rotation.y = ang;
+      if (no.userData.espinhos) no.userData.espinhos.rotation.y = -ang;
+    }
     var vivos = {};
     for (i = 0; i < lista.length; i++) {
       var w = lista[i], k = w.x + ',' + w.y;
       vivos[k] = 1;
-      if (wallNodes[k]) {
+      if (wallNodes[k] && !!wallNodes[k].userData.espinhos === (w.fere > 0)) {
         // já está de pé: só reapruma a mira, sem refazer a subida
-        wallNodes[k].rotation.y = anguloDoMuro(st, w) +
-                                  (wallNodes[k].userData.faceOffset || 0);
+        apruma(wallNodes[k], anguloDoMuro(st, w) + (wallNodes[k].userData.faceOffset || 0));
         continue;
       }
-      var node = montaMuro(w.element || 'neutro', w.defId);
+      if (wallNodes[k]) { descartaMuro(wallNodes[k]); delete wallNodes[k]; }
+      var node = montaMuro(w.element || 'neutro', w.defId, w.fere);
       var p = R.world(w.x, w.y, 0);
       node.position.set(p.x, 0, p.z);
-      node.rotation.y = anguloDoMuro(st, w) + (node.userData.faceOffset || 0);
+      apruma(node, anguloDoMuro(st, w) + (node.userData.faceOffset || 0));
       node.userData.t0 = nowT;        // nasce afundada e sobe
       scene.add(node);
       wallNodes[k] = node;
@@ -4435,6 +4571,12 @@ var JOGO = (typeof window !== 'undefined')
       var e = 1 - (1 - t) * (1 - t);
       n.position.y = -MURO_ALT * (1 - e);
       if (n.userData.faixa) n.userData.faixa.material.opacity = 0.55 + 0.35 * Math.sin(nowT * 2.2);
+      // 03/10: a ponta dos espinhos respira no brilho do elemento
+      if (n.userData.espinhos) n.userData.espinhos.userData.mat.emissiveIntensity = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(nowT * 3.1));
+    }
+    // a zona dos espinhos respira devagar (um material por cor: todas juntas)
+    for (var zc in zonaMat) if (Object.prototype.hasOwnProperty.call(zonaMat, zc)) {
+      zonaMat[zc].opacity = 0.14 + 0.12 * (0.5 + 0.5 * Math.sin(nowT * 2.0));
     }
     for (var i = wallFalling.length - 1; i >= 0; i--) {
       var f = wallFalling[i];
@@ -4450,6 +4592,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < wallFalling.length; i++) descartaMuro(wallFalling[i]);
     wallFalling.length = 0;
     wallSig = '';
+    limpaZona();
   }
 
   var evNodes = [];

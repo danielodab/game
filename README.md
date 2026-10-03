@@ -173,6 +173,12 @@ recebe a parte que ajuda (`Engine.feiticoMisto`; `docs/EQUILIBRIO.md` §3). No f
 alvo próprio e casa única, o efeito hostil é o **preço** e cai em quem lança (a queimadura do
 Sangue Fervente e das Veias em Chamas). A prova direta das regras é `node tests/regras_equilibrio.js`.
 
+**O muro de espinhos (03/10).** Todo muro do Minotauro (e das fusões dele) fere o inimigo que
+**termina a vez numa casa vizinha** (de lado, não de quina) ou é **jogado contra a pedra**: o `fere`
+do feitiço (30) vezes o poder de quem ergueu, uma vez por vez, nunca no próprio lado. A IA dos dois
+lados enxerga — quem anda evita, quem ergue aperta — e a tela mostra (estacas ao pé da pedra, casas
+vizinhas pintadas, a casa de passo vermelha). `docs/EQUILIBRIO.md` §3.6.
+
 **PvP ranqueado (03/10).** A Arena (quadro de inscritos, vale coroa) aceita até **3 níveis** entre o
 herói mais forte de cada lado — o servidor confere no desafio e no fechamento. O Campo de PvP (10) e
 a guerra de guilda (10) seguem como estavam.
@@ -246,10 +252,11 @@ jogador. Página nova sem essa linha é bug.
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`texturas_prova.py`** (Python) | 16 de 16 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta (também quando divide o bufferView com o relevo), `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
 | `texturas_abrem.html` | passou (03/10) — 333/333 `.glb` do bundle abrem no three e desenham, 0 erros de GL |
-| **`equilibrio.js`** (Node) | a prova do equilíbrio ([`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md)); medida completa de 03/10: **399 de 436** — perfis 198/198, fusão 119/126 (sobram degraus nos níveis de conferência 16 e 25), duelos em dupla 62 de 84 células em 40–60% (o Minotauro é a maior parte do que sobra); depois da revisão (preço no próprio corpo) os duelos completos dão 60 de 84 células e 21 de 28 médias. Ver §7.1 |
+| **`equilibrio.js`** (Node) | a prova do equilíbrio ([`docs/EQUILIBRIO.md`](docs/EQUILIBRIO.md)); medida completa de 03/10: **399 de 436** — perfis 198/198, fusão 119/126 (sobram degraus nos níveis de conferência 16 e 25), duelos em dupla 62 de 84 células em 40–60% (o Minotauro é a maior parte do que sobra); depois da revisão (preço no próprio corpo) os duelos completos dão 60 de 84 células e 21 de 28 médias; **depois do muro de espinhos (03/10): 70 de 84 células e 24 de 28 médias** (o Minotauro 44/55/55/47%), e a prova rápida **423 de 436** (era 413). Ver §7.1 |
 | `equilibrio_fusao.html` | a mesma conta da fusão no navegador (8 misturas) |
 | `equilibrio_pve.js` (Node) | mostra, não cobra: o calabouço por classe no nível recomendado (docs/EQUILIBRIO.md §6.6) |
-| `regras_equilibrio.js` (Node) | 29 de 29 — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA |
+| `regras_equilibrio.js` (Node) | 62 de 62 (03/10) — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA; e o **muro de espinhos** do Minotauro: os dados e o texto de cada feitiço, quem encosta (de lado, não de quina, nunca o próprio lado, uma vez por vez), o empurrão contra a pedra, o invisível que sangra sem aparecer, o pet, o Eco 2×2 e o placar dele, a IA que desvia e a que aperta (com mutação: tirar o peso ou o aperto reprova), e a mesma semente no mesmo hash |
+| `muro_visual.html` | 19 de 19 (03/10; a página estava parada desde 03/09 — a descida começa na antessala — e voltou pela porta `direto`) — a pedra aparece, sobe, assenta e afunda, e os espinhos: o colar de 12 pontas preso à grade, a zona nas casas vizinhas, os pixels que eles somam e a casa de passo vermelha só do outro lado |
 
 **A bateria depois da junção de 03/10** (Node, API e as páginas que as frentes tocaram, no Chrome
 headless pela vez da máquina), comparada com a base `39a6ae9`. O que falha é o que já falhava lá:
@@ -257,8 +264,9 @@ headless pela vez da máquina), comparada com a base `39a6ae9`. O que falha é o
 `juiz_poco.js` 1 de 4, `luta_aberta_cliente.js` 2 de 27 (as 4 do Eco, de 03/10, passam), `guilda_api.py` 1 (o nome "Mestre"
 reservado), `rele_nomes_prova.py --sem-navegador` 1 de 113, `validate_classes` 7, `validate_fusion`
 51, `test_progress_v2` 56, `arvore_feiticos` 4, `grupo_hud` 2, `pocoes_hud` 1 e `ui_screens` 4.
-Três vêm das frentes e ficam abertas, conhecidas: `equilibrio.js` (prova rápida) dá **413 de 436**,
-igual à ponta da frente; `site_prova.py` acusa a falta dos retratos dos quatro Colossos (só com a
+Três vêm das frentes e ficam abertas, conhecidas: `equilibrio.js` (prova rápida) dava **413 de 436**,
+igual à ponta da frente — com o muro de espinhos (03/10) dá **423 de 436** (sobram os degraus de
+fusão no 16 e no 25 e cinco médias de duelo na borda, ver `docs/EQUILIBRIO.md` §4.4); `site_prova.py` acusa a falta dos retratos dos quatro Colossos (só com a
 arte); e `ui_screens.html` acusa o cais de sete portas vazando o quadro de 390 px — a página
 simula o celular num quadro dentro de uma janela larga, onde as regras `@media` do celular não
 valem; numa tela de verdade de 320, 360 ou 390 px o cais cabe (`eco_hud.html` e `fichas_fotos.html`
@@ -348,9 +356,10 @@ o porquê de cada uma e cada ajuste feito. Em resumo:
 - o `PAIR_TUNE` ganhou **nível** (`[k5, k12, k30]`), e a fusão ficou a ±20% em 119 de 126
   medidas (era 53 de 126 com a régua nova).
 
-**O que ficou aberto** (§6 do documento): o **Minotauro** na régua da IA (35–44%; números
-sozinhos não o trazem — decisão do dono), degraus de fusão no 16 e no 25, e a **paridade de 5
-níveis** do PvP (o lado mais alto vence 65–80%).
+**O que ficou aberto** (§6 do documento): degraus de fusão no 16 e no 25. As duas decisões que
+esperavam o dono entraram em 03/10: o **Minotauro** ganhou o **muro de espinhos** (§3.6 — na
+medida completa ele foi de 35/45/44/33% para 44/55/55/47% nos níveis 5/12/20/30, e as células
+de duelo na faixa de 60 para 70 de 84) e a **paridade da Arena** caiu de 5 para 3 níveis (§6.3).
 
 ### 7.2 O elenco é chibi, e isso tem chão
 
@@ -429,6 +438,19 @@ nova que entrar sem o passo reprova em `tests/texturas_prova.py`.
 `texture.dispose()` antes.** Sem isso o three grava a imagem nova dentro da
 memória já alocada para a antiga (`texStorage`) e mistura as duas — deu
 manchas pretas falsas no pilar da Cisterna na comparação de 02/10.
+
+**A cor de um material não volta igual.** `material.color.getHexString()`
+passa pelo espaço de cor do three e devolve outro número que o pedido (o
+vermelho `#ff3b4a` das casas de espinho não voltava `ff3b4a`) — a prova que
+procura casa pela cor lê a cor PEDIDA (`userData.cor`, `R.destaqueNaTela()`).
+E o destaque das casas só se refaz quando a assinatura muda (vez, PP/PA,
+posições, rodada): o muro não entra nela porque só nasce ou cai junto de uma
+delas (`docs/EQUILIBRIO.md` §3.6).
+
+**`Game.startRun` sem `{ direto: true }` abre a ANTESSALA** (desde 03/09) e
+`Game.state` fica nulo até entrar na sala. Página de prova que desce assim e
+espera a batalha fecha com zero checagens — o `muro_visual.html` ficou parado
+um mês desse jeito até 03/10.
 
 ---
 

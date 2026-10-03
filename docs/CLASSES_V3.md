@@ -72,6 +72,10 @@ e visão. Não mata — **estraga o plano do outro**.
 O muro é peça de tabuleiro: ocupa célula, dura alguns turnos, pode ser
 quebrado. É o que faz o Minotauro jogar com o mapa, e não com o inimigo.
 
+*03/10 (escolha do dono):* o muro dele tem **espinhos** — o inimigo que termina a vez numa
+casa vizinha, ou é jogado contra a pedra, se fere. Continua sem matar no golpe; o terreno é
+que cobra. Regra e número em `docs/EQUILIBRIO.md` §3.6.
+
 ### Curandeiro · suporte  *(novo)*
 Cura e bênção. O único que devolve vida de verdade e o único que dá bênção
 duradoura.
