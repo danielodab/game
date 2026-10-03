@@ -612,6 +612,84 @@ var JOGO = (typeof window !== 'undefined')
   var tentado = {};          // chave -> true: ja passou pelo parse (deu certo ou nao)
   var ouvintes = [];         // aoChegar(fn): quem precisa saber que modelo novo abriu
 
+  /* O CLIPE DE LOCOMOÇÃO FICA NO LUGAR (03/10). Quem leva o corpo de uma casa
+   * para a outra é o tabuleiro; o clipe só mexe as pernas. A Arraia de Rajada
+   * (Santuário) chegou com o andar no clipe de NADO do Meshy (Swim_Forward),
+   * que traz o deslocamento DENTRO do clipe: a raiz avança dois corpos por
+   * ciclo e volta num salto quando o laço recomeça — em jogo ela dispararia
+   * para a frente e seria puxada de volta a cada volta do clipe.
+   * A regra é por MEDIDA, não por nome: se a posição do osso-raiz termina
+   * longe de onde começou, tira-se a rampa (o avanço constante) eixo por eixo
+   * e fica só o balanço. Clipe que já é um laço no lugar (todos os outros)
+   * começa e termina no mesmo ponto e não é tocado. */
+  // a raiz é o quadril (Hips); arquivo sem esse nome usa a primeira trilha de posição
+  function trilhaDaRaiz(clip) {
+    var primeira = null;
+    for (var i = 0; clip && clip.tracks && i < clip.tracks.length; i++) {
+      var t = clip.tracks[i];
+      if (!/\.position$/.test(t.name) || t.values.length < 6) continue;
+      if (!primeira) primeira = t;
+      if (/Hips\.position$/i.test(t.name)) return t;
+    }
+    return primeira;
+  }
+  function prendeNoLugar(clip) {
+    if (!clip || !clip.tracks || clip.__noLugar) return false;
+    clip.__noLugar = true;
+    var tr = trilhaDaRaiz(clip);
+    if (!tr) return false;
+    var v = tr.values, tm = tr.times, n = tm.length, dur = tm[n - 1] - tm[0];
+    if (!(dur > 0)) return false;
+    // a régua: a maior coordenada da raiz (a altura do quadril, na unidade do arquivo)
+    var ref = 0;
+    for (var k = 0; k < v.length; k++) ref = Math.max(ref, Math.abs(v[k]));
+    var mexeu = false;
+    for (var e = 0; e < 3; e++) {
+      var avanco = v[(n - 1) * 3 + e] - v[e];
+      if (Math.abs(avanco) <= ref * 0.2) continue;
+      for (var q = 0; q < n; q++) v[q * 3 + e] -= avanco * (tm[q] - tm[0]) / dur;
+      mexeu = true;
+    }
+    return mexeu;
+  }
+  M.prendeNoLugar = prendeNoLugar;
+  // quem foi ajustado, para as provas: 'chave.papel' -> 'preso', 'subiu' ou 'preso+subiu'
+  var locoAjustada = {};
+  M.locoAjustada = function () { return locoAjustada; };
+
+  /* E FICA EM CIMA DO CHÃO. O mesmo clipe de nado da Arraia foi feito para um
+   * corpo na ÁGUA: a raiz dele fica abaixo da origem, e em jogo a Arraia
+   * planava um metro DENTRO do piso. Também por medida: se a raiz do clipe de
+   * locomoção fica, em média, abaixo da metade da altura que ela tem no clipe
+   * parado, o clipe inteiro sobe até a altura do parado — o corpo plana na
+   * altura do próprio quadril. Andar e correr de pé têm a raiz na mesma altura
+   * do parado e não são tocados.
+   * A conta é no espaço do PAI do osso (o Armature do Meshy vem girado e em
+   * centímetros): a linha do meio da matriz dele dá a altura no mundo, e a
+   * inversa diz que deslocamento local vale um metro para cima. */
+  function assentaLocomocao(scene, clipParado, clip) {
+    if (!scene || !clipParado || !clip || clip === clipParado || clip.__assentado) return false;
+    clip.__assentado = true;
+    var trP = trilhaDaRaiz(clipParado), trL = trilhaDaRaiz(clip);
+    if (!trP || !trL || trP.name !== trL.name) return false;
+    var osso = scene.getObjectByName(trL.name.replace(/\.position$/, ''));
+    if (!osso || !osso.parent) return false;
+    scene.updateMatrixWorld(true);
+    var m = osso.parent.matrixWorld.elements;
+    function alturaMedia(tr) {
+      var v = tr.values, n = v.length / 3, soma = 0;
+      for (var i = 0; i < n; i++) soma += m[1] * v[i * 3] + m[5] * v[i * 3 + 1] + m[9] * v[i * 3 + 2] + m[13];
+      return soma / n;
+    }
+    var hP = alturaMedia(trP), hL = alturaMedia(trL);
+    if (!(hP > 0) || hL >= hP * 0.5) return false;
+    var sobe = new THREE.Vector3(0, hP - hL, 0)
+      .applyMatrix3(new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(osso.parent.matrixWorld).invert()));
+    var vl = trL.values;
+    for (var q = 0; q < vl.length; q += 3) { vl[q] += sobe.x; vl[q + 1] += sobe.y; vl[q + 2] += sobe.z; }
+    return true;
+  }
+
   function parseUm(loader, key, feito) {
     var src = JOGO.MODELS || {};
     tentado[key] = true;
@@ -629,9 +707,20 @@ var JOGO = (typeof window !== 'undefined')
             clips[gltf.animations[j].name] = gltf.animations[j];
             names.push(gltf.animations[j].name);
           }
+          var acoes = names.length ? autoActions(names) : null;
+          // 03/10: o andar e o correr ficam NO LUGAR e EM CIMA DO CHÃO (ver
+          // prendeNoLugar e assentaLocomocao)
+          if (acoes) {
+            ['walk', 'run'].forEach(function (papel) {
+              if (!acoes[papel]) return;
+              var preso = prendeNoLugar(clips[acoes[papel]]);
+              var subiu = assentaLocomocao(gltf.scene, clips[acoes.idle], clips[acoes[papel]]);
+              if (preso || subiu) locoAjustada[key + '.' + papel] = (preso ? 'preso' : '') + (preso && subiu ? '+' : '') + (subiu ? 'subiu' : '');
+            });
+          }
           raw[key] = {
             scene: gltf.scene, clips: clips,
-            actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
+            actions: acoes,                                       // null = usa o banco KayKit
             own: names.length > 0,
             natural: naturalHeight(gltf.scene),
             yaw: measureYaw(gltf.scene)
@@ -1251,6 +1340,7 @@ var JOGO = (typeof window !== 'undefined')
     return {
       model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o corpo provisório já foi trocado acima; corpoDe é a rede de segurança
       proc: !!base.proc, procId: defId,
+      loco: base.loco || null,           // 03/10: o clipe de locomoção que passa na frente (a Arraia plana)
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
       tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
@@ -1617,7 +1707,9 @@ var JOGO = (typeof window !== 'undefined')
     // acervo, e o mesmo caminho serve monstro, chefe, pet e herói. Nunca por id.
     //   corrida > caminhada > voo > pulo, e `idle` só como derrota declarada.
     var locoCache = null;
-    var LOCO_ORDER = ['run', 'walk', 'fly', 'jump'];
+    // 03/10: `look.loco` passa um clipe na frente da fila — a Arraia de Rajada
+    // PLANA (o `walk` dela é o nado) e não pode trocar o planar pela corrida a pé.
+    var LOCO_ORDER = look.loco ? [look.loco, 'run', 'walk', 'fly', 'jump'] : ['run', 'walk', 'fly', 'jump'];
     function locomotion() {
       if (locoCache) return locoCache;
       for (var i = 0; i < LOCO_ORDER.length; i++) {
