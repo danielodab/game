@@ -108,6 +108,7 @@ import sqlite3
 import time
 from urllib.parse import parse_qs, urlsplit
 
+import moderacao                 # 02/10: o banimento com prazo (a linha vencida não é mais banimento)
 import nomes
 from comum import SESSAO_DIAS
 
@@ -229,6 +230,11 @@ def confere(caminho, token, agora=None):
         return None, False
     try:
         linha = con.execute(SQL, (token,)).fetchone()
+        # 02/10 (servidor/moderacao.py): contas.banido = 1 com as linhas de banimento todas
+        # vencidas não é mais banimento — a API só zera o 0/1 no próximo pedido da conta,
+        # e até lá o relé recusaria quem já cumpriu o prazo
+        if linha is not None and linha[3] and not moderacao.banida_de_fato(con, linha[0], t):
+            linha = linha[:3] + (0,) + linha[4:]
     except sqlite3.Error:
         return None, False
     finally:

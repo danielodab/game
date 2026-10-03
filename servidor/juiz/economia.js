@@ -325,6 +325,38 @@ const INTERNAS = {
    * vendedor (tudo ou nada, pelo Progress.gastaPedras); comprar e retirar as põem no estoque
    * de quem leva (addStones — pedra não ocupa o saco). Pedra fora de DATA.stones ou lote fora
    * da régua é argumento torto; estoque curto é 'falta', que a API traduz para 'pedras'. */
+  /* O PAINEL DO MESTRE NO JOGO (02/10, servidor/moderacao.py, POST /api/mestre/dar): o "pôr no
+   * inventário" roda AQUI, no estado do servidor, como a entrega da loja — nunca no save local. A API
+   * confere a marca do Mestre (e que peça só entra na conta dele); aqui vale a regra do jogo: a peça tem
+   * de existir no dado DESTA conta (o Set do Mestre só existe na conta do Mestre), as estrelas e o nível
+   * vão até o teto do dado, e o saco tem de ter vaga para todas — senão nada entra. A série nasce com a
+   * origem 'caixa', a mesma da Caixa do Mestre. */
+  mestreDarItem: (J, a) => {
+    const itemId = txt(a, 'itemId');
+    if (!Object.prototype.hasOwnProperty.call(J.DATA.items || {}, itemId)) throw recusa('item desconhecido: ' + itemId, 'item');
+    const P = J.Progress;
+    const maxEstrelas = (P.starCfg && P.starCfg().max) || 0;
+    const maxNivel = Math.floor(Number(((J.DATA.upgrade || {}).maxLevel))) || 10;
+    const estrelas = int(a, 'estrelas', 0, maxEstrelas, true) || 0;
+    const nivel = int(a, 'nivel', 0, maxNivel, true) || 0;
+    const qtd = int(a, 'qtd', 1, 20, true) || 1;
+    if (!P.bagFree(qtd)) throw recusa('o saco não tem vaga para ' + qtd + (qtd === 1 ? ' peça' : ' peças'), 'saco');
+    const iids = [];
+    for (let i = 0; i < qtd; i++) {
+      const e = P.novaCopia(itemId, 'caixa', nivel, estrelas);
+      if (!e) throw recusa('item desconhecido: ' + itemId, 'item');
+      P.state.inventory.push(e);
+      iids.push(e.iid);
+    }
+    P.save();
+    return { ok: true, itemId, qtd, estrelas, nivel, iids };
+  },
+  mestreDarSelos: (J, a) => {
+    const elemento = txt(a, 'elemento');
+    const n = int(a, 'n', 1, 999);
+    if (!J.Progress.addSelo(elemento, n)) throw falha('elemento: selo desconhecido');
+    return { ok: true, elemento, n, total: (J.Progress.selosVer() || {})[elemento] || 0 };
+  },
   mercadoTiraPedras: (J, a) => {
     const { stoneId, qtd } = lotePedra(J, a);
     if (J.Progress.stoneCount(stoneId) < qtd || !J.Progress.gastaPedras(stoneId, qtd)) {
@@ -385,7 +417,12 @@ const MESTRE = {
   gmPegaInsignias: (J, a) => J.GM.pegaInsignias(int(a, 'n', 1, 99999)),
   gmPegaCartas: (J, a) => J.GM.pegaCartas(txt(a, 'classId'), int(a, 'n', 1, 99999)),
   gmPegaPergaminho: (J, a) => J.GM.pegaPergaminho(txt(a, 'tipo'), int(a, 'n', 1, 99)),
-  gmPegaBonusXp: (J, a) => J.GM.pegaBonusXp(int(a, 'dias', 1, 365))
+  gmPegaBonusXp: (J, a) => J.GM.pegaBonusXp(int(a, 'dias', 1, 365)),
+  // 02/10: as FERRAMENTAS do painel do Mestre (o painel de teste, js/ui/debug.js): liberar classe, cravar o
+  // nível e o elemento. A mesma função do jogo (js/core/gm.js) roda lá na hora e aqui no estado do servidor
+  gmLiberaClasse: (J, a) => J.GM.liberaClasse(txt(a, 'classId')),
+  gmNivel: (J, a) => J.GM.poeNivel(txt(a, 'heroId'), int(a, 'nivel', 1, 999)),
+  gmElemento: (J, a) => J.GM.poeElemento(txt(a, 'heroId'), txt(a, 'elemento'))
 };
 
 function acha(nome, x) {

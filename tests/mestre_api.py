@@ -183,11 +183,14 @@ class ProvaDoMestre(unittest.TestCase):
         self.assertEqual((status, r['erro']), (403, 'só o Mestre do Fundo mexe nos eventos do mundo'))
         m = self.mestre('Guia Portao')
         self.assertEqual(self.busca(m, '#%d' % c.conta['id'])[0], 200)
-        # a marca tirada pelo SQL vale no pedido seguinte; o Mestre banido leva 'conta banida'
+        # a marca tirada pelo SQL vale no pedido seguinte; o Mestre banido leva 'conta banida'.
+        # 02/10 (servidor/moderacao.py): o 403 leva também o `banimento` — o banido pelo SQL, sem
+        # linha de banimento (o `admin banir` de antes), é o permanente sem motivo registrado
         self.sql("UPDATE contas SET gm = 0 WHERE id = ?", m.conta['id'])
         self.assertEqual(self.busca(m, '#1')[1]['erro'], FRASE)
         self.sql("UPDATE contas SET gm = 1, banido = 1 WHERE id = ?", m.conta['id'])
-        self.assertEqual(self.busca(m, '#1'), (403, {'ok': False, 'erro': 'conta banida'}))
+        self.assertEqual(self.busca(m, '#1'), (403, {'ok': False, 'erro': 'conta banida', 'banimento': {
+            'id': None, 'motivo': None, 'inicio': None, 'fim': None, 'permanente': True, 'legado': True}}))
 
     # -- 2. a busca ----------------------------------------------------------------------
     def test_busca(self):
@@ -251,8 +254,11 @@ class ProvaDoMestre(unittest.TestCase):
         c = self.novo('Fica Ficha')
         r = self.ficha(m, c.conta['id'])
         self.assertEqual(set(r), {'ok', 'agora', 'conta', 'save', 'classes', 'cartas', 'catalogo', 'presentes', 'saldo',
-                                  'barras', 'pagamentos', 'alertas'})
+                                  'barras', 'pagamentos', 'alertas', 'moderacao'})
         self.assertEqual(r['barras'], {'saldo': 0, 'movimentos': []})           # 13/09: as barras de ouro da conta
+        # 02/10 (servidor/moderacao.py): a conta limpa — sem banimento, sem silêncio, sem histórico nem denúncia
+        self.assertEqual(r['moderacao'], {'banimento': None, 'silencio': None, 'banimentos': [], 'silencios': [],
+                                          'denuncias': {}})
         self.assertEqual(r['conta']['email'], c.conta['nome'].replace(' ', '') + '@soterra.test')   # inteiro, na ficha
         self.assertEqual((r['conta']['gm'], r['conta']['banido']), (False, False))
         self.assertTrue(r['conta']['ultimaSessao'])

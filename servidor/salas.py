@@ -86,7 +86,9 @@ OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaT
                           # 22/09: o lote de pedras de forja no mercadinho (mercado.py)
                           'mercadoTiraPedras', 'mercadoPoePedras',
                           # 13/09: a poção bebida fora da batalha (14/09: vida_pocao, em qualquer lugar)
-                          'beberPocao'})
+                          'beberPocao',
+                          # 02/10: o "pôr no inventário" do painel do Mestre no jogo (moderacao.py, /api/mestre/dar)
+                          'mestreDarItem', 'mestreDarSelos'})
 # os campos de dono CLIENTE do db (§3; a mesma lista de js/core/economia.js: DB_CLIENTE e JOGADOR_CLIENTE)
 DB_CLIENTE = ('mutados', 'placar', 'pvp', 'trocas')
 JOGADOR_CLIENTE = ('id', 'nome', 'avatar', 'dupla', 'coroaOculta', 'criadoEm')
@@ -1096,6 +1098,9 @@ class SalasMixin:
                 nova, db = self._estado_grava(conta, estado, saida, t)
                 self._evento(cid, 'op', {'versao': nova, 'ops': nomes_ops,
                                          'novos': [n['iid'] for n in saida['iids']['novos']]})
+                # 02/10: a Caixa e as ferramentas do Mestre (as ops gm*) também vão à auditoria (moderacao.py)
+                if conta['gm'] and any(n.startswith('gm') for n in nomes_ops) and hasattr(self, '_audita'):
+                    self._audita(conta, 'op', cid, {'ops': limpas, 'versao': nova}, t=t)
         except EstadoMudou:
             raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
         resposta = {'ok': True, 'versao': nova, 'hash': saida['hash'], 'resultados': saida.get('resultados') or []}
