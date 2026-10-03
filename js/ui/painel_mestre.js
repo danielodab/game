@@ -169,6 +169,9 @@ var JOGO = (typeof window !== 'undefined')
     'font:16px/1 system-ui,sans-serif;color:#ffd479;background:#1b222c;border:1px solid #3a4655}',
     '.pm-abrir:hover,.pm-abrir:focus-visible{opacity:1}',
     'html.celular .pm-abrir{bottom:auto;top:calc(4px + var(--sa-t,0px));right:calc(66px + var(--canto,0px));opacity:.45}',
+    // 03/10 (revisão): na batalha esse canto é do cadeado, do recentrar e do som — o ⚖ cobria o ⌖ e roubava o
+    // toque. Lá o Mestre já tem o bt-gm; o painel abre da praça (ou pelo F9 no teclado)
+    'html.celular body:has(.bt-top) .pm-abrir{display:none}',
     '.pm-capa{position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:12px;',
     'background:rgba(6,8,10,.62);pointer-events:auto;font:13px/1.45 var(--ui-sans,system-ui,sans-serif);color:#e8eef6}',
     '.pm-caixa{width:min(940px,100%);height:min(88vh,760px);display:flex;flex-direction:column;border-radius:12px;',
@@ -253,6 +256,7 @@ var JOGO = (typeof window !== 'undefined')
     capa.addEventListener('click', function (ev) { if (ev.target === capa) PM.fechar(); });
     capa.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); PM.fechar(); } });
     M.prendeTeclas(capa);
+    M.lacoTab(capa);                     // 03/10 (revisão): o Tab dá a volta dentro do painel
     capa._quem = quem;
   }
   PM.aberto = function () { return !!(capa && capa.parentNode); };

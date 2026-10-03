@@ -99,6 +99,17 @@
     var b = q('.pm-abrir');
     check('a conta que o servidor marcou (gm:true): o botão discreto aparece e recebe clique',
           !!b && pe(b) === 'auto' && PM.noServidor() === true);
+    // 03/10 (revisão): no celular, na batalha, o ⚖ caía em cima do recentrar (⌖) e roubava o toque
+    var html = document.documentElement, btTop = document.createElement('div');
+    btTop.className = 'bt-top';
+    html.classList.add('celular');
+    document.getElementById('ui-root').appendChild(btTop);
+    var naBatalha = getComputedStyle(b).display;
+    btTop.parentNode.removeChild(btTop);
+    var naPraca = getComputedStyle(b).display;
+    html.classList.remove('celular');
+    check('no celular, na batalha (a fileira do cadeado, do ⌖ e do som), o ⚖ some; na praça, volta',
+          naBatalha === 'none' && naPraca !== 'none', naBatalha + ' / ' + naPraca);
     var ev = tecla('F9');
     check('F9 abre o painel, e a tecla não segue para o jogo (preventDefault)', PM.aberto() && ev.defaultPrevented);
     var capa = q('.pm-capa');
@@ -106,6 +117,11 @@
           pe(capa) === 'auto' && !document.getElementById('ui-root').contains(capa));
     check('as sete abas', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
           'Itens,Moedas,Jogadores,Denúncias,Banimentos,Auditoria,Ferramentas');
+    var focP = M.focaveis(capa);
+    focP[focP.length - 1].focus();
+    var tabP = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    focP[focP.length - 1].dispatchEvent(tabP);
+    check('o Tab do último controle do painel volta ao primeiro (03/10)', tabP.defaultPrevented && document.activeElement === focP[0]);
     capa.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     check('Esc fecha', !PM.aberto());
     tecla('m', { ctrlKey: true, altKey: true });
@@ -270,10 +286,29 @@
     botaoCom('Denunciar Bia', menu).click();
     var jan = q('.mod-capa');
     check('o menu abre a janela da denúncia, que recebe clique', !!jan && pe(jan) === 'auto' && jan.textContent.indexOf('Denunciar Bia') >= 0);
+    await espera(20);
+    check('o foco vai ao primeiro controle da janela (03/10)', document.activeElement === q('input[value=ofensa]', jan),
+          document.activeElement && document.activeElement.outerHTML.slice(0, 60));
+    // 03/10 (revisão): no toque, as categorias e os botões na régua de 44 px; o rádio no tema escuro
+    document.documentElement.classList.add('toque');
+    var alturas = qq('.mod-cats label, .mod-b', jan).map(function (n) { return Math.round(n.getBoundingClientRect().height); });
+    var acento = getComputedStyle(q('input[value=ofensa]', jan)).accentColor;
+    document.documentElement.classList.remove('toque');
+    check('no toque, cada categoria e cada botão da denúncia têm ≥ 44 px de altura, e o rádio não é o azul nativo',
+          alturas.length >= 7 && alturas.every(function (h) { return h >= 44; }) && acento && acento !== 'auto', alturas.join(',') + ' ' + acento);
     var envia = botaoCom('Enviar denúncia', jan);
     check('sem categoria, não envia', envia.disabled === true);
     q('input[value=ofensa]', jan).click();
     check('com a categoria, envia', envia.disabled === false);
+    var focJ = M.focaveis(jan);
+    focJ[focJ.length - 1].focus();
+    var tabJ = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    focJ[focJ.length - 1].dispatchEvent(tabJ);
+    var ida = tabJ.defaultPrevented && document.activeElement === focJ[0];
+    var volta = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    focJ[0].dispatchEvent(volta);
+    check('o Tab dá a volta dentro da janela (do último ao primeiro, e Shift+Tab do primeiro ao último) (03/10)',
+          ida && volta.defaultPrevented && document.activeElement === focJ[focJ.length - 1]);
     q('textarea', jan).value = 'ameaçou';
     respostas['/api/denuncia'] = { ok: true, status: 201, denuncia: { id: 77 } };
     envia.click();
@@ -303,6 +338,16 @@
     await JOGO.CorreioEquipe.confere();
     var bc = q('.mod-carta-botao');
     check('cartas não lidas: o envelope aparece, com o número, e recebe clique', !!bc && bc.textContent.indexOf('2 cartas') >= 0 && pe(bc) === 'auto');
+    // 03/10 (revisão): com o painel de aproximação da praça aberto, a pílula não fica em cima do botão dele
+    var hp = document.createElement('div');
+    hp.className = 'hub-painel';
+    document.getElementById('ui-root').appendChild(hp);
+    var comPainel = getComputedStyle(bc).display;
+    hp.className = 'hub-painel is-off';
+    var semPainel = getComputedStyle(bc).display;
+    hp.parentNode.removeChild(hp);
+    check('com o painel da praça aberto a pílula das cartas some; fechado, volta', comPainel === 'none' && semPainel !== 'none',
+          comPainel + ' / ' + semPainel);
     bc.click();
     await espera(40);
     check('abrir mostra as cartas e marca todas como lidas', qq('.mod-carta').length === 2 &&
@@ -325,6 +370,17 @@
     check('e recebe clique, por cima de tudo', pe(ban) === 'auto' && +getComputedStyle(ban).zIndex >= 2147483000);
     var evT = tecla('i');
     check('as teclas não chegam mais ao jogo', evT.defaultPrevented === true);
+    // 03/10 (revisão): o teclado tem saída — o foco vai ao "Sair da conta" e o Tab não sai da capa
+    var sair = botaoCom('Sair da conta', ban);
+    var focoNoBotao = document.activeElement === sair;
+    var evTab = tecla('Tab');
+    check('a capa do banido põe o foco no "Sair da conta", e o Tab fica nele',
+          focoNoBotao && evTab.defaultPrevented && document.activeElement === sair);
+    JOGO.Banimento.mostra({ permanente: true, motivo: 'de novo' });
+    JOGO.Banimento.mostra({ permanente: true, motivo: 'e de novo' });
+    ban = q('.mod-ban');
+    check('mostrar de novo troca a capa (uma só) e o foco segue no botão dela',
+          qq('.mod-ban').length === 1 && document.activeElement === botaoCom('Sair da conta', ban));
     botaoCom('Sair da conta', ban).click();
     check('"Sair da conta" esquece a sessão', S.ativa() === false);
     fim();

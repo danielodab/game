@@ -117,6 +117,30 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
+  /* 03/10 (revisão): a capa diz aria-modal, e o Tab tem de valer isso — do último controle ele saía para a
+   * página de trás, e as teclas voltavam a ser atalho da HUD por baixo do véu. O Tab dá a volta dentro da
+   * caixa (Shift+Tab do primeiro ao último), a mesma regra da ficha da HUD (hud.js, sheetEl). */
+  var FOCAVEIS = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+  M.focaveis = function (raiz) {
+    return [].filter.call(raiz.querySelectorAll(FOCAVEIS), function (n) {
+      return !n.disabled && n.tabIndex >= 0 && n.getClientRects().length > 0;
+    });
+  };
+  M.lacoTab = function (raiz) {
+    raiz.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab') return;
+      var foc = M.focaveis(raiz);
+      if (!foc.length) { ev.preventDefault(); return; }
+      var prim = foc[0], ult = foc[foc.length - 1], at = document.activeElement, vai = null;
+      if (!raiz.contains(at) || at === raiz) vai = ev.shiftKey ? ult : prim;
+      else if (ev.shiftKey && at === prim) vai = ult;
+      else if (!ev.shiftKey && at === ult) vai = prim;
+      if (!vai) return;
+      ev.preventDefault();
+      try { vai.focus(); } catch (e) {}
+    });
+  };
+
   /* ------------------------------------------------------------ o estilo */
   /* Mora aqui (e não no css/style.css) para o arquivo entrar e sair sozinho; as
    * cores leem as variáveis do tema, com o valor de reserva ao lado. */
@@ -154,6 +178,15 @@ var JOGO = (typeof window !== 'undefined')
     '.mod-carta-botao{position:fixed;right:12px;bottom:calc(132px + var(--sa-b,0px));z-index:9300;',
     'pointer-events:auto;padding:6px 10px;border-radius:999px;cursor:pointer;font:600 12px system-ui,sans-serif;',
     'background:rgba(60,44,12,.92);color:#ffe2a0;border:1px solid #8a6a24;box-shadow:0 4px 14px rgba(0,0,0,.45)}',
+    // 03/10 (revisão): no celular a pílula caía em cima do botão do painel de aproximação da praça (Banco,
+    // Mercado, Arena, Poço, Forja, o Descer do portal) e roubava o toque: com o painel aberto, ela some
+    'body:has(.hub-painel:not(.is-off)) .mod-carta-botao{display:none}',
+    // 03/10 (revisão): a régua de toque das fichas (--tap, 44 px) e os controles nativos no tema escuro
+    '.mod-caixa{color-scheme:dark}',
+    '.mod-caixa input[type=radio],.mod-caixa input[type=checkbox]{accent-color:var(--gold,#e8c25a);width:18px;height:18px;',
+    'margin:0;flex:0 0 auto}',
+    'html.toque .mod-caixa label{min-height:var(--tap,44px);margin:0}',
+    'html.toque .mod-b{min-height:var(--tap,44px)}',
     '.mod-carta{padding:8px 10px;margin:6px 0;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid #2b3542}',
     '.mod-carta.is-nova{border-color:#8a6a24}',
     '.mod-carta b{color:var(--gold,#e8c25a)}',
@@ -191,15 +224,50 @@ var JOGO = (typeof window !== 'undefined')
     capa.addEventListener('click', function (ev) { if (ev.target === capa) fecha(); });
     capa.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); fecha(); } });
     M.prendeTeclas(capa);
+    M.lacoTab(capa);
     capa.tabIndex = -1;
     document.body.appendChild(capa);
     try { capa.focus(); } catch (e) {}       // as teclas daqui não viram atalho do jogo
+    // quem chamou enche a caixa depois: o foco vai ao primeiro controle no quadro seguinte
+    setTimeout(function () {
+      if (!capa.parentNode || (document.activeElement !== capa && capa.contains(document.activeElement))) return;
+      var foc = M.focaveis(cx);
+      if (foc.length) try { foc[0].focus(); } catch (e) {}
+    }, 0);
     return { capa: capa, caixa: cx, fecha: fecha };
   };
 
   // =========================================================== O BANIMENTO
   var B = JOGO.Banimento = {};
   var capaBan = null;
+  var ouvindoBan = false;
+  /* as teclas com a capa do banido no ar não chegam ao jogo; o Tab fica dentro dela (03/10, revisão: o foco
+   * ficava preso no chat e a capa, que cobre tudo, não tinha saída pelo teclado). Registrados UMA vez:
+   * antes cada mostra() somava mais três ouvintes na janela. */
+  function ouveBan() {
+    if (ouvindoBan) return;
+    ouvindoBan = true;
+    ['keydown', 'keyup', 'keypress'].forEach(function (tipo) {
+      window.addEventListener(tipo, function (ev) {
+        var capa = capaBan;
+        if (!capa || !capa.parentNode) return;
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        ev.stopPropagation();
+        var t = ev.target;          // a tecla mandada à janela (window) não é um nó: conta como fora da capa
+        var dentro = !!(t && t.nodeType && capa.contains(t));
+        if (tipo === 'keydown' && ev.key === 'Tab') {
+          var foc = M.focaveis(capa);
+          ev.preventDefault();
+          if (!foc.length) return;
+          var i = dentro ? foc.indexOf(t) : -1;
+          var vai = i < 0 ? foc[0] : foc[(i + (ev.shiftKey ? foc.length - 1 : 1)) % foc.length];
+          try { vai.focus(); } catch (e) {}
+          return;
+        }
+        if (!dentro) ev.preventDefault();
+      }, true);
+    });
+  }
   /* A capa do banido. `info` = o `banimento` do 403 ({motivo, inicio, fim, permanente}).
    * Nada de alert(): a capa cobre tudo e as teclas não chegam mais ao jogo. */
   B.mostra = function (info) {
@@ -246,16 +314,9 @@ var JOGO = (typeof window !== 'undefined')
     cx.appendChild(acoes);
     capa.appendChild(cx);
     (document.body).appendChild(capa);
-    ['keydown', 'keyup', 'keypress'].forEach(function (t) {
-      window.addEventListener(t, function (ev) {
-        if (!capa.parentNode) return;
-        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-        ev.stopPropagation();
-        var t = ev.target;          // a tecla mandada à janela (window) não é um nó: conta como fora da capa
-        if (!(t && t.nodeType && capa.contains(t))) ev.preventDefault();
-      }, true);
-    });
     capaBan = capa;
+    ouveBan();
+    try { acoes.querySelector('button').focus(); } catch (eF) {}   // o único botão: a saída pelo teclado
     B.ultimo = info;
     return capa;
   };
