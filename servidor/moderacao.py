@@ -71,6 +71,9 @@ juiz, 503: a autoridade e o juiz não podem divergir.
   cada entrega guarda o hash de antes e o de depois, e a op do jogador que
   chega com o hash de ANTES de uma corrente de entregas sobe por cima delas
   (salas.py, economia_op, `_rebase_entregas`) em vez de cair no 409.
+  03/10 (revisão): cartas e bicho mudam o grupo que o juiz refaz no fim da
+  luta — com uma luta aberta na conta de destino eles esperam (409 em-luta,
+  TIPOS_DA_LUTA); e a entrega que não muda nada é 422 nada-mudou, sem aviso.
 """
 import json
 import logging
@@ -221,6 +224,19 @@ ENTREGA_TEXTO_MAX = 160                # o "O Mestre te enviou …" (o texto vem
 ENTREGAS_LISTA = 20                    # quantas o jogo busca de uma vez
 CORRENTE_MAX = 30                      # quantas entregas seguidas a op do jogador atravessa (_rebase_entregas)
 FRASE_LAPIDE = 'essa conta foi excluída pelo titular: o id é só a lápide dela'
+# 03/10 (revisão): o que muda o GRUPO que o juiz refaz. A sala solo, a em grupo, o duelo, a Arena e a guerra
+# fecham refazendo a luta com o Progress.battleParty do estado de AGORA (as estrelas da classe e o nível e as
+# estrelas do bicho entram nos atributos). Cartas ou bicho entregues no meio da luta faziam o replay sair
+# diferente do que o jogador jogou: a sala vencida caía como 'divergiu' — a trilha de fraude — e não pagava
+# (medido: cartas no topo com a sala aberta → 422 "o fim da sala divergiu"). Esses dois tipos esperam a luta
+# acabar; peça, pedra, selo, insígnia, pergaminho e bônus de XP não tocam no grupo e entram a qualquer hora.
+# (O Eco Primordial refaz com a FOTO da abertura, supremo_estados: não segura nada.)
+TIPOS_DA_LUTA = ('cartas', 'pet')
+DAR_LUTA_JANELA = 2 * 3600             # luta aberta há mais que isso foi largada (a mesma régua da luta largada)
+DAR_DUELO_JANELA = 3600                # o duelo sem resultado há mais de 1 h: os dois largaram (privacidade.py)
+FRASE_EM_LUTA = ('essa conta está numa luta agora: cartas e bicho mudam o grupo que o servidor refaz no fim '
+                 'dela, e a vitória do jogador cairia — mande quando a luta acabar (peças, pedras e o resto entram já)')
+FRASE_NADA_MUDOU = 'nada mudou: essa conta já tem isso (a entrega não foi feita nem avisada)'
 DADOS_MAX = 2000                       # o JSON de uma linha de auditoria
 RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 RE_ID_TEXTO = re.compile(r'^[a-z0-9_-]{1,64}$')
@@ -1069,6 +1085,8 @@ class ModeracaoMixin:
                     raise Recusa(409, FRASE_LAPIDE)
                 if alvo['banido']:
                     raise Recusa(409, 'essa conta está banida: nada entra nela')
+                if tipo in TIPOS_DA_LUTA and self._dar_em_luta(alvo_id, t):
+                    raise Recusa(409, FRASE_EM_LUTA, motivo='em-luta')
                 estado = self._estado_ler(alvo_id)
             if estado is None:
                 raise Recusa(409, FRASE_SEM_ESTADO)
@@ -1079,11 +1097,18 @@ class ModeracaoMixin:
             # o hash do estado de antes, medido pelo juiz: o servidor só o guarda depois da primeira op ou sala,
             # e o jogo, sem ele, mede o mesmo hash no estado que adotou (autoridade.js, puxaEstado)
             hash_antes = saida.get('hashAntes') if isinstance(saida.get('hashAntes'), str) else estado['hash']
+            # 03/10 (revisão): a entrega que não mexeu em nada (o bicho que a conta já tem, sem o topo; o que
+            # já está no topo) virava aviso e carta "O Mestre te enviou …" sem nada ter entrado
+            if isinstance(saida.get('hash'), str) and saida['hash'] == hash_antes:
+                raise Recusa(422, FRASE_NADA_MUDOU, motivo='nada-mudou')
             try:
                 with self._escrita():
                     if self.con.execute("SELECT 1 FROM moderacao_auditoria WHERE mestre_id = ? AND idem = ?",
                                         (conta['id'], idem)).fetchone() is not None:
                         raise Recusa(409, 'esta entrega acabou de ser feita por outro pedido com o mesmo idem')
+                    # a luta pode ter aberto enquanto o juiz trabalhava (a abertura também escreve aqui dentro)
+                    if tipo in TIPOS_DA_LUTA and self._dar_em_luta(alvo_id, t):
+                        raise Recusa(409, FRASE_EM_LUTA, motivo='em-luta')
                     nova, db = self._estado_grava(alvo, estado, saida, t)
                     self._evento(alvo_id, 'mestre-dar', {'por': conta['id'], 'op': op, 'args': args,
                                                          'novos': [n['iid'] for n in saida['iids']['novos']]})
@@ -1110,6 +1135,30 @@ class ModeracaoMixin:
             # o próprio Mestre: o jogo adota o estado novo sem recarregar (Autoridade.adotaDeFora)
             resp.update(hash=saida['hash'], progress=saida['progress'], db=db)
         return 201, resp
+
+    def _dar_em_luta(self, cid, t):
+        """Dentro da tranca: a conta tem uma luta aberta que o servidor ainda vai refazer com o estado dela
+        (ver TIPOS_DA_LUTA)? Sala solo ou em grupo, duelo (desafio, Campo, Arena), partida da Arena casada ou
+        pronta, guerra. Tabela que não existe (um banco de antes): não segura."""
+        ms = t * 1000
+        consultas = (
+            ("SELECT 1 FROM salas WHERE conta_id = ? AND estado = 'aberta' AND aberta_em > ?", (cid, t - DAR_LUTA_JANELA)),
+            ("SELECT 1 FROM salas_grupo WHERE (lider_id = ? OR membro_id = ?) AND estado = 'aberta' AND aberta_em > ?",
+             (cid, cid, t - DAR_LUTA_JANELA)),
+            ("SELECT 1 FROM arena_partidas WHERE (a_id = ? OR b_id = ?) AND estado IN ('casada', 'pronta') "
+             "AND criada_ms > ?", (cid, cid, ms - DAR_LUTA_JANELA * 1000)),
+            ("SELECT 1 FROM guerra_jogadores j JOIN guerra_partidas p ON p.gid = j.gid WHERE j.conta_id = ? "
+             "AND p.estado IN ('casada', 'pronta') AND p.criada_ms > ?", (cid, ms - DAR_LUTA_JANELA * 1000)),
+            ("SELECT 1 FROM duelo_vida v WHERE v.conta_id = ? AND v.criado_em > ? "
+             "AND NOT EXISTS (SELECT 1 FROM duelos d WHERE d.did = v.did)", (cid, t - DAR_DUELO_JANELA)),
+        )
+        for sql, args in consultas:
+            try:
+                if self.con.execute(sql, args).fetchone() is not None:
+                    return True
+            except sqlite3.OperationalError:
+                continue
+        return False
 
     # -- o jogador: o que o Mestre lhe enviou (03/10) -----------------------------------------------------
     def _entregas_pendentes(self, conta_id):

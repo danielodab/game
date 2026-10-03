@@ -56,7 +56,8 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
 sys.path.insert(0, AQUI)
 from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402  (põe servidor/ no sys.path)
-from autoridade_api import BAIXA, ESTADO_JS, JUIZ, NODE, PECA, espera_url, roda_node  # noqa: E402
+from autoridade_api import (BAIXA, ESTADO_JS, JOGADOR, JUIZ, NODE, PECA, SEMENTE_QUE_VENCE, adota_regras,  # noqa: E402
+                             espera_url, roda_node)
 import mestre as mestre_mod  # noqa: E402
 import moderacao as mod  # noqa: E402
 
@@ -102,6 +103,10 @@ class ProvaDaModeracao(unittest.TestCase):
             codigo = ("const est = require(process.argv[1]); const w = est.mundoEconomico({}); est.poeEstado(w, null, null);"
                       "const s = est.tiraEstado(w); process.stdout.write(JSON.stringify({progress: s.progress, db: s.db}));")
             cls.inicial = roda_node(['-e', codigo, ESTADO_JS])
+            # 03/10 (revisão): a prova da luta aberta abre e fecha uma sala de verdade (a página nova manda versaoRegras)
+            adota_regras(cls.juiz)
+            cls.xp = roda_node(['-e', "const est = require(process.argv[1]); const w = est.mundoEconomico({});"
+                                      "process.stdout.write(JSON.stringify(w.J.DATA.leveling.xpTable));", ESTADO_JS])
             env = {k: v for k, v in os.environ.items() if not k.startswith('SOTERRA_')}
             cls.base = cls._api('api', env, cls.juiz)
             cls.base_sem_juiz = cls._api('api-sem-juiz', env, 'http://127.0.0.1:%d' % porta_livre())
@@ -744,6 +749,57 @@ class ProvaDaModeracao(unittest.TestCase):
         status, r = j.pede('POST', '/api/op', {'hashAntes': 'inventado', 'ops': [{'nome': 'escolherSeloElemento',
                                                                                  'args': {'elemento': 'fogo'}}]})
         self.assertEqual(status, 409, r)
+
+    def test_16_cartas_e_bicho_esperam_a_luta_acabar(self):
+        # 03/10 (revisão): a sala fecha refazendo a luta com o grupo do estado de AGORA (Progress.battleParty: as
+        # estrelas da classe e o bicho entram nos atributos). Cartas entregues com a sala aberta faziam a vitória
+        # cair como 'divergiu' (a trilha de fraude) e não pagar — medido antes do conserto. Cartas e bicho esperam;
+        # o resto entra no meio da luta e a sala fecha igual
+        m, j = self.mestre('Guia Luta'), self.novo('Jogador Luta')
+        p, d = copy.deepcopy(self.inicial['progress']), copy.deepcopy(self.inicial['db'])
+        p['heroes']['sumo']['level'] = 22
+        p['heroes']['sumo']['xp'] = self.xp[21]
+        self.assertEqual(j.salva(0, p, d, [])[0], 200)
+        status, b = j.pede('POST', '/api/sala/abrir', {'dungeonId': 'cistern', 'roomIndex': 0, 'dificuldade': 'normal',
+                                                       'herois': ['sumo']})
+        self.assertEqual(status, 200, b)
+        self.sql("UPDATE salas SET semente = ? WHERE bilhete = ?", SEMENTE_QUE_VENCE, b['bilhete'])
+        s = j.pede('GET', '/api/save')[1]
+        jogo = roda_node([JOGADOR], {'progress': s['progress'], 'db': s['db'], 'dungeonId': 'cistern', 'roomIndex': 0,
+                                     'semente': SEMENTE_QUE_VENCE, 'dificuldade': 'normal', 'herois': ['sumo'],
+                                     'carry': None})
+        self.assertEqual(jogo['fase'], 'won', 'a sala da prova precisa ser vencida pela IA')
+        versao = j.pede('GET', '/api/save')[1]['versao']
+        for tipo, kw in (('cartas', {'classId': 'sumo', 'topo': True}), ('cartas', {'classId': 'sumo', 'n': 10}),
+                         ('pet', {'petId': 'pet-galehawk', 'topo': True})):
+            status, r = self.dar(m, j, tipo, **kw)
+            self.assertEqual((status, r.get('motivo')), (409, 'em-luta'), (tipo, r))
+        self.assertEqual(j.pede('GET', '/api/save')[1]['versao'], versao, 'nada entrou')
+        # o que não mexe no grupo entra no meio da luta, e a sala fecha paga mesmo assim
+        self.assertEqual(self.dar(m, j, 'pedras', stoneId='stone-ember', n=10)[0], 201)
+        self.assertEqual(self.dar(m, j, 'item', itemId=PECA, estrelas=2)[0], 201)
+        self.sql("UPDATE salas SET aberta_em = aberta_em - 600 WHERE bilhete = ?", b['bilhete'])   # não é "rápida demais"
+        status, r = j.pede('POST', '/api/sala/fechar', {'bilhete': b['bilhete'], 'lances': jogo['lances'],
+                                                        'hashFinal': jogo['hash']})
+        self.assertEqual((status, r.get('fase')), (200, 'won'), r)
+        self.assertEqual(r['progress']['stones']['stone-ember'], 10, 'a pedra do meio da luta ficou')
+        # luta fechada: as cartas entram
+        status, r = self.dar(m, j, 'cartas', classId='sumo', topo=True)
+        self.assertEqual(status, 201, r)
+        # a entrega que não muda nada não vira aviso nem carta: as cartas já no topo, o bicho que já é dele
+        avisos = j.pede('GET', '/api/eu')[1]['entregas']
+        status, r = self.dar(m, j, 'cartas', classId='sumo', topo=True)
+        self.assertEqual((status, r.get('motivo')), (422, 'nada-mudou'), r)
+        self.assertEqual(self.dar(m, j, 'pet', petId='pet-galehawk')[0], 201)
+        status, r = self.dar(m, j, 'pet', petId='pet-galehawk')
+        self.assertEqual((status, r.get('motivo')), (422, 'nada-mudou'), r)
+        self.assertEqual(j.pede('GET', '/api/eu')[1]['entregas'], avisos + 1, 'só o bicho novo foi avisado')
+        # a sala em grupo, a Arena, a guerra e o duelo seguram do mesmo jeito (a mesma consulta da exclusão)
+        self.sql("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES (?, ?, ?, NULL, ?)",
+                 'duelo-prova-luta', j.conta['id'], '["sumo"]', int(time.time()))
+        status, r = self.dar(m, j, 'pet', petId='pet-galehawk', topo=True)
+        self.assertEqual((status, r.get('motivo')), (409, 'em-luta'), r)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

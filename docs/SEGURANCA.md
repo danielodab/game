@@ -786,11 +786,11 @@ réguas de `moderacao.TIPOS_DAR` e o juiz conferindo o resto no dado da conta de
 |---|---|---|
 | `item` | `itemId, estrelas, nivel, qtd` | qtd 1–20; estrelas e forja até o teto do dado; vaga no saco para todas, senão nada entra |
 | `set` | `setId` | o conjunto inteiro, com vaga para todas as peças |
-| `pet` | `petId, topo?` | `topo` = ★3 e nível 10 |
+| `pet` | `petId, topo?` | `topo` = ★3 e nível 10; **não com a conta numa luta** (abaixo) |
 | `pedras` | `stoneId, n` | 1–1000 |
 | `selos` | `elemento, n` | 1–999, os cinco elementos |
 | `insignias` | `n` | 1–100 |
-| `cartas` | `classId, n` ou `topo: true` | 1–500; a classe do Mestre não tem carta |
+| `cartas` | `classId, n` ou `topo: true` | 1–500; a classe do Mestre não tem carta; **não com a conta numa luta** |
 | `pergaminho` | `pergaminho: xp\|elemento, n` | 1–99; entra só o que cabe no teto (99); cheio é 422 |
 | `bonus-xp` | `dias` | 1–30 |
 
@@ -805,6 +805,16 @@ dado, e `avisar` = 0 quando é o próprio Mestre): o `GET /api/eu` — que o jog
 vista — leva `entregas` (as não vistas); o jogo pede `GET /api/entregas`, adota o estado, mostra "O Mestre te enviou
 …" e marca `POST /api/entregas/vistas {ids}` (só as da própria conta). Quem estava offline recebe ao entrar. E uma
 carta da Equipe ("O Mestre te enviou um presente") fica no correio.
+
+**Cartas e bicho esperam a luta acabar** (03/10, revisão). A sala solo, a em grupo, o duelo, a Arena e a guerra fecham
+refazendo a luta com o `Progress.battleParty` do estado de AGORA — as estrelas da classe e o nível e as estrelas do bicho
+entram nos atributos. Cartas entregues com a sala aberta faziam a vitória cair como `divergiu` (a trilha de fraude) e
+não pagar (medido). Com uma luta aberta da conta de destino (a mesma consulta da exclusão de conta, mais a sala solo;
+aberta há menos de 2 h, o duelo há menos de 1 h), `cartas` e `pet` são **409 `motivo: em-luta`** — conferido na
+leitura e de novo dentro da transação que grava, porque a abertura da luta também escreve ali. O resto entra no meio
+da luta: não toca no grupo. O Eco Primordial refaz com a foto da abertura e não segura nada. E a entrega que **não
+muda nada** (o bicho que a conta já tem, sem o topo; as cartas já no topo) é **422 `motivo: nada-mudou`**: não vira
+aviso nem carta "O Mestre te enviou …" de algo que não entrou.
 
 **Sem atropelar o jogador online.** A entrega guarda o hash do estado de antes e o de depois. Uma op do jogador que
 chegue ao `/api/op` com o hash de antes de uma CORRENTE de entregas (da mais nova para trás, sem buraco) sobe por cima
@@ -821,5 +831,5 @@ resposta velha). As ferramentas do painel de teste (liberar classe, nível, elem
 (`gmLiberaClasse`, `gmNivel`, `gmElemento`): a mesma função de `js/core/gm.js` roda no jogo e no juiz — e a regra de
 cada entrega mora em `GM.cru`, a mesma na Caixa do Mestre e no juiz.
 
-Provas: `tests/moderacao_api.py` (API + juiz, 15), `tests/entregas_cliente.js` (o jogo do jogador online, 10) e
+Provas: `tests/moderacao_api.py` (API + juiz, 16), `tests/entregas_cliente.js` (o jogo do jogador online, 10) e
 `tests/moderacao_rele_prova.py` (relé de verdade, 19).
