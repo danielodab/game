@@ -447,6 +447,18 @@ var JOGO = (typeof window !== 'undefined')
     'stone-herald':   { model: 'stone-herald',   scale: 1.28 },  // 2,30 m — a armadura cheia de alicerce; o tanque
     'heartroot':      { model: 'heartroot',      scale: 1.33 },  // 2,39 m — a raiz que veio abracar o Coracao
     'boss-riftheart': { model: 'boss-riftheart', scale: 1.22 },  // 3,60 m — o maior bicho do jogo, o teto da regua
+    // --- Os COLOSSOS DO POÇO (02/10) — ainda SEM a arte do dono.
+    //
+    // Cada um tem chave de modelo PRÓPRIA ('colosso-fogo'...): quando o lote
+    // dele for embutido com essa chave, ele veste o corpo dele sozinho. Até lá
+    // a chave cai no CORPO PROVISÓRIO (M.CORPO_PROVISORIO, logo abaixo da
+    // tabela) — um monstro de arte própria do calabouço do MESMO elemento.
+    // Porte: 1,6× um monstro comum (1,80 m × 1,6 = 2,88 m) — maior que todo
+    // comum e ainda abaixo dos chefes (2,95 a 3,60 m).
+    'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — rocha vulcânica com fendas de lava
+    'colosso_agua':   { model: 'colosso-agua',   scale: 1.60 },  // 2,88 m — coral e água viva
+    'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraça de lajes
+    'colosso_ar':     { model: 'colosso-ar',     scale: 1.60 },  // 2,88 m — correntes de vento preso
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
     // Seis das sete estavam erradas no CONCEITO — cao de brasa era um lobo,
@@ -489,6 +501,33 @@ var JOGO = (typeof window !== 'undefined')
     'Rebanho do Invocador': { model: 'skeleton_minion',  scale: 0.90 }
   };
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
+
+  /* O CORPO PROVISÓRIO DOS COLOSSOS (02/10). A chave própria de cada colosso
+   * ainda não tem arte; enquanto `JOGO.MODELS` / o manifesto não a conhecerem,
+   * ele veste o monstro daqui — de arte própria do calabouço do mesmo
+   * elemento, já no porte de colosso (a escala é a da linha do MONSTER_LOOK, e
+   * a altura sai da escala, não do modelo). Escolhidos pela silhueta:
+   *   fogo  → Monte de Escória (Fecho de Brasa): pedra que escorre;
+   *   água  → Golem de Salmoura (Cisterna): "um colosso de sal";
+   *   terra → Boca do Túnel (Mina Trêmula): peito e boca de rocha;
+   *   ar    → Nuvem-Enxame (Andaimes do Vento): vento com forma de gente.
+   * QUANDO A ARTE CHEGAR: embuta com a chave da esquerda e APAGUE A LINHA
+   * dela aqui — é a única linha a mexer (sem apagar ela também funciona: a
+   * chave própria, existindo, vence). */
+  M.CORPO_PROVISORIO = {
+    'colosso-fogo':  'slag-mound',
+    'colosso-agua':  'brine-golem',
+    'colosso-terra': 'cave-jaw',
+    'colosso-ar':    'mote-swarm'
+  };
+  function temModelo(k) {
+    return !!((JOGO.MODELS && JOGO.MODELS[k]) || (JOGO.MESHY_CLIPS && JOGO.MESHY_CLIPS[k]) ||
+              (JOGO.Bundle && JOGO.Bundle.conhece && JOGO.Bundle.conhece(k)));
+  }
+  M.corpoDe = function (chave) {
+    var prov = M.CORPO_PROVISORIO[chave];
+    return (prov && !temModelo(chave)) ? prov : chave;
+  };
 
   // OS PETS SÃO DO USUÁRIO (31/08) — os seis do Meshy aposentam o
   // velociraptor, a cobra, a vespa, o sapo, a aranha e a raposa
@@ -1159,7 +1198,7 @@ var JOGO = (typeof window !== 'undefined')
                M.MONSTER_FALLBACK;
     var boss = !!(md && md.boss);
     return {
-      model: base.model, show: (base.show || []).slice(),
+      model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o colosso sem arte veste o provisório
       proc: !!base.proc, procId: defId,
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       tint: M.elementColor((md && md.element) || 'neutro'),

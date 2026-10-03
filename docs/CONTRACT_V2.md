@@ -222,6 +222,11 @@ DATA.dungeons = [ { id, name, theme, description, difficulty, order,
     palette:{…}, defaultWeather, weatherShiftEveryRounds:0,   // 0 = fixo
     tileEventRate, lootTable:[{itemId,weight,minRoom}], cardDrops:[{classId,weight}],
     rooms:[ { name, weather, layout:[…], monsters:{a:'monsterId'…}, sceneryTheme } ] } ];
+// 02/10: a sala do POÇO (só ela, gerada por js/core/poco.js) traz também
+//   colosso: 'colosso_fogo'|… ou null, e perigos:[ {tipo:'placa',x,y,dir}
+//   | {tipo:'jato',x,y,elemento,periodo,fase} | {tipo:'rachado',x,y,desaba}
+//   | {tipo:'runa',x,y} ]. Com `perigos`, o motor chama Poco.regras (engine.js Pg());
+//   sem ele, nada muda. Regra e números: docs/SISTEMAS.md, "O Poço sem Fundo".
 ```
 **6 calabouços**, 3 salas cada (2 + chefe), dificuldade crescente por `order`.
 

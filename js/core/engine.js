@@ -202,7 +202,10 @@ var JOGO = (typeof window !== 'undefined')
    *       tiram das sombras, a armadilha do dono não; pisar em armadilha do
    *       outro lado PARA o passo na casa dela, e a carga dela não pega mais o
    *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga
-   *   6 — 03/10: o EQUILÍBRIO (docs/EQUILIBRIO.md). O feitiço misto (efeito a
+   *   6 — 03/10: UMA subida só para o pacote da noite (equilíbrio, Poço e Eco
+   *       Primordial entraram juntos; uma sala aberta antes termina diferente
+   *       se refeita aqui).
+   *       (a) o EQUILÍBRIO (docs/EQUILIBRIO.md). O feitiço misto (efeito a
    *       favor E hostil) manda o hostil só no outro lado e o a favor só no
    *       lado de quem lança (feiticoMisto); a armadilha do lance que muralhou
    *       a casa vai para a vizinha livre; dano, cura, escudo e alcance das
@@ -211,8 +214,13 @@ var JOGO = (typeof window !== 'undefined')
    *       (fusion.js) e a IA passou a valorar muro e teleporte (ai.js); e o
    *       feitiço de alvo próprio e casa única cobra o preço hostil de quem
    *       lança (precoProprio: a queimadura do Sangue Fervente e das Veias em
-   *       Chamas nunca pegava) — uma sala aberta antes termina diferente se
-   *       refeita aqui */
+   *       Chamas nunca pegava).
+   *       (b) o POÇO ganhou chão e gigantes. Cada andar traz perigos
+   *       sorteados pela semente (placa de setas, chão rachado, jato elemental,
+   *       runa de exaustão — js/core/poco.js), o andar múltiplo de 5 chama um
+   *       Colosso (rastro de brasa, maré, couraça, ventania), o chefe do andar
+   *       é UM só, e onde há perigo o caminho de mesmo custo prefere a casa
+   *       sem perigo. */
   Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
@@ -236,6 +244,16 @@ var JOGO = (typeof window !== 'undefined')
   Engine.log = log;
 
   function DATA() { return JOGO.DATA || {}; }
+
+  /* OS PERIGOS DO POÇO E OS COLOSSOS (02/10). A regra mora em js/core/poco.js
+   * (Poco.regras), junto do gerador que sorteia o andar: quem monta um andar
+   * do Poço tem o arquivo, e o juiz (servidor/juiz/motor.js) também — uma
+   * página que carregasse o motor sem ele jogaria o andar sem perigo e
+   * divergiria do juiz. Aqui ficam só as chamadas, sempre por `Pg()`; sala
+   * sem `state.perigos` (todo calabouço que não é o Poço) não passa por
+   * nenhuma delas. `INTERNO` (lá embaixo) entrega a Poco.regras as funções
+   * privadas do motor de que a regra precisa — dano, empurrão, cura. */
+  function Pg() { var p = JOGO.Poco; return (p && p.regras) || null; }
 
   /* OS MULTIPLICADORES DA SALA. Devolve sempre um objeto util — uma batalha
    * antiga, salva antes desta funcao existir, cai em `normal` e nao quebra. */
@@ -871,6 +889,8 @@ var JOGO = (typeof window !== 'undefined')
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
     log(dungeon.name + ' — ' + room.name);
+    // 02/10: o chão do andar do Poço (e a couraça de quem nasce com ela)
+    if (room.perigos && Pg()) Pg().monta(state, room, INTERNO);
 
     // A ESCOLHA DA POSIÇÃO (03/09, pedido do dono): "a posição no início da
     // batalha o usuário que escolhe. O jogo dá 4 opções aleatórias… quando
@@ -1155,17 +1175,36 @@ var JOGO = (typeof window !== 'undefined')
     var queue = [{ x: sx, y: sy }];
     dist[sx + ',' + sy] = 0;
     var head = 0;
+    /* 02/10 — NO POÇO, O CAMINHO DE MESMO CUSTO DESVIA DO PERIGO. A placa de
+     * setas e a runa disparam para quem passa por cima, e o caminho saía do
+     * primeiro vizinho que a busca achava: o herói clicava numa casa a 4
+     * passos e o jogo o levava por cima da placa havendo outro caminho de 4
+     * sem nada. `haz` conta os perigos pisados até cada casa e, entre pais de
+     * MESMA distância, fica o de menos perigo (o primeiro, no empate — sem
+     * perigo nenhum o caminho é o de sempre). Não muda o que se alcança nem o
+     * PP: só por onde. Sala sem `state.perigos` nem calcula. */
+    var custo = (state.perigos && Pg()) ? Pg().mapaPasso(state, mover) : null;
+    var haz = custo ? {} : null;
+    if (haz) haz[sx + ',' + sy] = 0;
     while (head < queue.length) {
       var cur = queue[head++];
-      var d = dist[cur.x + ',' + cur.y];
+      var curKey = cur.x + ',' + cur.y;
+      var d = dist[curKey];
       if (maxCost >= 0 && d >= maxCost) continue;
       for (var i = 0; i < DIRS.length; i++) {
         var nx = cur.x + DIRS[i][0], ny = cur.y + DIRS[i][1];
         var key = nx + ',' + ny;
-        if (dist[key] !== undefined) continue;
+        if (dist[key] !== undefined) {
+          if (haz && dist[key] === d + 1 && haz[curKey] + (custo[key] || 0) < haz[key]) {
+            haz[key] = haz[curKey] + (custo[key] || 0);
+            parent[key] = curKey;
+          }
+          continue;
+        }
         if (!isWalkable(state, nx, ny, mover)) continue;
         dist[key] = d + 1;
-        parent[key] = cur.x + ',' + cur.y;
+        parent[key] = curKey;
+        if (haz) haz[key] = haz[curKey] + (custo[key] || 0);
         queue.push({ x: nx, y: ny });
       }
     }
@@ -1313,6 +1352,8 @@ var JOGO = (typeof window !== 'undefined')
       var quem = Engine.unitAt(state, path[pc].x, path[pc].y);
       if (quem && quem !== u) { esbarrou = quem; corte = pc; break; }
       if (armadilhaInimiga(state, u, path[pc].x, path[pc].y)) { corte = pc + 1; break; }
+      // 02/10: a runa de exaustão do Poço também prende o passo em cima dela
+      if (state.perigos && Pg() && Pg().prendePasso(state, u, path[pc].x, path[pc].y)) { corte = pc + 1; break; }
     }
     if (corte < path.length) path = path.slice(0, corte);
     if (!path.length) {
@@ -1342,6 +1383,7 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     u.pp -= path.length;
+    var deX = u.x, deY = u.y;                           // 02/10: o rastro do Colosso de Brasa começa aqui
     u.x = x; u.y = y;
     emit({ type: 'move', uid: uid, path: path });
     if (esbarrou) {
@@ -1363,7 +1405,10 @@ var JOGO = (typeof window !== 'undefined')
       Engine.triggerTrap(state, uid, path[i].x, path[i].y);
       if (!u.alive || state.phase !== 'playing') break;
       Engine.triggerTileEvent(state, uid, path[i].x, path[i].y);
+      // 02/10: a placa de setas e a runa do Poço, na ordem do passo
+      if (state.perigos && Pg() && u.alive && state.phase === 'playing') Pg().aoPisar(state, u, path[i].x, path[i].y, INTERNO);
     }
+    if (state.perigos && Pg() && u.alive && state.phase === 'playing') Pg().aoAndar(state, u, deX, deY, path, INTERNO);
     return true;
   };
 
@@ -1744,6 +1789,7 @@ var JOGO = (typeof window !== 'undefined')
         e = ef[j]; p.push(e.type, nh(e.duration), nh(e.remaining || 0), nh(e.value || 0));
         if (e.lancadoNoTurno != null) p.push('n' + nh(e.lancadoNoTurno));   // 22/09: só quando existe
       }
+      if (u.couraca != null) p.push('k' + nh(u.couraca));                   // 02/10: a couraça do Colosso de Rocha
       ks = Object.keys(u.cooldowns || {}).sort();
       for (j = 0; j < ks.length; j++) p.push(ks[j] + '=' + nh(u.cooldowns[ks[j]]));
       ks = Object.keys(u.castsThisTurn || {}).sort();
@@ -1754,6 +1800,9 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < (st.tileEventsActive || []).length; i++) {
       t = st.tileEventsActive[i]; p.push('E', nh(t.x), nh(t.y), t.eventId, nh(t.remaining));
     }
+    // 02/10: o chão do Poço (placa armada, chão que caiu, poça). Só existe no
+    // Poço — a sala de sempre não muda de hash
+    if (st.perigos) p.push('G', JSON.stringify(st.perigos));
     if (st.pendingFusion) p.push('F', st.pendingFusion.a, st.pendingFusion.b);
     if (st.desafio) {
       p.push('D', st.desafio.vivo ? 1 : 0, nh(st.desafio.passos), st.desafio.executado ? 1 : 0,
@@ -2152,6 +2201,8 @@ var JOGO = (typeof window !== 'undefined')
         amount = comCobertura;
       }
     }
+    // 02/10: a couraça do Colosso de Rocha corta o golpe enquanto aguenta
+    if (target.couraca > 0 && amount > 0 && target.alive && Pg()) amount = Pg().couraca(state, target, amount, element, INTERNO);
     if (!target.alive || amount <= 0) {
       if (target.alive) emit({ type: 'damage', uid: target.uid, amount: 0, element: element });
       return 0;
@@ -2211,6 +2262,8 @@ var JOGO = (typeof window !== 'undefined')
 
     checkEnrage(state, target);
     if (target.hp <= 0) processDeath(state, target);
+    // 02/10: o Colosso da Ventania sopra para longe quem o golpeia de perto
+    else if (sourceUid && Pg() && Engine.unitHasTrait(target, 'ventania')) Pg().aoFerir(state, target, sourceUid, INTERNO);
     return hpLoss;
   }
 
@@ -3469,6 +3522,11 @@ var JOGO = (typeof window !== 'undefined')
         state.tileEventsActive.splice(i, 1);
       }
     }
+    // 02/10: o chão do Poço — dispara o que foi avisado e avisa o que vem
+    if (state.perigos && Pg()) {
+      Pg().inicioRodada(state, INTERNO);
+      if (state.phase !== 'playing') return;
+    }
     spawnTileEvents(state);
   }
 
@@ -3503,6 +3561,9 @@ var JOGO = (typeof window !== 'undefined')
     if (state.phase !== 'playing') return;
     var u = Engine.activeUnit(state);
     if (u) {
+      // 02/10: a poça do Colosso da Maré (e a cura de quem ficou parado nela)
+      if (state.perigos && Pg()) Pg().fimTurno(state, u, INTERNO);
+      if (state.phase !== 'playing') return;
       tickDownEffects(state, u);
       // v2: a fusão declarada resolve no FIM do turno de quem declarou
       if (JOGO.Fusion && JOGO.Fusion.resolve && state.pendingFusion &&
@@ -3631,5 +3692,15 @@ var JOGO = (typeof window !== 'undefined')
       if (pet.alive) tickDownEffects(state, pet);
     }
     return acted;
+  };
+
+  /* 02/10 — O QUE A REGRA DO POÇO PODE USAR DO MOTOR (js/core/poco.js,
+   * Poco.regras). São as funções privadas de sempre, entregues em cada
+   * chamada em vez de expostas em Engine.*: ninguém de fora passa a ferir,
+   * empurrar ou curar sem os funis de dano, colisão e fúria. */
+  var INTERNO = {
+    dano: dealDamage, empurra: forcedMove, cura: applyHeal,
+    tileAt: tileAt, isFloor: isFloor, isWalkable: isWalkable,
+    getTrait: getTrait, manhattan: manhattan, log: log, emit: emit
   };
 })();

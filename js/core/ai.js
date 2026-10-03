@@ -32,6 +32,9 @@ var JOGO = (typeof window !== 'undefined')
  *    O monstro não vê a do Xamã (nem nenhuma do lado do jogador) e cai nela; no
  *    PvP ninguém vê a do outro. Fora do PvP a armadilha de monstro segue à
  *    vista do jogador, então pet e invocação dele ainda desviam dela (−60).
+ *  - O CHÃO DO POÇO (02/10): o peso de cada casa vem de Poco.regras.pesoCasas
+ *    (js/core/poco.js) — a casa avisada para o começo da próxima rodada pesa
+ *    −80, mais que armadilha, porque a unidade VAI estar lá quando o golpe vier.
  *  - EVENTOS DE TERRENO: bônus por terminar em evento bom (buff/fountain) e
  *    penalidade por evento ruim (drain); mystery vale um pouco (aposta).
  *  - ESQUIVA: recuar de uma célula fixada é penalizado pelo risco real
@@ -710,6 +713,12 @@ var JOGO = (typeof window !== 'undefined')
       else if (kind === 'portal') w = 0;
       eventCells[te.x + ',' + te.y] = w;
     }
+    /* 02/10: o chão do Poço (js/core/poco.js, Poco.regras.pesoCasas). A casa
+     * avisada para o começo da próxima rodada pesa mais que armadilha: a
+     * unidade VAI estar nela quando o golpe vier. Sem `state.perigos` (todo
+     * calabouço que não é o Poço) nada muda. */
+    var PR = (state.perigos && JOGO.Poco && JOGO.Poco.regras) ? JOGO.Poco.regras : null;
+    var pesoChao = PR ? PR.pesoCasas(state, unit) : null;
 
     // candidatos de posição: célula atual + alcançáveis com o PP atual
     var candidates = [{ x: unit.x, y: unit.y, cost: 0, risky: false }]
@@ -745,6 +754,7 @@ var JOGO = (typeof window !== 'undefined')
       if (trapCells[cell.x + ',' + cell.y]) score -= 60;
       var ev = eventCells[cell.x + ',' + cell.y];
       if (ev) score += ev;
+      if (pesoChao && pesoChao[cell.x + ',' + cell.y]) score += pesoChao[cell.x + ',' + cell.y];
 
       if (score > bestScore) { bestScore = score; bestCell = cell; bestFirstCast = cast; }
     }

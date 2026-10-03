@@ -576,6 +576,10 @@ var JOGO = (typeof window !== 'undefined')
     return saida;
   };
 
+  /* 02/10: o manifesto conhece esta chave? (models3d_v2 M.corpoDe — o colosso
+   * sem arte veste o corpo provisório até a chave própria dele existir) */
+  B.conhece = function (k) { return !!(k && porChave[k]); };
+
   function pronta(k) {
     var m2 = M2();
     return !!(garantidas[k] || (m2 && m2.decodificado && m2.decodificado(k)));

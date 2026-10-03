@@ -95,6 +95,12 @@ JOGO.DATA = {
 { type:'enrage', hpPct, power }           // abaixo de hpPct*hpMax ganha +power
 { type:'pushImmune' }
 { type:'regenAura', value, radius }       // cura aliados próximos no início do próprio turno
+// 02/10 — os quatro dos COLOSSOS DO POÇO. A regra deles mora em js/core/poco.js
+// (Poco.regras) e só vale com ele carregado; o colosso só nasce no Poço:
+{ type:'rastroBrasa', spellId, duration } // as casas por onde passa viram armadilha do lado dele (spellId em DATA.monsterSpells)
+{ type:'mare', cura, duration }           // poça onde termina a vez; parado em cima dela recupera `cura` × vida máxima
+{ type:'couraca', pontos, reducao }       // corta `reducao` de cada golpe até perder `pontos` placas (golpe de ar arranca duas)
+{ type:'ventania', tiles }                // quem o golpeia de perto, na própria vez, é soprado `tiles` casas
 ```
 
 ### Layout de sala (strings, todas do mesmo comprimento; grades entre 11×11 e 15×15)

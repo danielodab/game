@@ -189,15 +189,18 @@ for (const s of salas) {
   check(nome + ': a linha para no primeiro muro', linhaPassaMuro === 0, linhaPassaMuro + ' casas depois do muro');
 }
 
-// o Poço: andares semeados são salas reais (já cobertas acima)
+// o Poço: andares semeados são salas reais (já cobertas acima). 02/10: o chefe
+// e o colosso ganham casa com LETRA PRÓPRIA (js/core/poco.js) — o que a visão
+// precisa é o TERRENO da sala real, então as letras de monstro viram uma só
 if (Poco && Poco.salaSemeada) {
-  const reais = new Set(salas.map((s) => s.room.layout.join('\n')));
+  const terreno = (layout) => layout.join('\n').replace(/[a-z]/g, 'm');
+  const reais = new Set(salas.map((s) => terreno(s.room.layout)));
   let andares = 0, estranhos = 0;
   for (let andar = 1; andar <= 10; andar++) {
     const s = Poco.salaSemeada(andar, 12345 + andar);
     if (!s || !s.layout) continue;
     andares++;
-    if (!reais.has(s.layout.join('\n'))) estranhos++;
+    if (!reais.has(terreno(s.layout))) estranhos++;
   }
   check('o Poço: ' + andares + ' andares semeados, todos com o palco de uma sala real', andares === 10 && estranhos === 0,
         estranhos + ' andares com palco que não é de sala real');

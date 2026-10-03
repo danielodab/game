@@ -28,6 +28,10 @@ var JOGO = (typeof window !== 'undefined')
 // Traços permitidos (vocabulário FECHADO, contrato §3 / v1):
 //   explodeOnDeath{element,damage,radius} · split{monsterId,count} ·
 //   enrage{hpPct,power} · pushImmune{} · regenAura{value,radius}
+// 02/10, os quatro dos COLOSSOS DO POÇO (a regra mora em js/core/poco.js,
+// Poco.regras, e só vale com ele carregado — o colosso só nasce no Poço):
+//   rastroBrasa{spellId,duration} · mare{cura,duration} ·
+//   couraca{pontos,reducao} · ventania{tiles}
 //
 // >>> PEDRAS DE FORJA (adendo v2.1). Todo monstro que NÃO é invocação derruba
 // >>> pedras do PRÓPRIO elemento: o id da pedra sai de `monster.element` cruzado
@@ -182,7 +186,10 @@ JOGO.DATA = JOGO.DATA || {};
         // chefe mantém a vida escrita à mão (teto de 600 do contrato); o comum
         // engorda conforme a profundidade. Poder sobe para todos do andar.
         hp: o.boss ? o.hp : Math.round(o.hp * tierOf(o).hp),
-        pa: o.pa, pp: o.pp, initiative: o.initiative, power: tierOf(o).power,
+        // 02/10: `power` à mão só para quem não tem calabouço que o escale (os
+        // Colossos do Poço); sem ele, o NO_TIER daria poder 0 a um gigante
+        pa: o.pa, pp: o.pp, initiative: o.initiative,
+        power: (typeof o.power === 'number') ? o.power : tierOf(o).power,
         dodge: o.dodge, lock: o.lock, resists: res
       },
       spells: o.spells,
@@ -190,6 +197,8 @@ JOGO.DATA = JOGO.DATA || {};
       traits: o.traits || [],
       boss: !!o.boss,
       summonOnly: !!o.summonOnly,
+      // 02/10: os Colossos do Poço — fora do sorteio comum (js/core/poco.js)
+      colosso: !!o.colosso,
       // UMA CASA DECIMAL, de propósito. Com a xpTable atual o nível 3 custa 35
       // XP e a Estufa inteira vale isso — arredondando para inteiro, TODO
       // bicho do calabouço 1 viraria "1 XP" e o peso relativo entre eles
@@ -1785,6 +1794,132 @@ JOGO.DATA = JOGO.DATA || {};
       hp: 40, pa: 4, pp: 6, initiative: 88, dodge: 34, lock: 6,
       resists: { fogo: -15, terra: 30 },
       spells: ['m-sum-falcon-strike', 'm-sum-falcon-dive'], ai: 'melee', traits: [], summonOnly: true, xp: 0
+    }
+  });
+
+  // ==========================================================================
+  // 7) OS COLOSSOS DO POÇO (02/10) — os monstros MAIORES que o dono pediu para
+  //    o Poço, "somados aos dos calabouços, não no lugar deles".
+  //
+  //    Não moram em calabouço nenhum (dungeonId null) e NÃO entram no sorteio
+  //    comum do Poço (`colosso: true` — js/core/poco.js os tira do elenco): cada
+  //    andar múltiplo de 5 chama UM, girando fogo → água → terra → ar. Não são
+  //    chefes (`boss: false`) de propósito: os SELOS e as insígnias são só de
+  //    chefe e a roleta do Colecionador depende disso. Pagam mais que qualquer
+  //    comum (XP 45 contra 29,1 do melhor; pedras SEMPRE, 4 a 6 — o teto de 6
+  //    do não-chefe, tests/validate_world.html) e menos que um
+  //    chefe.
+  //
+  //    O PODER é escrito à mão (`power`) porque a tabela TIER é por calabouço e
+  //    o colosso não tem um; 60 fica no meio dos comuns que o Poço mistura (0 a
+  //    105). A vida sobe com o andar pela mesma escalada do resto do Poço
+  //    (Poco.escalaEstado), não aqui.
+  //
+  //    Os traços NOVOS (rastroBrasa, mare, couraca, ventania) são regra do
+  //    Poço e moram em js/core/poco.js (Poco.regras) — o motor só os chama.
+  // ==========================================================================
+  addSpells({
+    'm-colosso-punho-lava': {
+      name: 'Punho de Lava', element: 'fogo', paCost: 4, castsPerTurn: 1,
+      effects: [{ type: 'damage', element: 'fogo', min: 26, max: 34 }],
+      description: 'O colosso desce o punho de rocha rachada; a lava das fendas respinga em quem leva.',
+      flavor: 'Cada soco dele deixa o chão mais quente que antes.', fxKey: 'slam'
+    },
+    'm-colosso-erupcao': {
+      name: 'Erupção', element: 'fogo', paCost: 3, cooldown: 3, range: [0, 0], los: false,
+      shape: 'circle', size: 1, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'fogo', min: 16, max: 22 }],
+      description: 'As fendas do corpo se abrem de uma vez e cospem lava em toda casa colada a ele.',
+      flavor: 'Ficar perto é a única maneira de bater nele. Ele sabe.', fxKey: 'nova'
+    },
+    'm-colosso-brasa-chao': {
+      name: 'Chão em Brasa', element: 'fogo', paCost: 0, range: [0, 0], los: false,
+      targetSide: 'any',
+      effects: [{ type: 'damage', element: 'fogo', min: 12, max: 16 }],
+      description: 'A casa por onde o Colosso de Brasa passou ainda arde: queima quem pisa nela. (Rastro: nasce do passo dele, não é conjurado.)',
+      flavor: 'Ele não anda. Ele derrete o caminho.', fxKey: 'nova'
+    },
+    'm-colosso-onda': {
+      name: 'Onda Quebrada', element: 'agua', paCost: 4, range: [1, 2],
+      effects: [{ type: 'damage', element: 'agua', min: 24, max: 30 }, { type: 'push', tiles: 1 }],
+      description: 'Um braço de coral e água viva quebra sobre o alvo como onda em pedra, e o empurra 1 casa.',
+      flavor: 'O mar enterrado ainda lembra das marés.', fxKey: 'slam'
+    },
+    'm-colosso-tromba': {
+      name: 'Tromba d’Água', element: 'agua', paCost: 3, cooldown: 2, range: [1, 4],
+      shape: 'line', size: 3, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'agua', min: 16, max: 20 }],
+      description: 'O colosso cospe uma coluna de água que varre 3 casas em linha.',
+      flavor: 'Tudo o que ele engole volta. Com força.', fxKey: 'beam'
+    },
+    'm-colosso-esmaga': {
+      name: 'Esmagar', element: 'terra', paCost: 4,
+      effects: [{ type: 'damage', element: 'terra', min: 28, max: 36 }],
+      description: 'Um punho do tamanho de um homem cai sobre o alvo.',
+      flavor: 'Pedra não tem pressa. Pedra tem peso.', fxKey: 'slam'
+    },
+    'm-colosso-tremor': {
+      name: 'Tremor de Couraça', element: 'terra', paCost: 3, cooldown: 3, range: [1, 3],
+      shape: 'cross', size: 1, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'terra', min: 14, max: 18 }, { type: 'root', duration: 1 }],
+      description: 'O colosso bate o pé: o chão racha em cruz no alvo, ferindo e prendendo por 1 turno.',
+      flavor: 'O chão do Poço obedece a quem pesa mais.', fxKey: 'nova'
+    },
+    'm-colosso-rajada': {
+      name: 'Rajada Presa', element: 'ar', paCost: 4, range: [1, 3],
+      effects: [{ type: 'damage', element: 'ar', min: 22, max: 28 }, { type: 'push', tiles: 2 }],
+      description: 'Uma das correntes de vento escapa do corpo e acerta o alvo, que voa 2 casas.',
+      flavor: 'O vento preso quer sair. Sai em cima de alguém.', fxKey: 'gust'
+    },
+    'm-colosso-ciclone': {
+      name: 'Ciclone Curto', element: 'ar', paCost: 3, cooldown: 3, range: [0, 0], los: false,
+      shape: 'ring', size: 2, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'ar', min: 14, max: 18 }, { type: 'pull', tiles: 1 }],
+      description: 'As correntes giram: um anel de vento a 2 casas fere e puxa 1 casa para perto dele.',
+      flavor: 'Quem fugiu dele volta, de um jeito ou de outro.', fxKey: 'nova'
+    }
+  });
+
+  addMonsters({
+    'colosso_fogo': {
+      name: 'Colosso de Brasa', family: 'Colossos do Poço', element: 'fogo', dungeonId: null, colosso: true,
+      description: 'Uma montanha de rocha vulcânica andando de pé, rachada de alto a baixo; pelas fendas corre lava viva. Cada passo deixa a casa em brasa atrás dele, e quem pisa ali se queima.',
+      flavor: 'Os andares do Poço guardam o calor por onde ele passou.',
+      hp: 380, power: 60, pa: 7, pp: 3, initiative: 34, dodge: 0, lock: 40,
+      resists: { ar: 30, agua: -25, terra: 10 },
+      spells: ['m-colosso-punho-lava', 'm-colosso-erupcao'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }, { type: 'rastroBrasa', spellId: 'm-colosso-brasa-chao', duration: 2 }],
+      xp: 45, stone: [1, 4, 6]
+    },
+    'colosso_agua': {
+      name: 'Colosso da Maré', family: 'Colossos do Poço', element: 'agua', dungeonId: null, colosso: true,
+      description: 'Um corpo de coral e água viva, maior que dois homens, que pinga sem nunca secar. Onde ele para nasce uma poça, e parado dentro dela ele se refaz.',
+      flavor: 'Tire-o da água e ele é só pedra molhada.',
+      hp: 400, power: 60, pa: 7, pp: 3, initiative: 30, dodge: 4, lock: 36,
+      resists: { fogo: 30, terra: -25, ar: 10 },
+      spells: ['m-colosso-onda', 'm-colosso-tromba'], ai: 'melee',
+      traits: [{ type: 'mare', cura: 0.08, duration: 3 }],
+      xp: 45, stone: [1, 4, 6]
+    },
+    'colosso_terra': {
+      name: 'Colosso de Rocha', family: 'Colossos do Poço', element: 'terra', dungeonId: null, colosso: true,
+      description: 'Um gigante de pedra vestido com uma couraça de lajes. Enquanto a couraça aguenta, golpe nenhum entra inteiro; o vento a arranca mais depressa que qualquer lâmina.',
+      flavor: 'Primeiro a couraça. Depois, o resto.',
+      hp: 340, power: 60, pa: 7, pp: 2, initiative: 22, dodge: 0, lock: 48,
+      resists: { agua: 30, ar: -25, fogo: 10 },
+      spells: ['m-colosso-esmaga', 'm-colosso-tremor'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }, { type: 'couraca', pontos: 6, reducao: 0.5 }],
+      xp: 45, stone: [1, 4, 6]
+    },
+    'colosso_ar': {
+      name: 'Colosso da Ventania', family: 'Colossos do Poço', element: 'ar', dungeonId: null, colosso: true,
+      description: 'Um vulto alto envolto em correntes de ferro, e em cada corrente um vento preso que uiva. Anda mais que os outros colossos, e quem o golpeia de perto é soprado para longe.',
+      flavor: 'Chegar perto dele custa o dobro: ir e voltar.',
+      hp: 320, power: 60, pa: 7, pp: 5, initiative: 60, dodge: 16, lock: 30,
+      resists: { terra: 30, fogo: -25, agua: 10 },
+      spells: ['m-colosso-rajada', 'm-colosso-ciclone'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }, { type: 'ventania', tiles: 2 }],
+      xp: 45, stone: [1, 4, 6]
     }
   });
 
