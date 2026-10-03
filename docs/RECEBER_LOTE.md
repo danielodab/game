@@ -127,8 +127,11 @@ Cada modelo do Meshy traz três imagens 1024: cor, relevo (`normalTexture`) e
 metal/rugosidade. No `.glb` são ~1 MB de JPEG; no navegador viram ~12 MB de
 textura descompactada, e era isso que levava a aba a 2 GB. O dono comparou
 fotos lado a lado e aprovou: **a cor fica em 1024, relevo e metal/rugosidade
-(e oclusão, se vier em imagem separada) caem para 512** — a praça foi de
-1,57 GB para ~0,86 GB sem diferença a olho.
+(e oclusão, se vier em imagem separada) caem para 512**. Medido no jogo
+servido, mesma praça e mesma vitrine (143 modelos): 1,58 GB → 0,88 GB de
+textura decodificada, e a foto difere da anterior menos que duas fotos
+seguidas da MESMA versão (o ruído da animação). Os `.glb` reduzidos caíram
+de 106,1 para 99,0 MB.
 
 - Quem faz é `tools/reduz_texturas.py` (Lanczos, mesmo formato; JPEG a 90 com
   croma 4:4:4, porque no relevo e no brilho os canais não são cor). Imagem que
