@@ -28,6 +28,8 @@
          servidor, "Conferindo…" e depois o dano CONFERIDO, a posição e as tentativas que restam (e a
          nota quando o número daqui era outro: vale o do servidor); o lance anotado (o `p` da
          preparação) foi junto no fechar; a tela decide pointer-events e os botões respondem;
+       · 03/10, o sal de cada rodada: na virada a barra diz que a rodada vem do servidor, sem rede diz que
+         espera e o pedido sai de novo com o mesmo caminho, e a recusa de vez acaba a tentativa ali;
        · o aviso da loja para o prêmio do Eco (o título e os selos), e o título ganho no menu da ficha do
          Personagem, livre para pendurar; o cais da praça com a 7ª porta (o Eco) cabe a 320, 360 e 390 px;
        · nenhum erro na página e o save de verdade intocado. -->
@@ -140,9 +142,9 @@
     check('a ficha do Eco abre (UI.openSheet("eco"))', !!f && /O Eco Primordial/.test(txt(q1('.sheet-head', f))));
     check('sem servidor o botão é o do TREINO (não conta no placar)', /Treinar contra o Eco/.test(txt(q1('.eco-entra', f))));
     var regras = txt(q1('.eco-regras', f));
-    check('as regras dizem 12 rodadas, 3 por dia, as fases e o aviso',
+    check('as regras dizem 12 rodadas, 3 por dia, as fases, o aviso e que a sorte de cada rodada vem do servidor',
           /12 rodadas/.test(regras) && /3 tentativas por dia/.test(regras) && /Fogo → Água → Terra → Ar/.test(regras) &&
-          /AVISADO/.test(regras), regras.slice(0, 120));
+          /AVISADO/.test(regras) && /sorte de cada rodada vem do servidor/.test(regras), regras.slice(0, 120));
     check('a dupla de "Quem desce" aparece na ficha', /Vai a dupla/.test(txt(q1('.eco-dupla', f))) &&
           txt(q1('.eco-dupla', f)).indexOf(D.classes[P.hero(hid).classId || hid].name) >= 0, txt(q1('.eco-dupla', f)));
   });
@@ -273,6 +275,61 @@
           /1\.800 pontos/.test(est) && /4\.100/.test(est) && /2º lugar/.test(est) && /Tentativas de hoje: 1/.test(est), est);
     check('a nota quando o número daqui era outro', /vale o do servidor/.test(est), est);
     check('ainda há tentativa: "Tentar de novo" aparece', !!botaoTexto(/Tentar de novo/, t));
+  });
+
+  // ---- 4b) 03/10: o sal de cada rodada na tela — a virada espera o servidor, a rede que cai, a recusa de vez
+  var salPedidos = [], respondeSal = null;
+  p(function () {
+    JOGO.Autoridade = {
+      ligada: function () { return true; },
+      RETENTA_MS: 30,
+      abreEco: function () { return Promise.resolve({ ok: true, tentativa: 'tent-de-prova-0002', semente: 778, restantes: 0 }); },
+      salEco: function (corpo) {
+        salPedidos.push(corpo);
+        return new Promise(function (r) { respondeSal = r; });
+      },
+      fechaEco: function () { return new Promise(function () {}); }
+    };
+    G.init('menu');
+    G.startEco([hid]);
+    return espera(30);
+  });
+  p(function () {
+    var op = E.opcoesDe(G.state, G.state.placement.uid)[0];
+    G.marcaCasa(op.x, op.y);
+    G.prontoPrep(true);
+    G.update(0.016);
+    for (var i = 0; i < 400 && G.state && G.state.phase === 'playing' && !G.ecoSalEstado(); i++) {
+      if (G.isPlayerTurn()) G.endTurn(); else G.update(0.016);
+    }
+    G.update(0.016);                                // o quadro seguinte: o pedido sai aqui
+    UI.update(0.016);
+    check('na virada da rodada 1 a batalha pede o sal da 2 ao servidor, com o caminho dos lances',
+          salPedidos.length === 1 && salPedidos[0].rodada === 2 && salPedidos[0].tentativa === 'tent-de-prova-0002' &&
+          /^[0-9a-f]{64}$/.test(salPedidos[0].caminho), JSON.stringify(salPedidos));
+    check('a barra diz que a rodada vem do servidor (a vez é de ninguém)', /A rodada 2 vem do servidor/.test(txt(q1('.bt-wait.eco-sal'))) &&
+          !G.isPlayerTurn(), txt(q1('.bt-wait')));
+    respondeSal({ ok: false, foraDoAr: true, erro: 'o servidor não respondeu' });
+    return espera(10);
+  });
+  p(function () {
+    UI.update(0.016);
+    check('sem rede a barra avisa e a tentativa ESPERA (não acaba)', G.screen === 'battle' &&
+          /Sem resposta do servidor — a rodada 2 espera/.test(txt(q1('.bt-wait.eco-sal.is-sem-rede'))), txt(q1('.bt-wait')));
+    return espera(90);                              // a retentativa (RETENTA_MS da autoridade de mentira)
+  });
+  p(function () {
+    G.update(0.016);
+    check('o pedido sai de novo, com o MESMO caminho', salPedidos.length === 2 && salPedidos[1].caminho === salPedidos[0].caminho,
+          salPedidos.length);
+    respondeSal({ ok: false, erro: 'essa tentativa venceu (prazo)', motivo: 'vencida' });
+    return espera(10);
+  });
+  p(function () {
+    var t = q1('#ui-root .screen-ecoFim.is-on');
+    check('a recusa de vez encerra a tentativa na virada: a tela do fim diz a rodada e o porquê',
+          G.screen === 'ecoFim' && !!t && /A tentativa parou na rodada 2/.test(txt(q1('h1', t))) &&
+          /venceu \(prazo\)/.test(txt(q1('.eco-fim-sal', t))), txt(t).slice(0, 160));
   });
 
   // ---- 5) o aviso da loja do prêmio

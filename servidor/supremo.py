@@ -16,10 +16,26 @@ AS ROTAS:
                               o melhor da semana e a posição)
   GET  /api/supremo/ranking   público — o ranking de uma semana (?semana=N; sem, a de agora), 100 linhas
   POST /api/supremo/abrir     {herois, versaoRegras} → {tentativa, semente, restantes}: a SEMENTE é do
-                              servidor, como a do bilhete da sala (salas.py)
+                              servidor, como a do bilhete da sala (salas.py) — e só decide a colocação e
+                              a rodada 1
+  POST /api/supremo/sal       {tentativa, rodada, caminho} → {rodada, sal}: o sorteio da rodada 2 a 12,
+                              dado só contra o CAMINHO (o hash dos lances até a virada) e TRAVADO nele
   POST /api/supremo/fechar    {tentativa, lances, hashFinal} → o juiz refaz a tentativa
                               (servidor/juiz/supremo.js) e o placar é o DANO DO REPLAY — o número que o
                               navegador mostrou não entra em conta nenhuma; replay que diverge não pontua
+
+O SAL DE CADA RODADA (03/10, o dono: "dificulte"). Até aqui a semente inteira saía no abrir e valia 2 h: um
+programa refazia a Câmara fora do jogo, procurava a sequência que tirava mais dano e mandava só ela. Agora a
+rodada R (2 a 12) só começa com o sal dela (engine.js, "O SORTEIO RODADA A RODADA"), e o sal sai daqui:
+  - o jogo manda o caminho (SHA-256 dos lances até a virada: Engine.ecoCaminho) e recebe
+    sal = HMAC(chave da tentativa, "R:caminho") — a chave é HMAC(segredo do servidor, "eco-sal:" + tentativa)
+    e nunca sai daqui, a não ser para o juiz;
+  - UM caminho por rodada por tentativa (supremo_sais, chave (tentativa, rodada)): o mesmo caminho de novo
+    devolve o mesmo sal (a rede caiu no meio da resposta); outro caminho é 409 'caminho-preso' — saber a sorte
+    de dois futuros é exatamente o ensaio; e só a rodada seguinte à última travada (409 'rodada-fora');
+  - o juiz recalcula o caminho de cada lance de sal e o sal com a chave: outro caminho jogado com o sal de um,
+    sal inventado ou rodada pulada derrubam a tentativa (422, 'recusada').
+Ensaiar continua possível só DENTRO da rodada de agora, com a sorte dela na mão — que é o que jogar já é.
 
 AS RÉGUAS:
   - TENTATIVAS_POR_DIA por conta, no dia de BRASÍLIA (o mesmo das missões). Abrir conta como usada:
@@ -40,8 +56,11 @@ AS RÉGUAS:
     Nada é comprável: nem tentativa a mais, nem prêmio, nem título.
 """
 import calendar
+import hashlib
+import hmac
 import json
 import logging
+import re
 import secrets
 import time
 
@@ -52,8 +71,15 @@ from salas import LANCES_MAX, RE_BILHETE, SALA_MIN_S, SALA_S_POR_TURNO, _inteiro
 log = logging.getLogger('api')
 
 TENTATIVAS_POR_DIA = 3            # o espelho mora em js/core/data/eco.js (DATA.eco.tentativasPorDia)
-VALIDADE_S = 2 * 3600             # uma tentativa aberta vale 2 h (12 rodadas cabem com folga)
+RODADAS = 12                      # o espelho mora em js/core/data/eco.js (DATA.eco.rodadas): o sal vai da 2 a esta
+# A VALIDADE (revista em 03/10, com o sal por rodada). Antes as 2 h eram também a janela do ensaio: a semente
+# inteira na mão, 2 h para buscar fora do jogo. Com o sal por rodada não há o que buscar além da rodada de agora,
+# e encurtar o prazo não fecharia nada — só puniria quem pausa, joga no celular devagar ou fica sem rede no meio
+# (sem o sal a tentativa ESPERA). As 2 h ficam como conforto: 12 rodadas jogadas sem pressa cabem com folga.
+VALIDADE_S = 2 * 3600
 FOLGA_FECHO = VALIDADE_S          # a semana fecha 2 h depois do domingo 23:59:59
+RE_CAMINHO = re.compile(r'^[0-9a-f]{64}$')    # o SHA-256 dos lances (Engine.ecoCaminho), em hexadecimal minúsculo
+SAL_MAX = 0x7fffffff              # o sal tem 31 bits, como a semente (Engine.SAL_MAX)
 FUSO_S = -3 * 3600                # Brasília
 SEMANA_S = 7 * 86400
 EPOCA = calendar.timegm((2026, 1, 5, 0, 0, 0))   # uma SEGUNDA-feira, 00:00 no relógio de Brasília
@@ -105,6 +131,16 @@ CREATE TABLE IF NOT EXISTS supremo_estados(
   tentativa  TEXT PRIMARY KEY REFERENCES supremo_tentativas(id) ON DELETE CASCADE,
   progress   TEXT NOT NULL,
   db         TEXT
+);
+-- 03/10: o SAL de cada rodada, travado no caminho (o hash dos lances até a virada) — UMA linha por rodada por
+-- tentativa: a chave primária é a trava. O juiz recebe estas linhas no fechar e confere cada lance de sal
+CREATE TABLE IF NOT EXISTS supremo_sais(
+  tentativa  TEXT NOT NULL REFERENCES supremo_tentativas(id) ON DELETE CASCADE,
+  rodada     INTEGER NOT NULL,
+  caminho    TEXT NOT NULL,
+  sal        INTEGER NOT NULL,
+  pedido_ms  INTEGER NOT NULL,
+  PRIMARY KEY (tentativa, rodada)
 );
 -- a semana fechada: a PORTA dos prêmios (uma linha por semana, gravada na mesma transação que eles)
 CREATE TABLE IF NOT EXISTS supremo_semanas(
@@ -170,6 +206,22 @@ def selos_da_faixa(n):
 def faixas_publicas():
     return [{'id': f['id'], 'de': f['de'], 'ate': f['ate'], 'nome': f['nome'], 'vintens': f['vintens'],
              'selos': f['selos'], 'titulo': f['titulo']} for f in FAIXAS]
+
+
+# ---- o sal de cada rodada (03/10) -----------------------------------------------------------
+def chave_da_tentativa(segredo, tid):
+    """A chave do sorteio de UMA tentativa: HMAC(segredo do servidor, 'eco-sal:' + id). Derivada, não guardada:
+    os dois contêineres do rolling update leem o mesmo segredo (/dados/segredo) e chegam à mesma. O juiz recebe
+    esta (que só vale para esta tentativa), nunca o segredo."""
+    s = segredo if isinstance(segredo, bytes) else str(segredo).encode('utf-8')
+    return hmac.new(s, ('eco-sal:' + tid).encode('utf-8'), hashlib.sha256).digest()
+
+
+def sal_da_rodada(chave, rodada, caminho):
+    """O sal da rodada: HMAC-SHA-256(chave, 'R:caminho'), os 31 bits de cima do começo — a MESMA conta do juiz
+    (servidor/juiz/supremo.js, salDe; tests/supremo_api.py, test_14, confere as duas)."""
+    h = hmac.new(chave, ('%d:%s' % (rodada, caminho)).encode('utf-8'), hashlib.sha256).hexdigest()
+    return int(h[:8], 16) & SAL_MAX
 
 
 # a conta banida AGORA (03/10, revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta
@@ -397,6 +449,71 @@ class SupremoMixin:
         return 200, {'ok': True, 'tentativa': tid, 'semente': semente, 'restantes': TENTATIVAS_POR_DIA - usadas - 1,
                      'semana': semana_publica(semana)}
 
+    # -- POST /api/supremo/sal ------------------------------------------------------------------
+    def _supremo_venceu(self, s, instante):
+        """Dentro da _escrita: o motivo de a tentativa aberta `s` já ter vencido (a semana dela fechou, o prazo
+        passou), ou None. O fechar e o sal leem a mesma régua."""
+        if self.con.execute("SELECT 1 FROM supremo_semanas WHERE semana = ?", (s['semana'],)).fetchone():
+            return 'semana-fechou'
+        if instante - s['aberta_ms'] / 1000.0 > VALIDADE_S:
+            return 'prazo'
+        return None
+
+    def supremo_sal(self, conta, corpo):
+        """O sal da rodada R, contra o caminho dos lances até a virada dela. A trava: uma linha por (tentativa,
+        rodada); o mesmo caminho repetido devolve o mesmo sal (a resposta que a rede perdeu), outro caminho é
+        recusado — e a tentativa segue no caminho que travou."""
+        cid = conta['id']
+        tid, rodada, caminho = corpo.get('tentativa'), corpo.get('rodada'), corpo.get('caminho')
+        if not isinstance(tid, str) or not RE_BILHETE.match(tid):
+            raise Recusa(400, 'tentativa inválida')
+        if not _inteiro_puro(rodada) or not 2 <= rodada <= RODADAS:
+            raise Recusa(400, 'rodada precisa ser um inteiro de 2 a %d (a 1 é da semente)' % RODADAS)
+        if not isinstance(caminho, str) or not RE_CAMINHO.match(caminho):
+            raise Recusa(400, 'caminho precisa ser o SHA-256 dos lances, em hexadecimal')
+        self._supremo_fecha_vencidas()
+        instante = time.time()
+        t = int(instante)
+        recusa = None
+        with self._escrita():
+            s = self.con.execute("SELECT * FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
+            if s is None or s['conta_id'] != cid:            # a de outra conta: a mesma resposta
+                raise Recusa(404, 'tentativa não encontrada')
+            if s['estado'] == 'vencida':
+                raise Recusa(410, 'essa tentativa venceu (%s)' % (s['motivo'] or 'prazo'), motivo='vencida')
+            if s['estado'] != 'aberta':
+                raise Recusa(409, 'essa tentativa já foi fechada (%s)' % s['estado'], motivo='fechada')
+            vencida = self._supremo_venceu(s, instante)
+            if vencida:
+                self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', motivo = ?, fechada_em = ? "
+                                 "WHERE id = ?", (vencida, t, tid))
+                recusa = Recusa(410, 'essa tentativa venceu (%s)' % vencida, motivo='vencida')
+            else:
+                ja = self.con.execute("SELECT caminho, sal FROM supremo_sais WHERE tentativa = ? AND rodada = ?",
+                                      (tid, rodada)).fetchone()
+                if ja is not None:
+                    if ja['caminho'] == caminho:
+                        return 200, {'ok': True, 'rodada': rodada, 'sal': ja['sal']}
+                    # o ensaio: a sorte de outro futuro para a mesma rodada. Fica no registro da conta
+                    self._evento(cid, 'supremo-ensaio', {'tentativa': tid, 'rodada': rodada, 'motivo': 'caminho-preso'})
+                    recusa = Recusa(409, 'a rodada %d já tem o sorteio dela, preso aos lances que você mandou antes — '
+                                         'outro caminho não ganha outra sorte' % rodada, motivo='caminho-preso')
+                else:
+                    ultima = self.con.execute("SELECT MAX(rodada) FROM supremo_sais WHERE tentativa = ?",
+                                              (tid,)).fetchone()[0]
+                    esperada = (ultima or 1) + 1
+                    if rodada != esperada:
+                        self._evento(cid, 'supremo-ensaio', {'tentativa': tid, 'rodada': rodada, 'motivo': 'rodada-fora'})
+                        recusa = Recusa(409, 'a rodada %d não é a próxima desta tentativa (a próxima é a %d)'
+                                        % (rodada, esperada), motivo='rodada-fora', esperada=esperada)
+                    else:
+                        sal = sal_da_rodada(chave_da_tentativa(self.segredo, tid), rodada, caminho)
+                        self.con.execute("INSERT INTO supremo_sais(tentativa, rodada, caminho, sal, pedido_ms) "
+                                         "VALUES (?, ?, ?, ?, ?)", (tid, rodada, caminho, sal, int(instante * 1000)))
+                        return 200, {'ok': True, 'rodada': rodada, 'sal': sal}
+        # fora da transação: o que ela gravou (a tentativa vencida, o evento do ensaio) já está gravado
+        raise recusa
+
     # -- POST /api/supremo/fechar ---------------------------------------------------------------
     def _supremo_marca(self, tid, estado, motivo, t):
         with self._escrita():
@@ -430,10 +547,7 @@ class SupremoMixin:
             if s['estado'] != 'aberta':
                 raise Recusa(409, 'essa tentativa já foi fechada (%s)' % s['estado'])
             decorrido = instante - s['aberta_ms'] / 1000.0
-            if self.con.execute("SELECT 1 FROM supremo_semanas WHERE semana = ?", (s['semana'],)).fetchone():
-                vencida = 'semana-fechou'
-            elif decorrido > VALIDADE_S:
-                vencida = 'prazo'
+            vencida = self._supremo_venceu(s, instante)
             if vencida:
                 self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', motivo = ?, fechada_em = ? "
                                  "WHERE id = ?", (vencida, t, tid))
@@ -446,6 +560,9 @@ class SupremoMixin:
                         estado = {'progress': json.loads(foto['progress']), 'db': json.loads(foto['db'] or '{}')}
                     except (TypeError, ValueError):
                         pass
+                # 03/10: os caminhos travados rodada a rodada — o juiz confere cada lance de sal contra eles
+                sais = [{'rodada': r['rodada'], 'caminho': r['caminho'], 'sal': r['sal']} for r in self.con.execute(
+                    "SELECT rodada, caminho, sal FROM supremo_sais WHERE tentativa = ? ORDER BY rodada", (tid,))]
         if vencida:
             raise Recusa(410, 'essa tentativa venceu (%s)' % vencida, motivo='vencida')
         if decorrido < SALA_MIN_S:
@@ -454,7 +571,9 @@ class SupremoMixin:
         pedido = {'conta': {'id': cid, 'gm': bool(conta['gm'])},
                   'tentativa': {'semente': s['semente'], 'herois': json.loads(s['herois']),
                                 # a versão das regras com que abriu: o juiz confere contra a dele
-                                'regras': s['regras'] if _inteiro_puro(s['regras']) else 1},
+                                'regras': s['regras'] if _inteiro_puro(s['regras']) else 1,
+                                # a chave DESTA tentativa (não o segredo) e os sais que saíram daqui
+                                'chaveSal': chave_da_tentativa(self.segredo, tid).hex(), 'sais': sais},
                   'lances': lances, 'hashFinal': hash_final,
                   'progress': estado['progress'], 'db': estado['db'],
                   'contexto': {'agoraMs': int(instante * 1000)}}

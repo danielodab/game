@@ -20,11 +20,20 @@ número do cliente — e as réguas da semana:
   - a semana fecha sozinha (preguiçosa, no primeiro pedido depois do fim + a folga): prêmios por
     faixa, UMA vez só (chamar de novo não duplica), pela fila da loja, e o juiz entrega no estado da
     conta — vinténs, selos e o título do pódio (o mesmo texto de js/core/titulos.js);
-  - GET /api/eventos traz a semana do Eco como evento do mundo, com o fim no domingo 23:59:59.
+  - GET /api/eventos traz a semana do Eco como evento do mundo, com o fim no domingo 23:59:59;
+  - O SAL DE CADA RODADA (03/10, o dono: "dificulte" o ensaio fora do jogo): o jogador de mentira joga AO VIVO
+    (tests/juiz_jogador.js --ao-vivo) e pede o sal de cada rodada ao servidor de verdade no meio da partida. E
+    um atacante TENTA o ensaio e é recusado: o sal de outro caminho na mesma rodada (409 caminho-preso, e a
+    tentativa segue presa ao primeiro), outro caminho jogado com o sal do primeiro (422 caminho-trocado), o sal
+    inventado (422 sal-forjado), a rodada pulada no pedido (409 rodada-fora) e no fechar (422 sal-faltando); o
+    mesmo caminho de novo devolve o mesmo sal (a rede que caiu no meio da resposta); a conta do sal em Python é
+    a do juiz em Node.
 """
+import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import unittest
@@ -54,8 +63,12 @@ class ProvaDoEco(A.ProvaDaAutoridade):
     """Herda o palco e os ajudantes (novo, poe_estado, sql, save, roda_node...)."""
 
     def conta_pronta(self, apelido):
+        # 03/10: o herói no nível 26, e não no 22 do palco. Medido com o jogador de mentira (a IA) em tentativas de
+        # semente e sais sorteados: no 22 ele não tira NADA do Eco em ~4% delas (6 de 150 — cai antes de chegar
+        # perto), e as provas que cobram "o placar do replay" com dano > 0 falhavam por sorte; no 26, 0 de 200
+        # (o menor dano foi 90). A test_12 sobe dele para o 30 depois do fim
         c = self.novo(apelido)
-        self.poe_estado(c)
+        self.poe_estado(c, *self.estado_de_partida(nivel=26))
         return c
 
     def abre_eco(self, c, base=None, **kw):
@@ -64,7 +77,10 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         cli = self.em(c, base) if base else c
         return cli.pede('POST', '/api/supremo/abrir', corpo)
 
-    def joga_eco(self, c, tentativa, corta=None):
+    def joga_eco(self, c, tentativa, corta=None, opcao=None, responde=None, base=None):
+        """A tentativa jogada AO VIVO (03/10): o jogador de mentira para em cada virada, e o sal da rodada vem do
+        servidor de verdade (POST /api/supremo/sal) com o caminho que ele mandou — como o game.js faz. `responde`
+        (pedido, status, resposta) → o sal que o jogador usa: é por onde o atacante das provas troca o sal."""
         s = self.save(c)
         linha = self.sql("SELECT * FROM supremo_tentativas WHERE id = ?", tentativa)[0]
         pedido = {'progress': s['progress'], 'db': s['db'], 'dungeonId': 'camara_eco', 'roomIndex': 0,
@@ -72,7 +88,47 @@ class ProvaDoEco(A.ProvaDaAutoridade):
                   'carry': None}
         if corta is not None:
             pedido['cortaEm'] = corta
-        return A.roda_node([A.JOGADOR], pedido)
+        if opcao is not None:
+            pedido['opcao'] = opcao
+        cli = self.em(c, base) if base else c
+        proc = subprocess.Popen([A.NODE, A.JOGADOR, '--ao-vivo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, creationflags=A.BAIXA)
+        respostas = []
+        try:
+            proc.stdin.write((json.dumps(pedido) + '\n').encode('utf-8'))
+            proc.stdin.flush()
+            while True:
+                ln = proc.stdout.readline()
+                if not ln:
+                    raise RuntimeError('o jogador parou: ' + proc.stderr.read().decode('utf-8', 'replace')[-2000:])
+                m = json.loads(ln.decode('utf-8'))
+                if 'fim' in m:
+                    jogo = m['fim']
+                    jogo['respostas'] = respostas
+                    return jogo
+                pede = m['pede']
+                st, r = cli.pede('POST', '/api/supremo/sal', {'tentativa': tentativa, 'rodada': pede['rodada'],
+                                                               'caminho': pede['caminho']})
+                respostas.append({'rodada': pede['rodada'], 'caminho': pede['caminho'], 'status': st, 'resposta': r})
+                sal = r.get('sal') if st == 200 else None
+                if responde is not None:
+                    sal = responde(pede, st, r)
+                proc.stdin.write((json.dumps({'sal': sal}) + '\n').encode('utf-8'))
+                proc.stdin.flush()
+        finally:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                proc.wait(30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            for f in (proc.stdout, proc.stderr):
+                try:
+                    f.close()
+                except Exception:
+                    pass
 
     def fecha_eco(self, c, tentativa, jogo, base=None):
         cli = self.em(c, base) if base else c
@@ -156,7 +212,10 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         i = next(k for k, l in enumerate(torto['lances']) if l['a'] == 'c' and l.get('ok'))
         torto['lances'][i]['x'] = (torto['lances'][i]['x'] + 3) % 18
         st, r = self.fecha_eco(c, tid, torto)
-        self.assertEqual((st, r.get('motivo')), (422, 'divergiu'), r)
+        # 03/10: o lance trocado que o motor ainda aceita só aparece adiante — e o primeiro lance de sal depois dele
+        # já acusa (o caminho até ali não é o que o servidor travou). As duas são a mesma regra: não pontua
+        self.assertEqual(st, 422, r)
+        self.assertIn(r.get('motivo'), ('divergiu', 'caminho-trocado'), r)
         linha = self.sql("SELECT * FROM supremo_tentativas WHERE id = ?", tid)[0]
         self.assertEqual((linha['estado'], linha['dano']), ('recusada', None))
         st, r = self.fecha_eco(c, tid, jogo)
@@ -168,6 +227,9 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         outro = self.conta_pronta('Curioso')
         st, r = self.fecha_eco(outro, tid, jogo)
         self.assertEqual(st, 404, r)                       # a de outra conta não é achada
+        # a tentativa honesta pediu o sal de cada rodada depois da 1ª, e o servidor deu
+        self.assertTrue(jogo['respostas'] and all(x['status'] == 200 for x in jogo['respostas']), jogo['respostas'])
+        self.assertEqual([x['rodada'] for x in jogo['respostas']], list(range(2, 2 + len(jogo['respostas']))))
         st, r = self.fecha_eco(c, tid, jogo)
         self.assertEqual(st, 200, r)
         self.assertTrue(r['dano'] > 0, r)
@@ -371,6 +433,101 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(st, 200, r)
         self.assertTrue(r['dano'] > 0, r)
         self.assertEqual(self.sql("SELECT 1 FROM supremo_estados WHERE tentativa = ?", tid), [], 'a foto sai ao fechar')
+
+    def test_13_o_ensaio_e_recusado(self):
+        """03/10 (o dono: "dificulte"). Um atacante joga a tentativa duas vezes até a rodada 2 por caminhos
+        diferentes, quer a sorte dos dois e jogar o melhor. O servidor dá o sal de UM caminho por rodada; o juiz
+        recusa o outro caminho jogado com aquele sal, o sal inventado e a rodada sem sal."""
+        c = self.conta_pronta('Ensaiador')
+        st, r = self.abre_eco(c)
+        self.assertEqual(st, 200, r)
+        tid = r['tentativa']
+        a = self.joga_eco(c, tid)                                       # o caminho A, honesto, ao vivo
+        sal_a = {x['rodada']: x['resposta']['sal'] for x in a['respostas'] if x['status'] == 200}
+        cam_a = {x['rodada']: x['caminho'] for x in a['respostas']}
+        self.assertTrue(len(sal_a) >= 1 and 2 in sal_a, a['respostas'])
+        travadas = self.sql("SELECT rodada, caminho, sal FROM supremo_sais WHERE tentativa = ? ORDER BY rodada", tid)
+        self.assertEqual([(t['rodada'], t['caminho'], t['sal']) for t in travadas],
+                         [(k, cam_a[k], sal_a[k]) for k in sorted(sal_a)])
+        # a rede caiu no meio da resposta: o mesmo caminho de novo recebe o MESMO sal
+        st, r = c.pede('POST', '/api/supremo/sal', {'tentativa': tid, 'rodada': 2, 'caminho': cam_a[2]})
+        self.assertEqual((st, r.get('sal')), (200, sal_a[2]), r)
+        # ... inclusive pelo outro contêiner (a chave sai do mesmo segredo)
+        st, r = self.em(c, self.base_rigorosa).pede('POST', '/api/supremo/sal', {'tentativa': tid, 'rodada': 2,
+                                                                                  'caminho': cam_a[2]})
+        self.assertEqual((st, r.get('sal')), (200, sal_a[2]), r)
+
+        # O ENSAIO: o caminho B (outra casa na colocação) pede a sorte dele na rodada 2 — recusado — e segue com a
+        # sorte travada no A, na esperança de o juiz não reparar
+        def usa_a_sorte_de_a(pede, status, resposta):
+            return sal_a.get(pede['rodada']) if status != 200 else resposta['sal']
+        b = self.joga_eco(c, tid, opcao=1, responde=usa_a_sorte_de_a)
+        pedido_b = b['respostas'][0]
+        self.assertNotEqual(pedido_b['caminho'], cam_a[2], 'a outra casa tem de dar outro caminho')
+        self.assertEqual((pedido_b['rodada'], pedido_b['status'], pedido_b['resposta'].get('motivo')),
+                         (2, 409, 'caminho-preso'), pedido_b)
+        self.assertEqual(self.sql("SELECT caminho FROM supremo_sais WHERE tentativa = ? AND rodada = 2", tid)[0]['caminho'],
+                         cam_a[2], 'a rodada 2 continua presa ao caminho A')
+        ensaios = self.sql("SELECT dados FROM eventos WHERE conta_id = ? AND tipo = 'supremo-ensaio'", c.conta['id'])
+        self.assertTrue(ensaios and json.loads(ensaios[0]['dados'])['motivo'] == 'caminho-preso', ensaios)
+        st, r = self.fecha_eco(c, tid, b)
+        self.assertEqual((st, r.get('motivo')), (422, 'caminho-trocado'), r)
+        self.assertEqual(self.sql("SELECT estado FROM supremo_tentativas WHERE id = ?", tid)[0]['estado'], 'recusada')
+        st, r = self.fecha_eco(c, tid, a)
+        self.assertEqual(st, 409, r)                       # a tentativa do ensaio não volta a valer
+
+        # o sal inventado e a rodada pulada no fechar (outra tentativa, jogada honesta)
+        st, r = self.abre_eco(c)
+        tid2 = r['tentativa']
+        jogo = self.joga_eco(c, tid2)
+        k = next(i for i, l in enumerate(jogo['lances']) if l['a'] == 'r')
+        forjado = json.loads(json.dumps(jogo))
+        forjado['lances'][k]['s'] = (forjado['lances'][k]['s'] + 1) % (S.SAL_MAX + 1)
+        st, r = self.fecha_eco(c, tid2, forjado)
+        self.assertEqual((st, r.get('motivo')), (422, 'sal-forjado'), r)
+        d = self.conta_pronta('Pulador')
+        st, r = self.abre_eco(d)
+        tid3 = r['tentativa']
+        jogo = self.joga_eco(d, tid3)
+        k = next(i for i, l in enumerate(jogo['lances']) if l['a'] == 'r')
+        pulado = dict(jogo, lances=[l for i, l in enumerate(jogo['lances']) if i != k])
+        st, r = self.fecha_eco(d, tid3, pulado)
+        self.assertEqual((st, r.get('motivo')), (422, 'sal-faltando'), r)
+
+        # o PEDIDO fora da ordem: a rodada 3 antes da 2, a 1 (é da semente), a 13, caminho torto, a de outra conta
+        st, r = self.abre_eco(c)
+        tid4 = r['tentativa']
+        caminho = hashlib.sha256(b'qualquer').hexdigest()
+        st, r = c.pede('POST', '/api/supremo/sal', {'tentativa': tid4, 'rodada': 3, 'caminho': caminho})
+        self.assertEqual((st, r.get('motivo'), r.get('esperada')), (409, 'rodada-fora', 2), r)
+        for corpo in ({'rodada': 1, 'caminho': caminho}, {'rodada': S.RODADAS + 1, 'caminho': caminho},
+                      {'rodada': 2, 'caminho': caminho.upper()}, {'rodada': 2, 'caminho': caminho[:-1]},
+                      {'rodada': '2', 'caminho': caminho}, {'rodada': True, 'caminho': caminho}):
+            st, r = c.pede('POST', '/api/supremo/sal', dict(corpo, tentativa=tid4))
+            self.assertEqual(st, 400, (corpo, r))
+        st, r = self.conta_pronta('Bisbilhoteiro').pede('POST', '/api/supremo/sal',
+                                                        {'tentativa': tid4, 'rodada': 2, 'caminho': caminho})
+        self.assertEqual(st, 404, r)
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM supremo_sais WHERE tentativa = ?", tid4)[0]['n'], 0)
+        # o prazo: a tentativa vencida não ganha sal (e fica vencida)
+        self.sql("UPDATE supremo_tentativas SET aberta_ms = aberta_ms - ? WHERE id = ?", (S.VALIDADE_S + 60) * 1000, tid4)
+        st, r = c.pede('POST', '/api/supremo/sal', {'tentativa': tid4, 'rodada': 2, 'caminho': caminho})
+        self.assertEqual((st, r.get('motivo')), (410, 'vencida'), r)
+        self.assertEqual(self.sql("SELECT estado, motivo FROM supremo_tentativas WHERE id = ?", tid4)[0]['estado'], 'vencida')
+
+    def test_14_a_conta_do_sal_e_a_mesma_no_juiz(self):
+        """O sal sai da API (Python) e o juiz (Node) o recalcula: as duas contas têm de ser a mesma, byte a byte."""
+        chave = S.chave_da_tentativa(b'segredo-de-prova', 'tentativa-de-prova-0001')
+        casos = [(2, hashlib.sha256(b'a').hexdigest()), (7, hashlib.sha256(b'b').hexdigest()), (12, '0' * 64)]
+        codigo = ("const {salDe} = require(process.argv[1]); const c = JSON.parse(process.argv[2]);"
+                  "process.stdout.write(JSON.stringify(c.casos.map((x) => salDe(Buffer.from(c.chave, 'hex'), x[0], x[1]))));")
+        node = A.roda_node(['-e', codigo, os.path.join(RAIZ, 'servidor', 'juiz', 'supremo.js').replace('\\', '/'),
+                            json.dumps({'chave': chave.hex(), 'casos': casos})])
+        self.assertEqual(node, [S.sal_da_rodada(chave, r, cam) for r, cam in casos])
+        self.assertTrue(all(0 <= x <= S.SAL_MAX for x in node), node)
+        # e o espelho do número de rodadas (js/core/data/eco.js)
+        with open(os.path.join(RAIZ, 'js', 'core', 'data', 'eco.js'), encoding='utf-8') as f:
+            self.assertEqual(int(re.search(r'rodadas:\s*(\d+)', f.read()).group(1)), S.RODADAS)
 
     def test_11_banimento_vencido_nao_tira_do_ranking(self):
         """03/10 (revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta. O

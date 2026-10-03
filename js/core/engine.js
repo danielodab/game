@@ -155,7 +155,9 @@ var JOGO = (typeof window !== 'undefined')
  *         não o acerta duas vezes (o `hit` é por uid).
  * 20. O ECO PRIMORDIAL (02/10): fases, Ecos Menores, golpe avisado, teto de
  *     12 rodadas e a contagem do dano — o bloco "O ECO PRIMORDIAL" mais abaixo
- *     e o dado em js/core/data/eco.js.
+ *     e o dado em js/core/data/eco.js. 03/10: a sorte de cada rodada (da 2ª à
+ *     12ª) vem de um sal do servidor, dado só depois de os lances até ali
+ *     ficarem travados lá ("O SORTEIO RODADA A RODADA").
  *     As decisões 19 e 20 subiram Engine.VERSAO_REGRAS para 6: a tentativa
  *     refeita no juiz (servidor/juiz/supremo.js) só bate com estas regras, e a
  *     área que cobre a mesma unidade em duas casas deixou de repetir.
@@ -246,7 +248,9 @@ var JOGO = (typeof window !== 'undefined')
    *       sem perigo.
    *       (c) o ECO PRIMORDIAL: o corpo grande 2×2 e o chefe supremo
    *       (decisões 19 e 20 no topo deste arquivo; dado em js/core/data/eco.js;
-   *       a tentativa refeita em servidor/juiz/supremo.js).
+   *       a tentativa refeita em servidor/juiz/supremo.js), com o sorteio
+   *       rodada a rodada (o sal de cada rodada vem do servidor; entrou no
+   *       mesmo 6 porque o 6 ainda não tinha ido ao ar).
    *       (d) 03/10, ainda antes de o 6 ir ao ar: o MURO QUE FERE QUEM ENCOSTA
    *       (a escolha do dono para o Minotauro — o bloco de mesmo nome perto de
    *       forcedMove; docs/EQUILIBRIO.md §3.6). Entra no mesmo 6: nenhuma sala
@@ -1425,6 +1429,7 @@ var JOGO = (typeof window !== 'undefined')
 
   Engine.move = function (state, uid, x, y) {
     if (state.phase !== 'playing') return false;
+    if (state.eco && state.eco.espera) return false;     // 03/10: a rodada parada no sal — ninguém anda
     var u = Engine.findUnit(state, uid);
     if (!u || !u.alive || u.offBoard) return false;
     if (Engine.unitHasEffect(u, 'root')) {                // v2
@@ -1910,7 +1915,8 @@ var JOGO = (typeof window !== 'undefined')
     // 02/10: a sala do Eco — fase, placar, ritmo e o golpe marcado (só quando existe: o hash
     // das outras salas não muda)
     if (st.eco) {
-      p.push('ECO', nh(st.eco.fase), nh(st.eco.dano), nh(st.eco.vezes), st.eco.derrubou ? 1 : 0);
+      p.push('ECO', nh(st.eco.fase), nh(st.eco.dano), nh(st.eco.vezes), st.eco.derrubou ? 1 : 0,
+             nh(st.eco.espera || 0), nh(st.eco.salDa || 0));        // 03/10: a rodada parada esperando o sal
       if (st.eco.aviso) {
         p.push('AV', st.eco.aviso.golpe, (st.eco.aviso.casas || []).map(function (c) { return c.x + '.' + c.y; }).join(';'));
       }
@@ -2932,6 +2938,7 @@ var JOGO = (typeof window !== 'undefined')
   // --------------------------------------------------------------- cast
   Engine.cast = function (state, uid, spellId, x, y) {
     if (state.phase !== 'playing') return false;
+    if (state.eco && state.eco.espera) return false;     // 03/10: a rodada parada no sal — ninguém lança
     var caster = Engine.findUnit(state, uid);
     var spell = spellDef(spellId);
     if (!caster || !spell) return false;
@@ -3652,8 +3659,10 @@ var JOGO = (typeof window !== 'undefined')
       if (state.units[i].defId === cfg.chefe && state.units[i].side === 'enemy') { u = state.units[i]; break; }
     }
     if (!u) return;
+    // `espera`/`salDa` (03/10): o sorteio rodada a rodada — a rodada 1 é da semente, as outras do sal
+    // delas (ecoPedeSal, mais abaixo)
     state.eco = { uid: u.uid, fase: 0, dano: 0, derrubou: false, aviso: null, vezes: 0,
-                  rodadas: cfg.rodadas || 12, hpMax: u.hpMax };
+                  rodadas: cfg.rodadas || 12, hpMax: u.hpMax, espera: 0, salDa: 1 };
     aplicaFaseEco(state, u, 0);
   }
   /* O ELEMENTO DA FASE e a resistência pela RODA (DATA.beats): resiste ao que
@@ -3821,6 +3830,153 @@ var JOGO = (typeof window !== 'undefined')
     return { dano: e.dano, derrubou: !!e.derrubou, bonus: bonus, pontos: e.dano + bonus,
              fase: e.fase, rodada: Math.min(state.round || 0, e.rodadas), rodadas: e.rodadas,
              hpMax: e.hpMax };
+  };
+
+  /* O SORTEIO RODADA A RODADA (03/10, o dono: "dificulte" o ensaio da
+   * tentativa fora do jogo — docs/SEGURANCA.md §4.8).
+   *
+   * Com a semente inteira na mão, um programa refazia a Câmara fora do jogo
+   * quantas vezes quisesse e mandava só a melhor sequência: cada dano, cada
+   * esquiva e cada lugar de Eco Menor das 12 rodadas saía dela. Agora a
+   * semente só decide a colocação e a rodada 1. A rodada R (2 a 12) só começa
+   * com o SAL dela: o motor para na virada, `espera` diz qual rodada falta, e
+   * nada anda (a vez é de ninguém) até `ecoSal` entrar — que re-semeia o
+   * sorteio SÓ com o sal e a rodada. Quem dá o sal (servidor/supremo.py) só o
+   * dá depois de receber o CAMINHO — o hash dos lances até ali — e aceita um
+   * caminho por rodada: pedir o sal de outro caminho é recusado. Saber a sorte
+   * da rodada R+1 exige ter travado no servidor tudo o que se jogou até o fim
+   * da R; ensaiar dá só a rodada de agora, que é o que jogar já é.
+   *
+   * O sal entra como lance próprio ({a:'r', r, s}) na lista que o juiz refaz
+   * (servidor/juiz/supremo.js): ele recalcula o caminho de cada um e confere o
+   * sal com a chave do servidor. O treino sem servidor passa pela MESMA parada
+   * com um sal daqui (game.js), para o treino ser o mesmo jogo.
+   *
+   * A 13ª rodada não pede sal: começar ela encerra a tentativa sem sortear
+   * nada (onRoundStart). Chamado na virada da rodada, antes de `round++`:
+   * devolve true quando a rodada nova tem de esperar. */
+  function ecoPedeSal(state) {
+    var e = state.eco;
+    if (!e) return false;
+    var prox = (state.round || 0) + 1;
+    if (prox > e.rodadas || (e.salDa || 0) >= prox) return false;
+    if (e.espera !== prox) {
+      e.espera = prox;
+      emit({ type: 'ecoEsperaSal', rodada: prox });
+    }
+    return true;
+  }
+  /* a rodada que espera o sal (0 = nenhuma) */
+  Engine.ecoEsperaSal = function (state) {
+    var e = state && state.eco;
+    return (e && e.espera && state.phase === 'playing') ? e.espera : 0;
+  };
+  Engine.SAL_MAX = 0x7fffffff;           // o sal é um inteiro de 31 bits, como a semente
+  /* O sal da rodada que espera: re-semeia o sorteio com ELE e começa a rodada
+   * (o resto da virada: a rodada sobe, o chão e o clima andam, a vez seguinte
+   * começa). Sal de outra rodada, ou fora da espera, não faz nada (false). */
+  Engine.ecoSal = function (state, rodada, sal) {
+    var e = state && state.eco;
+    if (!e || !e.espera || e.espera !== rodada || state.phase !== 'playing') return false;
+    if (typeof sal !== 'number' || !isFinite(sal) || Math.floor(sal) !== sal || sal < 0 || sal > Engine.SAL_MAX) return false;
+    e.espera = 0;
+    e.salDa = rodada;
+    // só o sal e a rodada: nada do sorteio de antes atravessa para a rodada nova
+    state._rng = hashStr('eco-sal:' + rodada + ':' + sal);
+    emit({ type: 'ecoSal', rodada: rodada });
+    advanceTurn(state, 0);               // a virada parada continua de onde parou (activeIdx no fim da ordem)
+    return true;
+  };
+
+  /* O CAMINHO: o SHA-256 dos lances até a virada, num JSON canônico (chaves em
+   * ordem, o que o JSON não leva fica fora — o mesmo texto aqui, no navegador,
+   * e no juiz, que recebe os lances pelo JSON do servidor). Um hash de 32 bits
+   * (o FNV do Engine.hash) não serve: com ~65 mil sequências na mão acha-se
+   * duas com o mesmo número, trava-se uma e joga-se a que o sal favorecer. */
+  function canonico(v) {
+    if (v === null || typeof v !== 'object') {
+      var s = JSON.stringify(v);
+      return s === undefined ? 'null' : s;      // undefined numa lista vira null, como no JSON
+    }
+    var i, out = [];
+    if (Object.prototype.toString.call(v) === '[object Array]') {
+      for (i = 0; i < v.length; i++) out.push(canonico(v[i]));
+      return '[' + out.join(',') + ']';
+    }
+    var ks = Object.keys(v).sort();
+    for (i = 0; i < ks.length; i++) {
+      var x = v[ks[i]];
+      if (x === undefined || typeof x === 'function') continue;
+      out.push(JSON.stringify(ks[i]) + ':' + canonico(x));
+    }
+    return '{' + out.join(',') + '}';
+  }
+  // o texto em UTF-8 (surrogate solto vira U+FFFD, como no TextEncoder e no Buffer do Node)
+  function utf8(s) {
+    var out = [], i, c, d;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+        d = s.charCodeAt(i + 1);
+        if (d >= 0xDC00 && d <= 0xDFFF) { c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00); i++; }
+      }
+      if (c >= 0xD800 && c <= 0xDFFF) c = 0xFFFD;
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0x10000) out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else out.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  // SHA-256 (FIPS 180-4) em JS puro e síncrono: o crypto.subtle é assíncrono e
+  // não existe fora de contexto seguro; tests/eco_motor.js confere com o do Node
+  var SHA_K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+  function sha256(texto) {
+    var b = utf8(String(texto)), n = b.length, i, j;
+    var altos = Math.floor(n / 0x20000000), baixos = (n * 8) >>> 0;   // o tamanho em bits, 64 bits
+    b.push(0x80);
+    while ((b.length % 64) !== 56) b.push(0);
+    b.push((altos >>> 24) & 255, (altos >>> 16) & 255, (altos >>> 8) & 255, altos & 255,
+           (baixos >>> 24) & 255, (baixos >>> 16) & 255, (baixos >>> 8) & 255, baixos & 255);
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    var W = new Array(64);
+    for (i = 0; i < b.length; i += 64) {
+      for (j = 0; j < 16; j++) W[j] = (b[i + 4 * j] << 24) | (b[i + 4 * j + 1] << 16) | (b[i + 4 * j + 2] << 8) | b[i + 4 * j + 3];
+      for (j = 16; j < 64; j++) {
+        var x = W[j - 15], y = W[j - 2];
+        var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+        var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+        W[j] = (W[j - 16] + s0 + W[j - 7] + s1) | 0;
+      }
+      var a = H[0], bb = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (j = 0; j < 64; j++) {
+        var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+        var t1 = (h + S1 + ((e & f) ^ (~e & g)) + SHA_K[j] + W[j]) | 0;
+        var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+        var t2 = (S0 + ((a & bb) ^ (a & c) ^ (bb & c))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = bb; bb = a; a = (t1 + t2) | 0;
+      }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + bb) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+    }
+    var hex = '';
+    for (i = 0; i < 8; i++) hex += ('00000000' + (H[i] >>> 0).toString(16)).slice(-8);
+    return hex;
+  }
+  Engine._sha256 = sha256;               // provas: conferido contra o crypto do Node
+  Engine._canonico = canonico;
+  /* o caminho dos lances (64 hex): o que o jogo manda ao pedir o sal e o que o juiz recalcula */
+  Engine.ecoCaminho = function (lances) {
+    return sha256('soterra-eco-caminho-1|' + canonico(lances || []));
   };
 
   // --------------------------------------------------------------- turnos
@@ -4027,10 +4183,14 @@ var JOGO = (typeof window !== 'undefined')
   function advanceTurn(state, guard) {
     if (state.phase !== 'playing') return;
     if (guard > state.order.length + 2) return;
+    if (state.eco && state.eco.espera) return;    // 03/10: parada no sal, nada anda (nem o activeIdx)
     var steps = 0, max = state.order.length * 2 + 2;
     do {
       state.activeIdx++;
       if (state.activeIdx >= state.order.length) {
+        // 03/10: a rodada nova do Eco espera o sal dela (ecoPedeSal): a vez fica com ninguém
+        // (activeIdx além da ordem) até Engine.ecoSal, que volta para cá
+        if (state.eco && ecoPedeSal(state)) return;
         state.activeIdx = 0;
         state.round++;
         // desafio RELÂMPAGO: começou a rodada 6, o contrato já era — avisar

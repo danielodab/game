@@ -198,6 +198,7 @@ var JOGO = (typeof window !== 'undefined')
     carryFimRede = null;         // 14/09: a vida dos heróis NÃO zera aqui (é única, JOGO.Vida)
     ataSolo = null;
     ataEco = null;               // 02/10: a tentativa do Eco (quem larga fecha antes: Game.abandonar)
+    salEco = null;               // 03/10: o sal que estava a caminho fica sem dono (pedeSalEco confere)
     conferindoSala = false;
     resetAiState();
     resetTimer(true);
@@ -442,12 +443,17 @@ var JOGO = (typeof window !== 'undefined')
    *     placar, e um herói ferido de outra luta desigualaria a disputa — o juiz refaz do mesmo jeito;
    *   - dificuldade sempre 'normal' (a mesma régua para todo mundo no ranking), sem desafio de sala;
    *   - só a dupla da própria conta (a sala em grupo pela Rede fica para depois: a semente e o placar
-   *     de dois jogadores pedem uma ata própria no servidor).
+   *     de dois jogadores pedem uma ata própria no servidor);
+   *   - 03/10: a semente decide só a colocação e a rodada 1. Na virada de cada rodada o motor PARA
+   *     (Engine.ecoEsperaSal) e o jogo pede o sal dela ao servidor com o caminho dos lances até ali
+   *     (pedeSalEco); sem rede a tentativa espera e o pedido sai de novo; o treino usa um sal daqui.
    * O fim (Eco derrubado, grupo caído ou a 13ª rodada) vai para a tela 'ecoFim': o dano daqui na hora
    * e, quando o servidor responde, o dano conferido, a posição e as tentativas que restam. */
   var ataEco = null;           // { tentativa, treino, restantes } da tentativa em curso
   var fimEco = null;           // o que a tela 'ecoFim' mostra
   var abrindoEco = false;      // o pedido da semente está no servidor: não sai outro
+  var salEco = null;           // 03/10: { rodada, pedindo, dormindo, semRede, tentativas } do sal pedido agora
+  Game.SAL_PRAZO_MS = 10000;   // o pedido do sal sem resposta nenhuma em 10 s conta como sem rede (pedeSalEco)
   Game.ecoTentativa = function () {
     return ataEco ? { tentativa: ataEco.tentativa, treino: !!ataEco.treino, restantes: ataEco.restantes } : null;
   };
@@ -509,6 +515,7 @@ var JOGO = (typeof window !== 'undefined')
     ataSolo = info.treino ? null : { bilhete: null, lances: [], eco: info.tentativa };
     ataEco = { tentativa: info.tentativa || null, treino: !!info.treino, restantes: info.restantes };
     fimEco = null;
+    salEco = null;
     Game.state = E().createBattle(cfg.arena, 0, partyPayload(),
       { seed: semente, dificuldade: 'normal', escolhePosicao: true });
     zeraPrep();                                    // os 30 s da preparação, como em toda sala
@@ -521,6 +528,7 @@ var JOGO = (typeof window !== 'undefined')
     var eco = ataEco, ata = ataSolo, st = Game.state;
     ataEco = null;
     ataSolo = null;
+    salEco = null;               // o sal que ainda vinha não serve a mais nada (pedeSalEco confere a tentativa)
     if (!eco) return null;
     var placar = null;
     try { placar = st ? E().ecoPlacar(st) : null; } catch (e) { placar = null; }
@@ -544,6 +552,92 @@ var JOGO = (typeof window !== 'undefined')
     return fimEco;
   }
   Game._fechaEco = fechaEco;                     // provas
+
+  /* O SAL DA RODADA (03/10, o dono: "dificulte" o ensaio da tentativa fora do jogo; engine.js, "O SORTEIO
+   * RODADA A RODADA"; docs/SEGURANCA.md §4.8). Na virada, o motor para e a vez é de ninguém até o sal entrar.
+   *   - TENTATIVA OFICIAL: o caminho (Engine.ecoCaminho dos lances anotados até aqui) vai ao servidor
+   *     (Autoridade.salEco) e o sal que volta entra como lance {a:'r', r, s} — o juiz refaz com ele.
+   *   - SEM REDE: a tentativa ESPERA (nada anda sem o sal; a barra diz "sem resposta") e o pedido sai de novo a
+   *     cada Autoridade.RETENTA_MS. O mesmo caminho recebe o mesmo sal: a resposta perdida não estraga nada.
+   *   - RECUSA DE VEZ (a tentativa venceu, a semana fechou, outro caminho já travado): a tentativa acaba
+   *     ali e fecha com os lances até a rodada que valeu — a largada conta até onde foi, como sempre.
+   *   - TREINO (sem servidor): a mesma parada com um sal daqui, para o treino ser o mesmo jogo; não pontua. */
+  Game.ecoSalEstado = function () {
+    if (!Game.state || !Game.state.eco) return null;
+    var r = E().ecoEsperaSal ? E().ecoEsperaSal(Game.state) : 0;
+    if (!r) return null;
+    return { rodada: r, treino: !ataEco || !!ataEco.treino, semRede: !!(salEco && salEco.rodada === r && salEco.semRede),
+             tentativas: (salEco && salEco.rodada === r && salEco.tentativas) || 0 };
+  };
+  function pedeSalEco() {
+    var st = Game.state, eng = E();
+    var r = (st && eng.ecoEsperaSal) ? eng.ecoEsperaSal(st) : 0;
+    if (!r) return;
+    if (salEco && salEco.rodada === r && (salEco.pedindo || salEco.dormindo)) return;
+    // treino (ou uma Câmara sem tentativa nenhuma, como nas bancadas): o sal daqui, sem servidor e sem placar
+    if (!ataEco || ataEco.treino || !ataSolo) {
+      aplicaSalEco(r, Math.floor(Math.random() * (eng.SAL_MAX || 0x7fffffff)));
+      return;
+    }
+    var A = JOGO.Autoridade;
+    if (!A || !A.salEco) { encerraEcoSemSal({ erro: 'este jogo não sabe pedir o sorteio da rodada' }); return; }
+    var tent = ataEco.tentativa;
+    var antes = (salEco && salEco.rodada === r) ? salEco : null;
+    var pedido = { rodada: r, pedindo: true, dormindo: false, semRede: !!(antes && antes.semRede),
+                   tentativas: (antes ? antes.tentativas : 0) + 1 };
+    salEco = pedido;
+    // o caminho dos lances ATÉ AQUI: o juiz recalcula o mesmo, com o lance do sal logo depois deles
+    var caminho = eng.ecoCaminho(ataSolo.lances);
+    /* O PEDIDO PENDURADO (revisão de 03/10). O fetch não tem prazo: a conexão que morreu calada (o celular que
+     * trocou de antena, o túnel, o Wi-Fi que caiu sem avisar) deixa o pedido sem resposta e sem erro por minutos,
+     * e a rodada ficava parada dizendo "vem do servidor…" sem pedir de novo — provado em tests/eco_sal_cliente.js.
+     * Passado Game.SAL_PRAZO_MS, o pedido conta como sem rede (a barra diz) e o próximo quadro pede outro: o MESMO
+     * caminho recebe o MESMO sal, então o pedido em dobro não estraga nada no servidor. */
+    setTimeout(function () {
+      if (salEco === pedido && pedido.pedindo) { pedido.pedindo = false; pedido.semRede = true; }
+    }, Game.SAL_PRAZO_MS || 10000);
+    A.salEco({ tentativa: tent, rodada: r, caminho: caminho }).then(function (resp) {
+      // a tentativa acabou (ou outra começou) enquanto o pedido viajava: a resposta não serve mais
+      if (!ataEco || ataEco.tentativa !== tent || Game.state !== st) return;
+      // o sal vale mesmo vindo do pedido que passou do prazo (os lances não mudam na espera: o caminho é o
+      // mesmo), desde que a rodada dele ainda espere — o segundo sal da mesma rodada não entra
+      if (resp && resp.ok && typeof resp.sal === 'number') {
+        if (eng.ecoEsperaSal(st) !== r) return;
+        salEco = null;
+        aplicaSalEco(r, resp.sal);
+        return;
+      }
+      if (salEco !== pedido) return;      // a falha de um pedido que outro já substituiu não decide nada
+      if (resp && resp.foraDoAr) {
+        pedido.pedindo = false;
+        pedido.dormindo = true;
+        pedido.semRede = true;
+        setTimeout(function () { if (salEco === pedido) pedido.dormindo = false; }, A.RETENTA_MS || 4000);
+        return;
+      }
+      salEco = null;
+      encerraEcoSemSal(resp);
+    });
+  }
+  function aplicaSalEco(r, sal) {
+    var ok = !!E().ecoSal(Game.state, r, sal);
+    anotaSolo({ a: 'r', r: r, s: sal, ok: ok });
+    if (Game.state.phase !== 'playing') handleBattleOver();
+  }
+  function encerraEcoSemSal(resp) {
+    var rodada = (Game.state && E().ecoEsperaSal) ? E().ecoEsperaSal(Game.state) : 0;
+    resetAiState();
+    resetTimer(true);
+    Game.selectedSpellId = null;
+    Game.mustEndTurn = false;
+    Game.pendingFusion = null;
+    var fim = fechaEco(true);
+    if (!fim) return;
+    fim.parouNaRodada = rodada || null;
+    fim.semSal = (resp && resp.erro) || 'o servidor não deu o sorteio da rodada';
+    setScreen('ecoFim', fim);
+  }
+  Game._pedeSalEco = pedeSalEco;                 // provas
 
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
@@ -2942,6 +3036,13 @@ var JOGO = (typeof window !== 'undefined')
     if (Game.state.phase === 'placing') { tickPrep(); return; }   // 21/09: o relógio da preparação
 
     if (Game.state.phase !== 'playing') { handleBattleOver(); return; }
+
+    // 03/10: a rodada nova do Eco espera o sal dela — a vez é de ninguém até ele chegar (pedeSalEco)
+    if (Game.state.eco && E().ecoEsperaSal && E().ecoEsperaSal(Game.state)) {
+      resetAiState();
+      pedeSalEco();
+      return;
+    }
 
     if (Game.isPlayerTurn()) {
       resetAiState();

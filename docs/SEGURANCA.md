@@ -221,21 +221,48 @@ O chefe supremo da semana (docs/SISTEMAS.md §6-B). O placar é o dano refeito p
 dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cliente).
 
 - `POST /api/supremo/abrir` `{herois, versaoRegras}` → `{tentativa, semente, restantes, semana}`. A
-  SEMENTE é do servidor; heróis conferidos no estado do servidor (o Mestre não entra: leva qualquer
+  SEMENTE é do servidor e, desde 03/10, decide só a colocação e a rodada 1 (o resto vem do sal de cada
+  rodada, abaixo); heróis conferidos no estado do servidor (o Mestre não entra: leva qualquer
   feitiço); versão das regras conferida como no bilhete (§4.1, 409 `regras-velhas`); **3 por dia** de
   Brasília por conta (429 `sem-tentativas`, com `liberaEm`). Abrir conta como usada; abrir outra vence a
   aberta (`outra-aberta`). A tentativa não mexe na vida única, mas é **luta aberta** no cliente (03/10): o
   registro `soterra-luta-aberta` guarda os lances, o `abreEco` espera a pendente fechar antes de abrir outra (a
   que ainda estava sendo conferida não vence como `outra-aberta`) e a aba fechada antes da resposta fecha na
   volta. O estado da conta NA ABERTURA fica em `supremo_estados` até a tentativa fechar.
+- **O sal de cada rodada** (03/10, o dono: "dificulte" o ensaio fora do jogo). `POST /api/supremo/sal`
+  `{tentativa, rodada, caminho}` → `{rodada, sal}`. Na virada para a rodada R (2 a 12) o motor PARA e a vez é
+  de ninguém (`Engine.ecoEsperaSal`); o jogo manda o CAMINHO — o SHA-256 do JSON canônico dos lances anotados
+  até ali (`Engine.ecoCaminho`) — e recebe `sal = HMAC-SHA-256(chave da tentativa, "R:caminho")` (os 31 bits de
+  cima), com `chave = HMAC-SHA-256(segredo do servidor, "eco-sal:" + tentativa)`. O sal re-semeia o sorteio da
+  rodada SÓ com ele (`Engine.ecoSal`) e entra como lance `{a:'r', r, s}`.
+  - **A trava**: `supremo_sais` tem chave (tentativa, rodada) — UM caminho por rodada. O mesmo caminho de novo
+    devolve o mesmo sal (a resposta que a rede perdeu); outro caminho é 409 `caminho-preso` (e um evento
+    `supremo-ensaio` na conta), e a tentativa segue presa ao primeiro; rodada que não é a próxima, 409
+    `rodada-fora` (com `esperada`); rodada 1 ou acima de 12, caminho que não é 64 hexadecimais minúsculos: 400.
+    Tentativa de outra conta: 404; vencida (prazo, semana fechada): 410 `vencida`, e ela fica vencida.
+  - **Por que SHA-256 e não o hash de 32 bits** do estado: com ~65 mil sequências na mão acha-se duas com o
+    mesmo número (aniversário), trava-se uma e joga-se a que o sal favorecer.
+  - **Por que a chave é derivada e não guardada**: os dois contêineres do rolling update leem o mesmo segredo
+    (`/dados/segredo`, §4) e chegam à mesma chave; o juiz recebe a chave DA tentativa, nunca o segredo.
+  - **Sem rede** o jogo espera (a barra diz "sem resposta do servidor") e pede de novo o mesmo caminho a cada
+    4 s. O pedido que não volta nem falha (a conexão que morreu calada: o `fetch` não tem prazo) conta como sem
+    rede depois de 10 s (`Game.SAL_PRAZO_MS`) e sai outro; o sal que o velho trouxer tarde não entra duas vezes.
+    A recusa de vez (vencida, `caminho-preso`) encerra a tentativa na virada e fecha com os lances até ali.
+    O treino (sem sessão) passa pela mesma parada com um sal local e não pontua.
 - `POST /api/supremo/fechar` `{tentativa, lances, hashFinal}` → o juiz (`POST /supremo/fecha`, §5.4)
   refaz a Câmara pelo MESMO refazer da sala e devolve `Engine.ecoPlacar`. O que vale é esse número:
   lance trocado, hash do fim mentido ou outra semente = 422 `divergiu` e a tentativa fica `recusada`, sem
   pontuar. Prazo de 2 h, semana já fechada e regras trocadas no meio = 410 (`vencida`, não fraude); a das regras
   trocadas (`regras-mudaram`, o deploy no meio dela) é a única que DEVOLVE a vez do dia. A
   régua de tempo mínimo da sala vale aqui (`SALA_MIN_S`, `SALA_S_POR_TURNO`). A tentativa largada no meio
-  pontua o dano até onde foi (os lances conferidos são de verdade). Limite conhecido: com a semente na
-  mão, dá para ensaiar a tentativa fora do jogo e mandar só a melhor sequência (§9, "Limites conhecidos").
+  pontua o dano até onde foi (os lances conferidos são de verdade) — também a largada parada na virada,
+  esperando o sal. Lance de sal com outro caminho (`caminho-trocado`), sal inventado (`sal-forjado`), sal que o
+  servidor nunca deu (`sal-nao-pedido`), sal fora da virada ou de outra rodada (`sal-fora-da-hora`) e rodada
+  jogada sem o sal (`sal-faltando`) = 422 e a tentativa fica `recusada`.
+- **O prazo de 2 h, revisto em 03/10.** Antes ele era também a janela do ensaio (a semente inteira, 2 h para
+  buscar). Com o sal por rodada não há o que buscar além da rodada de agora, e encurtar não fecharia nada — só
+  puniria quem pausa, joga devagar no celular ou fica sem rede no meio (a tentativa espera o sal). Ficou em 2 h,
+  como conforto; a folga do fechamento da semana continua sendo ele.
 - `GET /api/supremo` (público; com token traz `eu`: tentativas de hoje, o melhor, a posição, os últimos
   prêmios) e `GET /api/supremo/ranking?semana=N` (público, 100 linhas, as semanas fechadas). O ranking é
   a melhor tentativa conferida de cada conta; a equipe (`contas.gm`) e quem está banido não entram.
@@ -622,12 +649,17 @@ Panóplia do Mestre ou índice sem peça devolvem `false` com o estado igual (n�
 
 ### 5.4 `POST /supremo/fecha` (02/10, `servidor/juiz/supremo.js`)
 
-`{conta, tentativa: {semente, herois, regras}, lances, hashFinal, progress, db, contexto}`. O grupo sai do
+`{conta, tentativa: {semente, herois, regras, chaveSal, sais}, lances, hashFinal, progress, db, contexto}`. O grupo sai do
 `Progress.battleParty` do estado do servidor DA ABERTURA (`supremo_estados`, 03/10: uma peça equipada entre o fim
 e o fechar refeito mudava o grupo e a tentativa caía como `divergiu`) (todos cheios: a tentativa não usa a vida única), a Câmara do
 Eco é refeita pelo `refazEm` da sala (a vez, o resultado de cada lance, os hashes; a versão das regras) e
 sai `{ok, fase, rodada, turnosJogador, hash, placar}` — `placar = Engine.ecoPlacar(estado)`. Nenhum campo
-do pedido vira placar. Prova: `tests/juiz_supremo.js`.
+do pedido vira placar. 03/10: cada lance `{a:'r', r, s}` passa pelo `confereSal` (o `refazEm` só aceita sal de
+quem sabe conferir): a rodada tem de ser a que espera, o caminho é RECALCULADO dos lances que chegaram e tem de
+ser o que a API travou (`sais`, as linhas de `supremo_sais`), e o sal tem de ser o HMAC dele com `chaveSal`.
+Qualquer outro lance com a rodada parada é `sal-faltando`. Provas: `tests/juiz_supremo.js` (o ensaio tentado e
+recusado de cada jeito) e `tests/supremo_api.py` (o mesmo com o servidor de verdade, e a conta do sal em Python
+igual à do juiz).
 
 ## 6. O cliente
 
@@ -692,6 +724,9 @@ do pedido vira placar. Prova: `tests/juiz_supremo.js`.
 
 - [x] O Eco Primordial (02/10): a tentativa, o placar refeito pelo juiz, a semana e os prêmios uma vez só
       (`servidor/supremo.py`, `servidor/juiz/supremo.js`; `tests/supremo_api.py`, `tests/juiz_supremo.js`)
+- [x] O ensaio da tentativa do Eco dificultado (03/10): o sal de cada rodada travado no caminho
+      (`POST /api/supremo/sal`, `Engine.ecoSal`, o `confereSal` do juiz; `tests/eco_motor.js`,
+      `tests/juiz_supremo.js`, `tests/supremo_api.py`, `tests/eco_sal_cliente.js`, `tests/eco_hud.html`)
 
 ### Limites conhecidos
 
@@ -704,15 +739,16 @@ do pedido vira placar. Prova: `tests/juiz_supremo.js`.
   conhecidas".
 - A configuração de PA/PP do Mestre (`soterra-gm-v1`) mora no navegador: batalha da conta do
   Mestre com PA/PP mudado pode divergir no servidor.
-- **O ensaio da tentativa do Eco** (03/10): a semente vai ao navegador no abrir, antes da luta, e a
-  tentativa inteira depende só dela e dos lances (o sorteio de dano, o lugar dos Ecos Menores, cada
-  decisão da IA). Quem tem a semente roda o motor do próprio jogo
-  (`Engine.createBattle('camara_eco', 0, grupo, {seed, dificuldade: 'normal', escolhePosicao: true})`)
-  quantas vezes quiser dentro das 2 h de validade e manda só a melhor sequência — o juiz confere e o
-  placar entra. O limite de 3 por dia e a disputa do pódio não seguram isso. Fechar de fato pede
-  revelar a aleatoriedade por rodada (sementes encadeadas, a da rodada r+1 só depois dos lances da r)
-  ou tirar o sorteio que mais decide (dano e lugar dos Menores fixos); fica para o dono decidir
-  (README §7.0).
+- **O ensaio da tentativa do Eco — o que sobrou** (03/10). Até a manhã de 03/10 a semente inteira ia ao
+  navegador no abrir e a tentativa toda dependia só dela: um programa refazia a Câmara fora do jogo quantas
+  vezes quisesse nas 2 h e mandava só a melhor sequência. O dono mandou dificultar, e desde então a sorte da
+  rodada 2 a 12 vem do sal travado no caminho (§4.8): saber a sorte de uma rodada FUTURA exige ter travado no
+  servidor tudo o que se jogou até ali. O que continua possível, e é o limite aceito: (1) com o sal da rodada
+  de agora na mão, o cliente pode simular as jogadas DESTA rodada antes de fazê-las (a colocação e a rodada 1
+  com a semente; cada rodada seguinte com o sal dela) — é o que jogar já é, e fechar isso pediria o servidor
+  jogando a batalha ao vivo; (2) um programa que joga sozinho, rodada a rodada, continua sendo um jogador (a
+  régua de tempo mínimo e as 3 tentativas por dia seguram o volume, não a qualidade); (3) abrir a tentativa e
+  desistir quando a semente não agrada gasta uma das 3 do dia, como antes.
 
 ## 10. A moderação: banimento, silêncio, denúncias e a auditoria do Mestre (02/10)
 

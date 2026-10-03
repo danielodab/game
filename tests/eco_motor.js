@@ -28,8 +28,14 @@
  *     bônus e encerra; a 13ª rodada encerra com o placar intacto;
  *   · o hash muda com o placar e a mesma semente com os mesmos lances refaz a
  *     mesma tentativa (o juiz depende disso);
+ *   · o SORTEIO RODADA A RODADA (03/10): a rodada 2 a 12 não começa sem o sal
+ *     dela, nada anda enquanto espera, sal de outra rodada não entra, a sorte da
+ *     rodada sai SÓ do sal (o que veio antes não atravessa), a 13ª não pede sal,
+ *     e o caminho é o SHA-256 de verdade (conferido com o do Node) de um JSON
+ *     canônico que sobrevive à viagem pelo servidor;
  *   · e a IA joga uma tentativa inteira sem nenhum lance recusado. */
 const path = require('path');
+const nodeCrypto = require('crypto');
 const { mundo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'motor.js'));
 
 let total = 0, falhas = 0;
@@ -87,9 +93,17 @@ function camara(party, seed) {
 function eco(st) { return E.findUnit(st, st.eco.uid); }
 function herois(st) { return st.units.filter((u) => u.kind === 'hero'); }
 function poe(st, u, x, y) { u.x = x; u.y = y; }
+// 03/10: a rodada parada esperando o sal recebe um (o servidor de mentira das provas: um número fixo por rodada)
+function sal(st, s) {
+  const r = E.ecoEsperaSal(st);
+  if (!r) return false;
+  E.ecoSal(st, r, s != null ? s : 7919 * r);
+  return true;
+}
 // a vez de um herói: encerra quem estiver na vez até ser ele (a IA não joga aqui; os monstros só passam)
 function vezDe(st, uid) {
   for (let i = 0; i < 200 && st.phase === 'playing'; i++) {
+    if (sal(st)) continue;
     const a = E.activeUnit(st);
     if (a && a.uid === uid) return true;
     E.endTurn(st);
@@ -395,11 +409,125 @@ function eventos(tipo) { return E.events.filter((e) => e.type === tipo); }
   const st = camara([heroi('h1')]);
   const h = herois(st)[0];
   let n = 0;
-  while (st.phase === 'playing' && n++ < 5000) E.endTurn(st);
+  while (st.phase === 'playing' && n++ < 5000) { if (!sal(st)) E.endTurn(st); }
   const pl = E.ecoPlacar(st);
   check('passadas as ' + CFG.rodadas + ' rodadas a tentativa acaba (a 13ª não começa)',
         st.phase === 'lost' && st.round === CFG.rodadas + 1 && pl.rodada === CFG.rodadas, st.phase + ' r' + st.round);
   check('o placar fica como estava (0, ninguém bateu)', pl.dano === 0 && pl.pontos === 0 && h.alive !== undefined);
+})();
+
+// ------------------------------------------------- o sorteio rodada a rodada (03/10)
+// a rodada 1 inteira (só passando a vez) até a virada parar no sal da 2
+function ateOSal(st) {
+  for (let i = 0; i < 200 && st.phase === 'playing' && !E.ecoEsperaSal(st); i++) E.endTurn(st);
+  return E.ecoEsperaSal(st);
+}
+(function () {
+  const st = camara([heroi('h1'), heroi('h2')], 9);
+  const r = ateOSal(st);
+  check('no fim da rodada 1 a virada PARA esperando o sal da rodada 2 (a vez é de ninguém, a luta segue viva)',
+        r === 2 && st.round === 1 && st.phase === 'playing' && E.activeUnit(st) === null && st.eco.espera === 2,
+        'espera ' + r + ' rodada ' + st.round + ' ' + st.phase);
+  check('a parada avisa a tela (o evento ecoEsperaSal da rodada 2)',
+        E.events.some((ev) => ev.type === 'ecoEsperaSal' && ev.rodada === 2));
+  const h0 = E.hash(st), rng0 = st._rng;
+  const [h1] = herois(st);
+  E.endTurn(st); E.endTurn(st);
+  E.move(st, h1.uid, h1.x, h1.y - 1);
+  E.cast(st, h1.uid, 'pv-tiro', 8, 9);
+  check('enquanto espera, encerrar a vez, andar e lançar não mexem em NADA (o hash é o mesmo)', E.hash(st) === h0 && st._rng === rng0);
+  check('o sal de outra rodada não entra (a 3 com a 2 esperando)', E.ecoSal(st, 3, 123) === false && E.hash(st) === h0);
+  check('sal fora do formato não entra (negativo, quebrado, acima de 31 bits, texto)',
+        [-1, 1.5, E.SAL_MAX + 1, '5', null].every((s) => E.ecoSal(st, 2, s) === false) && E.hash(st) === h0);
+  check('o sal certo começa a rodada 2: a vez volta a alguém', E.ecoSal(st, 2, 555) === true && st.round === 2 &&
+        !!E.activeUnit(st) && !E.ecoEsperaSal(st) && st.eco.salDa === 2, 'rodada ' + st.round);
+  check('o mesmo sal não entra de novo na rodada que já começou', E.ecoSal(st, 2, 555) === false);
+})();
+
+(function () {
+  // a sorte da rodada sai SÓ do sal: duas câmaras de sementes diferentes, paradas na mesma virada, com o mesmo sal
+  const a = camara([heroi('h1')], 101), b = camara([heroi('h1')], 202);
+  ateOSal(a); ateOSal(b);
+  const antesDifere = a._rng !== b._rng;
+  E.ecoSal(a, 2, 4242); E.ecoSal(b, 2, 4242);
+  check('o sorteio da rodada nova sai SÓ do sal e da rodada — nada do sorteio de antes atravessa',
+        antesDifere && a._rng === b._rng, a._rng + ' / ' + b._rng);
+  // e o mesmo estado, com sais diferentes, sorteia diferente; com o mesmo sal, igual
+  function rodada2(s) {
+    const st = camara([heroi('h1', { stats: undefined, spells: undefined, classId: 'arqueiro', level: 30, element: 'fogo' })], 31);
+    ateOSal(st);
+    E.ecoSal(st, 2, s);
+    // a rodada 2 inteira jogada pela IA (heróis e Eco), até a próxima parada
+    for (let n = 0; n < 60 && st.phase === 'playing' && !E.ecoEsperaSal(st); n++) {
+      const u = E.activeUnit(st);
+      for (const ac of AI.planTurn(st, u.uid)) {
+        if (st.phase !== 'playing') break;
+        if (ac.action === 'cast') E.cast(st, u.uid, ac.spellId, ac.x, ac.y);
+        else if (ac.action === 'move') E.move(st, u.uid, ac.x, ac.y);
+        else if (ac.action === 'end') break;
+      }
+      if (st.phase === 'playing' && !E.ecoEsperaSal(st)) E.endTurn(st);
+    }
+    return E.hash(st);
+  }
+  const s1 = rodada2(1), s1b = rodada2(1);
+  const outros = [2, 3, 4, 5, 6].map(rodada2);
+  check('o mesmo sal refaz a mesma rodada (o juiz depende disso)', s1 === s1b);
+  check('outro sal, outra sorte na mesma rodada (5 sais, ' + new Set([s1].concat(outros)).size + ' fins diferentes)',
+        new Set([s1].concat(outros)).size >= 3);
+})();
+
+(function () {
+  // a tentativa inteira: um sal por rodada, da 2 à 12; a 13ª encerra sem pedir
+  const st = camara([heroi('h1')], 77);
+  const pedidas = [];
+  for (let n = 0; st.phase === 'playing' && n < 5000; n++) {
+    const r = E.ecoEsperaSal(st);
+    if (r) { pedidas.push(r); E.ecoSal(st, r, r * 13); continue; }
+    E.endTurn(st);
+  }
+  check('a tentativa inteira pede UM sal por rodada, da 2 à ' + CFG.rodadas + ', e a ' + (CFG.rodadas + 1) + 'ª encerra sem pedir',
+        JSON.stringify(pedidas) === JSON.stringify(Array.from({ length: CFG.rodadas - 1 }, (x, i) => i + 2)) &&
+        st.phase === 'lost' && st.round === CFG.rodadas + 1, JSON.stringify(pedidas) + ' ' + st.phase);
+  // a parada entra no hash: o motor parado e o andando não podem ter o mesmo número
+  const p = camara([heroi('h1')], 77);
+  ateOSal(p);
+  const parado = E.hash(p);
+  p.eco.espera = 0;
+  check('a rodada parada no sal entra no hash', E.hash(p) !== parado);
+  p.eco.espera = 2;
+  // e só na Câmara: uma sala de calabouço vira a rodada sem parar
+  const sala = E.createBattle('cistern', 0, [heroi('h1', { stats: undefined, spells: undefined, classId: 'sumo', level: 30 })],
+                              { seed: 3, escolhePosicao: false });
+  let viradas = 0;
+  for (let n = 0; n < 400 && sala.phase === 'playing' && sala.round < 4; n++) {
+    if (E.ecoEsperaSal(sala) || !E.activeUnit(sala)) { viradas = -1; break; }
+    E.endTurn(sala);
+  }
+  check('fora da Câmara do Eco a rodada vira sem sal nenhum', viradas === 0 && sala.round >= 4, 'rodada ' + sala.round);
+})();
+
+(function () {
+  // O CAMINHO: SHA-256 de verdade, conferido com o do Node
+  const textos = ['', 'abc', 'Câmara do Eco 💠', '\ud800 solto', 'x\udc00y', 'a'.repeat(55), 'a'.repeat(56),
+                  'b'.repeat(63), 'c'.repeat(64), 'd'.repeat(65), 'e'.repeat(1000), JSON.stringify({ a: 'ç', b: [1, 2] })];
+  const ruins = textos.filter((t) => E._sha256(t) !== nodeCrypto.createHash('sha256').update(t, 'utf8').digest('hex'));
+  check('o SHA-256 do motor é o do Node em ' + textos.length + ' textos (vazio, acento, emoji, surrogate solto, as bordas de 55/56/64 bytes)',
+        ruins.length === 0, JSON.stringify(ruins.map((t) => t.slice(0, 12))));
+  const lances = [{ a: 'p', x: null, y: null, e: { u3: { x: 4, y: 15 }, u1: { x: 9, y: 15 } }, ok: true },
+                  { a: 'm', u: 'u1', x: 9, y: 13, ok: true, extra: undefined },
+                  { a: 'c', u: 'u1', s: 'pv-tiro', x: 8, y: 9, ok: false },
+                  { a: 'e', ok: true }, { a: 'r', r: 2, s: 99, ok: true }];
+  const c0 = E.ecoCaminho(lances);
+  const viagem = JSON.parse(JSON.stringify(lances));                       // o que o juiz recebe pelo servidor
+  const embaralhado = lances.map((l) => { const o = {}; Object.keys(l).reverse().forEach((k) => { o[k] = l[k]; }); return o; });
+  check('o caminho tem 64 hexadecimais', /^[0-9a-f]{64}$/.test(c0), c0);
+  check('o caminho sobrevive à viagem pelo JSON (o campo undefined some igual) e não liga para a ordem das chaves',
+        E.ecoCaminho(viagem) === c0 && E.ecoCaminho(embaralhado) === c0);
+  const outro = JSON.parse(JSON.stringify(lances));
+  outro[1].y = 12;
+  check('um lance diferente é outro caminho (a casa, o resultado, a ordem)', E.ecoCaminho(outro) !== c0 &&
+        E.ecoCaminho(lances.slice().reverse()) !== c0 && E.ecoCaminho(lances.slice(0, 4)) !== c0);
 })();
 
 // ------------------------------------------------- determinismo, hash e a IA inteira
@@ -410,6 +538,7 @@ function partidaIA(seed, guarda) {
   E.events.length = 0;
   let recusas = 0, n = 0;
   while (st.phase === 'playing' && n++ < 3000) {
+    if (sal(st)) continue;
     const u = E.activeUnit(st);
     const plano = AI.planTurn(st, u.uid);
     let acabou = false;

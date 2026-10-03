@@ -282,7 +282,12 @@ vem de `Progress.battleParty()`.
 `Engine.ligacao(state,a,b)` e `Engine.origemPara(state,uid,spellId,x,y)`. Toda pergunta "quem está nesta casa"
 e "a que distância" passa por elas (decisão de design 19 do engine.js). **O Eco** (`state.eco`, `Engine.ecoPlacar`)
 está em docs/SISTEMAS.md §6-B; eventos `ecoFase{uid,fase,element}` · `ecoAviso{uid,golpe,nome,element,casas}` ·
-`ecoGolpe{…}` · `ecoDano{uid,perda,total}` · `ecoTempo{rodadas}`.
+`ecoGolpe{…}` · `ecoDano{uid,perda,total}` · `ecoTempo{rodadas}` · `ecoEsperaSal{rodada}` · `ecoSal{rodada}`.
+**O sorteio rodada a rodada (03/10)**: na Câmara, a virada para a rodada 2..12 PARA (`Engine.ecoEsperaSal(state)` diz
+qual rodada espera; `Engine.activeUnit` devolve null; `move`/`cast`/`endTurn` não mexem em nada) até
+`Engine.ecoSal(state, rodada, sal)` (sal inteiro de 0 a `Engine.SAL_MAX`), que re-semeia o sorteio só com o sal e
+começa a rodada. `Engine.ecoCaminho(lances)` = SHA-256 (hex) do JSON canônico dos lances — o que vai ao servidor
+para pedir o sal. O lance do sal é `{a:'r', r: rodada, s: sal, ok}`.
 
 **Novos eventos**: `weatherTick{uid,amount}` · `weatherShift{weather}` · `dodgeFail{uid,lockerUid}` ·
 `dodgeOk{uid}` · `fusion{…}` · `petAct{uid,action}` · `tileEvent{uid,eventId,text}` ·
@@ -302,6 +307,10 @@ expiração encerra o turno automaticamente; `Game.declareFusion(uidA, uidB)`;
 `Game.selectSpell` com **cancelamento**: clique fora da zona válida ⇒ desmarca o feitiço e
 devolve o modo de movimento (nunca gasta a ação). 02/10: `Game.startEco(heroIds, aoAbrir)` (a tentativa do Eco:
 semente do servidor com sessão, treino sem), `Game.ecoTentativa()`, `Game.ecoFim()` e a tela `ecoFim`.
+03/10: `Game.ecoSalEstado()` → `{rodada, treino, semRede, tentativas}` enquanto a rodada espera o sal (null fora
+disso); o `Game.update` pede o sal sozinho (`JOGO.Autoridade.salEco`), tenta de novo sem rede (e quando o pedido
+fica sem resposta por `Game.SAL_PRAZO_MS`, 10 s) e encerra a
+tentativa na recusa de vez (`ecoFim().parouNaRodada`, `.semSal`).
 
 ### `JOGO.Renderer` (Designer Render) — PixiJS
 `init(canvasOuContainer)` · `render(dt)` · `handleEvent(ev)` · `isBusy()` · `project(x,y)` ·

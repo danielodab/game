@@ -428,6 +428,16 @@ vida máxima (6.000) aos pontos. A tentativa NÃO usa nem gasta a vida única (t
 desafio de sala, é sempre na dificuldade normal e é só da dupla da própria conta. Medido: a dupla de nível
 30 jogada pela IA tira ~1/3 da vida em 12 rodadas — derrubar exige jogar bem (`tests/eco_motor.js`).
 
+**A sorte rodada a rodada (03/10).** A semente que o servidor dá na abertura decide só a colocação e a
+rodada 1. Na virada para cada rodada seguinte (2 a 12) a batalha para um instante — a barra diz "A rodada N
+vem do servidor…" — e o jogo pede ao servidor o SAL da rodada, mandando junto o caminho (um resumo
+criptográfico dos lances jogados até ali). O servidor dá um sal por rodada e fica preso àquele caminho: não há
+como saber a sorte de uma rodada futura antes de ter travado lá o que se jogou. Sem rede a tentativa espera
+("Sem resposta do servidor — a rodada N espera, tentando de novo…") e segue quando a rede volta; se o servidor
+recusar de vez (a tentativa venceu, a semana fechou), a tentativa acaba na virada e o dano até ali vai para a
+conferência. O treino sem conta passa pela mesma parada com um sal local e não conta no placar. O porquê e
+as contas estão em docs/SEGURANCA.md §4.8.
+
 **A semana.** 3 tentativas por dia (o dia de Brasília); vale a melhor da semana, de segunda 00:00 a
 domingo 23:59 de Brasília. O ranking é por conta (empate: quem chegou primeiro); a equipe joga mas não
 entra. No fechamento, por faixa: 1º–3º 5.000 vinténs, 20 selos de chefe e o título **Voz do Eco** (para
