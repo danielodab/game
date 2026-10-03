@@ -161,3 +161,8 @@ def main():
 
 
 main()
+# 02/10: relevo e metal/rugosidade a 512, a cor fica em 1024 (o que o dono
+# aprovou na comparacao lado a lado). Sem isto, rodar este embute de novo para
+# trocar uma peca devolvia o arquivo inteiro a 1024 sem ninguem notar.
+import reduz_texturas  # noqa: E402  (mora ao lado, em tools/)
+reduz_texturas.reduz_arquivo(SAIDA)

@@ -34,6 +34,8 @@ PASSO A PASSO (o mesmo dos lotes anteriores, agora sem copiar script):
      JOGO.MESHY_CLIPS[id]. Depois:
        - index.html: acrescente 'assets/embedded/models-meshy-<calabouco>.js'
          na lista dos modelos (ao lado de models-meshy-cisterna.js);
+       - python tools/reduz_texturas.py  (relevo e brilho a 512, a cor fica
+         em 1024 — o Python do Blender nao tem Pillow, entao e passo a parte);
        - python tools/extrai_assets.py   (o bundle servido);
        - abra tests/bestiario.html?calabouco=<calabouco> — ele cobra kit
          próprio, clipe por papel e porte de cada monstro;
@@ -279,7 +281,8 @@ def embute(man):
         print("%-18s %6.2f MB  %6d tris  %.2f m  %s%s" % (
             mid, mb, tris, alt, ",".join(acoes), ("  FALTOU: " + "; ".join(perdidas)) if perdidas else ""))
     print("saida:", saida)
-    print("\nAGORA: index.html (models-meshy-%s.js), tools/extrai_assets.py, tests/bestiario.html?calabouco=%s" % (cal, cal))
+    print("\nAGORA: index.html (models-meshy-%s.js), tools/reduz_texturas.py, tools/extrai_assets.py, "
+          "tests/bestiario.html?calabouco=%s" % (cal, cal))
 
 
 def main():
