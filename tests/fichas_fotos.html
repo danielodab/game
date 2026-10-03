@@ -498,6 +498,43 @@
       check('Menos movimento: desligar tira a classe', !document.documentElement.classList.contains('menos-movimento'));
     });
 
+    // ---- o Tab dá a volta DENTRO da ficha (ela é diálogo modal): do último
+    // controle para o primeiro, e Shift+Tab do primeiro para o último
+    passo = passo.then(function () {
+      UI.closeSheet(); UI.openSheet('config');
+      var f = painel();
+      var foc = qa('button, a[href], input, select, textarea, summary', f).filter(function (n) {
+        return !n.disabled && n.getClientRects().length > 0;
+      });
+      var ult = foc[foc.length - 1], prim = foc[0];
+      ult.focus();
+      ult.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      check('Tab no último controle da ficha volta ao primeiro (não foge para trás do véu)',
+            document.activeElement === prim, document.activeElement ? document.activeElement.className : '?');
+      prim.focus();
+      prim.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+      check('Shift+Tab no primeiro controle vai ao último', document.activeElement === ult,
+            document.activeElement ? document.activeElement.className : '?');
+      UI.closeSheet();
+    });
+
+    // ---- quem está digitando fora da ficha (o chat da praça) não perde o
+    // campo quando uma ficha abre sozinha (a escolha do duelo chega pela rede):
+    // o foco puxado no meio da frase fazia o "i" abrir o inventário por cima
+    passo = passo.then(function () {
+      UI.closeSheet();
+      var campo = document.createElement('input');
+      campo.className = 'hub-chat-input';
+      document.getElementById('ui-root').appendChild(campo);
+      campo.focus();
+      UI.openSheet('config');
+      check('ficha que abre com alguém digitando fora dela deixa o foco no campo',
+            document.activeElement === campo, document.activeElement ? document.activeElement.tagName : '?');
+      UI.closeSheet();
+      check('fechar essa ficha também não tira o foco do campo', document.activeElement === campo);
+      campo.parentNode.removeChild(campo);
+    });
+
     // ---- a régua do "desligado" (.btn.is-off apagado a 45%) não acende o que
     // is-off ESCONDE: o recentrar da câmera some de verdade na batalha
     passo = passo.then(function () {

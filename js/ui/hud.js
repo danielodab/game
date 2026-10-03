@@ -520,6 +520,26 @@ var JOGO = (typeof window !== 'undefined')
     sheetEl = el('div', 'ui-sheet');
     root.appendChild(sheetEl);
     tap(sheetEl, function (ev) { if (ev.target === sheetEl) closeSheet(); });
+    /* 03/10 (revisão): a ficha se anuncia como diálogo MODAL (aria-modal) — o
+     * leitor de tela passa a tratar o resto da página como inerte. O Tab, não:
+     * do último botão ele saía para o cais e os botões ATRÁS do véu, e o
+     * jogador de teclado se perdia num lugar que nem enxerga. O Tab dá a volta
+     * dentro da ficha (do último ao primeiro, e Shift+Tab do primeiro ao último). */
+    sheetEl.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab' || !sheetEl.classList.contains('is-on')) return;
+      var pn = sheetEl.querySelector('.sheet-panel');
+      if (!pn) return;
+      var foc = [].filter.call(pn.querySelectorAll(
+        'button, a[href], input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])'),
+        function (n) { return !n.disabled && n.tabIndex >= 0 && n.getClientRects().length > 0; });
+      if (!foc.length) return;
+      var prim = foc[0], ult = foc[foc.length - 1], at = document.activeElement, vai = null;
+      if (ev.shiftKey && (at === prim || at === pn)) vai = ult;
+      else if (!ev.shiftKey && at === ult) vai = prim;
+      if (!vai) return;
+      ev.preventDefault();
+      try { vai.focus(); } catch (e) {}
+    });
 
     tipEl = el('div', 'ui-tip');
     root.appendChild(tipEl);
@@ -5735,6 +5755,15 @@ var JOGO = (typeof window !== 'undefined')
   function sheetShell(title, sub, ico) {
     var jaAberta = sheetEl.classList.contains('is-on');
     var focoDentro = jaAberta && sheetEl.contains(document.activeElement);
+    /* 03/10 (revisão): quem está DIGITANDO num campo fora da ficha (o chat da
+     * praça) não perde o campo. Há ficha que abre sozinha, pela rede — a
+     * escolha do duelo (aoDueloMudou) —, e o foco puxado para o painel no meio
+     * da frase fazia o resto dela virar atalho: o "i" de "aí" trocava a
+     * escolha do duelo pelo inventário, o Esc fechava a ficha, e no celular o
+     * teclado sumia. Antes da ficha virar diálogo o campo ficava com o foco. */
+    var ativo = document.activeElement;
+    var digitando = !!ativo && !sheetEl.contains(ativo) &&
+      (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.isContentEditable);
     if (!jaAberta) {
       var at = document.activeElement;
       sheetDeQuem = (at && at !== document.body && !sheetEl.contains(at)) ? at : null;
@@ -5772,7 +5801,7 @@ var JOGO = (typeof window !== 'undefined')
     // a ficha que acabou de abrir (ou que se redesenhou com o foco dentro,
     // que o clear acabou de apagar) segura o foco; quem desenha um campo
     // depois disto (a mensagem particular) toma o foco para o campo
-    if (!jaAberta || focoDentro || document.activeElement === document.body) {
+    if (!digitando && (!jaAberta || focoDentro || document.activeElement === document.body)) {
       try { panel.focus({ preventScroll: true }); } catch (e) {}
     }
     return body;
