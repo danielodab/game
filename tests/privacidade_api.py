@@ -460,6 +460,13 @@ class ProvaDaPrivacidade(unittest.TestCase):
                  "b_nivel, a_desde_ms, criada_ms, prazo_ms, estado) VALUES ('d-dados-ar', ?, ?, '[]', '[]', '[]', '[]', "
                  "1, 1, ?, ?, ?, 'jogada')", cid, bid, t * 1000, t * 1000, t * 1000)
         self.sql("INSERT INTO rele_presenca(conta_id, evento, em_ms) VALUES (?, 'caiu', ?)", cid, t * 1000)
+        # e o código da troca de e-mail (o e-mail novo e o IP, sem o hash), o alerta de pagamento e a guilda antiga
+        self.sql("INSERT INTO codigos(conta_id, finalidade, hash, dado, ip, criado_em, expira_em) "
+                 "VALUES (?, 'email', 'hash-que-nao-sai', 'novo@prova.test', '203.0.113.9', ?, ?)", cid, t, t + 86400)
+        self.sql("INSERT INTO contas_alertas(conta_id, tipo, dados, criado_em) VALUES (?, 'estorno', '{\"n\": 1}', ?)",
+                 cid, t)
+        self.sql("INSERT INTO guildas_antigas(conta_id, nome, emblema, trazida_em) VALUES (?, 'Os Antigos', '⚑', ?)",
+                 cid, t)
         self.sql("DELETE FROM limites WHERE chave = ?", 'meus-dados:%d' % cid)
         st, r = a.pede('GET', '/api/conta/meus-dados')
         self.assertEqual(st, 200, r)
@@ -472,6 +479,12 @@ class ProvaDaPrivacidade(unittest.TestCase):
         self.assertEqual([x['xp'] for x in d['guilda_xp_doado']], [321])
         self.assertEqual([x['texto'] for x in d['guilda_mural_escrito']], ['meu recado'])
         self.assertEqual([x['evento'] for x in d['presenca']], ['caiu'])
+        self.assertEqual([(x['dado'], x['ip']) for x in d['codigos']], [('novo@prova.test', '203.0.113.9')])
+        self.assertNotIn('hash-que-nao-sai', json.dumps(d))
+        self.assertEqual([(x['tipo'], x['dados']) for x in d['alertas']], [('estorno', {'n': 1})])
+        self.assertEqual(d['guilda_antiga']['nome'], 'Os Antigos')
+        for chave in ('ranking_aparencia', 'arena_inscricao', 'guilda_dizimo'):
+            self.assertIn(chave, d)
         self.assertNotIn('"%d"' % bid, json.dumps(d['duelos']), 'o número do adversário não entra')
         # (o balde foi esvaziado antes deste pedido: ele é o 1º da hora, e o laço abaixo completa o teto)
         for _ in range(privacidade.MEUS_DADOS_POR_HORA - 1):

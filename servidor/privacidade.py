@@ -498,6 +498,22 @@ class PrivacidadeMixin:
             "WHERE c.conta_id = ? ORDER BY c.em", (cid,))]
         dados['presenca'] = [dict(r) for r in self.con.execute(
             "SELECT evento, em_ms FROM rele_presenca WHERE conta_id = ? ORDER BY em_ms DESC", (cid,))]
+        # 03/10 (revisão): mais o que estava de fora. Os códigos de troca de e-mail e de senha (o e-mail
+        # novo pedido e o IP de quem pediu; o hash do código não), os alertas de pagamento sobre a conta
+        # (sem quem da Equipe viu), a guilda antiga trazida do jogo local, a aparência do ranking, a
+        # inscrição na Arena e o dízimo da guilda. Ficam de fora, de propósito: as linhas de auditoria em
+        # que a conta é o alvo (diriam quem da Equipe agiu), os hashes de sessão derrubada e de estado, e
+        # as filas da guerra e da sala em grupo (já contadas em 'guerras' e 'salas_em_grupo')
+        dados['codigos'] = [dict(r) for r in self.con.execute(
+            "SELECT finalidade, dado, ip, criado_em, expira_em, usado FROM codigos WHERE conta_id = ? "
+            "ORDER BY criado_em DESC", (cid,))]
+        dados['alertas'] = [dict(r, dados=_json(r['dados'])) for r in self.con.execute(
+            "SELECT tipo, dados, criado_em, visto_em FROM contas_alertas WHERE conta_id = ? ORDER BY id DESC", (cid,))]
+        dados['guilda_antiga'] = um("SELECT nome, emblema, trazida_em FROM guildas_antigas WHERE conta_id = ?")
+        dados['ranking_aparencia'] = um("SELECT avatar, classe, atualizado_em FROM resumos_extra WHERE conta_id = ?")
+        dados['arena_inscricao'] = um("SELECT herois, classes, nivel, desde_ms FROM arena_inscritos WHERE conta_id = ?")
+        dados['guilda_dizimo'] = um("SELECT g.nome AS guilda, d.pct FROM guilda_dizimo_membro d "
+                                    "JOIN guildas g ON g.id = d.guilda_id WHERE d.conta_id = ?")
         # 03/10 (junção com o Eco Primordial): as tentativas da semana e os prêmios recebidos — o placar
         # é público, mas a semente, os heróis e o motivo de uma recusa são da conta
         try:
