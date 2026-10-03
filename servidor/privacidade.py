@@ -310,12 +310,15 @@ class PrivacidadeMixin:
                 (cid, LAPIDE_NOME % cid, LAPIDE_EMAIL % cid, '!', '!', t))
             self.con.execute("INSERT OR REPLACE INTO contas_excluidas(conta_id, excluida_em, guilda) VALUES (?, ?, ?)",
                              (cid, t, guilda))
-        # o que mora só na memória deste processo
-        self.tentativas.pop(cid, None)
-        self._resumos_vistos.pop(cid, None)
-        self._ranking_guardado = None
-        for chave in [k for k in self.intencoes if cid in k]:
-            self.intencoes.pop(chave, None)
+        # o que mora só na memória deste processo — DENTRO da tranca (03/10, revisão): a troca (api.py)
+        # mexe em `intencoes` com ela pega, e percorrer o dicionário enquanto outra thread insere levanta
+        # RuntimeError DEPOIS do commit: a conta já tinha saído, a resposta era 500 e o e-mail não ia
+        with self.tranca:
+            self.tentativas.pop(cid, None)
+            self._resumos_vistos.pop(cid, None)
+            self._ranking_guardado = None
+            for chave in [k for k in self.intencoes if cid in k]:
+                self.intencoes.pop(chave, None)
         log.info("conta #%d excluída pelo titular (guilda: %s)", cid, guilda or '-')
         self._envia_depois(email, *self._texto_excluida(conta['nome']), rotulo='o aviso de conta excluída')
         return 200, {'ok': True, 'excluida': True, 'guilda': guilda}
