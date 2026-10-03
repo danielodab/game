@@ -253,10 +253,11 @@
     respostas['/api/arena/estado'] = function () { return { ok: true, status: 200, agoraMs: Date.now(), fase: 'livre' }; };
     var meu = forteDe(ids);
     respostas['/api/arena/quadro'] = function () {
-      return { ok: true, status: 200, agoraMs: Date.now(), paridade: 5, inscritos: [
+      // 03/10 (o dono): a paridade da Arena é 3 — a Duda 4 acima fica fora, a Cris 3 acima entra
+      return { ok: true, status: 200, agoraMs: Date.now(), paridade: 3, inscritos: [
         { conta: 1, nome: 'Ana', nivel: meu, brasa: 1000, classes: [{ classId: classeDe(ids[0]), nivel: meu }], desdeMs: Date.now() - 5000, eu: true },
-        { conta: 44, nome: 'Duda', nivel: meu + 6, brasa: 1500, classes: [{ classId: 'bruxo', nivel: meu + 6 }, { classId: 'sumo', nivel: 3 }], desdeMs: Date.now() - 9000, eu: false },
-        { conta: 33, nome: 'Cris', nivel: meu + 5, brasa: 1300, classes: [{ classId: 'sumo', nivel: meu + 5 }, { classId: 'curandeiro', nivel: 2 }], desdeMs: Date.now() - 65000, eu: false }
+        { conta: 44, nome: 'Duda', nivel: meu + 4, brasa: 1500, classes: [{ classId: 'bruxo', nivel: meu + 4 }, { classId: 'sumo', nivel: 3 }], desdeMs: Date.now() - 9000, eu: false },
+        { conta: 33, nome: 'Cris', nivel: meu + 3, brasa: 1300, classes: [{ classId: 'sumo', nivel: meu + 3 }, { classId: 'curandeiro', nivel: 2 }], desdeMs: Date.now() - 65000, eu: false }
       ] };
     };
     U.openSheet('arenaQuadro');
@@ -267,14 +268,20 @@
       check('quadro · os inscritos com as duas classes, a coroa e o tempo', ok && /Cris/.test(cris.textContent) && /Coroa IV/.test(cris.textContent) &&
             /Sumo|Bárbaro/i.test(cris.textContent) && /esperando há 1:0/.test(cris.textContent), cris && cris.textContent);
       check('quadro · a própria inscrição aparece sem botão de desafio', eu && /sua inscrição/.test(eu.textContent) && !eu.querySelector('button'));
-      check('quadro · quem está fora da paridade (6 acima) fica apagado e não desafia', duda && duda.classList.contains('is-fora') &&
+      check('quadro · a paridade da Arena é 3 no cliente e o cabeçalho diz "até 3 níveis" (o número que o servidor mandou)',
+            J.Arena.PARIDADE === 3 && /até 3 níveis/.test(f ? f.textContent : ''), J.Arena.PARIDADE + ' · ' + (f ? f.textContent.slice(0, 160) : ''));
+      check('quadro · quem está fora da paridade (4 acima) fica apagado e não desafia', duda && duda.classList.contains('is-fora') &&
             botao(duda, /Fora da paridade/) && !botao(duda, /^Desafiar$/));
       var bD = botao(cris, /^Desafiar$/);
-      check('quadro · quem está na paridade (5 acima) tem "Desafiar"', !!bD && !cris.classList.contains('is-fora'));
+      check('quadro · quem está na paridade (3 acima) tem "Desafiar"', !!bD && !cris.classList.contains('is-fora'));
+      var bF = botao(duda, /Fora da paridade/);
+      if (bF) bF.click();
+      check('quadro · tocar em quem está fora diz o porquê com o número de agora ("passa de 3")',
+            /passa de 3 \(/.test(toastTxt()), toastTxt());
       respostas['/api/arena/desafiar'] = function (op) {
         return { ok: true, status: 200, agoraMs: Date.now(), fase: 'casada', papel: 'desafiante', lado: 'B', prazoMs: Date.now() + 30000,
                  confirmei: false, eleConfirmou: false, herois: op.body.herois, classes: [], nivel: meu,
-                 adversario: { conta: 33, nome: 'Cris', nivel: meu + 5, brasa: 1300, herois: ['x', 'y'], classes: [{ classId: 'sumo', nivel: meu + 5 }] } };
+                 adversario: { conta: 33, nome: 'Cris', nivel: meu + 3, brasa: 1300, herois: ['x', 'y'], classes: [{ classId: 'sumo', nivel: meu + 3 }] } };
       };
       bD.click();
       f = fichaAberta();

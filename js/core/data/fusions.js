@@ -62,7 +62,13 @@ JOGO.DATA = JOGO.DATA || {};
   function sm(id) { return { type: 'summon', monsterId: id }; }
   function tr(id, dur) { return { type: 'trap', trapId: id, duration: dur }; }
   function tn(dur) { return { type: 'taunt', duration: dur }; }
-  function wl(dur) { return { type: 'wall', duration: dur }; }   // v3: verbo BARRAR
+  /* v3: verbo BARRAR. 03/10: o muro de toda fusao do Minotauro tem os ESPINHOS do
+   * muro dele (engine.js, "O MURO QUE FERE QUEM ENCOSTA"): `fere` e o MESMO numero
+   * dos feiticos de muro da classe (spells.js) e nao passa pelo fator da forma (o
+   * PAIR_TUNE chega a 3,1 — ver scaleEffect em fusion.js); o poder da fusao entra na
+   * hora de erguer. Todo `wl` deste arquivo e de dupla do Minotauro. */
+  var MURO_FERE = 30;
+  function wl(dur) { return { type: 'wall', duration: dur, fere: MURO_FERE }; }
   function iv(dur) { return { type: 'invisible', duration: dur }; }
   function rf(pct, dur) { return { type: 'reflect', pct: pct, duration: dur }; }
   function dsh() { return { type: 'dispelShield' }; }

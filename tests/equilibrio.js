@@ -83,15 +83,18 @@ const FAIXA_CAMINHO = 0.25;
  * nos dados (spells.js, monsters.js, fusions.js, fusion.js) já multiplicado —
  * o porquê de cada ajuste mora nas tabelas de docs/EQUILIBRIO.md §5, não ao
  * lado do número. Formato:
- *   { "classes": { "<classe>": { "dano": k, "cura": k, "escudo": k, "pv": +n,
+ *   { "classes": { "<classe>": { "dano": k, "cura": k, "escudo": k, "pv": +n, "fere": k,
  *                                "tier": { "<nível>": k }, "<elemento>": k } },
+ *   ("fere" multiplica os espinhos do muro — o `fere` dos efeitos de muro da classe;
+ *    a potência não o toca: o muro é o verbo, não o golpe)
  *     "feiticos": { "<id>": { "dano": k, "cura": k, "escudo": k } },
  *     "pairTune": { "<dupla>": [k5, k12, k30] } } */
 function grupoDoNivel(n) { return n >= 30 ? 'D' : n >= 15 ? 'C' : n >= 10 ? 'B' : 'A'; }
 function aplicaAjuste(J, aj) {
   const D = J.DATA;
-  function escala(ef, kd, kc, ks) {
+  function escala(ef, kd, kc, ks, kf) {
     if (!ef) return;
+    if (ef.type === 'wall' && ef.fere > 0 && kf != null && kf !== 1) ef.fere = Math.max(1, Math.round(ef.fere * kf));
     if ((ef.type === 'damage' || ef.type === 'poison' || ef.type === 'chain') && kd !== 1) {
       ef.min = Math.max(1, Math.round(ef.min * kd)); ef.max = Math.max(ef.min, Math.round(ef.max * kd));
     }
@@ -122,8 +125,9 @@ function aplicaAjuste(J, aj) {
     const kd = (c.dano || 1) * kt * ke * (f.dano || 1) * fg[0];
     const kc = (c.cura || 1) * (f.cura || 1) * fg[1];
     const ks = (c.escudo || 1) * (f.escudo || 1) * fg[2];
+    const kf = (c.fere != null ? c.fere : 1) * (f.fere || 1);
     (sp.effects || []).forEach((ef) => {
-      escala(ef, kd, kc, ks);
+      escala(ef, kd, kc, ks, kf);
       if (ef.type === 'trap' && D.spells[ef.trapId]) filhos.push([D.spells[ef.trapId], kd, kc, ks]);
       if (ef.type === 'summon') {
         const m = J.Engine.monster(ef.monsterId);

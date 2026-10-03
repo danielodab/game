@@ -140,6 +140,16 @@ descrição ("+35 de poder, ao preço de queimadura própria"); a área em volta
 corpo continua sem ferir quem lança. Ver `docs/EQUILIBRIO.md` §3; a prova é
 `tests/regras_equilibrio.js`.
 
+**O muro de espinhos do Minotauro (03/10).** Todo muro do Minotauro (e das fusões dele) fere quem é
+do outro lado e **termina a vez numa casa vizinha** — norte, sul, leste ou oeste, nunca de quina —, e
+quem é **jogado contra ele** por empurrão ou puxão (além dos 10 da colisão). Uma vez por vez, o muro
+que fere mais; nunca o próprio lado; o dano é o `fere` do feitiço (30) vezes o poder de quem ergueu
+na hora de erguer, menos a resistência ao elemento do muro. Quem sangra nos espinhos não sai das
+sombras, e o reflexo não volta pela pedra. A IA dos dois lados enxerga: quem anda evita terminar
+encostado, quem ergue põe a pedra onde o inimigo não pode sair ou logo atrás dele antes do
+empurrão. Na tela: as estacas ao pé da pedra, as casas vizinhas pintadas e a casa de passo
+vermelha. `docs/EQUILIBRIO.md` §3.6.
+
 ### Esquiva e fixação
 
 Esquiva é **identidade de classe**, não um número igual para todos — vai de
@@ -630,7 +640,7 @@ servidor (`docs/SEGURANCA.md` §10).
 
 | assunto | estado |
 |---|---|
-| **Equilíbrio** | classes, caminhos, fusões e duelos medidos — ver `docs/EQUILIBRIO.md` (o Minotauro na régua da IA e a paridade de 5 níveis são decisão do dono, §6 de lá) |
+| **Equilíbrio** | classes, caminhos, fusões e duelos medidos — ver `docs/EQUILIBRIO.md` (03/10, as duas decisões do dono de §6 de lá: o muro do Minotauro fere quem encosta, e a paridade da Arena caiu de 5 para 3 níveis) |
 | **Efeitos** | 21 famílias e placas ligadas; falta julgar no tamanho real do tabuleiro |
 | **Fogo na arma** | proposto, depende do resultado das placas |
 | **Nomes das classes** | confirmados pelo dono — ficam como estão |

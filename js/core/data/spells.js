@@ -1852,10 +1852,17 @@ JOGO.DATA.spells = {
    *
    * Como os quatro caminhos se separam, para nao virarem o mesmo feitico
    * pintado de outra cor:
-   *   fogo  — o muro QUEIMA quem encosta; escudo que devolve dano
+   *   fogo  — o muro deixa BRASA ao pé; escudo que devolve dano
    *   agua  — o muro ESCORREGA (empurra quem passa perto); escudo que regenera
    *   terra — o muro DURA mais e e mais largo; escudo grosso, o mais puro
    *   ar    — o muro se MOVE junto com voce; escudo leve que da PP
+   *
+   * 03/10 — OS ESPINHOS (a escolha do dono: "dar ao muro do Minotauro algo que a IA
+   * tambem enxergue"). Todo muro dele tem `fere`: o inimigo que termina a vez numa
+   * casa vizinha (ou e jogado contra a pedra) leva esse dano vezes o poder de quem
+   * ergueu (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). Um numero so para a classe —
+   * o da descricao —, achado pela bancada (docs/EQUILIBRIO.md §3.6); as fusoes do
+   * Minotauro usam o mesmo (MURO_FERE em fusions.js).
    * ====================================================================== */
 
   'minotauro-neutro-1': {
@@ -1883,8 +1890,8 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'neutro' } ],
-    description: 'Ergue um muro numa célula vazia por 2 turnos — bloqueia passagem e visão.',
+    effects: [ { type: 'wall', duration: 2, element: 'neutro', fere: 30 } ],
+    description: 'Ergue um muro numa célula vazia por 2 turnos — bloqueia passagem e visão. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Não é para proteger ninguém. É para o outro ter de dar a volta.',
     fxKey: 'stoneWall'
   },
@@ -1894,9 +1901,9 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'fogo' },
+    effects: [ { type: 'wall', duration: 2, element: 'fogo', fere: 30 },
                { type: 'trap', trapId: 'trap-fogo-brasa', duration: 2 } ],
-    description: 'Muro de 2 turnos que deixa brasa acesa em volta: quem encostar se queima.',
+    description: 'Muro de 2 turnos que deixa brasa armada ao pé: quem pisar nela se queima. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'A pedra esfria. A brasa embaixo dela, não.',
     fxKey: 'emberWall'
   },
@@ -1926,9 +1933,9 @@ JOGO.DATA.spells = {
     paCost: 4, cooldown: 3, castsPerTurn: 1,
     range: { min: 1, max: 3, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'fogo' },
+    effects: [ { type: 'wall', duration: 2, element: 'fogo', fere: 30 },
                { type: 'damage', element: 'fogo', min: 16, max: 22 } ],
-    description: 'Levanta uma linha de 3 muros e queima 16–22 em quem estava no caminho.',
+    description: 'Levanta uma linha de 3 muros e queima 16–22 em quem estava no caminho. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Três pedras, uma decisão: por aqui, não.',
     fxKey: 'fireFence'
   },
@@ -1948,9 +1955,9 @@ JOGO.DATA.spells = {
     paCost: 5, cooldown: 5, castsPerTurn: 1,
     range: { min: 0, max: 0, line: false, los: false, movable: false },
     aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'self',
-    effects: [ { type: 'wall', duration: 3, element: 'fogo' },
+    effects: [ { type: 'wall', duration: 3, element: 'fogo', fere: 30 },
                { type: 'shield', value: 180, duration: 3 } ],
-    description: 'Fecha um anel de muros em raio 2 à sua volta e ganha 180 de escudo por 3 turnos.',
+    description: 'Fecha um anel de muros em raio 2 à sua volta e ganha 180 de escudo por 3 turnos. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'A forja não tem porta. Quem entrou, fica.',
     fxKey: 'sealedForge'
   },
@@ -1960,9 +1967,9 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'agua' },
+    effects: [ { type: 'wall', duration: 2, element: 'agua', fere: 30 },
                { type: 'trap', trapId: 'trap-agua-redemoinho', duration: 2 } ],
-    description: 'Muro de 2 turnos com o chão molhado em volta: quem chega perto escorrega.',
+    description: 'Muro de 2 turnos com o chão molhado em volta: quem chega perto escorrega. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'A pedra para o corpo. A poça decide o resto.',
     fxKey: 'slickWall'
   },
@@ -1992,8 +1999,8 @@ JOGO.DATA.spells = {
     paCost: 4, cooldown: 3, castsPerTurn: 1,
     range: { min: 1, max: 3, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 3, element: 'agua' }, { type: 'push', tiles: 1 } ],
-    description: 'Uma linha de 3 muros por 3 turnos, empurrando 1 célula quem estava ali.',
+    effects: [ { type: 'wall', duration: 3, element: 'agua', fere: 30 }, { type: 'push', tiles: 1 } ],
+    description: 'Uma linha de 3 muros por 3 turnos, empurrando 1 célula quem estava ali. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'O rio não discute com o dique. Só faz a volta.',
     fxKey: 'dike'
   },
@@ -2013,10 +2020,10 @@ JOGO.DATA.spells = {
     paCost: 5, cooldown: 5, castsPerTurn: 1,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 3, element: 'agua' },
+    effects: [ { type: 'wall', duration: 3, element: 'agua', fere: 30 },
                { type: 'damage', element: 'agua', min: 22, max: 30 },
                { type: 'push', tiles: 1 } ],
-    description: 'Anel de muros em raio 2 no alvo: 22–30 de água e 1 de empurrão em quem ficou dentro.',
+    description: 'Anel de muros em raio 2 no alvo: 22–30 de água e 1 de empurrão em quem ficou dentro. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Cercar não é prender. É escolher a saída por ele.',
     fxKey: 'waterSiege'
   },
@@ -2026,8 +2033,8 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 4, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 4, element: 'terra' } ],
-    description: 'Ergue um muro que dura 4 turnos — o mais teimoso dos quatro caminhos.',
+    effects: [ { type: 'wall', duration: 4, element: 'terra', fere: 30 } ],
+    description: 'Ergue um muro que dura 4 turnos — o mais teimoso dos quatro caminhos. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Puseram ali antes de haver estrada. A estrada é que deu a volta.',
     fxKey: 'menhir'
   },
@@ -2057,8 +2064,8 @@ JOGO.DATA.spells = {
     paCost: 4, cooldown: 3, castsPerTurn: 1,
     range: { min: 1, max: 3, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 4, element: 'terra' } ],
-    description: 'Três muros em linha, de pé por 4 turnos. Corta a sala em duas.',
+    effects: [ { type: 'wall', duration: 4, element: 'terra', fere: 30 } ],
+    description: 'Três muros em linha, de pé por 4 turnos. Corta a sala em duas. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Toda muralha é uma frase curta: não.',
     fxKey: 'rampart'
   },
@@ -2078,9 +2085,9 @@ JOGO.DATA.spells = {
     paCost: 5, cooldown: 5, castsPerTurn: 1,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'cross', size: 2 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 4, element: 'terra' },
+    effects: [ { type: 'wall', duration: 4, element: 'terra', fere: 30 },
                { type: 'root', duration: 1 } ],
-    description: 'Cruz de muros de 4 turnos em torno do alvo, e 0 PP por 1 turno em quem ficou dentro.',
+    description: 'Cruz de muros de 4 turnos em torno do alvo, e 0 PP por 1 turno em quem ficou dentro. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'O labirinto é dele. Vocês só estão passando.',
     fxKey: 'labyrinth'
   },
@@ -2090,9 +2097,9 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 2, castsPerTurn: 1,
     range: { min: 1, max: 5, line: false, los: true, movable: false },
     aoe: { shape: 'single', size: 0 }, needsEmptyTile: true, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 1, element: 'ar' },
+    effects: [ { type: 'wall', duration: 1, element: 'ar', fere: 30 },
                { type: 'trap', trapId: 'trap-ar-rajada', duration: 2 } ],
-    description: 'Muro de 1 turno, mas erguido de longe — e deixa uma rajada armada em volta.',
+    description: 'Muro de 1 turno, mas erguido de longe — e deixa uma rajada armada em volta. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Dura um instante. O instante era o que faltava.',
     fxKey: 'gustWall'
   },
@@ -2122,8 +2129,8 @@ JOGO.DATA.spells = {
     paCost: 3, cooldown: 3, castsPerTurn: 1,
     range: { min: 1, max: 6, line: true, los: true, movable: false },
     aoe: { shape: 'line', size: 3 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'ar' } ],
-    description: 'Três muros em linha, erguidos a 6 células de distância — o maior alcance da classe.',
+    effects: [ { type: 'wall', duration: 2, element: 'ar', fere: 30 } ],
+    description: 'Três muros em linha, erguidos a 6 células de distância — o maior alcance da classe. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Ele fecha a porta do outro lado da sala.',
     fxKey: 'flyingFence'
   },
@@ -2143,10 +2150,10 @@ JOGO.DATA.spells = {
     paCost: 5, cooldown: 5, castsPerTurn: 1,
     range: { min: 1, max: 6, line: false, los: true, movable: false },
     aoe: { shape: 'ring', size: 2 }, needsEmptyTile: false, targetSide: 'any',
-    effects: [ { type: 'wall', duration: 2, element: 'ar' },
+    effects: [ { type: 'wall', duration: 2, element: 'ar', fere: 30 },
                { type: 'push', tiles: 2 },
                { type: 'damage', element: 'ar', min: 22, max: 30 } ],
-    description: 'Anel de muros a até 6 células: empurra 2, causa 22–30 de ar e fecha o cerco.',
+    description: 'Anel de muros a até 6 células: empurra 2, causa 22–30 de ar e fecha o cerco. Os espinhos ferem 30 o inimigo que terminar a vez encostado ou for jogado contra a pedra.',
     flavor: 'Curral não precisa ser grande. Precisa ser fechado.',
     fxKey: 'windPen'
   },

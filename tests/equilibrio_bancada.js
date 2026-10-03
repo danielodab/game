@@ -157,10 +157,20 @@
     // invocações — é o que o alcance mede (o Xamã parado a 8 casas "acertava"
     // com o bicho que andou até lá)
     function zera() { return { dano: 0, heroi: 0, cura: 0, escudo: 0, amigo: 0, controle: 0 }; }
+    /* 03/10 — OS ESPINHOS DO MURO NÃO CONTAM AQUI (engine.js, "O MURO QUE FERE QUEM ENCOSTA";
+     * docs/EQUILIBRIO.md §1.5 e §3.6). No perfil e na fusão os bonecos não andam: terminam TODA vez na
+     * casa da âncora, então qualquer pedra posta ao lado deles fere em toda rodada — medido, o
+     * Minotauro do nível 20 passava a bater 80% do Bárbaro num alvo só (a regra do papel é < 75%) e o
+     * caminho de Água ia a 1,32× da classe (o Dique empurra o boneco contra a própria pedra). O espinho existe para quem decide ficar ou sair, e um alvo que nunca sai mede o boneco, não
+     * o kit — o mesmo motivo de a armadilha não disparar aqui. Os espinhos contam nos DUELOS, onde a
+     * IA do outro lado decide. A colisão do empurrão (os 10 por casa) continua contando: ela é do
+     * golpe. O dano dos espinhos vem logo depois do evento `muroFere` da mesma vítima. */
     function apura(st, acc) {
-      var evs = E.events;
+      var evs = E.events, espinho = {};
       for (var i = 0; i < evs.length; i++) {
         var ev = evs[i], u;
+        if (ev.type === 'muroFere') { espinho[ev.uid] = (espinho[ev.uid] || 0) + 1; continue; }
+        if (ev.type === 'damage' && espinho[ev.uid] > 0) { espinho[ev.uid]--; continue; }
         if (ev.type === 'damage' && ev.amount > 0) {
           u = U(st, ev.uid); if (!u) continue;
           if (u.side === 'enemy') {

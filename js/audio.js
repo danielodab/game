@@ -252,6 +252,8 @@ var JOGO = (typeof window !== 'undefined')
         case 'fusion':   Audio.play('rugido'); Audio.play('fogo', { gain: 0.6, delay: 0.12 }); break;
 
         case 'wallRaised':    Audio.play('impacto', { rate: 0.8 }); break;
+        // 03/10: os espinhos do muro do Minotauro — o golpe seco e agudo, com o som que já existe
+        case 'muroFere':      Audio.play('golpe', { gain: 0.75, rate: 1.45 }); break;
         case 'trapSet':       Audio.play('confirma', { gain: 0.6 }); break;
         case 'trapTriggered': Audio.play('fogo', { gain: 0.8 }); break;
         case 'shield':        Audio.play('impacto', { gain: 0.55, rate: 1.25 }); break;

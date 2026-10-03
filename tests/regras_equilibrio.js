@@ -259,5 +259,344 @@ check('feiticoMisto: dano + cura é misto; só dano e só cura não são',
     plano.some((x) => x.action === 'cast' && x.spellId === 'espadachim-ar-10'), JSON.stringify(plano));
 })();
 
+/* 9. O MURO QUE FERE QUEM ENCOSTA (03/10, a escolha do dono para o Minotauro —
+ *    docs/EQUILIBRIO.md §3.6; engine.js, "O MURO QUE FERE QUEM ENCOSTA"). */
+function muroEm(st, x, y) { return st.walls.find((w) => w.x === x && w.y === y) || null; }
+// encerra a vez de `u` (as dos outros passam antes, sem jogar) e devolve os eventos dela
+function fechaAVezDe(st, u) {
+  ateAVezDe(E, st, u);
+  E.events.length = 0;
+  E.endTurn(st);
+  const evs = E.events.slice();
+  E.events.length = 0;
+  return evs;
+}
+const doMuro = (evs, u) => evs.filter((e) => e.type === 'muroFere' && e.uid === u.uid);
+
+// 9a. Os dados: todo muro do Minotauro e das fusões dele tem espinhos, com o número na descrição
+(function () {
+  const comMuro = (sp) => (sp.effects || []).some((e) => e.type === 'wall');
+  const muroDe = (sp) => sp.effects.find((e) => e.type === 'wall');
+  const daClasse = Object.keys(D.spells).filter((id) => D.spells[id].classId === 'minotauro' && comMuro(D.spells[id]));
+  const fora = [];
+  ['spells', 'monsterSpells', 'petSpells', 'itemSpells'].forEach((t) => Object.keys(D[t] || {}).forEach((id) => {
+    const sp = D[t][id];
+    if (comMuro(sp) && sp.classId !== 'minotauro') fora.push(t + ':' + id);
+  }));
+  check('muro só existe no Minotauro (feitiço de classe): nenhum monstro, pet ou item ergue muro', fora.length === 0, fora.join(', '));
+  check('o Minotauro tem os seus treze feitiços de muro', daClasse.length === 13, daClasse.length);
+  const semEspinho = daClasse.filter((id) => !(muroDe(D.spells[id]).fere > 0));
+  check('todo muro do Minotauro tem espinhos (fere > 0)', semEspinho.length === 0, semEspinho.join(', '));
+  const numeros = Array.from(new Set(daClasse.map((id) => muroDe(D.spells[id]).fere)));
+  check('os espinhos são um número só para a classe toda (o texto e a régua dizem um)', numeros.length === 1, numeros.join(', '));
+  const N = numeros[0];
+  const FRASE = 'Os espinhos ferem ' + N + ' o inimigo que terminar a vez encostado ou for jogado contra a pedra.';
+  const semTexto = daClasse.filter((id) => (D.spells[id].description || '').indexOf(FRASE) < 0);
+  check('a descrição de cada feitiço de muro diz a regra com o número certo ("' + FRASE + '")',
+    semTexto.length === 0, semTexto.join(', '));
+  // as formas de fusão com muro: todas de dupla do Minotauro, todas com o mesmo número de base
+  const formas = [];
+  Object.keys(D.fusionForms).forEach((par) => D.fusionForms[par].forEach((f) => {
+    const w = (f.mechanic || []).find((e) => e.type === 'wall');
+    if (w) formas.push({ par, nome: f.formName, fere: w.fere });
+  }));
+  check('as formas de fusão com muro são todas de dupla do Minotauro', formas.length > 0 && formas.every((f) => f.par.split('+').indexOf('minotauro') >= 0),
+    formas.filter((f) => f.par.indexOf('minotauro') < 0).map((f) => f.nome).join(', '));
+  check('todo muro de fusão do Minotauro tem os mesmos espinhos de base da classe', formas.every((f) => f.fere === N),
+    formas.filter((f) => f.fere !== N).map((f) => f.nome + '=' + f.fere).join(', '));
+  // o espinho da fusão é o MESMO da classe: não passa pelo fator da forma (o PAIR_TUNE chega a 3,1 e a
+  // pedra feriria 120 de base no nível 5) — o poder da fusão entra na hora de erguer, como em todo muro
+  const fs = [];
+  Object.keys(D.fusionForms).filter((par) => par.indexOf('minotauro') >= 0).forEach((par) => [5, 12, 30].forEach((nv) => {
+    J.Fusion.spellsFor(par, 'terra+fogo', nv).filter((sp) => comMuro(sp)).forEach((sp) => fs.push(sp));
+  }));
+  check('o espinho do muro de fusão é o da classe em toda dupla e nível (o PAIR_TUNE não o toca)',
+    fs.length > 0 && fs.every((sp) => muroDe(sp).fere === N), fs.filter((sp) => muroDe(sp).fere !== N).map((sp) => sp.id + '=' + muroDe(sp).fere).join(', '));
+})();
+
+// 9b. Quem termina a vez encostado se fere — só o outro lado, só de lado (não de quina), uma vez
+(function () {
+  const c = cena(E, 'minotauro');
+  c.h.x = 4; c.h.y = 4; c.a.x = 6; c.a.y = 3; c.p.x = 7; c.p.y = 2; c.b.x = 7; c.b.y = 1;
+  const ok = lanca(E, c, 'minotauro-neutro-3', 6, 2);        // a Primeira Pedra: vizinha norte do boneco a
+  const w = muroEm(c.st, 6, 2);
+  if (w) w.remaining = 99;                                    // a prova atravessa rodadas: a pedra fica
+  const sp = D.spells['minotauro-neutro-3'];
+  const esperado = E.fereDoMuro(c.st, c.h, sp, sp.effects.find((e) => e.type === 'wall'));
+  check('espinhos: a pedra sobe com o dano congelado nela (o `fere` do feitiço vezes o poder de quem ergueu)',
+    ok === true && !!w && w.fere === esperado && w.fere > sp.effects[0].fere - 1 && w.side === c.h.side, JSON.stringify(w));
+  const hp = { a: c.a.hp, p: c.p.hp, b: c.b.hp, h: c.h.hp };
+  const evA = fechaAVezDe(c.st, c.a);
+  check('espinhos: o inimigo que termina a vez encostado (norte) leva o dano do muro, uma vez',
+    doMuro(evA, c.a).length === 1 && hp.a - c.a.hp === w.fere && doMuro(evA, c.a)[0].motivo === 'encostou',
+    (hp.a - c.a.hp) + ' contra ' + w.fere);
+  const evB = fechaAVezDe(c.st, c.b);
+  check('espinhos: encostado só de QUINA (diagonal) não se fere', doMuro(evB, c.b).length === 0 && c.b.hp === hp.b, hp.b + ' → ' + c.b.hp);
+  const evP = fechaAVezDe(c.st, c.p);
+  check('espinhos: o próprio lado encostado nunca se fere', doMuro(evP, c.p).length === 0 && c.p.hp === hp.p, hp.p + ' → ' + c.p.hp);
+  // dois muros encostados: uma vez só, o que fere mais
+  c.st.walls.push(Object.assign({}, w, { x: 5, y: 3, fere: w.fere + 7 }));
+  c.st.grid.tiles[3][5].type = 'wall';
+  const hp2 = c.a.hp;
+  const evA2 = fechaAVezDe(c.st, c.a);
+  check('espinhos: encostado em dois muros, fere UMA vez, o que fere mais', doMuro(evA2, c.a).length === 1 && hp2 - c.a.hp === w.fere + 7,
+    (hp2 - c.a.hp) + ' contra ' + (w.fere + 7));
+  check('espinhos: a previsão da IA e da tela (Engine.muroFerePrevisto) é o dano de verdade',
+    E.muroFerePrevisto(c.st, c.a, c.a.x, c.a.y) === w.fere + 7 && E.muroFerePrevisto(c.st, c.a, 9, 5) === 0 &&
+    E.muroFerePrevisto(c.st, c.p, c.p.x, c.p.y) === 0);
+  // a resistência ao elemento do muro entra
+  c.a.resists = Object.assign({}, c.a.resists, { neutro: 50 });
+  check('espinhos: a resistência da vítima ao elemento do muro corta o dano', E.muroFerePrevisto(c.st, c.a, c.a.x, c.a.y) === Math.round((w.fere + 7) / 2),
+    E.muroFerePrevisto(c.st, c.a, c.a.x, c.a.y));
+  // o muro sem espinhos (feitiço que não declara `fere`) não fere
+  c.a.resists.neutro = 0;
+  c.st.walls.forEach((m) => { delete m.fere; });
+  const hp3 = c.a.hp;
+  const evA3 = fechaAVezDe(c.st, c.a);
+  check('espinhos: muro sem `fere` é só pedra', doMuro(evA3, c.a).length === 0 && c.a.hp === hp3);
+})();
+
+// 9c. Jogado contra o muro: a colisão e os espinhos
+(function () {
+  const c = cena(E, 'minotauro');
+  c.h.x = 4; c.h.y = 3; c.a.x = 5; c.a.y = 3; c.p.x = 2; c.p.y = 5; c.b.x = 11; c.b.y = 5;
+  lanca(E, c, 'minotauro-neutro-3', 6, 3);                   // a pedra logo atrás do boneco
+  const w = muroEm(c.st, 6, 3);
+  E.events.length = 0;
+  const ok = lanca(E, c, 'minotauro-neutro-1', 5, 3);         // a Marrada: golpe e 1 casa de empurrão
+  const evs = E.events.slice();
+  const fere = doMuro(evs, c.a), emp = evs.find((e) => e.type === 'pushed' && e.uid === c.a.uid);
+  check('jogado contra o muro de espinhos: a colisão de sempre (10) E os espinhos',
+    ok === true && !!w && !!emp && emp.collision === 10 && fere.length === 1 && fere[0].motivo === 'empurrado' && fere[0].amount === w.fere,
+    JSON.stringify({ emp, fere }));
+  // a mesma pedra, sendo do outro lado: só a colisão
+  w.side = 'enemy';
+  c.a.x = 5; c.a.y = 3;
+  E.events.length = 0;
+  lanca(E, c, 'minotauro-neutro-1', 5, 3);
+  check('jogado contra o muro do PRÓPRIO lado: só a colisão, sem espinhos', doMuro(E.events, c.a).length === 0);
+})();
+
+// 9d. O invisível encostado sangra e continua sumido; o lance e o log levam o uid (a tela do outro lado cala)
+(function () {
+  const c = cena(E, 'minotauro');
+  c.h.x = 4; c.h.y = 4; c.a.x = 6; c.a.y = 3; c.p.x = 2; c.p.y = 5; c.b.x = 11; c.b.y = 5;
+  lanca(E, c, 'minotauro-neutro-3', 6, 2);
+  const w = muroEm(c.st, 6, 2);
+  if (w) w.remaining = 99;
+  c.a.effects.push({ type: 'invisible', duration: 30, sourceUid: c.a.uid });
+  const hp = c.a.hp;
+  const evs = fechaAVezDe(c.st, c.a);
+  const linha = evs.find((e) => e.type === 'log' && /espinhos/.test(e.text));
+  check('invisível encostado: leva o dano e continua invisível (quem se fere não sai das sombras)',
+    hp - c.a.hp === w.fere && E.unitHasEffect(c.a, 'invisible'), (hp - c.a.hp) + ' · ' + JSON.stringify(c.a.effects.map((e) => e.type)));
+  check('invisível encostado: o evento e a linha do diário levam o uid dele (Game.eventoParaTela e o log calam para o outro lado)',
+    doMuro(evs, c.a).length === 1 && doMuro(evs, c.a)[0].uid === c.a.uid && !!linha && linha.uid === c.a.uid &&
+    evs.filter((e) => e.type === 'damage' && e.uid === c.a.uid).length === 1);
+  // a IA do Minotauro não enxerga o invisível: nenhum valor de espinho por ele. O outro boneco sai de cena,
+  // e a mesma cena com ele À VISTA é o controle (a pedra vai encostar nele)
+  c.st.walls.length = 0; c.st.grid.tiles[2][6].type = 'floor';
+  c.b.alive = false;
+  ateAVezDe(E, c.st, c.h);
+  c.h.x = 4; c.h.y = 4; c.a.x = 6; c.a.y = 3;
+  c.h.spells = ['minotauro-neutro-3']; c.h.pa = 6; c.h.pp = 0; c.h.castsThisTurn = {}; c.h.cooldowns = {};
+  c.a.ppMax = 0; c.a.pp = 0;
+  const encosta = (pl) => pl.some((x) => x.action === 'cast' && Math.abs(x.x - c.a.x) + Math.abs(x.y - c.a.y) === 1);
+  const sombra = c.a.effects.filter((e) => e.type === 'invisible');
+  c.a.effects = c.a.effects.filter((e) => e.type !== 'invisible');
+  const planoVisto = AI.planTurn(c.st, c.h.uid);
+  c.a.effects = c.a.effects.concat(sombra);
+  const planoOculto = AI.planTurn(c.st, c.h.uid);
+  check('invisível: À VISTA e preso, a IA ergue a pedra encostada nele (o controle)', encosta(planoVisto), JSON.stringify(planoVisto));
+  check('invisível: sumido, a IA do outro lado não ergue pedra para apertar quem ela não vê', !encosta(planoOculto), JSON.stringify(planoOculto));
+})();
+
+// 9e. A IA: quem anda evita terminar encostado; quem ergue aperta quem não pode sair
+(function () {
+  // um atirador que anda, encostado num muro de espinhos do herói, com tiro de qualquer casa por perto
+  D.monsters['pe-andarilho'] = Object.assign({}, D.monsters['pe-atirador'], { id: 'pe-andarilho',
+    stats: Object.assign({}, D.monsters['pe-atirador'].stats, { pp: 3 }) });
+  const st = sala(E, 1, [{ classId: 'minotauro', heroId: 'h1', level: 12 }]);
+  const h = st.units.find((u) => u.kind === 'hero');
+  const m = st.units.find((u) => u.defId === 'pe-atirador');
+  m.defId = 'pe-andarilho'; m.ppMax = 3;
+  ateAVezDe(E, st, h);
+  // o atirador já na distância ideal dele (10, o alcance do tiro): sem espinho, nada o tira do lugar
+  h.x = 1; h.y = 1; m.x = 9; m.y = 3;
+  // a pedra de espinhos do herói encostada no atirador (norte dele), posta à mão
+  st.walls.push({ x: 9, y: 2, antes: 'floor', deco: false, ownerUid: h.uid, side: h.side, defId: h.defId, element: 'neutro', remaining: 3, fere: 20 });
+  st.grid.tiles[2][9].type = 'wall'; st.grid.tiles[2][9].invocado = true;
+  ateAVezDe(E, st, m);
+  m.pp = 3; m.pa = 6;
+  const plano = AI.planTurn(st, m.uid);
+  const mv = plano.find((x) => x.action === 'move');
+  const fim = mv ? { x: mv.x, y: mv.y } : { x: m.x, y: m.y };
+  check('IA: o inimigo que pode sair NÃO termina a vez encostado no muro de espinhos',
+    E.muroFerePrevisto(st, m, fim.x, fim.y) === 0, JSON.stringify(plano));
+  // a mesma cena sem os espinhos: ele fica (parar custa menos e o tiro sai dali)
+  delete st.walls[0].fere;
+  const plano2 = AI.planTurn(st, m.uid);
+  check('IA: sem os espinhos, a mesma pedra não o tira do lugar (é o espinho que pesa, não a pedra)',
+    !plano2.some((x) => x.action === 'move'), JSON.stringify(plano2));
+})();
+(function () {
+  // o Minotauro com a Primeira Pedra e dois bonecos presos (sem PP): a pedra entre os dois encosta nos dois
+  const st = sala(E, 0, [{ classId: 'minotauro', heroId: 'h1', level: 12 }]);
+  const h = st.units.find((u) => u.kind === 'hero');
+  const a = st.units.find((u) => u.defId === 'pe-alvo'), b = st.units.find((u) => u.defId === 'pe-alvo2');
+  ateAVezDe(E, st, h);
+  h.x = 3; h.y = 3; a.x = 6; a.y = 3; b.x = 6; b.y = 5;
+  h.spells = ['minotauro-neutro-3']; h.pa = 6; h.pp = 0; h.castsThisTurn = {}; h.cooldowns = {};
+  const plano = AI.planTurn(st, h.uid);
+  const muro = plano.find((x) => x.action === 'cast');
+  check('IA: o Minotauro ergue a pedra onde aperta — encostada nos DOIS inimigos que não podem sair (6,4)',
+    !!muro && muro.x === 6 && muro.y === 4, JSON.stringify(plano));
+})();
+
+(function () {
+  // O APERTO: com a Primeira Pedra e a Marrada na mão, a pedra sobe ATRÁS do inimigo encostado e a Marrada o
+  // joga nela — a jogada de gente com o Minotauro. O inimigo pode andar (o valor não vem de ele estar preso).
+  const st = sala(E, 0, [{ classId: 'minotauro', heroId: 'h1', level: 12 }]);
+  const h = st.units.find((u) => u.kind === 'hero');
+  const a = st.units.find((u) => u.defId === 'pe-alvo'), b = st.units.find((u) => u.defId === 'pe-alvo2');
+  ateAVezDe(E, st, h);
+  h.x = 4; h.y = 3; a.x = 5; a.y = 3; a.ppMax = 3; b.x = 11; b.y = 5;
+  h.spells = ['minotauro-neutro-3', 'minotauro-neutro-1']; h.pa = 6; h.pp = 0; h.castsThisTurn = {}; h.cooldowns = {};
+  const plano = AI.planTurn(st, h.uid);
+  const iMuro = plano.findIndex((x) => x.action === 'cast' && x.spellId === 'minotauro-neutro-3');
+  const iMarrada = plano.findIndex((x) => x.action === 'cast' && x.spellId === 'minotauro-neutro-1');
+  check('IA, o aperto: a pedra sobe ATRÁS do inimigo encostado (6,3) e ANTES da Marrada',
+    iMuro >= 0 && iMarrada > iMuro && plano[iMuro].x === 6 && plano[iMuro].y === 3, JSON.stringify(plano));
+  E.events.length = 0;
+  plano.forEach((x) => { if (x.action === 'cast') E.cast(st, h.uid, x.spellId, x.x, x.y); });
+  check('IA, o aperto: jogado como planejado, o inimigo bate nos espinhos',
+    E.events.some((e) => e.type === 'muroFere' && e.uid === a.uid && e.motivo === 'empurrado'));
+})();
+
+// 9e'. O pet também termina a vez dele: preso ao lado da pedra do outro lado, se fere; podendo sair, sai
+(function () {
+  const st = sala(E, 0, [{ classId: 'sumo', heroId: 'h1', level: 12, pet: 'pet-lodestone' }]);
+  const h = st.units.find((u) => u.kind === 'hero');
+  const pet = st.units.find((u) => u.kind === 'pet');
+  const a = st.units.find((u) => u.defId === 'pe-alvo'), b = st.units.find((u) => u.defId === 'pe-alvo2');
+  check('pet: a sala de prova tem o pet do herói', !!pet, st.units.map((u) => u.kind).join(','));
+  if (!pet) return;
+  ateAVezDe(E, st, h);
+  h.x = 3; h.y = 3; pet.x = 4; pet.y = 3; a.x = 10; a.y = 5; b.x = 11; b.y = 1;
+  // uma pedra de espinhos do OUTRO lado (o lado dos bonecos), encostada no pet (norte dele)
+  st.walls.push({ x: 4, y: 2, antes: 'floor', deco: false, ownerUid: a.uid, side: a.side, defId: a.defId, element: 'neutro', remaining: 9, fere: 25 });
+  st.grid.tiles[2][4].type = 'wall'; st.grid.tiles[2][4].invocado = true;
+  const ppMax0 = pet.ppMax;
+  pet.ppMax = 0;                                  // preso: a vez dele acaba ali
+  const hp = pet.hp;
+  E.events.length = 0;
+  E.endTurn(st);                                  // a vez do dono acaba; o pet age logo depois
+  const f = E.events.filter((e) => e.type === 'muroFere' && e.uid === pet.uid);
+  check('pet: preso ao lado da pedra do outro lado, se fere no fim da vez dele', f.length === 1 && hp - pet.hp === 25, (hp - pet.hp) + ' · ' + JSON.stringify(f));
+  // podendo andar, o pet não termina encostado (a pedra fica onde está)
+  pet.ppMax = ppMax0 || 3; pet.x = 4; pet.y = 3;
+  ateAVezDe(E, st, h);
+  h.x = 3; h.y = 3;
+  E.events.length = 0;
+  E.endTurn(st);
+  check('pet: podendo andar, não termina a vez encostado na pedra de espinhos',
+    E.muroFerePrevisto(st, pet, pet.x, pet.y) === 0 && !E.events.some((e) => e.type === 'muroFere' && e.uid === pet.uid),
+    pet.x + ',' + pet.y);
+})();
+
+// 9f. O Eco (corpo 2×2): encosta por qualquer casa, de quina não, e não é jogado contra a pedra
+(function () {
+  const W2 = mundo(['js/core/progress.js']);
+  const J2 = W2.JOGO, E2 = J2.Engine;
+  const st = E2.createBattle(J2.DATA.eco.arena, 0, [{ classId: 'minotauro', heroId: 'h1', level: 30, element: 'terra' }],
+    { seed: 11, escolhePosicao: false });
+  st.phase = 'playing';
+  const eco = E2.findUnit(st, st.eco.uid);
+  const h = st.units.find((u) => u.kind === 'hero');
+  for (let i = 0; i < 40 && E2.activeUnit(st) !== h; i++) E2.endTurn(st);
+  h.x = eco.x + 4; h.y = eco.y + 1; h.pa = 30; h.castsThisTurn = {}; h.cooldowns = {};
+  if (h.spells.indexOf('minotauro-neutro-3') < 0) h.spells.push('minotauro-neutro-3');
+  // a pedra a leste da casa (x+1, y+1) do Eco — encosta na casa de baixo à direita
+  const okC = E2.cast(st, h.uid, 'minotauro-neutro-3', eco.x + 2, eco.y + 1);
+  h.castsThisTurn = {}; h.cooldowns = {};
+  // e uma na QUINA (x+2, y+2): não encosta
+  const ok2 = E2.cast(st, h.uid, 'minotauro-neutro-3', eco.x + 2, eco.y + 2);
+  const prev = E2.muroFerePrevisto(st, eco, eco.x, eco.y);
+  const dano0 = st.eco.dano, hp0 = eco.hp;
+  for (let i = 0; i < 40 && E2.activeUnit(st) !== eco; i++) E2.endTurn(st);
+  E2.events.length = 0;
+  E2.endTurn(st);
+  const f = E2.events.filter((e) => e.type === 'muroFere' && e.uid === eco.uid);
+  check('Eco 2×2: a pedra encostada numa casa dele fere no fim da vez dele, uma vez (a da quina não soma)',
+    okC === true && ok2 === true && prev > 0 && f.length === 1 && f[0].amount === prev && hp0 - eco.hp === prev, JSON.stringify(f));
+  check('Eco 2×2: o placar conta o dano do muro do herói (a fonte é quem ergueu)', st.eco.dano - dano0 === prev, (st.eco.dano - dano0) + ' contra ' + prev);
+})();
+
+// 9g. O juiz: o duelo jogado no cliente, com os espinhos no meio, é refeito no servidor até o mesmo hash.
+/* Revisão de 03/10: a versão anterior jogava duas vezes o mesmo motor e comparava — e no nível 30 da
+ * praça ninguém encostava em pedra nenhuma (0 espinhos), então passava sem cobrar a regra. Agora o
+ * duelo vai ao juiz de verdade (servidor/juiz/duelo.js, o que o /api/duelo/fechar chama) com os lances
+ * anotados como o cliente anota, numa sala em que os dois jeitos de ferir acontecem (encostou e
+ * empurrado) — e a prova exige que tenham acontecido. */
+(function () {
+  const est = require(path.join(__dirname, '..', 'servidor', 'juiz', 'estado.js'));
+  const { fechaDuelo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'duelo.js'));
+  const { ehDeGente } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'sala.js'));
+  const AGORA = Date.now();
+  function conta(heroi, nivel) {
+    const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+    est.poeEstado(w, null, null);
+    const P = w.J.Progress;
+    if (!P.state.heroes[heroi]) P.unlockClass(heroi);
+    P.state.heroes[heroi].level = nivel;
+    P.state.heroes[heroi].xp = w.J.DATA.leveling.xpTable[nivel - 1];
+    P.save();
+    return Object.assign(est.tiraEstado(w), { heroi });
+  }
+  function partyDe(c, dono) {
+    const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+    est.poeEstado(w, c.progress, c.db);
+    return w.J.Progress.battleParty([c.heroi]).map((p) => Object.assign(p, { dono }));
+  }
+  const DG = 'cistern', SALA = 1, SEMENTE = 3;
+  const ana = conta('minotauro', 12), bia = conta('espadachim', 12);
+  const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+  est.poeEstado(w, ana.progress, ana.db);
+  const E4 = w.J.Engine;
+  const st = E4.createDuelSala(DG, SALA, partyDe(ana, 'ana'), partyDe(bia, 'bia'), { seed: SEMENTE });
+  const log = [], fere = { encostou: 0, empurrado: 0 };
+  const apura = () => { E4.events.forEach((e) => { if (e.type === 'muroFere') fere[e.motivo]++; }); E4.events.length = 0; };
+  E4.events.length = 0;
+  let voltas = 0;
+  while (st.phase === 'playing' && voltas++ < 3000) {
+    const u = E4.activeUnit(st);
+    if (!u) break;
+    const gente = ehDeGente(u);
+    for (const x of (w.J.AI.planTurn(st, u.uid) || [])) {
+      if (st.phase !== 'playing') break;
+      if (x.action === 'move') { const ok = !!E4.move(st, u.uid, x.x, x.y); if (gente) log.push({ a: 'm', u: u.uid, x: x.x, y: x.y, ok, de: u.dono }); }
+      else if (x.action === 'cast') { const ok = !!E4.cast(st, u.uid, x.spellId, x.x, x.y); if (gente) log.push({ a: 'c', u: u.uid, s: x.spellId, x: x.x, y: x.y, ok, de: u.dono }); }
+      else break;
+      apura();
+    }
+    if (st.phase === 'playing') { E4.endTurn(st); if (gente) log.push({ a: 'e', ok: true, de: u.dono }); }
+    apura();
+  }
+  const pedido = {
+    A: { conta: { id: 1 }, dono: 'ana', herois: ['minotauro'], progress: ana.progress, db: ana.db },
+    B: { conta: { id: 2 }, dono: 'bia', herois: ['espadachim'], progress: bia.progress, db: bia.db },
+    dungeonId: DG, roomIndex: SALA, semente: SEMENTE, lances: log, hashFinal: E4.hash(st), contexto: { agoraMs: AGORA }
+  };
+  let r, rf;
+  try { r = fechaDuelo(pedido); } catch (e) { r = { erro: e.message, motivo: e.motivo }; }
+  try { rf = fechaDuelo(Object.assign({}, pedido, { hashFinal: (pedido.hashFinal + 7) >>> 0 })); } catch (e) { rf = { motivo: e.motivo }; }
+  check('juiz: o duelo do cliente tem os DOIS jeitos de ferir no meio (encostou e empurrado)',
+    fere.encostou > 0 && fere.empurrado > 0 && ['won', 'lost', 'empate'].indexOf(st.phase) >= 0, JSON.stringify({ fere, fase: st.phase }));
+  check('juiz: o servidor refaz o duelo com os espinhos e chega ao MESMO hash e ao mesmo fim',
+    !!r && r.ok === true && r.fase === st.phase, JSON.stringify(r && (r.erro || r.fase)));
+  check('juiz: o mesmo duelo com o hash forjado cai (divergiu) — o hash cobra o espinho',
+    !!rf && rf.motivo === 'divergiu', JSON.stringify(rf));
+})();
+
 console.log('\n' + (total - falhas) + ' / ' + total + ' passaram');
 process.exitCode = falhas ? 1 : 0;

@@ -465,7 +465,7 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertEqual((r['ranqueado'], r['motivo'], r['modo']), (False, 'paridade', 'campo'), 'diferença 11 no Campo')
         self.assertEqual((self.save(a)['versao'], self.save(b)['versao']), (1, 1))
-        # a mesma diferença na Arena (≤ 5) também não, mesmo com a partida pronta
+        # a mesma diferença na Arena (≤ 3 desde 03/10; eram 5) também não, mesmo com a partida pronta
         did = self.did()
         agora_ms = int(time.time() * 1000)
         self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, b_nivel, "
@@ -475,6 +475,25 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         jogo2 = self.joga_duelo(a, b, semente=321)
         status, r = a.pede('POST', '/api/duelo/fechar', dict(self.corpo_duelo(a, b, did, jogo2, modo='arena'), semente=321))
         self.assertEqual((status, r.get('ranqueado'), r.get('motivo')), (200, False, 'paridade'), r)
+        # 03/10, A BORDA DA ARENA (o dono baixou de 5 para 3): com a partida pronta, diferença 4 não ranqueia e
+        # diferença 3 ranqueia — o fechar confere de novo nos estados do servidor, não confia no quadro
+        for nivel_b, vale in ((16, False), (17, True)):
+            e, f = self.com_estado('Eli Arena', 'sumo', 20), self.com_estado('Fe Arena', 'curandeiro', nivel_b)
+            did = self.did()
+            agora_ms = int(time.time() * 1000)
+            self.sql("INSERT INTO arena_partidas(did, a_id, b_id, a_herois, b_herois, a_classes, b_classes, a_nivel, b_nivel, "
+                     "a_desde_ms, a_ok, b_ok, criada_ms, prazo_ms, pronta_ms, estado) VALUES (?, ?, ?, '[\"sumo\"]', "
+                     "'[\"curandeiro\"]', '[]', '[]', 20, ?, ?, 1, 1, ?, ?, ?, 'pronta')",
+                     did, e.conta['id'], f.conta['id'], nivel_b, agora_ms, agora_ms, agora_ms + 30000, agora_ms)
+            jogo_x = self.joga_duelo(e, f)
+            status, r = e.pede('POST', '/api/duelo/fechar', self.corpo_duelo(e, f, did, jogo_x, modo='arena'))
+            self.assertEqual(status, 200, r)
+            if vale:
+                self.assertEqual((r['ranqueado'], r['modo']), (jogo_x['fase'] in ('won', 'lost', 'empate'), 'arena'),
+                                 'diferença 3 na Arena ranqueia: %r' % (r,))
+            else:
+                self.assertEqual((r['ranqueado'], r.get('motivo'), r['modo']), (False, 'paridade', 'arena'),
+                                 'diferença 4 na Arena não ranqueia: %r' % (r,))
         # diferença 10 no Campo ranqueia
         c, d = self.com_estado('Cris Campo', 'sumo', 19), self.com_estado('Duda Campo', 'curandeiro', 9)
         jogo3 = self.joga_duelo(c, d)

@@ -438,7 +438,9 @@ corpo do `POST /api/duelo/fechar` (`desafio | arena | campo`; outro valor = 400)
   calabouço no fechar diverge no replay (422).
 - `arena` (o quadro de inscritos, `servidor/arena.py`): ranqueia só se existe a partida pronta desse
   `did` entre essas duas contas (`'sem-partida'`), com OS heróis que o quadro mostrou (`'dupla'`), e na
-  paridade de 5 níveis entre o herói mais forte de cada lado, lida nos estados do servidor (`'paridade'`).
+  paridade de 3 níveis entre o herói mais forte de cada lado, lida nos estados do servidor (`'paridade'`) —
+  eram 5 até 03/10, quando o dono baixou (o lado 5 acima vencia 65–80%, `docs/EQUILIBRIO.md` §6.3). O
+  `/api/arena/desafiar` recusa com a mesma régua (`ARENA_PARIDADE`), e o quadro a devolve em `paridade`.
 - `campo` (o Campo de PvP): paridade de 10 (`'paridade'`). Arena e campo no mapa `praca` = `'mapa'`.
 Os tetos (3/par, 20/conta em 24 h) valem para arena e campo. A coluna `duelos.venc` (o que os tetos
 contam) só é preenchida no ranqueado; o amistoso guarda o vencedor só no `resultado`.

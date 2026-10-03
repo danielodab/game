@@ -3170,20 +3170,39 @@ var JOGO = (typeof window !== 'undefined')
       });
       // toque longo/segunda toque no nome abre a explicação
       var q = el('span', 'sp-info', 'i');
-      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid), d2 ? elemColor(d2.element) : '#ffd08a');
+      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid, u), d2 ? elemColor(d2.element) : '#ffd08a');
       cell.appendChild(q);
       bt.spells.appendChild(cell);
     });
     // 13/09: a barra da batalha não tem mais poção — ela se bebe fora da luta (vidaBloco, 14/09)
   }
 
-  function spellTipBody(d2, sid) {
+  // `quem` (opcional): a unidade que vai lançar — só a barra da batalha o passa
+  UI._spellTipBody = function (d2, sid, quem) { return spellTipBody(d2, sid, quem); };   // provas (muro_visual.html)
+  function spellTipBody(d2, sid, quem) {
     if (!d2) return 'Este feitiço não pôde ser carregado.';
     var out = '<i>' + (d2.paCost || 0) + ' PA';
     if (d2.range) out += ' · alcance ' + (d2.range.min || 0) + '–' + (d2.range.max || 0);
     if (d2.cooldown) out += ' · recarga ' + d2.cooldown;
     if (d2.castsPerTurn) out += ' · ' + d2.castsPerTurn + '×/turno';
     out += '</i><br>' + esc(d2.description || '');
+    /* 03/10: OS ESPINHOS (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). O feitiço de classe já diz o
+     * número na descrição; a forma de fusão tem uma descrição só para todas as misturas e níveis, e
+     * o número dela muda com eles — a linha sai do próprio efeito, como o motor o usa. */
+    var muroEf = null;
+    (d2.effects || []).forEach(function (ef) { if (ef && ef.type === 'wall' && ef.fere > 0) muroEf = ef; });
+    if (muroEf && d2.fusion) {
+      out += '<br><b>Espinhos:</b> a pedra fere ' + muroEf.fere + ' (mais o poder) quem do outro lado terminar a vez ' +
+             'encostado nela ou for jogado contra ela.';
+    }
+    /* 03/10 (revisão): o 30 da descrição é a BASE, como o "16–22" de qualquer golpe; o espinho que a
+     * pedra leva é ele vezes o poder de quem ergue (34 no nível 5, 56 no 30). Na barra da batalha,
+     * com quem vai erguer na mão, a ficha diz o número que a pedra vai ferir AGORA — a mesma conta do
+     * motor (Engine.fereDoMuro), e não uma cópia dela. */
+    if (muroEf && quem) {
+      var fereAgora = safe(function () { return E().fereDoMuro(G().state, quem, d2, muroEf); }, 0);
+      if (fereAgora > 0) out += '<br><b>Espinhos agora:</b> com o seu poder, a pedra fere ' + fereAgora + '.';
+    }
     if (d2.aoe && d2.aoe.shape && d2.aoe.shape !== 'single') {
       out += '<br>Área: ' + esc(d2.aoe.shape) + ' ' + (d2.aoe.size || '');
     }
@@ -12574,7 +12593,7 @@ var JOGO = (typeof window !== 'undefined')
     var m = r.motivo;
     if (m === 'vida-zero') return 'Um herói da dupla está sem vida' + (r.esperaS ? ': espere ' + r.esperaS + ' s' : '') + ' ou beba uma poção.';
     if (m === 'vida-zero-alvo') return 'Um herói dessa inscrição está sem vida agora.';
-    if (m === 'paridade') return 'A diferença de nível entre os heróis mais fortes passa de 5: não vale.';
+    if (m === 'paridade') return 'A diferença de nível entre os heróis mais fortes passa de ' + paridadeArena() + ': não vale.';
     if (m === 'sem-inscricao') return 'Essa inscrição saiu do quadro.';
     if (m === 'inscrito') return 'Saia da sua inscrição antes de desafiar outra.';
     if (m === 'casada') return 'Você já tem uma partida da Arena em andamento.';
@@ -12618,10 +12637,16 @@ var JOGO = (typeof window !== 'undefined')
         });
       } });
   }
-  var quadroArena = { lista: null, erro: null, pedindo: false, t: 0 };
+  var quadroArena = { lista: null, erro: null, pedindo: false, t: 0, paridade: null };
+  /* 03/10 (o dono): a paridade da Arena é 3 níveis. Quem decide é o servidor (PARIDADE['arena'] em
+   * servidor/grupo.py): o número que o quadro devolveu vale primeiro, o do cliente (Arena.PARIDADE) até ele
+   * chegar — nenhum texto da tela crava o número. */
+  function paridadeArena() {
+    return quadroArena.paridade || (Ar() && Ar().PARIDADE) || 3;
+  }
   function sheetArenaQuadro(semPedir) {
     var A = Ar();
-    var body = sheetShell('Quadro da Arena', 'Quem espera desafio. Vale coroa: até 5 níveis entre os heróis mais fortes de cada lado.');
+    var body = sheetShell('Quadro da Arena', 'Quem espera desafio. Vale coroa: até ' + paridadeArena() + ' níveis entre os heróis mais fortes de cada lado.');
     sheetName = 'arenaQuadro';
     var caixa = el('div', 'ms-caixa arena-quadro');
     body.appendChild(caixa);
@@ -12645,13 +12670,16 @@ var JOGO = (typeof window !== 'undefined')
     quadroArena.t = Date.now();
     A.quadro().then(function (r) {
       quadroArena.pedindo = false;
-      if (r && r.ok) { quadroArena.lista = r.inscritos; quadroArena.erro = null; }
+      if (r && r.ok) {
+        quadroArena.lista = r.inscritos; quadroArena.erro = null;
+        if (typeof r.paridade === 'number' && r.paridade > 0) quadroArena.paridade = r.paridade;
+      }
       else quadroArena.erro = (r && r.erro) || 'o servidor não respondeu';
       if (sheetName === 'arenaQuadro') sheetArenaQuadro(true);
     });
   }
   function linhaQuadro(x, meu, e) {
-    var par = (Ar() && Ar().PARIDADE) || 5;
+    var par = paridadeArena();
     var fora = !x.eu && Math.abs(meu - x.nivel) > par;
     var ln = el('div', 'aq-linha' + (x.eu ? ' is-eu' : '') + (fora ? ' is-fora' : ''));
     ln.setAttribute('data-conta', String(x.conta));
@@ -12680,7 +12708,7 @@ var JOGO = (typeof window !== 'undefined')
       inicial: selHeroes.slice(),
       aoEscolher: function (ids) {
         var nv = forteDeIds(ids);
-        if (Math.abs(nv - x.nivel) > ((Ar() && Ar().PARIDADE) || 5)) {
+        if (Math.abs(nv - x.nivel) > paridadeArena()) {
           toast('Com essa dupla (nv ' + nv + ') a diferença para nv ' + x.nivel + ' passa do limite.');
           return null;
         }
@@ -13383,11 +13411,25 @@ var JOGO = (typeof window !== 'undefined')
     bt.logList.scrollTop = bt.logList.scrollHeight;
   }
 
+  var avisouEspinhos = false;        // 03/10: o aviso dos espinhos sai uma vez por batalha
   UI.handleEvent = function (ev) {
     if (!ev || !ev.type) return;
     if (ev.type === 'timerTick') { paintTimer(); return; }
     if (ev.type === 'prepTick') { pintaPrep(); return; }      // 21/09: o relógio da preparação
+    if (ev.type === 'battleStart') avisouEspinhos = false;
     if (current !== 'battle') return;
+    /* 03/10 — OS ESPINHOS DO MURO. A primeira vez que um dos MEUS encosta no muro de espinhos do
+     * outro lado, o porquê vai à torrada (a linha do diário é miúda e o número parece só mais um
+     * golpe); depois disso o vermelho das casas de passo já ensina. */
+    if (ev.type === 'muroFere' && !avisouEspinhos) {
+      var vEsp = unitByUid(ev.uid);
+      var meuLado = safe(function () { return G().meuLado(); }, 'player');
+      if (vEsp && vEsp.side === meuLado) {
+        avisouEspinhos = true;
+        toast((vEsp.name || vEsp.defId) + (ev.motivo === 'empurrado' ? ' foi jogado contra o' : ' terminou a vez encostado no') +
+              ' muro de espinhos: −' + ev.amount + '. Casa vizinha de muro com espinhos fere no fim da vez.', 'bad');
+      }
+    }
     if (ev.type === 'log') { pushLog(esc(ev.text)); return; }
     var f = EV_TEXT[ev.type];
     if (f) {

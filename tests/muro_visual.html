@@ -104,7 +104,9 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
         ['minotauro', 'sumo'].forEach(function (c) {
           var h = P.hero(c); if (h) h.level = 30;
         });
-        G.startRun(['minotauro', 'sumo'], (location.href.indexOf('cisterna')>=0) ? 'cistern' : 'greenhouse');
+        // 03/10: `direto` — desde 03/09 a descida começa na ANTESSALA (Game.state fica null até
+        // entrar na sala) e esta página fechava com zero checagens; `direto` é a porta das bancadas
+        G.startRun(['minotauro', 'sumo'], (location.href.indexOf('cisterna')>=0) ? 'cistern' : 'greenhouse', { direto: true });
       } catch (e) { return diz('não desci: ' + e.message); }
       setTimeout(roda, 500);
     })();
@@ -131,6 +133,98 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
       return n;
     }
     function passos(n, dt) { for (var i = 0; i < n; i++) { try { R.render(dt); } catch (e) {} } }
+
+    /* OS ESPINHOS NA TELA (03/10). O muro do Minotauro fere quem termina a vez numa das quatro
+     * casas vizinhas; a tela tem de dizer isso sem o jogador ler o diário:
+     *   · o colar de pontas ao pé da pedra (12, três por face), preso à GRADE — o escudo gira
+     *     para encarar o inimigo e as pontas não podem girar junto;
+     *   · a zona: as casas de chão vizinhas pintadas (e só elas);
+     *   · os espinhos APARECEM em pixel: a mesma pedra sem `fere` desenha menos;
+     *   · nas casas de passo de quem é do OUTRO lado, a que termina encostada sai vermelha. */
+    function espinhosNaTela(st) {
+      var w0 = st.walls[0];
+      check('espinhos: o muro do Minotauro sobe com espinhos no motor (fere > 0)', w0.fere > 0, 'fere ' + w0.fere);
+      passos(4, 0.033);
+      var lista = (R.murosComEspinhos && R.murosComEspinhos()) || [];
+      var e0 = lista.filter(function (m) { return m.casa === w0.x + ',' + w0.y; })[0];
+      check('espinhos: a pedra tem o colar desenhado (12 pontas)', !!e0 && e0.pontas === 12, JSON.stringify(lista));
+      check('espinhos: o colar fica preso à GRADE (giro no mundo múltiplo de 90°), seja qual for o giro do escudo',
+            !!e0 && Math.abs(Math.sin(2 * e0.giro)) < 0.02,
+            e0 ? 'colar ' + (e0.giro * 180 / Math.PI).toFixed(1) + '° · escudo ' + (e0.giroEscudo * 180 / Math.PI).toFixed(1) + '°' : '-');
+      var zona = (R.zonaEspinhosNaTela && R.zonaEspinhosNaTela()) || [];
+      var deve = [[0, -1], [0, 1], [-1, 0], [1, 0]].map(function (d) { return { x: w0.x + d[0], y: w0.y + d[1] }; })
+        .filter(function (c) { return c.x >= 0 && c.y >= 0 && c.x < st.grid.w && c.y < st.grid.h && st.grid.tiles[c.y][c.x].type === 'floor'; });
+      var chave = function (c) { return c.x + ',' + c.y; };
+      check('espinhos: a zona pinta as casas de chão vizinhas da pedra, e só elas',
+            deve.length > 0 && zona.map(chave).sort().join(' ') === deve.map(chave).sort().join(' '),
+            'zona ' + zona.map(chave).join(' ') + ' · esperado ' + deve.map(chave).join(' '));
+      // em pixel: a mesma pedra SEM espinhos (o colar e a zona somem) contra ela com espinhos
+      var com = pega();
+      var fere = w0.fere;
+      delete w0.fere;
+      passos(30, 0.033);
+      var sem = pega();
+      var dif = difere(com, sem);
+      w0.fere = fere;
+      passos(30, 0.033);
+      var PISO_ESP = Math.round(RW * RH * 0.0015);
+      check('espinhos: o colar e a zona APARECEM (a pedra sem espinhos desenha outra coisa)', dif > PISO_ESP,
+            dif + ' px de diferença (piso ' + PISO_ESP + ')');
+    }
+
+    /* a casa de passo vermelha: de quem é do OUTRO lado do muro. Roda DEPOIS da comparação das duas
+     * pedras: aqui as vezes passam (a vez pode estar com um monstro) e o quadro muda inteiro. */
+    function espinhosNoPasso(st) {
+      var w0 = st.walls[0];
+      var chave = function (c) { return c.x + ',' + c.y; };
+      // o desenho segue os eventos: espera as animações assentarem (com elas o destaque fica apagado)
+      function assenta() { for (var k = 0; k < 400 && R.isBusy && R.isBusy(); k++) passos(1, 0.05); passos(3, 0.016); }
+      var rest0 = w0.remaining;
+      w0.remaining = Math.max(w0.remaining, 60);
+      var ativo = E.activeUnit(st);
+      for (var vz = 0; vz < 30 && ativo && !(ativo.side === 'player' && (!G.isPlayerTurn || G.isPlayerTurn())); vz++) {
+        try { E.endTurn(st); } catch (e) {}
+        ativo = E.activeUnit(st);
+      }
+      if (!ativo || ativo.side !== 'player' || (G.isPlayerTurn && !G.isPlayerTurn())) {
+        w0.remaining = rest0;
+        check('espinhos: há um herói na vez para medir as casas de passo', false, ativo ? ativo.name + ' ' + ativo.side : 'ninguém');
+        return;
+      }
+      var lado0 = w0.side, x0 = ativo.x, y0 = ativo.y, pp0 = ativo.pp;
+      w0.side = 'enemy';
+      // o herói da vez a duas casas da pedra, com passo para encostar nela
+      var perto = null;
+      for (var yy = 0; yy < st.grid.h && !perto; yy++) for (var xx = 0; xx < st.grid.w && !perto; xx++) {
+        if (Math.abs(xx - w0.x) + Math.abs(yy - w0.y) !== 2 || st.grid.tiles[yy][xx].type !== 'floor') continue;
+        var oc = E.unitAt(st, xx, yy);
+        if (!oc || oc === ativo) perto = { x: xx, y: yy };
+      }
+      if (perto) { ativo.x = perto.x; ativo.y = perto.y; }
+      ativo.pp = Math.max(ativo.pp, 3);
+      G.selectedSpellId = null;
+      assenta();
+      var deveVermelho = (E.reachable(st, ativo.uid) || []).filter(function (c) {
+        return E.muroFerePrevisto(st, ativo, c.x, c.y) > 0;
+      }).map(chave).sort();
+      var vermelhas = ((R.destaqueNaTela && R.destaqueNaTela()) || []).filter(function (d) { return d.cor === '#ff3b4a'; })
+        .map(chave).sort();
+      check('espinhos: as casas de passo que terminam encostadas no muro do outro lado saem VERMELHAS (e só elas)',
+            deveVermelho.length > 0 && vermelhas.join(' ') === deveVermelho.join(' '),
+            'vermelhas ' + vermelhas.join(' ') + ' · esperado ' + deveVermelho.join(' ') + ' · ' +
+            ((R.destaqueNaTela && R.destaqueNaTela()) || []).length + ' casas acesas · ocupado ' + !!(R.isBusy && R.isBusy()));
+      w0.side = lado0;
+      var vermelhasDoProprio = 0;
+      // a assinatura do destaque não olha o lado da pedra (no jogo ele não muda): mexe e volta o herói
+      if (perto) { ativo.x = x0; passos(1, 0.016); ativo.x = perto.x; }
+      assenta();
+      ((R.destaqueNaTela && R.destaqueNaTela()) || []).forEach(function (d) { if (d.cor === '#ff3b4a') vermelhasDoProprio++; });
+      check('espinhos: o muro do PRÓPRIO lado não pinta casa de passo de vermelho (não fere quem é dele)',
+            vermelhasDoProprio === 0, vermelhasDoProprio + ' casas');
+      ativo.x = x0; ativo.y = y0; ativo.pp = pp0;
+      w0.remaining = rest0;
+      passos(4, 0.016);
+    }
 
     // `Game.state` e PROPRIEDADE, nao funcao. Chamada como `G.state()` ela
     // lanca e o `catch` engolia — a pagina fechava com zero checagens dizendo
@@ -175,12 +269,30 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
             sid ? sid + ' (' + (D.spells[sid].element || '?') + ')' : '');
       if (!sid) return fecha();
 
+      // 03/10 (revisão): a ficha do feitiço na barra da batalha diz o espinho de AGORA — o 30 da
+      // descrição é a base, e a pedra deste Minotauro do nível 30 fere mais (o poder dele)
+      (function () {
+        var efM = (D.spells[sid].effects || []).filter(function (ef) { return ef.type === 'wall'; })[0];
+        var nAgora = E.fereDoMuro(st, heroi, D.spells[sid], efM);
+        var corpo = (JOGO.UI && JOGO.UI._spellTipBody) ? JOGO.UI._spellTipBody(D.spells[sid], sid, heroi) : '';
+        var semQuem = (JOGO.UI && JOGO.UI._spellTipBody) ? JOGO.UI._spellTipBody(D.spells[sid], sid) : '';
+        check('espinhos: a ficha na batalha diz o número de agora (fere ' + nAgora + ', não só a base ' + efM.fere + ')',
+              nAgora > efM.fere && corpo.indexOf('a pedra fere ' + nAgora + '.') >= 0 && semQuem.indexOf('Espinhos agora') < 0,
+              corpo.slice(-160));
+      })();
+
       heroi.spells = (heroi.spells || []).slice();
       if (heroi.spells.indexOf(sid) < 0) heroi.spells.push(sid);
 
       var lancou = false, casa = null;
       var alvos = [];
       try { alvos = E.castTargets(st, heroi.uid, sid) || []; } catch (e) {}
+      // 03/10: a primeira pedra na casa do alcance mais perto do MEIO do tabuleiro — a da ponta da
+      // lista saía colada na borda (2,4) e a câmera isométrica a cortava: o pico ficava a 486 px do piso de 518
+      var meioX = (st.grid.w - 1) / 2, meioY = (st.grid.h - 1) / 2;
+      alvos = alvos.slice().sort(function (m, n2) {
+        return (Math.abs(m.x - meioX) + Math.abs(m.y - meioY)) - (Math.abs(n2.x - meioX) + Math.abs(n2.y - meioY));
+      });
       for (var a = 0; a < alvos.length && !lancou; a++) {
         heroi.pa = 12;
         try { heroi.cooldowns = {}; heroi.castsThisTurn = {}; } catch (e) {}
@@ -214,6 +326,9 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
       check('a subida assenta em vez de seguir crescendo',
             Math.abs(serie[25] - serie[20]) < Math.max(150, serie[25] * 0.2),
             'quadro 21 = ' + serie[20] + ' · quadro 26 = ' + serie[25]);
+
+      // ---- 03/10: OS ESPINHOS (engine.js, "O MURO QUE FERE QUEM ENCOSTA"): a pedra MOSTRA que fere
+      espinhosNaTela(st);
 
       // ---- DUAS PEDRAS: a medida que se calibra sozinha.
       // Se o que mudou no quadro fosse luz, sombra ou algum efeito solto, erguer
@@ -262,6 +377,9 @@ quadro em relação ao mesmo quadro sem muro, ao longo da subida, da parada e da
         check('consegui erguer uma segunda pedra para comparar', false,
               alvos2.length + ' casas no alcance · ' + (st.walls || []).length + ' muros de pé');
       }
+
+      // 03/10: a casa de passo vermelha (passa vezes: por isso depois da comparação das duas pedras)
+      if (!/mira|pick=|transp|fica/.test(location.href)) espinhosNoPasso(st);
 
       // ?mira — mede se o escudo REALMENTE encara o inimigo, em vez de eu julgar
       // pela foto. Numa câmera isométrica um escudo virado para o leste aparece

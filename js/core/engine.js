@@ -246,7 +246,11 @@ var JOGO = (typeof window !== 'undefined')
    *       sem perigo.
    *       (c) o ECO PRIMORDIAL: o corpo grande 2×2 e o chefe supremo
    *       (decisões 19 e 20 no topo deste arquivo; dado em js/core/data/eco.js;
-   *       a tentativa refeita em servidor/juiz/supremo.js). */
+   *       a tentativa refeita em servidor/juiz/supremo.js).
+   *       (d) 03/10, ainda antes de o 6 ir ao ar: o MURO QUE FERE QUEM ENCOSTA
+   *       (a escolha do dono para o Minotauro — o bloco de mesmo nome perto de
+   *       forcedMove; docs/EQUILIBRIO.md §3.6). Entra no mesmo 6: nenhuma sala
+   *       foi jogada sob o 6 sem ele. */
   Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
@@ -1888,7 +1892,10 @@ var JOGO = (typeof window !== 'undefined')
       for (j = 0; j < ks.length; j++) p.push('c:' + ks[j] + '=' + nh(u.castsThisTurn[ks[j]]));
     }
     for (i = 0; i < (st.traps || []).length; i++) { t = st.traps[i]; p.push('T', nh(t.x), nh(t.y), nh(t.remaining)); }
-    for (i = 0; i < (st.walls || []).length; i++) { t = st.walls[i]; p.push('W', nh(t.x), nh(t.y), nh(t.remaining)); }
+    for (i = 0; i < (st.walls || []).length; i++) {
+      t = st.walls[i]; p.push('W', nh(t.x), nh(t.y), nh(t.remaining));
+      if (t.fere) p.push('f' + nh(t.fere), t.side || '');       // 03/10: os espinhos (só no muro que fere)
+    }
     for (i = 0; i < (st.tileEventsActive || []).length; i++) {
       t = st.tileEventsActive[i]; p.push('E', nh(t.x), nh(t.y), t.eventId, nh(t.remaining));
     }
@@ -2611,6 +2618,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var fromX = target.x, fromY = target.y;
     var moved = 0, collisionDmg = 0;
+    var bateuEm = null;     // 03/10: a casa em que a vítima bateu (o muro que fere quem é jogado nele)
     var i, sx, sy, nx, ny;
 
     if (mode === 'push') {
@@ -2622,6 +2630,7 @@ var JOGO = (typeof window !== 'undefined')
         nx = target.x + sx; ny = target.y + sy;
         if (!isWalkable(state, nx, ny)) {
           collisionDmg = 10 * (tiles - moved);
+          bateuEm = { x: nx, y: ny };
           break;
         }
         target.x = nx; target.y = ny; moved++;
@@ -2641,6 +2650,7 @@ var JOGO = (typeof window !== 'undefined')
             nx = target.x + (dx > 0 ? 1 : -1); ny = target.y;
           } else {
             collisionDmg = 10 * (intended - moved);
+            bateuEm = { x: nx, y: ny };
             break;
           }
         }
@@ -2654,9 +2664,114 @@ var JOGO = (typeof window !== 'undefined')
       if (collisionDmg > 0) {
         log(target.name + ' colide! (' + collisionDmg + ' de dano)', target.uid);
         dealDamage(state, target, collisionDmg, 'neutro', caster.uid);
+        // 03/10: jogado contra o muro de espinhos do outro lado, os espinhos ferem também
+        if (bateuEm && target.alive && state.phase === 'playing') {
+          var wBate = muroQueFereEm(state, bateuEm.x, bateuEm.y, target.side);
+          if (wBate) ferePeloMuro(state, target, wBate, 'empurrado');
+        }
       }
     }
   }
+
+  /* O MURO QUE FERE QUEM ENCOSTA (03/10, a escolha do dono para o Minotauro —
+   * docs/EQUILIBRIO.md §3.6). A bancada mostrou o Minotauro perdendo os
+   * duelos da IA (35/45/44/33% nos níveis 5/12/20/30) e número nenhum o
+   * trazia: escudo ×4, +60 de PV, dano ×2,2 e ele seguia em 36–39%. O que
+   * faltava era o muro dele VALER alguma coisa que os dois lados enxergam.
+   * Agora o muro erguido por um feitiço que declara `fere` (todo muro do
+   * Minotauro e das fusões dele) tem espinhos:
+   *   · quem é do OUTRO lado e TERMINA a própria vez numa casa vizinha
+   *     (norte, sul, leste ou oeste — nunca na diagonal) leva o dano do muro;
+   *   · quem é JOGADO contra ele (empurrão ou puxão que bate na pedra) leva o
+   *     dano do muro além dos 10 por casa da colisão;
+   *   · uma vez por vez: encostado em dois ou três muros, vale o que fere
+   *     mais (o anel em volta de alguém não multiplica o castigo);
+   *   · nunca fere o próprio lado, e quem encosta é que se fere: ninguém sai
+   *     das sombras (o invisível encostado sangra e continua sumido — a tela
+   *     do outro lado não mostra o golpe, Game.eventoParaTela) e o Minotauro
+   *     invisível numa fusão também não aparece por causa disso, como na
+   *     armadilha;
+   *   · o corpo grande (o Eco, 2×2) encosta por qualquer das casas dele.
+   * O número é o `fere` do efeito vezes o PODER de quem ergueu NA HORA de
+   * erguer (como o veneno congela o poder no lance), e na vítima entra a
+   * resistência ao elemento do muro. Sem rolagem: o dano é o mesmo em
+   * qualquer máquina e a IA dos dois lados o lê sem adivinhar — quem anda
+   * pesa a casa vizinha do muro (ai.js), quem ergue pesa quem vai ficar preso
+   * ao lado dele. A fonte do dano é quem ergueu (o placar do Eco conta, a
+   * dificuldade escala como qualquer golpe); o reflexo NÃO volta pelo muro —
+   * ninguém bateu em ninguém, o corpo é que encostou na pedra. */
+  function muroFereOLado(w, lado) {
+    return !!w && w.fere > 0 && w.side !== lado;
+  }
+  // o muro de espinhos do outro lado NESTA casa (ou null)
+  function muroQueFereEm(state, x, y, lado) {
+    var ws = state.walls || [];
+    for (var i = 0; i < ws.length; i++) {
+      if (ws[i].x === x && ws[i].y === y && muroFereOLado(ws[i], lado)) return ws[i];
+    }
+    return null;
+  }
+  // o dano que este muro faz nesta unidade, já com a resistência dela ao elemento do muro
+  function danoDoMuro(u, w) {
+    var res = Engine.effResist(u, w.element || 'neutro');
+    return Math.max(1, Math.round(w.fere * (100 - res) / 100));
+  }
+  /* O muro que fere `u` se ele terminar a vez com o corpo em (x, y): o vizinho
+   * ortogonal de qualquer casa do corpo que fere mais (empate: o primeiro da
+   * lista, a mesma ordem no cliente e no juiz). */
+  function muroEncostado(state, u, x, y) {
+    var ws = state.walls || [];
+    if (!ws.length || !u) return null;
+    var p = porteDe(u), melhor = null, melhorDano = 0;
+    for (var i = 0; i < ws.length; i++) {
+      var w = ws[i];
+      if (!muroFereOLado(w, u.side)) continue;
+      // vizinho ortogonal do quadrado [x, x+p) × [y, y+p): encosta de lado, nunca de quina
+      var dx = w.x < x ? x - w.x : (w.x >= x + p ? w.x - (x + p - 1) : 0);
+      var dy = w.y < y ? y - w.y : (w.y >= y + p ? w.y - (y + p - 1) : 0);
+      if (dx + dy !== 1) continue;
+      var d = danoDoMuro(u, w);
+      if (d > melhorDano) { melhorDano = d; melhor = w; }
+    }
+    return melhor;
+  }
+  function ferePeloMuro(state, u, w, motivo) {
+    var dano = danoDoMuro(u, w);
+    emit({ type: 'muroFere', uid: u.uid, x: w.x, y: w.y, amount: dano,
+           element: w.element || 'neutro', motivo: motivo });
+    log(motivo === 'empurrado'
+      ? u.name + ' é jogado contra os espinhos do muro (' + dano + ').'
+      : u.name + ' encosta nos espinhos do muro (' + dano + ').', u.uid);
+    dealDamage(state, u, dano, w.element || 'neutro', w.ownerUid || null, true);
+  }
+  /* o fim da vez: quem encostou se fere (Engine.endTurn e a vez do pet) */
+  function encostaNoMuro(state, u) {
+    if (!u || !u.alive || u.offBoard || state.phase !== 'playing') return;
+    var w = muroEncostado(state, u, u.x, u.y);
+    if (w) ferePeloMuro(state, u, w, 'encostou');
+  }
+  /* Para a IA e a tela: quanto `u` perde se terminar a vez em (x, y) — 0 se
+   * nada fere ali. `x, y` é o canto noroeste do corpo, como u.x/u.y. */
+  Engine.muroFerePrevisto = function (state, u, x, y) {
+    if (!state || !u || !state.walls || !state.walls.length) return 0;
+    var w = muroEncostado(state, u, x, y);
+    return w ? danoDoMuro(u, w) : 0;
+  };
+  /* Para a IA: o dano de bater nesta casa sendo jogado (0 se não há muro de
+   * espinhos do outro lado ali). */
+  Engine.muroFereAoBater = function (state, u, x, y) {
+    if (!state || !u || !state.walls || !state.walls.length) return 0;
+    var w = muroQueFereEm(state, x, y, u.side);
+    return w ? danoDoMuro(u, w) : 0;
+  };
+  /* Para a IA e a tela: o `fere` que um efeito de muro deixaria na pedra se
+   * `caster` o erguesse agora com `spell` (o poder entra na hora de erguer). */
+  Engine.fereDoMuro = function (state, caster, spell, eff) {
+    if (!eff || !(eff.fere > 0) || !caster) return 0;
+    var pw = state ? Engine.castPower(state, caster, spell || {}) : Engine.effPower(caster);
+    return Math.max(1, Math.round(eff.fere * (100 + pw) / 100));
+  };
+  Engine.muroEncostado = function (state, u, x, y) { return muroEncostado(state, u, x, y); };
 
   // --------------------------------------------------- v2: marcas
   function applyMark(state, target, eff, sourceUid) {
@@ -3288,6 +3403,8 @@ var JOGO = (typeof window !== 'undefined')
            * inteiro. */
           var elMuro = eff.element || spell.element || 'neutro';
           var durMuro = eff.duration || 3;
+          // 03/10: os ESPINHOS — o dano de quem encosta, com o poder de agora congelado na pedra
+          var fereMuro = Engine.fereDoMuro(state, caster, spell, eff);
           var subiram = 0;
           for (var wt = 0; wt < tiles.length; wt++) {
             var wx2 = tiles[wt].x, wy2 = tiles[wt].y;
@@ -3311,23 +3428,28 @@ var JOGO = (typeof window !== 'undefined')
              * morrer antes de o muro cair, e ai a busca devolveria nada e o
              * escudo trocaria de arte no meio da vida dele — na frente do
              * jogador, sem erro nenhum no console. */
-            state.walls.push({ x: wx2, y: wy2, antes: cel.type, deco: !!cel.deco,
-                               ownerUid: caster.uid, side: caster.side,
-                               defId: caster.defId || null,
-                               element: elMuro, remaining: durMuro });
+            var novoMuro = { x: wx2, y: wy2, antes: cel.type, deco: !!cel.deco,
+                             ownerUid: caster.uid, side: caster.side,
+                             defId: caster.defId || null,
+                             element: elMuro, remaining: durMuro };
+            if (fereMuro > 0) novoMuro.fere = fereMuro;
+            state.walls.push(novoMuro);
             cel.type = 'wall';
             cel.deco = false;
             cel.invocado = true;
             muroDesteLance[wx2 + ',' + wy2] = true;
-            emit({ type: 'wallRaised', uid: caster.uid, x: wx2, y: wy2,
-                   element: elMuro, duration: durMuro });
+            var evMuro = { type: 'wallRaised', uid: caster.uid, x: wx2, y: wy2,
+                           element: elMuro, duration: durMuro };
+            if (fereMuro > 0) evMuro.fere = fereMuro;
+            emit(evMuro);
             subiram++;
           }
           // DIZER QUANTOS SUBIRAM. Quem esperava tres e ve "ergue 2 muros"
           // entende na hora que uma casa estava ocupada; antes so via menos
           // pedra e nao tinha como saber por que.
-          if (subiram === 1) log(caster.name + ' ergue um muro.');
-          else if (subiram > 1) log(caster.name + ' ergue ' + subiram + ' muros.');
+          var espinhos = fereMuro > 0 ? ' de espinhos (fere ' + fereMuro + ' quem encostar)' : '';
+          if (subiram === 1) log(caster.name + ' ergue um muro' + espinhos + '.');
+          else if (subiram > 1) log(caster.name + ' ergue ' + subiram + ' muros' + espinhos + '.');
           else log(caster.name + ' não acha onde erguer o muro.');
           break;
         }
@@ -3936,6 +4058,10 @@ var JOGO = (typeof window !== 'undefined')
       // 02/10: a poça do Colosso da Maré (e a cura de quem ficou parado nela)
       if (state.perigos && Pg()) Pg().fimTurno(state, u, INTERNO);
       if (state.phase !== 'playing') return;
+      // 03/10: terminou a vez encostado no muro de espinhos do outro lado — antes do tique, que o
+      // escudo que vence agora ainda segura
+      encostaNoMuro(state, u);
+      if (state.phase !== 'playing') return;
       tickDownEffects(state, u);
       if (state.eco && u.uid === state.eco.uid) ecoFimDaVez(state, u);   // 02/10: o aviso do golpe grande
       // v2: a fusão declarada resolve no FIM do turno de quem declarou
@@ -4014,6 +4140,8 @@ var JOGO = (typeof window !== 'undefined')
         var dOwner = anchor ? manhattan(c.x, c.y, anchor.x, anchor.y) : 0;
         if (anchor && dOwner > follow) continue;          // respeita a coleira
         var score = -0.5 * c.cost;
+        // 03/10: o pet também vê os espinhos do muro do outro lado e não para encostado neles
+        if (state.walls.length) score -= 1.2 * Engine.muroFerePrevisto(state, pet, c.x, c.y);
         if (pet.behavior === 'support') {
           var tgt = woundedAlly || anchor;
           if (tgt) score -= 1.2 * manhattan(c.x, c.y, tgt.x, tgt.y);
@@ -4064,6 +4192,9 @@ var JOGO = (typeof window !== 'undefined')
         emit({ type: 'petAct', uid: pet.uid, action: 'idle', ownerUid: ownerUid });
       }
 
+      // 03/10: o pet também termina a vez dele — encostado no muro de espinhos do outro lado, se fere
+      encostaNoMuro(state, pet);
+      if (state.phase !== 'playing') return acted;
       if (pet.alive) tickDownEffects(state, pet);
     }
     return acted;
