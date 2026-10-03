@@ -652,10 +652,12 @@ guarda o id da denúncia. Ao fechar, o denunciante recebe uma **carta da Equipe*
 achou que procedia e leva a resposta do Mestre — **nunca a punição** (é da conta de outra pessoa) nem a nota interna.
 
 ### 10.4 A auditoria
-`moderacao_auditoria`: uma linha por ação do Mestre, **na mesma transação da ação**. As rotas de `moderacao.py` gravam
-a sua; as outras rotas do Mestre (presentes, barras, alertas, eventos do mundo, a ficha da conta — ela mostra o e-mail
-inteiro) passam pelo gancho do `despacha` (`_audita_rota`, depois de dar certo; leituras ficam de fora, o e-mail
-buscado vai mascarado); as ops da Caixa e das ferramentas do Mestre (`gm*`) pelo `/api/op`. Lida em
+`moderacao_auditoria`: uma linha por ação do Mestre. As rotas de `moderacao.py` e as ops da Caixa e das ferramentas
+do Mestre (`gm*`, pelo `/api/op`) gravam a sua **na mesma transação da ação**. As outras rotas do Mestre (presentes,
+barras, alertas, eventos do mundo, a busca de contas, a ficha da conta — ela mostra o e-mail inteiro) passam pelo
+gancho do `despacha` (`_audita_rota`): a linha é gravada **logo depois** de a rota dar certo, numa transação própria —
+se essa gravação falhar, a ação fica feita e a falha vai ao log. As listas (denúncias, banimentos, auditoria,
+presentes, alertas) não deixam linha; o e-mail buscado vai mascarado. Lida em
 `GET /api/mestre/auditoria[?alvo=N][&acao=x][&limite=N]` e no `admin auditoria`.
 
 ### 10.5 O "pôr no inventário" do painel do Mestre

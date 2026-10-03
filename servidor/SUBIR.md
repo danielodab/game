@@ -499,9 +499,17 @@ curl -s https://SEU-ENDERECO/api/saude
   4. abra uma vez `https://SEU-ENDERECO/index.html?gm=SUA-CHAVE` (`?gm=off` desliga).
   Para tirar a marca, o mesmo comando com `gm=0`.
 - **Banir** uma conta: de preferência pelo painel do Mestre (F9 no jogo), que
-  guarda o motivo e o prazo. Pelo banco, para sempre e sem motivo (a sessão
-  dela passa a levar 403; desbanir é o mesmo comando com `banido=0`):
-  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "update contas set banido=1 where nome='NOME'"`
+  guarda o motivo e o prazo. Pelo banco, para sempre (a sessão dela passa a
+  levar 403). NÃO basta o `update contas set banido=1`: se a conta tiver uma
+  linha de banimento com prazo ainda aberta (um banimento do Mestre desfeito
+  só pelo 0/1), a API mostra o motivo e o fim DELA e, quando o prazo vence,
+  zera o banimento sozinha. O comando abaixo fecha a linha velha e grava a
+  permanente, como o `admin banir` do Coolify (a tabela existe depois que a
+  API nova subiu uma vez):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "begin; update moderacao_banimentos set encerrado_em = cast(strftime('%s','now') as integer), encerrado_como = 'trocado' where encerrado_em is null and conta_id = (select id from contas where nome='NOME'); insert into moderacao_banimentos(conta_id, motivo, inicio) select id, 'banida pelo banco', cast(strftime('%s','now') as integer) from contas where nome='NOME'; update contas set banido=1 where nome='NOME'; commit;"`
+  Para **desbanir** pelo banco, feche as linhas abertas junto (senão elas
+  aparecem como "em vigor" na lista do Mestre e voltam no próximo `banido=1`):
+  `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db "begin; update moderacao_banimentos set encerrado_em = cast(strftime('%s','now') as integer), encerrado_como = 'desfeito', encerrado_motivo = 'pelo banco' where encerrado_em is null and conta_id = (select id from contas where nome='NOME'); update contas set banido=0 where nome='NOME'; commit;"`
 - **Olhar a trilha de auditoria** (cadastros, logins, peças nascidas, saves recusados):
   `sudo -u soterra sqlite3 /var/lib/soterra/soterra.db 'select tipo, dados from eventos order by id desc limit 20'`
 

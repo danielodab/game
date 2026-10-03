@@ -47,10 +47,12 @@ ação (silenciar ou banir) na mesma transação. Ao fechar, o denunciante receb
 uma CARTA da Equipe (o correio do jogo, `moderacao_cartas`, GET /api/correio)
 e, com o correio do servidor ligado, um e-mail — nunca com a punição aplicada.
 
-A AUDITORIA: `moderacao_auditoria`, uma linha por ação do Mestre, gravada NA
-MESMA transação da ação. As rotas deste arquivo gravam a sua; as outras rotas
-do Mestre (mestre.py, os eventos do mundo) passam pelo gancho do despacha
-(api.py, `_audita_rota`), e as ops da Caixa do Mestre pelo /api/op (salas.py).
+A AUDITORIA: `moderacao_auditoria`, uma linha por ação do Mestre. As rotas
+deste arquivo e as ops da Caixa do Mestre pelo /api/op (salas.py) a gravam NA
+MESMA transação da ação; as outras rotas do Mestre (mestre.py, os eventos do
+mundo) ganham a linha do gancho do despacha (api.py, `_audita_rota`) LOGO
+DEPOIS de dar certo, numa transação própria (se ela falhar, a ação fica e o
+log conta).
 
 O "PÔR NO INVENTÁRIO" (POST /api/mestre/dar): pelo JUIZ, no estado que o
 servidor guarda (ops internas `mestreDarItem`/`mestreDarSelos`, servidor/juiz/
