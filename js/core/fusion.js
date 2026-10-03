@@ -73,27 +73,27 @@ var JOGO = (typeof window !== 'undefined')
   // conserto do feitiço misto (engine.js, feiticoMisto): o 3,83 do Muro Vivo
   // existia para tapar a Sentinela que matava o próprio ídolo.
   Fusion.PAIR_TUNE = {
-    'arqueiro+bruxo':        [0.952, 0.817, 0.667],
-    'arqueiro+curandeiro':   [0.879, 0.585, 0.712],
-    'arqueiro+espadachim':   [1.841, 1.197, 1.248],
-    'arqueiro+invocador':    [0.838, 0.665, 0.657],
-    'arqueiro+minotauro':    [1.140, 1.067, 1.000],
-    'arqueiro+sumo':         [1.372, 1.038, 0.803],
-    'bruxo+curandeiro':      [0.874, 0.656, 0.497],
-    'bruxo+espadachim':      [1.240, 0.865, 0.715],
-    'bruxo+invocador':       [1.099, 0.902, 0.668],
-    'bruxo+minotauro':       [1.132, 0.959, 0.881],
-    'bruxo+sumo':            [1.378, 1.216, 0.766],
-    'curandeiro+espadachim': [1.388, 0.739, 0.807],
-    'curandeiro+invocador':  [0.603, 0.390, 0.565],
-    'curandeiro+minotauro':  [2.140, 1.510, 1.248],
-    'curandeiro+sumo':       [0.895, 0.715, 1.125],
-    'espadachim+invocador':  [1.230, 0.711, 0.540],
-    'espadachim+minotauro':  [2.410, 1.884, 1.257],
-    'espadachim+sumo':       [1.881, 1.448, 0.992],
-    'invocador+minotauro':   [3.127, 1.661, 0.646],
-    'invocador+sumo':        [1.045, 0.885, 0.750],
-    'minotauro+sumo':        [1.697, 1.336, 0.956]
+    'arqueiro+bruxo':        [0.951, 0.813, 0.641],
+    'arqueiro+curandeiro':   [0.917, 0.600, 0.739],
+    'arqueiro+espadachim':   [1.832, 1.208, 1.269],
+    'arqueiro+invocador':    [0.838, 0.661, 0.669],
+    'arqueiro+minotauro':    [1.141, 1.065, 1.008],
+    'arqueiro+sumo':         [1.371, 1.014, 0.773],
+    'bruxo+curandeiro':      [0.913, 0.677, 0.490],
+    'bruxo+espadachim':      [1.236, 0.857, 0.688],
+    'bruxo+invocador':       [1.095, 0.900, 0.634],
+    'bruxo+minotauro':       [1.131, 0.971, 0.812],
+    'bruxo+sumo':            [1.384, 1.184, 0.714],
+    'curandeiro+espadachim': [1.432, 0.759, 0.837],
+    'curandeiro+invocador':  [0.630, 0.399, 0.595],
+    'curandeiro+minotauro':  [2.224, 1.550, 1.295],
+    'curandeiro+sumo':       [0.933, 0.722, 1.125],
+    'espadachim+invocador':  [1.237, 0.716, 0.540],
+    'espadachim+minotauro':  [2.416, 1.911, 1.249],
+    'espadachim+sumo':       [1.875, 1.426, 0.963],
+    'invocador+minotauro':   [3.138, 1.664, 0.648],
+    'invocador+sumo':        [1.046, 0.861, 0.723],
+    'minotauro+sumo':        [1.717, 1.296, 0.984]
   };
 
   function E() { return JOGO.Engine; }
