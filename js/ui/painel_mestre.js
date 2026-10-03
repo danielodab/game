@@ -411,7 +411,7 @@ var JOGO = (typeof window !== 'undefined')
     var c = eu();
     var bar = el('div', 'pm-para' + (destino ? ' is-outro' : ''));
     bar.appendChild(el('span', 'pm-dim', 'Para:'));
-    bar.appendChild(el('b', null, destino ? destino.nome + ' · #' + destino.id : (c.nome || 'você') + ' (você)'));
+    bar.appendChild(el('b', null, destino ? destino.nome + ' · #' + destino.id : (c.nome ? c.nome + ' (você)' : 'você')));
     alvo.appendChild(bar);
     if (!PM.noServidor()) {
       bar.appendChild(el('span', 'pm-dim', 'jogo local: entregar a um jogador pede a conta do Mestre no servidor'));
