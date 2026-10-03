@@ -2616,6 +2616,11 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .nuvem-caixa a.btn { display: block; text-align: center; text-decoration: none; margin-top: 8px; }
 .conta-linha.is-on span { color: var(--gold); }
 .contas-nota { font-size: 12px; color: var(--dim); line-height: 1.5; }
+/* 02/10: os links dos Termos e da Política, e a ficha de excluir a conta (hud.js, sheetExcluirConta) */
+.contas-legal { margin: 8px 0 0; }
+.contas-legal a { color: var(--gold); }
+.excluir-campo { display: block; width: 100%; margin: 6px 0; text-align: left; }
+.excluir-aviso { min-height: 1.5em; color: #ff9a8a; }
 
 /* ------------------------------------------ OS PERGAMINHOS DA LOJA (Fase C)
    Ainda sem arte (o dono paga os dois ícones depois): um glifo num disco — o

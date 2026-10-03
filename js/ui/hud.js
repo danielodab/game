@@ -8779,6 +8779,12 @@ var JOGO = (typeof window !== 'undefined')
             function () { Nx.sair().then(function () { sheetContas(); }); });
         }));
         caixaN.appendChild(linhaN);
+        // 02/10: os direitos do titular (servidor/privacidade.py): os documentos, baixar os dados, excluir
+        caixaN.appendChild(linksLegais());
+        var linhaP = el('div', 'nuvem-botoes');
+        linhaP.appendChild(btn('Baixar meus dados', '', baixaMeusDados));
+        linhaP.appendChild(btn('Excluir conta…', 'btn-warn', function () { sheetExcluirConta(estN.conta); }));
+        caixaN.appendChild(linhaP);
       } else {
         caixaN.appendChild(el('p', 'contas-nota',
           'Sem conta no servidor: o save vive só nesta máquina. Crie a conta ou entre pelo site — ' +
@@ -8788,6 +8794,7 @@ var JOGO = (typeof window !== 'undefined')
         aN.target = '_blank';
         aN.rel = 'noopener';
         caixaN.appendChild(aN);
+        caixaN.appendChild(linksLegais());
       }
       body.appendChild(caixaN);
     }
@@ -8796,6 +8803,111 @@ var JOGO = (typeof window !== 'undefined')
       'OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra ' +
       'conta — os dois se veem no Acampamento (fantasma, chat, troca, arena). ' +
       'Atalho: abrir a segunda janela já com <b>?conta=2</b> no fim do endereço.'));
+  }
+
+  /* OS DIREITOS DO TITULAR NO JOGO (02/10, LGPD; servidor/privacidade.py). A ficha
+   * Contas, logada, ganha os links dos Termos e da Política (abrem no site, noutra
+   * aba), "Baixar meus dados" (o JSON de tudo o que o servidor guarda, entregue como
+   * arquivo) e "Excluir conta…", que abre a ficha de confirmação forte: o nome EXATO
+   * da conta e a senha, conferidos de novo no servidor. Excluída, a Nuvem para (a
+   * sessão já morreu lá) e o save LOCAL desta máquina fica como está — a ficha diz.
+   * Os campos são da ficha (sheet), que já decide pointer-events: nenhuma camada nova. */
+  function linksLegais() {
+    var Sx = JOGO.Sessao;
+    var p = el('p', 'contas-nota contas-legal');
+    function liga(rotulo, fn, reserva) {
+      var a = el('a', null, rotulo);
+      a.href = safe(function () { return Sx[fn](); }, reserva);
+      a.target = '_blank';
+      a.rel = 'noopener';
+      return a;
+    }
+    p.appendChild(liga('Termos de Uso', 'paginaTermos', 'site/termos.html'));
+    p.appendChild(document.createTextNode(' · '));
+    p.appendChild(liga('Política de Privacidade', 'paginaPrivacidade', 'site/privacidade.html'));
+    return p;
+  }
+  function baixaMeusDados() {
+    var Sx = JOGO.Sessao;
+    if (!Sx || !Sx.meusDados) return;
+    toast('juntando os seus dados…');
+    Sx.meusDados().then(function (r) {
+      if (!r || !r.ok || !r.dados) { toast((r && r.erro) || 'não deu para juntar os dados'); return; }
+      try {
+        var blob = new Blob([JSON.stringify(r.dados, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        var d = new Date();
+        a.href = URL.createObjectURL(blob);
+        a.download = 'soterra-meus-dados-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) +
+          ('0' + d.getDate()).slice(-2) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
+        toast('arquivo dos seus dados baixado');
+      } catch (eB) {
+        toast('o navegador não deixou salvar o arquivo');
+      }
+    });
+  }
+  function sheetExcluirConta(conta) {
+    var Sx = JOGO.Sessao, Nx = JOGO.Nuvem;
+    var nomeConta = (conta && typeof conta.nome === 'string') ? conta.nome : '';
+    var body = sheetShell('Excluir a conta', 'Isto não tem volta.');
+    sheetName = 'excluir-conta';
+    body.appendChild(el('p', 'contas-nota',
+      'O save no servidor, os itens, os personagens, as barras de ouro e os vinténs somem para sempre. ' +
+      'Fica só o registro dos pagamentos, sem o seu nome e o seu e-mail. Se lidera uma guilda, a ' +
+      'liderança passa ao membro mais antigo. Quer o arrependimento de uma compra? Peça <b>antes</b>.'));
+    body.appendChild(el('p', 'contas-nota', 'Para confirmar, digite o nome da conta, <b>' + esc(nomeConta) +
+      '</b>, e a senha.'));
+    function campo(tipo, rotulo, ac) {
+      var c = document.createElement('input');
+      c.type = tipo;
+      c.className = 'bk2-qtd excluir-campo';
+      c.placeholder = rotulo;
+      c.setAttribute('aria-label', rotulo);
+      c.setAttribute('autocomplete', ac);
+      c.spellcheck = false;
+      body.appendChild(c);
+      return c;
+    }
+    var nome = campo('text', 'nome da conta', 'off');
+    var senha = campo('password', 'senha', 'current-password');
+    var aviso = el('p', 'contas-nota excluir-aviso', '');
+    body.appendChild(aviso);
+    var ocupado = false;
+    var acts = el('div', 'confirm-acts');
+    acts.appendChild(btn('Voltar', 'btn-ghost', function () { sheetContas(); }));
+    var vai = btn('Excluir para sempre', 'btn-warn', function () {
+      if (ocupado || !Sx || !Sx.excluir) return;
+      ocupado = true;
+      confere();
+      aviso.textContent = 'excluindo…';
+      Sx.excluir(nome.value.trim(), senha.value).then(function (r) {
+        ocupado = false;
+        senha.value = '';
+        if (!r || !r.ok) {
+          aviso.textContent = (r && r.erro) || 'não deu para excluir a conta';
+          confere();
+          return;
+        }
+        // a sessão já saiu (Sessao.excluir); a Nuvem para de tentar subir o save
+        safe(function () { if (Nx && Nx.sair) Nx.sair(); }, null);
+        var fim = sheetShell('Conta excluída', 'A conta saiu do servidor.');
+        sheetName = 'excluir-conta';
+        fim.appendChild(el('p', 'contas-nota',
+          'O save desta máquina continua aqui, só neste navegador. Para apagá-lo, limpe os dados do site no navegador.'));
+        fim.appendChild(btn('Fechar', 'btn-primary btn-block', function () { sheetContas(); }));
+      });
+    });
+    acts.appendChild(vai);
+    body.appendChild(acts);
+    function confere() {
+      vai.classList.toggle('is-off', ocupado || !nomeConta || nome.value.trim() !== nomeConta || !senha.value);
+    }
+    nome.addEventListener('input', confere);
+    senha.addEventListener('input', confere);
+    confere();
   }
 
   /* O PERFIL PÚBLICO (pedido 25/08): a ficha de outro jogador da praça —
@@ -12752,7 +12864,9 @@ var JOGO = (typeof window !== 'undefined')
     else if (current === 'elementChoice') dados = lastElementChoice;
     else if (current === 'duelFim') dados = lastDuelFim;
     try { if (current && screens[current]) UI.showScreen(current, dados); } catch (e) {}
-    if (eraNome && eraNome !== 'confirm') {
+    // 02/10: a ficha de excluir a conta tem o nome e a senha digitados — redesenhar a
+    // apagaria (e o openSheet não a conhece: fecharia); ela fica como está, como a confirmação
+    if (eraNome && eraNome !== 'confirm' && eraNome !== 'excluir-conta') {
       try { openSheet(eraNome, eraArg); } catch (e2) {}
     }
   };
