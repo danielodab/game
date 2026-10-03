@@ -597,9 +597,10 @@
     }).then(function () {
       var bs = qa('.screen-hub.is-on .hub-dock-b');
       var rots = bs.map(function (b) { return (q1('.hd-rot', b) || {}).textContent; });
-      check('Cais: seis portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
-            bs.length === 6 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
-            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos$/.test(rots.join(',')), rots.join(','));
+      // 03/10 (a junção com o Eco Primordial): a 7ª porta, o Eco, também vem desenhada (fc-eco)
+      check('Cais: sete portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
+            bs.length === 7 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
+            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos,Eco$/.test(rots.join(',')), rots.join(','));
       check('Cais: nenhum emoji sobrou no texto das portas',
             bs.every(function (b) { return !/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(b.textContent); }),
             bs.map(function (b) { return b.textContent; }).join(' | '));

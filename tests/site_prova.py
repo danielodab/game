@@ -500,8 +500,12 @@ def prova_fusoes(abre):
     det = texto(secao(h, 'duplas'))
     m1 = re.search(r'Disparo Salgado.*?dano (\d+)–(\d+) de Água', det)
     check('fusões: no nível 1 só a forma do início', 'Disparo Salgado' in det and 'Sigilo Salgado' not in det)
-    check('fusões: os números saem do spellsFor (o nível 30 bate mais que o 1)',
-          bool(m1 and m30) and int(m30.group(1)) > int(m1.group(1)),
+    # 03/10 (a junção com o equilíbrio): o coeficiente da dupla passou a variar com o nível
+    # (Fusion.PAIR_TUNE = [k5, k12, k30]) e em várias duplas o número de BASE desce do 1 para o 30
+    # (o poder do herói, que sobe, entra depois, na batalha) — a régua é "o número muda com o nível",
+    # que é o que prova que ele sai do spellsFor e não de um texto fixo
+    check('fusões: os números saem do spellsFor (mudam do nível 1 para o 30)',
+          bool(m1 and m30) and (m30.group(1), m30.group(2)) != (m1.group(1), m1.group(2)),
           'nível 1: %s · nível 30: %s' % (m1 and m1.group(0)[-24:], m30 and m30.group(0)[-24:]))
 
     h = abre('fusoes.html', 'cheia', '#dupla=sumo+minotauro&elementos=fogo+fogo&nivel=12')

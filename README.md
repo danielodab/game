@@ -218,7 +218,7 @@ jogador. Página nova sem essa linha é bug.
 | **`moderacao_api.py`** (Python, API + juiz) | 12 de 12 — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |
 | **`moderacao_rele_prova.py`** (Python, relé de verdade) | 18 de 18 — o token banido ouve `banido` e cai com 4003 (no ident e com a praça aberta), o silenciado não fala, o banimento vencido confere |
 | **`painel_mestre.html`** (navegador) | 45 de 45 — o painel do Mestre (quem vê, F9, abas, filtros de item, o que vai ao servidor, a adoção do estado), a denúncia pela linha do chat, o correio e a tela do banido — contando o DOM e as camadas que recebem clique |
-| `validate_world.html` | 7.185 checagens (19/09: cobra "alcance > 0 ⇒ los:true"); em Node 7.184 OK — a varredura de fonte exige `http://` |
+| `validate_world.html` | **7.914 checagens, 0 falhas** depois da junção de 03/10 (servido; com a seção 9 do Eco e os traços dos Colossos). 19/09: cobra "alcance > 0 ⇒ los:true"; a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 218 passaram / 0 falharam (02/10: + a Câmara do Eco) — 21 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
 | **`poco_perigos.js`** (Node) | 42 passaram / 0 falharam (02/10) — o chão do Poço e os Colossos: semente decide tudo, perigo nunca na entrada nem em casa de monstro, buraco nunca separa o mapa (nem o rachado debaixo de muro invocado deixa de virar buraco), todo disparo avisado com uma vez inteira para sair, a IA não para em casa avisada (0 em 1.303 decisões), um colosso e um chefe por andar múltiplo de 5, os quatro traços, o juiz refaz andares com perigo e colosso e chega ao mesmo hash |
 | `poco_chao_tela.html` | passou (02/10) — 7 perigos desenhados, avisos acendem e apagam, nada vaza; o colosso mede ~1,5× um comum de escala 1,0 |
@@ -228,16 +228,16 @@ jogador. Página nova sem essa linha é bug.
 | **`eco_hud.html`** | a ficha do Eco, a linha da sala na batalha, a tela do fim (treino e conferido pelo servidor), o aviso do prêmio, e o título "Voz do Eco" ganho aparece no menu da ficha do Personagem e pendura, e o cais da praça com as 7 portas cabe a 320, 360 e 390 px (43 de 43) |
 | **`regras_versao_api.py`** (Python, juiz + API) | 8 de 8 — a versão das regras do bilhete, da sala em grupo, do duelo e da guerra: 409 na abertura (versão errada OU sem o campo, em sala/grupo/duelo/confirmar da guerra), 410/`vencida` no fechamento, linha ausente = versão 1. `Engine.VERSAO_REGRAS` é **6** desde 03/10 — uma subida só para o equilíbrio, o chão do Poço e o Eco Primordial |
 | `validate_classes.html` | 7.088 checagens, **7 falhas** — o teste crava `starCosts = [5,15,30,55,90]` e o dado é `[5,15,35,65,110]` (a escada de 30/08); as mesmas antes e depois de 03/10 |
-| **`privacidade_api.py`** (Python, API) | 11 de 11 (02/10) — o cadastro exige o aceite da versão de agora e o grava; excluir pede o nome exato e a senha e espera luta e pagamento abertos; depois, NENHUMA linha do esquema aponta para a conta (lido do `sqlite_master`), fica só o dinheiro sem a conta, a guilda passa ao mais antigo; baixar meus dados; a faxina dos prazos no boot; cada número das páginas `site/termos.html` e `privacidade.html` bate com a constante |
+| **`privacidade_api.py`** (Python, API) | 12 de 12 (03/10, com a prova da junção: o Eco e a moderação no "Baixar meus dados", a lápide que não se desbane nem aparece entre os banidos) — o cadastro exige o aceite da versão de agora e o grava; excluir pede o nome exato e a senha e espera luta e pagamento abertos; depois, NENHUMA linha do esquema aponta para a conta (lido do `sqlite_master`), fica só o dinheiro sem a conta, a guilda passa ao mais antigo; baixar meus dados; a faxina dos prazos no boot; cada número das páginas `site/termos.html` e `privacidade.html` bate com a constante |
 | **`registros_api.py`** (Python, API) | 9 de 9 (02/10) — o registro de erros: repetidos numa linha, nada de e-mail/IP/token no banco, cortes, freio por endereço, 30 dias, o painel do Mestre e a exceção da própria API |
 | **`privacidade_navegador.py`** (Chrome, pela vez da máquina) | 11 de 11 (03/10) — `site_privacidade.html` 38/38 (termos, privacidade, o aceite no cadastro, o bloco da conta, o painel de erros, com fetch falso), `site_fase_c.html` 129/129 e `privacidade_jogo.html` 14/14: o jogo INTEIRO contra a API de verdade — o erro lançado chega ao banco, a ficha Contas baixa os dados e exclui a conta |
 | **`registro_erros.js`** (Node) | 40 de 40 (02/10) — o cliente (`js/core/registro_erros.js`): junta, limita, limpa a pilha, nada em `file://`, e é o primeiro script do `index.html` |
 | `validate_data.html` | 2.631 checagens, 0 falhas |
 | `efeitos_um_a_um.html` | 7 de 7 — 186 desenhos disparados um a um |
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
-| `carga.html` | passou (03/10) — 40,02 MB na primeira visita servida, 92 `.glb` (eram 40,88 MB antes do relevo/brilho a 512) |
+| `carga.html` | passou (03/10) — 40,02 MB na primeira visita servida, 92 `.glb` (eram 40,88 MB antes do relevo/brilho a 512); depois da junção, 40,14 MB |
 | `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
-| **`fichas_fotos.html`** (sem `?ficha=`) | a régua das fichas (02/10): em cada uma das 23 fichas, medalhão + título + fechar, papel de diálogo com nome, todo controle ≥ 44 px numa coluna de 390, nada vazando, foco dentro e de volta a quem abriu, o Tab dando a volta dentro dela, e quem digita fora dela (o chat) sem perder o campo; abas de texto, Configurações (a chave da tela cheia seguindo a tela), o cais desenhado e o `.is-off` que esconde continuando escondido. Com `?ficha=<nome>` é a página das FOTOS — `tools/fotos_fichas.py` fotografa todas (1600×900 e 390×844) numa janela de Chrome só e monta a folha antes\|depois |
+| **`fichas_fotos.html`** (sem `?ficha=`) | **174 de 174** depois da junção de 03/10 (`python tools/fotos_fichas.py prova`) — a régua das fichas (02/10): em cada uma das 24 fichas (a do Eco entrou na junção), medalhão + título + fechar, papel de diálogo com nome, todo controle ≥ 44 px numa coluna de 390, nada vazando, foco dentro e de volta a quem abriu, o Tab dando a volta dentro dela, e quem digita fora dela (o chat) sem perder o campo; abas de texto, Configurações (a chave da tela cheia seguindo a tela), o cais desenhado com as sete portas (a do Eco com o `fc-eco`) e o `.is-off` que esconde continuando escondido. Com `?ficha=<nome>` é a página das FOTOS — `tools/fotos_fichas.py` fotografa todas (1600×900 e 390×844) numa janela de Chrome só e monta a folha antes\|depois |
 | `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`texturas_prova.py`** (Python) | 16 de 16 (03/10) — relevo/brilho a 512 fora das exceções, cor intacta (também quando divide o bufferView com o relevo), `.glb` remontado byte a byte igual fora das imagens, bundle em dia |
@@ -246,6 +246,19 @@ jogador. Página nova sem essa linha é bug.
 | `equilibrio_fusao.html` | a mesma conta da fusão no navegador (8 misturas) |
 | `equilibrio_pve.js` (Node) | mostra, não cobra: o calabouço por classe no nível recomendado (docs/EQUILIBRIO.md §6.6) |
 | `regras_equilibrio.js` (Node) | 29 de 29 — cada regra que o equilíbrio consertou, num lance só: feitiço misto, armadilha ao pé do muro, preço no próprio corpo, muro e salto da IA |
+
+**A bateria depois da junção de 03/10** (Node, API e as páginas que as frentes tocaram, no Chrome
+headless pela vez da máquina), comparada com a base `39a6ae9`. O que falha é o que já falhava lá:
+`autoridade_cliente.js` (sem vitória para provar), `autoridade_ponta.js` 3 de 11,
+`juiz_poco.js` 1 de 4, `luta_aberta_cliente.js` 2 de 23, `guilda_api.py` 1 (o nome "Mestre"
+reservado), `rele_nomes_prova.py --sem-navegador` 1 de 113, `validate_classes` 7, `validate_fusion`
+51, `test_progress_v2` 56, `arvore_feiticos` 4, `grupo_hud` 2, `pocoes_hud` 1 e `ui_screens` 4.
+Três vêm das frentes e ficam abertas, conhecidas: `equilibrio.js` (prova rápida) dá **413 de 436**,
+igual à ponta da frente; `site_prova.py` acusa a falta dos retratos dos quatro Colossos (só com a
+arte); e `ui_screens.html` acusa o cais de sete portas vazando o quadro de 390 px — a página
+simula o celular num quadro dentro de uma janela larga, onde as regras `@media` do celular não
+valem; numa tela de verdade de 320, 360 ou 390 px o cais cabe (`eco_hud.html` e `fichas_fotos.html`
+medem isso numa janela de celular).
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
@@ -283,6 +296,37 @@ Fora do Git de propósito:
 ---
 
 ## 7. O que está em aberto — leia antes de prometer qualquer coisa
+
+### 7.0 A noite de 03/10: oito frentes juntadas de uma vez
+
+Oito frentes trabalharam em cópias isoladas a partir de `39a6ae9` e entraram nesta ordem, cada
+uma num merge próprio: **texturas** (relevo e brilho a 512, a aba cai de 1,58 para 0,88 GB) →
+**equilíbrio** (a régua `tests/equilibrio.js` e os acertos de regra e de número) → **Poço** (chão
+perigoso, Colossos, chefe único) → **Eco Primordial** (o chefe supremo 2×2 da semana, conferido
+pelo juiz) → **conta** (Termos, Privacidade, excluir a conta, baixar os dados, registro de erros) →
+**Mestre** (o painel F9, banimento com prazo, silêncio, denúncias, auditoria) → **menus** (o
+sistema visual das fichas e a ficha de Configurações) → **arte** (`docs/PROMPTS_LANCAMENTO.md`).
+
+- `Engine.VERSAO_REGRAS` é **6**, uma subida só para as três frentes que mudam o fim de uma sala
+  (equilíbrio, Poço, Eco); o comentário do histórico em `engine.js` conta as três.
+- O que a junção teve de decidir (cada ponto no commit do merge):
+  - o Poço e o Eco criavam cada um uma `M.CORPO_PROVISORIO` no `models3d_v2.js`, em formatos
+    diferentes, e a segunda apagava a primeira — virou **uma tabela só**, de objetos;
+  - a **lápide** da conta excluída (`banido = 1`) não se desbane nem se pune (API e `admin
+    desbanir`) e não aparece entre os banidos do Mestre;
+  - "Baixar meus dados" traz também o Eco (tentativas e prêmios) e a moderação da conta (punições,
+    denúncias feitas, cartas); a Política e os Termos contam a denúncia (as falas anexadas são a
+    única exceção ao "o chat não é gravado") e o silêncio — o **prazo de guarda das denúncias**
+    ficou `[PREENCHER]` para o dono e o advogado;
+  - a porta do Eco no cais ganhou o ícone desenhado `fc-eco` e a ficha dele o medalhão; a prova
+    das fichas passou a cobrar a ficha do Eco.
+- **Fica para o dono decidir:** a conta banida não alcança "Excluir conta" nem "Baixar meus
+  dados" (o 403 do banimento vem antes — direito do titular contra evasão de banimento); o escudo
+  do Minotauro em 1024; o Minotauro na régua da IA (§7.1); o risco de a semente do Eco valer 2 h
+  (dá para buscar fora do jogo a melhor sequência); a mira dos efeitos do Eco no canto do corpo; e o
+  número de BASE dos feitiços de fusão, que com o `PAIR_TUNE` por nível **desce** do nível 1 para o
+  30 em várias duplas (Arqueiro+Bruxo: 15–21 no 1, 14–19 no 30; o poder do herói entra depois, na
+  batalha) — a wiki e a barra mostram esse número, e quem lê pode achar que a fusão enfraquece.
 
 ### 7.1 O equilíbrio: medido, acertado, e o que sobrou
 
