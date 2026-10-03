@@ -283,6 +283,28 @@
     var vis = [].filter.call(doc.querySelectorAll('.screen-hub .hub-chat-log .chat-sussurro'), visivel)
       .some(function (l) { return /oi na praça/.test(l.textContent); });
     check('22: na praça a particular entra no chat do canto, visível', vis);
+    // 03/10 (a denúncia, js/ui/moderacao.js): o particular é onde o assédio mais acontece — a linha que
+    // chega diz quem falou (data-de), o clique direito nela abre "Denunciar Cris", e o texto entra nas
+    // falas que a denúncia anexa. Antes a linha particular não tinha nada disso
+    var linhaCris = [].filter.call(doc.querySelectorAll('.screen-hub .hub-chat-log .chat-sussurro'), function (l) {
+      return /oi na praça/.test(l.textContent);
+    })[0];
+    var falasCris = (J.Denuncia && J.Denuncia.falasDe) ? J.Denuncia.falasDe('cris', null) : [];
+    check('03/10: a particular recebida guarda quem falou e entra nas falas da denúncia',
+          !!linhaCris && linhaCris.getAttribute('data-de') === 'cris' &&
+          falasCris.some(function (f) { return f.texto === 'oi na praça'; }),
+          (linhaCris ? linhaCris.getAttribute('data-de') : 'sem linha') + ' · ' + JSON.stringify(falasCris));
+    if (linhaCris) {
+      var r0 = linhaCris.getBoundingClientRect();
+      linhaCris.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true,
+                                                               clientX: r0.left + 4, clientY: r0.top + 4 }));
+    }
+    var menuCris = doc.querySelector('.mod-menu');
+    check('03/10: o clique direito na particular abre o menu "Denunciar Cris"',
+          !!menuCris && /^Denunciar Cris/.test((menuCris.querySelector('button') || {}).textContent || ''),
+          menuCris ? menuCris.textContent : '(sem menu)');
+    var fechaCris = menuCris ? [].filter.call(menuCris.querySelectorAll('button'), function (b) { return b.textContent === 'Fechar'; })[0] : null;
+    if (fechaCris) fechaCris.click();
     U.openSheet('missoes');
     J.Grupo._ev({ tipo: 'sussurro', de: 'cris', cx: 'cxcris', nome: 'Cris', texto: 'com a ficha aberta' });
     check('22: com uma ficha por cima do chat, a particular vira toast também', toastTxt() === 'Cris (particular): com a ficha aberta', toastTxt());

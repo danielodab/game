@@ -11373,6 +11373,9 @@ var JOGO = (typeof window !== 'undefined')
     else if (l.meu) li.innerHTML = '→ <b>' + esc(l.nome) + ':</b> ' + esc(l.texto);
     else li.innerHTML = '<b>' + esc(l.nome) + '</b> (particular): ' + esc(l.texto);
     if (!l.meu && !l.sistema) {
+      // 03/10: o particular é onde o assédio mais acontece — a linha também se denuncia (js/ui/moderacao.js)
+      li.setAttribute('data-de', l.de);
+      li.setAttribute('data-nome', l.nome || '');
       li.title = 'toque para responder';
       tap(li, function () { armaSussurro(l.de, l.nome); });
     }
@@ -11476,6 +11479,8 @@ var JOGO = (typeof window !== 'undefined')
    * não há chat (batalha, recompensa, derrota) ou uma ficha está por cima dele. */
   function aoSussurroChegou(l) {
     if (!l) return;
+    // 03/10: o particular recebido entra nas falas que a denúncia anexa (o servidor não guarda o chat)
+    if (!l.meu && !l.sistema) safe(function () { return JOGO.Denuncia && JOGO.Denuncia.anota(l.de, l.nome, l.texto); }, null);
     if (sheetName === 'sussurro' && sussurroAlvo && suHist && suHist.isConnected &&
         (l.de === sussurroAlvo.id || l.para === sussurroAlvo.id)) {
       suHist.appendChild(linhaSussurro(l));
