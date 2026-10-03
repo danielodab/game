@@ -271,6 +271,8 @@
     lista('ms-pagamentos', ficha.pagamentos, linhaPagamento, Array.isArray(ficha.pagamentos) ? 'Nenhum pacote comprado.' : '');
     lista('ms-alertas-conta', ficha.alertas, function (a) { return linhaAlerta(a, false); },
           Array.isArray(ficha.alertas) ? 'Nenhum alerta desta conta.' : '');
+    // 02/10: o banimento, o silêncio e as denúncias da conta (mestre_moderacao.js)
+    if (window.MS_MODERACAO) MS_MODERACAO.ficha(ficha, function () { abreFicha(fichaId); });
   }
   /* 13/09: as barras de ouro da conta — o saldo, o formulário do presente e os últimos movimentos */
   var MOTIVO_BARRAS = { pacote: 'pacote pago', loja: 'compra na loja', 'estorno-loja': 'devolvidas (pedido cancelado ou recusado)',
