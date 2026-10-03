@@ -7,27 +7,41 @@ var JOGO = (typeof window !== 'undefined')
 //
 // Pedido do dono: "hoje o Mestre precisa sair para o menu/site para agir". O
 // painel abre POR CIMA de qualquer tela (a praça, a antessala, a batalha), só
-// para a conta do Mestre, por um botão discreto (⚖, em cima do "🔧 teste")
-// e pelo atalho F9 (ou Ctrl+Alt+M). Abas:
-//   Itens        busca por nome/slot/nível/raridade/elemento, estrelas, forja e
-//                quantidade → "pôr no meu inventário" PELO SERVIDOR
-//                (POST /api/mestre/dar: o juiz põe no estado do servidor e o
-//                jogo adota o estado novo sem recarregar)
-//   Moedas       vinténs, barras e selos para si ou para um jogador (as rotas de
-//                presente que o site do Mestre já usa, e /api/mestre/dar)
-//   Jogadores    buscar conta, a ficha, presentear do catálogo, silenciar, banir
+// para a conta do Mestre, por um botão discreto (⚖, em cima do "🔧 teste"),
+// pelo F9 (ou Ctrl+Alt+M) e — 03/10 — pela tecla M e pelos botões ⚔ da HUD.
+//
+// O PAINEL ÚNICO (03/10, o dono: "junte"): o painel de antes da tecla M (o
+// grimório, a Caixa do Mestre, os eventos do mundo — fichas da HUD) virou ABAS
+// deste, sem função perdida e sem nada em dobro. Abas:
+//   Caixa        as sete abas redondas de sempre (Itens, Conjuntos, Bichos,
+//                Pedras, Selos e insígnias, Cartas, Pergaminhos). O Itens é a
+//                busca por nome/slot/nível/raridade/elemento com estrelas, forja
+//                e quantidade; o resto é desenhado pela HUD (UI.gmCaixaEm).
+//                PARA QUEM: o "Para:" escolhe o próprio Mestre ou QUALQUER
+//                jogador. Tudo entra PELO SERVIDOR (POST /api/mestre/dar: o
+//                juiz põe no estado da conta; o jogador recebe "O Mestre te
+//                enviou …" e uma carta da Equipe; o Mestre adota o próprio
+//                estado sem recarregar). Em casa, sem sessão, no save local.
+//   Moedas       vinténs (presente pela loja) e barras, para o mesmo "Para:"
+//   Jogadores    buscar conta, a ficha, presentear do catálogo, a Caixa e as
+//                moedas para ela, silenciar, banir
 //   Denúncias    a fila, os estados e a ação ligada (silenciar/banir)
 //   Banimentos   os em vigor (e o histórico), desbanir, dessilenciar
 //   Auditoria    as últimas ações de todo Mestre
-//   Ferramentas  o MESMO corpo do painel de teste (js/ui/debug.js, JOGO.Debug
-//                .desenhaEm) — liberar classes, nível, elemento, efeitos — e o
-//                PA/PP do Mestre (JOGO.GM.definePaPp). Nada duplicado.
+//   Eventos      os eventos do mundo (Agora, Agendar, Calendário — UI.gmAgendaEm)
+//   Grimório     qualquer feitiço na barra do Mestre do Fundo (UI.gmGrimorioEm)
+//   Ferramentas  PA/PP e "Aparelhar o Mestre" (JOGO.GM) e o MESMO corpo do
+//                painel de teste (js/ui/debug.js, JOGO.Debug.desenhaEm) —
+//                liberar classes, nível, elemento, efeitos.
+// Os nomes de antes seguem valendo: UI.openSheet('gm' | 'gmcaixa' | 'gmagenda')
+// abre o Grimório, a Caixa e os Eventos daqui.
 //
 // QUEM VÊ: a conta que o servidor marcou (a sessão com gm:true) ou, em casa, o
 // modo Mestre ligado pela chave (JOGO.GM.ativo). Quem MANDA é o servidor: cada
 // rota /api/mestre/* responde 403 a quem não tem a marca no banco, e toda ação
-// fica na auditoria (servidor/moderacao.py). Sem sessão (o jogo local) só as
-// Ferramentas e os Itens (no save deste navegador, que é o dono ali) funcionam.
+// fica na auditoria (servidor/moderacao.py). Sem sessão (o jogo local) a Caixa
+// (no save deste navegador, que é o dono ali, e só para o próprio Mestre), o
+// Grimório e as Ferramentas funcionam; os Eventos ficam só de leitura.
 //
 // Camada filha do <body>, fora do #ui-root (pointer-events: none), com
 // pointer-events: auto explícito. As teclas digitadas nela não chegam ao jogo.
@@ -40,16 +54,18 @@ var JOGO = (typeof window !== 'undefined')
 
   var M = JOGO.Moderacao;
   var PM = JOGO.PainelMestre = {};
-  PM.ABAS = [['itens', 'Itens'], ['moedas', 'Moedas'], ['jogadores', 'Jogadores'], ['denuncias', 'Denúncias'],
-             ['banimentos', 'Banimentos'], ['auditoria', 'Auditoria'], ['ferramentas', 'Ferramentas']];
+  PM.ABAS = [['caixa', 'Caixa'], ['moedas', 'Moedas'], ['jogadores', 'Jogadores'], ['denuncias', 'Denúncias'],
+             ['banimentos', 'Banimentos'], ['auditoria', 'Auditoria'], ['eventos', 'Eventos'], ['grimorio', 'Grimório'],
+             ['ferramentas', 'Ferramentas']];
+  // os nomes de antes: 'itens' (a primeira aba deste painel até 03/10) e as fichas da HUD
+  var APELIDOS = { itens: 'caixa', gm: 'grimorio', gmcaixa: 'caixa', gmagenda: 'eventos' };
   PM.LISTA_ITENS = 60;             // linhas de item desenhadas de uma vez (o resto pede filtro)
   var SLOTS = [['punho', 'Punho'], ['passo', 'Passo'], ['casca', 'Casca'], ['lume', 'Lume']];
   var ELEMENTOS = [['fogo', 'Fogo'], ['agua', 'Água'], ['terra', 'Terra'], ['ar', 'Ar'], ['neutro', 'Neutro']];
-  var SELOS = [['fogo', 'Fogo'], ['agua', 'Água'], ['terra', 'Terra'], ['ar', 'Ar']];
 
-  var aba = 'itens', capa = null, corpo = null, botao = null, abasEl = null;
+  var aba = 'caixa', capa = null, corpo = null, botao = null, abasEl = null, avisoEl = null;
   var filtro = { q: '', slot: '', raridade: '', elemento: '', nivelMax: '', estrelas: 0, nivel: 0, qtd: 1 };
-  var alvoMoedas = null;           // {id, nome} — null = eu
+  var destino = null;              // PARA QUEM a Caixa e as Moedas entregam: {id, nome} — null = o próprio Mestre
   var fichaId = null;              // a conta aberta na aba Jogadores
   var busca = { q: '', contas: null };
   var denFiltro = 'abertas', denAlvo = null, banTodos = false;
@@ -101,7 +117,16 @@ var JOGO = (typeof window !== 'undefined')
     var n = Math.floor(Number(v));
     return (isFinite(n) && n >= lo && n <= hi) ? n : null;
   }
-  function aviso(texto, tipo) { M.aviso(texto, tipo); }
+  /* 03/10: com o painel aberto, o aviso sai DENTRO dele — o da HUD (UI.toast) mora no #app, por baixo do
+   * véu do painel, e o Mestre não via se a entrega tinha entrado */
+  function aviso(texto, tipo) {
+    if (!PM.aberto() || !avisoEl) { M.aviso(texto, tipo); return; }
+    avisoEl.textContent = texto;
+    avisoEl.className = 'pm-toast is-on' + (tipo === 'good' ? ' is-bom' : '');
+    clearTimeout(aviso._t);
+    aviso._t = setTimeout(function () { if (avisoEl) avisoEl.classList.remove('is-on'); }, 3600);
+  }
+  PM.aviso = aviso;
   function carregando(alvo) { alvo.textContent = ''; alvo.appendChild(el('p', 'pm-dim', 'carregando…')); }
   function semServidor(alvo, oque) {
     alvo.appendChild(el('p', 'pm-aviso', oque + ' fala com o servidor: entre com a conta do Mestre (a que o servidor ' +
@@ -174,7 +199,7 @@ var JOGO = (typeof window !== 'undefined')
     'html.celular body:has(.bt-top) .pm-abrir{display:none}',
     '.pm-capa{position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:12px;',
     'background:rgba(6,8,10,.62);pointer-events:auto;font:13px/1.45 var(--ui-sans,system-ui,sans-serif);color:#e8eef6}',
-    '.pm-caixa{width:min(940px,100%);height:min(88vh,760px);display:flex;flex-direction:column;border-radius:12px;',
+    '.pm-caixa{position:relative;width:min(940px,100%);height:min(88vh,760px);display:flex;flex-direction:column;border-radius:12px;',
     'background:#12161b;border:1px solid #3a4655;box-shadow:0 18px 50px rgba(0,0,0,.65);overflow:hidden}',
     '.pm-cab{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #2b3542}',
     '.pm-cab b{font:700 15px var(--ui-serif,Georgia,serif);color:#e8c25a}',
@@ -212,6 +237,15 @@ var JOGO = (typeof window !== 'undefined')
     '.pm-tabela th{color:#8b93a0;font-weight:600}',
     '.pm-tabela code{font-size:11px;color:#aab3c0;word-break:break-all}',
     '.mod-b.is-armado{outline:2px solid #ff9b8a}',
+    // 03/10: o aviso dentro do painel, o "Para:" da Caixa e das Moedas, e a Caixa da HUD dentro do corpo
+    '.pm-toast{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);max-width:90%;padding:8px 14px;',
+    'border-radius:9px;background:rgba(12,15,19,.96);color:#f0ead8;border:1px solid #3a4655;opacity:0;',
+    'transition:opacity .2s;pointer-events:none;font:13px system-ui,sans-serif;z-index:2}',
+    '.pm-toast.is-on{opacity:1}.pm-toast.is-bom{border-color:#2b6b46;color:#8fe0a0}',
+    '.pm-para{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin:0 0 8px;border-radius:9px;',
+    'background:rgba(232,194,90,.06);border:1px solid rgba(232,194,90,.28)}',
+    '.pm-para b{color:#ffe2a0}.pm-para.is-outro{background:rgba(120,170,255,.08);border-color:rgba(120,170,255,.35)}',
+    '.pm-corpo .ms-caixa{max-height:none}',
     '@media (max-width:640px){.pm-caixa{height:94vh}.pm-corpo{padding:10px}}'
   ].join('');
   function estilo() {
@@ -237,13 +271,6 @@ var JOGO = (typeof window !== 'undefined')
     cab.appendChild(el('b', null, 'Painel do Mestre'));
     var quem = el('span', 'pm-dim');
     cab.appendChild(quem);
-    // o painel de antes (a tecla M, hud.js): o grimório, a Caixa, os eventos do mundo — os dois se apontam
-    var velho = bt('⚔ Grimório, Caixa e eventos (M)', 'mod-b', function () {
-      PM.fechar();
-      try { if (JOGO.UI && JOGO.UI.openSheet) JOGO.UI.openSheet('gm'); } catch (e) {}
-    });
-    velho.style.marginLeft = '8px';
-    if (JOGO.UI && JOGO.UI.openSheet) cab.appendChild(velho);
     var x = bt('✕', 'pm-x', PM.fechar);
     x.title = 'Fechar (Esc)';
     cab.appendChild(x);
@@ -252,6 +279,10 @@ var JOGO = (typeof window !== 'undefined')
     cx.appendChild(abasEl);
     corpo = el('div', 'pm-corpo');
     cx.appendChild(corpo);
+    avisoEl = el('div', 'pm-toast');
+    avisoEl.setAttribute('role', 'status');
+    avisoEl.setAttribute('aria-live', 'polite');
+    cx.appendChild(avisoEl);
     capa.appendChild(cx);
     capa.addEventListener('click', function (ev) { if (ev.target === capa) PM.fechar(); });
     capa.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); PM.fechar(); } });
@@ -263,7 +294,9 @@ var JOGO = (typeof window !== 'undefined')
   PM.abrir = function (qual) {
     if (!PM.ehMestre()) return false;
     monta();
-    if (qual) aba = qual;
+    if (qual === 'itens' && JOGO.UI && JOGO.UI.gmCaixaAba) JOGO.UI.gmCaixaAba('itens');
+    if (qual) aba = APELIDOS[qual] || qual;
+    if (!ABAS[aba]) aba = 'caixa';
     var c = eu();
     capa._quem.textContent = PM.noServidor() ? (c.nome || '') + ' · #' + c.id : 'jogo local (sem servidor)';
     if (!capa.parentNode) document.body.appendChild(capa);
@@ -273,7 +306,7 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   PM.fechar = function () { if (capa && capa.parentNode) capa.parentNode.removeChild(capa); };
-  PM.alterna = function () { return PM.aberto() ? (PM.fechar(), false) : PM.abrir(); };
+  PM.alterna = function (qual) { return PM.aberto() ? (PM.fechar(), false) : PM.abrir(qual); };
   PM.aba = function () { return aba; };
 
   function desenha() {
@@ -315,7 +348,9 @@ var JOGO = (typeof window !== 'undefined')
     try { return JOGO.Progress.starCfg().max; } catch (e) { return 5; }
   }
   function maxForja() { return Math.floor(Number((D().upgrade || {}).maxLevel)) || 10; }
-  ABAS.itens = function (alvo) {
+  /* A busca de peças (a aba Itens da Caixa): nome, slot, raridade, elemento e nível de uso; estrelas, forja e
+   * quantidade de cada entrega. Desenhada pela própria Caixa da HUD (ctx.itensEm) ou, sem HUD, sozinha. */
+  function itensEm(alvo) {
     var raridades = {};
     var its = D().items || {};
     Object.keys(its).forEach(function (k) { if (its[k] && its[k].rarity) raridades[its[k].rarity] = 1; });
@@ -339,11 +374,12 @@ var JOGO = (typeof window !== 'undefined')
     l2.appendChild(campo('quantidade', entrada('number', filtro.qtd, function (v) { filtro.qtd = inteiro(v, 1, 20) || 1; },
       { min: '1', max: '20' })));
     l2.appendChild(el('span', 'pm-dim', PM.noServidor()
-      ? 'entra pelo servidor (o juiz põe no seu estado e o jogo adota na hora)'
+      ? 'entra pelo servidor (o juiz põe no estado da conta e o jogo dela adota na hora)'
       : 'jogo local: entra no save deste navegador'));
     alvo.appendChild(l2);
     var lista = el('div', 'pm-lista');
     alvo.appendChild(lista);
+    var rotulo = destino ? 'Enviar a ' + destino.nome : 'Pôr no meu inventário';
     function pinta() {
       lista.textContent = '';
       var achados = itensFiltrados();
@@ -361,55 +397,170 @@ var JOGO = (typeof window !== 'undefined')
         nm.appendChild(el('b', null, it.name || it.id));
         nm.appendChild(el('span', 'pm-dim', [it.slot, it.rarity, it.element || 'neutro', 'nv ' + (it.nivelUso || 0), it.id].join(' · ')));
         row.appendChild(nm);
-        row.appendChild(bt('Pôr no meu inventário', 'mod-b mod-b-ok', function (ev) { PM.poeItem(it.id, ev && ev.target); }));
+        row.appendChild(bt(rotulo, 'mod-b mod-b-ok', function (ev) { PM.poeItem(it.id, ev && ev.target); }));
         lista.appendChild(row);
       });
     }
     pinta();
+  }
+  PM.itensEm = itensEm;
+
+  /* PARA QUEM: o próprio Mestre ou um jogador (a busca de contas). Só no servidor: em casa, sem sessão, a
+   * Caixa é a do save deste navegador. */
+  function paraBar(alvo) {
+    var c = eu();
+    var bar = el('div', 'pm-para' + (destino ? ' is-outro' : ''));
+    bar.appendChild(el('span', 'pm-dim', 'Para:'));
+    bar.appendChild(el('b', null, destino ? destino.nome + ' · #' + destino.id : (c.nome ? c.nome + ' (você)' : 'você')));
+    alvo.appendChild(bar);
+    if (!PM.noServidor()) {
+      bar.appendChild(el('span', 'pm-dim', 'jogo local: entregar a um jogador pede a conta do Mestre no servidor'));
+      return;
+    }
+    if (destino) {
+      bar.appendChild(el('span', 'pm-dim', 'ele recebe "O Mestre te enviou …" e uma carta da Equipe'));
+      bar.appendChild(bt('Voltar para mim', 'mod-b', function () { destino = null; desenha(); }));
+      return;
+    }
+    var escolher = bt('Escolher um jogador…', 'mod-b', function () {
+      escolher.disabled = true;
+      var caixa = el('div', 'pm-cartao');
+      bar.parentNode.insertBefore(caixa, bar.nextSibling);
+      var q = escolheConta(caixa, function (ct) { PM.paraConta(ct); desenha(); }, 'Entregar a esta conta');
+      try { q.focus(); } catch (e) {}
+    });
+    bar.appendChild(escolher);
+  }
+  PM.destino = function () { return destino; };
+  /* 03/10 (revisão): a própria conta escolhida na busca (ou a ficha dela) é o "você" — senão a entrega ia como
+   * "para outro" e o jogo do Mestre não adotava a resposta (a peça só aparecia na op seguinte, sem aviso) */
+  PM.paraConta = function (c) {
+    destino = (c && c.id !== eu().id) ? { id: c.id, nome: c.nome } : null;
+    return destino;
   };
 
-  /* Pôr no inventário: no ar, SÓ pelo servidor; em casa (sem sessão), no save local (o dono ali). */
-  PM.poeItem = function (itemId, b) {
-    var it = (D().items || {})[itemId];
-    if (!it) return Promise.resolve(null);
-    var qtd = inteiro(filtro.qtd, 1, 20) || 1;
-    var rot = qtd + '× ' + (it.name || itemId) + (filtro.estrelas ? ' ★' + filtro.estrelas : '') + (filtro.nivel ? ' +' + filtro.nivel : '');
+  /* A ENTREGA (03/10): o pedido {tipo, …} no formato do POST /api/mestre/dar (servidor/moderacao.py,
+   * TIPOS_DAR). No ar, SÓ pelo servidor, na conta do "Para:"; em casa (sem sessão), no save local, pelas
+   * mesmas portas da Caixa (JOGO.GM). `rotulo` = o que o aviso diz se o servidor não mandar o texto dele.
+   * Resolve a resposta ({ok, …}) ou null. */
+  var LOCAL = {
+    item: function (p) {
+      var G = JOGO.GM, P = JOGO.Progress, q = p.qtd || 1;
+      if (!G || !G.cru || !G.ativo()) return false;
+      if (P && P.bagFree && !P.bagFree(q)) { aviso('O saco não tem vaga para ' + q + '.'); return null; }
+      for (var i = 0; i < q; i++) if (!G.cru.item(p.itemId, p.nivel || 0, p.estrelas || 0)) return false;
+      return true;
+    },
+    set: function (p) { return JOGO.GM.pegaSet(p.setId) > 0; },
+    pet: function (p) { return JOGO.GM.pegaPet(p.petId, !!p.topo); },
+    pedras: function (p) { return JOGO.GM.pegaPedras(p.stoneId, p.n); },
+    selos: function (p) { return JOGO.GM.pegaSelos(p.elemento, p.n); },
+    insignias: function (p) { return JOGO.GM.pegaInsignias(p.n); },
+    cartas: function (p) { return JOGO.GM.pegaCartas(p.classId, p.topo ? 'topo' : p.n); },
+    pergaminho: function (p) {
+      var n = JOGO.GM.pegaPergaminho(p.pergaminho, p.n);
+      if (!n) { aviso('Já está no teto do inventário.'); return null; }
+      return true;
+    },
+    'bonus-xp': function (p) { return JOGO.GM.pegaBonusXp(p.dias); }
+  };
+  PM.entrega = function (pedido, rotulo, b) {
+    rotulo = rotulo || 'a entrega';
     if (!PM.noServidor()) {
       var S = JOGO.Sessao;
       if (S && S.ativa && S.ativa()) {
         aviso('Esta conta não tem a marca de Mestre no servidor: nada entra por aqui.');
         return Promise.resolve(null);
       }
-      return Promise.resolve(poeLocal(itemId, qtd, rot));
+      var f = LOCAL[pedido.tipo], ok = false;
+      try { ok = (f && JOGO.GM) ? f(pedido) : false; } catch (e) { ok = false; }
+      if (ok === null) return Promise.resolve(null);       // a própria porta já avisou (o saco cheio, o teto)
+      if (ok) {
+        try { if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint(); } catch (e2) {}
+        aviso(rotulo + ' no seu inventário (jogo local).', 'good');
+        return Promise.resolve({ ok: true, local: true });
+      }
+      aviso('não deu — o modo Mestre está desligado nesta conta?');
+      return Promise.resolve(null);
     }
+    var para = destino;
+    var corpoP = { idem: M.idem() };
+    Object.keys(pedido).forEach(function (k) { corpoP[k] = pedido[k]; });
+    if (para) corpoP.conta = para.id;
+    var A = JOGO.Autoridade;
+    // a marca de agora: se o Mestre fizer outra coisa enquanto a entrega viaja, a resposta não apaga isso
+    var marca = (A && A.marca) ? A.marca() : null;
+    var antes = (!para && A && A.descarrega) ? Promise.resolve(A.descarrega()).then(null, function () {}) : Promise.resolve();
     if (b) b.disabled = true;
-    return api('/api/mestre/dar', { method: 'POST', body: {
-      tipo: 'item', itemId: itemId, estrelas: filtro.estrelas, nivel: filtro.nivel, qtd: qtd, idem: M.idem() } })
-      .then(function (r) {
-        if (b) b.disabled = false;
-        if (r && r.ok) {
+    return antes.then(function () {
+      return api('/api/mestre/dar', { method: 'POST', body: corpoP });
+    }).then(function (r) {
+      if (b) b.disabled = false;
+      if (r && r.ok) {
+        if (!para) {
           try {
-            var A = JOGO.Autoridade;
-            if (A && A.adotaResposta) A.adotaResposta(r);
+            if (A && A.adotaDeFora) A.adotaDeFora(r, marca);
+            else if (A && A.adotaResposta) A.adotaResposta(r);
           } catch (e) {}
-          aviso(rot + ' no seu inventário.', 'good');
-        } else aviso(M.erro(r, 'não entrou'));
-        return r;
-      });
+        }
+        aviso((r.texto || rotulo) + (para ? ' a caminho de ' + para.nome + '.' : ' no seu inventário.'), 'good');
+      } else aviso(M.erro(r, 'não entrou'));
+      return r;
+    });
   };
-  function poeLocal(itemId, qtd, rot) {
-    var P = JOGO.Progress;
-    if (!P || !P.state || !P.novaCopia) return null;
-    if (P.bagFree && !P.bagFree(qtd)) { aviso('O saco não tem vaga para ' + qtd + '.'); return null; }
-    for (var i = 0; i < qtd; i++) {
-      var e = P.novaCopia(itemId, 'caixa', filtro.nivel, filtro.estrelas);
-      if (e) P.state.inventory.push(e);
-    }
-    if (P.save) P.save();
-    try { if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint(); } catch (e2) {}
-    aviso(rot + ' no seu inventário (jogo local).', 'good');
-    return { ok: true, local: true };
+
+  /* A peça da busca: a quantidade, as estrelas e a forja escolhidas lá em cima. */
+  PM.poeItem = function (itemId, b) {
+    var it = (D().items || {})[itemId];
+    if (!it) return Promise.resolve(null);
+    var qtd = inteiro(filtro.qtd, 1, 20) || 1;
+    var rot = qtd + '× ' + (it.name || itemId) + (filtro.nivel ? ' +' + filtro.nivel : '') + (filtro.estrelas ? ' ★' + filtro.estrelas : '');
+    return PM.entrega({ tipo: 'item', itemId: itemId, estrelas: filtro.estrelas, nivel: filtro.nivel, qtd: qtd }, rot, b);
+  };
+
+  /* ------------------------------------------------------------ Caixa */
+  function ctxDoPainel(qual) {
+    return {
+      entrega: function (pedido, rotulo) { return PM.entrega(pedido, rotulo); },
+      destino: destino,
+      aviso: aviso,
+      confirma: confirmaJanela,
+      refaz: desenha,
+      aberta: function () { return PM.aberto() && aba === qual; },
+      itensEm: itensEm
+    };
   }
+  /* a pergunta antes de apagar (os eventos do mundo): uma janela por cima do painel (z 9600) */
+  function confirmaJanela(titulo, html, fn) {
+    var j = M.janela(titulo);
+    var p = el('p');
+    p.innerHTML = html;            // o texto vem da HUD, já escapado por ela (esc)
+    j.caixa.appendChild(p);
+    var acoes = el('div', 'mod-acoes');
+    acoes.appendChild(bt('Cancelar', 'mod-b', j.fecha));
+    acoes.appendChild(bt('Confirmar', 'mod-b mod-b-perigo', function () { j.fecha(); fn(); }));
+    j.caixa.appendChild(acoes);
+    return j;
+  }
+  PM.confirma = confirmaJanela;
+  ABAS.caixa = function (alvo) {
+    paraBar(alvo);
+    var U = JOGO.UI;
+    if (U && U.gmCaixaEm) { U.gmCaixaEm(alvo, ctxDoPainel('caixa')); return; }
+    // sem a HUD (uma página de prova, o site): só as peças
+    alvo.appendChild(el('p', 'pm-dim', 'Conjuntos, bichos, pedras, selos, cartas e pergaminhos aparecem com o jogo inteiro aberto.'));
+    itensEm(alvo);
+  };
+  ABAS.eventos = function (alvo) {
+    var U = JOGO.UI;
+    if (U && U.gmAgendaEm) U.gmAgendaEm(alvo, ctxDoPainel('eventos'));
+    else alvo.appendChild(el('p', 'pm-aviso', 'Os eventos do mundo aparecem com o jogo inteiro aberto.'));
+  };
+  ABAS.grimorio = function (alvo) {
+    var U = JOGO.UI;
+    if (U && U.gmGrimorioEm) U.gmGrimorioEm(alvo, ctxDoPainel('grimorio'));
+    else alvo.appendChild(el('p', 'pm-aviso', 'O grimório aparece com o jogo inteiro aberto.'));
+  };
 
   /* ------------------------------------------------------------ Moedas */
   function escolheConta(alvo, aoEscolher, rotulo) {
@@ -446,16 +597,12 @@ var JOGO = (typeof window !== 'undefined')
     alvo.appendChild(res);
     return q;
   }
+  // as moedas: vinténs e barras (os selos e as insígnias são da Caixa, "Selos e insígnias")
   ABAS.moedas = function (alvo) {
     if (!PM.noServidor()) { semServidor(alvo, 'Dar moedas'); return; }
     var c = eu();
-    var para = alvoMoedas || { id: c.id, nome: c.nome };
-    var ehEu = para.id === c.id;
-    var cab = el('div', 'pm-cartao');
-    cab.appendChild(el('h3', null, 'Para: ' + para.nome + (ehEu ? ' (você)' : ' · #' + para.id)));
-    if (!ehEu) cab.appendChild(bt('Voltar para mim', 'mod-b', function () { alvoMoedas = null; desenha(); }));
-    alvo.appendChild(cab);
-    escolheConta(alvo, function (ct) { alvoMoedas = { id: ct.id, nome: ct.nome }; desenha(); }, 'Dar para esta');
+    var para = destino || { id: c.id, nome: c.nome };
+    paraBar(alvo);
     function bloco(titulo, nota, campos, rotulo, fazer) {
       var b = el('div', 'pm-cartao');
       b.appendChild(el('h3', null, titulo));
@@ -490,20 +637,7 @@ var JOGO = (typeof window !== 'undefined')
                 r && r.ok ? 'good' : undefined);
         });
       });
-    var sel = seletor(SELOS, 'fogo');
-    var sn = entrada('number', '10', null, { min: '1', max: '999' });
-    bloco('Selos do Colecionador', 'Pelo servidor, no estado da conta (o juiz conta).', [campo('elemento', sel), campo('quantos', sn)],
-      'Dar selos', function (go) {
-        var n = inteiro(sn.value, 1, 999);
-        if (!n) { aviso('selos de 1 a 999'); return; }
-        go.disabled = true;
-        api('/api/mestre/dar', { method: 'POST', body: { conta: para.id, tipo: 'selos', elemento: sel.value, n: n, idem: M.idem() } })
-          .then(function (r) {
-            go.disabled = false;
-            if (r && r.ok && ehEu) { try { JOGO.Autoridade.adotaResposta(r); } catch (e) {} }
-            aviso(r && r.ok ? n + ' selos de ' + sel.value + ' para ' + para.nome + '.' : M.erro(r, 'não deu'), r && r.ok ? 'good' : undefined);
-          });
-      });
+    alvo.appendChild(el('p', 'pm-dim', 'Selos do Colecionador e insígnias: na Caixa, em "Selos e insígnias".'));
   };
 
   /* ------------------------------------------------------------ Jogadores */
@@ -568,7 +702,11 @@ var JOGO = (typeof window !== 'undefined')
         l.appendChild(go);
         pres.appendChild(l);
       }
-      pres.appendChild(bt('Vinténs, barras e selos…', 'mod-b', function () { alvoMoedas = { id: c.id, nome: c.nome }; aba = 'moedas'; desenha(); }));
+      // 03/10: a Caixa inteira (peças com estrelas, conjuntos, bichos, pedras, selos, cartas, pergaminhos) para ESTA conta
+      var lc = el('div', 'pm-linha');
+      lc.appendChild(bt('A Caixa para esta conta…', 'mod-b mod-b-ok', function () { PM.paraConta(c); aba = 'caixa'; desenha(); }));
+      lc.appendChild(bt('Vinténs e barras…', 'mod-b', function () { PM.paraConta(c); aba = 'moedas'; desenha(); }));
+      pres.appendChild(lc);
       caixa.appendChild(pres);
 
       // silenciar e banir (o Mestre não pune a si mesmo nem outro Mestre: o servidor também recusa)
@@ -815,6 +953,13 @@ var JOGO = (typeof window !== 'undefined')
         G.definePaPp(pa.value, pv.value);
         aviso('O Mestre decidiu: ' + G.paPp().pa + ' PA e ' + G.paPp().pp + ' PP.', 'good');
       }));
+      // 03/10: o "Aparelhar o Mestre" morava na ficha da tecla M — o painel único o guarda aqui, junto do PA/PP
+      if (G.aparelha) {
+        l.appendChild(bt('Aparelhar o Mestre', 'mod-b', function () {
+          if (G.aparelha()) aviso('Panóplia no saco e os quatro caminhos abertos.', 'good');
+          else aviso('não deu — o Progress não respondeu');
+        }));
+      }
       c.appendChild(l);
       c.appendChild(el('p', 'pm-dim', 'Mora neste navegador. No ar, uma batalha do Mestre com PA/PP fora do padrão (12/8) pode ' +
         'divergir no juiz do servidor (docs/SEGURANCA.md, limites conhecidos).'));
@@ -849,9 +994,21 @@ var JOGO = (typeof window !== 'undefined')
     if (ev.key === 'F9' && !ev.ctrlKey && !ev.altKey && !ev.metaKey) return true;
     return !!(ev.ctrlKey && ev.altKey && !ev.metaKey && (ev.key === 'm' || ev.key === 'M' || ev.code === 'KeyM'));
   };
+  PM.ehTeclaM = function (ev) {
+    if (!ev || ev.ctrlKey || ev.altKey || ev.metaKey || String(ev.key || '').toLowerCase() !== 'm') return false;
+    var t = ev.target;
+    return !(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable));
+  };
   window.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && PM.aberto() && !document.querySelector('.mod-capa')) {
       ev.stopPropagation();                 // o Esc fecha o painel, e não a ficha da HUD que está por baixo
+      PM.fechar();
+      return;
+    }
+    // 03/10: a tecla M abre o painel pela HUD (hud.js) — e o fecha aqui, porque a capa prende as teclas
+    if (PM.aberto() && !document.querySelector('.mod-capa') && PM.ehTeclaM(ev)) {
+      ev.preventDefault();
+      ev.stopPropagation();
       PM.fechar();
       return;
     }

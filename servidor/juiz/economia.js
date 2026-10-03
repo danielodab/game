@@ -53,6 +53,18 @@ function slot(a) {
   return s;
 }
 
+/* a entrada do dado (DATA.items, .sets, .pets…) só se for PRÓPRIA do objeto: um id como "constructor"
+ * não acha nada */
+function de(J, colecao, id) {
+  const c = (J.DATA && J.DATA[colecao]) || {};
+  return Object.prototype.hasOwnProperty.call(c, id) ? c[id] : null;
+}
+const PERGAMINHOS = { xp: 'Pergaminho da Sabedoria', elemento: 'Pergaminho da Reescrita' };
+function nomeElemento(J, e) {
+  const d = (J.DATA && J.DATA.elementInfo && J.DATA.elementInfo[e]) || null;
+  return (d && d.name) || { fogo: 'Fogo', agua: 'Água', terra: 'Terra', ar: 'Ar', neutro: 'Neutro' }[e] || e;
+}
+
 /* o JSON que volta: sem funções nem ciclos (o resultado de uma função do jogo) */
 function limpo(v) {
   if (v === undefined) return null;
@@ -330,13 +342,18 @@ const INTERNAS = {
    * da régua é argumento torto; estoque curto é 'falta', que a API traduz para 'pedras'. */
   /* O PAINEL DO MESTRE NO JOGO (02/10, servidor/moderacao.py, POST /api/mestre/dar): o "pôr no
    * inventário" roda AQUI, no estado do servidor, como a entrega da loja — nunca no save local. A API
-   * confere a marca do Mestre (e que peça só entra na conta dele); aqui vale a regra do jogo: a peça tem
-   * de existir no dado DESTA conta (o Set do Mestre só existe na conta do Mestre), as estrelas e o nível
-   * vão até o teto do dado, e o saco tem de ter vaga para todas — senão nada entra. A série nasce com a
-   * origem 'caixa', a mesma da Caixa do Mestre. */
+   * confere a marca do Mestre, a conta de destino (nem lápide nem banida) e as réguas de quantidade; aqui
+   * vale a regra do jogo: a coisa tem de existir no dado DESTA conta (o Set do Mestre só existe na conta
+   * do Mestre), as estrelas e o nível vão até o teto do dado, e o saco tem de ter vaga para todas as
+   * peças — senão nada entra. A série nasce com a origem 'caixa', a mesma da Caixa do Mestre.
+   * 03/10 (o painel único): qualquer jogador recebe, e de tudo o que a Caixa dá. A regra de cada entrega
+   * é a do jogo (js/core/gm.js, GM.cru — a mesma que a Caixa do próprio Mestre usa), sem a marca: a conta
+   * de destino não é Mestre. Cada op devolve `texto` — o que entrou, com os nomes do dado — e a API o
+   * usa no aviso ao jogador ("O Mestre te enviou …"). */
   mestreDarItem: (J, a) => {
     const itemId = txt(a, 'itemId');
-    if (!Object.prototype.hasOwnProperty.call(J.DATA.items || {}, itemId)) throw recusa('item desconhecido: ' + itemId, 'item');
+    const def = de(J, 'items', itemId);
+    if (!def) throw recusa('item desconhecido: ' + itemId, 'item');
     const P = J.Progress;
     const maxEstrelas = (P.starCfg && P.starCfg().max) || 0;
     const maxNivel = Math.floor(Number(((J.DATA.upgrade || {}).maxLevel))) || 10;
@@ -344,21 +361,74 @@ const INTERNAS = {
     const nivel = int(a, 'nivel', 0, maxNivel, true) || 0;
     const qtd = int(a, 'qtd', 1, 20, true) || 1;
     if (!P.bagFree(qtd)) throw recusa('o saco não tem vaga para ' + qtd + (qtd === 1 ? ' peça' : ' peças'), 'saco');
-    const iids = [];
+    const antes = P.state.inventory.length;
     for (let i = 0; i < qtd; i++) {
-      const e = P.novaCopia(itemId, 'caixa', nivel, estrelas);
-      if (!e) throw recusa('item desconhecido: ' + itemId, 'item');
-      P.state.inventory.push(e);
-      iids.push(e.iid);
+      if (!J.GM.cru.item(itemId, nivel, estrelas)) throw recusa('item desconhecido: ' + itemId, 'item');
     }
-    P.save();
-    return { ok: true, itemId, qtd, estrelas, nivel, iids };
+    const iids = P.state.inventory.slice(antes).map((e) => e.iid);
+    const texto = (qtd > 1 ? qtd + '× ' : '') + (def.name || itemId) + (nivel ? ' +' + nivel : '') + (estrelas ? ' ★' + estrelas : '');
+    return { ok: true, itemId, qtd, estrelas, nivel, iids, texto };
   },
   mestreDarSelos: (J, a) => {
     const elemento = txt(a, 'elemento');
     const n = int(a, 'n', 1, 999);
-    if (!J.Progress.addSelo(elemento, n)) throw falha('elemento: selo desconhecido');
-    return { ok: true, elemento, n, total: (J.Progress.selosVer() || {})[elemento] || 0 };
+    if (!J.GM.cru.selos(elemento, n)) throw falha('elemento: selo desconhecido');
+    return { ok: true, elemento, n, total: (J.Progress.selosVer() || {})[elemento] || 0,
+             texto: n + (n === 1 ? ' Selo de ' : ' Selos de ') + nomeElemento(J, elemento) };
+  },
+  mestreDarSet: (J, a) => {
+    const setId = txt(a, 'setId');
+    const pecas = J.GM.cru.pecasDoSet(setId);
+    if (!pecas.length) throw recusa('conjunto desconhecido: ' + setId, 'set');
+    if (!J.Progress.bagFree(pecas.length)) throw recusa('o saco não tem vaga para as ' + pecas.length + ' peças do conjunto', 'saco');
+    const n = J.GM.cru.set(setId);
+    return { ok: true, setId, n, texto: 'o conjunto ' + (de(J, 'sets', setId).name || setId) + ' (' + n + ' peças)' };
+  },
+  mestreDarPet: (J, a) => {
+    const petId = txt(a, 'petId');
+    const def = de(J, 'pets', petId);
+    if (!def) throw recusa('bicho desconhecido: ' + petId, 'pet');
+    const topo = bool(a, 'topo');
+    J.GM.cru.pet(petId, topo);
+    return { ok: true, petId, topo, texto: 'o bicho ' + (def.name || petId) + (topo ? ' (★3, nível 10)' : '') };
+  },
+  mestreDarPedras: (J, a) => {
+    const stoneId = txt(a, 'stoneId');
+    const def = de(J, 'stones', stoneId);
+    if (!def) throw recusa('pedra desconhecida: ' + stoneId, 'pedra');
+    const n = int(a, 'n', 1, 1000);
+    if (!J.GM.cru.pedras(stoneId, n)) throw recusa('a pedra não entrou', 'pedra');
+    return { ok: true, stoneId, n, texto: n + '× ' + (def.name || stoneId) };
+  },
+  mestreDarInsignias: (J, a) => {
+    const n = int(a, 'n', 1, 100);
+    if (!J.GM.cru.insignias(n)) throw recusa('as insígnias não entraram', 'insignia');
+    return { ok: true, n, texto: n + (n === 1 ? ' Insígnia de Fundação' : ' Insígnias de Fundação') };
+  },
+  mestreDarCartas: (J, a) => {
+    const classId = txt(a, 'classId');
+    const def = de(J, 'classes', classId);
+    if (!def || classId === 'gm') throw recusa('classe desconhecida: ' + classId, 'classe');
+    const topo = bool(a, 'topo');
+    const n = topo ? 'topo' : int(a, 'n', 1, 500);
+    if (!J.GM.cru.cartas(classId, n)) throw recusa('as cartas não entraram', 'classe');
+    return { ok: true, classId, n: topo ? null : n, topo,
+             texto: topo ? 'as cartas de ' + (def.name || classId) + ' até o ★5 (classe liberada)'
+                         : n + (n === 1 ? ' carta de ' : ' cartas de ') + (def.name || classId) };
+  },
+  mestreDarPergaminho: (J, a) => {
+    const tipo = txt(a, 'tipo');
+    if (!Object.prototype.hasOwnProperty.call(PERGAMINHOS, tipo)) throw falha('tipo: pergaminho desconhecido');
+    const n = int(a, 'n', 1, 99);
+    const entrou = J.GM.cru.pergaminho(tipo, n);
+    if (!entrou) throw recusa('o ' + PERGAMINHOS[tipo] + ' já está no teto de ' + J.GM.cru.tetoPergaminho(), 'teto');
+    return { ok: true, tipo, n: entrou, texto: entrou + '× ' + PERGAMINHOS[tipo] };
+  },
+  mestreDarBonusXp: (J, a) => {
+    const dias = int(a, 'dias', 1, 30);
+    if (!J.GM.cru.bonusXp(dias)) throw recusa('o bônus de XP não entrou', 'bonus');
+    return { ok: true, dias, ate: J.Progress.bonusXpAte ? J.Progress.bonusXpAte() : null,
+             texto: dias + (dias === 1 ? ' dia' : ' dias') + ' de bônus de XP' };
   },
   mercadoTiraPedras: (J, a) => {
     const { stoneId, qtd } = lotePedra(J, a);

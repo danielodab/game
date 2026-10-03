@@ -36,6 +36,12 @@ var JOGO = (typeof window !== 'undefined')
   var hashAntesDaFila = null;  // o hash do estado quando a 1ª op da fila foi aplicada
   var profundidade = 0;        // op dentro de op (vestirTraje chama equipar): só a de fora vai
   var adotando = false;
+  var opsFeitas = 0;           // quantas ops esta página já pôs na fila (03/10: A.sincroniza vê se nasceu alguma no meio)
+  /* 03/10 (revisão): a fila que SOBROU de uma adoção com `manterFila` foi feita no estado de antes da adoção — a
+   * leva dela volta sempre com o estado (o hashDepois daqui não bate com o do servidor), e a adoção comum apagaria
+   * a fila nascida enquanto ELA viajava: a op do jogador sumia sem subir. Esta marca diz que a próxima leva é dessa
+   * fila, e a resposta dela também guarda o que nasceu no meio. */
+  var filaSobreAdocao = false;
   var fechamentos = [];        // fechar pendentes (sem rede): tentam de novo
   var ultimo = { versao: null, hash: null, erro: null };
   /* `parado` (13/09, um aparelho só): a conta entrou em outro aparelho e o jogo
@@ -94,7 +100,9 @@ var JOGO = (typeof window !== 'undefined')
   /* O estado do servidor vira o desta página, sem recarregar: o Progress relê
    * (saneia e refaz os feitiços), e o DB fica com a economia do servidor e o
    * cosmético daqui (nome, avatar, placar…). A HUD repinta. */
-  A.adota = function (progress, db) {
+  /* `manterFila` (03/10): o servidor subiu a op por cima de uma entrega do Mestre (resposta com `rebase`) — as
+   * ops que o jogador fez ENQUANTO ela viajava continuam valendo e sobem na próxima leva, sobre o hash novo. */
+  A.adota = function (progress, db, manterFila) {
     var p = P(), d = DB(), e = Ec(), C = JOGO.Contas;
     if (!p || !d || !e) return false;
     adotando = true;
@@ -105,8 +113,14 @@ var JOGO = (typeof window !== 'undefined')
         p.load();
       }
       if (db && typeof db === 'object' && d.importar) d.importar(e.junta(db, d.exportar()));
-      fila = [];                                       // o que estava na fila já não vale sobre o estado novo
-      hashAntesDaFila = null;
+      if (manterFila === true && fila.length) {
+        hashAntesDaFila = ultimo.hash;
+        filaSobreAdocao = true;
+      } else {
+        fila = [];                                     // o que estava na fila já não vale sobre o estado novo
+        hashAntesDaFila = null;
+        filaSobreAdocao = false;
+      }
     } finally {
       adotando = false;
     }
@@ -513,6 +527,7 @@ var JOGO = (typeof window !== 'undefined')
   /* A op já rodou aqui (a função do jogo); entra na fila para o servidor. */
   A.op = function (nome, args) {
     if (!A.ligada() || adotando || profundidade > 0) return;
+    opsFeitas++;
     if (!fila.length) hashAntesDaFila = ultimo.hash;
     fila.push({ nome: nome, args: args || {} });
     if (fila.length >= A.OPS_POR_PEDIDO) { descarregaFila(); return; }
@@ -539,6 +554,8 @@ var JOGO = (typeof window !== 'undefined')
     if (descarregando) return descarregando.then(function () { return fila.length ? descarregaFila() : null; });
     if (!fila.length || !A.ligada()) return Promise.resolve(null);
     var lote = fila.splice(0, A.OPS_POR_PEDIDO);
+    var sobreAdocao = filaSobreAdocao;
+    filaSobreAdocao = false;
     var corpo = { hashAntes: hashAntesDaFila, ops: lote, hashDepois: A.hashLocal() };
     hashAntesDaFila = fila.length ? corpo.hashDepois : null;
     subindo = true;
@@ -550,11 +567,18 @@ var JOGO = (typeof window !== 'undefined')
         // sem rede: o lote volta para a frente da fila e tenta depois
         fila = lote.concat(fila);
         hashAntesDaFila = corpo.hashAntes;
+        filaSobreAdocao = sobreAdocao;
         if (!timerFila) timerFila = setTimeout(function () { timerFila = null; descarregaFila(); }, A.RETENTA_MS);
         return r;
       }
       anotaResposta(r);
-      if (r && (r.status === 409 || r.progress || r.db)) {
+      if (r && r.ok && (r.rebase || (sobreAdocao && (r.progress || r.db)))) {
+        // 03/10: o Mestre tinha posto algo nesta conta e o servidor subiu a leva por cima (salas.py): o estado
+        // que volta tem as duas coisas, e o que o jogador fez enquanto isto viajava continua na fila — e a
+        // leva seguinte, a dessa fila (filaSobreAdocao), também guarda a fila que nasceu enquanto ela viajava
+        A.adota(r.progress, r.db, true);
+        if (fila.length && !timerFila) timerFila = setTimeout(function () { timerFila = null; descarregaFila(); }, A.FILA_MS);
+      } else if (r && (r.status === 409 || r.progress || r.db)) {
         // o servidor tinha outro estado (outra aba, ou a tela divergiu): ele manda
         A.adota(r.progress, r.db);
       } else if (r && !r.ok) {
@@ -583,6 +607,45 @@ var JOGO = (typeof window !== 'undefined')
       if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor recusou', motivo: (r && r.motivo) || null };
       return { ok: true, resultado: (r.resultados || [])[0] };
     });
+  };
+
+  /* O ESTADO QUE MUDOU POR FORA (03/10, o painel único do Mestre): uma entrega do Mestre nesta conta. O
+   * jogo adota o estado novo SEM apagar o que o jogador fez: primeiro a fila sobe (o servidor a põe por cima
+   * da entrega, `rebase`), depois o estado inteiro é lido — e só é adotado se nenhuma op nova nasceu
+   * enquanto a leitura viajava; se nasceu, tenta de novo (a leva dela traz o estado de volta). */
+  function pedeSave() {
+    if (typeof A._fetch === 'function') return Promise.resolve(A._fetch('/api/save', { method: 'GET' }));
+    var s = S();
+    if (!s || !s.api) return Promise.resolve(null);
+    return s.api('/api/save');
+  }
+  A.sincroniza = function (tentativas) {
+    if (!A.ligada()) return Promise.resolve(null);
+    tentativas = (typeof tentativas === 'number') ? tentativas : 3;
+    return descarregaFila().then(function () {
+      var marca = opsFeitas;
+      return pedeSave().then(function (r) {
+        if (parado || !r || !r.ok || !(r.progress || r.db)) return r || null;
+        if (marca !== opsFeitas || fila.length || descarregando) {
+          return tentativas > 0 ? A.sincroniza(tentativas - 1) : descarregaFila();
+        }
+        anotaResposta(r);
+        A.adota(r.progress, r.db);
+        if (typeof r.hash !== 'string') ultimo.hash = A.hashLocal();
+        return r;
+      });
+    });
+  };
+  /* A resposta de uma entrega ao PRÓPRIO Mestre (POST /api/mestre/dar): `marca` = A.marca() de quando o
+   * pedido saiu. Sem op nova no meio, adota como sempre; com op nova, a resposta já é velha — sincroniza. */
+  A.marca = function () { return opsFeitas; };
+  A.adotaDeFora = function (r, marca) {
+    if (!r || typeof r !== 'object') return false;
+    if (A.ligada() && (marca !== opsFeitas || fila.length || descarregando)) {
+      A.sincroniza();
+      return false;
+    }
+    return A.adotaResposta(r);
   };
 
   /* O estado inteiro do servidor (GET /api/save), adotado. */

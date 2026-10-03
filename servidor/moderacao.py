@@ -55,12 +55,25 @@ DEPOIS de dar certo, numa transação própria (se ela falhar, a ação fica e o
 log conta).
 
 O "PÔR NO INVENTÁRIO" (POST /api/mestre/dar): pelo JUIZ, no estado que o
-servidor guarda (ops internas `mestreDarItem`/`mestreDarSelos`, servidor/juiz/
-economia.js), como a entrega da loja — nunca no save local. A resposta leva o
-estado novo quando o alvo é o próprio Mestre: o jogo adota sem recarregar
-(JOGO.Autoridade.adotaResposta). Sem juiz, 503: a autoridade e o juiz não podem
-divergir. Peça só entra no inventário do PRÓPRIO Mestre; selos, em qualquer
-conta (as moedas do painel).
+servidor guarda (ops internas `mestreDar*`, servidor/juiz/economia.js), como a
+entrega da loja — nunca no save local. A resposta leva o estado novo quando o
+alvo é o próprio Mestre: o jogo adota sem recarregar (JOGO.Autoridade). Sem
+juiz, 503: a autoridade e o juiz não podem divergir.
+  03/10 (o dono: "pode por itens no inventario do jogador tambem, alem do
+  proprio dele"): o painel ficou ÚNICO e entrega de tudo o que a Caixa dá —
+  peça (estrelas, forja, quantidade), conjunto, bicho, pedras, selos,
+  insígnias, cartas, pergaminhos e dias de bônus de XP — em QUALQUER conta,
+  com as réguas de TIPOS_DAR (e o juiz conferindo o teto do dado e a vaga do
+  saco). Nunca numa lápide (conta excluída) nem numa banida. O jogador fica
+  sabendo por `moderacao_entregas` (o /api/eu conta as não vistas; o jogo
+  pergunta GET /api/entregas, mostra "O Mestre te enviou …" e adota o estado)
+  e por uma carta da Equipe, que fica no correio. E ele não perde o que fez:
+  cada entrega guarda o hash de antes e o de depois, e a op do jogador que
+  chega com o hash de ANTES de uma corrente de entregas sobe por cima delas
+  (salas.py, economia_op, `_rebase_entregas`) em vez de cair no 409.
+  03/10 (revisão): cartas e bicho mudam o grupo que o juiz refaz no fim da
+  luta — com uma luta aberta na conta de destino eles esperam (409 em-luta,
+  TIPOS_DA_LUTA); e a entrega que não muda nada é 422 nada-mudou, sem aviso.
 """
 import json
 import logging
@@ -151,6 +164,22 @@ CREATE TABLE IF NOT EXISTS moderacao_cartas(
   lida_em    INTEGER
 );
 CREATE INDEX IF NOT EXISTS moderacao_cartas_conta ON moderacao_cartas(conta_id, id);
+-- 03/10: o que o Mestre pôs no estado de uma conta (POST /api/mestre/dar). `avisar` = 1 quando a conta não é
+-- a do próprio Mestre (o jogador vê "O Mestre te enviou …" e marca `visto_em`); os dois hashes são a corrente
+-- que deixa a op do jogador, que saiu antes da entrega, subir por cima dela (salas.py, economia_op)
+CREATE TABLE IF NOT EXISTS moderacao_entregas(
+  id          INTEGER PRIMARY KEY,
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  mestre_id   INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  tipo        TEXT NOT NULL,
+  texto       TEXT NOT NULL,
+  hash_antes  TEXT,
+  hash_depois TEXT,
+  avisar      INTEGER NOT NULL DEFAULT 1,
+  criado_em   INTEGER NOT NULL,
+  visto_em    INTEGER
+);
+CREATE INDEX IF NOT EXISTS moderacao_entregas_conta ON moderacao_entregas(conta_id, id);
 """
 
 # ---- as réguas ------------------------------------------------------------------------
@@ -179,10 +208,39 @@ CARTAS_LISTA = 30
 DAR_POR_HORA = 120                     # "pôr no inventário" por Mestre por hora (contado no banco)
 DAR_ITEM_QTD = 20                      # cópias de uma vez (o saco tem fundo: o juiz confere a vaga)
 DAR_SELOS_MAX = 999
+# 03/10: o que o painel único entrega, a op do juiz de cada um e as réguas (as mesmas do juiz, que também
+# confere o teto das estrelas e da forja no dado e a vaga do saco). Coerentes com o jogo: a Caixa dava +10
+# e +100 de pedra, selo e insígnia; o pergaminho pára no teto do inventário (99); o bônus de XP, até 30 dias
+TIPOS_DAR = {'item': 'mestreDarItem', 'set': 'mestreDarSet', 'pet': 'mestreDarPet', 'pedras': 'mestreDarPedras',
+             'selos': 'mestreDarSelos', 'insignias': 'mestreDarInsignias', 'cartas': 'mestreDarCartas',
+             'pergaminho': 'mestreDarPergaminho', 'bonus-xp': 'mestreDarBonusXp'}
+DAR_PEDRAS_MAX = 1000
+DAR_INSIGNIAS_MAX = 100
+DAR_CARTAS_MAX = 500
+DAR_PERGAMINHOS_MAX = 99
+DAR_BONUS_DIAS_MAX = 30
+PERGAMINHOS = ('xp', 'elemento')
+ENTREGA_TEXTO_MAX = 160                # o "O Mestre te enviou …" (o texto vem do juiz, com os nomes do dado)
+ENTREGAS_LISTA = 20                    # quantas o jogo busca de uma vez
+CORRENTE_MAX = 30                      # quantas entregas seguidas a op do jogador atravessa (_rebase_entregas)
+FRASE_LAPIDE = 'essa conta foi excluída pelo titular: o id é só a lápide dela'
+# 03/10 (revisão): o que muda o GRUPO que o juiz refaz. A sala solo, a em grupo, o duelo, a Arena e a guerra
+# fecham refazendo a luta com o Progress.battleParty do estado de AGORA (as estrelas da classe e o nível e as
+# estrelas do bicho entram nos atributos). Cartas ou bicho entregues no meio da luta faziam o replay sair
+# diferente do que o jogador jogou: a sala vencida caía como 'divergiu' — a trilha de fraude — e não pagava
+# (medido: cartas no topo com a sala aberta → 422 "o fim da sala divergiu"). Esses dois tipos esperam a luta
+# acabar; peça, pedra, selo, insígnia, pergaminho e bônus de XP não tocam no grupo e entram a qualquer hora.
+# (O Eco Primordial refaz com a FOTO da abertura, supremo_estados: não segura nada.)
+TIPOS_DA_LUTA = ('cartas', 'pet')
+DAR_LUTA_JANELA = 2 * 3600             # luta aberta há mais que isso foi largada (a mesma régua da luta largada)
+DAR_DUELO_JANELA = 3600                # o duelo sem resultado há mais de 1 h: os dois largaram (privacidade.py)
+FRASE_EM_LUTA = ('essa conta está numa luta agora: cartas e bicho mudam o grupo que o servidor refaz no fim '
+                 'dela, e a vitória do jogador cairia — mande quando a luta acabar (peças, pedras e o resto entram já)')
+FRASE_NADA_MUDOU = 'nada mudou: essa conta já tem isso (a entrega não foi feita nem avisada)'
 DADOS_MAX = 2000                       # o JSON de uma linha de auditoria
 RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 RE_ID_TEXTO = re.compile(r'^[a-z0-9_-]{1,64}$')
-ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar')
+ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar', 'neutro')   # 03/10: o neutro também (a Caixa sempre deu)
 TENTATIVAS = 3                          # quantas vezes refazer quando o estado muda no meio
 FRASE_SEM_JUIZ = ('o juiz do servidor está fora: sem ele nada entra no inventário (a autoridade e o juiz não '
                   'podem divergir). Tente de novo em instantes')
@@ -501,7 +559,7 @@ class ModeracaoMixin:
         if alvo is None:
             raise Recusa(404, 'conta não encontrada')
         if self._e_lapide(alvo_id):
-            raise Recusa(409, 'essa conta foi excluída pelo titular: o id é só a lápide dela')
+            raise Recusa(409, FRASE_LAPIDE)
         if alvo['gm']:
             raise Recusa(409, 'essa conta tem a marca de Mestre: tire a marca no Terminal (admin tirar-mestre) antes')
         return alvo
@@ -933,41 +991,77 @@ class ModeracaoMixin:
              'dados': _json(r['dados'], r['dados'])} for r in linhas]}
 
     # -- POST /api/mestre/dar {conta?, tipo, idem, ...} -------------------------------------------------
+    @staticmethod
+    def _args_dar(tipo, corpo):
+        """As réguas de cada entrega (TIPOS_DAR): os argumentos da op do juiz, ou Recusa(400)."""
+        def inteiro(campo, minimo, maximo, padrao=None):
+            v = corpo.get(campo, padrao)
+            if isinstance(v, bool) or not isinstance(v, int) or not minimo <= v <= maximo:
+                raise Recusa(400, '%s precisa ser um inteiro de %d a %d' % (campo, minimo, maximo))
+            return v
+
+        def ident(campo):
+            v = corpo.get(campo)
+            if not isinstance(v, str) or not RE_ID_TEXTO.match(v):
+                raise Recusa(400, '%s inválido' % campo)
+            return v
+
+        def sim_nao(campo):
+            v = corpo.get(campo, False)
+            if not isinstance(v, bool):
+                raise Recusa(400, '%s precisa ser true ou false' % campo)
+            return v
+
+        if tipo == 'item':
+            return {'itemId': ident('itemId'), 'estrelas': inteiro('estrelas', 0, 99, 0),
+                    'nivel': inteiro('nivel', 0, 99, 0), 'qtd': inteiro('qtd', 1, DAR_ITEM_QTD, 1)}
+        if tipo == 'set':
+            return {'setId': ident('setId')}
+        if tipo == 'pet':
+            return {'petId': ident('petId'), 'topo': sim_nao('topo')}
+        if tipo == 'pedras':
+            return {'stoneId': ident('stoneId'), 'n': inteiro('n', 1, DAR_PEDRAS_MAX)}
+        if tipo == 'selos':
+            if corpo.get('elemento') not in ELEMENTOS_SELO:
+                raise Recusa(400, 'elemento precisa ser um de: %s' % ', '.join(ELEMENTOS_SELO))
+            return {'elemento': corpo['elemento'], 'n': inteiro('n', 1, DAR_SELOS_MAX)}
+        if tipo == 'insignias':
+            return {'n': inteiro('n', 1, DAR_INSIGNIAS_MAX)}
+        if tipo == 'cartas':
+            if sim_nao('topo'):
+                return {'classId': ident('classId'), 'topo': True}
+            return {'classId': ident('classId'), 'n': inteiro('n', 1, DAR_CARTAS_MAX)}
+        if tipo == 'pergaminho':
+            if corpo.get('pergaminho') not in PERGAMINHOS:
+                raise Recusa(400, 'pergaminho precisa ser um de: %s' % ', '.join(PERGAMINHOS))
+            return {'tipo': corpo['pergaminho'], 'n': inteiro('n', 1, DAR_PERGAMINHOS_MAX)}
+        if tipo == 'bonus-xp':
+            return {'dias': inteiro('dias', 1, DAR_BONUS_DIAS_MAX)}
+        raise Recusa(400, 'tipo precisa ser um de: %s' % ', '.join(TIPOS_DAR))
+
+    @staticmethod
+    def _texto_entrega(resultado):
+        """O que entrou, para o aviso ao jogador: o texto do juiz (com os nomes do dado), limpo e curto."""
+        t = resultado.get('texto') if isinstance(resultado, dict) else None
+        t = limpa_texto(t, ENTREGA_TEXTO_MAX) if isinstance(t, str) else None
+        return t or 'um presente'
+
     def mestre_dar(self, conta, corpo):
-        """O "pôr no inventário" do painel do Mestre no jogo, PELO JUIZ no estado do
-        servidor (ver o topo). tipo 'item' {itemId, estrelas, nivel, qtd} só na conta
-        do próprio Mestre; tipo 'selos' {elemento, n} em qualquer conta."""
+        """O "pôr no inventário" do painel único do Mestre, PELO JUIZ no estado do servidor
+        (ver o topo): `tipo` em TIPOS_DAR, com os argumentos de _args_dar, na conta `conta`
+        (sem ela, a do próprio Mestre). Nunca numa lápide nem numa conta banida."""
         alvo_id = corpo.get('conta', conta['id'])
         if not _id_valido(alvo_id):
             raise Recusa(400, 'conta precisa ser o número da conta')
         tipo, idem = corpo.get('tipo'), corpo.get('idem')
         if not isinstance(idem, str) or not RE_IDEM.match(idem):
             raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
-        if tipo == 'item':
-            if alvo_id != conta['id']:
-                raise Recusa(403, 'peça só entra no inventário do próprio Mestre; para um jogador, use o presente '
-                                  'do catálogo (a ficha da conta)')
-            item_id = corpo.get('itemId')
-            if not isinstance(item_id, str) or not RE_ID_TEXTO.match(item_id):
-                raise Recusa(400, 'itemId inválido')
-            args = {'itemId': item_id}
-            for campo, maximo in (('estrelas', 99), ('nivel', 99), ('qtd', DAR_ITEM_QTD)):
-                v = corpo.get(campo, 1 if campo == 'qtd' else 0)
-                if isinstance(v, bool) or not isinstance(v, int) or not (1 if campo == 'qtd' else 0) <= v <= maximo:
-                    raise Recusa(400, '%s precisa ser um inteiro de %d a %d' % (campo, 1 if campo == 'qtd' else 0, maximo))
-                args[campo] = v
-            op = 'mestreDarItem'
-        elif tipo == 'selos':
-            elemento, n = corpo.get('elemento'), corpo.get('n')
-            if elemento not in ELEMENTOS_SELO:
-                raise Recusa(400, 'elemento precisa ser um de: %s' % ', '.join(ELEMENTOS_SELO))
-            if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= DAR_SELOS_MAX:
-                raise Recusa(400, 'n precisa ser um inteiro de 1 a %d' % DAR_SELOS_MAX)
-            args, op = {'elemento': elemento, 'n': n}, 'mestreDarSelos'
-        else:
-            raise Recusa(400, 'tipo precisa ser item ou selos')
+        if tipo not in TIPOS_DAR:
+            raise Recusa(400, 'tipo precisa ser um de: %s' % ', '.join(TIPOS_DAR))
+        args, op = self._args_dar(tipo, corpo), TIPOS_DAR[tipo]
         if not self._autoridade_ligada():
             raise Recusa(503, FRASE_SEM_JUIZ)
+        proprio = alvo_id == conta['id']
         with self.tranca:
             ja = self.con.execute("SELECT dados, alvo_id FROM moderacao_auditoria WHERE mestre_id = ? AND idem = ?",
                                   (conta['id'], idem)).fetchone()
@@ -976,7 +1070,7 @@ class ModeracaoMixin:
             if ja['alvo_id'] != alvo_id or dados.get('op') != op or dados.get('args') != args:
                 raise Recusa(409, 'idem já usado em outra entrega')
             resp = {'ok': True, 'repetido': True, 'resultado': dados.get('resultado')}
-            if alvo_id == conta['id']:
+            if proprio:
                 resp.update(self._estado_publico(alvo_id))
             return 200, resp
         self._mestre_freio(conta, 'dar', DAR_POR_HORA, 'entregas demais nesta hora; espere um pouco')
@@ -986,22 +1080,48 @@ class ModeracaoMixin:
                 alvo = self.con.execute("SELECT * FROM contas WHERE id = ?", (alvo_id,)).fetchone()
                 if alvo is None:
                     raise Recusa(404, 'conta não encontrada')
+                # a lápide antes do banido: ela também tem banido = 1, e a frase certa é "excluída"
+                if self._e_lapide(alvo_id):
+                    raise Recusa(409, FRASE_LAPIDE)
                 if alvo['banido']:
                     raise Recusa(409, 'essa conta está banida: nada entra nela')
+                if tipo in TIPOS_DA_LUTA and self._dar_em_luta(alvo_id, t):
+                    raise Recusa(409, FRASE_EM_LUTA, motivo='em-luta')
                 estado = self._estado_ler(alvo_id)
             if estado is None:
                 raise Recusa(409, FRASE_SEM_ESTADO)
             alvo = dict(alvo)
             saida = self._juiz_op(alvo, estado, [{'nome': op, 'args': args}], interno=True)
             resultado = (saida.get('resultados') or [None])[0]
+            texto = self._texto_entrega(resultado)
+            # o hash do estado de antes, medido pelo juiz: o servidor só o guarda depois da primeira op ou sala,
+            # e o jogo, sem ele, mede o mesmo hash no estado que adotou (autoridade.js, puxaEstado)
+            hash_antes = saida.get('hashAntes') if isinstance(saida.get('hashAntes'), str) else estado['hash']
+            # 03/10 (revisão): a entrega que não mexeu em nada (o bicho que a conta já tem, sem o topo; o que
+            # já está no topo) virava aviso e carta "O Mestre te enviou …" sem nada ter entrado
+            if isinstance(saida.get('hash'), str) and saida['hash'] == hash_antes:
+                raise Recusa(422, FRASE_NADA_MUDOU, motivo='nada-mudou')
             try:
                 with self._escrita():
                     if self.con.execute("SELECT 1 FROM moderacao_auditoria WHERE mestre_id = ? AND idem = ?",
                                         (conta['id'], idem)).fetchone() is not None:
                         raise Recusa(409, 'esta entrega acabou de ser feita por outro pedido com o mesmo idem')
+                    # a luta pode ter aberto enquanto o juiz trabalhava (a abertura também escreve aqui dentro)
+                    if tipo in TIPOS_DA_LUTA and self._dar_em_luta(alvo_id, t):
+                        raise Recusa(409, FRASE_EM_LUTA, motivo='em-luta')
                     nova, db = self._estado_grava(alvo, estado, saida, t)
                     self._evento(alvo_id, 'mestre-dar', {'por': conta['id'], 'op': op, 'args': args,
                                                          'novos': [n['iid'] for n in saida['iids']['novos']]})
+                    self.con.execute(
+                        "INSERT INTO moderacao_entregas(conta_id, mestre_id, tipo, texto, hash_antes, hash_depois, avisar, "
+                        "criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (alvo_id, conta['id'], tipo, texto, hash_antes, saida['hash'], 0 if proprio else 1, t))
+                    if not proprio:
+                        # a carta fica no correio da Equipe: o registro que o jogador relê depois do aviso
+                        self.con.execute("INSERT INTO moderacao_cartas(conta_id, assunto, texto, criado_em) "
+                                         "VALUES (?, ?, ?, ?)",
+                                         (alvo_id, 'O Mestre te enviou um presente',
+                                          'O Mestre te enviou %s. Já está na sua conta: confira o inventário.' % texto, t))
                     self._audita(conta, 'dar-' + tipo, alvo_id, {'op': op, 'args': args, 'resultado': resultado,
                                                                   'versao': nova}, idem=idem, t=t)
                 break
@@ -1010,8 +1130,86 @@ class ModeracaoMixin:
         else:
             raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(alvo_id))
         log.info("moderação: #%d pôs %s no estado de #%d (versão %d)", conta['id'], op, alvo_id, nova)
-        resp = {'ok': True, 'resultado': resultado, 'versao': nova}
-        if alvo_id == conta['id']:
-            # o próprio Mestre: o jogo adota o estado novo sem recarregar (Autoridade.adotaResposta)
+        resp = {'ok': True, 'resultado': resultado, 'versao': nova, 'texto': texto}
+        if proprio:
+            # o próprio Mestre: o jogo adota o estado novo sem recarregar (Autoridade.adotaDeFora)
             resp.update(hash=saida['hash'], progress=saida['progress'], db=db)
         return 201, resp
+
+    def _dar_em_luta(self, cid, t):
+        """Dentro da tranca: a conta tem uma luta aberta que o servidor ainda vai refazer com o estado dela
+        (ver TIPOS_DA_LUTA)? Sala solo ou em grupo, duelo (desafio, Campo, Arena), partida da Arena casada ou
+        pronta, guerra. Tabela que não existe (um banco de antes): não segura."""
+        ms = t * 1000
+        consultas = (
+            ("SELECT 1 FROM salas WHERE conta_id = ? AND estado = 'aberta' AND aberta_em > ?", (cid, t - DAR_LUTA_JANELA)),
+            ("SELECT 1 FROM salas_grupo WHERE (lider_id = ? OR membro_id = ?) AND estado = 'aberta' AND aberta_em > ?",
+             (cid, cid, t - DAR_LUTA_JANELA)),
+            ("SELECT 1 FROM arena_partidas WHERE (a_id = ? OR b_id = ?) AND estado IN ('casada', 'pronta') "
+             "AND criada_ms > ?", (cid, cid, ms - DAR_LUTA_JANELA * 1000)),
+            ("SELECT 1 FROM guerra_jogadores j JOIN guerra_partidas p ON p.gid = j.gid WHERE j.conta_id = ? "
+             "AND p.estado IN ('casada', 'pronta') AND p.criada_ms > ?", (cid, ms - DAR_LUTA_JANELA * 1000)),
+            ("SELECT 1 FROM duelo_vida v WHERE v.conta_id = ? AND v.criado_em > ? "
+             "AND NOT EXISTS (SELECT 1 FROM duelos d WHERE d.did = v.did)", (cid, t - DAR_DUELO_JANELA)),
+        )
+        for sql, args in consultas:
+            try:
+                if self.con.execute(sql, args).fetchone() is not None:
+                    return True
+            except sqlite3.OperationalError:
+                continue
+        return False
+
+    # -- o jogador: o que o Mestre lhe enviou (03/10) -----------------------------------------------------
+    def _entregas_pendentes(self, conta_id):
+        """Quantas entregas do Mestre a conta ainda não viu (o /api/eu leva o número: o jogo olha a cada
+        30 s, e só pergunta a lista quando há alguma). Sem a tabela (um banco de antes), 0."""
+        try:
+            with self.tranca:
+                return self.con.execute("SELECT COUNT(*) FROM moderacao_entregas WHERE conta_id = ? AND avisar = 1 "
+                                        "AND visto_em IS NULL", (conta_id,)).fetchone()[0]
+        except sqlite3.Error:
+            return 0
+
+    def entregas_ler(self, conta, corpo):
+        with self.tranca:
+            linhas = self.con.execute("SELECT id, tipo, texto, criado_em FROM moderacao_entregas WHERE conta_id = ? "
+                                      "AND avisar = 1 AND visto_em IS NULL ORDER BY id LIMIT ?",
+                                      (conta['id'], ENTREGAS_LISTA)).fetchall()
+        return 200, {'ok': True, 'entregas': [{'id': r['id'], 'tipo': r['tipo'], 'texto': r['texto'],
+                                               'criadoEm': r['criado_em']} for r in linhas]}
+
+    def entregas_vistas(self, conta, corpo):
+        ids = corpo.get('ids')
+        if not isinstance(ids, list) or not 1 <= len(ids) <= 200 or not all(_id_valido(i) for i in ids):
+            raise Recusa(400, 'ids precisa ser uma lista de 1 a 200 números de entrega')
+        t = agora()
+        with self._escrita():
+            n = 0
+            for i in set(ids):
+                n += self.con.execute("UPDATE moderacao_entregas SET visto_em = ? WHERE id = ? AND conta_id = ? "
+                                      "AND visto_em IS NULL", (t, i, conta['id'])).rowcount
+        return 200, {'ok': True, 'marcadas': n}
+
+    def _rebase_entregas(self, conta_id, hash_cliente, hash_servidor):
+        """Dentro da tranca (salas.py, economia_op): a op do jogador chegou com um hash velho. Se a
+        diferença entre o estado que ele viu e o de agora são SÓ entregas do Mestre (a corrente de
+        hash_antes → hash_depois, da mais nova para trás, até o hash dele), a op dele sobe por cima delas:
+        a entrega só ACRESCENTA (a peça entra no fim do saco, a pedra no estoque), e os índices que a op
+        dele cita continuam apontando para as mesmas coisas. Qualquer outro buraco na corrente: False (o
+        409 de sempre, e o jogo adota o estado do servidor)."""
+        if not isinstance(hash_cliente, str) or not isinstance(hash_servidor, str):
+            return False
+        try:
+            linhas = self.con.execute("SELECT hash_antes, hash_depois FROM moderacao_entregas WHERE conta_id = ? "
+                                      "ORDER BY id DESC LIMIT ?", (conta_id, CORRENTE_MAX)).fetchall()
+        except sqlite3.Error:
+            return False
+        atual = hash_servidor
+        for r in linhas:
+            if r['hash_depois'] != atual or not r['hash_antes']:
+                return False
+            atual = r['hash_antes']
+            if atual == hash_cliente:
+                return True
+        return False

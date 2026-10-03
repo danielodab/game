@@ -7,7 +7,8 @@
 </head>
 <body>
 <!-- PÁGINA DE PROVA (foto): a Caixa do Mestre (03/09) — a ficha exclusiva
-     do GM com todos os itens, conjuntos e bichos do jogo para pegar.
+     do GM com todos os itens, conjuntos e bichos do jogo para pegar. Desde
+     03/10 é a aba Caixa do painel único do Mestre (js/ui/painel_mestre.js).
      ?aba=sets ou ?aba=bichos muda a aba; desde 11/09 também ?aba=pedras,
      ?aba=moedas (selos e insígnias), ?aba=cartas e ?aba=pergaminhos. Só existe
      com a chave. -->
@@ -32,7 +33,7 @@ f.onload = function () {
         setTimeout(function () {
           var rot = { sets: 'Conjuntos', bichos: 'Bichos', itens: 'Itens', pedras: 'Pedras', moedas: 'Selos e insígnias',
                       cartas: 'Cartas', pergaminhos: 'Pergaminhos' }[Q.aba] || 'Itens';
-          [].slice.call(d.querySelectorAll('.sheet-panel button')).filter(function (b) { return b.textContent.trim() === rot; })[0].click();
+          [].slice.call(d.querySelectorAll('.pm-capa button')).filter(function (b) { return b.textContent.trim() === rot; })[0].click();
         }, 800);
       }
       setTimeout(function () { window.__pronto = true; }, 2500);

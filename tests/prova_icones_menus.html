@@ -63,7 +63,9 @@
     'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
     'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
     'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
-    'js/ui/icones_ui.js','js/ui/hud.js'];
+    'js/ui/icones_ui.js','js/ui/hud.js',
+    // 03/10: a Caixa do Mestre é uma aba do painel único do Mestre
+    'js/ui/moderacao.js','js/ui/painel_mestre.js'];
   for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
 </script>
 <script>
@@ -210,7 +212,13 @@
               pets: [{ petId: Object.keys(D.pets)[4] }], travada: true, confirmada: false } };
   }
   var GM_ANTES;
-  function ligaGM() { GM_ANTES = JOGO.GM; JOGO.GM = { ativo: function () { return true; } }; }
+  // o Mestre de mentira: o modo ligado e a porta das pedras da Caixa (o painel, sem sessão, entrega no save local)
+  var GM_PEDRAS = [];
+  function ligaGM() {
+    GM_ANTES = JOGO.GM;
+    JOGO.GM = { ativo: function () { return true; },
+                pegaPedras: function (sid, n) { GM_PEDRAS.push(sid + ':' + n); return true; } };
+  }
   function desligaGM() { JOGO.GM = GM_ANTES; }
   var SRV_ANTES = {};
   function ligaSrv() {
@@ -271,8 +279,8 @@
 
   // ------------------------------------------------------------ a PROVA
   // o contrato de TODO botão redondo que está na ficha aberta
-  function contratoDosBotoes(onde) {
-    var bs = qa('.btn-ico', ficha());
+  function contratoDosBotoes(onde, raiz) {
+    var bs = qa('.btn-ico', raiz || ficha());
     var ruins = [];
     bs.forEach(function (b) {
       var r = b.getBoundingClientRect();
@@ -290,8 +298,8 @@
           bs.length > 0 && ruins.length === 0, ruins.slice(0, 5).join(' | '));
   }
   // nada vaza da ficha (a coluna de 390 px da prova)
-  function cabe(onde) {
-    var f = ficha();
+  function cabe(onde, raiz) {
+    var f = raiz || ficha();
     var fora = [];
     if (f) {
       var lim = f.getBoundingClientRect();
@@ -309,7 +317,7 @@
         }
       });
     }
-    check(onde + ': nada vaza da coluna de 390 px', !!f && fora.length === 0, fora.slice(0, 4).join(' | '));
+    check(onde + ': nada vaza ' + (raiz ? 'do painel' : 'da coluna de 390 px'), !!f && fora.length === 0, fora.slice(0, 4).join(' | '));
   }
   function celulasNomes(raiz) {
     return qa('.ig-cell:not(.is-vazia) .ig-nm', raiz || ficha()).map(function (n) { return n.textContent; });
@@ -624,23 +632,58 @@
       toca('.elem-tabs [data-el="todos"]');
     });
 
-    // ---- 12) CAIXA DO GM: 7 abas redondas com o nome exato
+    // ---- 12) CAIXA DO GM: 7 abas redondas com o nome exato — 03/10: a aba Caixa do painel único do Mestre
     p(function () {
       ligaGM();
       abre('gmcaixa');
-      var fila = q1('.gm-abas', ficha());
+      var pm = q1('.pm-capa .pm-corpo');
+      check('caixa do GM: o nome de antes (openSheet "gmcaixa") abre a aba Caixa do painel único, sem ficha da HUD',
+            !!pm && JOGO.PainelMestre.aba() === 'caixa' && !ficha());
+      var fila = q1('.gm-abas', pm);
       var bs = fila ? qa('button', fila) : [];
       check('caixa do GM: 7 abas redondas com o nome exato de antes',
             mesmo(textos(bs), ['Itens', 'Conjuntos', 'Bichos', 'Pedras', 'Selos e insígnias', 'Cartas', 'Pergaminhos']) &&
             bs.every(function (b) { return b.classList.contains('btn-ico'); }), textos(bs).join(','));
       check('caixa do GM: a fileira tem classe própria (gm-abas) e nenhum estilo na linha', !!fila && !fila.getAttribute('style'));
       // o jeito da prova_gm_caixa: o botão pelo texto exato
-      var ped = qa('.sheet-panel button', ficha().parentNode).filter(function (b) { return b.textContent.trim() === 'Pedras'; })[0];
+      var ped = qa('.pm-capa button').filter(function (b) { return b.textContent.trim() === 'Pedras'; })[0];
       if (ped) ped.click();
-      check('caixa do GM: a aba achada pelo texto exato abre', !!q1('.gm-abas [data-aba="pedras"].is-on', ficha()) &&
-            (q1('.gm-abas .ico-fila-nome', ficha()) || {}).textContent === 'Pedras');
-      contratoDosBotoes('caixa do GM');
-      cabe('caixa do GM');
+      check('caixa do GM: a aba achada pelo texto exato abre', !!q1('.gm-abas [data-aba="pedras"].is-on', pm) &&
+            (q1('.gm-abas .ico-fila-nome', pm) || {}).textContent === 'Pedras');
+      contratoDosBotoes('caixa do GM', pm);
+      cabe('caixa do GM', pm);
+      // sem sessão (em casa, com a chave): a Caixa entrega no save local, pela porta do JOGO.GM
+      var linhaPedra = qa('.ms-linha', pm)[0];
+      var mais10 = linhaPedra && qa('button', linhaPedra).filter(function (b) { return b.textContent === '+10'; })[0];
+      if (mais10) mais10.click();
+      check('caixa do GM, jogo local: o +10 da pedra vai pela porta da Caixa (GM.pegaPedras), com a pedra da linha',
+            GM_PEDRAS.length === 1 && GM_PEDRAS[0] === Object.keys(D.stones)[0] + ':10', GM_PEDRAS.join(','));
+      check('caixa do GM: o "Para:" diz que é o próprio Mestre (e que jogador pede o servidor)',
+            !!q1('.pm-para', pm) && /você/.test(q1('.pm-para', pm).textContent) && /servidor/.test(q1('.pm-para', pm).textContent));
+      JOGO.PainelMestre.fechar();
+      desligaGM();
+    });
+
+    // ---- 12b) A TECLA M com a HUD e o painel juntos (03/10, revisão): a HUD ouve no document e o painel na
+    // window — a mesma batida passa pelos dois, e o M que abria pela HUD não pode ser fechado pelo painel logo atrás
+    p(function () {
+      ligaGM();
+      UI.closeSheet();
+      JOGO.PainelMestre.fechar();
+      function m(alvo) {
+        (alvo || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true }));
+      }
+      m();
+      check('tecla M (HUD + painel): abre o painel único', JOGO.PainelMestre.aberto());
+      m();
+      check('tecla M de novo: fecha', !JOGO.PainelMestre.aberto());
+      JOGO.PainelMestre.abrir('itens');          // a busca de peças da Caixa: slot, raridade, elemento, estrelas, forja
+      var sel = q1('.pm-capa .pm-corpo select');
+      if (sel) sel.focus();
+      m(sel);
+      check('o "m" numa lista de escolha do painel (a busca por letra do select) não fecha o painel',
+            !!sel && JOGO.PainelMestre.aberto());
+      JOGO.PainelMestre.fechar();
       desligaGM();
     });
 

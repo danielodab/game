@@ -18,7 +18,8 @@ var JOGO = (typeof window !== 'undefined')
 //   JOGO.Denuncia    .anota(id, nome, texto): as falas que ESTE jogador viu
 //                    (a HUD chama a cada linha do chat) · .abrir(alvo) · .botao
 //                    · .silenciado(sil): o aviso de quem fala silenciado
-//   JOGO.CorreioEquipe  as cartas da Equipe (o retorno da denúncia)
+//   JOGO.CorreioEquipe  as cartas da Equipe (o retorno da denúncia; 03/10, o presente do Mestre)
+//   JOGO.EntregasMestre o aviso "O Mestre te enviou …" e a adoção do estado (03/10)
 //
 // Arquivo NOVO de propósito: a HUD (hud.js) só ganha ganchos de uma linha. Toda
 // camada daqui é filha do <body> (fora do #ui-root, que tem pointer-events:
@@ -589,9 +590,52 @@ var JOGO = (typeof window !== 'undefined')
     pollT = setInterval(function () { if (!document.hidden) C.confere(); }, C.INTERVALO_MS);
   };
 
-  /* No boot: com sessão, o correio olha uma vez (e depois a cada 5 min). Sem sessão, nada. */
+  // ======================================================= O QUE O MESTRE TE ENVIOU (03/10)
+  /* O painel único do Mestre põe peça, conjunto, bicho, pedras… no inventário de QUALQUER jogador, pelo
+   * servidor (servidor/moderacao.py, /api/mestre/dar). O jogador fica sabendo assim:
+   *   - online: o /api/eu que o jogo já pergunta a cada 30 s com a aba à vista (sessao.js) traz quantas
+   *     entregas ele não viu, e dispara 'soterra:entregas';
+   *   - offline: a mesma pergunta, uma vez, logo depois do boot.
+   * Aqui a lista vem de GET /api/entregas, o aviso diz "O Mestre te enviou …", o estado é adotado SEM
+   * apagar o que o jogador fez (JOGO.Autoridade.sincroniza: a fila dele sobe antes, por cima da entrega) e
+   * só então as entregas são marcadas como vistas. Na batalha espera: o aviso e a adoção ficam para fora
+   * dela (o fechar da sala já devolve o estado com a entrega dentro). A carta da Equipe fica no correio. */
+  var E = JOGO.EntregasMestre = {};
+  var pedindoE = false;
+  function emBatalha() {
+    try { return !!(JOGO.Game && JOGO.Game.screen === 'battle'); } catch (e) { return false; }
+  }
+  E.texto = function (lista) {
+    var t = (lista || []).map(function (x) { return x.texto; }).filter(Boolean);
+    if (!t.length) return '';
+    if (t.length > 3) t = t.slice(0, 3).concat(['e mais ' + (lista.length - 3)]);
+    return 'O Mestre te enviou ' + (t.length === 1 ? t[0] : t.slice(0, -1).join(', ') + ' e ' + t[t.length - 1]) + '.';
+  };
+  E.confere = function () {
+    var S = JOGO.Sessao;
+    if (pedindoE || !S || !S.ativa || !S.ativa() || (S.derrubadaJa && S.derrubadaJa())) return Promise.resolve(null);
+    if (emBatalha()) return Promise.resolve(null);      // o próximo /api/eu (30 s) pergunta de novo
+    pedindoE = true;
+    return M.api('/api/entregas').then(function (r) {
+      if (!r || !r.ok || !r.entregas || !r.entregas.length) { pedindoE = false; return r; }
+      var A = JOGO.Autoridade;
+      var sinc = (A && A.sincroniza) ? A.sincroniza() : Promise.resolve(null);
+      return Promise.resolve(sinc).then(null, function () { return null; }).then(function () {
+        M.aviso(E.texto(r.entregas), 'good');
+        try { if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint(); } catch (e2) {}
+        try { if (JOGO.CorreioEquipe) JOGO.CorreioEquipe.confere(); } catch (e3) {}
+        return M.api('/api/entregas/vistas', { method: 'POST', body: { ids: r.entregas.map(function (x) { return x.id; }) } });
+      }).then(function () { pedindoE = false; return r; }, function () { pedindoE = false; return r; });
+    }, function () { pedindoE = false; return null; });
+  };
+  try { window.addEventListener('soterra:entregas', function () { E.confere(); }); } catch (e) {}
+
+  /* No boot: com sessão, o correio olha uma vez (e depois a cada 5 min), e as entregas do Mestre que
+   * chegaram com o jogo fechado são avisadas. Sem sessão, nada. */
   function liga() {
-    try { if (JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa()) C.liga(); } catch (e) {}
+    try {
+      if (JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa()) { C.liga(); E.confere(); }
+    } catch (e) {}
   }
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', function () { setTimeout(liga, 4000); });
   else setTimeout(liga, 4000);
