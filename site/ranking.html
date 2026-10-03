@@ -30,7 +30,10 @@
      10/09 (pedido do dono): a EQUIPE (contas.gm = 1) fica fora das tabelas e
      aparece à parte, na caixa "Equipe do SOTERRA": só o nome de cada membro e
      o retrato do Cavaleiro Negro (img/equipe-cavaleiro-busto.webp). Sem equipe
-     na resposta (ou com o servidor fora), a caixa fica escondida. -->
+     na resposta (ou com o servidor fora), a caixa fica escondida.
+     02/10: O ECO PRIMORDIAL (servidor/supremo.py, GET /api/supremo/ranking): o placar
+     semanal de DANO no chefe supremo — 100 linhas, a semana de agora com a contagem
+     regressiva e as semanas já fechadas para olhar; o endereço #eco abre aqui. -->
 </head>
 <body>
 
@@ -96,6 +99,18 @@
           <tbody id="rk-classe"></tbody></table>
         <div class="estado" id="es-classe">carregando…</div>
       </div>
+    </div>
+
+    <div class="eco-rank" id="eco">
+      <h3>O Eco Primordial <small>o dano no chefe supremo da semana — conferido pelo servidor, a melhor tentativa de cada conta</small></h3>
+      <p class="sub" id="eco-semana">carregando…</p>
+      <div class="abas" id="eco-semanas" role="tablist"></div>
+      <div class="tabela-caixa">
+        <table><thead><tr><th>#</th><th>Nome</th><th class="num">Pontos</th><th class="num">Dano</th><th>Derrubou</th></tr></thead>
+          <tbody id="rk-eco"></tbody></table>
+        <div class="estado" id="es-eco">carregando…</div>
+      </div>
+      <ul class="eco-faixas" id="eco-faixas"></ul>
     </div>
   </div>
 </section>
@@ -239,10 +254,74 @@
     });
   }
 
+  /* ---- O ECO PRIMORDIAL (02/10) ----
+   * A semana de agora (com a contagem regressiva do relógio do servidor) ou uma
+   * já fechada, escolhida nas abas. O site só mostra: a posição, o placar e os
+   * prêmios são do servidor (servidor/supremo.py). */
+  var ecoSemana = null, ecoResp = null;
+  function ecoFaixas(fx) {
+    document.getElementById('eco-faixas').innerHTML = (fx || []).map(function (f) {
+      var partes = [];
+      if (f.vintens) partes.push(N(f.vintens) + ' vinténs');
+      if (f.selos) partes.push(N(f.selos) + ' selos de chefe');
+      if (f.titulo) partes.push('o título “' + E(f.titulo) + '”');
+      return '<li><b>' + E(f.nome) + '</b>: ' + partes.join(' · ') + '</li>';
+    }).join('') + (fx && fx.length ? '<li class="apoio">Nada disso se compra: os prêmios saem no fechamento da semana, pela fila de entregas da conta.</li>' : '');
+  }
+  function ecoDesenha(r) {
+    var corpo = document.getElementById('rk-eco');
+    var cab = document.getElementById('eco-semana');
+    var ini = new Date(r.semana.inicio * 1000), fim = new Date(r.semana.fim * 1000);
+    var dia = function (d) { return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); };
+    cab.textContent = 'Semana de ' + dia(ini) + ' a ' + dia(fim) + ' · ' +
+      (r.semana.id === r.atual ? SITE.falta(r.semana.fim + 1, 'fecha em') + ' (domingo, 23:59 de Brasília)'
+                               : (r.fechada ? 'fechada — os prêmios já saíram' : 'fechando'));
+    var abas = [r.atual].concat((r.semanasFechadas || []).filter(function (w) { return w !== r.atual; }));
+    document.getElementById('eco-semanas').innerHTML = abas.slice(0, 6).map(function (w) {
+      return '<button type="button" role="tab" data-semana="' + w + '" class="' + (w === r.semana.id ? 'ligada' : '') + '">' +
+        (w === r.atual ? 'esta semana' : 'semana ' + w) + '</button>';
+    }).join('');
+    corpo.innerHTML = '';
+    var lista = r.ranking || [];
+    if (!lista.length) { estado('eco', 'ninguém pontuou nesta semana — o primeiro lugar está livre'); }
+    else {
+      document.getElementById('es-eco').style.display = 'none';
+      corpo.innerHTML = lista.map(function (l) {
+        return '<tr class="top' + l.posicao + '"><td class="pos">' + l.posicao + '</td><td class="nome">' + E(l.nome) +
+          '</td><td class="num">' + N(l.pontos) + '</td><td class="num">' + N(l.dano) + '</td><td>' + (l.derrubou ? '★' : '') + '</td></tr>';
+      }).join('');
+    }
+    ecoFaixas(r.faixas);
+  }
+  function ecoCarrega(semana) {
+    estado('eco', 'carregando…');
+    SITE.api('/api/supremo/ranking' + (semana != null ? '?semana=' + encodeURIComponent(semana) : ''), { semToken: true })
+      .then(function (r) {
+        if (!r || !r.ok) {
+          document.getElementById('eco-semana').textContent = '';
+          estado('eco', r && r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco'
+                                            : ((r && r.erro) || 'o placar do Eco chega com a próxima versão do servidor'), 'fora');
+          return;
+        }
+        ecoResp = r;
+        ecoSemana = r.semana.id;
+        ecoDesenha(r);
+      });
+  }
+  document.getElementById('eco-semanas').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('button[data-semana]') : null;
+    if (b) ecoCarrega(Number(b.getAttribute('data-semana')));
+  });
+
   montaAbas();
   escolhe(abaDoHash(), false);
-  document.getElementById('bt-atualizar').addEventListener('click', carrega);
+  document.getElementById('bt-atualizar').addEventListener('click', function () { carrega(); ecoCarrega(ecoSemana); });
   carrega();
+  ecoCarrega(null);
+  if (location.hash === '#eco') {
+    var alvoEco = document.getElementById('eco');
+    if (alvoEco && alvoEco.scrollIntoView) alvoEco.scrollIntoView();
+  }
 })();
 </script>
 </body>

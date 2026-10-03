@@ -823,3 +823,11 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
   /* no celular a linha quebra: o estado e o botão descem inteiros, sem aperto */
   .ms-lado .lista-pedidos .direita, .ms-ficha .lista-pedidos .direita, .ms-ultimos .lista-pedidos .direita { max-width: none; }
 }
+
+/* O ECO PRIMORDIAL (02/10): o placar semanal de dano no ranking.html (#eco) */
+.eco-rank { margin-top: 40px; }
+.eco-rank h3 { margin-bottom: 6px; }
+.eco-rank h3 small { color: var(--apagado, #8b93a0); font-weight: 400; }
+.eco-rank .abas { margin: 8px 0 0; }
+.eco-faixas { margin: 12px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.eco-faixas .apoio { list-style: none; margin-left: -18px; margin-top: 6px; opacity: .75; font-size: 13px; }
