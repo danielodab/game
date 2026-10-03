@@ -354,6 +354,49 @@
           ultimo('/api/correio/lida').op.body.todas === true && !q('.mod-carta-botao'));
     q('.mod-capa').click();
 
+    // ============================================================ o que o Mestre te enviou (03/10)
+    // o jogador online: o /api/eu (a olhada de 30 s da sessao.js) conta as entregas não vistas; o jogo pede a
+    // lista, ADOTA o estado pela Autoridade.sincroniza (que sobe a fila dele antes) e só então avisa e marca
+    var ordem = [];
+    JOGO.Autoridade.sincroniza = function () { ordem.push('sincroniza'); return Promise.resolve({ ok: true }); };
+    var avisos = [], avisoOrig = M.aviso;
+    M.aviso = function (t, tipo) { ordem.push('aviso'); avisos.push([t, tipo]); };
+    respostas['/api/entregas'] = function () { ordem.push('lista'); return { ok: true, entregas: [
+      { id: 4, tipo: 'item', texto: '2× Ferrão de Vespa +1 ★2', criadoEm: 1790990000 },
+      { id: 5, tipo: 'pedras', texto: '100× Brasa Coagulada', criadoEm: 1790990001 }] }; };
+    respostas['/api/entregas/vistas'] = function () { ordem.push('vistas'); return { ok: true, marcadas: 2 }; };
+    var sFetchOrig = S._fetch;
+    S._fetch = function (url) {
+      return Promise.resolve({ status: 200, json: function () {
+        return Promise.resolve(/\/api\/eu$/.test(url) ? { ok: true, conta: { id: 3, nome: 'Ana', gm: false }, entregas: 2 }
+                                                    : { ok: false, erro: 'rota de mentira' }); } });
+    };
+    await S.confereAparelho();
+    await espera(60);
+    check('o /api/eu com entregas não vistas dispara o aviso: lista → adota o estado → avisa → marca como vistas',
+          ordem.join(',') === 'lista,sincroniza,aviso,vistas', ordem.join(','));
+    check('o aviso diz "O Mestre te enviou …" com as duas coisas, em verde',
+          avisos.length === 1 && avisos[0][0] === 'O Mestre te enviou 2× Ferrão de Vespa +1 ★2 e 100× Brasa Coagulada.' &&
+          avisos[0][1] === 'good', JSON.stringify(avisos));
+    check('e marca só as que mostrou', JSON.stringify(ultimo('/api/entregas/vistas').op.body.ids) === '[4,5]');
+    // na batalha espera: nem pede a lista (o fechar da sala já devolve o estado com a entrega)
+    ordem = [];
+    JOGO.Game = { screen: 'battle' };
+    window.dispatchEvent(new CustomEvent('soterra:entregas', { detail: { n: 1 } }));
+    await espera(30);
+    check('na batalha o aviso espera (nem a lista é pedida)', ordem.length === 0, ordem.join(','));
+    JOGO.Game = { screen: 'hub' };
+    respostas['/api/entregas'] = { ok: true, entregas: [] };
+    window.dispatchEvent(new CustomEvent('soterra:entregas', { detail: { n: 1 } }));
+    await espera(30);
+    check('fora dela, lista vazia: nada a avisar nem a adotar', ordem.length === 0 && avisos.length === 1, ordem.join(','));
+    check('o texto de mais de três entregas resume ("e mais N")',
+          JOGO.EntregasMestre.texto([{ texto: 'a' }, { texto: 'b' }, { texto: 'c' }, { texto: 'd' }, { texto: 'e' }]) ===
+          'O Mestre te enviou a, b, c e e mais 2.');
+    M.aviso = avisoOrig;
+    S._fetch = sFetchOrig;
+    delete JOGO.Game;
+
     // ============================================================ a tela do banido (por último: ela prende as teclas)
     JOGO.Banimento.semNavegar = true;
     S._fetch = function () {

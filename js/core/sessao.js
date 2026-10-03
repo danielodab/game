@@ -399,7 +399,15 @@
   S.confereAparelho = function () {
     if (derrubadaJa || olhando || !S.ativa()) return Promise.resolve(null);
     olhando = true;
-    return S.api('/api/eu').then(function (r) { olhando = false; return r; });
+    return S.api('/api/eu').then(function (r) {
+      olhando = false;
+      // 03/10: o servidor conta as entregas do Mestre que esta conta ainda não viu (moderacao.py); quem avisa e
+      // adota o estado é o js/ui/moderacao.js (JOGO.EntregasMestre), que ouve este evento
+      if (r && r.ok && r.entregas > 0) {
+        try { window.dispatchEvent(new CustomEvent('soterra:entregas', { detail: { n: r.entregas } })); } catch (e) {}
+      }
+      return r;
+    });
   };
   S.vigiaOutroAparelho = function () {
     if (vigiaLigada || derrubadaJa || typeof document === 'undefined' || typeof setInterval !== 'function' || !S.ativa()) return false;
