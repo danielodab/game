@@ -1140,9 +1140,14 @@ JOGO.DATA = JOGO.DATA || {};
 
   // --- INVOCADOR + MINOTAURO — O Muro Vivo -------------------------------
   // INVOCAR + BARRAR: a pedra tem alguem dentro. Barra E ataca.
+  // 03/10: Sentinela, Vigia e Guarnição eram de casa ÚNICA, e a casa única é
+  // a do ídolo recém-cravado: o dano "de quem estava do lado" caía nele (a
+  // Sentinela matava o próprio ídolo no nível 5). Agora a área é o círculo de
+  // 1 em volta da cravada; o ídolo nasce no centro e a regra do feitiço misto
+  // (engine.js, feiticoMisto) poupa o lado de quem lança.
   F['invocador+minotauro'] = [
     { tier: 0, formName: 'Sentinela', paCost: 3, cooldown: 0, castsPerTurn: 1,
-      range: rng(1, 4), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
+      range: rng(1, 4), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
       mechanic: [sm('fus-wall-watcher'), d('@A', 13, 18)],
       description: 'Crava o ídolo onde o caminho precisa de dono, e a cravada abre o chão de quem estava do lado.',
@@ -1154,7 +1159,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A pedra sobe rachando o chão e deixa o laço armado ao pé: quem der a volta pisa no que ficou escondido.',
       fxShape: 'shieldFx' },
     { tier: 10, formName: 'Vigia', paCost: 4, cooldown: 3, castsPerTurn: 1,
-      range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
+      range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
       mechanic: [sm('fus-wall-watcher'), d('@A', 18, 24), sh(50, 2)],
       description: 'O ídolo sobe do chão já escudado, e o solavanco da subida derruba quem estava em cima.',
@@ -1172,7 +1177,7 @@ JOGO.DATA = JOGO.DATA || {};
       description: 'A cerca cresce em cruz e morde: quem estava dentro fica, e sangra.',
       fxShape: 'summonFx' },
     { tier: 20, formName: 'Guarnição', paCost: 5, cooldown: 4, castsPerTurn: 1,
-      range: rng(1, 5), aoe: aoe('single', 0), needsEmptyTile: true, targetSide: 'any',
+      range: rng(1, 5), aoe: aoe('circle', 1), needsEmptyTile: true, targetSide: 'any',
       riderMode: 'support',
       mechanic: [sm('fus-wall-watcher'), wl(3), d('@A', 22, 29), sh(75, 3)],
       description: 'Ídolo, muro e escudo de uma vez, e o chão racha embaixo de quem estava na passagem.',

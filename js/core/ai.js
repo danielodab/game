@@ -214,6 +214,19 @@ var JOGO = (typeof window !== 'undefined')
       if (u && u.alive) unitsHit.push(u);
     }
 
+    /* 03/10: O FEITIÇO MISTO (engine.js, feiticoMisto). Num feitiço que tem
+     * efeito a favor E efeito hostil, o motor manda o hostil só no outro lado
+     * e o a favor só no lado de quem lança — e em quem lança sempre. A IA
+     * mede com a mesma régua: sem fogo amigo nesses, e sem descontar a cura
+     * "dada ao inimigo" que o motor já não dá. */
+    var misto = !!(E().feiticoMisto && E().feiticoMisto(spell));
+    var hitHostil = unitsHit, hitFavor = unitsHit;
+    if (misto) {
+      hitHostil = unitsHit.filter(function (w) { return w.side !== unit.side; });
+      hitFavor = unitsHit.filter(function (w) { return w.side === unit.side; });
+      if (hitFavor.indexOf(unit) < 0) hitFavor.push(unit);
+    }
+
     var effs = spell.effects || [];
     var value = 0;
     // v2.2/v2.3: o que a engine somará ao poder nesta conjuração, e o quanto a
@@ -226,8 +239,8 @@ var JOGO = (typeof window !== 'undefined')
       var t, u2, dmg;
       switch (eff.type) {
         case 'damage':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue; // engine exclui o conjurador
             dmg = expectDamage(unit, u2, eff, elemBonus);
             if (u2.side !== unit.side) {
@@ -245,8 +258,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'poison':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue;
             dmg = expectDamage(unit, u2, eff, elemBonus) * eff.duration;
             if (u2.side !== unit.side) { if (!isInvisible(u2)) value += dmg * 0.8; }
@@ -254,32 +267,33 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'heal':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             var healed = Math.min(((eff.min + eff.max) / 2) * healScale, u2.hpMax - u2.hp);
             if (u2.side === unit.side) value += healed * (ctx.role === 'support' ? 1.3 : 0.9);
             else value -= healed;
           }
           break;
         case 'regen':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             value += Math.min(((eff.min + eff.max) / 2) * eff.duration * healScale,
                               u2.hpMax - u2.hp) * 0.6;
           }
           break;
         case 'shield':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             var engaged = ctx.nearestEnemyDistTo(u2.x, u2.y) <= 3;
             value += eff.value * ((engaged || u2.hp < u2.hpMax) ? 0.6 : 0.05);
           }
           break;
         case 'buff':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          var lista = eff.value < 0 ? hitHostil : hitFavor;   // o sinal decide o lado
+          for (t = 0; t < lista.length; t++) {
+            u2 = lista[t];
             if (eff.value >= 0) {
               if (u2.side !== unit.side) { value -= 10; continue; }
               value += (eff.stat === 'power') ? 10 : 5;
@@ -291,23 +305,24 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'resist':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          lista = eff.value < 0 ? hitHostil : hitFavor;
+          for (t = 0; t < lista.length; t++) {
+            u2 = lista[t];
             if (eff.value >= 0) value += (u2.side === unit.side) ? 4 : -4;
             else value += (u2.side !== unit.side && !isInvisible(u2)) ? 5 : -4;
           }
           break;
         case 'push':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             if (E().unitHasTrait(u2, 'pushImmune')) continue;
             value += 3 + shoveCollision(state, cx, cy, u2, eff.tiles, ctx);
           }
           break;
         case 'pull':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             if (E().unitHasTrait(u2, 'pushImmune')) continue;
             var gain = Math.min(eff.tiles, Math.max(0, manhattan(cx, cy, u2.x, u2.y) - 1));
@@ -332,8 +347,8 @@ var JOGO = (typeof window !== 'undefined')
 
         // ---------------------------------------------------------------- v2
         case 'root':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit) continue;
             if (u2.side === unit.side) { value -= 14; continue; }
             if (isInvisible(u2)) continue;
@@ -343,8 +358,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'mark':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             var maxSt = eff.max || 5;
             var cur = E().markStacks(u2);
@@ -353,8 +368,8 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'detonateMarks':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             var st = E().markStacks(u2);
             if (st <= 0) continue;                         // sem marcas, não vale
@@ -374,8 +389,8 @@ var JOGO = (typeof window !== 'undefined')
           value += weatherShiftValue(state, unit, eff.weather, ctx);
           break;
         case 'cleanse':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) continue;
             var kinds = eff.kinds || [];
             var n = 0;
@@ -386,16 +401,16 @@ var JOGO = (typeof window !== 'undefined')
           }
           break;
         case 'reflect':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitFavor.length; t++) {
+            u2 = hitFavor[t];
             if (u2.side !== unit.side) { value -= 6; continue; }
             if (E().unitHasEffect(u2, 'reflect')) continue;
             value += (ctx.nearestEnemyDistTo(u2.x, u2.y) <= 2 ? 12 : 3) + (eff.pct || 0) * 0.1;
           }
           break;
         case 'dispelShield':
-          for (t = 0; t < unitsHit.length; t++) {
-            u2 = unitsHit[t];
+          for (t = 0; t < hitHostil.length; t++) {
+            u2 = hitHostil[t];
             if (u2 === unit || u2.side === unit.side || isInvisible(u2)) continue;
             value += u2.shield * 0.8;
           }
