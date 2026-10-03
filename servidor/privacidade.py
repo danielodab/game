@@ -290,6 +290,32 @@ class PrivacidadeMixin:
                 resultado = 'desfeita'
         return resultado
 
+    def _excluir_auditoria(self, cid):
+        """Dentro da transação da exclusão (03/10, revisão): o alvo_id da auditoria vira NULL sozinho (ON
+        DELETE SET NULL), mas o gancho das rotas do Mestre (moderacao._audita_rota) grava o corpo da rota em
+        `dados`, e o número da conta ia junto ({'conta': N}, {'consulta': {'id': 'N'}}). A Política (seção 9)
+        promete o registro das ações da Equipe sem o número da conta: aqui ele sai dos `dados`."""
+        try:
+            linhas = self.con.execute("SELECT id, dados FROM moderacao_auditoria WHERE alvo_id = ?", (cid,)).fetchall()
+        except sqlite3.OperationalError:   # um banco de antes da moderação
+            return
+
+        def limpa(d, chaves):
+            return {k: v for k, v in d.items()
+                    if not (k in chaves and not isinstance(v, bool) and (v == cid or v == str(cid)))}
+
+        for r in linhas:
+            d = _json(r['dados'])
+            if isinstance(d, dict):
+                d = limpa(d, ('conta', 'alvo', 'para'))
+                if isinstance(d.get('consulta'), dict):
+                    d['consulta'] = limpa(d['consulta'], ('id', 'conta'))
+                novo = json.dumps(d, ensure_ascii=False, sort_keys=True, default=str)
+            else:
+                novo = json.dumps({'conta-excluida': True})   # cortado ou torto: não dá para saber o que levava
+            if novo != r['dados']:
+                self.con.execute("UPDATE moderacao_auditoria SET dados = ? WHERE id = ?", (novo, r['id']))
+
     def conta_excluir(self, conta, corpo):
         cid = conta['id']
         nome, senha = corpo.get('nome'), corpo.get('senha')
@@ -318,6 +344,7 @@ class PrivacidadeMixin:
             self.con.execute("DELETE FROM eventos WHERE conta_id = ? AND tipo NOT LIKE 'pagamento-%'", (cid,))
             for tabela, coluna in SEM_CHAVE:
                 self.con.execute("DELETE FROM %s WHERE %s = ?" % (tabela, coluna), (cid,))
+            self._excluir_auditoria(cid)
             try:
                 self.con.execute("DELETE FROM contas WHERE id = ?", (cid,))
             except sqlite3.IntegrityError as e:
