@@ -14,16 +14,20 @@ Uso:
     python tools/fotos_fichas.py fotos <pasta-saida> [--base http://localhost:8142/]
                                  [--fichas personagem,inventario,...] [--tamanhos 1600x900,390x844]
     python tools/fotos_fichas.py comparar <pasta-antes> <pasta-depois> <pasta-saida>
+    python tools/fotos_fichas.py prova [--base http://localhost:8142/]
 
 `fotos` grava <ficha>__<L>x<A>.png e um erros.json (o que cada página
 reclamou); `comparar` monta uma folha de contato antes|depois por ficha
-(desktop em cima, celular embaixo).
+(desktop em cima, celular embaixo); `prova` roda a régua do sistema das fichas
+(a página sem ?ficha=) numa janela de celular de 390×844 — numa janela larga
+as regras de @media montariam o desktop dentro da coluna e a prova mediria um
+estado que o jogo nunca mostra — e sai com o número de falhas.
 """
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request, base64
 
 FICHAS = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
           'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
-          'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'praca', 'praca-poco',
+          'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'praca', 'praca-poco',
           'praca-sede', 'praca-arena']
 CHROME = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 BAIXA = 0x00004000          # BELOW_NORMAL_PRIORITY_CLASS: o dono joga nesta máquina
@@ -54,7 +58,9 @@ class Cdp(object):
 
 def sobe_chrome():
     perfil = tempfile.mkdtemp(prefix='fichas-fotos-')
-    proc = subprocess.Popen([CHROME, '--headless=new', '--disable-gpu', '--no-first-run',
+    # --enable-unsafe-swiftshader: o WebGL por software, como o README manda — sem ele a
+    # página que monta o tabuleiro (o index inteiro, o toque) fica parada em "rodando"
+    proc = subprocess.Popen([CHROME, '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader', '--no-first-run',
                              '--no-default-browser-check', '--hide-scrollbars', '--mute-audio',
                              '--remote-debugging-port=0', '--user-data-dir=' + perfil, 'about:blank'],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -163,7 +169,43 @@ def comparar(antes, depois, saida):
         print('folha', f, flush=True)
 
 
+def prova(base):
+    proc, perfil, cdp = sobe_chrome()
+    try:
+        cdp('Emulation.setDeviceMetricsOverride', width=390, height=844, deviceScaleFactor=1, mobile=True)
+        cdp('Emulation.setTouchEmulationEnabled', enabled=True, maxTouchPoints=5)
+        cdp('Page.navigate', url=base + 'tests/fichas_fotos.html')
+        t0 = time.time()
+        while time.time() - t0 < 300:
+            time.sleep(0.5)
+            try:
+                if cdp.avalia('window.__pronto === true'):
+                    break
+            except Exception:
+                pass
+        resumo = cdp.avalia("document.getElementById('summary').textContent") or '(sem placar)'
+        ruins = cdp.avalia("[].map.call(document.querySelectorAll('#log div'), function (d) { return d.textContent; })"
+                           ".filter(function (t) { return /^FALHOU/.test(t); })")
+        ruins = '\n'.join(ruins or [])
+        falhas = cdp.avalia('window.__fail')
+    finally:
+        try:
+            cdp('Browser.close')
+        except Exception:
+            pass
+        mata(proc, perfil)
+    print(resumo)
+    if ruins:
+        print(ruins)
+    return 1 if (falhas is None or falhas) else 0
+
+
 def main(a):
+    # o console do Windows é cp1252: o "✕" e a seta da HUD quebravam o print
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
     if len(a) >= 2 and a[0] == 'fotos':
         base, fichas, tams = 'http://localhost:8142/', FICHAS, [(1600, 900), (390, 844)]
         i = 2
@@ -179,6 +221,9 @@ def main(a):
         if not base.endswith('/'):
             base += '/'
         fotos(a[1], base, fichas, tams)
+    elif a and a[0] == 'prova':
+        base = a[a.index('--base') + 1] if '--base' in a else 'http://localhost:8142/'
+        raise SystemExit(prova(base if base.endswith('/') else base + '/'))
     elif len(a) == 4 and a[0] == 'comparar':
         comparar(a[1], a[2], a[3])
     else:

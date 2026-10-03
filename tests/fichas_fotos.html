@@ -6,8 +6,15 @@
 <title>SOTERRA — as fichas para foto</title>
 <link rel="stylesheet" href="../css/style.css">
 <style>
-  /* o placar mora fora da tela: a foto é a janela inteira, como no jogo */
+  /* na FOTO o placar mora fora da tela: a foto é a janela inteira, como no
+     jogo; na PROVA (sem ?ficha=) a HUD roda numa coluna de celular (390×844)
+     e o placar fica embaixo dela */
   #topo { position: fixed; left: -9999px; top: 0; font: 12px monospace; }
+  html.prova, html.prova body { overflow: auto; height: auto; }
+  html.prova #app { position: relative; width: 390px; height: 844px; }
+  html.prova #topo { position: static; padding: 10px; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
   /* a praça sem o 3D: um chão escuro no lugar do mapa, para a ficha ter o
      que cobrir (o véu da ficha é o que se quer ver na foto) */
   #game-canvas { background: radial-gradient(ellipse 70% 60% at 50% 40%, #2a3340 0%, #10151b 100%); }
@@ -28,12 +35,19 @@
      ?ficha= personagem | heroi | inventario | forja | feiticos | colecao |
              banco | guilda | mercado | loteria | missoes | placar | amigos |
              perfil | troca | contas | duelo | dupla | quadro | sussurro |
-             pausa | confirma | config | praca | praca-poco | praca-sede |
+             pausa | confirma | praca | praca-poco | praca-sede |
              praca-arena
      ?foco=1 — põe o foco de teclado no primeiro botão da ficha (a foto do
-              anel de foco). -->
-<div id="topo"><div id="summary">rodando…</div></div>
+              anel de foco).
+
+     SEM ?ficha= é a PROVA do sistema das fichas (o padrão de 02/10), numa
+     coluna de 390×844: em cada ficha, o medalhão + título + fechar, o papel de
+     diálogo com nome, todo controle >= 44 px, nada vazando e o foco dentro; as
+     abas de texto com o texto de sempre; o foco que volta a quem abriu; o cais desenhado.
+       python tools/fotos_fichas.py prova   (janela de 390×844; o placar em #summary) -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
 <div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script>if (!/[?&]ficha=/.test(location.search)) document.documentElement.className += ' prova';</script>
 <script src="save_sandbox.js"></script>
 <script>
   window.__V = '?v=' + Date.now();
@@ -227,7 +241,6 @@
       var b = q1('.ui-sheet.is-on .btn-warn');
       if (b) b.click();
     },
-    config: function () { UI.openSheet('config'); },
     praca: function () { ligaPraca(); UI.showScreen('hub'); },
     'praca-poco': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'poco', nome: 'Poço sem Fundo' }); },
     'praca-sede': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'sede', nome: 'Sede das Guildas' }); },
@@ -237,29 +250,235 @@
     return espera(300).then(function () { if (JOGO.Hub.aoAproximar) JOGO.Hub.aoAproximar(l); });
   }
 
-  semeia().then(function () {
-    var f = FICHAS[Q.ficha];
-    if (!f) { erros.push('ficha desconhecida: ' + Q.ficha); return; }
-    // fora da praça, a tela de fundo é o menu (o jogo abre nele)
-    if (!/^praca/.test(Q.ficha)) UI.showScreen('menu');
-    return f();
-  }).then(function () {
-    return espera(900);
-  }).then(function () {
-    if (Q.foco) {
-      var b = q1('.ui-sheet.is-on .sheet-body button, .ui-sheet.is-on .sheet-body [tabindex]');
-      if (b) b.focus();
-    }
-    // o tutor e os balões de primeira visita não são carregados aqui: a foto é a ficha
-    var abertas = document.querySelectorAll('.ui-sheet.is-on').length;
-    document.getElementById('summary').textContent = 'foto: ' + Q.ficha + ' · fichas abertas ' + abertas +
-      ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
-    window.__erros = erros;
-    window.__pronto = true;
-  }).catch(function (e) {
+  // ------------------------------------------------------------ o modo FOTO
+  function foto() {
+    return semeia().then(function () {
+      var f = FICHAS[Q.ficha];
+      if (!f) { erros.push('ficha desconhecida: ' + Q.ficha); return; }
+      // fora da praça, a tela de fundo é o menu (o jogo abre nele)
+      if (!/^praca/.test(Q.ficha)) UI.showScreen('menu');
+      return f();
+    }).then(function () {
+      return espera(900);
+    }).then(function () {
+      if (Q.foco) {
+        var b = q1('.ui-sheet.is-on .sheet-body button, .ui-sheet.is-on .sheet-body [tabindex]');
+        if (b) b.focus();
+      }
+      // o tutor e os balões de primeira visita não são carregados aqui: a foto é a ficha
+      var abertas = document.querySelectorAll('.ui-sheet.is-on').length;
+      document.getElementById('summary').textContent = 'foto: ' + Q.ficha + ' · fichas abertas ' + abertas +
+        ' · ' + erros.length + ' erro(s) ' + erros.join(' | ');
+      window.__erros = erros;
+      window.__pronto = true;
+    }).catch(function (e) {
+      erros.push('semente: ' + (e && e.message || e));
+      window.__erros = erros;
+      window.__pronto = true;
+    });
+  }
+
+  // ------------------------------------------------------------ a PROVA do padrão
+  /* A régua do sistema das fichas, cobrada em TODA ficha, numa coluna de
+   * celular (390×844): o que se cobra é a REGRA (todo controle >= 44 px, o
+   * medalhão e o diálogo em todas, nada vazando), não a lista de classes de
+   * cada ficha — ficha nova que nascer do sheetShell entra sozinha na conta
+   * quando for posta em FICHAS. */
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    document.getElementById('log').appendChild(d);
+  }
+  function qa(s, r) { return [].slice.call((r || document).querySelectorAll(s)); }
+  function painel() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function visivel(n) {
+    var r = n.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    var cs = getComputedStyle(n);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+  // os controles que o dedo aperta — o que não for um destes é texto ou foto
+  var CONTROLES = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role="switch"], [tabindex]:not(.sheet-panel)';
+  /* AS EXCEÇÕES À RÉGUA DE 44, uma por uma e o porquê (ficha nova não entra
+   * aqui sem motivo escrito):
+   *   · a célula de peça do saco e do banco (.ig-cell) é um quadro de foto de
+   *     72+ px — mas é <div>, não entra na conta;
+   *   · o link dentro de um parágrafo (a sem classe .btn) segue o texto: alvo
+   *     de linha de texto é a linha inteira, como em qualquer página. */
+  function dispensado(n) {
+    if (n.tagName === 'A' && !n.classList.contains('btn')) return true;
+    return false;
+  }
+  function pequenos(raiz) {
+    var ruins = [];
+    qa(CONTROLES, raiz).forEach(function (n) {
+      if (!visivel(n) || dispensado(n)) return;
+      var r = n.getBoundingClientRect();
+      if (r.height < 43.5 || r.width < 43.5) {
+        var c = typeof n.className === 'string' ? n.className.split(/\s+/).slice(0, 3).join('.') : '';
+        ruins.push(n.tagName.toLowerCase() + (c ? '.' + c : '') + ' ' + Math.round(r.width) + '×' + Math.round(r.height) +
+                   ' "' + (n.textContent || n.value || '').trim().slice(0, 18) + '"');
+      }
+    });
+    return ruins;
+  }
+  // nada sai da ficha pelos lados (a coluna de 390), a não ser dentro de quem rola
+  function vazam(f) {
+    var fora = [];
+    var lim = f.getBoundingClientRect();
+    qa('*', f).forEach(function (n) {
+      var r = n.getBoundingClientRect();
+      if (!r.width) return;
+      if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+        var p = n.parentNode, rola = false;
+        while (p && p !== f) {
+          var ov = getComputedStyle(p).overflowX;
+          if (ov === 'auto' || ov === 'scroll' || ov === 'hidden') { rola = true; break; }
+          p = p.parentNode;
+        }
+        if (!rola) fora.push(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className || n.tagName));
+      }
+    });
+    return fora;
+  }
+
+  // as fichas que a régua cobra (as da praça são o cais e os painéis, à parte)
+  var NA_REGUA = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
+                  'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
+                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma'];
+
+  function prova() {
+    // a régua é de CELULAR: numa janela larga as regras de @media acham que é
+    // desktop e montam duas colunas dentro dos 390 px do #app (o saco ficava
+    // com 26 px de largura) — um estado que o jogo nunca mostra. Quem roda é
+    // `python tools/fotos_fichas.py prova` (janela de 390×844) ou o DevTools no
+    // modo celular; fora disso a prova diz por que não vale, em vez de mentir.
+    check('a prova roda numa janela de celular (largura <= 500 px)', window.innerWidth <= 500,
+          'janela de ' + window.innerWidth + ' px — use python tools/fotos_fichas.py prova');
+    var passo = Promise.resolve();
+    NA_REGUA.forEach(function (nome) {
+      passo = passo.then(function () {
+        UI.closeSheet();
+        UI.showScreen('menu');
+        return FICHAS[nome]();
+      }).then(function () { return espera(250); }).then(function () {
+        var f = painel();
+        if (!f) { check(nome + ': a ficha abre', false); return; }
+        var head = q1('.sheet-head', f), h2 = q1('.sheet-head h2', f);
+        var med = q1('.sheet-head > .sheet-ico svg.ico-svg', f);
+        var fecha = q1('.sheet-head .btn-close', f);
+        check(nome + ': cabeçalho com medalhão desenhado, título e fechar',
+              !!head && head.classList.contains('tem-ico') && !!med && !!h2 && !!h2.textContent.trim() && !!fecha,
+              h2 ? h2.textContent : 'sem título');
+        check(nome + ': é um diálogo com nome (role, aria-modal, aria-labelledby → o título)',
+              f.getAttribute('role') === 'dialog' && f.getAttribute('aria-modal') === 'true' &&
+              !!h2 && document.getElementById(f.getAttribute('aria-labelledby')) === h2);
+        check(nome + ': o fechar diz "Fechar" ao leitor de tela', !!fecha && fecha.getAttribute('aria-label') === 'Fechar');
+        var ruins = pequenos(f);
+        check(nome + ': todo controle visível mede ao menos 44×44', ruins.length === 0, ruins.slice(0, 4).join(' | '));
+        var fora = vazam(f);
+        check(nome + ': nada vaza da coluna de 390 px', fora.length === 0, fora.slice(0, 4).join(' | '));
+        check(nome + ': o foco está dentro da ficha', f.contains(document.activeElement),
+              document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
+      });
+    });
+
+    // ---- as abas de texto mantêm o texto de sempre (as provas antigas as acham por ele)
+    passo = passo.then(function () {
+      UI.closeSheet(); FICHAS.amigos();
+      return espera(200);
+    }).then(function () {
+      var abas = qa('.am-abas .btn-tab', painel());
+      check('Amigos: as duas abas são pílulas (.btn-tab), a aberta acesa e aria-pressed, com o texto de sempre',
+            abas.length === 2 && abas[0].textContent === 'Amigos' && abas[1].textContent === 'Inimigos' &&
+            abas[0].classList.contains('is-on') && abas[0].getAttribute('aria-pressed') === 'true' &&
+            abas[1].getAttribute('aria-pressed') === 'false', abas.map(function (b) { return b.textContent; }).join(','));
+      abas[1].click();
+      var abas2 = qa('.am-abas .btn-tab', painel());
+      check('Amigos: tocar em Inimigos acende Inimigos', abas2.length === 2 && abas2[1].classList.contains('is-on') &&
+            !abas2[0].classList.contains('is-on'));
+      abas2[0].click();
+      UI.closeSheet(); FICHAS.personagem();
+      return espera(300);
+    }).then(function () {
+      var abas = qa('.char-abas .btn-tab', painel());
+      var nomes = hids.slice(0, 2).map(function (h) { return D.classes[(P.hero(h) || {}).classId || h].name; });
+      check('Personagem: os heróis da dupla são abas com o nome da classe, uma acesa',
+            abas.length === 2 && abas[0].textContent === nomes[0] && abas[1].textContent === nomes[1] &&
+            abas.filter(function (b) { return b.classList.contains('is-on'); }).length === 1,
+            abas.map(function (b) { return b.textContent; }).join(',') + ' (esperava ' + nomes.join(',') + ')');
+    });
+
+    // ---- o foco volta para quem abriu a ficha (a porta da Conta, no menu)
+    passo = passo.then(function () {
+      UI.closeSheet();
+      UI.showScreen('menu');
+      var b = qa('.screen-menu.is-on .menu-fichas .btn').filter(function (x) { return /^Conta/.test(x.textContent); })[0];
+      check('Menu: a porta da Conta existe', !!b);
+      if (!b) return;
+      b.focus();
+      b.click();
+      var f = painel();
+      check('Contas: abrem pelo menu, com o foco dentro da ficha', !!f && f.contains(document.activeElement));
+      // o anel de teclado: sem mouse nem toque nesta página, o foco posto por
+      // script conta como de teclado (:focus-visible) e tem de desenhar o anel
+      var x = q1('.btn-close', f);
+      x.focus();
+      var cs = getComputedStyle(x);
+      check('o foco de teclado desenha o anel (outline sólido de 2 px) no fechar',
+            x.matches(':focus-visible') && cs.outlineStyle === 'solid' && parseFloat(cs.outlineWidth) >= 2,
+            cs.outlineStyle + ' ' + cs.outlineWidth + ' focus-visible=' + x.matches(':focus-visible'));
+      x.click();
+      check('fechar a ficha devolve o foco a quem a abriu', document.activeElement === b,
+            document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
+    });
+
+    // ---- o cais: o desenho no lugar do emoji, o nome de sempre
+    passo = passo.then(function () {
+      UI.closeSheet();
+      FICHAS.praca();
+      return espera(300);
+    }).then(function () {
+      var bs = qa('.screen-hub.is-on .hub-dock-b');
+      var rots = bs.map(function (b) { return (q1('.hd-rot', b) || {}).textContent; });
+      check('Cais: seis portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
+            bs.length === 6 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
+            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos$/.test(rots.join(',')), rots.join(','));
+      check('Cais: nenhum emoji sobrou no texto das portas',
+            bs.every(function (b) { return !/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(b.textContent); }),
+            bs.map(function (b) { return b.textContent; }).join(' | '));
+      var p0 = bs.filter(function (b) { var r = b.getBoundingClientRect(); return r.height < 43.5; });
+      check('Cais: toda porta mede ao menos 44 px de altura', p0.length === 0, p0.length + ' baixas');
+      bs[1].click();
+      var f = painel();
+      check('Cais: a porta acesa é a da ficha aberta, e o medalhão da ficha é o desenho da porta',
+            bs[1].classList.contains('is-on') && !!f && !!q1('.sheet-ico .ico-fc-inventario', f));
+      UI.closeSheet();
+    });
+
+    return passo.then(function () {
+      check('nenhum erro na página', erros.length === 0, erros.slice(0, 4).join(' | '));
+      var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check();
+      check('o save de verdade continua intocado', !!sb && sb.ok, sb ? JSON.stringify(sb.disco).slice(0, 120) : 'sem sandbox');
+    }).catch(function (e) {
+      check('a prova correu até o fim', false, (e && e.stack) || String(e));
+    }).then(function () {
+      var sum = document.getElementById('summary');
+      sum.className = falhas ? 'fail' : 'allpass';
+      sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+      window.__fail = falhas;
+      window.__pronto = true;
+    });
+  }
+
+  if (Q.ficha) foto();
+  else semeia().then(prova, function (e) {
     erros.push('semente: ' + (e && e.message || e));
-    window.__erros = erros;
-    window.__pronto = true;
+    return prova();
   });
 })();
 </script>

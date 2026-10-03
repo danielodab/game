@@ -1270,10 +1270,13 @@ var JOGO = (typeof window !== 'undefined')
     // o cais agora ACENDE a aba aberta (30/08): sem isso, no celular o menu
     // principal não dizia onde o jogador estava
     dockBotoes = {};
-    [{ ic: '🧍', rot: 'Personagem', abre: 'char' },
-     { ic: '🎒', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
-     { ic: '📖', rot: 'Feitiços', abre: 'spells' },
-     { ic: '📜', rot: 'Missões', abre: 'missoes' },
+    // 02/10: o ícone (ico) é o desenho do icones_ui.js — o mesmo medalhão do
+    // cabeçalho da ficha que a porta abre; o emoji (ic) fica de reserva para
+    // quando o icones_ui.js não carregou
+    [{ ic: '🧍', ico: 'fc-personagem', rot: 'Personagem', abre: 'char' },
+     { ic: '🎒', ico: 'fc-inventario', rot: 'Inventário', tecla: 'I', abre: 'inventory' },
+     { ic: '📖', ico: 'fc-feiticos', rot: 'Feitiços', abre: 'spells' },
+     { ic: '📜', ico: 'fc-missoes', rot: 'Missões', abre: 'missoes' },
      // 11/09: a Guilda é uma aba como as outras — SEMPRE no cais. Ela nascia
      // escondida e só aparecia se `resumoGuilda` já tivesse chegado quando a
      // conta foi pintada; como a guilda carrega por promessa, quase nunca
@@ -1281,13 +1284,16 @@ var JOGO = (typeof window !== 'undefined')
      // quem não está precisa da porta ainda mais — é por ela que se funda.
      // `remoto` avisa a ficha de que se está longe da Sede (cofre e banco
      // continuam só lá).
-     { ic: '🛡️', rot: 'Guilda', abre: 'guilda', remoto: true },
+     { ic: '🛡️', ico: 'fc-guilda', rot: 'Guilda', abre: 'guilda', remoto: true },
      // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
-     { ic: '👥', rot: 'Amigos', abre: 'amigos' }
+     { ic: '👥', ico: 'fc-amigos', rot: 'Amigos', abre: 'amigos' }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
-      b.appendChild(el('span', 'hd-ic', d.ic));
+      var svgD = safe(function () { return JOGO.IconesUI.svg(d.ico); }, '');
+      var ic = el('span', 'hd-ic' + (svgD ? ' is-svg' : ''), svgD || d.ic);
+      ic.setAttribute('aria-hidden', 'true');
+      b.appendChild(ic);
       b.appendChild(el('span', 'hd-rot', d.rot +
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
       tap(b, function () { openSheet(d.abre, d.remoto || undefined); });
@@ -1431,6 +1437,19 @@ var JOGO = (typeof window !== 'undefined')
       setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
     }
 
+    /* 02/10: o título do painel de aproximação leva o MESMO medalhão da
+     * ficha que o botão abre (o baú no banco, o poço no Poço) — o painel e a
+     * ficha passam a ser a mesma porta. Sem o icones_ui.js, só o texto. */
+    function tituloPainel(texto, ico) {
+      var h = el('h3', 'hp-tit', esc(texto));
+      var svg = safe(function () { return JOGO.IconesUI.svg(ico); }, '');
+      if (svg) {
+        var m = el('span', 'hp-ico', svg);
+        m.setAttribute('aria-hidden', 'true');
+        h.insertBefore(m, h.firstChild);
+      }
+      return h;
+    }
     if (JOGO.Hub) JOGO.Hub.aoAproximar = function (lugar) {
       // 11/09: o convite (grupo/duelo) em aberto não some por um passo
       if (painelModo === 'convite' && !painel.classList.contains('is-off')) return;
@@ -1500,21 +1519,21 @@ var JOGO = (typeof window !== 'undefined')
           'A descida se perde: da próxima vez você começa da primeira sala.'));
         painel.appendChild(btn('Sair', 'btn-warn btn-block', perguntaSair));
       } else if (lugar.tipo === 'banco') {
-        painel.appendChild(el('h3', null, 'Banco do Acampamento'));
+        painel.appendChild(tituloPainel('Banco do Acampamento', 'fc-banco'));
         painel.appendChild(el('p', 'hub-nota',
           'O que está no cofre não desce com você — e por isso nunca se perde.'));
         painel.appendChild(btn('Abrir o cofre', 'btn-primary btn-block', function () {
           openSheet('banco');
         }));
       } else if (lugar.tipo === 'mercado') {
-        painel.appendChild(el('h3', null, 'Mercadinho do Acampamento'));
+        painel.appendChild(tituloPainel('Mercadinho do Acampamento', 'fc-mercado'));
         painel.appendChild(el('p', 'hub-nota',
           'Peças à venda — só o que jogador anunciou. Toda venda sua paga 5% de taxa.'));
         painel.appendChild(btn('Abrir o balcão', 'btn-primary btn-block', function () {
           openSheet('mercado');
         }));
       } else if (lugar.tipo === 'arena') {
-        painel.appendChild(el('h3', null, 'Arena de Duelos'));
+        painel.appendChild(tituloPainel('Arena de Duelos', 'fc-duelo'));
         painel.appendChild(el('p', 'hub-nota',
           '<b>Desafio amistoso</b>: toque em alguém na praça (no mapa da praça; a coroa não muda). ' +
           '<b>Ranqueado</b>: inscreva a sua dupla no quadro e espere um desafio — ou desafie um inscrito.'));
@@ -1536,7 +1555,7 @@ var JOGO = (typeof window !== 'undefined')
         });
       } else if (lugar.tipo === 'poco') {
         // O POÇO SEM FUNDO (25/08; 13/09 saiu da Arena e ganhou a arte do dono)
-        painel.appendChild(el('h3', null, 'Poço sem Fundo'));
+        painel.appendChild(tituloPainel('Poço sem Fundo', 'fc-poco'));
         painel.appendChild(el('p', 'hub-nota',
           'A torre infinita: cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros mais duros.'));
         if (emGrupo()) {
@@ -1558,7 +1577,7 @@ var JOGO = (typeof window !== 'undefined')
           }
         });
       } else if (lugar.tipo === 'sede') {
-        painel.appendChild(el('h3', null, 'Sede das Guildas'));
+        painel.appendChild(tituloPainel('Sede das Guildas', 'fc-guilda'));
         painel.appendChild(el('p', 'hub-nota',
           'O estandarte dos clãs. A casa própria de cada guilda vem com o lobby — por ora, a ficha resolve tudo.'));
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
@@ -1567,7 +1586,7 @@ var JOGO = (typeof window !== 'undefined')
         painelGuerra(painel);         // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
       } else if (lugar.tipo === 'loteria') {
         // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
-        painel.appendChild(el('h3', null, 'Barraquinha da Sorte'));
+        painel.appendChild(tituloPainel('Barraquinha da Sorte', 'fc-loteria'));
         var sl = safe(function () { return P().roletaSaldo(); }, null);
         painel.appendChild(el('p', 'hub-nota', sl
           ? (sl.giros > 0 ? '<b>' + sl.total + '</b> selos no bolso — <b>' + sl.giros + '</b> giro(s) da sorte.'
@@ -1583,7 +1602,7 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'forja') {
         // A BARRACA DO FERREIRO (30/08): a forja ganhou endereço na praça —
         // a bigorna continua no cais para quem prefere o atalho
-        painel.appendChild(el('h3', null, 'Forja do Acampamento'));
+        painel.appendChild(tituloPainel('Forja do Acampamento', 'fc-forja'));
         painel.appendChild(el('p', 'hub-nota',
           'Ponha a peça na bancada, a pedra do elemento ao lado — e bata o martelo.'));
         painel.appendChild(btn('Chegar na bancada', 'btn-primary btn-block', function () {
@@ -3181,10 +3200,21 @@ var JOGO = (typeof window !== 'undefined')
 
   function closeSheet() {
     if (!sheetEl) return;
+    var tinhaFoco = sheetEl.contains(document.activeElement);
     sheetEl.classList.remove('is-on');
     sheetName = null;
     marcaDock(null);
     hideTip();
+    // 02/10: o foco volta a quem abriu a ficha — só se ele estava DENTRO
+    // dela (fechar por um clique lá fora não rouba o foco de ninguém)
+    var volta = sheetDeQuem;
+    sheetDeQuem = null;
+    if (tinhaFoco) {
+      try {
+        if (volta && volta.isConnected) volta.focus({ preventScroll: true });
+        else document.activeElement.blur();
+      } catch (e) {}
+    }
   }
   /* O BANCO — agora do jeito pedido: o saco do grupo de um lado,
    * o cofre do outro, as DUAS grades na mesma tela, e a peça ATRAVESSA —
@@ -5373,13 +5403,18 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (libs.indexOf(charHeroi) < 0) charHeroi = libs[0];
       caixa.appendChild(el('h3', 'bk-tit', 'Características'));
-      var chips = el('div', 'guilda-emblemas');
+      // 02/10: a escolha do herói é uma fileira de ABAS (a pílula dourada é a
+      // aberta, aria-pressed para o leitor de tela) — era um par de botões
+      // soltos de 18 px, com o tamanho de letra dos emblemas da guilda
+      var chips = el('div', 'abas-fila char-abas');
       libs.forEach(function (hid) {
-        chips.appendChild(btn(className(hero(hid).classId || hid),
-          'btn-mini ' + (hid === charHeroi ? 'btn-gold' : 'btn-ghost'), function () {
-            charHeroi = hid;
-            sheetChar();
-          }));
+        var on = hid === charHeroi;
+        var bA = btn(className(hero(hid).classId || hid), 'btn-tab' + (on ? ' is-on' : ''), function () {
+          charHeroi = hid;
+          sheetChar();
+        });
+        bA.setAttribute('aria-pressed', on ? 'true' : 'false');
+        chips.appendChild(bA);
       });
       caixa.appendChild(chips);
 
@@ -5671,20 +5706,73 @@ var JOGO = (typeof window !== 'undefined')
     s.appendChild(box);
   }
 
-  function sheetShell(title, sub) {
+  /* O MEDALHÃO DE CADA FICHA (02/10, a frente dos menus): o cabeçalho ganha o
+   * ícone da porta que abriu a ficha — o mesmo desenho do cais — para o
+   * jogador saber onde está sem ler o título. Quem decide é o NOME da ficha
+   * (o openSheet o põe antes de chamar a função de desenho; os redesenhos de
+   * dentro mantêm o nome) e, nas fichas de meta, a aba. Ficha sem entrada
+   * aqui sai com o losango de sempre: nenhum cabeçalho fica sem marca. */
+  var ICONE_FICHA = {
+    char: 'fc-personagem', heroSheet: 'fc-personagem', amigos: 'fc-amigos', guilda: 'fc-guilda',
+    banco: 'fc-banco', missoes: 'fc-missoes', mercado: 'fc-mercado', mercadoConfirma: 'fc-mercado',
+    loteria: 'fc-loteria', placar: 'fc-placar', troca: 'fc-troca', contas: 'fc-contas',
+    perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
+    arenaQuadro: 'fc-duelo', sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
+    gm: 'fc-mestre', gmcaixa: 'fc-mestre', gmagenda: 'fc-mestre', confirm: 'fc-alerta'
+  };
+  var ICONE_ABA = { inventario: 'fc-inventario', forja: 'fc-forja', feiticos: 'fc-feiticos',
+                    colecao: 'fc-colecao', avatar: 'fc-personagem' };
+  function iconeDaFicha() {
+    if (sheetName === 'party') return ICONE_ABA[partyTab] || null;
+    return ICONE_FICHA[sheetName] || null;
+  }
+  /* quem tinha o foco quando a ficha abriu: o foco volta para ele ao fechar
+   * (quem navega pelo teclado não pode ser jogado no começo da página) */
+  var sheetDeQuem = null;
+
+  function sheetShell(title, sub, ico) {
+    var jaAberta = sheetEl.classList.contains('is-on');
+    var focoDentro = jaAberta && sheetEl.contains(document.activeElement);
+    if (!jaAberta) {
+      var at = document.activeElement;
+      sheetDeQuem = (at && at !== document.body && !sheetEl.contains(at)) ? at : null;
+    }
     clear(sheetEl);
     var panel = el('div', 'sheet-panel');
+    // a ficha é um diálogo: o leitor de tela anuncia o título ao abrir, e o
+    // painel aceita o foco (tabindex -1) para o Tab começar DENTRO dela
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-labelledby', 'sheet-titulo');
+    panel.tabIndex = -1;
     var head = el('div', 'sheet-head');
+    var svg = safe(function () { return JOGO.IconesUI.svg(ico || iconeDaFicha() || ''); }, '');
+    if (svg) {
+      head.classList.add('tem-ico');
+      var med = el('span', 'sheet-ico', svg);
+      med.setAttribute('aria-hidden', 'true');
+      head.appendChild(med);
+    }
     var t = el('div', 'sheet-head-txt');
-    t.appendChild(el('h2', null, esc(title)));
+    var h2 = el('h2', null, esc(title));
+    h2.id = 'sheet-titulo';
+    t.appendChild(h2);
     if (sub) t.appendChild(el('p', null, sub));
     head.appendChild(t);
-    head.appendChild(btn('✕', 'btn-icon btn-close', closeSheet));
+    var fecha = btn('✕', 'btn-icon btn-close', closeSheet);
+    fecha.setAttribute('aria-label', 'Fechar');
+    head.appendChild(fecha);
     panel.appendChild(head);
     var body = el('div', 'sheet-body');
     panel.appendChild(body);
     sheetEl.appendChild(panel);
     sheetEl.classList.add('is-on');
+    // a ficha que acabou de abrir (ou que se redesenhou com o foco dentro,
+    // que o clear acabou de apagar) segura o foco; quem desenha um campo
+    // depois disto (a mensagem particular) toma o foco para o campo
+    if (!jaAberta || focoDentro || document.activeElement === document.body) {
+      try { panel.focus({ preventScroll: true }); } catch (e) {}
+    }
     return body;
   }
   /* `op` (22/09, opcional — a quebra da forja é quem pede): {sim, simCls,
@@ -5693,7 +5781,7 @@ var JOGO = (typeof window !== 'undefined')
    * volta — sem `aoCancelar` ele só fecha, como sempre. */
   function confirmSheet(title, body, onYes, op) {
     op = op || {};
-    var b = sheetShell(title);
+    var b = sheetShell(title, null, 'fc-alerta');
     sheetName = 'confirm';
     b.appendChild(el('p', 'confirm-txt', body));
     var acts = el('div', 'confirm-acts');
@@ -9096,12 +9184,16 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(el('p', 'empty', 'Entre na sua conta para ter amigos e inimigos.'));
       return;
     }
-    var abas = el('div', 'am-abas');
+    // 02/10: as duas listas viram ABAS de verdade (mesma pílula das outras fichas)
+    var abas = el('div', 'am-abas abas-fila');
     [['amigos', 'Amigos'], ['inimigos', 'Inimigos']].forEach(function (a) {
-      abas.appendChild(btn(a[1], 'btn-mini ' + (amigosAba === a[0] ? 'btn-gold' : 'btn-ghost'), function () {
+      var on = amigosAba === a[0];
+      var bA = btn(a[1], 'btn-tab' + (on ? ' is-on' : ''), function () {
         amigosAba = a[0];
         sheetAmigos();
-      }));
+      });
+      bA.setAttribute('aria-pressed', on ? 'true' : 'false');
+      abas.appendChild(bA);
     });
     body.appendChild(abas);
 

@@ -3149,3 +3149,216 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   .mc-linha:has(> .mc-estado) { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
   .mc-linha:has(> .mc-estado) > .ms-tx { flex: 1 1 calc(100% - 56px); }
 }
+
+/* ==========================================================================
+   O SISTEMA DAS FICHAS (02/10, a frente dos menus)   [Designer]
+   O dono pediu TODOS os menus "com padrão de empresa grande". O levantamento
+   (tests/fichas_fotos.html, 27 fichas em 1600×900 e 390×844) achou o mesmo
+   jogo pintado de vários jeitos: o cais de emoji, cabeçalho sem marca, abas
+   que eram botão dourado-ou-cinza, título de seção em três tamanhos, campo de
+   texto com raio e altura de cada ficha, nenhum anel de foco fora dos botões
+   redondos, nenhum :hover nos botões comuns e um ✕ de 30 px nos Amigos.
+
+   Este bloco é a régua — mora no FIM do arquivo para vencer as regras velhas
+   de mesma força sem precisar de !important. Regra nova usa estes nomes:
+     · espaço   --esp-1..6   (4 · 8 · 12 · 16 · 24 · 32)
+     · letra    --fs-xs..2xl (11.5 · 12.5 · 14 · 16 · 19 · 22) e --lh
+     · texto    --tx-1 (corpo) · --tx-2 (apoio) · --tx-3 (nota)
+     · fundo    --sf-1 (cartão) · --sf-2 (cartão aceso / hover) · --sf-campo
+     · borda    --bd-1 (filete) · --bd-2 (caixa) · --bd-ouro
+     · foco     --foco  (o anel de teclado, UM para a interface toda)
+     · estado   --op-apagado (desligado) · --dur (a transição curta)
+     · cor por elemento: as --e-* de cima; quem pinta põe --ec na peça.
+   O que NÃO entra (o celular paga): blur grande, sombra animada, filtro em
+   camada que rola. A ficha tem um blur de 2 px no véu e nada mais.
+   ========================================================================== */
+:root {
+  --esp-1: 4px;  --esp-2: 8px;  --esp-3: 12px; --esp-4: 16px; --esp-5: 24px; --esp-6: 32px;
+  --fs-xs: 11.5px; --fs-s: 12.5px; --fs-m: 14px; --fs-l: 16px; --fs-xl: 19px; --fs-2xl: 22px;
+  --lh: 1.45;
+  --tx-1: var(--text);
+  --tx-2: #b9c0cb;
+  --tx-3: var(--dim);
+  --sf-1: rgba(255,255,255,.035);
+  --sf-2: rgba(255,255,255,.07);
+  --sf-campo: #0c1015;
+  --bd-1: var(--line);
+  --bd-2: var(--line2);
+  --bd-ouro: var(--gold-dim);
+  --foco: #ffd77a;
+  --op-apagado: .45;
+  --dur: .12s;
+}
+
+/* ---- o FOCO de teclado: um anel só, em tudo que se aperta ou se digita.
+   :focus-visible = só quem chegou pelo teclado vê; o toque e o mouse, não. */
+.ui-root :is(button, a[href], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+/* o painel da ficha recebe o foco ao abrir (o Tab começa dentro dele) — sem
+   anel: ele é a moldura, não um controle */
+.ui-root .sheet-panel:focus, .ui-root .sheet-panel:focus-visible { outline: none; }
+
+/* ---- HOVER só onde existe mouse: no toque, o :hover gruda depois do dedo */
+@media (hover: hover) {
+  .btn:not(.is-off):not(.is-apagado):not(:disabled):hover { filter: brightness(1.12); }
+  .btn-ghost:not(.is-off):not(:disabled):hover { background: var(--sf-2); }
+  .btn-tab:not(.is-on):hover { color: var(--tx-1); border-color: var(--bd-2); background: var(--sf-2); }
+  .btn.btn-close:hover { color: var(--gold); border-color: var(--bd-ouro); }
+}
+
+/* ---- DESLIGADO: um jeito só de dizer "não dá agora" (antes .is-off,
+   .is-apagado e [disabled] tinham três opacidades) */
+.btn:disabled, .btn[aria-disabled="true"], .btn.is-off, .btn.is-apagado {
+  opacity: var(--op-apagado); filter: grayscale(.6); cursor: not-allowed;
+}
+.btn:disabled:active, .btn.is-off:active { transform: none; filter: grayscale(.6); }
+
+/* ---- O CABEÇALHO DA FICHA: medalhão + título + subtítulo + fechar.
+   O medalhão é o mesmo desenho da porta que abriu a ficha (o cais, o menu) —
+   o jogador sabe onde está sem ler. Sem ícone, sobra o losango antigo. */
+.sheet-head { align-items: center; gap: var(--esp-3); padding: var(--esp-3) var(--pad); }
+.sheet-head.tem-ico h2::before { display: none; }
+.sheet-ico {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--gold-2);
+  background: radial-gradient(circle at 50% 30%, var(--gold-a22), rgba(0,0,0,.35) 75%);
+  border: 1px solid var(--gold-3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 3px rgba(0,0,0,.35);
+}
+.sheet-ico .ico-svg { width: 24px; height: 24px; }
+.sheet-head h2 { font: 700 var(--fs-xl)/1.2 var(--ui-serif); color: var(--gold); letter-spacing: .01em; }
+.sheet-head p { font-size: var(--fs-s); color: var(--tx-3); line-height: var(--lh); margin-top: 2px; }
+.btn.btn-close {
+  align-self: center; width: var(--tap); height: var(--tap); padding: 0;
+  border-radius: 50%; font-size: 17px; color: var(--tx-2);
+  background: rgba(0,0,0,.25);
+}
+/* a ALÇA da ficha no celular: o risquinho no topo diz "isto é uma folha por
+   cima do jogo" (o gesto dos aplicativos); no desktop a ficha é janela e não tem */
+@media (max-width: 819px) {
+  .sheet-panel { position: relative; }
+  .sheet-panel::before {
+    content: ''; position: absolute; left: 50%; top: 6px; width: 38px; height: 4px;
+    margin-left: -19px; border-radius: 2px; background: rgba(255,255,255,.16); pointer-events: none;
+  }
+  .sheet-head { padding-top: var(--esp-4); }
+  .sheet-ico { width: 40px; height: 40px; }
+  .sheet-ico .ico-svg { width: 22px; height: 22px; }
+}
+.sheet-body { gap: var(--esp-3); }
+
+/* ---- O TÍTULO DE SEÇÃO: uma régua só. Os títulos dourados em caixa alta das
+   fichas (o .bk-tit e os irmãos que nasceram copiando ele) ganham o mesmo
+   corpo, a mesma folga e o FILETE que corre até a borda — a seção se lê de
+   longe. */
+.sheet-body .bk-tit, .sheet-body .hs-sec, .sheet-body .nuvem-titulo, .sheet-body .perfil-h {
+  display: flex; align-items: center; gap: var(--esp-2);
+  font: 700 var(--fs-xs)/1.2 var(--ui-sans); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--gold-2); margin: var(--esp-2) 0 var(--esp-1);
+}
+.sheet-body .bk-tit::after, .sheet-body .hs-sec::after, .sheet-body .nuvem-titulo::after,
+.sheet-body .perfil-h::after {
+  content: ''; flex: 1 1 auto; height: 1px; min-width: 12px;
+  background: linear-gradient(90deg, var(--gold-a22), transparent);
+}
+.sheet-body .guilda-mural-cab .bk-tit::after { display: none; }
+
+/* ---- AS ABAS DE TEXTO (.abas-fila): a pílula das fichas. Ícone quando há
+   (as fileiras redondas de item seguem como estão), texto quando o nome É a
+   informação (Amigos/Inimigos, os heróis do Personagem). */
+.abas-fila {
+  display: flex; flex-wrap: wrap; gap: var(--esp-1);
+  padding: var(--esp-1); border-radius: 26px;
+  background: rgba(0,0,0,.25); border: 1px solid var(--bd-1);
+  align-self: flex-start; max-width: 100%;
+}
+.abas-fila .btn-tab { flex: 0 1 auto; min-width: 96px; border-color: transparent; background: transparent; color: var(--tx-2); }
+.abas-fila .btn-tab.is-on {
+  color: var(--gold); border-color: var(--gold-dim);
+  background: linear-gradient(180deg, var(--gold-a22), var(--gold-a08));
+}
+.am-abas.abas-fila { margin: 0; }
+
+/* os botões das filas de escolha (caminho elemental, reescrita) herdavam os
+   18 px dos emblemas da guilda — letra de título num botão pequeno */
+.guilda-emblemas .btn-mini { font-size: 13px; }
+
+/* ---- CAMPOS: um campo só — 44 px, o mesmo raio, o mesmo fundo, e o foco
+   dourado. Antes eram quatro alturas (.hub-input, .bk2-qtd, a busca, o
+   <select> do título) e o número do GM sem estilo nenhum. */
+.ui-sheet :is(input:not([type]), input[type="text"], input[type="number"], input[type="search"], select, textarea) {
+  min-height: var(--tap); border-radius: 10px;
+  border: 1px solid var(--bd-2); background: var(--sf-campo); color: var(--tx-1);
+  font: 400 var(--fs-m)/1.3 var(--ui-sans);
+  transition: border-color var(--dur) ease, box-shadow var(--dur) ease;
+}
+.ui-sheet :is(input:not([type]), input[type="text"], input[type="number"], input[type="search"]) { padding: 0 var(--esp-3); }
+.ui-sheet textarea { padding: var(--esp-2) var(--esp-3); }
+.ui-sheet :is(input, textarea)::placeholder { color: #6c7684; }
+.ui-sheet :is(input:not([type="range"]), select, textarea):focus {
+  border-color: var(--gold-3); box-shadow: 0 0 0 3px var(--gold-a14); outline: none;
+}
+.ui-root .ui-sheet :is(input:not([type="range"]), select, textarea):focus-visible { outline: none; }
+.ui-sheet :is(input, select, textarea):disabled { opacity: var(--op-apagado); cursor: not-allowed; }
+
+/* ---- CARTÕES e LINHAS DE LISTA: a mesma caixa para as listas de gente e de
+   contas (Amigos, Arena, Contas) — fundo de cartão, filete, relevo */
+.am-linha, .aq-linha, .conta-linha {
+  min-height: 52px; border-radius: var(--rad-m);
+  border: 1px solid var(--bd-2); background: var(--sf-1); box-shadow: var(--relevo);
+}
+.am-linha { padding: var(--esp-2) var(--esp-2) var(--esp-2) var(--esp-3); }
+/* o ✕ de tirar da lista media 30 px: alvo de dedo é 44 */
+.am-acts .btn-mini.am-tira { width: var(--tap); min-width: var(--tap); padding: 0; }
+
+/* ---- ESTADO VAZIO: a caixa tracejada diz "aqui vai ter coisa" em vez de uma
+   frase cinza perdida no meio da ficha */
+.sheet-body .empty {
+  padding: var(--esp-5) var(--esp-4); border: 1px dashed var(--bd-2); border-radius: var(--rad-m);
+  background: rgba(0,0,0,.18); color: var(--tx-3); font-size: var(--fs-s); line-height: var(--lh);
+}
+.sheet-body .empty::before {
+  content: '◆'; display: block; margin-bottom: var(--esp-1); color: var(--gold-dim); font-size: 12px;
+}
+
+/* ---- DICAS: a nota de rodapé de toda ficha, na mesma letra e no mesmo cinza */
+.sheet-body .inv-dica, .sheet-body .contas-nota { font-size: var(--fs-s); line-height: var(--lh); color: var(--tx-3); }
+.sheet-body .inv-dica b, .sheet-body .contas-nota b { color: var(--tx-2); }
+
+/* ---- a pergunta de confirmação: o texto com folga e os dois botões iguais */
+.confirm-txt { font-size: var(--fs-m); color: var(--tx-1); }
+.confirm-acts { margin-top: var(--esp-2); }
+
+/* ---- O CAIS com os ícones desenhados: o traço do jogo no lugar do emoji */
+.hub-dock-b { min-height: var(--tap); justify-content: center; }
+.hub-dock-b .hd-ic.is-svg { display: block; width: 22px; height: 22px; color: var(--tx-2); }
+.hub-dock-b .hd-ic.is-svg .ico-svg { width: 22px; height: 22px; display: block; }
+.hub-dock-b.is-on .hd-ic.is-svg { color: var(--gold); }
+@media (hover: hover) { .hub-dock-b:hover .hd-ic.is-svg { color: var(--tx-1); } }
+.hub-dock-b:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+@media (max-width: 480px) {
+  .hub-dock-b .hd-ic.is-svg, .hub-dock-b .hd-ic.is-svg .ico-svg { width: 20px; height: 20px; }
+}
+
+/* ---- O PAINEL DE APROXIMAÇÃO da praça (banco, mercadinho, arena, Poço, Sede,
+   barraquinha, forja): o título leva o medalhão da ficha que o botão abre */
+.hub-painel h3.hp-tit { display: flex; align-items: center; gap: var(--esp-2); }
+.hp-ico { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--gold-2); border: 1px solid var(--gold-3);
+  background: radial-gradient(circle at 50% 30%, var(--gold-a22), rgba(0,0,0,.35) 75%); }
+.hp-ico .ico-svg { width: 19px; height: 19px; }
+
+/* ---- A RÉGUA DOS 44 PX (o que a prova do fichas_fotos.html achou em 02/10):
+   as setas do carrossel do herói (30 px), o "1"/"2" de guardar traje (31 px),
+   o ⇄ Trocar (34), o botão do título (42), o "Como ganhar cada título" (25) e
+   as peças da mesa de troca (40). Alvo de dedo é 44 — em toda ficha. */
+.btn-mini { min-width: var(--tap); }
+.btn-mini.pt-troca { min-height: var(--tap); padding-top: 0; padding-bottom: 0; }
+.tit-botao { min-height: var(--tap); }
+.tit-como > summary { padding: 12px 0; line-height: 20px; min-height: var(--tap); box-sizing: border-box; }
+.tr-item { min-height: var(--tap); }
+/* o "Sair do jogo" do menu inicial tinha 40 (a ui_screens.html cobra 44 no menu) */
+.menu-sair { min-height: var(--tap); }

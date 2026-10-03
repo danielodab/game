@@ -208,6 +208,7 @@ jogador. Página nova sem essa linha é bug.
 | `armadilha_chao.html` | passou — 5 armadilhas, uma cor por elemento |
 | `carga.html` | passou — 23,87 MB servido contra 30,84 MB embutido |
 | `toque.html` | 12 de 12 — mirar com o dedo, agir com o mouse |
+| **`fichas_fotos.html`** (sem `?ficha=`) | a régua das fichas (02/10): em cada uma das 22 fichas, medalhão + título + fechar, papel de diálogo com nome, todo controle ≥ 44 px numa coluna de 390, nada vazando, foco dentro e de volta a quem abriu; abas de texto e o cais desenhado. Com `?ficha=<nome>` é a página das FOTOS — `tools/fotos_fichas.py` fotografa todas (1600×900 e 390×844) numa janela de Chrome só e monta a folha antes\|depois |
 | `celular.html` | 13 de 13 — o `index.html` num quadro de 390×844 |
 | `perf.html` | passou — 193 chamadas de desenho no perfil de celular |
 | **`equilibrio_fusao.html`** | **FALHA — 18 de 30 duplas na faixa.** Ver §7 |
@@ -322,6 +323,14 @@ cancelar) — três ocorrências.
 **O `renderer.info` zera a cada `renderer.render()`.** Com o pós-processamento
 ligado são vários passes por quadro, e ler no fim media só o último: `R.stats()`
 devolvia "1 chamada, 1 triângulo". O zerar agora é manual, na entrada do quadro.
+
+**Toda ficha nasce do `sheetShell` e veste o sistema das fichas.** O fim do
+`css/style.css` ("O SISTEMA DAS FICHAS") é a régua de espaço, letra, cor, foco,
+desligado, campo, aba de texto (`.abas-fila` + `.btn-tab`), título de seção
+(`.bk-tit`), estado vazio (`.empty`) e cartão. O medalhão do cabeçalho vem de
+`ICONE_FICHA`/`ICONE_ABA` no `hud.js` (desenhos `fc-*` do `icones_ui.js`):
+ficha nova ganha uma linha ali. Aba de texto guarda o TEXTO de sempre — as provas
+acham os botões por ele. Antes de mexer, rode a prova do `fichas_fotos.html`.
 
 **Teste bom cobra a REGRA, não o número.** Já aconteceu três vezes: o teste
 cravava `1,10×` em vez de ler `starCfg()`, e uma mudança legítima de curva
