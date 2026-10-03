@@ -498,6 +498,18 @@
       check('Menos movimento: desligar tira a classe', !document.documentElement.classList.contains('menos-movimento'));
     });
 
+    // ---- a régua do "desligado" (.btn.is-off apagado a 45%) não acende o que
+    // is-off ESCONDE: o recentrar da câmera some de verdade na batalha
+    passo = passo.then(function () {
+      var b = document.createElement('button');
+      b.className = 'btn bt-cam is-off';
+      b.textContent = '⌖';
+      document.getElementById('ui-root').appendChild(b);
+      var op = getComputedStyle(b).opacity;
+      check('o recentrar da câmera desligado continua invisível (is-off nele é sumir)', op === '0', 'opacity ' + op);
+      b.parentNode.removeChild(b);
+    });
+
     // ---- o cais: o desenho no lugar do emoji, o nome de sempre
     passo = passo.then(function () {
       UI.closeSheet();

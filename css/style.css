@@ -603,7 +603,10 @@ i, em { font-style: normal; color: var(--dim); }
   opacity: 0.7; z-index: 3; transition: opacity .18s;
 }
 .bt-cam:hover { opacity: 1; }
-.bt-cam.is-off { opacity: 0; pointer-events: none; }
+/* .btn na frente (03/10, revisão): a régua do "desligado" no fim do arquivo
+   (.btn.is-off, mesma força e depois) acendia este botão escondido a 45% —
+   um ⌖ cinza parado no topo de toda batalha. Aqui is-off é SUMIR, não apagar. */
+.btn.bt-cam.is-off { opacity: 0; filter: none; pointer-events: none; }
 /* Cadeado: SEMPRE visível, porque é estado e não ação — o jogador precisa
    poder ler de relance se a câmera está presa. Fechado, acende. */
 .bt-trava {
