@@ -52,6 +52,15 @@ O maior alcance do jogo e o único que **acumula**: cada tiro deixa uma marca, e
 há feitiços que detonam todas de uma vez. Recompensa quem planeja dois turnos à
 frente.
 
+> **03/10 — o alcance hoje (medido, `docs/EQUILIBRIO.md` §4.3 e §5.1).** "O maior
+> alcance do jogo" deixou de ser verdade sozinho: já no nível 20 e 30 o Bruxo atirava
+> de mais longe, e o acerto do equilíbrio tirou 2 casas dos feitiços de dano dos dois
+> (nos duelos da IA quem atirava de 7 a 10 casas e recuava vencia 66–80%). O alcance
+> útil medido ficou Caçador 5,3 / 5,5 / 6,3 / 7,3 contra Bruxo 5,3 / 6,3 / 7,0 / 7,5
+> (níveis 5 / 12 / 20 / 30): o Caçador divide o topo, a no máximo 15% do Bruxo. Se o
+> dono quiser o Caçador de volta como o único mais longe, é decisão de desenho — e o
+> duelo dele sobe junto.
+
 ### Ladino · assassino
 **Invisibilidade** e esquiva alta. Aparece, dá um dano grande num alvo só,
 some. Vive de posicionamento, não de resistência.

@@ -42,7 +42,7 @@
   // onde estava a régua antiga), o 20 e o troféu (30).
   var NIVEIS = [5, 12, 20, 30];
   // Níveis que NÃO entram no ajuste do PAIR_TUNE — só na conferência. Um ajuste
-  // de dois parâmetros por dupla mede quatro níveis e é conferido em dois que
+  // de três parâmetros por dupla mede quatro níveis e é conferido em dois que
   // ele nunca viu: se passasse só onde foi ajustado, era decoreba, não regra.
   var NIVEIS_PROVA = [16, 25];
 

@@ -52,7 +52,7 @@ const FAIXA_DUELO = [0.40, 0.60];    // X+Z contra Y+Z, com o mesmo parceiro Z d
  *   alcance [mín, máx] em casas
  *   desde  a regra do papel só vale a partir deste nível (a área do Bruxo
  *          chega com o caminho: no nível 5 ele só tem o primeiro degrau)
- * E para todas: o dano em alvo único entre 0,30× e 1,80× da média — ninguém
+ * E para todas: o dano em alvo único entre 0,30× e 2,20× da média — ninguém
  * inútil, ninguém dono do jogo. */
 const PAPEL = {
   tanque:    { unico: [0.80, 1.60], vidaEf: 1.05 },
@@ -79,12 +79,14 @@ const FAIXA_CAMINHO = 0.25;
 
 /* A FERRAMENTA DE CALIBRAGEM (`--ajuste arquivo.json`): experimenta
  * multiplicadores SEM tocar nos dados, só na memória dos filhos. Foi assim que
- * os números de docs/EQUILIBRIO.md §5 foram achados; o que ficou foi escrito à
- * mão em spells.js/fusions.js/classes.js, com o porquê ao lado. Formato:
+ * os números de docs/EQUILIBRIO.md §5 foram achados; o que ficou foi escrito
+ * nos dados (spells.js, monsters.js, fusions.js, fusion.js) já multiplicado —
+ * o porquê de cada ajuste mora nas tabelas de docs/EQUILIBRIO.md §5, não ao
+ * lado do número. Formato:
  *   { "classes": { "<classe>": { "dano": k, "cura": k, "escudo": k, "pv": +n,
  *                                "tier": { "<nível>": k }, "<elemento>": k } },
  *     "feiticos": { "<id>": { "dano": k, "cura": k, "escudo": k } },
- *     "pairTune": { "<dupla>": [k5, k30] } } */
+ *     "pairTune": { "<dupla>": [k5, k12, k30] } } */
 function grupoDoNivel(n) { return n >= 30 ? 'D' : n >= 15 ? 'C' : n >= 10 ? 'B' : 'A'; }
 function aplicaAjuste(J, aj) {
   const D = J.DATA;
