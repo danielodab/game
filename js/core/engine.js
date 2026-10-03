@@ -156,6 +156,9 @@ var JOGO = (typeof window !== 'undefined')
  * 20. O ECO PRIMORDIAL (02/10): fases, Ecos Menores, golpe avisado, teto de
  *     12 rodadas e a contagem do dano — o bloco "O ECO PRIMORDIAL" mais abaixo
  *     e o dado em js/core/data/eco.js.
+ *     As decisões 19 e 20 subiram Engine.VERSAO_REGRAS para 6: a tentativa
+ *     refeita no juiz (servidor/juiz/supremo.js) só bate com estas regras, e a
+ *     área que cobre a mesma unidade em duas casas deixou de repetir.
  * ==========================================================================*/
 
 (function () {
@@ -221,14 +224,7 @@ var JOGO = (typeof window !== 'undefined')
    *       anda esbarra nele e para antes; raio, veneno, empurrão e cia. também
    *       tiram das sombras, a armadilha do dono não; pisar em armadilha do
    *       outro lado PARA o passo na casa dela, e a carga dela não pega mais o
-   *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga
-   *   6 — 02/10: o CORPO GRANDE e o ECO PRIMORDIAL. Unidade de `porte` 2 ocupa
-   *       2×2 casas (a área acerta uma vez, a distância e a fixação medem da
-   *       casa mais perto, não é empurrada nem trocada) e a área que cobre a
-   *       mesma unidade duas vezes deixou de repetir; o Eco troca de fase, chama
-   *       os Ecos Menores, avisa o golpe grande e encerra na 12ª rodada — a
-   *       tentativa refeita no juiz (servidor/juiz/supremo.js) só bate com estas
-   *       regras */
+   *       dono vivo; a IA só desvia da armadilha que o lado dela enxerga */
   Engine.VERSAO_REGRAS = 6;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };

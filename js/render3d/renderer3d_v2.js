@@ -2566,7 +2566,10 @@ var JOGO = (typeof window !== 'undefined')
   function ehMapaDeDuelo(st) {
     var D = DATA();
     if (!st || !D.arenas) return false;
-    for (var i = 0; i < D.arenas.length; i++) if (D.arenas[i] && D.arenas[i].id === st.dungeonId) return true;
+    // 02/10: a Câmara do Eco mora em DATA.arenas mas é PvE — o enquadramento é o de calabouço
+    for (var i = 0; i < D.arenas.length; i++) {
+      if (D.arenas[i] && D.arenas[i].id === st.dungeonId) return D.arenas[i].modo !== 'eco';
+    }
     return false;
   }
   function medeHudDuelo() {
@@ -3303,6 +3306,8 @@ var JOGO = (typeof window !== 'undefined')
     });
     if (!node) return null;
     node.userData.uid = u.uid;
+    // 02/10: o corpo grande que troca de elemento (o Eco) — syncUnits refaz o corpo com a tinta nova
+    if (u.porte > 1) node.userData.elementoFase = u.element || null;
 
     // sombra de contato (um disco escuro) — ancora a figura no chão mesmo com
     // a sombra projetada fraca em celular
@@ -3452,7 +3457,8 @@ var JOGO = (typeof window !== 'undefined')
       // continuava com o boneco de antes e as marcas da outra classe nunca
       // apareciam — era o relato "ao fundir ele não vem fundido". Quando o
       // defId muda, o modelo é refeito.
-      if (node && node.userData && node.userData.defId !== u.defId) {
+      if (node && node.userData && (node.userData.defId !== u.defId ||
+          (node.userData.elementoFase !== undefined && node.userData.elementoFase !== (u.element || null)))) {
         if (node.parent) node.parent.remove(node);
         delete unitNodes[u.uid];
         node = null;
@@ -3503,8 +3509,10 @@ var JOGO = (typeof window !== 'undefined')
       if (!node || !v) continue;
       var ud = node.userData;
 
-      // posição + solavanco
-      node.position.set(wx(v.x) + v.knockX, v.z, wz(v.y) + v.knockZ);
+      // posição + solavanco. 02/10: o corpo de porte 2 fica no MEIO das quatro casas dele (x, y é o
+      // canto noroeste) — sem isto o Eco nascia em cima de uma casa e transbordava para as vizinhas
+      var meio = (u.porte > 1) ? (u.porte - 1) / 2 : 0;
+      node.position.set(wx(v.x + meio) + v.knockX, v.z, wz(v.y + meio) + v.knockZ);
       // rotação suave até a direção desejada
       var d = v.faceTo - v.face;
       while (d > Math.PI) d -= Math.PI * 2;
@@ -3609,6 +3617,43 @@ var JOGO = (typeof window !== 'undefined')
       mats[i].depthWrite = a > 0.6;
     }
   }
+
+  // ======================================================= O AVISO DO ECO (02/10)
+  /* As casas do golpe grande marcado (state.eco.aviso) ficam vermelhas no chão, pulsando, durante a
+   * rodada inteira em que o grupo pode sair delas — o aviso "um turno antes" do dono. Malhas próprias
+   * (não as do ovPool, que se refazem a cada mira) dentro do overlayG; refeitas só quando a marca
+   * muda, e o pulso é da opacidade de um material só. Para o adversário… não há: o Eco é PvE. */
+  var ecoAvisoG = null, ecoAvisoSig = '', ecoAvisoMat = null;
+  function pintaAvisoEco(st) {
+    var av = st && st.eco && st.eco.aviso && st.phase === 'playing' ? st.eco.aviso : null;
+    var sig = av ? av.golpe + ':' + (av.casas || []).map(function (c) { return c.x + '.' + c.y; }).join(';') : '';
+    if (sig !== ecoAvisoSig) {
+      ecoAvisoSig = sig;
+      if (ecoAvisoG) {
+        if (ecoAvisoG.parent) ecoAvisoG.parent.remove(ecoAvisoG);
+        ecoAvisoG = null;
+      }
+      if (av && overlayG) {
+        if (!ecoAvisoMat) {
+          ecoAvisoMat = new THREE.MeshBasicMaterial({ color: col3('#ff4a2a'), transparent: true, opacity: 0.5,
+                                                      depthWrite: false, side: THREE.DoubleSide });
+        }
+        ecoAvisoMat.color.copy(col3(R.elementColor(av.el || 'fogo')));   // a cor do elemento do golpe
+        ecoAvisoG = new THREE.Group();
+        ecoAvisoG.name = 'eco-aviso';
+        (av.casas || []).forEach(function (c) {
+          var m = new THREE.Mesh(M.tileFlatGeo(), ecoAvisoMat);
+          m.renderOrder = 3;
+          m.position.set(wx(c.x), 0.07, wz(c.y));
+          m.scale.setScalar(0.96);
+          ecoAvisoG.add(m);
+        });
+        overlayG.add(ecoAvisoG);
+      }
+    }
+    if (ecoAvisoMat && ecoAvisoG) ecoAvisoMat.opacity = 0.32 + 0.26 * (0.5 + 0.5 * Math.sin(nowT * 5.2));
+  }
+  R._ecoAviso = function () { return ecoAvisoG ? ecoAvisoG.children.length : 0; };   // provas: conta, não foto
 
   // ================================================================= OVERLAYS
   var ovPool = [], ovUsed = 0;
@@ -4904,6 +4949,7 @@ var JOGO = (typeof window !== 'undefined')
       rebuildTileEvents(st);
       rebuildTraps(st);
       rebuildWalls(st);
+      pintaAvisoEco(st);                  // 02/10: as casas do golpe grande do Eco
       vigiaAreaUtil(st);                  // 15/09: a HUD cresceu? reenquadra (só no desktop)
       var en = engine();
       drawActiveRing(safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null));

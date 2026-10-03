@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — o Eco Primordial (HUD)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  html, body { overflow: auto; height: auto; }
+  body { margin: 0; background: #0f1216; color: #e8eef6; }
+  #topo { padding: 10px; font: 12px monospace; }
+  #summary { padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  #app { position: relative; width: 390px; height: 844px; }
+</style>
+</head>
+<body>
+<!-- O ECO PRIMORDIAL NA TELA (02/10). tests/eco_motor.js cobra a REGRA, tests/supremo_api.py o
+     SERVIDOR; esta cobra a HUD. Página LEVE — sem index.html, sem WebGL: o CSS, os dados, o miolo
+     (o motor, o Game) e a HUD de verdade num #app de 390 px, com a Sessao e a Autoridade de mentira
+     quando a prova pede o servidor. Conta o que a HUD criou (nada de julgar por foto):
+       · a ficha 'eco': o título, as regras com as 12 rodadas, o botão de TREINO sem servidor e o de
+         "Enfrentar" com ele; a semana, as tentativas de hoje, o melhor e a posição, os 10 primeiros
+         e as 4 faixas de prêmio vindos do GET /api/supremo (de mentira);
+       · a batalha: a linha da sala com o nome da Câmara, "Rodada N de 12", o chip do dano ao vivo,
+         a fase com o elemento e o aviso do golpe marcado;
+       · o fim: a tela 'ecoFim' com o dano daqui na hora e "não conta no placar" no treino; com o
+         servidor, "Conferindo…" e depois o dano CONFERIDO, a posição e as tentativas que restam (e a
+         nota quando o número daqui era outro: vale o do servidor); o lance anotado (o `p` da
+         preparação) foi junto no fechar; a tela decide pointer-events e os botões respondem;
+       · o aviso da loja para o prêmio do Eco (o título e os selos);
+       · nenhum erro na página e o save de verdade intocado. -->
+<div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js','js/core/data/arenas.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js','js/core/data/eco.js',
+    'js/core/contas.js','js/core/nomes.js','js/core/titulos.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'js/render2d/art.js','assets/embedded/icones-itens.js','js/render2d/icones_itens.js',
+    'assets/embedded/icones-extras.js','js/render2d/icones_extras.js',
+    'js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var erros = [];
+  window.addEventListener('error', function (e) {
+    erros.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    erros.push('promessa: ' + ((e.reason && e.reason.message) || e.reason));
+  });
+  function qa(s, raiz) { return [].slice.call((raiz || document).querySelectorAll(s)); }
+  function q1(s, raiz) { return (raiz || document).querySelector(s); }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function ficha() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function txt(n) { return n ? n.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function botaoTexto(re, raiz) {
+    return qa('button', raiz || document).filter(function (b) { return re.test(txt(b)); })[0] || null;
+  }
+  function fim() {
+    check('nenhum erro na página', erros.length === 0, erros.slice(0, 4).join(' | '));
+    var sb = JOGO.SaveSandbox && JOGO.SaveSandbox.check();
+    check('o save de verdade continua intocado', !!sb && sb.ok, sb ? JSON.stringify(sb.disco).slice(0, 120) : 'sem sandbox');
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__done = true;
+    window.__pronto = true;
+  }
+
+  var D = JOGO.DATA, P = JOGO.Progress, UI = JOGO.UI, G = JOGO.Game, E = JOGO.Engine;
+  var hid;
+  function semeia() {
+    P.load(); P.reset();
+    hid = P.heroIds()[0];
+    var XP = D.leveling.xpTable;
+    P.addXp(hid, XP[Math.min(29, XP.length - 1)]);
+    P.save();
+    UI.init();
+    UI.selection([hid]);
+  }
+  // o GET /api/supremo de mentira (o formato de servidor/supremo.py)
+  var AGORA = Math.floor(Date.now() / 1000);
+  var RESPOSTA = {
+    ok: true, agora: AGORA, tentativasPorDia: 3,
+    semana: { id: 40, inicio: AGORA - 3 * 86400, fim: AGORA + 2 * 86400 + 3600 },
+    faixas: [
+      { id: 'podio', de: 1, ate: 3, nome: '1º ao 3º', vintens: 5000, selos: 20, titulo: 'Voz do Eco' },
+      { id: 'elite', de: 4, ate: 10, nome: '4º ao 10º', vintens: 2500, selos: 10, titulo: null },
+      { id: 'cem', de: 11, ate: 100, nome: '11º ao 100º', vintens: 1000, selos: 4, titulo: null },
+      { id: 'participacao', de: 101, ate: null, nome: 'participação', vintens: 150, selos: 0, titulo: null }
+    ],
+    ranking: [
+      { posicao: 1, nome: 'Ana', pontos: 7500, dano: 6000, derrubou: true, rodada: 11 },
+      { posicao: 2, nome: 'Bruno', pontos: 4100, dano: 4100, derrubou: false, rodada: 12 },
+      { posicao: 3, nome: 'Cris', pontos: 3900, dano: 3900, derrubou: false, rodada: 12 }
+    ],
+    eu: { tentativasHoje: 1, restantes: 2, melhor: { pontos: 4100, dano: 4100, derrubou: false }, posicao: 2,
+          foraDoRanking: false, premios: [], amanhaEm: AGORA + 50000 }
+  };
+  var pedidos = [];
+  function poeSessao() {
+    JOGO.Sessao = {
+      ativa: function () { return true; },
+      api: function (rota, op) {
+        pedidos.push({ rota: rota, op: op });
+        if (rota === '/api/supremo') return Promise.resolve(JSON.parse(JSON.stringify(RESPOSTA)));
+        return Promise.resolve({ ok: false, status: 404 });
+      }
+    };
+  }
+
+  var passos = [];
+  function p(fn) { passos.push(fn); }
+
+  // ---- 1) a ficha sem servidor: o treino
+  p(function () {
+    UI.openSheet('eco');
+    var f = ficha();
+    check('a ficha do Eco abre (UI.openSheet("eco"))', !!f && /O Eco Primordial/.test(txt(q1('.sheet-head', f))));
+    check('sem servidor o botão é o do TREINO (não conta no placar)', /Treinar contra o Eco/.test(txt(q1('.eco-entra', f))));
+    var regras = txt(q1('.eco-regras', f));
+    check('as regras dizem 12 rodadas, 3 por dia, as fases e o aviso',
+          /12 rodadas/.test(regras) && /3 tentativas por dia/.test(regras) && /Fogo → Água → Terra → Ar/.test(regras) &&
+          /AVISADO/.test(regras), regras.slice(0, 120));
+    check('a dupla de "Quem desce" aparece na ficha', /Vai a dupla/.test(txt(q1('.eco-dupla', f))) &&
+          txt(q1('.eco-dupla', f)).indexOf(D.classes[P.hero(hid).classId || hid].name) >= 0, txt(q1('.eco-dupla', f)));
+  });
+
+  // ---- 2) a batalha de treino: a linha da sala
+  p(function () {
+    var r = G.startEco([hid]);
+    check('o treino abre a Câmara na hora (sem servidor)', r === true && G.screen === 'battle' && !!G.state && !!G.state.eco, String(r));
+    check('a ficha fecha ao entrar', !ficha());
+    // a preparação: começa a luta (o relógio de 30 s é de parede; aqui o PRONTO)
+    var op = E.opcoesDe(G.state, G.state.placement.uid)[0];
+    G.marcaCasa(op.x, op.y);
+    G.prontoPrep(true);
+    G.update(0.016);
+    check('a luta começou depois do PRONTO', G.state.phase === 'playing', G.state.phase);
+    UI.update(0.016);
+    var sala = txt(q1('.bt-room'));
+    check('a linha da sala tem o nome da Câmara (mapa de DATA.arenas)', /A Câmara do Eco/.test(sala), sala);
+    check('"Rodada 1 de 12"', /Rodada 1 de 12/.test(sala), sala);
+    check('o chip do dano ao vivo começa em 0', /Dano no Eco: 0/.test(txt(q1('.eco-chip'))), txt(q1('.eco-chip')));
+    check('a fase com o elemento (Fogo)', txt(q1('.eco-fase')) === 'Fogo', txt(q1('.eco-fase')));
+    // o placar e o golpe marcado aparecem quando o estado muda
+    G.state.eco.dano = 1234;
+    G.state.eco.aviso = { golpe: 'eco-golpe-fogo', el: 'fogo', nome: 'Chuva do Núcleo', casas: [{ x: 1, y: 7 }] };
+    var u = E.findUnit(G.state, G.state.eco.uid);
+    u.hp -= 1;                                     // a assinatura da batalha muda com a vida
+    UI.update(0.016);
+    check('o chip mostra o dano com milhar e a porcentagem da vida', /Dano no Eco: 1\.234 \(\d+%\)/.test(txt(q1('.eco-chip'))),
+          txt(q1('.eco-chip')));
+    check('o aviso do golpe marcado aparece com o nome', /Chuva do Núcleo/.test(txt(q1('.eco-aviso'))));
+    G.state.eco.aviso = null;
+  });
+
+  // ---- 3) o fim do treino
+  var vidaGravada = 0, vidaAntes = JOGO.Vida;
+  p(function () {
+    JOGO.Vida = { fim: function () { vidaGravada++; } };   // o dublê: conta quem grava a vida do fim
+    G.state.phase = 'lost';
+    G.update(0.016);
+    JOGO.Vida = vidaAntes;
+    var t = q1('#ui-root .screen-ecoFim.is-on');
+    check('o fim vai para a tela ecoFim', G.screen === 'ecoFim' && !!t);
+    check('a tela mostra o dano daqui (1.234)', txt(q1('.eco-fim-num', t)) === '1.234', txt(q1('.eco-fim-num', t)));
+    check('o treino diz que não conta no placar', /não conta no placar/.test(txt(q1('.eco-fim-estado', t))));
+    check('a tela decide pointer-events (auto) e tem os três botões',
+          getComputedStyle(t).pointerEvents === 'auto' && !!botaoTexto(/Tentar de novo/, t) &&
+          !!botaoTexto(/Ver o ranking/, t) && !!botaoTexto(/Voltar à praça/, t));
+    check('a vida dos heróis NÃO foi gravada (a tentativa não gasta a vida única)', vidaGravada === 0, String(vidaGravada));
+  });
+
+  // ---- 4) com o servidor: a ficha, a tentativa oficial e o placar conferido
+  var fechou = null, resolveFecha = null;
+  p(function () {
+    poeSessao();
+    JOGO.Autoridade = {
+      ligada: function () { return true; },
+      abreEco: function (corpo) {
+        pedidos.push({ rota: 'abreEco', corpo: corpo });
+        return Promise.resolve({ ok: true, tentativa: 'tent-de-prova-0001', semente: 777, restantes: 1 });
+      },
+      fechaEco: function (corpo) {
+        fechou = corpo;
+        return new Promise(function (r) { resolveFecha = r; });
+      }
+    };
+    // "Voltar à praça" volta pelo Game (a praça 3D não existe nesta página leve: o dublê só conta)
+    var restart = G.restart, foi = null;
+    G.restart = function (tela) { foi = tela; };
+    botaoTexto(/Voltar à praça/, q1('.screen-ecoFim')).click();
+    G.restart = restart;
+    check('"Voltar à praça" leva à praça', foi === 'hub', String(foi));
+    G.init('menu');
+    UI.openSheet('eco');
+    return espera(30);
+  });
+  p(function () {
+    var f = ficha();
+    check('com o servidor o botão é "Enfrentar o Eco"', txt(q1('.eco-entra', f)) === 'Enfrentar o Eco', txt(q1('.eco-entra', f)));
+    var st = txt(q1('.eco-status', f));
+    check('a semana fecha em… (a contagem regressiva do relógio do servidor)', /A semana fecha em/.test(st), st);
+    check('as tentativas de hoje e o melhor com a posição', /2 de 3/.test(st) && /4\.100 pontos/.test(st) && /2º lugar/.test(st), st);
+    check('os 3 primeiros da semana, com a estrela de quem derrubou', qa('.eco-rank-linha', f).length === 3 &&
+          !!q1('.eco-rank-linha .eco-nome i', f) && qa('.eco-rank-linha.is-podio', f).length === 3);
+    check('as 4 faixas de prêmio, com o título do pódio', qa('.eco-faixa', f).length === 4 && /Voz do Eco/.test(txt(q1('.eco-premios', f))));
+    check('o link do ranking completo vai ao site (#eco)', /ranking\.html#eco$/.test(q1('.eco-site', f).getAttribute('href')));
+    q1('.eco-entra', f).click();
+    return espera(30);
+  });
+  p(function () {
+    var abre = pedidos.filter(function (x) { return x.rota === 'abreEco'; })[0];
+    check('o botão abre a tentativa no servidor com a dupla', !!abre && abre.corpo.herois[0] === hid);
+    check('a batalha nasce da semente do SERVIDOR', G.screen === 'battle' && !!G.state && !!G.state.eco &&
+          G.ecoTentativa() && G.ecoTentativa().tentativa === 'tent-de-prova-0001');
+    var ref = E.createBattle(D.eco.arena, 0, P.battleParty([hid]), { seed: 777, dificuldade: 'normal', escolhePosicao: true });
+    check('… a mesma sala que a semente 777 monta (o juiz refaz assim)', E.hash(ref) === E.hash(G.state) ||
+          JSON.stringify(E.opcoesDe(ref, ref.placement.uid)) === JSON.stringify(E.opcoesDe(G.state, G.state.placement.uid)));
+    var op = E.opcoesDe(G.state, G.state.placement.uid)[1];
+    G.marcaCasa(op.x, op.y);
+    G.prontoPrep(true);
+    G.update(0.016);
+    var u = E.findUnit(G.state, G.state.eco.uid);
+    G.state.eco.dano = 321;
+    u.hp = 0; u.alive = false;
+    G.state.eco.derrubou = true;
+    G.state.phase = 'won';
+    G.update(0.016);
+    check('o fim manda os lances ao servidor (o `p` da preparação com a casa marcada)', !!fechou &&
+          fechou.tentativa === 'tent-de-prova-0001' && fechou.lances.length >= 1 && fechou.lances[0].a === 'p' &&
+          !!fechou.lances[0].e && typeof fechou.hashFinal === 'number',
+          JSON.stringify(fechou && fechou.lances && fechou.lances[0]));
+    var t = q1('#ui-root .screen-ecoFim.is-on');
+    check('derrubado: o título é a queda do Eco', /O Eco Primordial caiu/.test(txt(q1('h1', t))));
+    check('enquanto o servidor confere, a tela diz "Conferindo…"', /Conferindo com o servidor/.test(txt(q1('.eco-fim-estado', t))));
+    resolveFecha({ ok: true, dano: 300, pontos: 1800, derrubou: true, bonus: 1500, rodada: 9,
+                   eu: { restantes: 1, melhor: { pontos: 4100 }, posicao: 2, foraDoRanking: false } });
+    return espera(30);
+  });
+  p(function () {
+    var t = q1('#ui-root .screen-ecoFim.is-on');
+    var est = txt(q1('.eco-fim-estado', t));
+    check('o dano que vale é o CONFERIDO pelo servidor (300, não 321)', txt(q1('.eco-fim-num', t)) === '300', txt(q1('.eco-fim-num', t)));
+    check('a resposta do servidor: pontos, o melhor, a posição e as tentativas que restam',
+          /1\.800 pontos/.test(est) && /4\.100/.test(est) && /2º lugar/.test(est) && /Tentativas de hoje: 1/.test(est), est);
+    check('a nota quando o número daqui era outro', /vale o do servidor/.test(est), est);
+    check('ainda há tentativa: "Tentar de novo" aparece', !!botaoTexto(/Tentar de novo/, t));
+  });
+
+  // ---- 5) o aviso da loja do prêmio
+  p(function () {
+    var a = UI.avisoLojaTexto({ tipo: 'entregue', origem: 'eco', pedido: { nome: 'Prêmio do Eco Primordial', origem: 'eco',
+      entrega: { tipo: 'premio-eco', alvo: 'eco', qtd: 1, posicao: 1, titulo: 'Voz do Eco',
+                 selos: { fogo: 5, agua: 5, terra: 5, ar: 5 } } } });
+    check('o aviso do prêmio diz a posição, o título e os selos', !!a && a.tipo === 'good' &&
+          /1º da semana/.test(a.texto) && /Voz do Eco/.test(a.texto) && /20 selos/.test(a.texto), a && a.texto);
+    var v = UI.avisoLojaTexto({ tipo: 'entregue', origem: 'eco', pedido: { nome: 'x', entrega: { tipo: 'vintens', qtd: 5000 } } });
+    check('o aviso dos vinténs do prêmio', !!v && /Prêmio do Eco Primordial: 5\.000 vinténs/.test(v.texto), v && v.texto);
+  });
+
+  try {
+    semeia();
+    passos.reduce(function (pr, fn) {
+      return pr.then(function () { return fn(); }).catch(function (e) {
+        check('passo sem exceção', false, (e && e.message) + ' ' + ((e && e.stack) || '').split('\n')[1]);
+      });
+    }, Promise.resolve()).then(fim);
+  } catch (e) {
+    check('a página montou', false, e && e.message);
+    fim();
+  }
+})();
+</script>
+</body>
+</html>

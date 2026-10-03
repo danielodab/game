@@ -474,8 +474,37 @@ var JOGO = (typeof window !== 'undefined')
     'sum-storm-falcon':   { model: 'sum_storm_falcon',   scale: 0.64 },  // 1,15 m
     // as duas novas, que fecham o buraco de nivel 30 na Agua e no Ar
     'sum-drowned-cistern': { model: 'sum_drowned_cistern', scale: 1.44 }, // 2,60 m
-    'sum-storm-eye':       { model: 'sum_storm_eye',       scale: 1.50 }  // 2,70 m
+    'sum-storm-eye':       { model: 'sum_storm_eye',       scale: 1.50 }, // 2,70 m
+    /* O ECO PRIMORDIAL E OS ECOS MENORES (02/10). Chave de modelo PRÓPRIA para cada um — a arte
+     * final do dono entra embutida com estes nomes e ganha sozinha. Enquanto o kit não existe, o
+     * corpo cai no provisório de M.CORPO_PROVISORIO (logo abaixo). `tintaDaFase`: o Eco troca de
+     * elemento a cada fase, e a tinta vem do elemento da UNIDADE, não do dado (o renderizador
+     * refaz o corpo quando ele troca). Porte: chefe é 2,95 m × escala; o Eco é ~2× um chefe
+     * (ocupa 2×2 casas) e o Menor, um monstro comum. */
+    'eco_primordial':  { model: 'boss-eco-primordial', scale: 2.00, tintaDaFase: true },   // 5,90 m
+    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },
+    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },
+    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.00 },
+    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }
   };
+
+  /* O CORPO PROVISÓRIO (02/10): quem veste o quê enquanto a arte final não chega. Para a arte final
+   * entrar basta embutir o kit com a chave própria (ele passa na frente: temKit); para aposentar o
+   * provisório de vez, apaga-se UMA linha daqui. Escolhas: o Coração Partido é o maior chefe e já é
+   * feito de quatro elementos — o melhor dublê de "pedaços dos seis calabouços"; com 2,44 ele mede
+   * 7,2 m, o dobro dele (1,22). Os Menores vestem os quatro Arautos do Coração, a mesma armadura com
+   * recheio de cada elemento, no porte que já têm. */
+  M.CORPO_PROVISORIO = {
+    'boss-eco-primordial': { model: 'boss-riftheart', scale: 2.44, tintaDaFase: true },
+    'eco-menor-fogo':      { model: 'cinder-herald', scale: 1.17 },
+    'eco-menor-agua':      { model: 'tide-herald',   scale: 1.17 },
+    'eco-menor-terra':     { model: 'stone-herald',  scale: 1.28 },
+    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 }
+  };
+  function temKitDe(chave) {
+    return !!((JOGO.MODELS && JOGO.MODELS[chave]) || (JOGO.MESHY_CLIPS && JOGO.MESHY_CLIPS[chave]));
+  }
+  M.temKitDe = temKitDe;
 
   // Familias: rede de seguranca quando um id novo aparecer nos dados.
   M.FAMILY_LOOK = {
@@ -1144,7 +1173,8 @@ var JOGO = (typeof window !== 'undefined')
 
   function monsterLook(defId) {
     var D = DATA();
-    var md = (D.monsters && D.monsters[defId]) || null;
+    // 02/10: o elenco do Eco mora à parte (js/core/data/eco.js)
+    var md = (D.monsters && D.monsters[defId]) || (D.ecoMonstros && D.ecoMonstros[defId]) || null;
     // 10/09, preparando os lotes dos portais fechados: um monstro cujo kit
     // PRÓPRIO já está embutido (JOGO.MODELS[defId], pelo embute_monstros.py)
     // veste o próprio corpo mesmo sem linha no MONSTER_LOOK — a linha só
@@ -1157,13 +1187,17 @@ var JOGO = (typeof window !== 'undefined')
     var base = MONSTER_LOOK[defId] || proprio ||
                (md && md.family && M.FAMILY_LOOK[md.family]) ||
                M.MONSTER_FALLBACK;
+    // 02/10: sem o kit da chave própria, o corpo provisório (M.CORPO_PROVISORIO)
+    if (base && base.model && M.CORPO_PROVISORIO[base.model] && !temKitDe(base.model)) base = M.CORPO_PROVISORIO[base.model];
     var boss = !!(md && md.boss);
+    var tintaFase = !!(base && base.tintaDaFase);
     return {
       model: base.model, show: (base.show || []).slice(),
       proc: !!base.proc, procId: defId,
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
-      tint: M.elementColor((md && md.element) || 'neutro'),
-      accent: M.elementColor((md && md.element) || 'neutro'),
+      // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
+      tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
+      accent: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
       family: md && md.family, boss: boss
     };
   }

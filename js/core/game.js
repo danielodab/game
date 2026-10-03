@@ -197,6 +197,7 @@ var JOGO = (typeof window !== 'undefined')
     Game.mustEndTurn = false;
     carryFimRede = null;         // 14/09: a vida dos heróis NÃO zera aqui (é única, JOGO.Vida)
     ataSolo = null;
+    ataEco = null;               // 02/10: a tentativa do Eco (quem larga fecha antes: Game.abandonar)
     conferindoSala = false;
     resetAiState();
     resetTimer(true);
@@ -431,6 +432,116 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* O ECO PRIMORDIAL (02/10) — o chefe supremo da semana (js/core/data/eco.js; a tentativa, o placar
+   * e a semana moram em servidor/supremo.py). A tentativa é uma batalha SOLO na Câmara do Eco:
+   *   - com sessão do site (Autoridade ligada) a semente vem do servidor (POST /api/supremo/abrir, 3 por
+   *     dia), os lances são anotados como na sala solo (anotaSolo) e o fechar manda tudo para o juiz
+   *     refazer — o placar que vale é o dele, nunca o número desta tela;
+   *   - sem sessão (em casa, file://) é TREINO: semente daqui, e a tela diz que não conta no placar;
+   *   - NÃO usa nem gasta a vida única: todo herói entra cheio e o fim não grava vida. A tentativa é
+   *     placar, e um herói ferido de outra luta desigualaria a disputa — o juiz refaz do mesmo jeito;
+   *   - dificuldade sempre 'normal' (a mesma régua para todo mundo no ranking), sem desafio de sala;
+   *   - só a dupla da própria conta (a sala em grupo pela Rede fica para depois: a semente e o placar
+   *     de dois jogadores pedem uma ata própria no servidor).
+   * O fim (Eco derrubado, grupo caído ou a 13ª rodada) vai para a tela 'ecoFim': o dano daqui na hora
+   * e, quando o servidor responde, o dano conferido, a posição e as tentativas que restam. */
+  var ataEco = null;           // { tentativa, treino, restantes } da tentativa em curso
+  var fimEco = null;           // o que a tela 'ecoFim' mostra
+  var abrindoEco = false;      // o pedido da semente está no servidor: não sai outro
+  Game.ecoTentativa = function () {
+    return ataEco ? { tentativa: ataEco.tentativa, treino: !!ataEco.treino, restantes: ataEco.restantes } : null;
+  };
+  Game.ecoFim = function () { return fimEco; };
+  Game.ecoAbrindo = function () { return abrindoEco; };
+  function ehMestre(hid) {
+    var prog = P(), h = null;
+    try { h = prog && prog.hero ? prog.hero(hid) : null; } catch (e) { h = null; }
+    return !!(h && (h.classId === 'gm' || hid === 'gm'));
+  }
+  /* Devolve true (a batalha nasceu, ou os modelos estão descendo e ela nasce sozinha), 'esperando' (a
+   * semente está no servidor; `aoAbrir(r)` roda com a resposta) ou false (grupo inválido, em grupo pela
+   * Rede, o Mestre, sem o dado do Eco). */
+  Game.startEco = function (heroIds, aoAbrir) {
+    var cfg = JOGO.DATA && JOGO.DATA.eco;
+    if (!cfg || !cfg.arena || !validParty(heroIds)) return false;
+    var cp = C();
+    try { if (cp && cp.emGrupo && cp.emGrupo()) return false; } catch (e) {}
+    for (var i = 0; i < heroIds.length; i++) if (ehMestre(heroIds[i])) return false;
+    if (abrindoEco) return 'esperando';
+    var A = JOGO.Autoridade;
+    var oficial = !!(A && A.ligada && A.ligada() && A.abreEco);
+    function abre() {
+      if (!oficial) {
+        // TREINO: a semente daqui — nada vai ao servidor
+        var sem = (Date.now() ^ Math.floor(Math.random() * 2147483647)) >>> 0;
+        comecaEco(heroIds, sem, { treino: true });
+        if (aoAbrir) { try { aoAbrir({ ok: true, treino: true }); } catch (e1) {} }
+        return;
+      }
+      abrindoEco = true;
+      A.abreEco({ herois: heroIds.slice() }).then(function (r) {
+        abrindoEco = false;
+        if (r && r.ok && typeof r.semente === 'number' && typeof r.tentativa === 'string') {
+          comecaEco(heroIds, r.semente, { tentativa: r.tentativa, restantes: r.restantes });
+        }
+        if (aoAbrir) { try { aoAbrir(r); } catch (e2) {} }
+      });
+    }
+    // os modelos da Câmara (o Eco e os Ecos Menores) descem antes, atrás da tela de carga
+    if (seguraParaModelos({ dungeonId: cfg.arena, party: heroIds, sala: 0 }, abre)) return true;
+    abre();
+    return oficial ? 'esperando' : true;
+  };
+  function comecaEco(heroIds, semente, info) {
+    var cfg = JOGO.DATA.eco;
+    Game.party = heroIds.slice();
+    Game.dungeonId = cfg.arena;
+    Game.roomIndex = 0;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    carryFimRede = null;
+    resetAiState();
+    resetTimer(true);
+    rede = null; ultimoTurno = null; timerTurno = null;
+    // os lances vão no formato da sala solo; sem `bilhete` não há registro de luta aberta (a vida não entra)
+    ataSolo = info.treino ? null : { bilhete: null, lances: [], eco: info.tentativa };
+    ataEco = { tentativa: info.tentativa || null, treino: !!info.treino, restantes: info.restantes };
+    fimEco = null;
+    Game.state = E().createBattle(cfg.arena, 0, partyPayload(),
+      { seed: semente, dificuldade: 'normal', escolhePosicao: true });
+    zeraPrep();                                    // os 30 s da preparação, como em toda sala
+    setScreen('battle');
+    return true;
+  }
+  /* O FIM DA TENTATIVA: a tela na hora com o dano daqui; o fechar no servidor em seguida (com
+   * retentativa sem rede, como a sala). `largou` = o jogador saiu no meio: os lances até ali valem. */
+  function fechaEco(largou) {
+    var eco = ataEco, ata = ataSolo, st = Game.state;
+    ataEco = null;
+    ataSolo = null;
+    if (!eco) return null;
+    var placar = null;
+    try { placar = st ? E().ecoPlacar(st) : null; } catch (e) { placar = null; }
+    fimEco = { placar: placar, treino: eco.treino, conferindo: !eco.treino && !!ata, oficial: null, erro: null,
+               fase: st ? st.phase : null, largou: !!largou, restantes: eco.restantes };
+    if (!eco.treino && ata && JOGO.Autoridade && JOGO.Autoridade.fechaEco) {
+      var hashFinal = null;
+      try { hashFinal = largou ? null : E().hash(st); } catch (e2) { hashFinal = null; }
+      var meu = fimEco;
+      JOGO.Autoridade.fechaEco({ tentativa: eco.tentativa, lances: ata.lances, hashFinal: hashFinal })
+        .then(function (r) {
+          meu.conferindo = false;
+          if (r && r.ok) meu.oficial = r;
+          else meu.erro = (r && r.erro) || 'o servidor não conferiu a tentativa';
+          if (Game.screen === 'ecoFim' && fimEco === meu) setScreen('ecoFim', meu);
+        });
+    }
+    return fimEco;
+  }
+  Game._fechaEco = fechaEco;                     // provas
+
   Game.nextRoom = function () {
     if (Game.screen !== 'roomClear' || !Game.dungeonId) return false;
     // [G11] em grupo o líder libera a sala seguinte (manda `proxima`) e o
@@ -524,6 +635,8 @@ var JOGO = (typeof window !== 'undefined')
    * desistência. */
   Game.abandonar = function () {
     if (Game.screen !== 'antessala' && Game.screen !== 'battle') return false;
+    // 02/10: a tentativa do Eco largada no meio fecha com os lances até aqui (o dano feito vale)
+    if (ataEco) fechaEco(true);
     Game.init('hub');
     // 15/09: a luta largada no meio fecha já no servidor, com os lances até aqui (a vida do ponto em que parou)
     try {
@@ -2700,6 +2813,16 @@ var JOGO = (typeof window !== 'undefined')
   function handleBattleOver() {
     if (!Game.state || Game.screen !== 'battle') return;
     if (conferindoSala) return;          // o recibo da vitória ainda está vindo do servidor
+    // 02/10: o fim da tentativa do Eco não é vitória nem derrota de sala: sem recompensa, sem vida gravada
+    if (Game.state.eco && ataEco) {
+      resetAiState();
+      resetTimer(true);
+      Game.selectedSpellId = null;
+      Game.mustEndTurn = false;
+      Game.pendingFusion = null;
+      setScreen('ecoFim', fechaEco(false));
+      return;
+    }
     // [G11] no grupo, quem não é a autoridade confere o FIM da sala com ela (o
     // hash do estado final) antes da recompensa; enquanto isso, segue na tela
     // da batalha — o update chama de novo a cada quadro

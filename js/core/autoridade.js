@@ -293,6 +293,22 @@ var JOGO = (typeof window !== 'undefined')
   A.fecha = function (bilhete, lances, hashFinal) {
     return fechaEm('/api/sala/fechar', { bilhete: bilhete, lances: lances, hashFinal: hashFinal });
   };
+  /* O ECO PRIMORDIAL (02/10, servidor/supremo.py): a tentativa abre com a semente do servidor (as ops na fila
+   * sobem antes: o juiz monta o grupo do estado de lá) e fecha com os lances — o juiz refaz e o placar é o dele.
+   * Resolve sempre: {ok, tentativa, semente, restantes} / {ok, dano, pontos, eu…} ou {ok:false, erro, motivo}.
+   * A tentativa não é luta aberta (não mexe na vida única): sem registro em soterra-luta-aberta. */
+  A.abreEco = function (corpo) {
+    return descarregaFila().then(function () { return api('/api/supremo/abrir', comVersao(corpo)); }).then(function (r) {
+      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (!r.ok) {
+        return { ok: false, erro: r.erro || 'o servidor não abriu a tentativa', motivo: r.motivo || null,
+                 liberaEm: r.liberaEm };
+      }
+      return r;
+    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+  };
+  A.fechaEco = function (corpo) { return fechaEm('/api/supremo/fechar', corpo); };
   /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata (15/09: depois de fechar a luta pendente) */
   A.abreGrupo = function (corpo) {
     return A.fechaPendente().then(function () { return api('/api/grupo/abrir', comVersao(corpo)); })
@@ -445,7 +461,7 @@ var JOGO = (typeof window !== 'undefined')
             return;
           }
           if (foraDoAr(r)) {
-            if (!avisou) aviso('Conferindo a ' + (rota.indexOf('/guerra/') >= 0 ? 'guerra' : 'sala') + ' com o servidor… (sem resposta, tentando de novo)');
+            if (!avisou) aviso('Conferindo a ' + (rota.indexOf('/guerra/') >= 0 ? 'guerra' : (rota.indexOf('/supremo/') >= 0 ? 'tentativa do Eco' : 'sala')) + ' com o servidor… (sem resposta, tentando de novo)');
             setTimeout(function () { tenta(true); }, A.RETENTA_MS);
             return;
           }
