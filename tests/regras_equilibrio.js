@@ -532,31 +532,70 @@ const doMuro = (evs, u) => evs.filter((e) => e.type === 'muroFere' && e.uid === 
   check('Eco 2×2: o placar conta o dano do muro do herói (a fonte é quem ergueu)', st.eco.dano - dano0 === prev, (st.eco.dano - dano0) + ' contra ' + prev);
 })();
 
-// 9g. O juiz: a mesma semente com os mesmos lances chega ao mesmo fim, com espinhos no meio
+// 9g. O juiz: o duelo jogado no cliente, com os espinhos no meio, é refeito no servidor até o mesmo hash.
+/* Revisão de 03/10: a versão anterior jogava duas vezes o mesmo motor e comparava — e no nível 30 da
+ * praça ninguém encostava em pedra nenhuma (0 espinhos), então passava sem cobrar a regra. Agora o
+ * duelo vai ao juiz de verdade (servidor/juiz/duelo.js, o que o /api/duelo/fechar chama) com os lances
+ * anotados como o cliente anota, numa sala em que os dois jeitos de ferir acontecem (encostou e
+ * empurrado) — e a prova exige que tenham acontecido. */
 (function () {
-  function joga() {
-    const W3 = mundo(['js/core/progress.js']);
-    const J3 = W3.JOGO, E3 = J3.Engine, A3 = J3.AI, B3 = require(path.join(__dirname, 'equilibrio_bancada.js')).cria(J3);
-    const st = E3.createDuelSala('praca', 0, [B3.heroi('minotauro', 'terra', 30)], [B3.heroi('espadachim', 'fogo', 30)], { seed: 'espinhos' });
-    let fere = 0, guarda = 0;
-    while (st.phase === 'playing' && guarda++ < 400) {
-      const u = E3.activeUnit(st);
-      const plano = A3.planTurn(st, u.uid);
-      for (const a of plano) {
-        if (st.phase !== 'playing') break;
-        if (a.action === 'move') E3.move(st, u.uid, a.x, a.y);
-        else if (a.action === 'cast') E3.cast(st, u.uid, a.spellId, a.x, a.y);
-        else break;
-      }
-      if (st.phase === 'playing') E3.endTurn(st);
-      fere += E3.events.filter((e) => e.type === 'muroFere').length;
-      E3.events.length = 0;
-    }
-    return { hash: E3.hash(st), fase: st.phase, rodada: st.round, fere };
+  const est = require(path.join(__dirname, '..', 'servidor', 'juiz', 'estado.js'));
+  const { fechaDuelo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'duelo.js'));
+  const { ehDeGente } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'sala.js'));
+  const AGORA = Date.now();
+  function conta(heroi, nivel) {
+    const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+    est.poeEstado(w, null, null);
+    const P = w.J.Progress;
+    if (!P.state.heroes[heroi]) P.unlockClass(heroi);
+    P.state.heroes[heroi].level = nivel;
+    P.state.heroes[heroi].xp = w.J.DATA.leveling.xpTable[nivel - 1];
+    P.save();
+    return Object.assign(est.tiraEstado(w), { heroi });
   }
-  const r1 = joga(), r2 = joga();
-  check('juiz: duas partidas da mesma semente com o Minotauro chegam ao MESMO hash (o espinho não sorteia nada)',
-    r1.hash === r2.hash && r1.fase === r2.fase && r1.rodada === r2.rodada, JSON.stringify([r1, r2]));
+  function partyDe(c, dono) {
+    const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+    est.poeEstado(w, c.progress, c.db);
+    return w.J.Progress.battleParty([c.heroi]).map((p) => Object.assign(p, { dono }));
+  }
+  const DG = 'cistern', SALA = 1, SEMENTE = 3;
+  const ana = conta('minotauro', 12), bia = conta('espadachim', 12);
+  const w = est.mundoEconomico({ agoraMs: AGORA, semente: 5 });
+  est.poeEstado(w, ana.progress, ana.db);
+  const E4 = w.J.Engine;
+  const st = E4.createDuelSala(DG, SALA, partyDe(ana, 'ana'), partyDe(bia, 'bia'), { seed: SEMENTE });
+  const log = [], fere = { encostou: 0, empurrado: 0 };
+  const apura = () => { E4.events.forEach((e) => { if (e.type === 'muroFere') fere[e.motivo]++; }); E4.events.length = 0; };
+  E4.events.length = 0;
+  let voltas = 0;
+  while (st.phase === 'playing' && voltas++ < 3000) {
+    const u = E4.activeUnit(st);
+    if (!u) break;
+    const gente = ehDeGente(u);
+    for (const x of (w.J.AI.planTurn(st, u.uid) || [])) {
+      if (st.phase !== 'playing') break;
+      if (x.action === 'move') { const ok = !!E4.move(st, u.uid, x.x, x.y); if (gente) log.push({ a: 'm', u: u.uid, x: x.x, y: x.y, ok, de: u.dono }); }
+      else if (x.action === 'cast') { const ok = !!E4.cast(st, u.uid, x.spellId, x.x, x.y); if (gente) log.push({ a: 'c', u: u.uid, s: x.spellId, x: x.x, y: x.y, ok, de: u.dono }); }
+      else break;
+      apura();
+    }
+    if (st.phase === 'playing') { E4.endTurn(st); if (gente) log.push({ a: 'e', ok: true, de: u.dono }); }
+    apura();
+  }
+  const pedido = {
+    A: { conta: { id: 1 }, dono: 'ana', herois: ['minotauro'], progress: ana.progress, db: ana.db },
+    B: { conta: { id: 2 }, dono: 'bia', herois: ['espadachim'], progress: bia.progress, db: bia.db },
+    dungeonId: DG, roomIndex: SALA, semente: SEMENTE, lances: log, hashFinal: E4.hash(st), contexto: { agoraMs: AGORA }
+  };
+  let r, rf;
+  try { r = fechaDuelo(pedido); } catch (e) { r = { erro: e.message, motivo: e.motivo }; }
+  try { rf = fechaDuelo(Object.assign({}, pedido, { hashFinal: (pedido.hashFinal + 7) >>> 0 })); } catch (e) { rf = { motivo: e.motivo }; }
+  check('juiz: o duelo do cliente tem os DOIS jeitos de ferir no meio (encostou e empurrado)',
+    fere.encostou > 0 && fere.empurrado > 0 && ['won', 'lost', 'empate'].indexOf(st.phase) >= 0, JSON.stringify({ fere, fase: st.phase }));
+  check('juiz: o servidor refaz o duelo com os espinhos e chega ao MESMO hash e ao mesmo fim',
+    !!r && r.ok === true && r.fase === st.phase, JSON.stringify(r && (r.erro || r.fase)));
+  check('juiz: o mesmo duelo com o hash forjado cai (divergiu) — o hash cobra o espinho',
+    !!rf && rf.motivo === 'divergiu', JSON.stringify(rf));
 })();
 
 console.log('\n' + (total - falhas) + ' / ' + total + ' passaram');

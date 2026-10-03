@@ -316,7 +316,7 @@ os quatro clientes e o juiz chegam ao mesmo hash). Sobe nada em `VERSAO_REGRAS`:
 ao ar, e esta regra entra nele (o comentário do `engine.js` a lista).
 
 Cada regra desta seção tem prova direta, num lance só: `node tests/regras_equilibrio.js`
-(29 de 29 até §3.5; com os espinhos, 62 de 62).
+(29 de 29 até §3.5; com os espinhos, 64 de 64).
 
 ## 4. Antes e depois
 
