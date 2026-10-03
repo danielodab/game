@@ -88,7 +88,10 @@ OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaT
                           # 13/09: a poção bebida fora da batalha (14/09: vida_pocao, em qualquer lugar)
                           'beberPocao',
                           # 02/10: o "pôr no inventário" do painel do Mestre no jogo (moderacao.py, /api/mestre/dar)
-                          'mestreDarItem', 'mestreDarSelos'})
+                          'mestreDarItem', 'mestreDarSelos',
+                          # 03/10: o painel único do Mestre entrega de tudo a qualquer conta
+                          'mestreDarSet', 'mestreDarPet', 'mestreDarPedras', 'mestreDarInsignias', 'mestreDarCartas',
+                          'mestreDarPergaminho', 'mestreDarBonusXp'})
 # os campos de dono CLIENTE do db (§3; a mesma lista de js/core/economia.js: DB_CLIENTE e JOGADOR_CLIENTE)
 DB_CLIENTE = ('mutados', 'placar', 'pvp', 'trocas')
 JOGADOR_CLIENTE = ('id', 'nome', 'avatar', 'dupla', 'coroaOculta', 'criadoEm')
@@ -1071,11 +1074,17 @@ class SalasMixin:
             raise Recusa(400, 'hashAntes precisa ser um texto')
         t = agora()
         chave = 'op:%d' % cid
+        rebase = False
         with self._escrita():
             estado = self._estado_exige(cid)
             if estado['hash'] is not None and hash_antes != estado['hash']:
-                raise Recusa(409, 'estado desatualizado: adote o do servidor', versao=estado['versao'],
-                             hash=estado['hash'], progress=estado['progress'], db=estado['db'])
+                # 03/10: o Mestre pôs algo nesta conta enquanto a op do jogador viajava (moderacao.py,
+                # /api/mestre/dar). Se a diferença for só isso, a op sobe por cima da entrega — o jogador não
+                # perde o que fez; a resposta leva o estado com as duas coisas (o hashDepois não bate)
+                rebase = hasattr(self, '_rebase_entregas') and self._rebase_entregas(cid, hash_antes, estado['hash'])
+                if not rebase:
+                    raise Recusa(409, 'estado desatualizado: adote o do servidor', versao=estado['versao'],
+                                 hash=estado['hash'], progress=estado['progress'], db=estado['db'])
             em = [r[0] for r in self.con.execute("SELECT em FROM limites WHERE chave = ? AND em > ? ORDER BY em",
                                                  (chave, t - 60))]
             if len(em) + len(limpas) > OPS_POR_MINUTO:
@@ -1104,7 +1113,9 @@ class SalasMixin:
         except EstadoMudou:
             raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
         resposta = {'ok': True, 'versao': nova, 'hash': saida['hash'], 'resultados': saida.get('resultados') or []}
-        if hash_depois is None or hash_depois != saida['hash']:
+        if rebase:
+            resposta['rebase'] = True          # o jogo guarda a fila que fez enquanto isto viajava (autoridade.js)
+        if rebase or hash_depois is None or hash_depois != saida['hash']:
             resposta.update(progress=saida['progress'], db=db)
         return 200, resposta
 

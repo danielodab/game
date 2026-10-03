@@ -388,6 +388,9 @@ ROTAS = {
     ('GET',  '/api/correio'):                 ('correio_ler', True),
     ('POST', '/api/correio/lida'):            ('correio_lida', True),
     ('GET',  '/api/moderacao/eu'):            ('moderacao_eu', True),
+    # 03/10: o que o Mestre enviou a esta conta (o aviso "O Mestre te enviou …"; o /api/eu conta as não vistas)
+    ('GET',  '/api/entregas'):                ('entregas_ler', True),
+    ('POST', '/api/entregas/vistas'):         ('entregas_vistas', True),
     ('POST', '/api/mestre/banir'):            ('mestre_banir', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/desbanir'):         ('mestre_desbanir', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/silenciar'):        ('mestre_silenciar', True, True, FRASE_SO_MESTRE),
@@ -1029,8 +1032,11 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         return 200, {'ok': True}
 
     def eu(self, conta, corpo):
+        # 03/10: `entregas` = quantas entregas do Mestre a conta não viu (moderacao.py). O jogo já pergunta o
+        # /api/eu a cada 30 s com a aba à vista (sessao.js): é por aqui que o presente chega sem mais um pedido
         return 200, {'ok': True, 'conta': {'id': conta['id'], 'nome': conta['nome'], 'email': conta['email'],
-                                           'criadoEm': conta['criado_em'], 'gm': bool(conta['gm'])}}
+                                           'criadoEm': conta['criado_em'], 'gm': bool(conta['gm'])},
+                     'entregas': self._entregas_pendentes(conta['id'])}
 
     # -- o save e o registro de instâncias ----------------------------------------
     def save_ler(self, conta, corpo):

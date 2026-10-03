@@ -268,40 +268,54 @@ var JOGO = (typeof window !== 'undefined')
   /* 03/09, pedido do dono: "o GM pode abrir uma caixa para pegar qualquer
    * item do jogo pra ele equipar; terá um menu exclusivo para pegar pet ou
    * set para seu inventário". Tudo entra pela mesma porta do aparelha —
-   * direto no saco, sem fundo e sem sorteio — e só com a chave virada. */
-  function saco() {
-    var P = JOGO.Progress;
-    return (GM.ativo() && P && P.state && P.state.inventory) ? P.state.inventory : null;
+   * direto no saco, sem fundo e sem sorteio — e só com a chave virada.
+   *
+   * 03/10 (o painel único do Mestre): a mesma entrega vale para o inventário de
+   * QUALQUER jogador, pelo servidor (servidor/moderacao.py, POST /api/mestre/dar).
+   * Lá o juiz roda no estado da conta do JOGADOR, que não tem a marca de Mestre —
+   * por isso a regra de cada entrega mora em GM.cru, SEM perguntar a marca, e é
+   * ela que o juiz chama (servidor/juiz/economia.js, ops mestreDar*). Quem pode
+   * entregar é decidido fora: aqui, os GM.pega* (a chave virada ou a conta
+   * marcada); no servidor, a rota (só a conta com contas.gm = 1). Uma regra só,
+   * para o jogo e o juiz chegarem ao mesmo hash. */
+  var cru = GM.cru = {};
+  function P0() { var P = JOGO.Progress; return (P && P.state) ? P : null; }
+  function dado(colecao, id) {
+    var D = JOGO.DATA || {};
+    var c = D[colecao];
+    return (c && typeof id === 'string' && Object.prototype.hasOwnProperty.call(c, id)) ? c[id] : null;
   }
-  GM.pegaItem = function (itemId) {
-    var inv = saco();
-    var def = JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[itemId];
-    if (!inv || !def) return false;
-    inv.push(JOGO.Progress.novaCopia ? JOGO.Progress.novaCopia(itemId, 'caixa') : { itemId: itemId, level: 0, stars: 0 });
-    if (JOGO.Progress.save) JOGO.Progress.save();
+  function inteiro(n) { var q = Math.floor(Number(n)); return (isFinite(q) && q >= 1) ? q : 0; }
+  function copia(P, itemId, nivel, estrelas) {
+    return P.novaCopia ? P.novaCopia(itemId, 'caixa', nivel, estrelas) : { itemId: itemId, level: nivel || 0, stars: estrelas || 0 };
+  }
+  // uma peça (com forja e estrelas, que o painel escolhe; sem elas, a peça crua de sempre)
+  cru.item = function (itemId, nivel, estrelas) {
+    var P = P0();
+    if (!P || !P.state.inventory || !dado('items', itemId)) return false;
+    P.state.inventory.push(copia(P, itemId, nivel, estrelas));
+    if (P.save) P.save();
     return true;
   };
-  GM.pegaSet = function (setId) {
-    var inv = saco();
-    var sd = JOGO.DATA && JOGO.DATA.sets && JOGO.DATA.sets[setId];
-    if (!inv || !sd || !sd.pieces) return 0;
-    var n = 0;
-    for (var i = 0; i < sd.pieces.length; i++) {
-      if (JOGO.DATA.items[sd.pieces[i]]) {
-        inv.push(JOGO.Progress.novaCopia ? JOGO.Progress.novaCopia(sd.pieces[i], 'caixa') : { itemId: sd.pieces[i], level: 0, stars: 0 });
-        n++;
-      }
-    }
-    if (n && JOGO.Progress.save) JOGO.Progress.save();
-    return n;
+  // as peças que o conjunto tem no dado desta conta (o Set do Mestre só existe na conta dele)
+  cru.pecasDoSet = function (setId) {
+    var sd = dado('sets', setId);
+    if (!sd || !sd.pieces) return [];
+    return sd.pieces.filter(function (id) { return !!dado('items', id); });
+  };
+  cru.set = function (setId) {
+    var P = P0();
+    var pecas = cru.pecasDoSet(setId);
+    if (!P || !P.state.inventory || !pecas.length) return 0;
+    pecas.forEach(function (id) { P.state.inventory.push(copia(P, id)); });
+    if (P.save) P.save();
+    return pecas.length;
   };
   /* O bicho entra pelas cartas (as 5 pagas de uma vez); `topo` leva as
    * cartas ao ★3 e o XP ao nível 10 — o Mestre não espera. */
-  GM.pegaPet = function (petId, topo) {
-    var P = JOGO.Progress;
-    if (!GM.ativo() || !P || !P.addPetCards) return false;
-    var pd = JOGO.DATA && JOGO.DATA.pets && JOGO.DATA.pets[petId];
-    if (!pd) return false;
+  cru.pet = function (petId, topo) {
+    var P = P0();
+    if (!P || !P.addPetCards || !dado('pets', petId)) return false;
     var info = P.petCardInfo(petId);
     if (!info.unlocked) P.addPetCards(petId, P.PET_UNLOCK_COST || 5);
     if (topo) {
@@ -311,39 +325,30 @@ var JOGO = (typeof window !== 'undefined')
     }
     return true;
   };
-
-  /* O RESTO DO INVENTÁRIO (11/09, pedido do dono: "quero liberar pedras e as
-   * outras coisas também para o inventário da minha conta GM"). As MESMAS
-   * portas do Progress que o saque, a roleta e a loja usam — e só com a chave
-   * virada. Quantidade inteira a partir de 1; o resto é recusado. */
-  function inteiro(n) { var q = Math.floor(Number(n)); return (isFinite(q) && q >= 1) ? q : 0; }
-  function progresso() { var P = JOGO.Progress; return (GM.ativo() && P) ? P : null; }
   // as pedras de forja: as cinco dos elementos e a Âncora
-  GM.pegaPedras = function (stoneId, n) {
-    var P = progresso(), q = inteiro(n);
-    var def = JOGO.DATA && JOGO.DATA.stones && JOGO.DATA.stones[stoneId];
-    if (!P || !P.addStones || !def || !q) return false;
+  cru.pedras = function (stoneId, n) {
+    var P = P0(), q = inteiro(n);
+    if (!P || !P.addStones || !dado('stones', stoneId) || !q) return false;
     return P.addStones(stoneId, q) === true;
   };
   // os selos do Colecionador, um por elemento (o addSelo recusa elemento que não existe)
-  GM.pegaSelos = function (elemento, n) {
-    var P = progresso(), q = inteiro(n);
+  cru.selos = function (elemento, n) {
+    var P = P0(), q = inteiro(n);
     if (!P || !P.addSelo || !q) return false;
     return P.addSelo(elemento, q) === true;
   };
   // as insígnias de fundação (as que fundam guilda)
-  GM.pegaInsignias = function (n) {
-    var P = progresso(), q = inteiro(n);
+  cru.insignias = function (n) {
+    var P = P0(), q = inteiro(n);
     if (!P || !P.addInsignia || !q) return false;
     return P.addInsignia(q) === true;
   };
   /* as cartas de classe: `n` cartas, ou 'topo' — a classe liberada e no ★5 (o
    * desbloqueio mais os excedentes da última estrela, de DATA.cards). A classe
    * do Mestre não tem carta. */
-  GM.pegaCartas = function (classId, n) {
-    var P = progresso();
-    var cls = JOGO.DATA && JOGO.DATA.classes && JOGO.DATA.classes[classId];
-    if (!P || !P.addCards || !P.cardInfo || !cls || classId === 'gm') return false;
+  cru.cartas = function (classId, n) {
+    var P = P0();
+    if (!P || !P.addCards || !P.cardInfo || !dado('classes', classId) || classId === 'gm') return false;
     var q;
     if (n === 'topo') {
       var k = (JOGO.DATA.cards || {})[classId] || {};
@@ -360,21 +365,23 @@ var JOGO = (typeof window !== 'undefined')
   /* os pergaminhos da loja — 'xp' (Sabedoria) e 'elemento' (Reescrita) — até o
    * teto de cada um (DATA.pergaminhos.tetoInventario): entra só o que cabe.
    * Devolve QUANTOS entraram (0 = nenhum). */
-  GM.pegaPergaminho = function (tipo, n) {
-    var P = progresso(), q = inteiro(n);
+  cru.tetoPergaminho = function () {
+    return Math.floor(Number(((JOGO.DATA || {}).pergaminhos || {}).tetoInventario)) || 99;
+  };
+  cru.pergaminho = function (tipo, n) {
+    var P = P0(), q = inteiro(n);
     if (!P || !P.addPergaminho || !P.pergaminhos || !q) return 0;
     var tem = (P.pergaminhos() || {})[tipo];
     if (typeof tem !== 'number') return 0;      // tipo que não existe
-    var teto = Math.floor(Number(((JOGO.DATA || {}).pergaminhos || {}).tetoInventario)) || 99;
-    var cabe = Math.min(q, teto - tem);
+    var cabe = Math.min(q, cru.tetoPergaminho() - tem);
     if (cabe <= 0) return 0;
     return P.addPergaminho(tipo, cabe) ? cabe : 0;
   };
   /* os dias de BÔNUS DE XP (os da loja), contados no relógio da Agenda — o do
    * servidor quando medido. Como na loja, o fator só pesa na sala com esse
    * relógio medido. */
-  GM.pegaBonusXp = function (dias) {
-    var P = progresso(), q = inteiro(dias);
+  cru.bonusXp = function (dias) {
+    var P = P0(), q = inteiro(dias);
     if (!P || !P.addBonusXpDias || !q) return false;
     var Ag = JOGO.Agenda, t = Date.now();
     try { if (Ag && Ag.agora) t = Ag.agora(); } catch (e) { t = Date.now(); }
@@ -382,6 +389,22 @@ var JOGO = (typeof window !== 'undefined')
     var r = P.addBonusXpDias(q, agoraS);
     return !!(r && r.ok);
   };
+
+  /* A CAIXA DO PRÓPRIO MESTRE (as portas de sempre, que a Autoridade embrulha em ops gm*): a mesma regra
+   * de cima, só com a chave virada. O "Pegar" da peça é a peça crua (sem forja nem estrela). */
+  GM.pegaItem = function (itemId) { return GM.ativo() ? cru.item(itemId) : false; };
+  GM.pegaSet = function (setId) { return GM.ativo() ? cru.set(setId) : 0; };
+  GM.pegaPet = function (petId, topo) { return GM.ativo() ? cru.pet(petId, topo) : false; };
+  /* O RESTO DO INVENTÁRIO (11/09, pedido do dono: "quero liberar pedras e as
+   * outras coisas também para o inventário da minha conta GM"). As MESMAS
+   * portas do Progress que o saque, a roleta e a loja usam. Quantidade
+   * inteira a partir de 1; o resto é recusado. */
+  GM.pegaPedras = function (stoneId, n) { return GM.ativo() ? cru.pedras(stoneId, n) : false; };
+  GM.pegaSelos = function (elemento, n) { return GM.ativo() ? cru.selos(elemento, n) : false; };
+  GM.pegaInsignias = function (n) { return GM.ativo() ? cru.insignias(n) : false; };
+  GM.pegaCartas = function (classId, n) { return GM.ativo() ? cru.cartas(classId, n) : false; };
+  GM.pegaPergaminho = function (tipo, n) { return GM.ativo() ? cru.pergaminho(tipo, n) : 0; };
+  GM.pegaBonusXp = function (dias) { return GM.ativo() ? cru.bonusXp(dias) : false; };
 
   /* AS FERRAMENTAS DO PAINEL DE TESTE (02/10): liberar classe, cravar o nível e o
    * elemento de um herói. Moravam só no js/ui/debug.js, mexendo direto no save —

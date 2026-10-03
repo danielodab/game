@@ -30,8 +30,15 @@ retorno, auditoria de toda ação do Mestre):
     gancho do despacha (o e-mail buscado mascarado); a Caixa pelo /api/op;
   - o PÔR NO INVENTÁRIO: pelo juiz, com estrelas, nível e quantidade, as séries
     registradas com a origem 'caixa', o estado devolvido ao próprio Mestre (o
-    jogo adota), idem, peça só no próprio Mestre, selos em outra conta, op
-    interna recusada do cliente, sem juiz 503.
+    jogo adota), idem, selos em outra conta, op interna recusada do cliente,
+    sem juiz 503;
+  - 03/10, o painel ÚNICO: tudo o que a Caixa dá (peça, conjunto, bicho, pedras,
+    selos, insígnias, cartas, pergaminhos, bônus de XP) no inventário de
+    QUALQUER jogador, com as réguas (quantidade, teto do pergaminho, vaga do
+    saco, o que só existe na conta do Mestre), nada para a lápide nem para a
+    banida, o aviso ao jogador (/api/eu conta, /api/entregas lista, a carta da
+    Equipe) e a op do jogador online que sobe POR CIMA da entrega em vez de
+    cair no 409.
 """
 import copy
 import json
@@ -495,7 +502,7 @@ class ProvaDaModeracao(unittest.TestCase):
         # as regras
         for mexe, esperado in (({'itemId': 'nao-existe'}, 422), ({'estrelas': 99}, 422), ({'qtd': 21}, 400),
                                ({'qtd': 0}, 400), ({'itemId': '../x'}, 400), ({'nivel': -1}, 400), ({'tipo': 'pet'}, 400),
-                               ({'conta': j.conta['id']}, 403), ({'idem': 'curto'}, 400)):
+                               ({'tipo': 'vintens'}, 400), ({'idem': 'curto'}, 400)):
             pedido = dict(corpo, idem=idem())
             pedido.update(mexe)
             status, r = m.pede('POST', '/api/mestre/dar', pedido)
@@ -581,6 +588,162 @@ class ProvaDaModeracao(unittest.TestCase):
         self.assertEqual([x['encerrado_como'] for x in bans], ['expirou', 'expirou'])
         self.assertEqual(j.pede('GET', '/api/eu')[0], 200)
 
+
+    # -- 03/10: o painel único entrega de tudo a QUALQUER jogador ---------------------------------------
+    def dar(self, m, alvo, tipo, **kw):
+        corpo = {'tipo': tipo, 'idem': idem()}
+        if alvo is not None:
+            corpo['conta'] = alvo.conta['id']
+        corpo.update(kw)
+        return m.pede('POST', '/api/mestre/dar', corpo)
+
+    def test_13_entrega_de_tudo_a_um_jogador_com_aviso(self):
+        m, j = self.mestre('Guia Entrega'), self.novo('Jogador Presente')
+        self.poe_estado(m)
+        self.poe_estado(j)
+        jid = j.conta['id']
+        antes = j.pede('GET', '/api/save')[1]['progress']
+        set_id = 'gh-set-flora'
+        entregas = (
+            ('item', {'itemId': PECA, 'estrelas': 2, 'nivel': 1, 'qtd': 3}),
+            ('set', {'setId': set_id}),
+            ('pet', {'petId': 'pet-galehawk', 'topo': True}),
+            ('pedras', {'stoneId': 'stone-ember', 'n': 100}),
+            ('selos', {'elemento': 'terra', 'n': 10}),
+            ('insignias', {'n': 10}),
+            ('cartas', {'classId': 'bruxo', 'topo': True}),
+            ('pergaminho', {'pergaminho': 'xp', 'n': 5}),
+            ('bonus-xp', {'dias': 7}),
+        )
+        textos = []
+        for tipo, kw in entregas:
+            status, r = self.dar(m, j, tipo, **kw)
+            self.assertEqual(status, 201, (tipo, r))
+            self.assertNotIn('progress', r, 'o estado de OUTRA conta não volta ao Mestre')
+            self.assertTrue(isinstance(r.get('texto'), str) and r['texto'] != 'um presente', (tipo, r))
+            textos.append(r['texto'])
+        p = j.pede('GET', '/api/save')[1]['progress']
+        novas = [e for e in p['inventory'] if e['itemId'] == PECA]
+        self.assertEqual([(e['stars'], e['level']) for e in novas], [(2, 1)] * 3, 'as 3 peças com estrela e forja')
+        pecas_set = [e for e in p['inventory'] if e['itemId'].startswith('gh-') and e['itemId'] != PECA]
+        self.assertEqual(len(pecas_set), len(p['inventory']) - len(antes['inventory']) - 3, 'o conjunto inteiro')
+        self.assertGreaterEqual(len(pecas_set), 2)
+        self.assertEqual(p['stones']['stone-ember'], antes.get('stones', {}).get('stone-ember', 0) + 100)
+        self.assertEqual(p['selos']['terra'], 10)
+        self.assertEqual(p['insignias'], (antes.get('insignias') or 0) + 10)
+        self.assertIn('bruxo', p['unlockedClasses'], 'as cartas no topo liberam a classe')
+        self.assertGreater(p['petCards']['pet-galehawk'], 5)
+        self.assertEqual(p['pergaminhos']['xp'], 5)
+        self.assertGreater(p.get('bonusXpAte') or 0, int(time.time()) + 6 * 86400)
+        # cada série nova de peça é registrada na conta do JOGADOR, com a origem da Caixa
+        regs = self.sql("SELECT conta_id, origem FROM itens WHERE conta_id = ? AND origem = 'caixa'", jid)
+        self.assertEqual(len(regs), 3 + len(pecas_set))
+        # o aviso: o /api/eu conta, a lista traz o texto, e marcar como vistas zera
+        status, eu = j.pede('GET', '/api/eu')
+        self.assertEqual((status, eu.get('entregas')), (200, len(entregas)), eu)
+        status, r = j.pede('GET', '/api/entregas')
+        self.assertEqual([e['texto'] for e in r['entregas']], textos)
+        self.assertTrue(textos[0].startswith('3× ') and textos[0].endswith(' +1 ★2'), textos[0])
+        self.assertIn('Selos de Terra', textos[4])
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM moderacao_cartas WHERE conta_id = ? AND assunto = ?",
+                                  jid, 'O Mestre te enviou um presente')[0]['n'], len(entregas),
+                         'e a carta da Equipe fica no correio')
+        self.assertEqual(j.pede('POST', '/api/entregas/vistas', {'ids': [e['id'] for e in r['entregas']]})[1]['marcadas'],
+                         len(entregas))
+        self.assertEqual(j.pede('GET', '/api/eu')[1]['entregas'], 0)
+        self.assertEqual(j.pede('GET', '/api/entregas')[1]['entregas'], [])
+        outro = self.novo('Curioso Entregas')
+        self.assertEqual(outro.pede('POST', '/api/entregas/vistas', {'ids': [1]})[1]['marcadas'], 0, 'só as da conta')
+        self.assertEqual(outro.pede('POST', '/api/entregas/vistas', {'ids': 'tudo'})[0], 400)
+        # a entrega ao PRÓPRIO Mestre não vira aviso (foi ele quem fez)
+        self.assertEqual(self.dar(m, None, 'pedras', stoneId='stone-tear', n=10)[0], 201)
+        self.assertEqual(m.pede('GET', '/api/eu')[1]['entregas'], 0)
+        # a auditoria leva quem recebeu
+        self.assertEqual(len(self.auditoria('dar-set', jid)), 1)
+        self.assertEqual(len(self.auditoria('dar-bonus-xp', jid)), 1)
+
+    def test_14_as_reguas_da_entrega(self):
+        m, j = self.mestre('Guia Reguas'), self.novo('Jogador Reguas')
+        self.poe_estado(j)
+        for tipo, kw, esperado in (
+                ('pedras', {'stoneId': 'stone-ember', 'n': 1001}, 400),
+                ('pedras', {'stoneId': 'stone-ember', 'n': 0}, 400),
+                ('pedras', {'stoneId': 'pedra-que-nao-existe', 'n': 1}, 422),
+                ('insignias', {'n': 101}, 400),
+                ('cartas', {'classId': 'bruxo', 'n': 501}, 400),
+                ('cartas', {'classId': 'gm', 'topo': True}, 422),
+                ('cartas', {'classId': 'bruxo', 'topo': 'sim'}, 400),
+                ('bonus-xp', {'dias': 31}, 400),
+                ('pergaminho', {'pergaminho': 'luz', 'n': 1}, 400),
+                ('pet', {'petId': 'pet-que-nao-existe'}, 422),
+                ('pet', {'petId': 'pet-galehawk', 'topo': 1}, 400),
+                ('set', {'setId': 'conjunto-nenhum'}, 422),
+                ('set', {'setId': 'gm-set-mestre'}, 422),          # o Set do Mestre não existe na conta do jogador
+                ('item', {'itemId': 'gm-espadao'}, 422),
+                ('item', {'itemId': PECA, 'qtd': 21}, 400),
+                ('vintens', {'n': 10}, 400)):
+            status, r = self.dar(m, j, tipo, **kw)
+            self.assertEqual(status, esperado, (tipo, kw, r))
+        # o pergaminho pára no teto do inventário: entra só o que cabe, e cheio é recusa
+        self.assertEqual(self.dar(m, j, 'pergaminho', pergaminho='elemento', n=90)[0], 201)
+        status, r = self.dar(m, j, 'pergaminho', pergaminho='elemento', n=50)
+        self.assertEqual((status, r['resultado']['n']), (201, 9), r)
+        self.assertEqual(self.dar(m, j, 'pergaminho', pergaminho='elemento', n=1)[0], 422)
+        # o saco tem fundo: o juiz confere a vaga de TODAS as peças antes de pôr qualquer uma
+        p = j.pede('GET', '/api/save')[1]['progress']
+        n0 = len(p['inventory'])
+        nada = 0
+        while True:
+            status, r = self.dar(m, j, 'item', itemId=PECA, qtd=20)
+            if status != 201:
+                break
+            nada += 1
+            self.assertLess(nada, 40, 'o saco nunca encheu')
+        self.assertEqual(status, 422, r)
+        self.assertEqual(r.get('motivo'), 'saco', r)
+        cheio = len(j.pede('GET', '/api/save')[1]['progress']['inventory'])
+        self.assertEqual((cheio - n0) % 20, 0, 'a entrega recusada não pôs nenhuma peça')
+        # nenhuma recusa vira aviso ao jogador
+        self.assertEqual(j.pede("GET", "/api/eu")[1]["entregas"], 2 + nada)
+        # a lápide (a conta excluída pelo titular): nada entra, com a frase certa (não a da banida)
+        k = self.novo('Jogador Lapide')
+        self.poe_estado(k)
+        status, r = k.pede('POST', '/api/conta/excluir', {'nome': k.conta['nome'], 'senha': SENHA})
+        self.assertEqual(status, 200, r)
+        status, r = self.dar(m, k, 'selos', elemento='fogo', n=1)
+        self.assertEqual((status, r.get('erro')), (409, mod.FRASE_LAPIDE), r)
+        self.assertEqual(self.dar(m, None, 'selos', elemento='fogo', n=1, conta=999999)[0], 404)
+
+    def test_15_a_op_do_jogador_sobe_por_cima_da_entrega(self):
+        # o jogador ONLINE: a op dele saiu com o hash de antes da entrega do Mestre. Sem isto ela caía no 409 e
+        # o jogo adotava o estado do servidor — a entrega aparecia, mas o que ele tinha acabado de fazer sumia
+        m, j = self.mestre('Guia Rebase'), self.novo('Jogador Rebase')
+        self.poe_estado(j)
+        self.assertIsNone(j.pede('GET', '/api/save')[1]['hash'], 'antes da primeira op o servidor não guarda o hash')
+        # o jogo sem o hash do servidor mede o do estado que adotou (autoridade.js): é o hashAntes que o juiz mede
+        self.assertEqual(self.dar(m, j, 'insignias', n=1)[0], 201)
+        h0 = self.sql("SELECT hash_antes FROM moderacao_entregas WHERE conta_id = ? ORDER BY id", j.conta['id'])[0]['hash_antes']
+        self.assertTrue(isinstance(h0, str) and h0, 'a entrega guarda o hash de antes mesmo sem o servidor o ter')
+        self.assertEqual(self.dar(m, j, 'pedras', stoneId='stone-root', n=10)[0], 201)
+        self.assertEqual(self.dar(m, j, 'selos', elemento='ar', n=5)[0], 201)
+        status, r = j.pede('POST', '/api/op', {'hashAntes': h0, 'hashDepois': 'o-de-antes',
+                                               'ops': [{'nome': 'escolherSeloElemento', 'args': {'elemento': 'agua'}}]})
+        self.assertEqual(status, 200, r)
+        self.assertTrue(r.get('rebase'), r)
+        p = r['progress']
+        self.assertEqual((p['stones']['stone-root'], p['selos']['ar'], p['insignias'], p['seloElemento']), (10, 5, 1, 'agua'),
+                         'o estado que volta tem as três entregas E a op do jogador')
+        self.assertEqual(j.pede('GET', '/api/save')[1]['hash'], r['hash'])
+        # um buraco na corrente (o estado mudou por OUTRA coisa entre o hash dele e a entrega): o 409 de sempre
+        self.assertEqual(self.dar(m, j, 'insignias', n=1)[0], 201)
+        status, r = j.pede('POST', '/api/op', {'hashAntes': h0, 'ops': [{'nome': 'escolherSeloElemento',
+                                                                         'args': {'elemento': 'fogo'}}]})
+        self.assertEqual(status, 409, r)
+        self.assertEqual(r['progress']['seloElemento'], 'agua', 'nada da op velha entrou')
+        # e um hash qualquer não atravessa nada
+        status, r = j.pede('POST', '/api/op', {'hashAntes': 'inventado', 'ops': [{'nome': 'escolherSeloElemento',
+                                                                                 'args': {'elemento': 'fogo'}}]})
+        self.assertEqual(status, 409, r)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
