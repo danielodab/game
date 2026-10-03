@@ -1602,9 +1602,11 @@ var JOGO = (typeof window !== 'undefined')
      * ninguém. O chat mora no canto: Enter fala, as últimas oito linhas
      * ficam. Em file:// a Rede é no-op e nada disto aparece. */
     var chatLog = null;
-    function chatLinha(quem, texto, cor) {
+    function chatLinha(quem, texto, cor, de) {
       if (!chatLog) return;
       var li = el('div', 'hub-chat-linha');
+      // 02/10: a linha de OUTRO jogador leva quem falou — o toque longo / clique direito denuncia (js/ui/moderacao.js)
+      if (de) { li.setAttribute('data-de', de); li.setAttribute('data-nome', quem || ''); }
       li.innerHTML = (quem ? '<b style="color:' + (cor || '#e8c25a') + '">' +
         esc(quem) + ':</b> ' : '') + esc(texto);
       chatLog.appendChild(li);
@@ -1785,6 +1787,8 @@ var JOGO = (typeof window !== 'undefined')
             fecha();
           });
           grade.appendChild(bSil);
+          // 02/10: denunciar à Equipe, pela conta conferida (js/ui/moderacao.js)
+          if (JOGO.Denuncia) grade.appendChild(JOGO.Denuncia.botao({ conta: par.nuvem, nome: par.nome, heroId: id, onde: 'praca' }, fecha));
           grade.appendChild(btn('Fechar', 'btn-ghost', fecha));
           painel.appendChild(grade);
           // CONVIDAR PARA A GUILDA (25/08): só quem lidera a guilda vê o botão
@@ -1931,14 +1935,17 @@ var JOGO = (typeof window !== 'undefined')
           } else if (ev.tipo === 'gchat') {
             // 13/09: o chat da guilda (/g) — só os membros recebem (o relé confere)
             if (mutados[ev.id]) return;
-            chatLinha('[' + (ev.guilda || 'Guilda') + '] ' + ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto, '#7fc8ff');
+            chatLinha('[' + (ev.guilda || 'Guilda') + '] ' + ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto, '#7fc8ff', ev.id);
+            safe(function () { return JOGO.Denuncia && JOGO.Denuncia.anota(ev.id, ev.nome, ev.texto); }, null);
           } else if (ev.tipo === 'gchat-nao') {
             toast(ev.motivo === 'sem-guilda' ? 'Você não está numa guilda: o /g não tem para quem ir.'
                                              : 'O chat da guilda precisa que você esteja na sua conta.');
           } else if (ev.tipo === 'chat') {
             if (mutados[ev.id]) return;               // silenciado: nem uma linha
             var textoC = R.filtra ? R.filtra(ev.texto) : ev.texto;
-            chatLinha(ev.nome, textoC);
+            chatLinha(ev.nome, textoC, null, ev.id);
+            // 02/10: o que ESTE jogador viu vai anexado à denúncia (o servidor não guarda o chat)
+            safe(function () { return JOGO.Denuncia && JOGO.Denuncia.anota(ev.id, ev.nome, ev.texto); }, null);
             // 11/09 (pedido do dono): a frase sobe num balão em cima de quem falou
             safe(function () { return JOGO.Hub.fala(ev.id, textoC); }, null);
           } else if (ev.tipo === 'saiu') {
@@ -8885,6 +8892,10 @@ var JOGO = (typeof window !== 'undefined')
     });
     body.appendChild(el('h3', 'perfil-h', 'Classes liberadas'));
     body.appendChild(tem ? caixa : el('p', 'empty', 'nada que a Rede saiba contar'));
+    // 02/10: denunciar à Equipe (js/ui/moderacao.js)
+    if (JOGO.Denuncia && typeof par.nuvem === 'number') {
+      body.appendChild(JOGO.Denuncia.botao({ conta: par.nuvem, nome: par.nome, heroId: par.id, onde: 'perfil' }, null, 'btn btn-ghost'));
+    }
   }
 
   /* A GUILDA (pedido 25/08): a ficha inteira — criar, membros, cofre com os
@@ -9172,6 +9183,8 @@ var JOGO = (typeof window !== 'undefined')
             else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
           }));
         }
+        // 02/10: denunciar à Equipe direto da lista (js/ui/moderacao.js)
+        if (JOGO.Denuncia) acts.appendChild(JOGO.Denuncia.botao({ conta: a.conta, nome: a.nome, onde: 'amigos' }, null, 'btn btn-mini btn-ghost'));
         acts.appendChild(btn('✕', 'btn-mini btn-ghost am-tira', function () {
           Am.definir({ conta: a.conta }, null).then(function (r) {
             toast(r.ok ? a.nome + ' saiu da lista.' : (r.erro || 'não deu'), r.ok ? 'good' : undefined);
@@ -10407,6 +10420,11 @@ var JOGO = (typeof window !== 'undefined')
     // OS EVENTOS DO MUNDO (10/09): XP, vinténs, pedras, saque ou aviso para todos os jogadores
     body.appendChild(btn('📅 Eventos do mundo: ligar agora, agendar, calendário', 'btn-gold btn-block', function () {
       openSheet('gmagenda');
+    }));
+    // 02/10: as contas, as denúncias, os banimentos e o inventário pelo servidor (js/ui/painel_mestre.js, F9)
+    if (JOGO.PainelMestre) body.appendChild(btn('⚖ Jogadores, denúncias, banimentos, itens com estrelas e moedas (F9)', 'btn-gold btn-block', function () {
+      closeSheet();
+      JOGO.PainelMestre.abrir();
     }));
     body.appendChild(el('p', 'inv-dica',
       'O cofre não tem fundo: todo preço se paga sozinho enquanto a chave estiver virada. ' +

@@ -484,6 +484,13 @@ as 6 classes, define nível e elemento de cada herói, enche o saco, e tem um
 **modo TESTE DE EFEITOS** — todos os 27 feitiços da classe, 99 PA, sem recarga,
 99999 PV dos dois lados. Serve para ver todo efeito sem jogar até o nível 30.
 Tem um "Desfazer tudo" que restaura o save copiado na abertura da página.
+Desde 02/10, com a conta do site (o servidor dono da economia), liberar classe,
+nível e elemento viram ops do Mestre (`GM.liberaClasse`/`poeNivel`/`poeElemento`
+em `js/core/gm.js`, refeitas pelo juiz); encher o saco, desfazer e a Brasa ficam
+só para o jogo local. O mesmo corpo aparece na aba **Ferramentas** do painel do
+Mestre (`js/ui/painel_mestre.js`, tecla F9), que também dá peça com estrelas e
+forja, moedas, e cuida de contas, denúncias e banimentos — a regra disso mora no
+servidor (`docs/SEGURANCA.md` §10).
 
 ---
 
