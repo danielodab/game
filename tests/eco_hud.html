@@ -29,7 +29,7 @@
          nota quando o número daqui era outro: vale o do servidor); o lance anotado (o `p` da
          preparação) foi junto no fechar; a tela decide pointer-events e os botões respondem;
        · o aviso da loja para o prêmio do Eco (o título e os selos), e o título ganho no menu da ficha do
-         Personagem, livre para pendurar;
+         Personagem, livre para pendurar; o cais da praça com a 7ª porta (o Eco) cabe a 320, 360 e 390 px;
        · nenhum erro na página e o save de verdade intocado. -->
 <div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
 <div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
@@ -309,6 +309,38 @@
   p(function () {
     check('escolher pendura o título do Eco (DB.definirTitulo)', penduro[0] === 'Voz do Eco', JSON.stringify(penduro));
     if (ficha()) UI.closeSheet && UI.closeSheet();
+  });
+
+  // ---- 7) o cais da praça com a 7ª porta (o Eco) cabe no celular (03/10, a revisão mediu os botões até 335 px
+  // numa tela de 320). O CSS de verdade num iframe da largura do aparelho — a media query é a do iframe.
+  var medidas = [];
+  p(function () {
+    var ROT = ['Personagem', 'Inventário', 'Feitiços', 'Missões', 'Guilda', 'Amigos', 'Eco'];
+    return Promise.all([320, 360, 390].map(function (w) {
+      return new Promise(function (ok) {
+        var f = document.createElement('iframe');
+        f.style.cssText = 'width:' + w + 'px;height:120px;border:0;position:absolute;left:-2000px;top:0';
+        f.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../css/style.css' +
+          window.__V + '"></head><body style="margin:0"><div style="position:relative;height:120px"><div class="hub-dock">' +
+          ROT.map(function (r) {
+            return '<button class="hub-dock-b"><span class="hd-ic">◆</span><span class="hd-rot">' + r +
+              (r === 'Inventário' ? ' <span class="tecla">I</span>' : '') + '</span></button>';
+          }).join('') + '</div></div></body></html>';
+        f.onload = function () {
+          var d = f.contentDocument, bs = [].slice.call(d.querySelectorAll('.hub-dock-b'));
+          var dir = Math.max.apply(null, bs.map(function (b) { return b.getBoundingClientRect().right; }));
+          var esq = Math.min.apply(null, bs.map(function (b) { return b.getBoundingClientRect().left; }));
+          medidas.push({ w: w, esq: Math.round(esq), dir: Math.round(dir), n: bs.length });
+          f.parentNode.removeChild(f);
+          ok();
+        };
+        document.body.appendChild(f);
+      });
+    }));
+  });
+  p(function () {
+    check('o cais com as 7 portas cabe inteiro na tela a 320, 360 e 390 px', medidas.length === 3 &&
+          medidas.every(function (m) { return m.n === 7 && m.esq >= 0 && m.dir <= m.w; }), JSON.stringify(medidas));
   });
 
   try {

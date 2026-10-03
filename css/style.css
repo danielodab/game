@@ -2592,6 +2592,11 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   .hub-dock-b .hd-ic { font-size: 17px; }
   .hub-dock-b .tecla { display: none; }
 }
+/* 03/10: com a 7ª porta (o Eco) o cais passava da tela nos celulares de 320 px — a última placa ficava
+   cortada (medido: botões até 335 px numa tela de 320). Abaixo de 360 px a placa perde a folga lateral. */
+@media (max-width: 360px) {
+  .hub-dock-b { min-width: 0; flex: 1 1 auto; padding: 5px 2px 4px; font-size: 9px; }
+}
 
 /* a fileira de fichas do menu inicial (o "Personagens" dividido) */
 .menu-fichas { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
