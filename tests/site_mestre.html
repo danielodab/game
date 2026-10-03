@@ -595,15 +595,20 @@
           /carta da Equipe/.test(m1) && pd.id === 5 && pd.estado === 'procedente' && pd.acao.tipo === 'banir' &&
           pd.acao.duracao === '7d' && pd.resposta === 'Obrigado pelo aviso.', JSON.stringify(pd));
     var bRui = p.q('#ms-banimentos [data-desfaz="desbanir"]');
+    var formAntes = p.q('#ms-moderacao-conta [data-punir]');
     check('moderação: os banidos de agora, com o motivo e quem baniu', /Rui/.test(texto(p.$('ms-banimentos'))) &&
           /golpe na troca/.test(texto(p.$('ms-banimentos'))) && /por Dono/.test(texto(p.$('ms-banimentos'))));
     bRui.click();
     await modal(p, true);
     await ate(function () { return pedidos(c, 'POST', '/api/mestre/desbanir').length === 1; });
     check('moderação: desbanir confirma e manda a conta', pedidos(c, 'POST', '/api/mestre/desbanir')[0].corpo.conta === 9);
-    // desfeito um banimento, a ficha aberta se lê de novo (e se redesenha): o formulário é outro nó
-    await ate(function () { return pedidos(c, 'GET', '/api/mestre/conta').length >= 2; });
-    await new Promise(function (r) { setTimeout(r, 60); });
+    // desfeito um banimento, a ficha aberta se lê de novo (e se redesenha): o formulário é outro nó.
+    // 03/10 (revisão): esperar só o PEDIDO da ficha e mais 60 ms era corrida — com a máquina ocupada a
+    // ficha ainda estava em "carregando" e o formulário não existia (TypeError no querySelector)
+    await ate(function () {
+      var f = p.q('#ms-moderacao-conta [data-punir]');
+      return pedidos(c, 'GET', '/api/mestre/conta').length >= 2 && !!f && f !== formAntes;
+    });
     // a ficha da conta (#conta=7): banir com duração e motivo
     var form = p.q('#ms-moderacao-conta [data-punir]');
     form.querySelector('[data-tipo]').value = 'banir';
