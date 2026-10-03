@@ -53,6 +53,7 @@ save com heróis, gm=1 gravado no sqlite como no teste da caixa, um evento e uma
 regra) e abre as páginas contra ela. Precisa das rotas /api/eventos do servidor.
 """
 import argparse
+import base64
 import functools
 import hashlib
 import html as html_lib
@@ -661,8 +662,10 @@ def prova_wiki(abre):
     check('wiki: as coroas da Arena, da primeira à última', 'Coroa I ' in t + ' ' and 'Coroa X' in t)
     limpo('wiki (regras)', h)
     check('wiki: o número do clima não está escrito no código da wiki', not re.search(r'ganha\s*%s\s*PV' % tique, le('site/wiki.js')))
-    check('wiki: nenhum outro jogo citado', not any('dofus' in x.lower() for x in textos) and
-          not any('dofus' in le(f).lower() for f in ('site/wiki.js', 'site/wiki.html', 'site/wiki.css')))
+    # o nome do outro jogo vem codificado: a regra do dono vale até para a prova que o procura
+    outro = base64.b64decode('ZG9mdXM=').decode()
+    check('wiki: nenhum outro jogo citado', not any(outro in x.lower() for x in textos) and
+          not any(outro in le(f).lower() for f in ('site/wiki.js', 'site/wiki.html', 'site/wiki.css')))
 
 
 def prova_index(abre):

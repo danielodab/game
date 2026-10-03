@@ -192,7 +192,8 @@
       check(pag + ': o índice só aponta para seções que existem', p.qq('.indice a').length >= 10 && !furos.length,
             furos.map(function (a) { return a.getAttribute('href'); }).join(' '));
       check(pag + ': o rodapé leva aos dois documentos', !!p.q('.rodape a[href="termos.html"]') && !!p.q('.rodape a[href="privacidade.html"]'));
-      check(pag + ': Dofus não aparece', !/dofus/i.test(p.d.documentElement.innerHTML));
+      // o nome do outro jogo vem codificado: a regra do dono vale até para a prova que o procura
+      check(pag + ': nenhum outro jogo citado', p.d.documentElement.innerHTML.toLowerCase().indexOf(atob('ZG9mdXM=')) < 0);
     }
   }
 
