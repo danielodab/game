@@ -85,7 +85,8 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.normpath(os.path.join(AQUI, '..'))
 IMG = os.path.join(RAIZ, 'site', 'img')
 PAGINA = 'tools/retratos_site.html'
-NOME_OK = re.compile(r'^(classe|fusao|obra|equipe|monstro|pet)-[a-z0-9-]+(-busto)?\.(webp|png)$')
+# 02/10: `_` também — os Colossos do Poço têm id com sublinhado (colosso_fogo...)
+NOME_OK = re.compile(r'^(classe|fusao|obra|equipe|monstro|pet)-[a-z0-9_-]+(-busto)?\.(webp|png)$')
 # 11/09: os bichos da wiki — monstros dos portais abertos, invocações do Xamã e pets
 LOTES_BICHOS = ['bichos-estufa', 'bichos-cisterna', 'bichos-fecho', 'bichos-andaimes', 'bichos-mina',
                 'bichos-coracao', 'bichos-invocacoes', 'pets']

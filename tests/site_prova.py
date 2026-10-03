@@ -336,8 +336,9 @@ def img_no_contrato(p):
     m = re.match(r'^/site/img/(item|extra)-([a-z0-9]+(-[a-z0-9]+)*)\.webp$', p)
     if m:
         return not m.group(2).startswith('gm-')
-    # 11/09: os retratos dos bichos (tools/retratos_site.py): monstro, capa do chefe e pet
-    if re.match(r'^/site/img/(monstro|pet)-[a-z0-9]+(-[a-z0-9]+)*\.webp$', p):
+    # 11/09: os retratos dos bichos (tools/retratos_site.py): monstro, capa do chefe e pet.
+    # 02/10: o id do monstro pode ter `_` (os Colossos do Poço: colosso_fogo...)
+    if re.match(r'^/site/img/(monstro|pet)-[a-z0-9]+([-_][a-z0-9]+)*\.webp$', p):
         return True
     return bool(re.match(r'^/site/img/(obra-fus(-[a-z]+)+\.webp|equipe-cavaleiro(-busto)?\.webp|'
                          r'(capa|guildas|arena|calabouco-[a-z]+)\.jpg)$', p))
@@ -567,8 +568,10 @@ def prova_wiki(abre):
     # 11/09: o retrato de cada bicho vem do 3D do jogo (tools/retratos_site.py);
     # a invocação de fusão usa a foto da obra. Todo arquivo pedido existe.
     corpo = sem_codigo(h)
-    fotos = re.findall(r'data-monstro="([a-z0-9-]+)"><span class="busto[^"]*"[^>]*><img src="img/((?:monstro|obra)-[a-z0-9-]+\.webp)"', corpo)
-    cartoes = re.findall(r'data-monstro="([a-z0-9-]+)"', corpo)
+    # 02/10: `_` no id — sem ele os quatro Colossos do Poço (colosso_fogo...)
+    # ficavam fora da conta e o "cada monstro com retrato" passava sem vê-los
+    fotos = re.findall(r'data-monstro="([a-z0-9_-]+)"><span class="busto[^"]*"[^>]*><img src="img/((?:monstro|obra)-[a-z0-9_-]+\.webp)"', corpo)
+    cartoes = re.findall(r'data-monstro="([a-z0-9_-]+)"', corpo)
     sem_arq = [f for _, f in fotos if not os.path.exists(os.path.join(RAIZ, 'site', 'img', f))]
     check('wiki: cada monstro do bestiário com o retrato do jogo, e o arquivo existe',
           bool(cartoes) and len(fotos) == len(cartoes) and not sem_arq,
