@@ -35,7 +35,7 @@
      ?ficha= personagem | heroi | inventario | forja | feiticos | colecao |
              banco | guilda | mercado | loteria | missoes | placar | amigos |
              perfil | troca | contas | duelo | dupla | quadro | sussurro |
-             pausa | confirma | praca | praca-poco | praca-sede |
+             pausa | confirma | config | praca | praca-poco | praca-sede |
              praca-arena
      ?foco=1 — põe o foco de teclado no primeiro botão da ficha (a foto do
               anel de foco).
@@ -43,7 +43,8 @@
      SEM ?ficha= é a PROVA do sistema das fichas (o padrão de 02/10), numa
      coluna de 390×844: em cada ficha, o medalhão + título + fechar, o papel de
      diálogo com nome, todo controle >= 44 px, nada vazando e o foco dentro; as
-     abas de texto com o texto de sempre; o foco que volta a quem abriu; o cais desenhado.
+     abas de texto com o texto de sempre; o foco que volta a quem abriu; as
+     Configurações mexendo no som e no movimento; o cais desenhado.
        python tools/fotos_fichas.py prova   (janela de 390×844; o placar em #summary) -->
 <div id="topo"><div id="summary">rodando…</div><div id="log"></div></div>
 <div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
@@ -241,6 +242,7 @@
       var b = q1('.ui-sheet.is-on .btn-warn');
       if (b) b.click();
     },
+    config: function () { UI.openSheet('config'); },
     praca: function () { ligaPraca(); UI.showScreen('hub'); },
     'praca-poco': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'poco', nome: 'Poço sem Fundo' }); },
     'praca-sede': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'sede', nome: 'Sede das Guildas' }); },
@@ -349,7 +351,7 @@
   // as fichas que a régua cobra (as da praça são o cais e os painéis, à parte)
   var NA_REGUA = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
                   'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
-                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma'];
+                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config'];
 
   function prova() {
     // a régua é de CELULAR: numa janela larga as regras de @media acham que é
@@ -435,6 +437,44 @@
       x.click();
       check('fechar a ficha devolve o foco a quem a abriu', document.activeElement === b,
             document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : '?');
+    });
+
+    // ---- as Configurações mexem no aparelho, não no save
+    passo = passo.then(function () {
+      UI.closeSheet();
+      UI.showScreen('menu');
+      var porta = q1('.screen-menu.is-on .menu-config');
+      check('Menu: a porta das Configurações existe e abre a ficha', !!porta);
+      if (porta) porta.click(); else FICHAS.config();
+      return espera(150);
+    }).then(function () {
+      var f = painel(), Au = JOGO.Audio;
+      var chaves = qa('.cfg-chave', f);
+      check('Configurações: as chaves são interruptores (role=switch, aria-checked, rótulo)',
+            chaves.length >= 2 && chaves.every(function (c) {
+              return c.getAttribute('role') === 'switch' && /^(true|false)$/.test(c.getAttribute('aria-checked')) && !!c.getAttribute('aria-label');
+            }), chaves.length + ' chaves');
+      var som = chaves.filter(function (c) { return c.getAttribute('aria-label') === 'Som do jogo'; })[0];
+      var vol = q1('.cfg-volume', f);
+      var antes = Au.isMudo();
+      som.click();
+      check('Som do jogo: a chave desliga o som de verdade e apaga o volume',
+            Au.isMudo() === !antes && som.getAttribute('aria-checked') === String(!Au.isMudo()) && vol.disabled === Au.isMudo());
+      som.click();
+      vol.value = '40';
+      vol.dispatchEvent(new Event('input', { bubbles: true }));
+      check('Volume: o deslizador muda o volume do jogo e o número ao lado', Math.abs(Au.getVolume() - 0.4) < 1e-6 &&
+            q1('.cfg-num', f).textContent === '40%', Au.getVolume() + ' / ' + q1('.cfg-num', f).textContent);
+      var mov = chaves.filter(function (c) { return c.getAttribute('aria-label') === 'Menos movimento'; })[0];
+      mov.click();
+      var gravado = {};
+      try { gravado = JSON.parse(localStorage.getItem('soterra-pref-ui') || '{}'); } catch (e) {}
+      check('Menos movimento: liga a classe no <html> e grava na chave do aparelho',
+            document.documentElement.classList.contains('menos-movimento') && gravado.menosMovimento === true);
+      check('Menos movimento: a ficha para de animar', getComputedStyle(f).animationName === 'none',
+            getComputedStyle(f).animationName);
+      mov.click();
+      check('Menos movimento: desligar tira a classe', !document.documentElement.classList.contains('menos-movimento'));
     });
 
     // ---- o cais: o desenho no lugar do emoji, o nome de sempre

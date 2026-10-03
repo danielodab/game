@@ -861,6 +861,8 @@ var JOGO = (typeof window !== 'undefined')
     var rotuloConta = safe(function () { return JOGO.Contas.rotulo(); }, null);
     fichas.appendChild(btn(rotuloConta ? 'Conta: <b>' + esc(rotuloConta) + '</b>' : 'Conta',
       'btn-mini btn-ghost', function () { openSheet('contas'); }));
+    // 02/10: a ficha das Configurações (som, tela, movimento) — antes não havia
+    fichas.appendChild(btn('Configurações', 'btn-mini btn-ghost menu-config', function () { openSheet('config'); }));
     acts.appendChild(fichas);
     box.appendChild(acts);
 
@@ -5818,6 +5820,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'heroSheet') sheetHero(arg);
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
+    else if (name === 'config') sheetConfig();                             // 02/10: som, tela, movimento e atalhos
     else if (name === 'perfil') sheetPerfil(arg);
     else if (name === 'guilda') sheetGuilda(arg);
     else if (name === 'banco') sheetBanco();
@@ -8801,6 +8804,138 @@ var JOGO = (typeof window !== 'undefined')
    * seu save solo e seu cofre; trocar é recarregar a página com `?conta=` na
    * URL — a conta é decidida no boot, antes de db/progress carregarem. A
    * ficha também ensina o teste de DOIS JOGADORES: duas janelas, duas contas. */
+  /* AS CONFIGURAÇÕES (02/10, a frente dos menus). O dono pediu "Configurações"
+   * entre os menus a melhorar, e ela NÃO EXISTIA: o som só se desligava no
+   * botãozinho 🔊 da batalha (sem volume), a tela cheia só no canto, e os
+   * atalhos de teclado não estavam escritos em lugar nenhum. Esta ficha junta
+   * o que é do APARELHO — nada daqui é progresso nem vai para a conta: o som
+   * mora no js/audio.js (chave própria), o movimento numa chave soterra-* que
+   * o save_sandbox das provas já blinda. */
+  var PREF_UI = 'soterra-pref-ui';
+  function prefUi() {
+    try { return JSON.parse(localStorage.getItem(PREF_UI) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function gravaPrefUi(p) {
+    try { localStorage.setItem(PREF_UI, JSON.stringify(p)); } catch (e) {}
+    aplicaPrefUi(p);
+  }
+  // "menos movimento": a ficha não sobe deslizando, o botão não afunda —
+  // para quem enjoa, e para o celular fraco que engasga na animação
+  function aplicaPrefUi(p) {
+    try { document.documentElement.classList.toggle('menos-movimento', !!(p || prefUi()).menosMovimento); } catch (e) {}
+  }
+  aplicaPrefUi();
+  // o 🔊 da batalha acompanha o que a ficha mudou
+  function pintaBotaoSom() {
+    if (!bt.som || !JOGO.Audio) return;
+    bt.som.textContent = JOGO.Audio.isMudo() ? '🔇' : '🔊';
+    bt.som.title = JOGO.Audio.isMudo() ? 'som desligado' : 'som ligado';
+  }
+  /* A CHAVE (o interruptor): um <button role="switch"> com o aria-checked —
+   * o leitor de tela diz "ligado/desligado", o teclado liga com Espaço, e o
+   * alvo tem 44 px de altura, não a bolinha de 20. */
+  function linhaConfig(titulo, dica, controle) {
+    var ln = el('div', 'cfg-linha');
+    var tx = el('div', 'cfg-tx');
+    tx.appendChild(el('b', 'cfg-tit', titulo));
+    if (dica) tx.appendChild(el('span', 'cfg-dica', dica));
+    ln.appendChild(tx);
+    ln.appendChild(controle);
+    return ln;
+  }
+  function chaveConfig(ligada, rotulo, aoMudar) {
+    var b = el('button', 'cfg-chave' + (ligada ? ' is-on' : ''));
+    b.type = 'button';
+    b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', ligada ? 'true' : 'false');
+    b.setAttribute('aria-label', rotulo);
+    b.appendChild(el('span', 'cfg-bola'));
+    tap(b, function () {
+      var on = b.getAttribute('aria-checked') !== 'true';
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.classList.toggle('is-on', on);
+      aoMudar(on);
+    });
+    return b;
+  }
+  function sheetConfig() {
+    var body = sheetShell('Configurações',
+      'O que vale para este aparelho: o som, a tela e o movimento da interface. Nada daqui mexe no seu progresso.');
+    sheetName = 'config';
+    var Au = JOGO.Audio;
+
+    var som = el('section', 'cfg-sec');
+    som.appendChild(el('h3', 'bk-tit', 'Som'));
+    if (Au && Au.isMudo) {
+      var volume = document.createElement('input');
+      var lnVol = null;
+      som.appendChild(linhaConfig('Som do jogo', 'Golpes, passos e a interface.',
+        chaveConfig(!Au.isMudo(), 'Som do jogo', function (on) {
+          Au.setMudo(!on);
+          pintaBotaoSom();
+          volume.disabled = !on;
+          if (lnVol) lnVol.classList.toggle('is-apagado', !on);
+        })));
+      volume.type = 'range';
+      volume.min = '0'; volume.max = '100'; volume.step = '5';
+      volume.className = 'cfg-volume';
+      volume.value = String(Math.round((Au.getVolume ? Au.getVolume() : 0.7) * 100));
+      volume.setAttribute('aria-label', 'Volume');
+      volume.disabled = Au.isMudo();
+      var vNum = el('output', 'cfg-num', volume.value + '%');
+      volume.addEventListener('input', function () {
+        vNum.textContent = volume.value + '%';
+        Au.setVolume(Number(volume.value) / 100);
+      });
+      // a seta do teclado mexe no volume, não num atalho do jogo
+      volume.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      var vol = el('div', 'cfg-vol');
+      vol.appendChild(volume);
+      vol.appendChild(vNum);
+      lnVol = linhaConfig('Volume', null, vol);
+      if (Au.isMudo()) lnVol.classList.add('is-apagado');
+      som.appendChild(lnVol);
+    } else som.appendChild(el('p', 'empty', 'O som não carregou neste aparelho.'));
+    body.appendChild(som);
+
+    var tela = el('section', 'cfg-sec');
+    tela.appendChild(el('h3', 'bk-tit', 'Tela'));
+    var TC = JOGO.TelaCheia;
+    if (TC && TC.suporta && TC.suporta()) {
+      tela.appendChild(linhaConfig('Tela cheia', 'Some a barra do navegador. Esc sai.',
+        chaveConfig(TC.cheia(), 'Tela cheia', function () { TC.alterna(); })));
+    }
+    tela.appendChild(linhaConfig('Menos movimento', 'As fichas abrem sem deslizar e os botões não afundam.',
+      chaveConfig(!!prefUi().menosMovimento, 'Menos movimento', function (on) {
+        var p = prefUi(); p.menosMovimento = on; gravaPrefUi(p);
+      })));
+    body.appendChild(tela);
+
+    // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
+    var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
+    if (!toque) {
+      var at = el('section', 'cfg-sec');
+      at.appendChild(el('h3', 'bk-tit', 'Atalhos de teclado'));
+      var lista = el('dl', 'cfg-atalhos');
+      [['I', 'abre e fecha o inventário'], ['Esc', 'fecha a ficha aberta'],
+       ['Tab', 'anda pelos botões da ficha; Enter ou Espaço aperta']]
+        .concat(mestreAtivo() ? [['M', 'abre o Painel do Mestre']] : [])
+        .forEach(function (a) {
+          lista.appendChild(el('dt', null, '<kbd class="tecla">' + a[0] + '</kbd>'));
+          lista.appendChild(el('dd', null, a[1]));
+        });
+      at.appendChild(lista);
+      body.appendChild(at);
+    }
+
+    var conta = el('section', 'cfg-sec');
+    conta.appendChild(el('h3', 'bk-tit', 'Conta'));
+    conta.appendChild(btn('Contas e nuvem', 'btn-ghost btn-block', function () { openSheet('contas'); }));
+    body.appendChild(conta);
+    var ver = safe(function () { return window.SOTERRA_VERSAO.versao; }, null);
+    body.appendChild(el('p', 'cfg-versao', 'SOTERRA — Ecos do Mundo Enterrado' + (ver ? ' · versão ' + esc(ver) : '')));
+  }
+
   function sheetContas() {
     var body = sheetShell('Contas',
       'Cada conta tem seu save e seu cofre. Trocar recarrega a página.');
@@ -10619,6 +10754,7 @@ var JOGO = (typeof window !== 'undefined')
           });
       }));
     }
+    acts.appendChild(btn('Configurações', 'btn-ghost', function () { openSheet('config'); }));
     acts.appendChild(btn('Voltar à luta', 'btn-primary', closeSheet));
     body.appendChild(acts);
   }
