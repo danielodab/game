@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — os modelos guardados no aparelho: escolha, progresso, retomada, apagar</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{border:1px solid #333}</style>
+</head>
+<body>
+<!-- 04/10: "sim, tem que ter as duas opções". O js/app_modelos.js de verdade roda aqui com
+     `?app=1`, um ARMAZENAMENTO de mentira (um Map) e uma REDE de mentira (que cai quando a
+     prova manda). Cobra, pela tela que o jogador vê:
+       · a primeira abertura mostra as duas opções, com o tamanho;
+       · fora do Wi-Fi avisa antes de baixar; "esperar o Wi-Fi" não baixa nada;
+       · a barra anda em MB; se a rede cai, o que baixou fica e "Continuar" pede SÓ o que falta;
+       · arte nova no servidor: baixa só o hash que mudou e o arquivo novo, apaga o que saiu;
+       · falta de espaço tem mensagem clara, antes e durante;
+       · nas Configurações: o espaço usado, baixar tudo depois, apagar;
+       · o Cache Storage de verdade do navegador grava, lê e apaga;
+       · a tela "sem conexão" do aplicativo (app/index.html) tenta de novo;
+       · o CARREGADOR DE VERDADE (js/assets_bundle.js) com o manifesto de verdade: a base só
+         desce depois da escolha, fica guardada no Cache Storage, e na abertura seguinte
+         sai inteira do aparelho, sem um pedido de modelo à rede (`?integra=1|2`, num quadro).
+     `?foto=1` só deixa a tela de escolha de pé (com o manifesto de verdade) para a foto;
+     `?moldura=1` a mostra numa janela de 390×844.
+     A metade "na web nada disso existe" está em tests/app_modelos.js (Node). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+  var Q = location.search;
+  if (/moldura=1/.test(Q)) {
+    document.body.innerHTML = '<iframe src="app_modelos.html?app=1&foto=1" style="width:390px;height:844px;' +
+      'transform:scale(.92);transform-origin:top left;border:0"></iframe>';
+    document.body.style.padding = '0';
+  } else {
+    window.__FOTO = /foto=1/.test(Q);
+    window.__INTEGRA = (/integra=(\d)/.exec(Q) || [])[1] || '';
+    history.replaceState(null, '', location.pathname + '?app=1');
+    if (window.__INTEGRA) document.write('<scr' + 'ipt src="../js/assets_bundle.js?v=' + Date.now() + '"></scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="../js/app_modelos.js?v=' + Date.now() + '"></scr' + 'ipt>');
+  }
+</script>
+<script>
+(function () {
+  'use strict';
+  if (!window.JOGO || !JOGO.AppModelos) return;
+  var A = JOGO.AppModelos, MB = 1048576;
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && !ok ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function $(id) { return document.getElementById(id); }
+  function tela() { var e = $('app-modelos'); return e ? e.textContent : null; }
+  function espera(cond, ms) {
+    var t0 = Date.now();
+    return new Promise(function (ok, erro) {
+      (function olha() {
+        var v; try { v = cond(); } catch (e) { v = false; }
+        if (v) return ok(v);
+        if (Date.now() - t0 > (ms || 4000)) return erro(new Error('esperei demais: ' + cond));
+        setTimeout(olha, 15);
+      })();
+    });
+  }
+
+  // ---- a foto: a tela de escolha com o manifesto de verdade, e mais nada
+  if (window.__FOTO) {
+    document.getElementById('summary').hidden = true;
+    A._guarda = { lista: function () { return Promise.resolve([]); }, apaga: function () { return Promise.resolve(); } };
+    A._conexao = { type: 'wifi' };
+    fetch('../assets/models/bundle/manifest.json').then(function (r) { return r.json(); }).then(function (man) {
+      localStorage.removeItem('soterra-app-modelos');
+      A.abertura({ man: man, url: function () { return ''; }, segue: function () {} });
+    });
+    return;
+  }
+
+  // ---- o carregador de verdade, dentro de um quadro: 1 = aparelho vazio, 2 = a abertura seguinte
+  if (window.__INTEGRA) {
+    document.getElementById('summary').hidden = true;
+    var B = JOGO.Bundle, R = { passo: window.__INTEGRA };
+    var modelosNaRede = function () {
+      return performance.getEntriesByType('resource').filter(function (e) {
+        return /assets\/models\/bundle\//.test(e.name) && !/manifest\.json/.test(e.name);
+      }).length;
+    };
+    var comeco = (window.__INTEGRA === '1')
+      ? caches.delete('soterra-modelos-1').then(function () { localStorage.removeItem('soterra-app-modelos'); })
+      : Promise.resolve();
+    comeco.then(function () {
+      B.busca({ base: '../', pronto: function (err) {
+        R.erro = err ? String(err.message || err) : null;
+        R.base = B.info().boot;
+        R.daRede = modelosNaRede();
+        // as gravações são soltas (o jogo não espera por elas): dá um tempo e conta o que ficou
+        espera(function () { return Object.keys(A._estado.tem || {}).length >= R.base.itens; }, 20000)
+          .then(null, function () {}).then(function () { return A.sincroniza(); }).then(function (p) {
+            R.guardados = p.nFeitos; R.bytes = p.feitos; R.tela = !!$('app-modelos');
+            window.__integra = R;
+          });
+      } });
+      if (window.__INTEGRA === '1') {
+        espera(function () { return $('am-agora'); }, 15000).then(function () {
+          R.antes = modelosNaRede();
+          $('am-agora').click();
+        }, function () { R.semTela = true; });
+      }
+    });
+    return;
+  }
+
+  // ---- o armazenamento e a rede de mentira
+  var disco = new Map(), cheio = false;
+  var guarda = {
+    lista: function () { var l = []; disco.forEach(function (v, k) { var p = k.split('|'); l.push({ arquivo: p[0], hash: p[1] }); }); return Promise.resolve(l); },
+    le: function (a, h) { return Promise.resolve(disco.get(a + '|' + h) || null); },
+    grava: function (a, h, b) {
+      if (cheio) { var e = new Error('sem espaço'); e.name = 'QuotaExceededError'; return Promise.reject(e); }
+      disco.set(a + '|' + h, b); return Promise.resolve();
+    },
+    apaga: function (a, h) { disco.delete(a + '|' + h); return Promise.resolve(); },
+    limpa: function () { disco.clear(); return Promise.resolve(); }
+  };
+  var rede = { pedidos: [], aguenta: Infinity, lenta: 0 };
+  function busca(url) {
+    rede.pedidos.push(url);
+    var cai = rede.pedidos.length > rede.aguenta;
+    return new Promise(function (ok, erro) {
+      setTimeout(function () { cai ? erro(new Error('falha de rede')) : ok(new TextEncoder().encode(url).buffer); }, rede.lenta);
+    });
+  }
+  function item(n, hash, mb) { return { alvo: 'MODELS', chave: n, arquivo: 'p/' + n + '.glb', bytes: mb * MB, hash: hash, grupo: 'base' }; }
+  function manifesto() {
+    return { gerado: 'g1', base: 'assets/models/bundle/', itens: [
+      item('a', 'h1', 10), item('b', 'h1', 20), item('c', 'h1', 30), item('d', 'h1', 10), item('e', 'h1', 20), item('f', 'h1', 10) ] };
+  }
+  function url(it) { return 'srv/' + it.arquivo + '?h=' + it.hash; }
+  var seguiu = 0;
+  function abre(man) { seguiu = 0; A.abertura({ man: man, url: url, segue: function () { seguiu++; } }); }
+  function zera() { disco.clear(); cheio = false; rede.pedidos = []; rede.aguenta = Infinity; rede.lenta = 0; localStorage.removeItem('soterra-app-modelos'); }
+
+  A._guarda = guarda;
+  A._busca = busca;
+  A.esperas = [0, 0];
+  A._estimativa = null;
+  A._conexao = { type: 'wifi' };
+  var man = manifesto();
+
+  zera();
+  abre(man);
+  espera(function () { return $('am-agora'); }).then(function () {
+    // ---------------------------------------------------- 1. a primeira abertura
+    check('primeira abertura: aparecem as duas opções e o jogo espera a escolha',
+          !!$('am-agora') && !!$('am-tudo') && seguiu === 0, tela());
+    check('"Baixar tudo" diz o tamanho do pacote (100,0 MB)', /100,0 MB/.test($('am-tudo').textContent), $('am-tudo').textContent);
+    check('no Wi-Fi a tela diz que está no Wi-Fi', /Wi-Fi/.test($('am-rede').textContent));
+    $('am-agora').click();
+    check('"Jogar agora": a tela some, o jogo segue e nada foi baixado',
+          !tela() && seguiu === 1 && rede.pedidos.length === 0 && A.escolha() === 'agora');
+
+    // ---------------------------------------------------- 2. jogar agora guarda o que usa
+    var it = man.itens[0], lido = 'x';
+    A.le(it, function (b) { lido = b; });
+    check('jogar agora: o que ainda não desceu não está guardado (vai para a rede)', lido === null);
+    A.grava(it, new Uint8Array([1, 2, 3]).buffer);
+    return espera(function () { return disco.size === 1; }).then(function () {
+      return new Promise(function (ok) { A.le(it, ok); });
+    });
+  }).then(function (b) {
+    check('jogar agora: o que desceu FICA guardado e a próxima leitura sai do aparelho', !!b && b.byteLength === 3);
+    abre(man);
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('quem escolheu jogar agora não vê a pergunta de novo', !tela() && rede.pedidos.length === 0);
+
+    // ---------------------------------------------------- 3. dados móveis: o aviso
+    zera();
+    A._conexao = { type: 'cellular' };
+    abre(man);
+    return espera(function () { return $('am-tudo'); });
+  }).then(function () {
+    check('nos dados móveis a tela de escolha avisa que gasta o plano', /dados móveis/.test($('am-rede').textContent), $('am-rede').textContent);
+    $('am-tudo').click();
+    return espera(function () { return $('am-nao'); });
+  }).then(function () {
+    check('fora do Wi-Fi: antes de baixar, o aviso com o tamanho — e nada desceu ainda',
+          /100,0 MB/.test(tela()) && rede.pedidos.length === 0, tela());
+    $('am-nao').click();
+    check('"Esperar o Wi-Fi": o jogo abre sem baixar nada, e a vontade fica gravada',
+          seguiu === 1 && rede.pedidos.length === 0 && A.escolha() === 'tudo' && !tela());
+
+    // ---------------------------------------------------- 4. no Wi-Fi: começa sozinho, e a rede cai no meio
+    A._conexao = { type: 'wifi' };
+    rede.aguenta = 3;                   // três arquivos chegam; depois a rede cai
+    abre(man);
+    return espera(function () { return $('am-continuar'); });
+  }).then(function () {
+    check('a rede caiu: a tela diz que o que baixou está guardado, em MB',
+          /conexão caiu/.test(tela()) && /60,0 de 100,0 MB/.test(tela()), tela());
+    check('ficaram guardados os 3 arquivos que chegaram', disco.size === 3, String(disco.size));
+    check('o jogo ainda não seguiu: o jogador escolhe continuar ou jogar', seguiu === 0);
+
+    // ---------------------------------------------------- 5. a retomada
+    rede.aguenta = Infinity; rede.pedidos = []; rede.lenta = 40;
+    $('am-continuar').click();
+    return espera(function () { return $('am-barra') && /de 100,0 MB/.test($('am-txt').textContent); });
+  }).then(function () {
+    check('ao continuar a barra já começa em 60 de 100 MB, e diz quanto falta',
+          /^60,0 de 100,0 MB · faltam 40,0 MB/.test($('am-txt').textContent) && $('am-barra').style.width === '60%', $('am-txt').textContent);
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('a retomada pede SÓ os 3 arquivos que faltavam', rede.pedidos.length === 3, rede.pedidos.join(' '));
+    check('pacote completo: os 6 guardados, a tela some e o jogo segue', disco.size === 6 && !tela());
+    rede.pedidos = []; rede.lenta = 0;
+    abre(man);
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('abrir de novo com tudo guardado: nenhuma tela e nenhum pedido à rede', !tela() && rede.pedidos.length === 0);
+
+    // ---------------------------------------------------- 6. a arte mudou no servidor
+    var m2 = manifesto();
+    m2.itens[1].hash = 'h2';                       // b mudou
+    m2.itens.splice(5, 1);                         // f saiu
+    m2.itens.push(item('g', 'h1', 5));             // g é novo
+    man = m2;
+    abre(man);
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('arte nova: desce só o que mudou de hash e o arquivo novo',
+          rede.pedidos.slice().sort().join(' ') === 'srv/p/b.glb?h=h2 srv/p/g.glb?h=h1', rede.pedidos.join(' '));
+    check('… e o que saiu e a versão velha são apagados',
+          disco.size === 6 && !disco.has('p/f.glb|h1') && !disco.has('p/b.glb|h1') && disco.has('p/b.glb|h2'), Array.from(disco.keys()).join(' '));
+
+    // ---------------------------------------------------- 7. pausar
+    zera(); man = manifesto(); rede.lenta = 60;
+    abre(man);
+    return espera(function () { return $('am-tudo'); });
+  }).then(function () {
+    $('am-tudo').click();
+    return espera(function () { return $('am-pausa'); });
+  }).then(function () {
+    $('am-pausa').click();
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('"Pausar e jogar agora": o jogo segue com o que já baixou guardado, sem pedir o resto',
+          !tela() && disco.size > 0 && disco.size < 6 && rede.pedidos.length === disco.size, disco.size + ' guardados, ' + rede.pedidos.length + ' pedidos');
+
+    // ---------------------------------------------------- 8. falta de espaço
+    zera(); rede.lenta = 0;
+    A._estimativa = { quota: 50 * MB, usage: 10 * MB };
+    abre(man);
+    return espera(function () { return $('am-tudo'); });
+  }).then(function () {
+    $('am-tudo').click();
+    return espera(function () { return /Falta espaço/.test(tela() || ''); });
+  }).then(function () {
+    check('sem espaço para o pacote: a tela diz quanto precisa e quanto há, e não baixa',
+          /100,0 MB/.test(tela()) && /40,0 MB livres/.test(tela()) && rede.pedidos.length === 0, tela());
+    $('am-jogar').click();
+    check('… e dá para jogar agora mesmo assim', seguiu === 1 && A.escolha() === 'agora');
+    zera(); A._estimativa = null; cheio = true;
+    abre(man);
+    return espera(function () { return $('am-tudo'); });
+  }).then(function () {
+    $('am-tudo').click();
+    return espera(function () { return /Faltou espaço/.test(tela() || ''); });
+  }).then(function () {
+    check('o aparelho encheu no meio do download: mensagem clara, com o botão de tentar de novo',
+          /Libere/.test(tela()) && !!$('am-continuar') && !!$('am-jogar'), tela());
+    cheio = false;
+    $('am-continuar').click();
+    return espera(function () { return seguiu === 1; });
+  }).then(function () {
+    check('liberado o espaço, "Tentar de novo" termina o pacote', disco.size === 6);
+
+    // ---------------------------------------------------- 9. as Configurações
+    var sec = A.secaoConfig();
+    document.body.appendChild(sec);
+    return espera(function () { return $('cfg-modelos-uso'); });
+  }).then(function () {
+    check('Configurações: mostra o espaço usado', /100,0 de 100,0 MB guardados/.test($('cfg-modelos-uso').textContent), $('cfg-modelos-uso').textContent);
+    check('com o pacote completo não há o que baixar, só o Apagar', !$('cfg-modelos-baixar') && !!$('cfg-modelos-apagar'));
+    $('cfg-modelos-apagar').click();
+    check('Apagar pergunta antes, dizendo quanto libera', /Libera 100,0 MB/.test(tela() || ''), tela());
+    $('am-nao').click();
+    check('Cancelar não apaga nada', disco.size === 6 && !tela());
+    $('cfg-modelos-apagar').click();
+    $('am-sim').click();
+    return espera(function () { return $('cfg-modelos-baixar'); });
+  }).then(function () {
+    check('Apagar: o pacote some do aparelho e a escolha volta a "jogar agora"',
+          disco.size === 0 && A.escolha() === 'agora' && /^0,0 de 100,0 MB/.test($('cfg-modelos-uso').textContent));
+    rede.pedidos = [];
+    $('cfg-modelos-baixar').click();
+    return espera(function () { return disco.size === 6 && !tela(); });
+  }).then(function () {
+    check('quem escolheu jogar agora baixa tudo depois, pelas Configurações',
+          rede.pedidos.length === 6 && A.escolha() === 'tudo');
+    return espera(function () { return /100,0 de 100,0/.test($('cfg-modelos-uso').textContent); });
+  }).then(function () {
+    check('… e a seção se atualiza sozinha ao terminar', true);
+    document.body.removeChild($('cfg-modelos'));
+
+    // ---------------------------------------------------- 10. o Cache Storage de verdade
+    A._guarda = undefined;
+    if (!A.ativo()) { check('este navegador tem Cache Storage (a prova precisa de http://localhost)', false); return null; }
+    var pequeno = { gerado: 'g', itens: [item('real', 'hr', 1)] };
+    return A.apagaTudo().then(function () {
+      localStorage.setItem('soterra-app-modelos', 'agora');
+      seguiu = 0;
+      A.abertura({ man: pequeno, url: url, segue: function () { seguiu++; } });
+      return espera(function () { return seguiu === 1; });
+    }).then(function () {
+      A.grava(pequeno.itens[0], new Uint8Array([7, 8, 9, 10]).buffer);
+      return espera(function () { return A._estado.tem['p/real.glb'] === 'hr'; });
+    }).then(function () {
+      return new Promise(function (ok) { A.le(pequeno.itens[0], ok); });
+    }).then(function (b) {
+      check('Cache Storage de verdade: grava e lê o mesmo conteúdo', !!b && new Uint8Array(b).join(',') === '7,8,9,10');
+      return A.sincroniza();
+    }).then(function (p) {
+      check('Cache Storage de verdade: a lista devolve o arquivo com o hash dele', p.nFeitos === 1 && p.baixar.length === 0);
+      return A.apagaTudo().then(function () { return caches.has('soterra-modelos-1'); });
+    }).then(function (tem) {
+      check('Cache Storage de verdade: apagar remove o cache inteiro', tem === false);
+    });
+  }).then(function () {
+    // ---------------------------------------------------- 11. a tela "sem conexão" do aplicativo
+    return new Promise(function (ok) {
+      var q = document.createElement('iframe');
+      q.style.cssText = 'width:300px;height:260px';
+      q.src = '../app/index.html';
+      q.onload = function () {
+        var w = q.contentWindow, d = w.document, foi = [];
+        w.__vai = function (u) { foi.push(u); };
+        check('tela sem conexão: tem título, explicação e o botão de tentar de novo',
+              !!d.getElementById('tentar') && d.getElementById('texto').textContent.length > 20);
+        d.getElementById('tentar').click();
+        check('"Tentar de novo" abre o jogo no servidor', foi.length === 1 && /\/$/.test(foi[0]), foi.join(' '));
+        w.dispatchEvent(new Event('online'));
+        check('a rede voltou: a tela tenta sozinha, sem toque', foi.length === 2);
+        check('a tela é um arquivo só (nenhum script, folha ou imagem de fora)',
+              !d.querySelector('script[src], link[href], img'));
+        ok();
+      };
+      document.body.appendChild(q);
+    });
+  }).then(function () {
+    // ---------------------------------------------------- 12. o carregador de verdade
+    function quadro(n) {
+      return new Promise(function (ok, erro) {
+        var q = document.createElement('iframe');
+        q.style.cssText = 'width:300px;height:200px';
+        q.src = 'app_modelos.html?integra=' + n;
+        document.body.appendChild(q);
+        espera(function () { return q.contentWindow.__integra; }, 120000).then(function (r) { document.body.removeChild(q); ok(r); }, erro);
+      });
+    }
+    return quadro(1).then(function (r) {
+      check('jogo de verdade, aparelho vazio: a base só começa a descer DEPOIS da escolha',
+            r.antes === 0 && !r.semTela && !r.erro, JSON.stringify(r));
+      check('"Jogar agora": a base desce da rede e fica inteira no Cache Storage',
+            r.daRede === r.base.itens && r.guardados === r.base.itens && r.bytes === r.base.bytes, JSON.stringify(r));
+      return quadro(2);
+    }).then(function (r) {
+      check('abertura seguinte: nenhuma pergunta, a base sai do aparelho e NENHUM modelo é pedido à rede',
+            !r.erro && r.daRede === 0 && r.tela === false && r.guardados === r.base.itens && r.base.itens > 50, JSON.stringify(r));
+      return caches.delete('soterra-modelos-1');
+    });
+  }).then(fim, function (e) { check('a prova chegou ao fim', false, String(e && e.message || e)); fim(); });
+})();
+</script>
+</body>
+</html>

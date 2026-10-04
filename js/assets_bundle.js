@@ -255,6 +255,12 @@ var JOGO = (typeof window !== 'undefined')
       medida.boot = { itens: itens.length, bytes: 0, grupos: B.sobDemanda() ? ['base'] : ['todos'] };
       for (var bi = 0; bi < itens.length; bi++) medida.boot.bytes += itens[bi].bytes || 0;
 
+      // NO APLICATIVO: antes de baixar a base, o js/app_modelos.js acerta o que está guardado
+      // com o manifesto e, na primeira abertura, pergunta "Jogar agora" ou "Baixar tudo".
+      var G = JOGO.AppModelos;
+      if (G && G.abertura) G.abertura({ man: man, url: enderecoModelo, segue: baixaBase });
+      else baixaBase();
+      function baixaBase() {
       var t1 = agora();
       fase = 'boot';
       (function vai(lista) {
@@ -269,6 +275,7 @@ var JOGO = (typeof window !== 'undefined')
           });
         });
       })(itens);
+      }
     }, function (e) { pronto(e); }, B.prazos.manifesto);
   };
 
@@ -356,6 +363,22 @@ var JOGO = (typeof window !== 'undefined')
   }
   B.sobDemanda = function () { return !!(B.servido && man && !forcaTudo && temGrupos(man)); };
 
+  /* NO APLICATIVO (04/10) o modelo é procurado primeiro no que está guardado no aparelho
+   * (js/app_modelos.js) e só depois na rede — e o que veio da rede fica guardado. Na web
+   * `JOGO.AppModelos` não existe (o index.html só escreve aquele arquivo dentro do
+   * aplicativo) e isto é o `pega` de sempre, com o mesmo prazo. */
+  function pegaModelo(it, ok, falha) {
+    var G = JOGO.AppModelos, url = enderecoModelo(it);
+    if (!G) return pega(url, 'arraybuffer', ok, falha, B.prazos.parado);
+    var voo = { x: null, morto: false, abort: function () { voo.morto = true; if (voo.x) { try { voo.x.abort(); } catch (e) {} } } };
+    G.le(it, function (buf) {
+      if (voo.morto) return;
+      if (buf) return ok(buf);
+      voo.x = pega(url, 'arraybuffer', function (b) { G.grava(it, b); ok(b); }, falha, B.prazos.parado);
+    });
+    return voo;
+  }
+
   // ------------------------------------------------------------ a fila
   function baixaUm(it, alta, feito) {
     var id = it.alvo + ':' + it.chave;
@@ -400,7 +423,7 @@ var JOGO = (typeof window !== 'undefined')
     (function tenta() {
       pausa = null;
       if (cancelado) return;
-      xhr = pega(enderecoModelo(it), 'arraybuffer', function (buf) {
+      xhr = pegaModelo(it, function (buf) {
         if (cancelado) return;
         guarda(it.alvo, it.chave, new Uint8Array(buf));
         medida.bytes += buf.byteLength;
@@ -413,7 +436,7 @@ var JOGO = (typeof window !== 'undefined')
         if (tent < ESPERAS.length) { pausa = setTimeout(tenta, ESPERAS[tent++]); return; }
         medida.erros.push(String(e.message || e));
         fim(e);
-      }, B.prazos.parado);
+      });
     })();
     function fim(err) {
       delete voos[id];

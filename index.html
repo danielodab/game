@@ -502,6 +502,14 @@
   // O carregador de modelos precisa existir antes da decisão abaixo.
   document.write('<scr' + 'ipt src="' + window.__url('js/assets_bundle.js') + '"><\/scr' + 'ipt>');
   try { if (window.__boot) window.__boot.espera(['js/assets_bundle.js'], 'A'); } catch (eB) {}   // a marca de abertura
+  // SÓ NO APLICATIVO de Android (o Capacitor põe window.Capacitor antes do primeiro script; `?app=1` é a
+  // casca fingida das provas): os modelos guardados no aparelho. Na web este arquivo nem é pedido.
+  try {
+    if (/[?&]app=1(&|$)/.test(location.search) ||
+        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+      document.write('<scr' + 'ipt src="' + window.__url('js/app_modelos.js') + '"><\/scr' + 'ipt>');
+    }
+  } catch (eApp) {}
 </script>
 <script>
   (function () {

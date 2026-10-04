@@ -9739,6 +9739,11 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(gsec);
     }
 
+    /* MODELOS NO APARELHO (04/10): só existe no aplicativo de Android — na web `JOGO.AppModelos` não é
+     * carregado. Mostra o espaço usado, baixa o pacote inteiro e apaga (js/app_modelos.js). */
+    var secModelos = safe(function () { return JOGO.AppModelos && JOGO.AppModelos.secaoConfig(); }, null);
+    if (secModelos) body.appendChild(secModelos);
+
     // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
     var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
     if (!toque) {
