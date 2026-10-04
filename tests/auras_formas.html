@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — cada aura com a sua forma</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1280px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1280px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- AS CINCO AURAS, CADA UMA COM A SUA FORMA. O dono: "cada aura deve ser diferente... não só mudar a cor,
+     e deve ter efeitos mais chamativos". O index.html de verdade num quadro (save na memória, Rede calada,
+     como a tests/aura_praca.html). Cobra do RENDERIZADOR, não da tela: cada aura monta peças diferentes das
+     outras (nome, tipo de objeto e contagem), se mexe, custa no máximo 3 chamadas de desenho, leva menos
+     partículas na qualidade baixa, anda mais devagar com "Menos movimento" e some no vizinho distante.
+     Mede o custo de vinte vizinhos com aura e, no fim, deixa as cinco lado a lado para a foto. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0;
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function nota(txt) { linhas.push('        ' + txt); pinta(); }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+    window.__done = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+  function dorme(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&graficos=alta&auras-formas';
+  var J, U, H, R, escolhida = 'fogo';
+  var CORES = ['fogo', 'agua', 'terra', 'ar', 'neutra'];
+  var NOME = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa' };
+  var CLASSES = ['arqueiro', 'curandeiro', 'sumo'];
+  function poe(id, cor, x, z) {
+    H.fantasmaSai(id);
+    H.fantasmaEntra(id, { id: id, nome: cor ? NOME[cor] : id, titulo: '', classe: CLASSES[id.length % 3], sala: null,
+                          aura: false, auraCor: cor ? R._corAura(cor) : null, x: x, z: z });
+  }
+  function assinatura(a) {
+    return Object.keys(a.pecas).sort().map(function (k) { return k + ':' + a.pecas[k].tipo; }).join('+');
+  }
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() &&
+                  J.UI && J.Hub && J.Hub._auraDoHeroi && J.Rede && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    U = J.UI; H = J.Hub; R = J.Rede;
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      quadro.contentWindow.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    if (!ids.length) { P.createHero('sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 1));
+    R.entrar = function () { return true; };          // a Rede calada: os vizinhos entram à mão
+    R.pares = function () { return []; };
+    R.mover = function () {};
+    // a HUD reacende no herói a aura que a LOJA diz (aplicaAuraPraca): aqui a loja diz o que o roteiro manda
+    J.Loja.auraEscolhida = function () { return escolhida; };
+    J.DB.batizar('Brasa').then(roteiro).then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function roteiro() {
+    var hp, vinte = [], semAura, comAura;
+    U.showScreen('hub');
+    return ate(function () { var e = H._estado(); return !!(e && e.pos); }, 30000).then(function (ok) {
+      check('(o Acampamento abriu)', ok);
+      if (!ok) throw new Error('sem a praça');
+      hp = H._estado().pos;
+      H.aura(false);
+      // ---- o herói veste as cinco, uma de cada vez: forma, peças, custo e movimento
+      var retratos = {};
+      CORES.forEach(function (c) { H.aura(true, c); retratos[c] = H._auraDoHeroi(); });
+      CORES.forEach(function (c) {
+        var a = retratos[c];
+        check('a aura de ' + NOME[c] + ' monta a forma própria e custa no máximo 3 chamadas de desenho',
+              a.acesa && a.forma === c && a.chamadas >= 1 && a.chamadas <= 3, assinatura(a) + ' · ' + a.particulas + ' partículas · ' + a.chamadas + ' chamadas');
+      });
+      var assin = CORES.map(function (c) { return assinatura(retratos[c]); });
+      var unicas = assin.filter(function (s, i) { return assin.indexOf(s) === i; });
+      check('nenhuma aura tem as mesmas peças de outra (não é o mesmo aro com outra cor)', unicas.length === 5, assin.join(' | '));
+      var nomes = {};
+      CORES.forEach(function (c) { Object.keys(retratos[c].pecas).forEach(function (k) { nomes[k] = (nomes[k] || 0) + 1; }); });
+      check('nenhuma peça se repete entre duas auras', Object.keys(nomes).every(function (k) { return nomes[k] === 1; }), JSON.stringify(nomes));
+      // ---- qualidade baixa: menos partículas (a mesma régua vale para o celular)
+      var qAntes = J.Mobile.qualidade;
+      J.Mobile.qualidade = function () { return 'baixa'; };
+      var leves = {};
+      CORES.forEach(function (c) { H.aura(false); H.aura(true, c); leves[c] = H._auraDoHeroi(); });
+      J.Mobile.qualidade = qAntes;
+      check('na qualidade baixa cada aura leva menos partículas (no máximo 60% das da alta)',
+            CORES.every(function (c) { return leves[c].leve && leves[c].particulas <= retratos[c].particulas * 0.6; }),
+            CORES.map(function (c) { return NOME[c] + ' ' + retratos[c].particulas + '→' + leves[c].particulas; }).join(', '));
+      H.aura(false); H.aura(true, 'fogo');
+      check('de volta à qualidade alta a aura volta inteira', !H._auraDoHeroi().leve && H._auraDoHeroi().particulas === retratos.fogo.particulas);
+      // ---- a aura se mexe, e "Menos movimento" a desacelera
+      var a1 = H._auraDoHeroi();
+      return dorme(700).then(function () {
+        var a2 = H._auraDoHeroi();
+        check('a aura se mexe sozinha (as partículas mudam de lugar de um quadro para o outro)', a2.pose !== a1.pose && a2.t > a1.t,
+              'pose ' + a1.pose + ' → ' + a2.pose + ' · relógio ' + a1.t + ' → ' + a2.t);
+        quadro.contentDocument.documentElement.classList.add('menos-movimento');
+        var b1, c1;
+        return dorme(150).then(function () { b1 = { r: H._auraDoHeroi().t, h: Date.now() }; return dorme(900); }).then(function () {
+          c1 = { r: H._auraDoHeroi().t, h: Date.now() };
+          quadro.contentDocument.documentElement.classList.remove('menos-movimento');
+          return dorme(150);
+        }).then(function () {
+          var d1 = { r: H._auraDoHeroi().t, h: Date.now() };
+          return dorme(900).then(function () {
+            var e1 = { r: H._auraDoHeroi().t, h: Date.now() };
+            var calmo = (c1.r - b1.r) / ((c1.h - b1.h) / 1000), normal = (e1.r - d1.r) / ((e1.h - d1.h) / 1000);
+            check('"Menos movimento" põe a aura em câmera lenta (menos da metade da velocidade)', normal > 0 && calmo < normal * 0.5,
+                  'calmo ' + calmo.toFixed(2) + ' × normal ' + normal.toFixed(2));
+          });
+        });
+      });
+    }).then(function () {
+      // ---- vinte vizinhos: o custo de desenho SEM aura e COM aura (quatro de cada)
+      escolhida = null;
+      H.aura(false);
+      for (var i = 0; i < 20; i++) {
+        vinte.push({ id: 'v' + i, x: hp.x + ((i % 5) - 2) * 1.9, z: hp.z - 2 - Math.floor(i / 5) * 1.9, cor: CORES[i % 5] });
+      }
+      vinte.forEach(function (v) { poe(v.id, null, v.x, v.z); });
+      return ate(function () { return vinte.every(function (v) { return !!H._corpoFantasma(v.id); }); }, 60000);
+    }).then(function (ok) {
+      check('(os vinte vizinhos têm corpo)', ok);
+      return dorme(900);
+    }).then(function () {
+      semAura = H._estado().desenho;
+      vinte.forEach(function (v) { poe(v.id, v.cor, v.x, v.z); });
+      return ate(function () { return vinte.every(function (v) { var a = H._auraFantasma(v.id); return !!H._corpoFantasma(v.id) && a && a.acesa; }); }, 60000);
+    }).then(function (ok) {
+      check('os vinte vizinhos acendem a aura do perfil, cada um a sua forma',
+            ok && vinte.every(function (v) { return H._auraFantasma(v.id).forma === v.cor; }));
+      return dorme(900);
+    }).then(function () {
+      comAura = H._estado().desenho;
+      var soma = vinte.reduce(function (s, v) { return s + H._auraFantasma(v.id).chamadas; }, 0);
+      var custo = comAura.calls - semAura.calls;
+      nota('CUSTO DE DESENHO com 20 auras: ' + semAura.calls + ' → ' + comAura.calls + ' chamadas (+' + custo +
+           '; a aura antiga custava 5 por corpo = +100) · triângulos ' + semAura.tris + ' → ' + comAura.tris);
+      check('vinte auras somam no máximo 60 chamadas de desenho (a antiga somava 100)', soma <= 60 && custo <= 60 && custo >= soma - 2, 'peças visíveis ' + soma + ', medido +' + custo);
+      // ---- o vizinho distante não desenha aura; ao voltar, desenha de novo
+      // (com os vinte na praça o 21º nem corpo ganha — é o teto de sempre; por isso eles saem antes)
+      vinte.forEach(function (v) { H.fantasmaSai(v.id); });
+      poe('longe', 'agua', hp.x + 40, hp.z);
+      return ate(function () { return !!H._corpoFantasma('longe'); }, 30000).then(function () { return dorme(400); });
+    }).then(function () {
+      var l = H._auraFantasma('longe');
+      check('o vizinho a 40 m não desenha a aura (nem a anima)', !!l && l.acesa && l.visivel === false && l.chamadas === 0, JSON.stringify(l && { v: l.visivel, c: l.chamadas }));
+      H.fantasmaSai('longe');
+      check('quem sai da praça leva a aura junto', H._auraFantasma('v0') === null);
+      // ---- a foto: as cinco lado a lado, o herói (Brasa) no meio
+      escolhida = 'fogo';
+      H.aura(true, 'fogo');
+      poe('mare', 'agua', hp.x - 5.0, hp.z);
+      poe('raiz', 'terra', hp.x - 2.5, hp.z);
+      poe('vento', 'ar', hp.x + 2.5, hp.z);
+      poe('lousa', 'neutra', hp.x + 5.0, hp.z);
+      try { H._cam({ dist: 10, tilt: 0.62 }); } catch (e) {}
+      return ate(function () { return ['mare', 'raiz', 'vento', 'lousa'].every(function (id) { return !!H._corpoFantasma(id); }); }, 30000);
+    }).then(function (ok) {
+      check('(as cinco auras estão acesas lado a lado, para a foto)', ok && H._auraDoHeroi().forma === 'fogo' &&
+            H._auraFantasma('lousa').forma === 'neutra');
+    });
+  }
+})();
+</script>
+</body>
+</html>

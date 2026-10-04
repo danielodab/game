@@ -2127,6 +2127,14 @@ var JOGO = (typeof window !== 'undefined')
    *   - a AURA: a comprada acende no herói (Hub.aura com a cor) e viaja no perfil da Rede; a ficha do
    *     Personagem liga, desliga e troca (secaoAura). */
   var AURA_PT = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa' };
+  // o que cada aura FAZ na praça (o mesmo que o js/render3d/hub3d.js desenha e que a loja do site descreve)
+  var AURA_EFEITO = {
+    fogo: 'labaredas que sobem dos pés, fagulhas que estalam e um clarão quente no chão',
+    agua: 'anéis de água que se abrem no chão como onda, e gotas que orbitam e caem',
+    terra: 'folhas e pétalas girando devagar, e brotos que nascem do chão e recolhem',
+    ar: 'fitas de ar em espiral subindo em volta do corpo, e um rastro ao andar',
+    neutra: 'lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida'
+  };
   function paginaLoja() {
     var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
     return raiz + 'site/loja.html';
@@ -2244,12 +2252,13 @@ var JOGO = (typeof window !== 'undefined')
           });
         b.setAttribute('data-aura', a.cor);
         b.setAttribute('aria-pressed', atual === a.cor ? 'true' : 'false');
-        b.title = minha ? a.nome : a.nome + ' — na loja do site';
+        b.title = a.nome + (AURA_EFEITO[a.cor] ? ': ' + AURA_EFEITO[a.cor] : '') + (minha ? '' : ' — na loja do site');
         fila.appendChild(b);
       });
       cx.appendChild(fila);
       var dica = el('p', 'inv-dica', tem.length
-        ? 'Um anel de luz aos pés do herói, que todo mundo na praça vê. Só aparência: não muda nada em batalha.'
+        ? (atual && AURA_EFEITO[atual] ? 'Aura de ' + esc(AURA_PT[atual] || atual) + ': ' + AURA_EFEITO[atual] + '. ' : 'Cada aura é um efeito diferente em volta do herói. ') +
+          'Todo mundo na praça vê. Só aparência: não muda nada em batalha.'
         : 'Você ainda não tem aura. Elas ficam na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência — só aparência, nada de poder.');
       var lk = dica.querySelector('a');
       if (lk) lk.href = paginaLoja();

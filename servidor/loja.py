@@ -369,11 +369,12 @@ def _barras_por_vintens(barras):
             'preco': vintens, 'moeda': 'vintens', 'limite': None}
 
 
-def _aura(cor, nome, do):
-    """04/10: a aura da praça. Só aparência: nada muda em batalha, e por isso pode se vender."""
+def _aura(cor, nome, efeito):
+    """04/10: a aura da praça. Só aparência: nada muda em batalha, e por isso pode se vender. Cada uma é um
+    efeito próprio (o dono: "não só mudar a cor") — a descrição conta o que se vê, igual ao js/render3d/hub3d.js."""
     return {'sku': 'aura-' + cor, 'secao': 'aparencia', 'tipo': 'aura', 'alvo': cor, 'qtd': 1, 'nome': nome,
-            'descricao': ('Um anel de luz %s aos pés do seu herói na praça: todo mundo vê. Só aparência — não muda '
-                          'nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.' % do),
+            'descricao': ('%s Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não '
+                          'muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.' % efeito),
             'preco': AURA_PRECO, 'moeda': 'barras', 'limite': {'grupo': 'aura-' + cor, 'max': 1, 'dias': None}}
 
 
@@ -418,11 +419,11 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
      'descricao': ('Troca um caminho elemental de um herói por outro que a classe tenha, sem mexer em nível, '
                    'itens e estrelas. Alternar entre os caminhos que ele já tem continua grátis.'),
      'preco': 250, 'moeda': 'barras', 'limite': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}},
-    _aura('fogo', 'Aura de Brasa', 'cor de brasa'),
-    _aura('agua', 'Aura de Maré', 'azul de maré'),
-    _aura('terra', 'Aura de Raiz', 'verde de raiz'),
-    _aura('ar', 'Aura de Vento', 'clara de vento'),
-    _aura('neutra', 'Aura da Lousa', 'cor de ouro velho'),
+    _aura('fogo', 'Aura de Brasa', 'Labaredas que sobem dos pés, fagulhas que estalam e um clarão quente que pulsa no chão.'),
+    _aura('agua', 'Aura de Maré', 'Anéis de água que se abrem no chão como onda, e gotas que orbitam e caem.'),
+    _aura('terra', 'Aura de Raiz', 'Folhas e pétalas girando devagar em volta, e brotos que nascem do chão e recolhem.'),
+    _aura('ar', 'Aura de Vento', 'Fitas de ar em espiral subindo em volta do corpo, e um rastro ao andar.'),
+    _aura('neutra', 'Aura da Lousa', 'Lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida no chão.'),
 )
 POR_SKU = {i['sku']: i for i in CATALOGO}
 # 04/10: o Pacote de Boas-Vindas. O preço cheio é a soma do que vem dentro, pelos preços do catálogo

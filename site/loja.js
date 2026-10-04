@@ -90,7 +90,7 @@
     guilda: { titulo: 'Guilda', sub: 'Dez Insígnias fundam uma guilda.' },
     pergaminhos: { titulo: 'Pergaminhos', sub: 'Chegam guardados no jogo; você lê quando quiser.' },
     // 04/10: as auras da praça — só aparência, e por isso podem se vender
-    aparencia: { titulo: 'Aparência', sub: 'Auras para a praça: um anel de luz aos pés do herói, que todo mundo vê. Só aparência — não muda nada em batalha. A aura é sua na hora; liga, desliga e troca na ficha do Personagem, no jogo.' }
+    aparencia: { titulo: 'Aparência', sub: 'Auras para a praça, cada uma com o seu efeito em volta do herói — chamas, ondas, folhas, vento em espiral, pedras e runas —, que todo mundo vê. Só aparência — não muda nada em batalha. A aura é sua na hora; liga, desliga e troca na ficha do Personagem, no jogo.' }
   };
   /* 04/10 — AS NOVIDADES (servidor/loja.py manda tudo; aqui não mora número nenhum):
    *   - o PACOTE DE BOAS-VINDAS (seção 'boas-vindas'): não é uma seção comum, é o destaque do topo,
@@ -563,10 +563,29 @@
     for (var i = 0; i < els.length; i++) els[i].textContent = 'Terminam em ' + faltaTexto(falta) + '.';
   }
 
+  /* 04/10: cada aura é um efeito PRÓPRIO na praça (o dono: "não só mudar a cor") — e a vitrine mostrava o
+   * mesmo anel cinco vezes. Agora cada produto leva o desenho da forma dela, riscado em SVG na cor do
+   * elemento: labaredas, ondas, folhas e brotos, espiral, lascas e círculo de runas. */
+  var AURA_FORMA = {
+    fogo: '<path d="M24 60c-5-12 2-20 6-30 3 9 9 14 6 30zM44 62c-8-18 4-30 8-46 6 16 16 26 8 46zM68 60c-4-11 3-17 5-27 4 8 9 15 5 27z" fill="currentColor"/>' +
+          '<circle cx="18" cy="22" r="2.2" fill="currentColor"/><circle cx="78" cy="16" r="2.2" fill="currentColor"/><circle cx="60" cy="8" r="1.8" fill="currentColor"/>',
+    agua: '<ellipse cx="48" cy="52" rx="14" ry="5" fill="none" stroke="currentColor" stroke-width="3"/>' +
+          '<ellipse cx="48" cy="52" rx="28" ry="10" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".7"/>' +
+          '<ellipse cx="48" cy="52" rx="42" ry="15" fill="none" stroke="currentColor" stroke-width="1.8" opacity=".4"/>' +
+          '<path d="M24 12c4 6 6 9 6 12a6 6 0 0 1-12 0c0-3 2-6 6-12zM70 6c3 5 5 7 5 10a5 5 0 0 1-10 0c0-3 2-5 5-10z" fill="currentColor"/>',
+    terra: '<path d="M14 26c10-10 22-8 28 0-8 8-20 9-28 0zM56 14c9-8 20-6 26 2-8 7-18 7-26-2z" fill="currentColor"/>' +
+           '<path d="M62 40c7-6 15-4 19 2-6 5-13 5-19-2z" fill="currentColor" opacity=".7"/>' +
+           '<path d="M30 66c0-10 2-16 6-22M48 66c0-14-2-20-6-26M64 66c0-8 2-12 5-16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>',
+    ar: '<path d="M14 60c22 8 60 4 66-6M20 44c18 8 50 4 56-6M26 28c14 7 38 4 44-5M34 14c9 5 22 3 28-3" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>',
+    neutra: '<ellipse cx="48" cy="54" rx="40" ry="13" fill="none" stroke="currentColor" stroke-width="2.6"/>' +
+            '<ellipse cx="48" cy="54" rx="27" ry="8.5" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".7"/>' +
+            '<path d="M22 22l7-12 6 12-6 10zM62 16l6-10 6 10-6 9zM78 34l4-7 4 7-4 6z" fill="currentColor"/>'
+  };
   function arte(it) {
-    if (it.tipo === 'aura') {            // 04/10: o anel de luz, na cor do elemento
+    if (it.tipo === 'aura') {
       var cor = it.alvo === 'neutra' ? 'neutro' : (ELEMENTOS.indexOf(it.alvo) >= 0 ? it.alvo : 'neutro');
-      return '<div class="arte-produto arte-aura el-' + cor + '"><span class="anel"></span></div>';
+      return '<div class="arte-produto arte-aura el-' + cor + '" data-aura="' + SITE.esc(it.alvo) + '">' +
+        '<svg class="aura-forma" viewBox="0 0 96 72" aria-hidden="true">' + (AURA_FORMA[it.alvo] || AURA_FORMA.agua) + '</svg></div>';
     }
     if (it.tipo === 'classe') {
       var src = SITE.img('classe', it.alvo);

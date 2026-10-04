@@ -909,10 +909,8 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
 .preco-cheio { font: 400 14px var(--sans); color: var(--texto-2); text-decoration: line-through; margin-right: 2px; }
 .oferta-falta { color: var(--ouro); font-weight: 600; white-space: nowrap; }
 .arte-aura { background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--el, #e0b860) 26%, transparent), transparent 70%), linear-gradient(160deg, #1d232c, #0f1216); }
-.arte-aura .anel {
-  width: 96px; height: 38px; border-radius: 50%; border: 3px solid var(--el, #e0b860);
-  box-shadow: 0 0 22px var(--el, #e0b860), inset 0 0 16px var(--el, #e0b860); opacity: .9;
-}
+/* 04/10: cada aura mostra a FORMA dela (labaredas, ondas, folhas, espiral, runas), não o mesmo anel */
+.arte-aura .aura-forma { width: 120px; height: 90px; color: var(--el, #e0b860); filter: drop-shadow(0 0 8px var(--el, #e0b860)); }
 .presente { margin-top: 10px; }
 .presente-aberto { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .12); }
 .presente label { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--texto-2); }

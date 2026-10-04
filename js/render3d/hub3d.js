@@ -3781,11 +3781,27 @@ var JOGO = (typeof window !== 'undefined')
       for (var fk2 in fantasmas) {
         if (fantasmas.hasOwnProperty(fk2)) viraCoroa(fantasmas[fk2].corpo);
       }
-      // A AURA respira: o anel gira devagar, as labaredas sobem e somem
-      var pulsaAura = function (corpoA) {
+      /* A AURA: a branca do Colecionador respira como sempre (o anel gira, as labaredas sobem); as da
+       * loja têm cada uma a sua animação (AURA_FORMA). "Menos movimento" das Configurações põe o relógio
+       * delas a um terço; a do vizinho distante não se desenha nem se anima. */
+      var calmo = false;
+      try { calmo = document.documentElement.classList.contains('menos-movimento'); } catch (eCalmo) {}
+      relogioAura += Math.max(0, dt) * (calmo ? 0.3 : 1);   // o primeiro quadro do laço pode vir com dt negativo
+      var pulsaAura = function (corpoA, vizinho) {
         if (!corpoA || !corpoA.aura) return;
-        for (var ai = 0; ai < corpoA.aura.children.length; ai++) {
-          var ch = corpoA.aura.children[ai];
+        var gA = corpoA.aura;
+        if (gA.userData.anima) {
+          if (vizinho && heroi) {
+            var ddx = corpoA.node.position.x - heroi.node.position.x, ddz = corpoA.node.position.z - heroi.node.position.z;
+            var longe = gA.userData.leve ? AURA_LONGE * 0.6 : AURA_LONGE;
+            gA.visible = (ddx * ddx + ddz * ddz) <= longe * longe;
+            if (!gA.visible) return;
+          }
+          gA.userData.anima(relogioAura, corpoA);
+          return;
+        }
+        for (var ai = 0; ai < gA.children.length; ai++) {
+          var ch = gA.children[ai];
           if (ch.isSprite) {
             var f2 = (relogio * 0.45 + (ch.userData.fase || 0)) % 1.0;
             ch.position.y = 0.7 + f2 * 1.0;
@@ -3796,9 +3812,9 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
       };
-      pulsaAura(heroi);
+      pulsaAura(heroi, false);
       for (var fk2b in fantasmas) {
-        if (fantasmas.hasOwnProperty(fk2b)) pulsaAura(fantasmas[fk2b].corpo);
+        if (fantasmas.hasOwnProperty(fk2b)) pulsaAura(fantasmas[fk2b].corpo, true);
       }
     }
     for (var i = 0; i < lugares.length; i++) {
@@ -4112,27 +4128,438 @@ var JOGO = (typeof window !== 'undefined')
     g2.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(cv);
   }
-  /* AS AURAS DA LOJA (04/10): o mesmo anel e as mesmas labaredas, TINGIDOS com a cor do elemento
-   * (a textura é branca e o material multiplica a cor — nenhuma arte nova). Quem tem a aura comprada
-   * E o Traje do Colecionador veste a comprada: foi a que ele escolheu na ficha do Personagem. Sem
-   * `cor` (ou com uma cor que esta versão não conhece) fica a branca de sempre. */
+  /* AS AURAS DA LOJA. Em 04/10 nasceram como o anel e as labaredas do Colecionador TINGIDOS com a cor do
+   * elemento — e o dono cobrou: "cada aura deve ser diferente... não só mudar a cor, e deve ter efeitos
+   * mais chamativos". Agora cada uma é um EFEITO PRÓPRIO, que se reconhece pela forma e pelo movimento:
+   *   fogo   (Brasa) — labaredas que sobem dos pés, fagulhas que estalam e um clarão quente que pulsa;
+   *   agua   (Maré)  — anéis que se abrem no chão como onda e gotas que orbitam e caem;
+   *   terra  (Raiz)  — folhas e pétalas girando devagar e brotos que nascem do chão e recolhem;
+   *   ar     (Vento) — fitas de ar em espiral subindo em volta do corpo e um rastro ao andar;
+   *   neutra (Lousa) — lascas de pedra em órbita lenta, runas e um círculo rúnico de luz pálida.
+   * Nenhuma arte nova: as formas saem do atlas de partículas que o jogo já carrega (JOGO.FX_ATLAS, 16
+   * quadros de 128 px) e de geometria de meia dúzia de triângulos. O CUSTO é contado em chamadas de
+   * desenho: cada aura são 2 ou 3 (a antiga eram 5), porque as partículas de um tipo vão todas num só
+   * THREE.Points / numa só malha, movidas na CPU. Quem tem a aura comprada E o Traje do Colecionador
+   * veste a comprada. Sem `cor` (ou com uma que esta versão não conhece) fica a branca de sempre. */
   var AURA_COR = { fogo: 0xff6a2a, agua: 0x3aa0ff, terra: 0x6fcf4a, ar: 0xbfefff, neutra: 0xe0b860 };
+  var AURA_LONGE = 26;               // m: além disto a aura do vizinho não se desenha (nem se anima)
+  var AURA_K_PONTO = 2.36;           // PointsMaterial mede em "metros / tan(fov/2)": 1 / tan(23°)
+  var relogioAura = 0;               // anda mais devagar com "Menos movimento" ligado
+  var texAtlasAura = null, quadrosAura = {}, matsAura = {};
+  /* no celular e na qualidade 'baixa' a aura leva METADE das partículas (e o vizinho some mais cedo) */
+  function auraLeve() {
+    try {
+      var M = JOGO.Mobile;
+      if (!M) return false;
+      return (M.qualidade && M.qualidade() === 'baixa') || !!(M.celular && M.celular());
+    } catch (e) { return false; }
+  }
+  /* um QUADRO do atlas como textura: todos os quadros dividem a mesma imagem (o clone do three reparte a
+   * fonte, a GPU guarda uma só). Sem o atlas na página (prova antiga), cai no borrão radial da aura branca. */
+  function quadroAura(i) {
+    if (quadrosAura[i]) return quadrosAura[i];
+    var A = JOGO.FX_ATLAS;
+    if (!A || !A.png) return texAuraChama;
+    if (!texAtlasAura) {
+      var img = new Image();
+      texAtlasAura = new THREE.Texture(img);
+      texAtlasAura.minFilter = texAtlasAura.magFilter = THREE.LinearFilter;
+      texAtlasAura.generateMipmaps = false;
+      img.onload = function () {
+        texAtlasAura.userData.pronta = true;
+        for (var k in quadrosAura) if (quadrosAura.hasOwnProperty(k)) quadrosAura[k].needsUpdate = true;
+      };
+      img.src = A.png;
+    }
+    var t = texAtlasAura.clone();
+    var col = i % A.cols, lin = Math.floor(i / A.cols);
+    // um fio de folga na borda: com filtro linear o quadro vizinho vazava na beirada
+    t.repeat.set(1 / A.cols - 0.01, 1 / A.rows - 0.01);
+    t.offset.set(col / A.cols + 0.005, 1 - (lin + 1) / A.rows + 0.005);
+    if (texAtlasAura.userData.pronta) t.needsUpdate = true;
+    quadrosAura[i] = t;
+    return t;
+  }
+  /* os materiais são UM por tipo de peça, repartidos por todos os corpos: vinte auras de Brasa na praça
+   * não criam vinte programas nem vinte estados de GPU */
+  function matAura(chave, faz) {
+    if (!matsAura[chave]) matsAura[chave] = faz();
+    return matsAura[chave];
+  }
+  /* PONTOS: n partículas do mesmo quadro numa chamada só. A cor (com alfa) é por partícula. */
+  function pontosAura(n, quadro, metros, chave) {
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+    var mat = matAura('p:' + chave, function () {
+      return new THREE.PointsMaterial({ map: quadroAura(quadro), size: metros * AURA_K_PONTO, sizeAttenuation: true,
+        transparent: true, depthWrite: false, vertexColors: true, alphaTest: 0.02 });
+    });
+    var p = new THREE.Points(geo, mat);
+    p.frustumCulled = false;           // as posições mudam todo quadro: a caixa nunca estaria certa
+    p.userData.n = n;
+    return p;
+  }
+  function poePonto(p, i, x, y, z, r, g, b, a) {
+    var P = p.geometry.attributes.position.array, C = p.geometry.attributes.color.array;
+    P[i * 3] = x; P[i * 3 + 1] = y; P[i * 3 + 2] = z;
+    C[i * 4] = r; C[i * 4 + 1] = g; C[i * 4 + 2] = b; C[i * 4 + 3] = a;
+  }
+  function sujaPontos(p) {
+    p.geometry.attributes.position.needsUpdate = true;
+    p.geometry.attributes.color.needsUpdate = true;
+  }
+  /* PLACAS NO CHÃO: n quadrados deitados numa malha só (os anéis da Maré, o clarão da Brasa, o círculo
+   * da Lousa). Cada um muda de raio, giro e alfa por quadro. */
+  function placasAura(n, quadro, chave) {
+    var geo = new THREE.BufferGeometry();
+    var uv = new Float32Array(n * 8), idx = [];
+    for (var i = 0; i < n; i++) {
+      uv.set([0, 0, 1, 0, 1, 1, 0, 1], i * 8);
+      idx.push(i * 4, i * 4 + 2, i * 4 + 1, i * 4, i * 4 + 3, i * 4 + 2);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 12), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 16), 4));
+    geo.setIndex(idx);
+    var mat = matAura('c:' + chave, function () {
+      return new THREE.MeshBasicMaterial({ map: (quadro && quadro.isTexture) ? quadro : quadroAura(quadro), transparent: true, depthWrite: false,
+        vertexColors: true,
+        // só a face de cima: o three desenha o transparente de dois lados em DUAS passadas (a medida de
+        // 04/10 deu 16 chamadas a mais em vinte auras por causa disso) e ninguém vê o chão por baixo
+        // as pedras do caminho ficam a 0,05 e puxam a profundidade para a frente (polygonOffset −2):
+        // sem ir além delas, a aura de quem pisa no caminho sumia debaixo da calçada
+        polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    });
+    var m = new THREE.Mesh(geo, mat);
+    m.frustumCulled = false;
+    m.userData.n = n;
+    return m;
+  }
+  function poePlaca(m, i, raio, giro, y, r, g, b, a) {
+    var P = m.geometry.attributes.position.array, C = m.geometry.attributes.color.array;
+    var c = Math.cos(giro) * raio, s = Math.sin(giro) * raio;
+    // os quatro cantos do quadrado girado em volta do eixo do corpo
+    var X = [-c + s, c + s, c - s, -c - s], Z = [-s - c, s - c, s + c, -s + c];
+    for (var k = 0; k < 4; k++) {
+      var o = (i * 4 + k);
+      P[o * 3] = X[k]; P[o * 3 + 1] = y; P[o * 3 + 2] = Z[k];
+      C[o * 4] = r; C[o * 4 + 1] = g; C[o * 4 + 2] = b; C[o * 4 + 3] = a;
+    }
+  }
+  function sujaPlacas(m) {
+    m.geometry.attributes.position.needsUpdate = true;
+    m.geometry.attributes.color.needsUpdate = true;
+  }
+  function fracao(x) { return x - Math.floor(x); }
+  /* o CÍRCULO RÚNICO da Lousa, riscado em código (128 px): dois aros e oito runas de traço grosso entre
+   * eles. O "círculo de runas" do atlas tem o traço fino demais — deitado no chão, a 10 m, não se via. */
+  var texRunasAura = null;
+  function runasAura() {
+    if (texRunasAura) return texRunasAura;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var c = cv.getContext('2d');
+    c.strokeStyle = '#fff'; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.lineWidth = 4; c.beginPath(); c.arc(64, 64, 59, 0, Math.PI * 2); c.stroke();
+    c.lineWidth = 2.5; c.beginPath(); c.arc(64, 64, 40, 0, Math.PI * 2); c.stroke();
+    // cada runa é um risco em pé com um ou dois galhos — oito desenhos diferentes, de um número só
+    c.lineWidth = 3;
+    for (var i = 0; i < 8; i++) {
+      c.save();
+      c.translate(64, 64); c.rotate(i * Math.PI / 4); c.translate(0, -49.5);
+      c.beginPath(); c.moveTo(0, -6); c.lineTo(0, 6);
+      var d = (i % 2) ? 4 : -4;
+      c.moveTo(0, -6 + (i % 3) * 3); c.lineTo(d, -2 + (i % 3) * 3);
+      if (i % 3 !== 1) { c.moveTo(0, 5 - (i % 4)); c.lineTo(-d, 1 - (i % 4)); }
+      if (i % 4 === 0) { c.moveTo(-4, 0); c.lineTo(4, 0); }
+      c.stroke();
+      c.restore();
+    }
+    texRunasAura = new THREE.CanvasTexture(cv);
+    return texRunasAura;
+  }
+
+  /* cada montador devolve { pecas: {nome: objeto}, anima: function (t, corpo) } e pendura as peças em g */
+  var AURA_FORMA = {
+    /* BRASA — o que se lê de longe é a COLUNA de fogo: labaredas grandes nascendo nos pés e afinando
+     * para cima, fagulhas pequenas que sobem depressa aos trancos, e o chão que acende e apaga. */
+    fogo: function (g, leve) {
+      var nL = leve ? 6 : 12, nF = leve ? 4 : 8;
+      var clarao = placasAura(1, 14, 'clarao');
+      /* a LABAREDA é geometria, não partícula: a "brasa rasgada" do atlas (primeira tentativa, 04/10) virava
+       * uma poeira laranja que ninguém lia como fogo. Cada língua é uma pipa de quatro vértices em pé —
+       * pé amarelo, barriga laranja, ponta vermelha que some —, e todas vão numa malha só. */
+      var geo = new THREE.BufferGeometry(), idx = [];
+      for (var q = 0; q < nL; q++) {
+        var o4 = q * 4;                 // pé, esquerda, direita, ponta — e o avesso, na mesma chamada
+        idx.push(o4, o4 + 2, o4 + 1, o4 + 1, o4 + 2, o4 + 3, o4, o4 + 1, o4 + 2, o4 + 1, o4 + 3, o4 + 2);
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nL * 12), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nL * 16), 4));
+      geo.setIndex(idx);
+      var labaredas = new THREE.Mesh(geo, matAura('labareda', function () {
+        return new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+      }));
+      labaredas.frustumCulled = false;
+      labaredas.userData.n = nL;
+      var fagulhas = pontosAura(nF, 5, 0.42, 'fagulha');
+      g.add(clarao); g.add(labaredas); g.add(fagulhas);
+      return { pecas: { clarao: clarao, labaredas: labaredas, fagulhas: fagulhas }, anima: function (t) {
+        var pulso = 0.5 + 0.5 * Math.sin(t * 5.2), treme = 0.5 + 0.5 * Math.sin(t * 13.7);
+        poePlaca(clarao, 0, 1.75 + pulso * 0.3, t * 0.3, 0.09, 1, 0.42 + treme * 0.1, 0.1, 0.6 + pulso * 0.4);
+        sujaPlacas(clarao);
+        var P = geo.attributes.position.array, C = geo.attributes.color.array, i, f, a;
+        for (i = 0; i < nL; i++) {
+          f = fracao(t * 1.0 + i * 0.61);                 // cada língua cresce do chão e some no alto
+          a = i * (Math.PI * 2 / nL) + t * 0.25;
+          var rx = Math.cos(a), rz = Math.sin(a), raio = 0.98;      // por FORA do corpo mais largo (0,9 m)
+          // metade das línguas vira 45° para um lado, metade para o outro: de qualquer ângulo há chama de frente
+          var fi = (i % 2) ? 0.8 : -0.8;
+          var dx = -rz * Math.cos(fi) + rx * Math.sin(fi), dz = rx * Math.cos(fi) + rz * Math.sin(fi);
+          var alt = 0.55 + 1.5 * Math.pow(f, 0.7), larg = 0.36 * (1 - f * 0.45);
+          var bal = Math.sin(t * 6.3 + i * 2.1) * 0.14 * (0.4 + f);      // a ponta dança
+          var cx = rx * raio, cz = rz * raio, o = i * 12, k = i * 16;
+          var alfa = 1 - f * f * f;
+          P[o] = cx; P[o + 1] = 0.06; P[o + 2] = cz;
+          P[o + 3] = cx - dx * larg; P[o + 4] = alt * 0.32; P[o + 5] = cz - dz * larg;
+          P[o + 6] = cx + dx * larg; P[o + 7] = alt * 0.32; P[o + 8] = cz + dz * larg;
+          P[o + 9] = cx * 0.82 + dx * bal; P[o + 10] = alt; P[o + 11] = cz * 0.82 + dz * bal;
+          C[k] = 1; C[k + 1] = 0.9; C[k + 2] = 0.35; C[k + 3] = alfa;
+          C[k + 4] = 1; C[k + 5] = 0.42; C[k + 6] = 0.05; C[k + 7] = alfa;
+          C[k + 8] = 1; C[k + 9] = 0.42; C[k + 10] = 0.05; C[k + 11] = alfa;
+          C[k + 12] = 0.9; C[k + 13] = 0.1; C[k + 14] = 0.02; C[k + 15] = alfa * 0.5;
+        }
+        geo.attributes.position.needsUpdate = true;
+        geo.attributes.color.needsUpdate = true;
+        for (i = 0; i < nF; i++) {
+          f = fracao(t * 1.15 + i * 0.37);
+          a = i * 1.7 + Math.floor(t * 1.15 + i * 0.37) * 2.3;      // cada volta sai de outro canto
+          // o ESTALO: a fagulha salta de lado aos trancos e pisca
+          var tranco = (Math.floor(t * 9 + i * 3) % 2) ? 0.09 : -0.09;
+          var pisca = (Math.floor(t * 14 + i * 5) % 3) ? 1 : 0.3;
+          poePonto(fagulhas, i, Math.cos(a) * 1.1 + tranco, 0.6 + f * 2.7, Math.sin(a) * 1.1 - tranco,
+                   1, 0.86, 0.25, Math.min(1, (1 - f) * 1.4) * pisca);
+        }
+        sujaPontos(fagulhas);
+      } };
+    },
+    /* MARÉ — tudo acontece DEITADO: anéis que nascem pequenos nos pés e se abrem até sumir, um atrás do
+     * outro, como pedra na água; por cima, gotas que dão a volta no corpo e despencam. */
+    agua: function (g, leve) {
+      var nA = leve ? 2 : 3, nG = leve ? 4 : 8;
+      var ondas = placasAura(nA, 9, 'onda');
+      var gotas = pontosAura(nG, 0, 0.4, 'gota');
+      g.add(ondas); g.add(gotas);
+      return { pecas: { ondas: ondas, gotas: gotas }, anima: function (t) {
+        var i, f;
+        for (i = 0; i < nA; i++) {
+          f = fracao(t * 0.42 + i / nA);
+          poePlaca(ondas, i, 0.6 + f * 1.9, i * 1.1, 0.08 + i * 0.004, 0.25, 0.68, 1, Math.min(1, Math.pow(1 - f, 1.2) * 1.25));
+        }
+        sujaPlacas(ondas);
+        for (i = 0; i < nG; i++) {
+          f = fracao(t * 0.3 + i / nG);
+          var a = t * 1.5 + i * (Math.PI * 2 / nG);
+          var y, alfa = 0.95;
+          if (f < 0.72) y = 1.7 + Math.sin(t * 2.2 + i * 1.3) * 0.15;      // orbita boiando
+          else {                                                            // e cai, cada vez mais depressa
+            var q = (f - 0.72) / 0.28;
+            y = 1.7 * (1 - q * q) + 0.1;
+            alfa = q > 0.85 ? (1 - q) / 0.15 : 0.95;
+          }
+          poePonto(gotas, i, Math.cos(a) * 1.1, y, Math.sin(a) * 1.1, 0.55, 0.88, 1, alfa);
+        }
+        sujaPontos(gotas);
+      } };
+    },
+    /* RAIZ — a única com coisa SÓLIDA: folhas e pétalas (losangos de dois triângulos) rodando devagar,
+     * cada uma virando no próprio eixo, e brotos que furam o chão, ficam um instante e recolhem. */
+    terra: function (g, leve) {
+      var nF = leve ? 6 : 12, nB = leve ? 3 : 6;
+      var geo = new THREE.BufferGeometry(), idx = [];
+      for (var q = 0; q < nF; q++) idx.push(q * 4, q * 4 + 1, q * 4 + 2, q * 4, q * 4 + 2, q * 4 + 3);
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nF * 12), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nF * 12), 3));
+      geo.setIndex(idx);
+      var folhas = new THREE.Mesh(geo, matAura('folha', function () {
+        return new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      }));
+      folhas.frustumCulled = false;
+      folhas.userData.n = nF;
+      var brotos = new THREE.InstancedMesh(new THREE.ConeGeometry(0.12, 0.95, 5),
+        matAura('broto', function () { return new THREE.MeshLambertMaterial({ color: 0x7a5230 /* madeira: verde sobre a grama da praça sumia */ }); }), nB);
+      brotos.frustumCulled = false;
+      brotos.userData.n = nB;
+      g.add(folhas); g.add(brotos);
+      var aux = new THREE.Object3D();
+      return { pecas: { folhas: folhas, brotos: brotos }, anima: function (t) {
+        var P = geo.attributes.position.array, C = geo.attributes.color.array, i, k;
+        for (i = 0; i < nF; i++) {
+          var a = t * 0.55 + i * (Math.PI * 2 / nF);
+          var raio = 1.15 + Math.sin(i * 2.7) * 0.16;
+          var cx = Math.cos(a) * raio, cz = Math.sin(a) * raio;
+          var cy = 0.7 + (i % 4) * 0.42 + Math.sin(t * 0.9 + i * 1.9) * 0.18;
+          // a folha é um losango: o eixo comprido segue a órbita, o curto gira em volta dele (o "virar")
+          var gira = t * 1.6 + i * 1.1, comp = 0.3, larg = 0.15;
+          var tx = -Math.sin(a), tz = Math.cos(a);                       // tangente da órbita
+          var nx = Math.cos(a) * Math.cos(gira), ny = Math.sin(gira), nz = Math.sin(a) * Math.cos(gira);
+          var V = [[cx + tx * comp, cy + 0.05, cz + tz * comp], [cx + nx * larg, cy + ny * larg, cz + nz * larg],
+                   [cx - tx * comp, cy - 0.05, cz - tz * comp], [cx - nx * larg, cy - ny * larg, cz - nz * larg]];
+          // de lado para a luz ela escurece: é o que faz o giro se ler sem iluminação de verdade
+          var luz = 0.62 + 0.38 * Math.abs(Math.sin(gira));
+          var petala = (i % 3) === 2;
+          var cr = petala ? 1.0 : 0.2, cg = petala ? 0.45 : 0.62, cb = petala ? 0.68 : 0.12;
+          for (k = 0; k < 4; k++) {
+            var o = (i * 4 + k) * 3;
+            P[o] = V[k][0]; P[o + 1] = V[k][1]; P[o + 2] = V[k][2];
+            var ponta = (k % 2) ? 1 : 0.8;                               // a nervura: as pontas mais escuras
+            C[o] = cr * luz * ponta; C[o + 1] = cg * luz * ponta; C[o + 2] = cb * luz * ponta;
+          }
+        }
+        geo.attributes.position.needsUpdate = true;
+        geo.attributes.color.needsUpdate = true;
+        for (i = 0; i < nB; i++) {
+          var f = fracao(t * 0.22 + i / nB), ciclo = Math.floor(t * 0.22 + i / nB);
+          // nasce (30%), fica (30%), recolhe (25%) e descansa: a cada ciclo num canto novo do chão
+          var alt = f < 0.3 ? f / 0.3 : (f < 0.6 ? 1 : (f < 0.85 ? 1 - (f - 0.6) / 0.25 : 0));
+          alt = alt * alt * (3 - 2 * alt);
+          var ab = i * (Math.PI * 2 / nB) + ciclo * 1.9, rb = 1.0 + ((i * 7 + ciclo * 3) % 5) * 0.1;
+          aux.position.set(Math.cos(ab) * rb, 0.47 * alt, Math.sin(ab) * rb);
+          aux.rotation.set(Math.sin(ab) * 0.28, 0, -Math.cos(ab) * 0.28);     // inclina para fora, como raiz
+          aux.scale.set(0.6 + alt * 0.4, Math.max(0.001, alt), 0.6 + alt * 0.4);
+          aux.updateMatrix();
+          brotos.setMatrixAt(i, aux.matrix);
+        }
+        brotos.instanceMatrix.needsUpdate = true;
+      } };
+    },
+    /* VENTO — a forma é a ESPIRAL: fitas compridas enroladas no corpo dos pés à cabeça, girando (a hélice
+     * que gira parece subir), com um trecho mais claro correndo por dentro; andando, o ar fica para trás. */
+    ar: function (g, leve) {
+      var nFitas = leve ? 2 : 3, seg = leve ? 14 : 22, nR = leve ? 3 : 6;
+      var nV = nFitas * (seg + 1) * 2;
+      var pos = new Float32Array(nV * 3), cor = new Float32Array(nV * 4), idx = [], v = 0;
+      for (var fi = 0; fi < nFitas; fi++) {
+        var base = v;
+        for (var s = 0; s <= seg; s++) {
+          var u = s / seg, a = u * Math.PI * 3.2 + fi * (Math.PI * 2 / nFitas);
+          var raio = 0.98 + u * 0.3, y = 0.15 + u * 2.35, meia = 0.12 * Math.sin(Math.PI * u) + 0.015;
+          pos.set([Math.cos(a) * raio, y - meia, Math.sin(a) * raio], v * 3); v++;
+          pos.set([Math.cos(a) * raio, y + meia, Math.sin(a) * raio], v * 3); v++;
+          if (s < seg) {
+            var b = base + s * 2;
+            // a fita se vê dos dois lados; em vez de DoubleSide (que no transparente custa duas passadas
+            // de desenho) cada trecho leva os triângulos também ao avesso, na mesma chamada
+            idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2, b, b + 2, b + 1, b + 1, b + 2, b + 3);
+          }
+        }
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(cor, 4));
+      geo.setIndex(idx);
+      var fitas = new THREE.Mesh(geo, matAura('fita', function () {
+        return new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+      }));
+      fitas.frustumCulled = false;
+      fitas.userData.n = nFitas;
+      var rastro = pontosAura(nR, 6, 0.8, 'rastro');
+      rastro.visible = false;
+      g.add(fitas); g.add(rastro);
+      var forcaRastro = 0, tAntes = null;
+      return { pecas: { fitas: fitas, rastro: rastro }, anima: function (t, corpo) {
+        fitas.rotation.y = -t * 2.6;
+        var k = 0;
+        for (var fi2 = 0; fi2 < nFitas; fi2++) {
+          for (var s2 = 0; s2 <= seg; s2++) {
+            var u2 = s2 / seg;
+            // a rajada: uma faixa clara que corre da base ao topo da fita
+            var raj = 0.5 + 0.5 * Math.sin((u2 - t * 0.9 - fi2 * 0.33) * Math.PI * 2);
+            var alfa = Math.min(1, Math.sin(Math.PI * u2) * (0.45 + 0.6 * raj) * 1.3);
+            for (var w = 0; w < 2; w++) {
+              cor[k * 4] = 0.86 + raj * 0.14; cor[k * 4 + 1] = 0.97; cor[k * 4 + 2] = 1; cor[k * 4 + 3] = alfa;
+              k++;
+            }
+          }
+        }
+        geo.attributes.color.needsUpdate = true;
+        // o RASTRO só existe andando; parado ele se apaga em meio segundo e deixa de ser desenhado
+        var dt = tAntes === null ? 0 : Math.max(0, Math.min(0.1, t - tAntes));
+        tAntes = t;
+        forcaRastro += ((corpo && corpo.andando ? 1 : 0) - forcaRastro) * Math.min(1, dt * 5);
+        rastro.visible = forcaRastro > 0.03;
+        if (rastro.visible) {
+          for (var i = 0; i < nR; i++) {
+            var f = fracao(t * 1.3 + i / nR);
+            // o corpo olha para +Z: o ar fica em −Z, abrindo e subindo um pouco
+            poePonto(rastro, i, Math.sin(i * 2.4 + t * 3) * (0.1 + f * 0.25), 0.55 + (i % 3) * 0.35 + f * 0.2,
+                     -0.9 - f * 2.0, 0.92, 0.98, 1, (1 - f) * 0.7 * forcaRastro);
+          }
+          sujaPontos(rastro);
+        }
+      } };
+    },
+    /* LOUSA — a mais LENTA e a mais pesada: lascas de pedra facetada flutuando em órbita, um círculo de
+     * runas deitado no chão que gira ao contrário, e tudo acende junto num pulso pálido e demorado. */
+    neutra: function (g, leve) {
+      var nL = leve ? 3 : 6, nR = leve ? 2 : 4;
+      var nC = leve ? 1 : 2;
+      var circulo = placasAura(nC, runasAura(), 'circulo');
+      var geoL = new THREE.OctahedronGeometry(0.2, 0);
+      var lascas = new THREE.InstancedMesh(geoL, matAura('lasca', function () {
+        return new THREE.MeshPhongMaterial({ color: 0x6b7180, flatShading: true, shininess: 8, emissive: 0x14151a });
+      }), nL);
+      lascas.frustumCulled = false;
+      lascas.userData.n = nL;
+      var runas = pontosAura(nR, 12, 0.75, 'runa');
+      g.add(circulo); g.add(lascas); g.add(runas);
+      var aux = new THREE.Object3D();
+      return { pecas: { circulo: circulo, lascas: lascas, runas: runas }, anima: function (t) {
+        var pulso = Math.pow(0.5 + 0.5 * Math.sin(t * 1.5), 2);            // sobe devagar, demora apagado
+        poePlaca(circulo, 0, 1.85, -t * 0.25, 0.09, 1, 0.93, 0.62, 0.7 + pulso * 0.3);
+        if (nC > 1) poePlaca(circulo, 1, 1.05 + pulso * 0.12, t * 0.4, 0.096, 1, 0.97, 0.8, 0.3 + pulso * 0.7);   // o de dentro gira ao contrário
+        sujaPlacas(circulo);
+        var i, a;
+        for (i = 0; i < nL; i++) {
+          a = t * 0.45 + i * (Math.PI * 2 / nL);
+          aux.position.set(Math.cos(a) * 1.2, 0.9 + (i % 3) * 0.45 + Math.sin(t * 0.8 + i * 2.1) * 0.12, Math.sin(a) * 1.2);
+          aux.rotation.set(t * 0.5 + i, t * 0.35 + i * 2, i * 1.3);
+          // lasca, não bola: cada uma esticada num eixo, de tamanho diferente
+          var e = 0.75 + (i % 3) * 0.25;
+          aux.scale.set(0.55 * e, 1.5 * e, 0.8 * e);
+          aux.updateMatrix();
+          lascas.setMatrixAt(i, aux.matrix);
+        }
+        lascas.instanceMatrix.needsUpdate = true;
+        for (i = 0; i < nR; i++) {
+          a = -t * 0.3 + i * (Math.PI * 2 / nR) + 0.4;
+          poePonto(runas, i, Math.cos(a) * 1.05, 1.5 + (i % 2) * 0.7 + Math.sin(t * 0.7 + i * 1.7) * 0.12, Math.sin(a) * 1.05,
+                   1, 0.86, 0.4, 0.45 + pulso * 0.55);
+        }
+        sujaPontos(runas);
+      } };
+    }
+  };
+  /* tira a aura do corpo e solta a geometria (ela é de cada corpo; os materiais são repartidos e ficam) */
+  function apagaAura(corpo) {
+    if (!corpo.aura) return;
+    corpo.node.remove(corpo.aura);
+    if (corpo.aura.userData.forma) {
+      corpo.aura.traverse(function (o) { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); });
+    }
+    corpo.aura = null;
+  }
   function acendeAura(corpo, liga, cor) {
     if (!corpo || !THREE) return;
     cor = (typeof cor === 'string' && AURA_COR.hasOwnProperty(cor)) ? cor : null;
     if (!liga) {
-      if (corpo.aura) { corpo.node.remove(corpo.aura); corpo.aura = null; }
+      apagaAura(corpo);
       corpo.auraCor = null;
       return;
     }
     if (corpo.aura && (corpo.auraCor || null) === cor) return;
-    if (corpo.aura) { corpo.node.remove(corpo.aura); corpo.aura = null; }   // trocou de cor: refaz
-    var tinta = cor ? AURA_COR[cor] : 0xffffff;
-    /* A cor NÃO pode ser aditiva: no chão claro da praça o aditivo colorido some (a foto de 04/10 mostrou
-     * as auras quase invisíveis). A aura comprada pinta por cima (NormalBlending), mais forte, e ganha um
-     * ARO fino da cor no chão — é ele que se lê de longe. A branca do Colecionador fica como sempre foi. */
-    var forca = cor ? 2.6 : 1;
-    var mistura = cor ? THREE.NormalBlending : THREE.AdditiveBlending;
+    apagaAura(corpo);                                                    // trocou de aura: refaz
     if (!texAuraDisco) {
       texAuraDisco = fazTexRadial([[0, 'rgba(255,255,255,0)'],
         [0.55, 'rgba(255,255,255,0.5)'], [0.75, 'rgba(255,255,255,0.16)'],
@@ -4141,42 +4568,62 @@ var JOGO = (typeof window !== 'undefined')
         [0.5, 'rgba(255,250,240,0.25)'], [1, 'rgba(255,255,255,0)']]);
     }
     var g = new THREE.Group();
+    if (cor) {
+      var leve = auraLeve();
+      var forma = AURA_FORMA[cor](g, leve);
+      g.userData.forma = cor;
+      g.userData.leve = leve;
+      g.userData.pecas = forma.pecas;
+      g.userData.anima = forma.anima;
+      forma.anima(relogioAura, corpo);       // já nasce no lugar: o primeiro quadro não mostra tudo na origem
+      corpo.node.add(g);
+      corpo.aura = g;
+      corpo.auraCor = cor;
+      return;
+    }
+    // a BRANCA do Colecionador, como sempre foi: um anel no chão e três labaredas macias, aditivas
     var disco = new THREE.Mesh(
       new THREE.PlaneGeometry(2.2, 2.2),
       new THREE.MeshBasicMaterial({ map: texAuraDisco, transparent: true, opacity: 0.34,
-        depthWrite: false, blending: mistura, color: tinta }));
+        depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
     disco.rotation.x = -Math.PI / 2;
     disco.position.y = 0.05;
-    disco.userData.forca = forca;
+    disco.userData.forca = 1;
     g.add(disco);
-    if (cor && THREE.RingGeometry) {
-      var aro = new THREE.Mesh(new THREE.RingGeometry(0.78, 0.9, 40),
-        new THREE.MeshBasicMaterial({ color: tinta, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide,
-          // as pedras do caminho ficam a 0,05 e puxam a profundidade para a frente (polygonOffset −2):
-          // sem ir além delas, o aro de quem pisa no caminho sumia debaixo da calçada
-          polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
-      aro.rotation.x = -Math.PI / 2;
-      aro.position.y = 0.09;
-      disco.position.y = 0.08;
-      disco.material.polygonOffset = true;
-      disco.material.polygonOffsetFactor = -3;
-      disco.material.polygonOffsetUnits = -3;
-      aro.userData.forca = 3.2;
-      g.add(aro);
-    }
     for (var f = 0; f < 3; f++) {
       var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texAuraChama,
         transparent: true, opacity: 0.32, depthWrite: false,
-        blending: mistura, color: tinta }));
+        blending: THREE.AdditiveBlending, color: 0xffffff }));
       sp.scale.set(0.5, 1.05, 1);
       sp.position.set(Math.cos(f * 2.1) * 0.35, 0.9, Math.sin(f * 2.1) * 0.35);
       sp.userData.fase = f * 0.33;
-      sp.userData.forca = forca;
+      sp.userData.forca = 1;
       g.add(sp);
     }
     corpo.node.add(g);
     corpo.aura = g;
     corpo.auraCor = cor;
+  }
+  /* o que a aura de um corpo É, para as provas: a forma, as peças (tipo de objeto e quantas partículas)
+   * e quantas chamadas de desenho ela custa agora */
+  function retratoAura(corpo) {
+    if (!corpo || !corpo.aura) return { acesa: false, cor: (corpo && corpo.auraCor) || null };
+    var u = corpo.aura.userData, pecas = {}, chamadas = 0, particulas = 0;
+    var pose = 0;                      // muda a cada quadro animado: a prova cobra que a aura se MEXE
+    if (u.pecas) {
+      for (var k in u.pecas) {
+        if (!u.pecas.hasOwnProperty(k)) continue;
+        var o = u.pecas[k];
+        pecas[k] = { tipo: o.isPoints ? 'pontos' : (o.isInstancedMesh ? 'instancias' : 'malha'), n: o.userData.n || 1 };
+        particulas += o.userData.n || 1;
+        if (o.visible) chamadas++;
+        var arr = o.isInstancedMesh ? o.instanceMatrix.array : o.geometry.attributes.position.array;
+        for (var q = 0; q < arr.length; q += 3) pose += Math.abs(arr[q]) * (1 + (q % 7));
+        pose += o.rotation.y;
+      }
+    } else chamadas = corpo.aura.children.length;
+    return { acesa: true, cor: corpo.auraCor || null, forma: u.forma || 'branca', leve: !!u.leve, pecas: pecas,
+             particulas: particulas, pose: +pose.toFixed(4), t: +relogioAura.toFixed(4), chamadas: corpo.aura.visible ? chamadas : 0, visivel: corpo.aura.visible };
   }
   Hub.aura = function (liga, cor) {
     auraDoHeroi = !!liga;              // 14/09: a troca de cena (Campo) remonta o herói e religa
@@ -4185,7 +4632,7 @@ var JOGO = (typeof window !== 'undefined')
     return !!heroi;
   };
   Hub._auraDoHeroi = function () {     // só as provas: a aura acesa no herói e a cor dela
-    return { acesa: !!(heroi && heroi.aura), cor: (heroi && heroi.auraCor) || null };
+    return retratoAura(heroi);
   };
 
   /* OS FANTASMAS — os outros jogadores da Rede. Desde o TETO (pedido 25/08,
@@ -4692,7 +5139,7 @@ var JOGO = (typeof window !== 'undefined')
   /* o modelo que o corpo de um fantasma veste (provas) */
   Hub._auraFantasma = function (id) {   // só as provas (tests/aura_praca.html): a aura acesa num vizinho e a cor
     var r = fantasmas[id];
-    return (r && r.corpo) ? { acesa: !!r.corpo.aura, cor: r.corpo.auraCor || null } : null;
+    return (r && r.corpo) ? retratoAura(r.corpo) : null;
   };
   Hub._corpoFantasma = function (id) {
     var r = fantasmas[id], u = r && r.corpo && r.corpo.node.userData;
