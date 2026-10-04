@@ -572,6 +572,45 @@ i, em { font-style: normal; color: var(--dim); }
 }
 .rw-item canvas { border-radius: 10px; border: 2px solid var(--rc, var(--line2)); }
 .rw-cards { display: flex; gap: 12px; flex-wrap: wrap; }
+/* A CARTA DE CLASSE COMO ITEM (04/10): o cartão com o retrato (canvas do Art.cardIcon), a borda na cor
+   da raridade e a contagem no canto. O mesmo cartão serve o Inventário, a recompensa, a Coleção e a ficha. */
+.carta-cl {
+  position: relative; display: inline-block; line-height: 0; border-radius: 9px; flex: 0 0 auto;
+  box-shadow: 0 0 0 2px var(--rc, #c9a227), 0 0 10px var(--rc-halo, transparent);
+}
+.carta-cl canvas { display: block; border-radius: 8px; }
+.carta-cl-n {
+  position: absolute; top: -7px; right: -8px; min-width: 22px; padding: 2px 6px; text-align: center;
+  font: 800 13px/1.2 var(--ui-sans); color: #0d1116; background: var(--gold);
+  border-radius: 9px; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.rw-card .carta-cl { margin: 6px 8px 0 0; }
+.rw-card-prox { color: var(--dim); }
+.ig-cell.is-carta .ig-plate { padding: 2px; background: none; box-shadow: none; }
+.ig-cell.is-carta .carta-cl { box-shadow: none; }      /* a borda da raridade já é a da célula */
+.ig-prog { display: block; width: 84%; height: 4px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.ig-prog i { display: block; height: 100%; background: var(--gold); }
+.carta-det {
+  display: flex; gap: 14px; align-items: flex-start; padding: 12px 10px 10px; margin: 6px 0 10px;
+  border: 1px solid var(--line2); border-radius: 12px; background: rgba(255,255,255,.04);
+}
+.carta-det-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; align-items: flex-start; }
+.carta-det-t h3 { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 15px; }
+.carta-det-t .bar { align-self: stretch; }
+.carta-det-tem { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--dim); }
+.carta-det-tem b { color: var(--text); }
+.carta-det-faz { margin: 0; }
+.carta-det-nota { margin: 0; color: var(--dim); font-size: 12px; }
+.hs-carta {
+  display: flex; gap: 12px; align-items: center; width: 100%; margin-top: 8px; padding: 8px 10px 6px 8px;
+  border: 1px solid var(--line2); border-radius: 10px; background: rgba(255,255,255,.04);
+  color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.hs-carta-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+@media (max-width: 480px) {
+  .carta-det { gap: 10px; padding: 12px 8px 8px; }
+  .carta-det .carta-cl canvas { width: 84px !important; height: auto !important; }
+}
 .rw-card { display: flex; gap: 10px; align-items: center; }
 .rw-card-t { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--dim); }
 .rw-card-t b { color: var(--text); font-size: 13.5px; }

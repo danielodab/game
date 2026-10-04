@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — a carta de classe como item</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:100%;height:100%;border:0;background:#000}
+  #summary{position:fixed;left:4px;bottom:4px;z-index:5;padding:2px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;font:11px monospace;opacity:.85}
+  #log{display:none}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A CARTA DE CLASSE COMO ITEM (04/10). O dono: "a carta de classe, essas devem ter o desenho do
+     personagem, ser um item... essa carta que dá estrela para o personagem". O index.html de verdade num
+     quadro do tamanho da janela (roda também em @390x844m). Dá cartas a duas classes pelo caminho do jogo
+     (Progress.addCards) e cobra da HUD: a aba Cartas do Inventário com uma pilha por classe — retrato,
+     moldura da raridade, ×N e progresso —, o painel que diz o que a carta faz, a recompensa com o cartão,
+     a Coleção e a ficha do herói com a contagem; e que nada da regra mudou. Termina na aba Cartas, para a foto. -->
+<iframe id="tela"></iframe>
+<div id="summary">rodando…</div><pre id="log"></pre>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0;
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+    window.__done = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+  function dorme(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&cartas-item';
+  var J, U, P, doc;
+  function q1(sel, raiz) { return (raiz || doc).querySelector(sel); }
+  function qa(sel, raiz) { return Array.prototype.slice.call((raiz || doc).querySelectorAll(sel)); }
+  function ficha() { return q1('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function toca(sel, raiz) { var b = q1(sel, raiz || ficha()); if (b) b.click(); return !!b; }
+  function temDesenho(no) {           // o cartão tem um retrato pintado (canvas com tinta, ou imagem)
+    var cv = no && no.querySelector('canvas, img');
+    if (!cv) return false;
+    if (cv.tagName !== 'CANVAS') return (cv.naturalWidth || cv.width) > 0;
+    try {
+      var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, cores = {}, n = 0;
+      for (var i = 0; i < d.length; i += 4 * 97) { if (d[i + 3] > 200) { var k = (d[i] >> 4) + ',' + (d[i + 1] >> 4) + ',' + (d[i + 2] >> 4); if (!cores[k]) { cores[k] = 1; n++; } } }
+      return n >= 12;                 // um retrato tem dezenas de tons; uma moldura vazia, meia dúzia
+    } catch (e) { return cv.width > 0; }
+  }
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() && J.UI && J.Progress && J.DB && J.Art);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    U = J.UI; P = J.Progress; doc = quadro.contentDocument;
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      quadro.contentWindow.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    if (!ids.length) { P.createHero('sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 1));
+    if (J.Rede) { J.Rede.entrar = function () { return true; }; J.Rede.pares = function () { return []; }; J.Rede.mover = function () {}; }
+    J.DB.batizar('Cartas').then(function () { return roteiro(ids[0]); }).then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function roteiro(hid) {
+    var C = J.DATA.classes, todas = Object.keys(C).filter(function (c) { return c !== 'gm'; });
+    var minha = (P.state.heroes[hid] || {}).classId || hid;
+    // a trancada mais cara: três cartas não a liberam
+    var trancada = todas.filter(function (c) { return !P.isClassUnlocked(c) && P.cardInfo(c).unlockCost > 3; })
+      .sort(function (a, b) { return P.cardInfo(b).unlockCost - P.cardInfo(a).unlockCost; })[0];
+    var regras = J.Engine && J.Engine.VERSAO_REGRAS;
+    var antesA = P.cardInfo(minha).cards, antesB = P.cardInfo(trancada).cards;
+    P.addCards(minha, 7);
+    P.addCards(trancada, 3);
+    var iA = P.cardInfo(minha), iB = P.cardInfo(trancada);
+    check('(o roteiro: ' + minha + ' liberada com ' + iA.cards + ' cartas, ' + trancada + ' trancada com ' + iB.cards + ' de ' + iB.unlockCost + ')',
+          !!trancada && iA.unlocked && !iB.unlocked && iA.cards === antesA + 7 && iB.cards === antesB + 3);
+    var guardado = JSON.stringify(P.state.cards);
+
+    U.showScreen('hub');
+    return dorme(600).then(function () {
+      // ---------------- 1) o INVENTÁRIO: a aba Cartas
+      U.openSheet('inventory');
+      var abas = qa('.inv-tabs-main .btn-ico', ficha()).map(function (b) { return b.getAttribute('data-cat'); });
+      check('o Inventário tem a aba Cartas', abas.indexOf('cartas') >= 0, abas.join(','));
+      toca('.inv-tabs-main [data-cat="cartas"]');
+      var cels = qa('.ig-cell.is-carta', ficha());
+      var donas = todas.filter(function (c) { return P.cardInfo(c).cards > 0; });
+      check('uma pilha por classe que tem carta (e nenhuma para quem não tem)', cels.length === donas.length &&
+            cels.every(function (c) { return donas.indexOf(c.getAttribute('data-carta')) >= 0; }), cels.length + ' de ' + donas.length);
+      var cA = q1('.ig-cell.is-carta[data-carta="' + minha + '"]', ficha()), cB = q1('.ig-cell.is-carta[data-carta="' + trancada + '"]', ficha());
+      check('cada pilha é um cartão com o RETRATO do personagem', cels.every(temDesenho));
+      check('a contagem ×N é a do save', !!cA && !!cB && q1('.ig-n', cA).textContent === '×' + iA.cards && q1('.ig-n', cB).textContent === '×' + iB.cards,
+            cA && q1('.ig-n', cA).textContent + ' / ' + (cB && q1('.ig-n', cB).textContent));
+      check('a moldura leva a cor da raridade da carta (cardRarity)', !!cA && !!cB &&
+            cA.getAttribute('data-rar') === (C[minha].cardRarity || 'comum') && cB.getAttribute('data-rar') === (C[trancada].cardRarity || 'comum') &&
+            !!cA.style.getPropertyValue('--rc'), cA && cA.getAttribute('data-rar') + ' / ' + (cB && cB.getAttribute('data-rar')));
+      check('o nome da classe está escrito na pilha', !!cA && q1('.ig-nm', cA).textContent === iA.name);
+      var larg = function (c) { return parseInt((q1('.ig-prog i', c) || { style: {} }).style.width, 10); };
+      check('o risco de progresso acompanha a conta (liberar / próxima estrela)',
+            larg(cB) === Math.round(iB.cards / iB.unlockCost * 100) && larg(cA) >= 0 && larg(cA) <= 100, larg(cB) + '% · ' + larg(cA) + '%');
+      check('o retrato vem do cache: pedir a mesma carta duas vezes devolve o mesmo desenho, do tamanho de um ícone',
+            J.Art.cardIcon(minha, 92, 130) === J.Art.cardIcon(minha, 92, 130) && J.Art.cardIcon(minha, 92, 130).width <= 512,
+            J.Art.cardIcon(minha, 92, 130).width + ' px');
+
+      // ---------------- 2) o painel: o que a carta faz
+      cB.click();
+      var det = q1('.carta-det', ficha());
+      check('tocar na carta trancada abre o painel: "junte N para liberar", quanto falta e a barra',
+            !!det && det.getAttribute('data-carta') === trancada && det.textContent.indexOf('Junte ' + iB.unlockCost + ' cartas para liberar') >= 0 &&
+            det.textContent.indexOf(iB.cards + ' / ' + iB.unlockCost + ' para liberar') >= 0 && temDesenho(det), det ? det.textContent.slice(0, 160) : 'sem painel');
+      check('a pilha escolhida fica marcada', !!q1('.ig-cell.is-carta.is-sel[data-carta="' + trancada + '"]', ficha()));
+      q1('.ig-cell.is-carta[data-carta="' + minha + '"]', ficha()).click();
+      det = q1('.carta-det', ficha());
+      var esperado = iA.next ? 'para a ★' + iA.next.star : 'Todas as estrelas';
+      check('na carta da classe liberada o painel fala da próxima estrela', !!det && det.getAttribute('data-carta') === minha &&
+            det.textContent.indexOf(esperado) >= 0 && (!iA.next || det.textContent.indexOf('Junte mais ' + iA.next.faltam) >= 0), det ? det.textContent.slice(0, 160) : 'sem painel');
+      check('o painel diz que a carta conta sozinha e não se troca nem se vende, e leva à Coleção',
+            !!det && /conta sozinha/.test(det.textContent) && /não se troca nem se vende/.test(det.textContent) &&
+            qa('button', det).some(function (b) { return /Coleção/.test(b.textContent); }));
+      var painel = ficha();
+      check('cabe na largura da tela (nada vaza para o lado)', painel.scrollWidth <= painel.clientWidth + 1 &&
+            det.getBoundingClientRect().right <= quadro.contentWindow.innerWidth + 1, painel.scrollWidth + ' em ' + painel.clientWidth);
+      var rA = q1('.ig-cell.is-carta[data-carta="' + minha + '"]', ficha()).getBoundingClientRect();   // a ficha foi redesenhada: a pilha é outra
+      check('a pilha tem tamanho de toque (44 px ou mais)', rA.width >= 44 && rA.height >= 44, Math.round(rA.width) + '×' + Math.round(rA.height));
+
+      // ---------------- 3) a Coleção e a ficha do herói
+      qa('button', det).filter(function (b) { return /Coleção/.test(b.textContent); })[0].click();
+      var linha = q1('.col-row.is-focus', ficha());
+      check('o botão abre a Coleção na classe da carta, e o cartão de lá leva o mesmo ×N',
+            !!linha && !!q1('.carta-cl[data-carta="' + minha + '"]', linha) && (q1('.carta-cl-n', linha) || {}).textContent === '×' + iA.cards && temDesenho(linha),
+            linha ? (q1('.carta-cl-n', linha) || {}).textContent : 'sem linha em foco');
+      U.openSheet('heroSheet', hid);
+      var hc = q1('.hs-carta', ficha());
+      check('a ficha do herói mostra a carta da classe como item (cartão, ×N e o que falta)',
+            !!hc && (q1('.carta-cl-n', hc) || {}).textContent === '×' + iA.cards && temDesenho(hc) && !!q1('.bar', hc), hc ? hc.textContent.slice(0, 90) : 'sem a linha da carta');
+      U.closeSheet();
+
+      // ---------------- 4) a RECOMPENSA: o cartão, não um texto
+      U.showScreen('roomClear', { cards: [{ classId: trancada, name: iB.name, amount: 2, cards: iB.cards, unlockCost: iB.unlockCost,
+                                            unlocked: false, novaClasse: false, stars: 0, starUp: 0, next: iB.next }] });
+      var rw = q1('.rw-card .carta-cl[data-carta="' + trancada + '"]');
+      check('na recompensa a carta que caiu é o cartão com o retrato, a moldura da raridade e o +N',
+            !!rw && temDesenho(rw) && (q1('.carta-cl-n', rw) || {}).textContent === '+2' && rw.getAttribute('data-rar') === (C[trancada].cardRarity || 'comum'),
+            rw ? (q1('.carta-cl-n', rw) || {}).textContent : 'sem cartão na recompensa');
+
+      // ---------------- 5) a regra ficou onde estava
+      check('ver as cartas não gasta nem muda nenhuma (a contagem do save é a mesma)', JSON.stringify(P.state.cards) === guardado);
+      check('as regras do motor não mudaram de versão', J.Engine.VERSAO_REGRAS === regras && regras === 7, String(regras));
+
+      // ---------------- a foto: o Inventário na aba Cartas, com uma carta aberta
+      U.showScreen('hub');
+      return dorme(500);
+    }).then(function () {
+      U.openSheet('inventory');
+      if (!q1('.carta-det', ficha())) toca('.ig-cell.is-carta[data-carta="' + minha + '"]');
+      check('(o Inventário fica aberto na aba Cartas, para a foto)', !!q1('.carta-det', ficha()) && qa('.ig-cell.is-carta', ficha()).length >= 2);
+    });
+  }
+})();
+</script>
+</body>
+</html>

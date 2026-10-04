@@ -2638,15 +2638,10 @@ var JOGO = (typeof window !== 'undefined')
           // A CARTA COM A CARA DO PERSONAGEM (30/08, pedido do dono): a
           // moldura de carta fica, o miolo é o retrato de corpo inteiro —
           // quem dropa a carta do Minotauro VÊ o Minotauro.
-          var carta = el('div', 'rw-card-foto');
-          carta.style.cssText = 'width:104px;height:146px;border:2px solid #c9a227;' +
-            'border-radius:10px;background:linear-gradient(180deg,#1a2029,#0e1319);' +
-            'display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative';
-          carta.appendChild(art('unit', [c.classId, { element: 'neutro', dir: 0, scale: 0.62 }], 96));
-          var nomeCarta = el('span', null, esc(className(c.classId)));
-          nomeCarta.style.cssText = 'position:absolute;bottom:4px;left:0;right:0;text-align:center;' +
-            'font-size:11px;color:#e8c25a;text-shadow:0 1px 3px #000;pointer-events:none';
-          carta.appendChild(nomeCarta);
+          // 04/10: é o MESMO cartão do Inventário e da Coleção (retrato, moldura da raridade, nome) com
+          // o +N do que caiu — antes a moldura era sempre dourada, qualquer que fosse a raridade
+          var carta = cartaClasse(c.classId, 104, '+' + (c.amount || 1));
+          carta.classList.add('rw-card-foto');
           cell.appendChild(carta);
           var t = el('div', 'rw-card-t');
           t.appendChild(el('b', null, '+' + (c.amount || 1) + ' ' + esc(c.name || className(c.classId))));
@@ -2656,6 +2651,7 @@ var JOGO = (typeof window !== 'undefined')
             : ci.cards + ' / ' + ci.unlockCost + ' para liberar'));
           t.appendChild(starRow(ci.stars, 14));
           if (c.starUp) t.appendChild(el('span', 'rw-starup', '★ Nova estrela!'));
+          else if (ci.unlocked && ci.next) t.appendChild(el('span', 'rw-card-prox', 'faltam ' + ci.next.faltam + ' para a ★' + ci.next.star));
           cell.appendChild(t);
           w.appendChild(cell);
         });
@@ -6895,7 +6891,8 @@ var JOGO = (typeof window !== 'undefined')
       var row = el('div', 'col-row' + (info.unlocked ? '' : ' is-locked') +
                           (cid === focusId ? ' is-focus' : ''));
       var pic = el('div', 'col-pic');
-      pic.appendChild(art('cardIcon', [cid, 92, 130], 92));
+      // 04/10: a carta é item — o cartão leva a contagem ×N (a mesma pilha da aba Cartas do Inventário)
+      pic.appendChild(cartaClasse(cid, 92, info.cards ? '×' + info.cards : null));
       if (!info.unlocked) pic.classList.add('silhouette');
       row.appendChild(pic);
 
@@ -7248,6 +7245,11 @@ var JOGO = (typeof window !== 'undefined')
     }));
     if (g.dataset && g.dataset.vazio) {
       ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
+    }
+    // 04/10: a carta escolhida abre em cima da grade (o que faz, quanto falta, a Coleção)
+    if (invMainTab === 'cartas') {
+      if (invCartaSel) ladoSaco.appendChild(cartaDetalhe(invCartaSel));
+      else if (!g.dataset.vazio) ladoSaco.appendChild(el('p', 'inv-dica', 'Toque numa carta para ver o que ela faz e quanto falta.'));
     }
     ladoSaco.appendChild(g);
     if (invBusca) aplicaBusca(g, invBusca);
@@ -7932,7 +7934,73 @@ var JOGO = (typeof window !== 'undefined')
   var INV_CATS = [{ id: 'equip', ico: 'cat-equip', rot: 'Equipamentos' },
                   { id: 'pedras', ico: 'cat-pedras', rot: 'Pedras' },
                   { id: 'cons', ico: 'cat-cons', rot: 'Consumíveis' },
-                  { id: 'pets', ico: 'cat-pets', rot: 'Pets' }];
+                  { id: 'pets', ico: 'cat-pets', rot: 'Pets' },
+                  { id: 'cartas', ico: 'cat-cartas', rot: 'Cartas' }];
+
+  /* A CARTA DE CLASSE COMO ITEM (04/10). O dono: "a carta de classe, essas devem ter o desenho do
+   * personagem, ser um item... essa carta que dá estrela para o personagem". A regra NÃO muda — a conta
+   * continua sendo `state.cards[classe]`, que libera a classe e sobe as estrelas sozinha (Progress.addCards,
+   * [D9]); o que muda é o que o jogador VÊ: um cartão com o retrato do personagem (o retrato 3D que o jogo
+   * já gera, dentro da moldura do Art.cardIcon), a borda na cor da raridade, o nome e a contagem ×N.
+   * Aparece no Inventário (aba Cartas, uma pilha por classe), na recompensa, na Coleção e na ficha do herói.
+   * O retrato vem do cache do art.js/portraits3d — um canvas por classe, do tamanho de um ícone. */
+  var invCartaSel = null;              // a carta aberta na aba Cartas (id da classe)
+  function cartaRaridade(cid) { return (classDef(cid) || {}).cardRarity || 'comum'; }
+  function cartaClasse(cid, larg, marca) {
+    var c = el('span', 'carta-cl');
+    markRarity(c, cartaRaridade(cid));
+    c.setAttribute('data-carta', cid);
+    c.appendChild(art('cardIcon', [cid, 92, 130], larg || 92));
+    if (marca) c.appendChild(el('span', 'carta-cl-n', esc(marca)));
+    return c;
+  }
+  /* o que a pilha FAZ e quanto falta: liberar a classe, depois a próxima estrela (as cartas além do
+   * custo de liberar é que contam para estrela — a mesma conta do Progress.cardInfo) */
+  function cartaProgresso(cid) {
+    var info = cardInfo(cid), nome = esc(info.name || className(cid));
+    if (!info.unlocked && info.cards < info.unlockCost) {
+      var f = info.unlockCost - info.cards;
+      return { info: info, pct: info.unlockCost ? info.cards / info.unlockCost : 0,
+               rot: info.cards + ' / ' + info.unlockCost + ' para liberar',
+               faz: 'Junte <b>' + info.unlockCost + '</b> cartas para liberar ' + nome + '. Falta' + (f === 1 ? '' : 'm') + ' <b>' + f + '</b>.' };
+    }
+    if (info.next) {
+      var sobra = Math.max(0, info.cards - info.unlockCost), alvo = sobra + info.next.faltam;
+      return { info: info, pct: alvo ? sobra / alvo : 0, rot: sobra + ' / ' + alvo + ' para a ★' + info.next.star,
+               faz: 'Junte mais <b>' + info.next.faltam + '</b> carta' + (info.next.faltam === 1 ? '' : 's') +
+                    ' para a ★' + info.next.star + ' de ' + nome + '.' };
+    }
+    return { info: info, pct: 1, rot: 'todas as estrelas', faz: 'Todas as estrelas de ' + nome + ' já foram conquistadas.' };
+  }
+  function cartasDoSaco() {
+    return Object.keys(classes()).filter(function (cid) { return cardInfo(cid).cards > 0; })
+      .sort(function (a, b) { return String(className(a)).localeCompare(String(className(b))); });
+  }
+  /* o painel da carta escolhida: o cartão grande, o que ela faz, o progresso e o caminho para a Coleção.
+   * Não há botão "usar": a carta conta sozinha na hora em que cai (liberar e subir estrela é automático). */
+  function cartaDetalhe(cid) {
+    var pr = cartaProgresso(cid), info = pr.info, rar = cartaRaridade(cid);
+    var cx = el('div', 'carta-det');
+    cx.setAttribute('data-carta', cid);
+    cx.appendChild(cartaClasse(cid, 104, '×' + info.cards));
+    var t = el('div', 'carta-det-t');
+    var h3 = el('h3', null, 'Carta de ' + esc(info.name || className(cid)));
+    var chip = el('span', 'chip carta-det-rar', esc(RAR_PT[rar] || rar));
+    chip.style.color = rarColor(rar);
+    h3.appendChild(chip);
+    t.appendChild(h3);
+    var linha = el('div', 'carta-det-tem', '<b>×' + info.cards + '</b> no saco · ' +
+      (info.unlocked ? 'classe liberada' : 'classe trancada'));
+    if (info.stars) linha.appendChild(starRow(info.stars, 14));
+    t.appendChild(linha);
+    t.appendChild(el('p', 'carta-det-faz', pr.faz));
+    t.appendChild(bar('bar-card', pr.pct, pr.rot));
+    t.appendChild(el('p', 'carta-det-nota', 'A carta conta sozinha: ao juntar o bastante, a classe libera e a estrela sobe na hora. ' +
+      'Cai dos chefes; não se troca nem se vende.'));
+    t.appendChild(btn('Ver as estrelas na Coleção', 'btn-mini', function () { openSheet('collection', cid); }));
+    cx.appendChild(t);
+    return cx;
+  }
   function invFilterTabs() {
     var cont = el('div', 'inv-tabs-container');
 
@@ -8333,6 +8401,34 @@ var JOGO = (typeof window !== 'undefined')
         tap(cel, function () { toast('A Reescrita é usada no painel de Caminhos Elementais, dentro da ficha do herói.'); });
         grid.appendChild(cel);
       }
+    } else if (invMainTab === 'cartas') {
+      // 04/10: uma pilha por classe — o cartão com o retrato, ×N e o risco do progresso
+      var cids = cartasDoSaco();
+      if (invCartaSel && cids.indexOf(invCartaSel) < 0) invCartaSel = null;
+      cids.forEach(function (cid) {
+        mostrou++;
+        var pr = cartaProgresso(cid);
+        var cc = el('button', 'ig-cell is-carta' + (invCartaSel === cid ? ' is-sel' : ''));
+        cc.type = 'button';
+        cc.setAttribute('data-carta', cid);
+        markRarity(cc, cartaRaridade(cid));
+        var plateC = el('span', 'ig-plate');
+        plateC.appendChild(cartaClasse(cid, 54));
+        cc.appendChild(plateC);
+        cc.appendChild(el('span', 'ig-n', '×' + pr.info.cards));
+        cc.appendChild(el('span', 'ig-nm', esc(pr.info.name || className(cid))));
+        var risco = el('span', 'ig-prog');
+        var cheio = el('i');
+        cheio.style.width = Math.round(Math.max(0, Math.min(1, pr.pct)) * 100) + '%';
+        risco.appendChild(cheio);
+        risco.title = pr.rot;
+        cc.appendChild(risco);
+        tap(cc, function () {
+          invCartaSel = (invCartaSel === cid) ? null : cid;
+          sheetParty('inventario');
+        });
+        grid.appendChild(cc);
+      });
     } else if (invMainTab === 'pets') {
       var pets = safe(function () { return P().state.pets || []; }, []);
       var pdefs = D().pets || {};
@@ -8397,6 +8493,8 @@ var JOGO = (typeof window !== 'undefined')
       });
       grid.dataset.vazio = (invMainTab === 'pedras' && invElemFiltro !== 'todos')
         ? 'Nenhuma pedra de ' + (ELEM_PT[invElemFiltro] || invElemFiltro) + ' no saco.'
+        : invMainTab === 'cartas'
+        ? 'Nenhuma carta de personagem ainda. Elas caem dos chefes: juntando o bastante, liberam a classe e sobem as estrelas dela.'
         : invMainTab !== 'equip'
         ? 'Nenhum item desta categoria no momento.'
         : invElemFiltro !== 'todos'
@@ -9273,6 +9371,19 @@ var JOGO = (typeof window !== 'undefined')
       sr.appendChild(starRow(info.stars, 18));
       sr.appendChild(el('span', null, 'bônus de estrela já contam nos números acima'));
       col.appendChild(sr);
+    }
+    // 04/10: as cartas da classe, como item — o cartão com ×N e o que falta para a próxima estrela
+    if (info.cards > 0) {
+      var prC = cartaProgresso(cid);
+      var lc = el('button', 'hs-carta');
+      lc.type = 'button';
+      lc.appendChild(cartaClasse(cid, 40, '×' + info.cards));
+      var lct = el('span', 'hs-carta-t');
+      lct.appendChild(el('span', null, prC.faz));
+      lct.appendChild(bar('bar-card', prC.pct, prC.rot));
+      lc.appendChild(lct);
+      tap(lc, function () { openSheet('collection', cid); });
+      col.appendChild(lc);
     }
     top.appendChild(col);
     body.appendChild(top);

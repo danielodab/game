@@ -332,10 +332,10 @@
       abre('inventory');
       var main = q1('.inv-tabs-main', ficha());
       var cats = qa('.btn-ico', main);
-      check('inventário: 4 categorias redondas com o nome de sempre escondido',
-            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets']), textos(cats).join(','));
+      check('inventário: 5 categorias redondas com o nome de sempre escondido (04/10: as Cartas de classe viraram item)',
+            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets', 'Cartas']), textos(cats).join(','));
       check('inventário: data-cat e ícone certos (elmo, pedras, poção, pata)',
-            mesmo(cats.map(function (b) { return b.getAttribute('data-cat'); }), ['equip', 'pedras', 'cons', 'pets']) &&
+            mesmo(cats.map(function (b) { return b.getAttribute('data-cat'); }), ['equip', 'pedras', 'cons', 'pets', 'cartas']) &&
             !!q1('.ico-cat-equip', cats[0]) && !!q1('.ico-cat-pedras', cats[1]) &&
             !!q1('.ico-cat-cons', cats[2]) && !!q1('.ico-cat-pets', cats[3]));
       check('inventário: as classes-gancho ficam (inv-tabs, btn-tab) e a aberta é is-on',
@@ -446,7 +446,7 @@
       var cats = qa('.inv-tabs-main button', ficha());
       var el = qa('.elem-tabs button', ficha());
       check('sem icones_ui.js: as abas voltam a ser TEXTO (btn-tab, sem btn-ico, sem nome escrito ao lado)',
-            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets']) &&
+            mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets', 'Cartas']) &&
             cats.every(function (b) { return b.classList.contains('btn-tab') && !b.classList.contains('btn-ico'); }) &&
             !q1('.ico-fila-nome', ficha()) && el.length === 6 && el[1].style.getPropertyValue('--ec') !== '');
       JOGO.IconesUI = IU;

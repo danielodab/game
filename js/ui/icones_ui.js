@@ -203,6 +203,9 @@ var JOGO = (typeof window !== 'undefined')
   poe('cat-pedras', CRISTAIS);
   poe('cat-cons', FRASCO);
   poe('cat-pets', PATA);
+  // 04/10: a carta de classe virou item — a quinta categoria é um cartão com a estrela que ele dá
+  poe('cat-cartas', risco('M7.6 2.8H16.4A2.1 2.1 0 0 1 18.5 4.9V19.1A2.1 2.1 0 0 1 16.4 21.2H7.6A2.1 2.1 0 0 1 5.5 19.1V4.9A2.1 2.1 0 0 1 7.6 2.8Z', 1.8) +
+                    cheio(estrela(12, 12, 4.6, 1.9, 5)));
 
   // --- os espaços do equipamento ("Tudo" e os quatro)
   poe('slot-todos', ret(3.3, 3.3, 7.6, 7.6, 2.1) + ret(13.1, 3.3, 7.6, 7.6, 2.1) +
