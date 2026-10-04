@@ -319,7 +319,8 @@ máquina, em tempo real: `corpos_lancamento` 22, `corpos_tabuleiro` 8, `poco_cha
 abrem e desenham), `carga.html` 40,19 MB até o menu (os três pacotes novos têm grupo próprio e NÃO
 entram na base); Node — `poco_perigos` 42, `eco_motor` 74, `visao_mapas` 218; Python —
 `texturas_prova` 16, `extrai_assets --conferir` em dia (348 itens), `retratos_site --so-confere`
-131 de 131. O `site_prova.py` **deixou de acusar os retratos dos Colossos** (72 fotos em 72
+131 de 131. O `site_prova.py` fecha **174 de 174** e **deixou de acusar os retratos dos Colossos** (uma
+rodada antes deu 1 falha no filtro de itens da wiki, a oscilação de sempre do tempo virtual; 72 fotos em 72
 cartões). Com TODOS os 183 modelos embutidos carregados, o ajuste de locomoção por medida
 (`M.locoAjustada()`) pega um clipe só, o nado da Arraia: nenhum andar que já estava no ar mudou.
 
