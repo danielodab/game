@@ -1043,6 +1043,13 @@ var JOGO = (typeof window !== 'undefined')
     return !!aplicaLocal({ a: 'p', x: null, y: null, e: e });
   }
   Game._comecaBatalha = comecaBatalha;            // provas
+  /* 04/10, o dono: "ao clicar no quadrado meu personagem se mova na hora, e eu posso trocar de quadrado até
+   * que a luta se inicie". As casas marcadas de todos (a minha e a do parceiro), para o tabuleiro PÔR O BONECO
+   * nelas já na preparação. É só tela: o estado continua sem mexer até o lance `p` (ver Engine.escolhe). */
+  Game.casasMarcadas = function () {
+    var st = Game.state;
+    return (st && st.phase === 'placing' && st.placement) ? escolhasDoLance() : {};
+  };
 
   function donoIdDe(u, fundo) {
     if (!u || fundo > 4) return null;

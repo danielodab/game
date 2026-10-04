@@ -3944,7 +3944,34 @@ var JOGO = (typeof window !== 'undefined')
     return false;
   }
 
+  /* A CASA MARCADA JÁ MOSTRA O BONECO (04/10, o dono: "ao clicar no quadrado meu personagem se mova na hora").
+   * Na preparação o motor não move ninguém (marcar não é lance: dois marcando ao mesmo tempo disputariam a mesma
+   * chave do lockstep), então quem anda é só o DESENHO: o `vis` de quem marcou desliza até a casa marcada, e quem
+   * estava nela troca de lugar com ele. Sem marca, volta para a casa do estado. O lance `p` põe todos de verdade
+   * e o 'placed' só teleporta quem ainda não está onde deve. */
+  function prepVisual(st, dt) {
+    if (!st || st.phase !== 'placing' || !st.placement) return;
+    var g = game(), marcas = safe(function () { return g && g.casasMarcadas ? g.casasMarcadas() : {}; }, {}) || {};
+    var alvo = {}, i, u, uid, m, k = Math.min(1, dt * 12);
+    for (i = 0; i < st.units.length; i++) { u = st.units[i]; if (!u.offBoard) alvo[u.uid] = { x: u.x, y: u.y }; }
+    for (uid in marcas) {
+      if (!Object.prototype.hasOwnProperty.call(marcas, uid) || !alvo[uid]) continue;
+      m = marcas[uid];
+      var casaDele = alvo[uid];
+      for (var outro in alvo) if (outro !== uid && alvo[outro].x === m.x && alvo[outro].y === m.y) alvo[outro] = { x: casaDele.x, y: casaDele.y };
+      alvo[uid] = { x: m.x, y: m.y };
+    }
+    for (uid in alvo) {
+      var v = vis[uid]; if (!v) continue;
+      if (Math.abs(alvo[uid].x - v.x) < 0.01 && Math.abs(alvo[uid].y - v.y) < 0.01) { v.x = alvo[uid].x; v.y = alvo[uid].y; continue; }
+      v.x += (alvo[uid].x - v.x) * k; v.y += (alvo[uid].y - v.y) * k;
+    }
+  }
+
+  R._visDe = function (uid) { var v = vis[uid]; return v ? { x: v.x, y: v.y } : null; };   // provas: onde o boneco está DESENHADO
+
   function updateUnitNodes(st, dt) {
+    prepVisual(st, dt);
     // os fundidos segurados pela animação não estão mais em st.units
     for (var h in unitNodes) {
       if (!fusionHolds(h)) continue;
@@ -5449,7 +5476,10 @@ var JOGO = (typeof window !== 'undefined')
         // 03/09: cada herói que mudou de casa na escolha da posição some e
         // reaparece na casa nova — o mesmo verbo do teletransporte
         (ev.moves || []).forEach(function (mv) {
-          animQ.push({ kind: 'teleport', uid: mv.uid, fx: mv.fromX, fy: mv.fromY,
+          // 04/10: quem já foi desenhado na casa marcada (prepVisual) não some para reaparecer no mesmo lugar
+          var vj = vis[mv.uid];
+          if (vj && Math.abs(vj.x - mv.toX) < 0.2 && Math.abs(vj.y - mv.toY) < 0.2) { vj.x = mv.toX; vj.y = mv.toY; return; }
+          animQ.push({ kind: 'teleport', uid: mv.uid, fx: vj ? Math.round(vj.x) : mv.fromX, fy: vj ? Math.round(vj.y) : mv.fromY,
                        tx: mv.toX, ty: mv.toY, t: 0, dur: 0.44, age: 0 });
         });
         break;
