@@ -3541,3 +3541,8 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
 .tr-item { min-height: var(--tap); }
 /* o "Sair do jogo" do menu inicial tinha 40 (a ui_screens.html cobra 44 no menu) */
 .menu-sair { min-height: var(--tap); }
+
+/* Configurações · Gráficos (04/10) */
+.cfg-select { min-height: 44px; padding: 6px 10px; border-radius: 10px; font: inherit; color: #f2ead8; background: #1b2230; border: 1px solid rgba(230,181,60,.4); max-width: 100%; }
+.cfg-recarrega { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.cfg-recarrega:empty { display: none; }

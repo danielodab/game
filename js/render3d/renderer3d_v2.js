@@ -324,6 +324,9 @@ var JOGO = (typeof window !== 'undefined')
     // porque ela não passa pelo canvas.
     var teto = (JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico()) ? 1.25 : 1.5;
     DPR = clamp(window.devicePixelRatio || 1, 1, teto);
+    // 04/10: a qualidade escolhida nas Configurações desenha menos pixels (a HUD, que é DOM, segue nítida)
+    var gq = (JOGO.Mobile && JOGO.Mobile.grafico) ? JOGO.Mobile.grafico() : null;
+    if (gq && gq.escala < 1) DPR = DPR * gq.escala;
     var box = measure(); W = box.w; H = box.h;
 
     var wantPreserve = opts.preserveDrawingBuffer ||
@@ -479,6 +482,7 @@ var JOGO = (typeof window !== 'undefined')
     var pedido = /[?&]bloom=1/.test(location.search || '') ? true
                : /[?&]bloom=0/.test(location.search || '') ? false : null;
     if (pedido === false) return;
+    if (pedido !== true && JOGO.Mobile && JOGO.Mobile.grafico && JOGO.Mobile.grafico().bloom === false) return;   // 04/10: gráficos no baixo
     if (pedido !== true && JOGO.Mobile && JOGO.Mobile.economico && JOGO.Mobile.economico()) return;
     if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.UnrealBloomPass) return;
     try {

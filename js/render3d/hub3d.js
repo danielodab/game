@@ -4024,7 +4024,9 @@ var JOGO = (typeof window !== 'undefined')
       canvas.className = 'hub-canvas';
       container.appendChild(canvas);
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      // 04/10: a qualidade das Configurações (JOGO.Mobile.grafico) desenha menos pixels no aparelho fraco
+      var gq = (JOGO.Mobile && JOGO.Mobile.grafico) ? JOGO.Mobile.grafico() : null;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5) * ((gq && gq.escala) || 1));
       if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding;
       raycaster = new THREE.Raycaster();
       montaCena();

@@ -9549,6 +9549,37 @@ var JOGO = (typeof window !== 'undefined')
       })));
     body.appendChild(tela);
 
+    /* GRÁFICOS (04/10, o dono: "teria como um usuário conseguir definir a resolução? assim para pc ou celular
+     * mais fraco ele consiga jogar"). Três níveis (JOGO.Mobile.grafico): resolução do 3D, tamanho das texturas
+     * e o brilho. Vale ao recarregar — modelo aberto não reabre em outro tamanho. */
+    var Mb = JOGO.Mobile;
+    if (Mb && Mb.qualidade) {
+      var gsec = el('section', 'cfg-sec');
+      gsec.appendChild(el('h3', 'bk-tit', 'Gráficos'));
+      var escolhida = prefUi().graficos || 'alta', emUso = Mb.qualidade();
+      var selG = document.createElement('select');
+      selG.className = 'cfg-select';
+      selG.setAttribute('aria-label', 'Qualidade gráfica');
+      [['alta', 'Alta — tudo no máximo'], ['media', 'Média — resolução e relevo menores'], ['baixa', 'Baixa — para aparelho fraco']].forEach(function (o) {
+        var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1];
+        if (o[0] === escolhida) op.selected = true;
+        selG.appendChild(op);
+      });
+      var avisoG = el('div', 'cfg-recarrega');
+      var pintaAvisoG = function () {
+        clear(avisoG);
+        if (selG.value === emUso) return;
+        avisoG.appendChild(el('span', 'inv-dica', 'Vale depois de recarregar o jogo.'));
+        avisoG.appendChild(btn('Recarregar agora', 'btn-mini btn-gold', function () { try { location.reload(); } catch (e) {} }));
+      };
+      selG.addEventListener('change', function () { var p = prefUi(); p.graficos = selG.value; gravaPrefUi(p); pintaAvisoG(); });
+      selG.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      gsec.appendChild(linhaConfig('Qualidade', 'Menos qualidade usa menos memória e roda melhor em PC ou celular fraco.', selG));
+      gsec.appendChild(avisoG);
+      pintaAvisoG();
+      body.appendChild(gsec);
+    }
+
     // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
     var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
     if (!toque) {

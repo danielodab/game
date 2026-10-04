@@ -953,7 +953,39 @@ var JOGO = (typeof window !== 'undefined')
 
 
 
+  /* O TETO DE TEXTURA DA QUALIDADE (04/10): no nível médio/baixo das Configurações o modelo abre com a textura
+   * já encolhida, e a imagem grande é SOLTA (close) — é ela, descompactada, que enche a memória da aba (4 MB por
+   * imagem de 1024; 1 MB a 512; 0,25 MB a 256). Feito antes do primeiro desenho, então nenhuma placa chegou a
+   * alocar o tamanho velho (trocar o tamanho depois exigiria dispose). */
+  function encolheTextura(t, teto) {
+    if (!t || !teto || !t.image || (t.userData && t.userData.encolhida)) return;
+    var im = t.image, w = im.width || 0, h = im.height || 0;
+    if (!w || !h || Math.max(w, h) <= teto || typeof document === 'undefined') return;
+    var k = teto / Math.max(w, h), cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+    var c = cv.getContext('2d');
+    if (!c) return;
+    try { c.imageSmoothingQuality = 'high'; c.drawImage(im, 0, 0, cv.width, cv.height); } catch (e) { return; }
+    t.image = cv; t.needsUpdate = true;
+    t.userData = t.userData || {}; t.userData.encolhida = true;
+    try { if (im.close) im.close(); } catch (e2) {}
+  }
+  function aplicaTetoDeTextura(scene) {
+    var g = (JOGO.Mobile && JOGO.Mobile.grafico) ? JOGO.Mobile.grafico() : null;
+    if (!g || (!g.cor && !g.dado)) return;
+    scene.traverse(function (n) {
+      if (!n.material) return;
+      (Array.isArray(n.material) ? n.material : [n.material]).forEach(function (m) {
+        if (!m) return;
+        encolheTextura(m.map, g.cor); encolheTextura(m.emissiveMap, g.cor);
+        encolheTextura(m.normalMap, g.dado); encolheTextura(m.roughnessMap, g.dado);
+        encolheTextura(m.metalnessMap, g.dado); encolheTextura(m.aoMap, g.dado);
+      });
+    });
+  }
+
   function prepScene(scene) {
+    try { aplicaTetoDeTextura(scene); } catch (eT) {}
     scene.traverse(function (n) {
       if (!n.isMesh && !n.isSkinnedMesh) return;
       n.castShadow = true; n.receiveShadow = true;

@@ -78,6 +78,32 @@ var JOGO = (typeof window !== 'undefined')
     return toque || telaDeAparelho();
   };
 
+  /* A QUALIDADE GRÁFICA (04/10, o dono: "teria como um usuário conseguir definir a resolução? assim para pc ou
+   * celular mais fraco ele consiga jogar"). Três níveis, escolhidos nas Configurações e guardados no aparelho
+   * (a mesma chave soterra-pref-ui das outras preferências). Cada um diz: `escala` (quanto da resolução da tela
+   * o 3D desenha — a HUD é DOM e segue nítida), `cor`/`dado` (o teto, em pixels, da textura de cor e das de
+   * relevo/brilho ao ABRIR um modelo; 0 = como veio) e `bloom`. A textura é o que enche a memória da aba: no
+   * nível baixo cada modelo abre com um quarto dela ou menos. Vale ao recarregar, porque modelo aberto não reabre. */
+  var GRAFICOS = {
+    alta:  { escala: 1,    cor: 0,   dado: 0,   bloom: true },
+    media: { escala: 0.75, cor: 0,   dado: 256, bloom: true },
+    baixa: { escala: 0.5,  cor: 512, dado: 256, bloom: false }
+  };
+  var nivelGrafico = null;
+  M.qualidade = function () {
+    if (nivelGrafico) return nivelGrafico;
+    var n = 'alta';
+    try {
+      var m = /[?&]graficos=(alta|media|baixa)/.exec(String(location.search || ''));
+      if (m) n = m[1];
+      else { var p = JSON.parse(localStorage.getItem('soterra-pref-ui') || '{}') || {}; if (GRAFICOS[p.graficos]) n = p.graficos; }
+    } catch (e) {}
+    nivelGrafico = n;                 // fixo até recarregar: metade dos modelos numa qualidade e metade noutra não
+    return n;
+  };
+  M.grafico = function () { return GRAFICOS[M.qualidade()]; };
+  M.NIVEIS_GRAFICOS = ['alta', 'media', 'baixa'];
+
   // Classes no <html> para o CSS que a consulta de mídia não alcança sozinha
   // (ex.: alvo de 44 px só quando o ponteiro é o dedo).
   function marca() {
