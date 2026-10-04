@@ -63,7 +63,7 @@ O AAB assinado, que é o que a loja recebe, está no `GOOGLE_PLAY.md` §1.
 
 Nada disso entra no servidor da web: o `.dockerignore` e o `tools/sobe_vps.py`
 deixam `android/`, `app/`, `www/`, `node_modules/` e os dois `package*.json` de
-fora. **A exceção é `vendor/capacitor/`** (três arquivos, 13 KB): é o servidor
+fora. **A exceção é `vendor/capacitor/`** (quatro arquivos, 22 KB): é o servidor
 que os entrega ao aplicativo, e só a ele — a web nunca os pede.
 
 ### Em pé e deitado
@@ -95,7 +95,7 @@ celular recebe na próxima abertura, sem AAB novo e sem revisão da loja.
 | `server.url` | `capacitor.config.json` | o endereço que o aplicativo abre |
 | `server.errorPath: "index.html"` | idem | o que mostrar quando o servidor não responde |
 | `app/index.html` | vira `www/index.html` | a tela **"Sem conexão — Tentar de novo"** |
-| `vendor/capacitor/*.js` | servidos pelo servidor | a parte JS dos plugins (voltar, segundo plano, tela acesa) |
+| `vendor/capacitor/*.js` | servidos pelo servidor | a parte JS dos plugins (voltar, segundo plano, tela acesa, compra pela Google) |
 
 **A `www/` agora é um arquivo só** — MEDIDO em 04/10/2026: **3,3 KB** (era
 13,71 MB com o jogo dentro). É a tela que aparece no lugar da tela branca quando
@@ -306,32 +306,19 @@ Em headless:
 4. **Ícone e tela de abertura do aplicativo** não existem (está o padrão do
    Capacitor). Tamanhos e comando: `GOOGLE_PLAY.md` §2.
 
-5. **A loja dentro do aplicativo** ainda é a do Mercado Pago, que a Play não
-   aceita para item digital. Fica para a etapa da compra pela Google
-   (`GOOGLE_PLAY.md` §7, item 4).
+5. **A compra de barras pela Google Play** está pronta no código (04/10: no
+   aplicativo o Mercado Pago não aparece; `js/core/compra_play.js` e
+   `servidor/pagamento_play.py`), mas só liga quando a conta da Play for
+   aprovada: produtos, conta de serviço e credencial estão no
+   `GOOGLE_PLAY.md` §9.
 
----
-
-## 7. O que o jogo faz de diferente dentro do aplicativo (04/10)
-
-A regra: **o jogo da web não muda**. Tudo abaixo pergunta antes
-`JOGO.Mobile.app()` — verdadeiro só dentro do Capacitor (`window.Capacitor`
-nativo) ou com `?app=1` no endereço, que é como as provas fingem a casca no
-navegador. O `<html>` ganha a classe `app`, para o CSS que precisar.
-
-| | o que acontece | onde |
-|---|---|---|
-| **Botão voltar** | fecha a ficha aberta, depois o painel da praça; sem nada aberto, pergunta "Sair do SOTERRA?"; na batalha avisa que a luta continua sem ele. Voltar de novo desfaz a pergunta — só o botão **Sair** sai | `M.voltar` em `js/mobile.js`, `UI.voltar` em `js/ui/hud.js` |
-| **Segundo plano** | o som cala e volta ao retornar. O desenho para sozinho (o WebView escondido não roda `requestAnimationFrame`), igual à aba escondida da web — e é por isso que o turno e a rede se acertam na volta pelo mesmo caminho que a web já usa | `M.segundoPlano`, `Audio.pausa` |
-| **Tela acesa** | só durante a batalha e com o aplicativo na frente | plugin `@capacitor-community/keep-awake` |
-| **Qualidade gráfica** | quem nunca escolheu abre em **média**; em aparelho fraco (até 2 GB de memória ou tela de até 360 px no lado curto), em **baixa**. A escolha das Configurações sempre vence | `M.padraoGrafico` |
 | **Sessão** | o Android não copia os dados do aplicativo para a nuvem do Google (`allowBackup="false"`): a sessão da conta não viaja para outro telefone | `AndroidManifest.xml` |
 
 | **Modelos no aparelho** | a escolha *Jogar agora* / *Baixar tudo* na primeira abertura; o modelo é procurado primeiro no aparelho (seção 8) | `js/app_modelos.js` |
 
-Os três arquivos do Capacitor (`vendor/capacitor/`) são carregados pelo
+Os quatro arquivos do Capacitor (`vendor/capacitor/`) são carregados pelo
 `js/mobile.js` **depois** de ele confirmar que está na casca, e o
-`js/app_modelos.js` só é escrito pelo `index.html` dentro do aplicativo: a web
+`js/app_modelos.js` e o `js/core/compra_play.js` só são escritos pelo `index.html` dentro do aplicativo: a web
 não pede nenhum dos quatro.
 
 ### As provas

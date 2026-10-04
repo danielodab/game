@@ -192,6 +192,39 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
     cobra uma vez). Quem recebe não cancela; a carta vai para `moderacao_cartas`; a trilha
     fica em `eventos` (`loja-presenteou`, `loja-presente-amigo`) e no extrato de barras de
     quem pagou ("… (presente para Fulano)"), que a ficha do Mestre mostra.
+- 04/10, as **barras pela Google Play, dentro do aplicativo** (`servidor/pagamento_play.py`;
+  a web segue no Mercado Pago, `servidor/pagamento.py`, sem mudança). A Play não aceita
+  outro meio de pagamento num aplicativo, então ali os mesmos pacotes são produtos da Play.
+  - **Quem credita é o servidor, pelo que a GOOGLE diz** — nunca pelo que o aplicativo
+    manda. `POST /api/pagamento/play {pacote, token}` consulta
+    `purchases.products.get` com a conta de serviço; o endereço leva o nome do
+    aplicativo e o produto, então token de outro aplicativo ou de outro pacote a Google
+    não acha. Pendente, cancelada e reembolsada não creditam; compra de teste só com
+    `SOTERRA_PLAY_TESTE=1`.
+  - **Um crédito por compra**, em três camadas: `pagamentos_play.token` único, o
+    `creditado_em IS NULL` lido dentro do `BEGIN IMMEDIATE` (os dois contêineres) e o
+    idem `play:<id>` no extrato das barras; o `orderId` da Google também é único.
+  - **O consumo espera o servidor**: o aplicativo compra sem consumir e sem confirmar, e
+    só consome com `consumir: true` na resposta. Fechou no meio: a compra fica no
+    aparelho e é reenviada (o token repetido não credita e nem consulta a Google de
+    novo). O que ninguém confirma em 3 dias a Google devolve ao comprador — é o que
+    acontece com a conta banida (403) e com o que passa do teto.
+  - **O teto de R$ 400 em 24 h** soma Mercado Pago e Play. **A conta dona:** o aplicativo
+    passa à Google um hmac da conta (`obfuscatedAccountId`) e a consulta o devolve; a
+    compra de uma conta não credita em outra.
+  - **Reembolso:** o servidor pergunta de 6 em 6 h (`purchases.voidedpurchases`) e tira
+    as barras que houver (`estorno-pagamento`, idem `play:<id>:estorno`); o que já foi
+    gasto vira alerta `estorno` com `faltou`. O Mestre pode forçar
+    (`POST /api/mestre/pagamento/play/estornos`). O reembolso de um token nunca visto
+    deixa uma lápide: ele não credita depois. O aviso em tempo real da Google (Pub/Sub)
+    não foi ligado.
+  - **A credencial** (`SOTERRA_PLAY_CREDENCIAL`, só no ambiente) nunca vai para log, repr
+    nem erro; sem ela as rotas respondem 503. O JWT da conta de serviço é assinado sem
+    biblioteca (RS256 em `assina_rs256`, conferido contra o `openssl`). Freio: 30
+    consultas à Google por conta por hora.
+  - **No cliente**, o Mercado Pago não aparece dentro do aplicativo (`SITE.noApp()`,
+    `JOGO.Mobile.app()`): regra da Play. Prova: `tests/pagamento_play_api.py` e
+    `tests/compra_play.html`.
 
 ### 4.6 A troca
 `POST /api/troca` move itens (por iid), bichos e vinténs entre os DOIS estados do

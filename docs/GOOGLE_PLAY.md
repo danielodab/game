@@ -297,7 +297,7 @@ países de uma vez — no Brasil, a do ClassInd. As respostas do SOTERRA:
 | Jogos de azar com dinheiro real | Não |
 | **Os usuários podem interagir ou trocar conteúdo?** | **Sim** — há chat entre jogadores (praça, mensagem particular, guilda), com denúncia e moderação |
 | **O app compartilha a localização do usuário com outros?** | Não |
-| **O app permite comprar itens digitais?** | **Sim** — depois que a compra pela Google entrar; se o aplicativo for enviado sem loja, responda Não e refaça o questionário quando ela entrar |
+| **O app permite comprar itens digitais?** | **Sim** — as barras de ouro, pela cobrança da Google (seção 9) |
 
 O resultado esperado é **Livre ou 10 anos**, com os avisos "Interação entre
 usuários" e "Compras no app".
@@ -355,12 +355,12 @@ mas é o melhor jeito de você mesmo instalar pela Play antes de chamar os outro
    abre `https://soterra.viidoo.io`: enquanto o servidor estiver com o código
    antigo, ele abre o jogo **sem** a escolha dos modelos e **sem** botão voltar
    (o servidor ainda não entrega `js/app_modelos.js` nem `vendor/capacitor/`).
-4. **A loja dentro do aplicativo.** A Play **não aceita** que um aplicativo
-   venda itens digitais por outro meio que não a cobrança dela — e hoje a loja
-   do jogo usa o Mercado Pago. Enquanto a compra pela Google não entrar (é a
-   próxima etapa), a loja precisa ficar **escondida dentro do aplicativo**, ou a
-   revisão recusa. Isto ainda **não** foi feito: é a primeira coisa da etapa da
-   cobrança.
+4. **A compra de barras pela Google Play.** O código está pronto (04/10): dentro
+   do aplicativo o Mercado Pago não aparece e as barras são compradas pela
+   cobrança da Google. Falta o que só a conta aprovada permite: cadastrar os
+   quatro produtos, criar a conta de serviço e pôr a credencial no servidor. O
+   passo a passo é a **seção 9**. Enquanto isso não for feito, a tela da compra
+   no aplicativo diz "chega em breve" e nada mais quebra.
 5. **A arte:** ícone 1024×1024, tela de abertura, ícone da loja 512×512, imagem
    de destaque 1024×500 e as capturas de tela (seção 2).
 6. **Os `[PREENCHER]` da Política de Privacidade e dos Termos** (razão social,
@@ -430,14 +430,21 @@ do Google Play** (Play Billing). Hoje a loja do jogo usa o Mercado Pago. Isso
 vale mesmo com o jogo vindo do servidor — **e fica mais delicado**, porque a
 loja da web aparece no aplicativo no instante em que for publicada.
 
-- **Antes do primeiro envio:** a loja precisa estar **escondida dentro do
-  aplicativo** (`JOGO.Mobile.app()`), sem botão, sem preço e **sem link ou
-  texto mandando comprar pelo site** — a Play, em regra, também proíbe levar o jogador
-  para pagar fora. **Isto ainda não foi feito.**
-- **A etapa seguinte** (não feita, de propósito): a compra pela Google, com um
-  plugin de cobrança no aplicativo e a conferência do recibo no servidor. A
-  Google fica com uma parte de cada venda (confira a taxa atual no Play Console).
-- A loja da web, para quem joga no computador, **continua como está**.
+- **Feito em 04/10:** dentro do aplicativo (`JOGO.Mobile.app()` no jogo,
+  `SITE.noApp()` no site) a loja **não mostra** o Mercado Pago: nem botão, nem
+  preço em reais, nem o nome dele, nem "Seus pacotes". No lugar entra a compra
+  pela Google (`js/core/compra_play.js`), no jogo (Configurações → *Barras de
+  ouro*) e na loja do site aberta dentro do aplicativo. **Gastar** barras
+  (personagens, auras, pedras, presente) continua igual. A prova é
+  `tests/compra_play.html`.
+- **A regra que fica para sempre:** dentro do aplicativo, **nunca** escreva
+  "compre pelo site", "mais barato no site", nem ponha link para pagar fora. A
+  Play proíbe levar o jogador a outro meio de pagamento — vale para tela, aviso,
+  correio do jogo e mensagem de evento. Como o jogo vem do servidor, um texto
+  assim publicado na web aparece no aplicativo na mesma hora.
+- A Google fica com uma parte de cada venda (seção 9.6).
+- A loja da web, para quem joga no computador, **continua como está** (Mercado
+  Pago).
 
 ### 8.4 O que conferir no aparelho (nada disto pôde ser provado aqui)
 
@@ -460,5 +467,175 @@ provado no Chrome com a casca fingida — falta o telefone:
    em Cache). "Limpar cache" do Android **não** pode apagar os modelos.
 8. **Depois de um deploy na web:** feche e abra o aplicativo — o jogo novo tem
    de aparecer sem reinstalar.
-9. **Um link para fora** (por exemplo o do Mercado Pago, enquanto a loja não
-   for escondida) abre no navegador do aparelho.
+9. **A loja do site aberta dentro do aplicativo** (a pílula da praça, o link da
+   aura) abre no próprio aplicativo e **não** mostra Mercado Pago: mostra os
+   quatro pacotes com o preço da Google.
+10. **A compra pela Google** (seção 9.5): a tela da Google abre, as barras
+    entram, e o mesmo pacote pode ser comprado de novo em seguida (sinal de que
+    a compra foi consumida).
+
+---
+
+## 9. A compra de barras pela Google Play — o que fazer quando a conta for aprovada
+
+**O que já está pronto (04/10):** o aplicativo já fala com a cobrança da Google
+(plugin `@capgo/native-purchases`, Play Billing 9), o servidor já confere cada
+compra na Google antes de creditar (`servidor/pagamento_play.py`) e a loja de
+dentro do aplicativo já não mostra o Mercado Pago. **O que falta é só o que
+depende da sua conta:** os produtos, a conta de serviço e a credencial.
+
+**Como funciona, em quatro linhas.** O jogador toca em "Comprar" e a Google
+cobra. O aplicativo manda o recibo (o *purchaseToken*) ao servidor do jogo. O
+servidor pergunta à Google se aquele recibo é de uma compra paga, deste
+aplicativo e deste pacote — e só então põe as barras na conta, uma vez. Aí o
+aplicativo "consome" a compra na Google, o que libera comprar o mesmo pacote de
+novo. Se o aplicativo fechar no meio, ele retoma sozinho na próxima abertura.
+
+### 9.1 Antes: um AAB novo e o perfil de pagamentos
+
+1. Rode `npm install` e `npm run sync` e gere um AAB novo (seção 1.4): o
+   aplicativo ganhou a biblioteca de cobrança, e a Play só deixa criar produto
+   depois de receber um AAB que a tenha. Suba-o no teste interno ou fechado.
+2. No Play Console, crie o **perfil de pagamentos** (*Configuração → Perfil de
+   pagamentos*): é a conta que recebe o dinheiro. Sem ele não há produto.
+
+### 9.2 Cadastrar os quatro produtos
+
+Play Console → o aplicativo → *Monetizar com o Google Play → Produtos →
+Produtos de compra única* (antes chamava "Produtos no app") → *Criar produto*.
+
+| ID do produto (exatamente assim) | Nome | Preço no Brasil | Barras |
+|---|---|---|---|
+| `barras_50` | Bolsa de 50 barras de ouro | R$ 4,90 | 50 |
+| `barras_280` | Saco de 280 barras de ouro | R$ 19,90 | 280 |
+| `barras_600` | Arca de 600 barras de ouro | R$ 39,90 | 600 |
+| `barras_1250` | Tesouro de 1.250 barras de ouro | R$ 79,90 | 1.250 |
+
+- **O ID é com sublinhado**, não com hífen: a Play só aceita letra minúscula,
+  número, sublinhado e ponto. No jogo o pacote chama `barras-50`; o servidor
+  troca o hífen pelo sublinhado num lugar só (`produto_play`, em
+  `servidor/pagamento_play.py`). **O ID não pode ser mudado nem reaproveitado
+  depois de criado.**
+- É produto de **compra única**, do tipo que se compra várias vezes
+  (consumível). **Não** é assinatura. Deixe a opção de **comprar várias
+  unidades de uma vez desligada**.
+- O preço no aplicativo é **o que você cadastrar aqui** (a Google converte para
+  os outros países). Use os mesmos do site. Se um dia mudar o preço no site
+  (`PACOTES`, em `servidor/loja.py`), mude aqui também — o teto de R$ 400 por
+  dia é contado pelo preço do site.
+- **Ative** cada produto. Produto inativo não aparece no aplicativo (a tela diz
+  "os pacotes ainda não estão disponíveis").
+
+### 9.3 Criar a conta de serviço (a chave que deixa o servidor perguntar à Google)
+
+1. Entre em <https://console.cloud.google.com> com a mesma conta Google. Crie
+   um projeto (por exemplo "soterra-servidor").
+2. *APIs e serviços → Biblioteca* → procure **Google Play Android Developer
+   API** → **Ativar**.
+3. *IAM e administrador → Contas de serviço → Criar conta de serviço*. Dê um
+   nome (por exemplo "soterra-compras"). Não precisa dar papel nenhum no
+   projeto. Anote o e-mail dela (termina em `.iam.gserviceaccount.com`).
+4. Abra a conta de serviço → aba *Chaves → Adicionar chave → Criar nova chave →
+   JSON*. Um arquivo `.json` é baixado. **Esse arquivo é uma senha**: não mande
+   por chat, não ponha no Git. Se vazar, apague a chave aqui e crie outra.
+5. No **Play Console** → *Usuários e permissões → Convidar novos usuários* →
+   cole o e-mail da conta de serviço. Em *Permissões do app*, escolha o SOTERRA
+   e marque:
+   - **Ver dados financeiros, pedidos e respostas à pesquisa de cancelamento**;
+   - **Gerenciar pedidos e assinaturas**.
+
+   Convide. (É esse "acesso financeiro" que deixa o servidor conferir as
+   compras e ver os reembolsos.)
+6. **Paciência:** a Google pode levar **até um dia** para a permissão valer.
+   Enquanto isso o servidor recebe "não autorizado" e o jogador vê "a Google
+   Play não respondeu"; nada é creditado errado.
+
+### 9.4 Pôr a credencial no servidor (Coolify)
+
+No Coolify, em *Environment Variables* do jogo (Runtime **ligado**, Build
+**desligado**, **Is Literal** marcado):
+
+| Nome | Valor |
+|---|---|
+| `SOTERRA_PLAY_CREDENCIAL` | o conteúdo **inteiro** do arquivo `.json` da conta de serviço, colado (começa com `{` e termina com `}`). Também serve o caminho de um arquivo dentro do contêiner, por exemplo `/dados/play.json` |
+| `SOTERRA_PLAY_TESTE` | `1`, **só na fase de teste** (aceita compra de teste, que não cobra nada). Tire antes de abrir ao público |
+| `SOTERRA_PLAY_PACOTE` | só se o identificador do aplicativo deixar de ser `br.com.soterra.jogo` |
+
+Salve e faça **Redeploy**. Nos *Runtime Logs* tem de aparecer
+`pagamento: Google Play ligada (br.com.soterra.jogo…)`. Se aparecer
+`Google Play desligada (…)`, o texto entre parênteses diz o que faltou. A chave
+nunca é escrita no log.
+
+Sem a variável, tudo continua funcionando: a tela do aplicativo diz "chega em
+breve" e as rotas respondem 503.
+
+### 9.5 Testar sem gastar dinheiro
+
+1. Play Console → *Configurações → Teste de licença* → adicione o seu Gmail (e o
+   de quem for testar). Deixe a resposta em `RESPOND_NORMALLY`.
+2. Esses mesmos Gmails têm de ser **testadores** da faixa onde o AAB está
+   (teste interno ou fechado) e instalar o aplicativo **pela Play** (o link de
+   participação), no telefone logado com esse Gmail.
+3. Com `SOTERRA_PLAY_TESTE=1` no servidor, abra o aplicativo → Configurações →
+   *Barras de ouro* → *Comprar barras de ouro*. A tela da Google mostra
+   "Cartão de teste, sempre aprovado": nada é cobrado.
+4. O que conferir:
+   - as barras entram e o extrato da loja mostra "… (Google Play)";
+   - dá para comprar **o mesmo pacote de novo** em seguida (a compra foi consumida);
+   - com "Cartão de teste, sempre recusado", nada entra;
+   - com a forma de pagamento de teste **lenta** ("aprovado depois de alguns
+     minutos"), a tela diz que a Google ainda espera o pagamento e, minutos
+     depois, ao voltar ao aplicativo, as barras entram sozinhas;
+   - **a retomada:** compre e, assim que a Google confirmar, feche o aplicativo
+     à força; ao abrir de novo aparece "Chegaram N barras de ouro…";
+   - **o reembolso:** no Play Console → *Gerenciamento de pedidos*, reembolse o
+     pedido de teste **marcando para remover o direito**. No painel do Mestre
+     aparece o alerta de estorno em até 6 horas, e as barras saem.
+5. **Tire** o `SOTERRA_PLAY_TESTE` e faça Redeploy antes de abrir ao público: sem
+   ela, compra de teste não vale barras.
+
+### 9.6 O que a Play cobra
+
+A Google fica com **15%** de cada venda até o primeiro US$ 1 milhão por ano —
+**desde que a conta entre no programa de taxa de serviço de 15%** (no Play
+Console, na configuração da conta de desenvolvedor; é um formulário, uma vez).
+Sem a inscrição, a taxa é **30%**. Do pacote de R$ 19,90 sobram cerca de
+R$ 16,90 antes dos impostos. O pagamento cai uma vez por mês no perfil de
+pagamentos. Confira a taxa vigente no Play Console: a Google muda essas regras
+de tempos em tempos.
+
+### 9.7 Reembolso, arrependimento e fraude
+
+- **Quem reembolsa é a Google** (o jogador pede na Play, ou você reembolsa em
+  *Gerenciamento de pedidos*). O servidor pergunta à Google **de 6 em 6 horas**
+  o que foi reembolsado, cancelado ou contestado nos últimos 30 dias, e tira da
+  conta as barras daquela compra que ainda estiverem lá. O que já foi gasto
+  vira **alerta no painel do Mestre** ("faltou"), como no estorno do Mercado
+  Pago — você decide o que fazer.
+- **O aviso na hora** (a Google chama de *Notificações do desenvolvedor em tempo
+  real*) **não foi ligado**: ele exige criar um tópico no Google Cloud Pub/Sub e
+  conferir a assinatura de cada aviso. A pergunta de 6 em 6 horas cobre o mesmo
+  caso com atraso; se um dia o atraso incomodar, é a evolução natural.
+- **Compra que o servidor não confirmou** (o jogador pagou e o servidor estava
+  fora, ou a conta bateu no teto de R$ 400 em 24 h, ou a conta foi banida): o
+  aplicativo tenta de novo a cada abertura. Se em **3 dias** ninguém confirmar,
+  **a Google devolve o dinheiro sozinha**. Ninguém paga sem receber.
+- O teto de **R$ 400 por conta em 24 h** vale somando o site e o aplicativo.
+- A compra feita logado numa conta do jogo só vale **naquela** conta.
+
+### 9.8 O que não pôde ser provado sem a conta e sem aparelho
+
+Tudo o que é do servidor e da tela foi provado com uma Google de mentira
+(`tests/pagamento_play_api.py`, `tests/compra_play.html`). Falta, e só o
+aparelho mostra:
+
+1. **O projeto compila** com o plugin de cobrança (nada foi compilado aqui).
+2. **A ponte do plugin na página do servidor** e na loja do site aberta dentro
+   do aplicativo (mesma origem; lido no código do Capacitor, não visto rodar).
+3. **A conversa de verdade com a Google:** o servidor assina o pedido de acesso
+   sem biblioteca externa (a assinatura foi comparada com a do `openssl` e
+   bateu), mas nunca falou com a Google real.
+4. **Os textos de erro do plugin** ("cancelado", "pendente", "você já tem este
+   item") foram lidos no código dele; um aparelho pode mostrar outro caso.
+5. **Os nomes dos menus do Play Console** mudam de tempos em tempos: se um
+   caminho acima não existir, procure pelo nome da função.
