@@ -70,7 +70,7 @@
 <section class="secao loja">
   <div class="miolo">
     <h2>Loja</h2>
-    <p class="sub">Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes (Pix ou cartão, pelo Mercado Pago) ou da troca pelos vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.</p>
+    <p class="sub" id="lj-sub">Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes (Pix ou cartão, pelo Mercado Pago) ou da troca pelos vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.</p>
 
     <div class="volta-pagamento" id="lj-volta" role="status" hidden></div>
 
@@ -111,7 +111,16 @@
 /* a cor da moldura de cada personagem vem do próprio jogo (classes.js, mesma
  * origem); cada arquivo com o hash do conteúdo (SITE_URL, no topo) */
 (function () {
-  ['site.js', 'banimento.js', '../js/core/data/classes.js', 'loja.js'].forEach(function (s) {
+  var lista = ['site.js', 'banimento.js', '../js/core/data/classes.js'];
+  // SÓ DENTRO DO APLICATIVO de Android: a compra de barras pela Google Play (a Play não aceita o Mercado Pago
+  // num aplicativo). Na web este arquivo nem é pedido. O teste é o mesmo do SITE.noApp (site.js).
+  try {
+    if (/[?&]app=1(&|$)/.test(location.search) || sessionStorage.getItem('soterra-app') === '1' ||
+        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+      lista.push('../js/core/compra_play.js');
+    }
+  } catch (eApp) {}
+  lista.concat(['loja.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

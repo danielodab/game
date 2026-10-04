@@ -9744,6 +9744,16 @@ var JOGO = (typeof window !== 'undefined')
     var secModelos = safe(function () { return JOGO.AppModelos && JOGO.AppModelos.secaoConfig(); }, null);
     if (secModelos) body.appendChild(secModelos);
 
+    /* BARRAS DE OURO PELA GOOGLE PLAY (04/10): só no aplicativo — na web `JOGO.CompraPlay` não é carregado e
+     * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */
+    if (JOGO.CompraPlay && JOGO.CompraPlay.noApp()) {
+      var secBarras = el('section', 'cfg-sec');
+      secBarras.appendChild(el('h3', 'bk-tit', 'Barras de ouro'));
+      secBarras.appendChild(el('p', 'inv-dica', 'A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.'));
+      secBarras.appendChild(btn('Comprar barras de ouro', 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
+      body.appendChild(secBarras);
+    }
+
     // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
     var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
     if (!toque) {
@@ -11841,6 +11851,8 @@ var JOGO = (typeof window !== 'undefined')
    * depois o painel da praça — e diz se fechou. Falso = não havia nada, e aí o aplicativo pergunta se
    * é para sair. Na web ninguém chama. */
   UI.voltar = function () {
+    // a tela da compra pela Google Play (só no aplicativo) fica por cima de tudo: fecha primeiro
+    if (JOGO.CompraPlay && JOGO.CompraPlay.aberto && JOGO.CompraPlay.aberto()) { JOGO.CompraPlay.fecha(); return true; }
     if (sheetName) { closeSheet(); return true; }
     var p = painelVivo();
     if (p && !p.classList.contains('is-off')) { fechaPainel(); return true; }

@@ -261,7 +261,8 @@ var JOGO = (typeof window !== 'undefined')
     var url = (typeof window.__url === 'function') ? window.__url : function (f) { return f; };
     // Entram por aqui e não pela lista do index.html, que é a da web: lá ninguém os pede.
     var arquivos = window.capacitorApp ? []     // já na página (as provas põem um de mentira): nada a buscar
-      : [url('vendor/capacitor/capacitor.js'), url('vendor/capacitor/app.js'), url('vendor/capacitor/keep-awake.js')];
+      : [url('vendor/capacitor/capacitor.js'), url('vendor/capacitor/app.js'), url('vendor/capacitor/keep-awake.js'),
+         url('vendor/capacitor/native-purchases.js')];   // a compra pela Google Play (js/core/compra_play.js)
     carrega(arquivos, function () {
       try { App = window.capacitorApp && window.capacitorApp.App; } catch (e) {}
       try { Vigilia = window.capacitorKeepAwake && window.capacitorKeepAwake.KeepAwake; } catch (e2) {}

@@ -93,6 +93,22 @@
     return '';
   };
 
+  /* 04/10 — DENTRO DO APLICATIVO de Android o site abre no mesmo WebView do jogo. A Play não aceita, num
+   * aplicativo, botão nem texto que leve a pagar item digital por fora da cobrança dela: a loja usa isto
+   * para trocar os pacotes do Mercado Pago pela compra da Google (js/core/compra_play.js). O Capacitor põe
+   * `window.Capacitor` em toda página do aplicativo; `?app=1` é a casca fingida das provas, e a marca na
+   * sessão do navegador acompanha quem veio do jogo e anda pelas páginas do site. Na web é sempre falso. */
+  SITE.noApp = function () {
+    try {
+      var C = window.Capacitor;
+      if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) return true;
+    } catch (e) { /* segue */ }
+    try {
+      if (/[?&]app=1(&|$)/.test(String(location.search || ''))) { sessionStorage.setItem('soterra-app', '1'); return true; }
+      return sessionStorage.getItem('soterra-app') === '1';
+    } catch (e2) { return false; }
+  };
+
   SITE.sessao = function () {
     try {
       var s = JSON.parse(leLocal(CHAVE_SESSAO) || 'null');

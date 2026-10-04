@@ -82,6 +82,8 @@ CAPACITOR = [
     ('node_modules/@capacitor/core/dist/capacitor.js', 'capacitor.js'),
     ('node_modules/@capacitor/app/dist/plugin.js', 'app.js'),
     ('node_modules/@capacitor-community/keep-awake/dist/plugin.js', 'keep-awake.js'),
+    # a compra de barras pela Google Play (js/core/compra_play.js)
+    ('node_modules/@capgo/native-purchases/dist/plugin.js', 'native-purchases.js'),
 ]
 
 # A Play recusa o que passa disto no download inicial. A www/ fica muito

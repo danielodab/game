@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a compra de barras pela Google Play dentro do aplicativo</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:420px;height:260px;border:1px solid #333}</style>
+</head>
+<body>
+<!-- 04/10: no APLICATIVO de Android as barras de ouro são compradas pela Google Play (a Play não aceita o
+     Mercado Pago num aplicativo); na WEB nada muda. Aqui o js/core/compra_play.js de verdade roda com
+     `?app=1` (a casca fingida), um PLUGIN de mentira no lugar do @capgo/native-purchases e um servidor de
+     mentira no lugar de /api/pagamento/play. Prova-se:
+       · o preço que aparece é o que a GOOGLE devolve; a compra abre sem consumir e sem confirmar sozinha;
+       · a compra só é CONSUMIDA depois que o servidor confirma — e não é consumida quando ele não credita
+         (pendente, teto, servidor fora) nem quando o jogador cancela;
+       · a RETOMADA: a compra paga que ficou no aparelho é entregue de novo e só então consumida;
+       · os estados (pendente, cancelada, sem a loja da Google, desligado);
+       · a loja do site ABERTA NO APLICATIVO não mostra Mercado Pago, Pix, preço em reais nem botão de
+         pacote: mostra a compra pela Google — e gastar barras continua lá;
+       · a loja do site NA WEB continua com o Mercado Pago e nem pede o compra_play.js.
+     O servidor de verdade (a conferência na Google, o crédito único) está em tests/pagamento_play_api.py. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  history.replaceState(null, '', location.pathname + '?app=1');     // a casca fingida, lida quando o arquivo é avaliado
+  var V = '?v=' + Date.now();
+
+  // ---- o servidor de mentira (as duas rotas do pagamento_play.py) ----
+  var chamadas = [];                       // a ORDEM de tudo: 'google:compra', 'servidor:POST', 'google:consome'…
+  var servidor = { modo: 'ok', creditados: {}, saldo: 10, posts: [] };
+  var PACOTES = [['barras-50', 'Bolsa de 50 barras de ouro', 50], ['barras-280', 'Saco de 280 barras de ouro', 280],
+                 ['barras-600', 'Arca de 600 barras de ouro', 600], ['barras-1250', 'Tesouro de 1.250 barras de ouro', 1250]];
+  function apiPlay(metodo, corpo) {
+    if (servidor.modo === 'desligado') return { ok: false, status: 503, erro: 'a compra pela Google Play chega em breve', play: false };
+    if (metodo === 'GET') {
+      return { ok: true, status: 200, ligado: true, teste: false, conta: 'c0ffee' + 'ab'.repeat(17), barras: { saldo: servidor.saldo },
+               compras: [], pacotes: PACOTES.map(function (p) {
+                 return { id: p[0], produto: p[0].replace('-', '_'), nome: p[1], barras: p[2], cabe: true }; }) };
+    }
+    chamadas.push('servidor:POST');
+    servidor.posts.push(corpo);
+    if (servidor.modo === 'fora') return { ok: false, status: 0 };
+    if (servidor.modo === 'teto') return { ok: true, status: 200, creditado: false, consumir: false, estado: 'teto', erro: 'o teto de pacotes é R$ 400,00 por dia' };
+    if (servidor.creditados[corpo.token]) return { ok: true, status: 200, creditado: false, repetido: true, consumir: true, estado: 'creditada', barras: { saldo: servidor.saldo } };
+    var qtd = Number(String(corpo.pacote).replace(/\D/g, ''));
+    servidor.creditados[corpo.token] = true;
+    servidor.saldo += qtd;
+    return { ok: true, status: 201, creditado: true, consumir: true, estado: 'creditada', barras: { saldo: servidor.saldo },
+             compra: { id: 1, pacote: corpo.pacote, barras: qtd } };
+  }
+
+  // ---- o plugin de mentira (a mesma forma do @capgo/native-purchases no Android) ----
+  var google = { suporta: true, proxima: 'paga', noAparelho: [], n: 0 };
+  var plugin = {
+    isBillingSupported: function () { return Promise.resolve({ isBillingSupported: google.suporta }); },
+    getProducts: function (o) {
+      chamadas.push('google:produtos');
+      return Promise.resolve({ products: o.productIdentifiers.map(function (id) {
+        return { identifier: id, priceString: 'G$ ' + id.replace(/\D/g, '') + ',00', title: id }; }) });
+    },
+    purchaseProduct: function (o) {
+      chamadas.push('google:compra');
+      google.ultima = o;
+      if (google.proxima === 'cancela') return Promise.reject({ code: 'USER_CANCELED', message: 'Purchase is not purchased' });
+      var c = { purchaseToken: 'tok-' + (++google.n) + '-abcdefghijklmnop', productIdentifier: o.productIdentifier,
+                purchaseState: google.proxima === 'pendente' ? '2' : '1', orderId: 'GPA.' + google.n };
+      google.noAparelho.push(c);
+      if (google.proxima === 'pendente') return Promise.reject({ message: 'Purchase is pending' });
+      return Promise.resolve(c);
+    },
+    getPurchases: function () { chamadas.push('google:lista'); return Promise.resolve({ purchases: google.noAparelho.slice() }); },
+    consumePurchase: function (o) {
+      chamadas.push('google:consome');
+      google.noAparelho = google.noAparelho.filter(function (c) { return c.purchaseToken !== o.purchaseToken; });
+      google.consumida = o.purchaseToken;
+      return Promise.resolve();
+    },
+    restorePurchases: function () { chamadas.push('google:RESTAURA'); return Promise.resolve(); },
+    acknowledgePurchase: function () { chamadas.push('google:CONFIRMA'); return Promise.resolve(); }
+  };
+  window.capacitorNativePurchases = { NativePurchases: plugin };
+  window.JOGO = { Sessao: { token: function () { return 'sessao-de-prova'; },
+                            api: function (rota, op) {
+                              return Promise.resolve(rota === '/api/pagamento/play'
+                                ? apiPlay((op && op.method) || 'GET', op && op.body) : { ok: false, status: 404 });
+                            } } };
+  document.write('<scr' + 'ipt src="../js/core/compra_play.js' + V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    try { sessionStorage.removeItem('soterra-app'); localStorage.removeItem('soterra-sessao'); } catch (e) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(cond, ms) {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function volta() {
+        var v = false;
+        try { v = cond(); } catch (e) {}
+        if (v || Date.now() - t0 > (ms || 8000)) return resolve(v);
+        setTimeout(volta, 50);
+      })();
+    });
+  }
+  var P = JOGO.CompraPlay;
+  var caixa = document.createElement('div');
+  document.body.appendChild(caixa);
+
+  /* A loja do site num quadro, com o fetch e a sessão de mentira postos ANTES dos scripts dela. O quadro é
+   * escrito por document.write: herda o endereço desta página (com ou sem `?app=1`), e o <base> acerta os caminhos. */
+  var CATALOGO = { ok: true, versao: 3, agora: Math.floor(Date.now() / 1000),
+    itens: [{ sku: 'barras-por-vintens-10', secao: 'barras-por-vintens', tipo: 'barras', alvo: 'conta', qtd: 10, nome: '10 barras de ouro',
+              descricao: '10 barras de ouro pagas com 800 vinténs.', preco: 800, moeda: 'vintens', limite: null }],
+    pacotes: PACOTES.map(function (p, i) { return { id: p[0], nome: p[1], moeda: 'barras', barras: p[2], centavos: 490, preco: 'R$ ' + (i + 4) + ',90' }; }),
+    ofertas: { semana: 1, desconto: 25, inicio: 0, fim: 0, itens: [] }, presente: { fora: ['vintens', 'barras', 'pacote'], porDia: 3 },
+    barras: { nome: 'Barras de Ouro', vintensPorBarra: 20, vintensPorBarraFarmada: 80 }, pagamento: { ligado: true, teste: false } };
+  function fetchFalso(url, pedido) {
+    var rota = String(url).replace(/^[a-z]+:\/\/[^/]+/, '').split('?')[0];
+    var corpo = pedido && pedido.body ? JSON.parse(pedido.body) : null;
+    var r = rota === '/api/loja/catalogo' ? CATALOGO
+      : rota === '/api/loja/minha' ? { ok: true, saldo: { carteira: 0, reservado: 0, aCaminho: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null },
+                                       barras: { saldo: servidor.saldo, movimentos: [] }, limites: {}, pedidos: [], classes: [],
+                                       auras: { tem: [], escolhida: null, todas: [] }, boasVindas: { disponivel: false, comprado: true } }
+      : rota === '/api/pagamento/meus' ? { ok: true, ligado: true, pagamentos: [] }
+      : rota === '/api/pagamento/play' ? apiPlay((pedido && pedido.method) || 'GET', corpo)
+      : rota === '/api/saude' ? { ok: true, agora: Math.floor(Date.now() / 1000) }
+      : { ok: false, erro: 'rota fora da prova', status: 404 };
+    var status = r.status || (r.ok ? 200 : 404);
+    return Promise.resolve({ status: status, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(r))); } });
+  }
+  function abreLoja() {
+    return fetch('../site/loja.html' + V).then(function (r) { return r.text(); }).then(function (texto) {
+      var q = document.createElement('iframe');
+      document.body.appendChild(q);
+      var w = q.contentWindow, d = q.contentDocument;
+      w.__pedidos = [];
+      d.open();
+      w.fetch = fetchFalso;
+      w.capacitorNativePurchases = window.capacitorNativePurchases;
+      w.localStorage.setItem('soterra-sessao', JSON.stringify({ token: 'sessao-de-prova', conta: { id: 1, nome: 'Prova Play' } }));
+      d.write(texto.replace('<head>', '<head><base href="' + location.origin + location.pathname.replace(/tests\/[^/]*$/, 'site/') + '">'));
+      d.close();
+      return espera(function () { return w.SITE && d.getElementById('lj-catalogo') && !/carregando/.test(d.getElementById('lj-catalogo').textContent)
+                                         && !/carregando/.test(d.getElementById('lj-saldo').textContent); })
+        .then(function () { return { w: w, d: d, q: q }; });
+    });
+  }
+
+  check('com ?app=1 o módulo se vê no aplicativo', P.noApp() === true);
+  P.painel(caixa);
+  espera(function () { return P._st.fase === 'ok'; }).then(function () {
+    var cartoes = caixa.querySelectorAll('[data-cpl-pacote]');
+    check('a tela mostra os quatro pacotes', cartoes.length === 4, String(cartoes.length));
+    check('o preço é o que a GOOGLE devolveu (não há preço em reais do servidor)',
+          /G\$ 280,00/.test(caixa.textContent) && !/R\$/.test(caixa.textContent), caixa.textContent.slice(0, 160));
+    check('a tela não cita Mercado Pago nem Pix e diz que a cobrança é da Google Play',
+          !/Mercado Pago|Pix/i.test(caixa.textContent) && /Google Play/.test(caixa.textContent));
+    check('os produtos pedidos à Google são os ids da Play (sublinhado, não hífen)', P._st.pacotes[1].produto === 'barras_280');
+    return espera(function () { return chamadas.indexOf('google:lista') >= 0; });      // a retomada da abertura da tela
+  }).then(function () {
+    // ---- a compra que dá certo ----
+    chamadas.length = 0;
+    return P.compra('barras-280');
+  }).then(function (r) {
+    var o = google.ultima || {};
+    check('a compra abre na Google SEM consumir e SEM confirmar sozinha, com o código da conta',
+          o.productIdentifier === 'barras_280' && o.productType === 'inapp' && o.isConsumable === false &&
+          o.autoAcknowledgePurchases === false && /^c0ffee/.test(o.appAccountToken || ''), JSON.stringify(o));
+    check('a ordem: compra na Google → servidor → SÓ ENTÃO consome',
+          chamadas.join(' ') === 'google:compra servidor:POST google:consome', chamadas.join(' '));
+    check('o servidor recebeu o purchaseToken e o produto', servidor.posts[0] && /^tok-1-/.test(servidor.posts[0].token) &&
+          servidor.posts[0].pacote === 'barras_280', JSON.stringify(servidor.posts[0]));
+    check('creditada: o recado diz quantas barras entraram e o saldo anda',
+          r.estado === 'creditada' && r.barras === 280 && /280 barras de ouro entraram/.test(caixa.textContent) &&
+          /290/.test((caixa.querySelector('[data-cpl-saldo]') || {}).textContent || ''), caixa.textContent.slice(0, 120));
+    check('consumida, a compra saiu do aparelho', google.noAparelho.length === 0);
+
+    // ---- o servidor não credita (teto): NÃO consome ----
+    chamadas.length = 0; servidor.modo = 'teto';
+    return P.compra('barras-50');
+  }).then(function (r) {
+    check('o servidor não creditou (teto do dia): a compra NÃO é consumida e fica no aparelho',
+          r.estado === 'teto' && chamadas.indexOf('google:consome') < 0 && google.noAparelho.length === 1, chamadas.join(' '));
+    check('o recado do teto explica', /limite de compras por dia/.test(caixa.textContent), caixa.textContent.slice(0, 140));
+    // ---- o servidor fora: NÃO consome; a RETOMADA entrega depois ----
+    chamadas.length = 0; servidor.modo = 'fora';
+    return P.retoma(true);
+  }).then(function (r) {
+    check('com o servidor fora a retomada não consome nada', r.creditadas === 0 && chamadas.indexOf('google:consome') < 0 &&
+          google.noAparelho.length === 1, chamadas.join(' '));
+    chamadas.length = 0; servidor.modo = 'ok';
+    return P.retoma(true);
+  }).then(function (r) {
+    check('a RETOMADA: a compra paga que ficou no aparelho vai ao servidor e só então é consumida',
+          r.creditadas === 1 && r.barras === 50 && chamadas.join(' ') === 'google:lista servidor:POST google:consome' &&
+          google.noAparelho.length === 0, chamadas.join(' ') + ' ' + JSON.stringify(r));
+    check('a retomada avisa o jogador', /Sua compra chegou: 50 barras/.test(caixa.textContent) && !!document.querySelector('.cpl-brinde'));
+    // ---- creditada mas o aplicativo fechou antes de consumir: o servidor diz "repetido" e manda consumir ----
+    var c = { purchaseToken: 'tok-velho-abcdefghijklmnop', productIdentifier: 'barras_600', purchaseState: '1' };
+    servidor.creditados[c.purchaseToken] = true;
+    google.noAparelho.push(c);
+    chamadas.length = 0;
+    var saldo = servidor.saldo;
+    return P.retoma(true).then(function (r2) {
+      check('a compra JÁ creditada que ficou sem consumir: consome e não credita de novo',
+            r2.creditadas === 0 && servidor.saldo === saldo && google.noAparelho.length === 0 &&
+            chamadas.join(' ') === 'google:lista servidor:POST google:consome', chamadas.join(' '));
+    });
+  }).then(function () {
+    // ---- pendente ----
+    chamadas.length = 0; google.proxima = 'pendente';
+    return P.compra('barras-600');
+  }).then(function (r) {
+    check('a compra PENDENTE não vai ao servidor nem é consumida, e a tela explica',
+          r.estado === 'pendente' && chamadas.join(' ') === 'google:compra' && /ainda espera o pagamento/.test(caixa.textContent),
+          chamadas.join(' '));
+    chamadas.length = 0;
+    return P.retoma(true);
+  }).then(function (r) {
+    check('a retomada conta a pendente e não a entrega', r.pendentes === 1 && chamadas.join(' ') === 'google:lista', chamadas.join(' '));
+    google.noAparelho[0].purchaseState = '1';        // a Google aprovou o pagamento
+    return P.retoma(true);
+  }).then(function (r) {
+    check('aprovada pela Google, a retomada seguinte entrega e consome', r.creditadas === 1 && r.barras === 600 && google.noAparelho.length === 0);
+    // ---- cancelada pelo jogador ----
+    chamadas.length = 0; google.proxima = 'cancela';
+    return P.compra('barras-1250');
+  }).then(function (r) {
+    check('o jogador cancelou: nada vai ao servidor e a tela diz que nada foi cobrado',
+          r.estado === 'cancelada' && chamadas.join(' ') === 'google:compra' && /Nada foi cobrado/.test(caixa.textContent));
+    check('o módulo nunca restaura nem confirma compra sozinho (a confirmação espera o servidor)',
+          chamadas.indexOf('google:RESTAURA') < 0 && chamadas.indexOf('google:CONFIRMA') < 0);
+    // ---- a tela por cima do jogo ----
+    P.abre();
+    var aberta = P.aberto() && !!document.querySelector('.cpl-fundo [data-cpl-corpo]');
+    P.fecha();
+    check('a tela abre por cima do jogo e fecha (o botão voltar do aparelho usa o mesmo fecha)', aberta && !P.aberto() && !document.querySelector('.cpl-fundo'));
+    // ---- sem a loja da Google no aparelho ----
+    google.suporta = false; google.proxima = 'paga';
+    return P.prepara();
+  }).then(function () {
+    check('sem a loja da Google no aparelho: a tela explica e não mostra botão de compra',
+          P._st.fase === 'sem-loja' && /Play Store/.test(caixa.textContent) && !caixa.querySelector('[data-cpl-comprar]'), P._st.fase);
+    google.suporta = true; servidor.modo = 'desligado';
+    return P.prepara();
+  }).then(function () {
+    check('com o servidor sem a credencial (503): "chega em breve", sem botão', P._st.fase === 'desligado' &&
+          /chega em breve/.test(caixa.textContent) && !caixa.querySelector('[data-cpl-comprar]'), P._st.fase);
+    servidor.modo = 'ok';
+
+    // ---- a loja do site DENTRO do aplicativo ----
+    return abreLoja();
+  }).then(function (L) {
+    var d = L.d, w = L.w;
+    return espera(function () { return d.querySelectorAll('#lj-play [data-cpl-pacote]').length === 4; }).then(function () {
+      var texto = d.body.innerText || d.body.textContent;
+      check('NO APLICATIVO a loja do site mostra a compra pela Google no lugar dos pacotes',
+            w.SITE.noApp() === true && d.querySelectorAll('#lj-play [data-cpl-pacote]').length === 4 && !d.getElementById('lj-pacotes').hidden);
+      check('NO APLICATIVO a loja não cita Mercado Pago nem Pix em lugar nenhum da página', !/Mercado Pago|Pix/i.test(texto),
+            (/.{30}(Mercado Pago|Pix).{30}/i.exec(texto) || [''])[0]);
+      check('NO APLICATIVO não há botão de pacote do site nem preço em reais nos pacotes',
+            !d.querySelector('[data-pacote]') && !/R\$/.test(d.getElementById('lj-pacotes').textContent));
+      check('NO APLICATIVO "Seus pacotes" (os do Mercado Pago) fica escondido', d.getElementById('lj-pagamentos-caixa').hidden === true);
+      check('NO APLICATIVO gastar continua igual: o catálogo e o saldo de barras estão lá',
+            /10 barras de ouro/.test(d.getElementById('lj-catalogo').textContent) && !!d.querySelector('[data-saldo="barras"]'));
+      chamadas.length = 0;
+      var antes = servidor.saldo;
+      d.querySelector('#lj-play [data-cpl-comprar="barras-50"]').click();
+      return espera(function () { return servidor.saldo === antes + 50 && chamadas.indexOf('google:consome') > 0 &&
+                                         (d.querySelector('[data-saldo="barras"]') || {}).textContent === String(antes + 50); });
+    }).then(function (ok) {
+      check('NO APLICATIVO a compra pela loja do site credita, consome depois do servidor e o saldo da página anda',
+            !!ok && chamadas.join(' ').indexOf('google:compra servidor:POST google:consome') === 0, chamadas.join(' '));
+      // ---- a loja do site NA WEB (sem a casca) ----
+      // a marca "estou no aplicativo" sai pelo armazenamento do QUADRO: o desta página é o de mentira do save_sandbox.js
+      L.w.sessionStorage.removeItem('soterra-app');
+      L.q.remove();
+      history.replaceState(null, '', location.pathname);
+      sessionStorage.removeItem('soterra-app');
+      return abreLoja();
+    });
+  }).then(function (L) {
+    var d = L.d, w = L.w;
+    return espera(function () { return d.querySelectorAll('button[data-pacote]').length === 4; }).then(function () {
+      check('NA WEB nada muda: os quatro pacotes com "Comprar com Pix ou cartão", o preço em reais e o Mercado Pago',
+            w.SITE.noApp() === false && d.querySelectorAll('button[data-pacote]').length === 4 &&
+            /Comprar com Pix ou cartão/.test(d.getElementById('lj-pacotes').textContent) &&
+            /R\$ 4,90/.test(d.getElementById('lj-pacotes').textContent) && /Mercado Pago/.test(d.body.textContent),
+            'noApp=' + w.SITE.noApp() + ' busca=' + w.location.search + ' botoes=' + d.querySelectorAll('button[data-pacote]').length +
+            ' ' + d.getElementById('lj-pacotes').textContent.slice(0, 200));
+      check('NA WEB a compra pela Google não existe: o arquivo nem é pedido', !d.getElementById('lj-play') && !(w.JOGO && w.JOGO.CompraPlay) &&
+            !d.querySelector('script[src*="compra_play"]'));
+      w.localStorage.removeItem('soterra-sessao');       // a sessão de mentira não fica no navegador da prova
+      L.q.remove();
+    });
+  }).catch(function (e) { check('a prova não quebrou', false, String(e && e.stack || e)); }).then(fim);
+})();
+</script>
+</body>
+</html>

@@ -194,6 +194,11 @@
     return !s.semFundo && !(Number(s.saveVersao) > 0);
   }
   function aCaminhoNoSaldo() { return Number(((minha && minha.saldo) || {}).aCaminho) || 0; }
+  /* 04/10: DENTRO DO APLICATIVO de Android (SITE.noApp) a Play só aceita a cobrança dela. Então ali os pacotes
+   * do Mercado Pago não aparecem (nem botão, nem preço em reais, nem o nome dele): no lugar entra a tela da
+   * compra pela Google (js/core/compra_play.js, que o loja.html só carrega no aplicativo). Gastar barras é igual. */
+  function noApp() { return !!(SITE.noApp && SITE.noApp()); }
+  function compraPlay() { return (window.JOGO && window.JOGO.CompraPlay) || null; }
   function pagamentoLigado() { return !!(catalogo && catalogo.pagamento && catalogo.pagamento.ligado === true); }
 
   /* ---- o que vem do servidor ---- */
@@ -225,7 +230,7 @@
   }
   /* "Seus pacotes": só com sessão e com os pagamentos ligados */
   function carregaPagamentos() {
-    if (!SITE.sessao() || !pagamentoLigado()) return Promise.resolve();
+    if (!SITE.sessao() || !pagamentoLigado() || noApp()) return Promise.resolve();
     return SITE.api('/api/pagamento/meus').then(function (r) {
       if (r.status === 401) { sessaoVencida(); return; }
       if (r.ok && Array.isArray(r.pagamentos)) pagamentos = r;
@@ -242,7 +247,7 @@
     var caixa = $('lj-saldo');
     if (estadoMinha === 'fora') {
       caixa.innerHTML = '<div class="saldo-fora">' + iconeBarra('grande') + '<p><b>Entre para comprar.</b> A loja vende em barras de ouro, ' +
-        'que ficam na sua conta do site: vêm dos pacotes (Pix ou cartão) ou da troca pelos vinténs do seu jogo.</p>' +
+        'que ficam na sua conta do site: vêm dos pacotes' + (noApp() ? '' : ' (Pix ou cartão)') + ' ou da troca pelos vinténs do seu jogo.</p>' +
         '<a class="btn btn-ouro" href="conta.html#entrar">Entrar</a><a class="btn" href="conta.html#criar">Criar conta</a></div>';
       return;
     }
@@ -284,6 +289,7 @@
   function listaPacotes() { return catalogo && Array.isArray(catalogo.pacotes) ? catalogo.pacotes.filter(pacoteBom) : []; }
   function desenhaPacotes() {
     var caixa = $('lj-pacotes');
+    if (noApp()) { desenhaPacotesApp(caixa); return; }
     var ps = listaPacotes();
     caixa.hidden = !ps.length;
     if (!ps.length) { caixa.innerHTML = ''; return; }
@@ -299,6 +305,20 @@
         : (ligado ? 'Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, os vinténs entram na sua conta na hora (já dá para gastar aqui) e o jogo os recebe na próxima abertura.'
                   : 'Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, os vinténs vêm das descidas.')) + '</p>' +
       '<div class="pacotes">' + ps.map(cartaoPacote).join('') + '</div>';
+  }
+  /* No aplicativo: a tela da compra pela Google no lugar dos pacotes em reais. O elemento é um só e é
+   * reaproveitado (o desenha() roda muitas vezes; a tela guarda o estado dela e se repinta sozinha). */
+  var caixaPlay = null;
+  function desenhaPacotesApp(caixa) {
+    var cp = compraPlay();
+    caixa.hidden = !cp;
+    if (!cp) { caixa.innerHTML = ''; return; }
+    if (caixaPlay && caixaPlay.parentNode === caixa) return;
+    caixa.innerHTML = '<div class="pacotes-cab">' + iconeBarra() + '<h3>Barras de Ouro</h3></div>';
+    caixaPlay = document.createElement('div');
+    caixaPlay.id = 'lj-play';
+    caixa.appendChild(caixaPlay);
+    cp.painel(caixaPlay);
   }
   function cartaoPacote(p) {
     var bt;
@@ -751,7 +771,7 @@
   }
   function desenhaPagamentos() {
     var caixa = $('lj-pagamentos-caixa');
-    var lista = estadoMinha === 'ok' && pagamentos && Array.isArray(pagamentos.pagamentos)
+    var lista = !noApp() && estadoMinha === 'ok' && pagamentos && Array.isArray(pagamentos.pagamentos)
       ? pagamentos.pagamentos.filter(function (p) { return p && p.id != null; }) : [];
     caixa.hidden = !lista.length;
     $('lj-pagamentos').innerHTML = lista.map(linhaPagamento).join('');
@@ -1064,6 +1084,14 @@
     SITE.api('/api/saude', { semToken: true }).then(function (r) {
       if (r.ok) { SITE.acertaRelogio(r.agora); desenha(); }
     });
+    if (noApp()) {
+      // o texto do topo fala do Mercado Pago: no aplicativo ele não pode aparecer
+      $('lj-sub').textContent = 'Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, ' +
+        'por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes ou da troca pelos ' +
+        'vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.';
+      // as barras compradas pela Google entraram (na hora, ou uma compra retomada): o saldo e o extrato andaram
+      window.addEventListener('soterra:barras-play', function () { carregaMinha(); });
+    }
     desenha();
     carregaCatalogo().then(iniciaVolta);     // sem volta, iniciaVolta só lê "Seus pacotes"
     carregaMinha();

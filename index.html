@@ -508,6 +508,8 @@
     if (/[?&]app=1(&|$)/.test(location.search) ||
         (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
       document.write('<scr' + 'ipt src="' + window.__url('js/app_modelos.js') + '"><\/scr' + 'ipt>');
+      // a compra de barras de ouro pela Google Play (a regra da Play: no aplicativo, só a cobrança dela)
+      document.write('<scr' + 'ipt src="' + window.__url('js/core/compra_play.js') + '"><\/scr' + 'ipt>');
     }
   } catch (eApp) {}
 </script>
