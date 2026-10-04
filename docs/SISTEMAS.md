@@ -350,12 +350,12 @@ cinco chefes). O colosso toma outra casa, girando por andar:
 Os colossos **não** entram no sorteio comum (`colosso: true`), **não** são
 chefes (selo, insígnia e roleta seguem só de chefe), pagam mais que qualquer
 comum (XP 45; pedras sempre, 4 a 6 — o teto do não-chefe) e sobem de vida com o
-andar como todo o resto. Porte: **1,6×** um monstro comum (2,88 m). Sem a arte
-do dono ainda, cada um tem chave de modelo própria (`colosso-fogo`…) que cai
-no **corpo provisório** de um monstro do calabouço do mesmo elemento
-(`M.CORPO_PROVISORIO` em `models3d_v2.js`: Monte de Escória, Golem de
-Salmoura, Boca do Túnel, Nuvem-Enxame). Arte final: embutir com a chave e
-apagar a linha do provisório.
+andar como todo o resto. Porte: **1,6×** um monstro comum (2,88 m). Desde
+03/10 os quatro vestem a **arte do dono** (`assets/embedded/models-meshy-colossos.js`,
+chaves `colosso-fogo`…`colosso-ar`, grupo `poco:colossos` no jogo servido — só
+desce com o andar que os tem). A arte veio cinza de propósito: são irmãos de
+corpo e quem diz o elemento é a tinta do jogo. Até 03/10 vestiam um corpo
+provisório de outro calabouço (`M.CORPO_PROVISORIO`); as quatro linhas saíram.
 
 **Os perigos do chão (02/10).** Todo andar tem perigos sorteados pela MESMA
 semente, todos **à vista desde o começo** e todos **avisados antes de ferir**:
@@ -445,10 +445,12 @@ sempre, como o de chefe); 4º–10º 2.500 e 10 selos; 11º–100º 1.000 e 4 se
 Nada disso se compra. A semana aparece como evento do mundo (a faixa da praça e o site/eventos.html) com a
 contagem regressiva, e o ranking está na ficha do Eco (o cais da praça) e em site/ranking.html#eco.
 
-**A arte é provisória.** O Eco veste o Coração Partido com o porte dobrado e a tinta do elemento da fase;
-os Ecos Menores, os quatro Arautos do Coração. Cada um tem chave de modelo própria
-(`boss-eco-primordial`, `eco-menor-*`): a arte final do dono entra embutida com essa chave e passa na
-frente sozinha; para aposentar o provisório, apaga-se a linha dele em `M.CORPO_PROVISORIO`
+**A arte, em 03/10.** Chegaram três Ecos Menores com corpo próprio (`assets/embedded/models-meshy-eco.js`,
+grupo `evento:eco`): Brasa, Coral e Rocha (este é o tanque, 2,00 m, e veio sem o clipe de correr).
+**Ainda provisórios:** o Eco Primordial veste o Coração Partido com o porte dobrado e a tinta do elemento da
+fase, e o Eco Menor de Vento veste o Arauto do Vento. Cada um tem chave de modelo própria
+(`boss-eco-primordial`, `eco-menor-ar`): a arte final entra embutida com essa chave e passa na frente
+sozinha; para aposentar o provisório, apaga-se a linha dele em `M.CORPO_PROVISORIO`
 (`js/render3d/models3d_v2.js`).
 
 ---

@@ -1031,7 +1031,27 @@ em vez do nome do arquivo.
 
 ## Pendências do código quando a arte chegar
 
-Nada disto é para fazer agora; é o que o lote vai pedir quando chegar:
+> **03/10 à noite — os PERSONAGENS chegaram e entraram** (frente `arte/monstros`):
+> os 4 Colossos (`models-meshy-colossos.js`), os Ecos Menores de Brasa, Coral e
+> Rocha (`models-meshy-eco.js`, cada um com a chave PRÓPRIA `eco-menor-<elem>`)
+> e os OITO do Santuário (`models-meshy-santuario.js`, `el-fogo-1` … `el-ar-2`).
+> Os manifestos estão em `tools/monstros/colossos.json`, `eco.json` e
+> `santuario.json`; as sete linhas dos que chegaram saíram do
+> `M.CORPO_PROVISORIO`. O que muda nos itens abaixo:
+> - **Colossos**: feito, com retrato no site (`retratos_site.py --lote bichos-colossos`);
+> - **Eco Menor único**: NÃO vale mais. O dono gerou três Menores com cara
+>   própria e não gerou o genérico `eco-menor`; cada linha do `MONSTER_LOOK`
+>   continua na chave dela. Faltam o **Eco Primordial** (`boss-eco-primordial`)
+>   e o **Eco Menor de Vento** (`eco-menor-ar`), que seguem no provisório;
+>   quando chegarem, entram no `tools/monstros/eco.json` e a linha de cada um
+>   sai do provisório;
+> - **Santuário**: os oito vieram, então NENHUM empréstimo de `MONSTER_LOOK`.
+>   O modelo de cada chave está pronto; as fichas (`DATA.monsters`) e o mapa
+>   são da frente do Santuário;
+> - a régua destes lotes é `tests/corpos_lancamento.html` e
+>   `tests/corpos_tabuleiro.html` (o bestiário não os alcança).
+
+O texto abaixo é o plano de ANTES da arte chegar, guardado para os lotes que faltam:
 
 - **Colossos e Eco**: os manifestos à mão (acima), `--raio-x`, fusão, o
   embutido no `index.html`, `extrai_assets.py` e conferir o porte. A troca do
