@@ -101,6 +101,19 @@ var JOGO = (typeof window !== 'undefined')
     return melhor;
   };
 
+  /* A COROA QUE A CONTA CARREGA ACIMA DA CABEÇA (04/10). O dono: "tenho uma conta sem nada de
+   * ponto na coroa e não aparece ela quando eu clico para mostrar.. em todos os níveis deve
+   * aparecer". Até aqui quem nunca tinha jogado a Arena (1000 pontos, 0 partidas) ficava sem
+   * coroa nenhuma, mesmo com o "Mostrar a coroa acima da cabeça" ligado — o botão não fazia nada
+   * numa conta nova. Agora a escada vale desde o primeiro degrau: sem partida, é a Coroa I. Só
+   * quem ESCONDEU a coroa na ficha (`oculta`) fica sem ela. `partidas` fica na assinatura para
+   * quem chama dizer o que sabe — a regra não o usa mais. É a régua única do herói, dos
+   * fantasmas da praça, da ficha, do perfil e do placar. */
+  B.coroaDe = function (pts, partidas, ehTopo, oculta) {
+    if (oculta === true) return null;
+    return B.tierDe(pts, ehTopo === true);
+  };
+
   /* Elo clássico: o esperado vem da diferença, o K é fixo, o piso segura o
    * fundo. Devolve { pts, delta } — quem aplica no DB é o chamador. */
   B.elo = function (meusPts, ptsDele, venci) {

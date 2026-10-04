@@ -65,6 +65,20 @@ MUITAS, porque o pedido foi "difícil de alcançar".</div>
         B.tierDe(1400, false).id === 'n5' &&
         B.tierDe(1600, false).id === 'n7');
 
+  // ---- 04/10: a coroa aparece em TODO nível (o dono: "tenho uma conta sem nada de ponto na coroa e
+  //      não aparece ela quando eu clico para mostrar")
+  var nova = B.coroaDe(1000, 0, false, false);
+  check('a conta que nunca jogou a Arena (1000 pontos, 0 partidas) carrega a Coroa I',
+        !!nova && nova.id === 'n1' && nova.nome === 'Coroa I', nova && nova.id);
+  check('sem os números da partida (um resumo antigo da Rede) também é a Coroa I',
+        (B.coroaDe(1000, undefined, false, false) || {}).id === 'n1');
+  check('quem ESCONDEU a coroa fica sem ela, em qualquer degrau',
+        B.coroaDe(1000, 0, false, true) === null && B.coroaDe(1650, 40, false, true) === null);
+  check('quem já lutou segue no degrau dos pontos (1650 → Coroa VII; 1900 sem o topo → IX; com o topo → X)',
+        B.coroaDe(1650, 40, false, false).id === 'n7' && B.coroaDe(1900, 90, false, false).id === 'n9' &&
+        B.coroaDe(1900, 90, true, false).id === 'n10');
+  check('no piso de 800 pontos ainda há coroa (a I)', B.coroaDe(800, 12, false, false).id === 'n1');
+
   // ------------------------------------------------ o portão duplo da Coroa X
   check('1900 pontos SEM o topo do placar fica na Coroa IX',
         B.tierDe(1900, false).id === 'n9');
@@ -98,6 +112,20 @@ MUITAS, porque o pedido foi "difícil de alcançar".</div>
     .then(function (bz) {
       check('a brasa sobrevive à releitura do disco',
             bz.pts === 1234 && bz.partidas === 7, JSON.stringify(bz));
+    })
+    // 04/10: nenhuma tela guarda mais o portão antigo ("Coroa I só para quem já lutou") — o herói, os
+    // fantasmas, a ficha, o perfil e o placar passam todos pela régua única (B.coroaDe)
+    .then(function () {
+      return Promise.all(['../js/ui/hud.js', '../js/render3d/hub3d.js'].map(function (u) {
+        return fetch(u + '?v=' + Date.now()).then(function (r) { return r.text(); });
+      }));
+    })
+    .then(function (fontes) {
+      var portao = /min === 0 && !\(/;
+      check('a HUD (plaquinha, ficha, perfil, placar) não esconde mais a Coroa I de quem não tem partida',
+            !portao.test(fontes[0]) && fontes[0].indexOf('Brasa.coroaDe(') >= 0 && fontes[0].indexOf("'sem coroa") < 0);
+      check('a praça (a coroa dos outros jogadores) usa a mesma régua',
+            !portao.test(fontes[1]) && fontes[1].indexOf('Brasa.coroaDe(') >= 0);
     })
     .catch(function (e) { check('a corrente não estoura', false, e && (e.message || e)); })
     .then(function () {

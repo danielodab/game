@@ -4537,12 +4537,11 @@ var JOGO = (typeof window !== 'undefined')
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
     var tierF = null;
     // quem escondeu a coroa na ficha não a usa aqui: a vontade viaja no resumo
-    if (perfil && perfil.resumo && !perfil.resumo.coroaOculta &&
-        typeof perfil.resumo.brasa === 'number' &&
-        JOGO.Brasa && JOGO.Brasa.tierDe) {
-      tierF = JOGO.Brasa.tierDe(perfil.resumo.brasa, false);
-      // a mesma regra do herói: a faísca da Fagulha é de quem JÁ lutou
-      if (tierF && tierF.min === 0 && !(perfil.resumo.partidas > 0)) tierF = null;
+    if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
+        JOGO.Brasa && JOGO.Brasa.coroaDe) {
+      // a mesma régua do herói (04/10): sem partida é a Coroa I; só a coroa escondida não aparece
+      tierF = JOGO.Brasa.coroaDe(perfil.resumo.brasa, perfil.resumo.partidas, false,
+                                 perfil.resumo.coroaOculta === true);
     }
     // a GUILDA do fantasma já viaja dentro do resumo do perfil (a Rede não
     // precisou mudar) — a placa dele nasce igual à do herói

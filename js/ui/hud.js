@@ -1422,14 +1422,13 @@ var JOGO = (typeof window !== 'undefined')
           if (!sala) reentraCampo();    // 14/09: quem lutou no Campo volta ao Campo
           if (!sala) reentraSede();     // 04/10: e quem saiu da sede para a guerra volta ao salão
         }
-        // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
-        // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
-        // lutou segue sem fogo nenhum — a ausência também diz algo.
+        // a plaquinha: nome, título — e a COROA da arena. 04/10 (o dono: "em todos os
+        // níveis deve aparecer"): quem nunca jogou a Arena carrega a Coroa I; só quem a
+        // escondeu na ficha fica sem (JOGO.Brasa.coroaDe é a régua única).
         var tier = null;
         resumoCoroaOculta = j.coroaOculta === true;
-        if (brasa && JOGO.Brasa && !resumoCoroaOculta) {
-          tier = JOGO.Brasa.tierDe(brasa.pts, souTopoDaArena());
-          if (tier && tier.min === 0 && !(brasa.partidas > 0)) tier = null;
+        if (brasa && JOGO.Brasa) {
+          tier = JOGO.Brasa.coroaDe(brasa.pts, brasa.partidas, souTopoDaArena(), resumoCoroaOculta);
         }
         if (JOGO.Hub && JOGO.Hub.nomeia) {
           // o 4º arg é a GUILDA: a placa com emblema+nome acima do jogador.
@@ -5516,11 +5515,9 @@ var JOGO = (typeof window !== 'undefined')
       // ---- A ARENA e o interruptor da coroa
       caixa.appendChild(el('h3', 'bk-tit', 'Arena'));
       var pts = bz ? bz.pts : 1000, partidas = (bz && bz.partidas) || 0;
-      var tierC = null;
-      if (JOGO.Brasa) {
-        tierC = JOGO.Brasa.tierDe(pts, souTopoDaArena());
-        if (tierC && tierC.min === 0 && !(partidas > 0)) tierC = null;
-      }
+      // 04/10: a ficha mostra a coroa da conta em TODO nível — sem partida, é a Coroa I (a mesma
+      // que o "Mostrar a coroa acima da cabeça" pendura na praça). Antes dizia "sem coroa".
+      var tierC = JOGO.Brasa ? JOGO.Brasa.coroaDe(pts, partidas, souTopoDaArena(), false) : null;
       var cx = el('div', 'char-arena');
       if (tierC && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tierC.id]) {
         var imgC = document.createElement('img');
@@ -5537,7 +5534,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       var colA = el('div', 'char-col');
       colA.appendChild(el('div', 'char-coroa-nm',
-        tierC ? esc(tierC.nome) : 'sem coroa — a arena ainda não te viu'));
+        tierC ? esc(tierC.nome) + (partidas > 0 ? '' : ' — a arena ainda não te viu lutar') : 'Arena'));
       colA.appendChild(el('div', 'char-sub', '<b>' + pts + '</b> pontos · ' +
         partidas + ' partida' + (partidas === 1 ? '' : 's') +
         (JOGO.Brasa ? ' · temporada <b>' + JOGO.Brasa.temporadaDe(Date.now()) + '</b>' : '')));
@@ -5871,14 +5868,11 @@ var JOGO = (typeof window !== 'undefined')
           return { id: a.id, resumo: { brasa: a.pts } };
         }), eu2.id);
         arena.forEach(function (a, i) {
-          /* A COROA I NÃO É DE GRAÇA (11/09, dono: "todos começam com a coroa
-           * 1 liberada"). É a mesma regra do novato que a plaquinha da praça,
-           * o perfil e a ficha do personagem já aplicavam — só esta lista
-           * tinha ficado de fora e dava Coroa I a quem nunca duelou. Quem tem
-           * zero partidas aparece no placar (os pontos são reais), mas sem
-           * degrau: a coroa é de quem pisou na arena. */
-          var tier = JOGO.Brasa ? JOGO.Brasa.tierDe(a.pts, i === 0) : null;
-          if (tier && tier.min === 0 && !(a.partidas > 0)) tier = null;
+          /* 04/10 (o dono: "em todos os níveis deve aparecer"): a Coroa I é de todo mundo,
+           * inclusive de quem ainda não tem partida — a mesma régua da plaquinha da praça, do
+           * perfil e da ficha (JOGO.Brasa.coroaDe). A regra de 11/09, que deixava o novato sem
+           * degrau, fazia o "Mostrar a coroa" não mostrar nada numa conta nova. */
+          var tier = JOGO.Brasa ? JOGO.Brasa.coroaDe(a.pts, a.partidas, i === 0, false) : null;
           var row = el('div', 'pl-linha' + (a.sou ? ' is-eu' : ''));
           row.appendChild(el('span', 'pl-pos', '#' + (i + 1)));
           var tx = el('div', 'ms-tx');
@@ -10007,11 +10001,10 @@ var JOGO = (typeof window !== 'undefined')
     topo.appendChild(art('unit', [par.classe, { element: 'neutro', dir: 0, scale: 0.7 }], 110));
     var col = el('div', 'perfil-col');
 
-    // a coroa da arena — o mesmo portão do novato da plaquinha
+    // a coroa da arena — 04/10: em todo nível (sem partida, a Coroa I), como na plaquinha
     var tier = null;
     if (JOGO.Brasa && typeof r.brasa === 'number') {
-      tier = JOGO.Brasa.tierDe(r.brasa, false);
-      if (tier && tier.min === 0 && !(r.partidas > 0)) tier = null;
+      tier = JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, false);
     }
     if (tier && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tier.id]) {
       var lc = el('div', 'perfil-coroa');
