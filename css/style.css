@@ -3627,3 +3627,32 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .hub-chat-log { max-height: 96px; }
   .hub-painel { bottom: calc(var(--sa-b, 0px) + 140px); }
 }
+
+/* A BATALHA NO CELULAR (04/10, revisão das telas no telefone). Só para o dedo (pointer: coarse).
+   Na PREPARAÇÃO a faixa "Escolha onde nascer" caía em cima do cartão da unidade (deitado) e do cartão e do
+   diário (em pé). Enquanto ela existe, o cartão e o diário saem: não é turno de ninguém, não há o que ler
+   neles, e o tabuleiro com as casas douradas é o que importa. A faixa encolhe e sobe. */
+@media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 480px) {
+  .screen-battle:has(.bt-placing) .bt-left,
+  .screen-battle:has(.bt-placing) .bt-log { display: none; }
+  .bt-placing { top: calc(var(--sa-t, 0px) + 96px); max-width: calc(100% - 24px); padding: 6px 12px; font-size: 12.5px; }
+  .bt-prep-tx { margin-bottom: 4px; }
+}
+/* deitado: a faixa da preparação vira uma linha no canto direito, e o cartão da unidade ativa fica menor
+   para não tapar um terço do tabuleiro; a fita do fim do turno perde altura */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .bt-placing { left: auto; right: calc(var(--sa-r, 0px) + 8px); transform: none; top: calc(var(--sa-t, 0px) + 44px);
+                max-width: 300px; text-align: left; }
+  .bt-left { top: calc(var(--sa-t, 0px) + 84px); max-width: 190px; }
+  .bt-log { top: calc(var(--sa-t, 0px) + 84px); width: min(34vw, 220px); }
+  .bt-log-list { max-height: 34px; }
+  .pt-moldura canvas, .pt-moldura .art-missing { width: 96px !important; height: 96px !important; }
+}
+
+/* em pé: o cartão da unidade e o diário dividiam a mesma faixa e se cobriam; cada um fica com a sua metade,
+   e a faixa da preparação desce para baixo da fila de turnos */
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 480px) {
+  .bt-left { max-width: calc(54vw - 54px); }
+  .bt-log { width: calc(46vw - 14px); }
+  .bt-placing { top: calc(var(--sa-t, 0px) + 128px); }
+}
