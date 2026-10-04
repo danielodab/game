@@ -1012,6 +1012,7 @@ class SalasMixin:
                         self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                 if not n:
                     raise Recusa(409, 'esse bilhete já foi fechado')
+                self._loja_depois_da_luta(conta)                # 04/10: o que a loja segurou pela luta entra agora
                 pub = self._estado_publico(cid)
                 return 200, {'ok': True, 'fase': saida['fase'], 'recompensa': None, 'versao': pub['versao'],
                              'hash': pub['hash'], 'progress': pub['progress'], 'db': pub['db'], 'carry': None}
@@ -1034,8 +1035,14 @@ class SalasMixin:
                                                     'guildaXp': saida['guildaXp']})
             except EstadoMudou:
                 continue                                        # a mesma semente refaz a mesma sala no estado novo
-            return 200, {'ok': True, 'fase': 'won', 'recompensa': saida.get('recompensa'), 'versao': nova,
-                         'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry}
+            resp = {'ok': True, 'fase': 'won', 'recompensa': saida.get('recompensa'), 'versao': nova,
+                    'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry}
+            # 04/10: a compra feita no meio da sala e segurada por ela (loja.py, TIPOS_DA_LUTA) entra no fecho,
+            # e a resposta já leva o estado com ela dentro
+            feito = self._loja_depois_da_luta(conta)
+            if feito:
+                resp.update(versao=feito['versao'], hash=feito['hash'], progress=feito['progress'], db=feito['db'])
+            return 200, resp
         raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
 
     # -- POST /api/sala/pocao (13/09; 14/09: a rota de antes da vida única) -----------------------------------

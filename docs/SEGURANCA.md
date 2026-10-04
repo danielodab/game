@@ -164,6 +164,39 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
   tirar os vinténs do estado (idem `pedido:ID:ganho`). No caminho antigo (sem juiz) o
   PUT que confirma a entrega credita: ali o save ainda é do cliente, o mesmo risco já
   aceito para os vinténs.
+- 04/10, **a compra vale na hora** (`servidor/loja.py`; o dono: "comprei barras de ouro com
+  vinténs e as barras não entraram na minha conta"). Antes o pedido ficava `pendente` até o
+  jogo abrir, com a aba à vista, e pedir `POST /api/loja/retirar` — a troca de vinténs por
+  barras parecia não ter entrado. Agora, com a autoridade ligada:
+  - **A própria compra entrega** (`loja_comprar` → `_loja_fecha_na_hora` → `_loja_na_hora` →
+    `_loja_retirar_no_servidor`): o juiz aplica o que a conta tem aberto, e o pedido vira
+    `entregue` na MESMA transação que grava o estado e credita as barras do ganho (idem
+    `pedido:ID:ganho`). Nada vem do cliente: a entrega e o preço são os congelados no banco.
+    A resposta leva `naHora`, o pedido fechado, o saldo e as barras de depois. O presente a
+    um amigo e o presente do Mestre seguem a mesma regra, na conta de quem recebe.
+  - **Uma vez só**: o `idem` repetido devolve o mesmo pedido (já fechado, nada é reaplicado);
+    o juiz pula o id já anotado em `db.loja.aplicadas`; o pedido só sai de aberto dentro da
+    transação que confere que ele ainda está aberto.
+  - **Nunca cobra sem entregar**: a entrega que o juiz recusa é estornada ali (as barras de
+    volta a quem pagou, a reserva solta) e a compra responde 409 `estornado`; o juiz fora do
+    ar deixa o pedido aberto (`pedido.espera = 'juiz'`) e ele sai na busca seguinte; a conta
+    sem estado no servidor espera o primeiro save (`'estado'`).
+  - **Luta aberta** (`_dar_em_luta`, a régua da Caixa do Mestre): o que mexe no grupo que o
+    juiz refaz no fim dela — `TIPOS_DA_LUTA`, a classe e o Pacote que a traz — espera
+    (`pedido.espera = 'luta'`, "chega quando a sala terminar"), tanto na compra quanto na
+    busca do jogo, e entra no fecho da sala (`sala_fechar` → `_loja_depois_da_luta`, com o
+    estado novo na resposta) ou na busca seguinte. O resto entra já: não toca a sala.
+  - **A peça vai para o banco**: a entrega `{tipo:'peca', alvo, qtd, nivel, estrelas}` cunha
+    as cópias (origem `loja`, registradas em `itens`) e as põe no cofre do Acampamento
+    (`db.banco.itens`), nunca no saco — o saco cheio não recusa nem perde uma compra. O
+    catálogo ainda não vende peça nenhuma; o tipo existe para quando vender.
+  - **O jogo aberto** fica sabendo sem recarregar: cada entrega deixa um elo em
+    `moderacao_entregas` (tipo `loja`, `hash_antes` → `hash_depois`), o `/api/eu` de 30 s
+    conta as não vistas e o jogo adota o estado pelo caminho da Caixa do Mestre
+    (`Autoridade.sincroniza`): a op que o jogador mandou antes de a compra entrar sobe por
+    cima dela (`_rebase_entregas`) em vez de cair no 409. O jogo fechado acha tudo pronto.
+  - **Sem a autoridade** (em casa) a fila de antes continua; o `/api/eu` passa a contar os
+    pedidos que esperam (`lojaAbertos`) e o jogo aberto busca em até 30 s, não em 5 min.
 - 04/10, as **quatro novidades da loja** (`servidor/loja.py`; nenhuma vende poder, sorteio,
   equipamento, estrela, selo ou bicho, e todas se pagam em barras):
   - **Auras** (cosmético da praça). A posse NÃO é tabela nem campo do save: é o pedido vivo

@@ -46,7 +46,7 @@ NIVEL_MAX = 30
 ELEMENTOS = ('neutro', 'fogo', 'agua', 'terra', 'ar')
 
 # ---- o registro de instâncias (o salvar do api.py e a autoridade do salas.py) ----------
-ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado'}
+ORIGENS = {'saque', 'roleta', 'mercador', 'caixa', 'forja', 'troca', 'banco', 'legado', 'loja'}
 RE_IID = re.compile(r'^[\x21-\x7e]{1,64}$')    # ASCII visível, sem espaço — o jogo gera 'j' + base36
 
 

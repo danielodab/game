@@ -305,6 +305,12 @@ class MestreMixin:
             presente = self._presente_json(self._presente_por_id(pid), t)
         log.info("mestre: #%d deu %s a #%d (pedido %d)", mestre, sku if vintens is None else '%d vinténs' % vintens,
                  alvo_id, pid)
+        # 04/10: com a autoridade ligada o presente entra na conta agora, como a compra (loja.py, _loja_na_hora)
+        with self.tranca:
+            alvo_conta = self.con.execute("SELECT * FROM contas WHERE id = ?", (alvo_id,)).fetchone()
+        if alvo_conta is not None and self._loja_na_hora(dict(alvo_conta)) is not None:
+            with self.tranca:
+                presente = self._presente_json(self._presente_por_id(pid), t)
         return 201, {'ok': True, 'presente': presente, 'semSave': save is None}
 
     # -- POST /api/mestre/barras {conta, barras, idem} (13/09) -------------------------------------------

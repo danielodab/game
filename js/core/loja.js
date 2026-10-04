@@ -67,6 +67,16 @@
  *   aura      {alvo: cor, qtd:1}: a aura presenteada pelo Mestre (a comprada já nasce
  *             entregue e nem passa por aqui). Nada a pôr no save: só o aviso.
  *   origem 'amigo' (com `pedido.de`, o nome de quem mandou): o presente de um amigo.
+ *   peca      {alvo: itemId, qtd 1..20[, nivel, estrelas]}: uma PEÇA de equipamento. Vai sempre
+ *             para o BANCO (o cofre do Acampamento), nunca para o saco: o saco cheio recusaria
+ *             a entrega, e o que foi comprado não pode sumir. Cada cópia nasce com série própria.
+ * A COMPRA VALE NA HORA (04/10, o dono: "comprei barras de ouro com vinténs e as barras não
+ * entraram na minha conta.. precisa ser na hora"). Com a autoridade ligada o SERVIDOR entrega
+ * dentro da própria compra (servidor/loja.py, _loja_na_hora) — este arquivo roda lá, no juiz —, e
+ * o jogo aberto fica sabendo pelo /api/eu de 30 s ('soterra:entregas': o js/ui/moderacao.js adota
+ * o estado sem apagar o que o jogador fez e avisa "Chegou da loja: …"). Sem a autoridade (em
+ * casa) a fila continua, mas o /api/eu conta os pedidos que esperam (`lojaAbertos`) e o jogo
+ * busca em até 30 s ('soterra:loja-abertos'), em vez de esperar os 5 minutos.
  * AS ORIGENS: o pedido pode trazer `origem` — 'presente' (o Mestre deu, pelo
  * painel dele: preço 0, o MESMO caminho, nenhuma regra à parte) ou 'pagamento'
  * (os vinténs de um pacote pago). Sem ela, ou com outra coisa, é compra da
@@ -95,7 +105,9 @@
   // as entregas que esta versão sabe aplicar (a tabela 4.6 do plano da loja 2)
   var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1,
                 'premio-eco': 1,     // 02/10: o prêmio da semana do Eco Primordial
-                pacote: 1, aura: 1 };   // 04/10: o Pacote de Boas-Vindas e a aura da praça
+                pacote: 1, aura: 1,     // 04/10: o Pacote de Boas-Vindas e a aura da praça
+                peca: 1 };              // 04/10: a peça de equipamento, que vai para o banco
+  var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra'];   // o gêmeo de loja.AURAS (servidor)
   var ITENS_DO_PACOTE = { pedras: 1, classe: 1 };          // o que um pacote pode trazer dentro
   var TETO_ITENS_PACOTE = 12;
@@ -118,6 +130,9 @@
     return typeof v === 'number' && isFinite(v) && v > 0 && Math.floor(v) === v && v <= teto;
   }
   function copia(o) { try { return JSON.parse(JSON.stringify(o)); } catch (e) { return null; } }
+  function autoridadeLigada() {
+    try { return !!(JOGO.Autoridade && JOGO.Autoridade.ligada && JOGO.Autoridade.ligada()); } catch (e) { return false; }
+  }
 
   /* Por que NÃO buscar agora (null = pode). */
   function porQueNao() {
@@ -365,6 +380,14 @@
       }
       return algum ? null : 'item-invalido';
     }
+    // 04/10: a peça que vai para o banco — só a que existe no jogo, com nível e estrelas dentro da régua
+    if (ent.tipo === 'peca') {
+      if (typeof ent.alvo !== 'string' || !(D().items || {})[ent.alvo] || !inteiroPos(ent.qtd, TETO_PECAS)) return 'item-invalido';
+      if (ent.nivel != null && ent.nivel !== 0 && !inteiroPos(ent.nivel, 30)) return 'item-invalido';
+      if (ent.estrelas != null && ent.estrelas !== 0 && !inteiroPos(ent.estrelas, 10)) return 'item-invalido';
+      if (!prog.novaCopia || !DB().depositarItem) return 'item-invalido';
+      return null;
+    }
     // 04/10: a aura (só a cor conhecida; nada entra no save)
     if (ent.tipo === 'aura') {
       return (AURAS.indexOf(ent.alvo) >= 0 && ent.qtd === 1) ? null : 'item-invalido';
@@ -420,6 +443,20 @@
       return;
     }
     if (ent.tipo === 'barras') return;   // os vinténs já saíram no lojaAplica; as barras, o servidor credita
+    if (ent.tipo === 'peca') {
+      /* SEMPRE no banco, nunca no saco: o saco tem limite e a compra não pode ser recusada (nem
+       * sumir) por falta de vaga. As cópias são cunhadas todas antes de a primeira entrar — se
+       * uma falhar, nenhuma entrou e o chamador desfaz o pagamento. */
+      var copias = [];
+      for (var ci = 0; ci < ent.qtd; ci++) {
+        var nova = prog.novaCopia(ent.alvo, 'loja', ent.nivel || 0, ent.estrelas || 0);
+        if (!nova) throw new Error('a peça não entrou');
+        copias.push(nova);
+      }
+      copias.forEach(function (c) { DB().depositarItem(c); });
+      prog.save();
+      return;
+    }
     if (ent.tipo === 'aura') return;     // 04/10: a posse da aura é do servidor; aqui só sai o aviso
     if (ent.tipo === 'pacote') {         // 04/10: o Pacote de Boas-Vindas, item a item (já conferidos todos)
       for (var qi = 0; qi < ent.itens.length; qi++) entrega(ent.itens[qi]);
@@ -544,10 +581,26 @@
         var m = ev && ev.data;
         if (!m || m.tipo !== 'comprou') return;
         if (oculta()) { compraPendente = true; return; }   // busca quando a aba voltar
+        /* 04/10: com a autoridade a compra JÁ entrou no servidor — não há fila a buscar. O que falta
+         * é esta página adotar o estado novo, pelo caminho que não apaga o que o jogador fez. */
+        if (autoridadeLigada()) {
+          try { window.dispatchEvent(new CustomEvent('soterra:entregas', { detail: { n: 1 } })); } catch (e5) {}
+          return;
+        }
         L.buscar();
       };
     }
   } catch (e3) {}
+  /* 04/10: o /api/eu de 30 s (sessao.js) disse que há pedido esperando o jogo: busca já, em vez de
+   * esperar o ciclo de 5 minutos. Na batalha espera — adotar um estado no meio dela é o que o
+   * resto do jogo evita —, e o /api/eu seguinte pergunta de novo. */
+  try {
+    window.addEventListener('soterra:loja-abertos', function () {
+      var emBatalha = false;
+      try { emBatalha = !!(JOGO.Game && JOGO.Game.screen === 'battle'); } catch (e6) {}
+      if (!emBatalha && liberada) L.buscar();
+    });
+  } catch (e7) {}
   // a Nuvem pode ter falado antes deste arquivo carregar: o histórico dela conta
   try {
     var hN = (N() && N().historico) ? N().historico() : [];

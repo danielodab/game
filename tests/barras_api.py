@@ -126,6 +126,10 @@ class ProvaDasBarras(unittest.TestCase):
             env_mp = dict(env, SOTERRA_MP_TOKEN=cls.token, SOTERRA_MP_SEGREDO=cls.segredo, SOTERRA_ENDERECO=ENDERECO)
             cls.base = cls._api('api', env_mp, cls.banco_arq, ['--juiz', cls.juiz, '--mp-api', cls.mp.base])
             cls.base_leg = cls._api('api-legado', env, cls.banco_leg, [])
+            # 04/10: a mesma API e o mesmo banco com o juiz FORA DO AR — a compra feita por ela fica na fila
+            # (a entrega na hora não tem quem a faça), como o pedido de antes do deploy ou o do juiz caído
+            cls.base_fila = cls._api('api-fila', env_mp, cls.banco_arq,
+                                     ['--juiz', 'http://127.0.0.1:%d' % porta_livre(), '--mp-api', cls.mp.base])
         except BaseException:
             cls.tearDownClass()
             raise
@@ -204,6 +208,14 @@ class ProvaDasBarras(unittest.TestCase):
         status, r = self.compra(c, sku)
         self.assertEqual(status, 201, (sku, r))
         return r['pedido']
+
+    def na_fila(self, c, sku):
+        """A compra que NÃO entra na hora (o juiz fora do ar): fica aberta, cobrada, esperando a busca."""
+        outro = Cliente(self.base_fila)
+        outro.token, outro.conta = c.token, c.conta
+        p = self.comprou(outro, sku)
+        self.assertEqual((p['estado'], p.get('espera')), ('pendente', 'juiz'), p)
+        return p
 
     def poe_estado(self, c, carteira=0, classes=None):
         """O primeiro PUT da conta (aceito inteiro): vira o estado do servidor."""
@@ -346,7 +358,7 @@ class ProvaDasBarras(unittest.TestCase):
         c = self.novo('Juiz Recusa')
         self.poe_estado(c)
         self.da_barras(c, 1000)
-        xama, pedras = self.comprou(c, 'classe-invocador'), self.comprou(c, 'pedras-terra')
+        xama, pedras = self.na_fila(c, 'classe-invocador'), self.na_fila(c, 'pedras-terra')
         self.assertEqual(self.barras(c), 475)
         # o Xamã foi liberado por outro caminho entre a compra e a entrega
         self.mexe_estado(c, progress=lambda p: p['unlockedClasses'].append('invocador'))
@@ -398,7 +410,7 @@ class ProvaDasBarras(unittest.TestCase):
         c = self.novo('Troca Barra')
         self.poe_estado(c, carteira=100)
         self.da_barras(c, 300)
-        p = self.comprou(c, 'vintens-5000')
+        p = self.na_fila(c, 'vintens-5000')
         self.assertEqual((p['nome'], p['barras'], p['preco']), ('5.000 vinténs', 250, 0))
         m = self.minha(c)
         self.assertEqual((m['barras']['saldo'], m['saldo']['aCaminho'], m['saldo']['disponivel']), (50, 5000, 5100))
@@ -412,14 +424,19 @@ class ProvaDasBarras(unittest.TestCase):
         m = self.minha(c)
         self.assertEqual((m['barras']['saldo'], m['saldo']['aCaminho']), (50, 0))
         # o pendente cancela e devolve as barras
-        q = self.comprou(c, 'vintens-1000')
+        q = self.na_fila(c, 'vintens-1000')
         self.assertEqual(self.barras(c), 0)
         self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': q['id']})[1]['barras'], {'saldo': 50})
+        # 04/10: com o juiz no ar a troca vale NA HORA — as barras saem e os vinténs entram na própria compra
+        status, r = self.compra(c, 'vintens-1000')
+        self.assertEqual((status, r['pedido']['estado'], r.get('naHora'), r['barras']['saldo']), (201, 'entregue', True, 0), r)
+        self.assertEqual((r['saldo']['carteira'], r['saldo']['aCaminho']), (6100, 0))
+        self.assertEqual(self.save(c)['db']['carteira']['moedas'], 6100)
 
     def test_07_vintens_viram_barras_so_depois_da_entrega(self):
         c = self.novo('Farma Muito')
         self.poe_estado(c, carteira=5000)
-        p = self.comprou(c, 'barras-por-vintens-50')
+        p = self.na_fila(c, 'barras-por-vintens-50')
         self.assertEqual((p['preco'], p['moeda'], p['ganhaBarras']), (4000, 'vintens', 50))
         m = self.minha(c)
         self.assertEqual((m['barras']['saldo'], m['saldo']['reservado'], m['saldo']['disponivel']), (0, 4000, 1000))
@@ -434,13 +451,20 @@ class ProvaDasBarras(unittest.TestCase):
         self.assertEqual(self.movimentos(c), [{'delta': 50, 'motivo': 'troca-vintens', 'ref': 'pedido:%d' % p['id'],
                                                'idem': 'pedido:%d:ganho' % p['id']}], 'uma vez só')
         # comprado com 1.000 no bolso, mas o estado perdeu os vinténs antes da entrega: o juiz recusa, nada entra
-        q = self.comprou(c, 'barras-por-vintens-10')
+        q = self.na_fila(c, 'barras-por-vintens-10')
         self.mexe_estado(c, carteira=300)
         r = self.retira(c)
         self.assertEqual((r['entregues'], r['estornados']), ([], [q['id']]))
         self.assertEqual(self.sql("SELECT estado, motivo FROM loja_pedidos WHERE id = ?", q['id']),
                          [{'estado': 'estornado', 'motivo': 'sem-saldo'}])
         self.assertEqual((self.barras(c), self.save(c)['db']['carteira']['moedas']), (50, 300))
+        # 04/10, o pedido do dono ("comprei barras de ouro com vinténs e as barras não entraram na minha conta"):
+        # com o juiz no ar os vinténs saem e as barras entram NA PRÓPRIA COMPRA, sem o jogo abrir nem buscar
+        self.mexe_estado(c, carteira=900)
+        status, r = self.compra(c, 'barras-por-vintens-10')
+        self.assertEqual((status, r['pedido']['estado'], r.get('naHora')), (201, 'entregue', True), r)
+        self.assertEqual((r['barras']['saldo'], r['saldo']['carteira'], r['saldo']['reservado']), (60, 100, 0))
+        self.assertEqual((self.barras(c), self.save(c)['db']['carteira']['moedas']), (60, 100))
 
     def test_08_vintens_viram_barras_no_caminho_antigo(self):
         """Sem juiz: o jogo aplica (desconta os vinténs) e o PUT que confirma credita as barras."""

@@ -19,6 +19,11 @@
  * BroadcastChannel('soterra-loja') {tipo:'comprou'}. O jogo retira, entrega e
  * desconta da carteira quando abrir logado na conta Principal.
  *
+ * A COMPRA VALE NA HORA (04/10): no servidor de produção a própria compra já entrega (servidor/loja.py,
+ * _loja_na_hora) — a resposta traz o pedido 'entregue' (`naHora`), o saldo e as barras de depois, e a
+ * página os mostra sem esperar o jogo. O pedido que ficou aberto diz por quê em `pedido.espera`: 'luta'
+ * (chega quando a sala terminar), 'estado' (a conta nunca abriu o jogo) ou 'juiz' (sai em instantes).
+ *
  * OS PACOTES DE VINTÉNS (10/09). Com `pagamento.ligado`: "Comprar com Pix ou
  * cartão" → SITE.confirma → POST /api/pagamento/pacote {pacote, idem} (chave
  * nova a cada clique; só a que ficou SEM resposta se repete) → o `endereco`
@@ -77,8 +82,8 @@
   /* as seções que a página conhece (o título e a frase de apoio); a ORDEM é a
    * do catálogo do servidor, e uma seção nova dele entra com o próprio id */
   var SECOES = {
-    vintens: { titulo: 'Vinténs para o jogo', sub: 'Troque barras de ouro por vinténs na carteira do jogo. As barras saem da conta na hora, e os vinténs chegam quando o jogo abrir logado nesta conta.' },
-    'barras-por-vintens': { titulo: 'Barras por vinténs — para quem farma', sub: 'O caminho de quem desce muito: troque os vinténs que você juntou no jogo por barras de ouro e leve qualquer coisa desta loja sem gastar dinheiro. Custa bem mais que a troca de ida, de propósito. Os vinténs saem quando o jogo receber o pedido, e as barras entram nessa hora.' },
+    vintens: { titulo: 'Vinténs para o jogo', sub: 'Troque barras de ouro por vinténs na carteira do jogo. As barras saem da conta e os vinténs entram na carteira na hora, mesmo com o jogo fechado.' },
+    'barras-por-vintens': { titulo: 'Barras por vinténs — para quem farma', sub: 'O caminho de quem desce muito: troque os vinténs que você juntou no jogo por barras de ouro e leve qualquer coisa desta loja sem gastar dinheiro. Custa bem mais que a troca de ida, de propósito. Os vinténs saem e as barras entram na hora da compra, mesmo com o jogo fechado.' },
     personagens: { titulo: 'Personagens', sub: 'Libera a classe no jogo, e o herói chega no nível 1. As cartas que você já tem entram no desbloqueio, mas o preço é o mesmo: se faltam poucas, talvez valha esperar a queda.' },
     bonus: { titulo: 'Bônus de XP', sub: 'Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.' },
     pedras: { titulo: 'Pedras de forja', sub: 'Pacotes de pedras para a Forja do Acampamento. A Âncora de Forja não está à venda: ela se conquista lá embaixo.' },
@@ -98,6 +103,9 @@
   var presenteAberto = null, presenteNome = '';   // o sku com o formulário de presente aberto e o nome digitado
   var ESTADO = { pendente: 'esperando o jogo abrir', retirado: 'a caminho do jogo', entregue: 'entregue',
                  estornado: 'devolvido', cancelado: 'cancelado' };
+  // 04/10: por que um pedido ainda não entrou, quando a entrega é na hora (pedido.espera, do servidor)
+  var ESPERA = { luta: 'chega quando a sala terminar', juiz: 'entra em instantes',
+                 estado: 'esperando o jogo abrir uma vez nesta conta' };
   var MOTIVO = { 'sem-saldo': 'vinténs insuficientes no jogo', 'classe-ja-liberada': 'a classe já estava liberada no jogo',
                  'item-invalido': 'o jogo não reconheceu o produto', 'erro-local': 'o jogo falhou ao entregar',
                  'recusado': 'o jogo recusou o pedido' };
@@ -279,8 +287,8 @@
       '<p class="saldo-quando apoio">' + E(quando) + '</p>' +
       '<ul><li>Só os vinténs do bolso contam; se estão no cofre, saque no jogo.</li>' +
       (temCaminho ? '<li class="nota-caminho">A caminho: vinténs de presentes e de trocas que o jogo ainda não recebeu. Eles já contam no disponível daqui.</li>' : '') +
-      '<li>O reservado é o que está nos pedidos pagos em vinténs: sai da carteira quando o jogo recebe.</li>' +
-      '<li>A entrega acontece quando o jogo abrir logado na conta Principal.</li></ul></section></div>';
+      '<li>O reservado é o que está nos pedidos pagos em vinténs que ainda não entraram.</li>' +
+      '<li>A compra vale na hora, mesmo com o jogo fechado. No meio de uma luta, o personagem comprado chega quando ela terminar.</li></ul></section></div>';
   }
 
   /* ---- os pacotes em reais (13/09: de barras de ouro; o de vinténs, de um servidor de antes, ainda desenha) ---- */
@@ -726,6 +734,7 @@
     var pago = p.origem === 'pagamento', presente = p.origem === 'presente' || p.origem === 'amigo';
     var deAmigo = p.origem === 'amigo';   // 04/10: o presente de outro jogador (as barras foram dele)
     var txt = est === 'outro' ? String(p.estado == null ? '' : p.estado) : ESTADO[est];
+    if (est === 'pendente' && proprio(ESPERA, p.espera)) txt = ESPERA[p.espera];
     var emBarras = p.moeda === 'barras';
     if (est === 'estornado') {
       // o crédito de um pacote que o jogo recusou não se perde: o servidor manda de novo
@@ -860,12 +869,12 @@
     var emBarras = moedaDe(it) === 'barras';
     var nota = mestre ? 'Conta do Mestre: o pedido não gasta barras de ouro nem vinténs, nem conta nos limites.'
       : it.tipo === 'vintens' && emBarras
-        ? 'As barras de ouro saem da sua conta agora, e os vinténs chegam à carteira quando o jogo abrir logado nesta conta. Cancelando antes disso, as barras voltam.'
+        ? 'As barras de ouro saem da sua conta e os vinténs entram na carteira do jogo agora, na hora. Depois de entregue, não há devolução.'
       : it.tipo === 'barras'
-        ? 'Os vinténs saem da carteira do jogo quando ele receber o pedido, e as barras de ouro entram na sua conta nessa hora. Depois de entregue, não há devolução.'
+        ? 'Os vinténs saem da carteira do jogo e as barras de ouro entram na sua conta agora, na hora. Depois de entregue, não há devolução.'
       : emBarras
-        ? 'As barras de ouro saem da sua conta agora. Se o pedido for cancelado ou o jogo o devolver, elas voltam; depois de entregue, não há devolução.'
-        : 'Os vinténs saem da carteira do jogo quando ele receber o pedido. Depois de entregue, não há devolução.';
+        ? 'As barras de ouro saem da sua conta agora e a compra entra no jogo na hora. Se o jogo a devolver, as barras voltam; depois de entregue, não há devolução.'
+        : 'Os vinténs saem da carteira do jogo agora, na hora. Depois de entregue, não há devolução.';
     // 04/10: o Pacote de Boas-Vindas leva as duas escolhas; a aura já nasce entregue (não há o que cancelar)
     var corpo = { sku: it.sku };
     var oQue = it.nome;
@@ -902,8 +911,16 @@
         }
         if (!r.ok) { aviso(SITE.erro(r, 'não deu para fazer o pedido')); desenha(); return carregaMinha(); }
         avisaJogo();
-        aviso('Pedido feito: ' + it.nome + '. ' + (it.tipo === 'aura'
+        // 04/10: o servidor diz se a compra já entrou (`naHora`) ou por que ainda espera (`pedido.espera`)
+        var espera = (r.pedido || {}).espera;
+        var entrou = r.naHora === true || (r.pedido || {}).estado === 'entregue';
+        aviso((entrou ? 'Compra feita: ' : 'Pedido feito: ') + it.nome + '. ' + (it.tipo === 'aura'
           ? 'A aura já é sua: ligue na ficha do Personagem, no jogo.'
+          : entrou ? (it.tipo === 'barras' ? 'As barras de ouro já estão na sua conta.'
+                      : it.tipo === 'peca' ? 'Já está no banco do jogo, no cofre do Acampamento.'
+                      : 'Já está na sua conta do jogo.')
+          : espera === 'luta' ? 'Você está no meio de uma luta: chega quando a sala terminar. Já está pago e guardado.'
+          : espera === 'juiz' ? 'Entra na sua conta em instantes.'
           : it.tipo === 'barras'
           ? 'As barras entram quando o jogo abrir logado na conta Principal e pagar os vinténs.'
           : 'Ele chega quando o jogo abrir logado na conta Principal.'), 'certo');
@@ -950,7 +967,8 @@
           return;
         }
         if (!r.ok) { aviso(SITE.erro(r, 'não deu para mandar o presente')); desenha(); return carregaMinha(); }
-        aviso('Presente enviado: ' + it.nome + ' para ' + ((r.presente || {}).para || nome) + '.', 'certo');
+        aviso('Presente enviado: ' + it.nome + ' para ' + ((r.presente || {}).para || nome) + '.' +
+              (r.naHora === true ? ' Já está na conta de quem recebeu.' : ''), 'certo');
         presenteAberto = null;
         presenteNome = '';
         if (r.barras && typeof r.barras === 'object' && temBarras()) minha.barras.saldo = r.barras.saldo;

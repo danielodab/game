@@ -329,6 +329,24 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertEqual(set(m['limites']), GRUPOS)
         self.assertEqual(m['limites']['pergaminho-elemento'], {'usados': 0, 'max': 1, 'dias': 30, 'liberaEm': None})
 
+    def test_sem_a_autoridade_a_fila_continua_e_o_jogo_e_avisado_ja(self):
+        """04/10: a entrega na hora é do servidor com a autoridade (tests/autoridade_api.py). Em casa, sem o
+        juiz, a compra continua um pedido na fila — mas o /api/eu que o jogo pergunta a cada 30 s conta os
+        pedidos que esperam, e o jogo aberto busca logo, sem esperar o ciclo de 5 minutos."""
+        c = self.novo('Fila De Casa')
+        self.sobe(c, carteira=1000)
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual(eu['lojaAbertos'], 0)
+        status, r = self.compra(c, 'barras-por-vintens-10')
+        self.assertEqual((status, r['pedido']['estado'], r.get('naHora'), r['barras']['saldo']), (201, 'pendente', None, 0), r)
+        self.assertNotIn('espera', r['pedido'])
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual(eu['lojaAbertos'], 1)
+        status, r = c.pede('POST', '/api/loja/retirar', {})
+        self.assertEqual(len(r['pedidos']), 1)
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual(eu['lojaAbertos'], 0, 'o que o jogo já buscou não chama de novo')
+
     def test_reserva(self):
         """A reserva de VINTÉNS (13/09: o que custa vinténs é a troca por barras de ouro)."""
         c = self.novo('Rosa Reserva')
@@ -709,7 +727,7 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertEqual((status, r['erro'], r['saldo']['disponivel']), (409, 'vinténs insuficientes', 4000))
         # o crédito de pacote não se cancela pelo site
         status, r = c.pede('POST', '/api/loja/cancelar', {'id': cred})
-        self.assertEqual((status, r['erro']), (409, 'vinténs de pacote não se cancelam: eles chegam quando o jogo abrir'))
+        self.assertEqual((status, r['erro']), (409, 'vinténs de pacote não se cancelam: eles entram sozinhos na conta'))
         # o retirar: o crédito (id menor) antes da compra; origem só no crédito
         r = c.pede('POST', '/api/loja/retirar', {})[1]
         self.assertEqual([p['id'] for p in r['pedidos']], sorted(p['id'] for p in r['pedidos']))

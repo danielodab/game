@@ -418,6 +418,10 @@
       if (r && r.ok && r.entregas > 0) {
         try { window.dispatchEvent(new CustomEvent('soterra:entregas', { detail: { n: r.entregas } })); } catch (e) {}
       }
+      // 04/10: e os pedidos da loja que esperam o jogo vir buscar (js/core/loja.js busca a fila já)
+      if (r && r.ok && r.lojaAbertos > 0) {
+        try { window.dispatchEvent(new CustomEvent('soterra:loja-abertos', { detail: { n: r.lojaAbertos } })); } catch (e2) {}
+      }
       return r;
     });
   };

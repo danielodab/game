@@ -76,6 +76,30 @@ todos sem ser um jogo pay to win"). A loja do site passa a vender em BARRAS:
   O pacote antigo de vinténs (PACOTES_RETIRADOS) saiu da venda, mas o pagamento
   criado antes do deploy e aprovado depois ainda credita os vinténs que vendeu.
 
+A COMPRA VALE NA HORA (04/10, o dono: "comprei barras de ouro com vinténs e as barras não entraram na minha
+conta.. esse lance de compra na loja e já disponibilizar precisa ser na hora; se for item vai para o jogo
+(banco)"). O caminho de cima (comprar → o jogo busca → entrega → confirma) deixava a compra parada até o jogo
+abrir, com a aba à vista, e vir buscar: quem trocava vinténs por barras no site via o pedido "esperando o jogo
+abrir" e nenhuma barra. Com a AUTORIDADE ligada (produção) isso acabou:
+  - a própria compra entrega (`_loja_fecha_na_hora` → `_loja_na_hora` → `_loja_retirar_no_servidor`): o juiz
+    aplica tudo o que a conta tem aberto no estado que o servidor guarda, e o pedido vira 'entregue' na MESMA
+    transação que grava o estado e credita as barras do ganho. A resposta da compra já traz o pedido fechado,
+    o saldo e as barras de depois (`naHora`);
+  - o presente a um amigo e o presente do Mestre seguem a mesma regra, na conta de quem recebe;
+  - a PEÇA de equipamento ({tipo:'peca'}) vai sempre para o BANCO do jogo (o cofre do Acampamento), com série
+    registrada (origem 'loja'): o saco cheio nunca recusa nem perde uma compra;
+  - a entrega que o juiz recusa é ESTORNADA ali mesmo (as barras de volta, a reserva solta) e a compra
+    responde 409 "nada foi cobrado"; o juiz fora do ar deixa o pedido aberto (`espera: 'juiz'`) e ele sai na
+    busca seguinte — nunca se cobra sem entregar;
+  - LUTA ABERTA: o que mexe no grupo que o juiz refaz no fim dela (TIPOS_DA_LUTA: a classe e o Pacote que a
+    traz) espera — `espera: 'luta'`, "chega quando a sala terminar" — e entra no fecho da sala (salas.py,
+    `_loja_depois_da_luta`) ou na busca seguinte; o resto entra já;
+  - cada entrega deixa um elo em `moderacao_entregas` (tipo 'loja', os hashes de antes e de depois): o jogo
+    aberto fica sabendo pelo /api/eu, adota o estado sem recarregar e sem perder a fila dele (o rebase da
+    Caixa do Mestre) e avisa "Chegou da loja: …"; o jogo fechado encontra tudo pronto.
+Sem a autoridade (em casa) a fila continua, mas o /api/eu conta os pedidos que esperam (`lojaAbertos`) e o
+jogo aberto busca em até 30 s.
+
 AS QUATRO NOVIDADES DE 04/10 (docs/LOJA_SUGESTOES.md, itens 2, 7, 8 e 10; o dono: "pode implantar").
 Nenhuma vende poder de PvP, sorteio, equipamento, estrela, selo ou bicho, e todas se pagam em barras:
   - AS AURAS (seção 'aparencia', tipo 'aura'): cosmético que a praça inteira vê, uma por elemento e a
@@ -125,6 +149,13 @@ PEDIDOS_LISTA = 30
 ANOTACAO_MAX = 200               # ids em db.loja.aplicadas / recusadas que o save pode trazer
 OPS_LOJA = 40                    # pedidos por entrega no servidor (o OPS_MAX do juiz); o resto sai no retirar seguinte
 MOTIVOS = ('sem-saldo', 'classe-ja-liberada', 'item-invalido', 'erro-local')
+# 04/10, a entrega na hora: o que o site diz quando o juiz recusa a compra (ela é estornada na mesma chamada)
+FRASE_DO_MOTIVO = {'sem-saldo': 'faltam vinténs na carteira do jogo', 'classe-ja-liberada': 'essa classe já está liberada',
+                   'item-invalido': 'o jogo não reconheceu o item'}
+# o que mexe no grupo que o juiz refaz no fim de uma luta (a classe traz cartas; o Pacote traz a classe): com
+# luta aberta, isso espera o fecho dela — a mesma cautela das cartas na Caixa do Mestre (moderacao.py)
+TIPOS_DA_LUTA = ('classe', 'pacote')
+ASSUNTO_PRESENTE = 'Você ganhou um presente'
 RE_IDEM = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
 CARTEIRA_TETO = 10 ** 12
 ELEMENTAIS = ('fogo', 'agua', 'terra', 'ar')
@@ -320,20 +351,20 @@ def _vintens(qtd):
     barras = qtd // VINTENS_POR_BARRA
     return {'sku': 'vintens-%d' % qtd, 'secao': 'vintens', 'tipo': 'vintens', 'alvo': 'carteira', 'qtd': qtd,
             'nome': '%s vinténs' % milhar(qtd),
-            'descricao': ('%s vinténs para a carteira do jogo, pagos com %s barras de ouro. Chegam quando o jogo '
-                          'abrir logado nesta conta.' % (milhar(qtd), milhar(barras))),
+            'descricao': ('%s vinténs para a carteira do jogo, pagos com %s barras de ouro. Entram na hora, '
+                          'mesmo com o jogo fechado.' % (milhar(qtd), milhar(barras))),
             'preco': barras, 'moeda': 'barras', 'limite': None}
 
 
 def _barras_por_vintens(barras):
     """13/09: vinténs → barras, o caminho de quem farma. O preço é em vinténs (pagos na entrega, como todo
     pedido antigo); a entrega {tipo:'barras'} não mexe em nada no jogo, e as barras entram quando o pedido
-    vira 'entregue'."""
+    vira 'entregue' — desde 04/10, na própria compra (_loja_na_hora): vinténs fora e barras dentro juntos."""
     vintens = barras * VINTENS_POR_BARRA_FARMADA
     return {'sku': 'barras-por-vintens-%d' % barras, 'secao': 'barras-por-vintens', 'tipo': 'barras',
             'alvo': 'conta', 'qtd': barras, 'nome': '%s barras de ouro' % milhar(barras),
             'descricao': ('%s barras de ouro para a sua conta do site, pagas com %s vinténs da carteira do jogo. '
-                          'Os vinténs saem quando o jogo receber o pedido, e as barras entram nessa hora.'
+                          'Os vinténs saem e as barras entram na hora da compra, mesmo com o jogo fechado.'
                           % (milhar(barras), milhar(vintens))),
             'preco': vintens, 'moeda': 'vintens', 'limite': None}
 
@@ -868,6 +899,12 @@ class LojaMixin:
             pedidos = self.con.execute("SELECT %s FROM %s WHERE p.conta_id = ? ORDER BY p.id DESC LIMIT ?"
                                        % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, PEDIDOS_LISTA)).fetchall()
             pedidos = [self._loja_pedido(r, t) for r in pedidos]
+            # 04/10: o pedido que só não entrou porque há uma luta aberta — o site diz "chega quando a sala terminar"
+            if (any(p['estado'] == 'pendente' for p in pedidos) and getattr(self, '_autoridade_ligada', lambda: False)()
+                    and self._loja_em_luta(cid, t)):
+                for p in pedidos:
+                    if p['estado'] == 'pendente' and (POR_SKU.get(p['sku']) or {}).get('tipo') in TIPOS_DA_LUTA:
+                        p['espera'] = 'luta'
             barras = self._barras_publico(cid)          # 13/09: o saldo de barras da conta e o extrato
             auras = self._auras_publico(cid)            # 04/10
             boas = self._boas_vindas_publico(cid, save['progress'] if save else None, t)
@@ -958,6 +995,109 @@ class LojaMixin:
                          liberaEm=criados[len(criados) - PEDIDOS_POR_HORA] + 3600)
 
     def loja_comprar(self, conta, corpo):
+        """A compra grava o pedido (_loja_compra_grava) e, com a autoridade ligada, o servidor já o ENTREGA
+        na mesma chamada (_loja_fecha_na_hora): quem comprou não espera o jogo abrir."""
+        status, resp = self._loja_compra_grava(conta, corpo)
+        return self._loja_fecha_na_hora(conta, status, resp, 'pedido')
+
+    # -- a entrega NA HORA (04/10) -------------------------------------------------------------------
+    def _loja_em_luta(self, cid, t):
+        """Dentro da tranca: a conta tem uma luta aberta que o servidor ainda vai refazer com o estado dela
+        (a mesma régua da Caixa do Mestre, moderacao.py)?"""
+        em_luta = getattr(self, '_dar_em_luta', None)
+        return bool(em_luta is not None and em_luta(cid, t))
+
+    def _loja_na_hora(self, conta):
+        """FORA da tranca. O dono (04/10): "comprei barras de ouro com vinténs e as barras não entraram na
+        minha conta.. esse lance de compra na loja e já disponibilizar precisa ser na hora". Com a
+        autoridade ligada o servidor é o dono da economia: não há por que o pedido esperar o jogo abrir e
+        vir buscá-lo. Entrega AGORA tudo o que a conta tem aberto, pelo mesmo caminho do retirar (o juiz, o
+        estado e o pedido fechando na mesma transação). Devolve a resposta dele; {'falhou': frase} se o
+        juiz não respondeu (o pedido fica aberto e sai na próxima busca — nada se perde); None sem a
+        autoridade (em casa o jogo continua buscando a fila)."""
+        if not getattr(self, '_autoridade_ligada', lambda: False)():
+            return None
+        try:
+            return self._loja_retirar_no_servidor(conta, na_hora=True)[1]
+        except Recusa as e:
+            log.warning("loja: a entrega na hora de #%d ficou para a próxima busca — %s", conta['id'], e.erro)
+            return {'falhou': e.erro}
+        except Exception:                               # a compra já está gravada: ela não pode virar um 500
+            log.exception("loja: a entrega na hora de #%d quebrou", conta['id'])
+            return {'falhou': 'erro'}
+
+    def _loja_fecha_na_hora(self, conta, status, resp, chave):
+        """Depois da compra (`chave` 'pedido') ou do presente a um amigo ('presente'; `conta` é quem PAGOU e
+        o pedido mora em quem recebe): entrega na hora e refaz a resposta com o que ficou — o pedido já
+        'entregue', o saldo e as barras de depois. O que o juiz recusou já foi ESTORNADO (as barras de volta
+        a quem pagou, a reserva solta): vira 409 dizendo que nada foi cobrado. O que ficou aberto leva
+        `espera`: 'luta' (o que mexe no grupo da luta chega quando ela terminar), 'estado' (a conta nunca
+        salvou: espera o jogo abrir uma vez) ou 'juiz' (sai na próxima busca)."""
+        pedido = resp.get(chave) if isinstance(resp, dict) else None
+        if not isinstance(pedido, dict) or pedido.get('estado') not in ('pendente', 'retirado'):
+            return status, resp
+        pid, t = pedido['id'], agora()
+        with self.tranca:
+            alvo = self.con.execute("SELECT * FROM contas WHERE id = (SELECT conta_id FROM loja_pedidos WHERE id = ?)",
+                                    (pid,)).fetchone()
+        if alvo is None:
+            return status, resp
+        feito = self._loja_na_hora(dict(alvo))
+        if feito is None:
+            return status, resp
+        with self.tranca:
+            r = self._loja_pedido_por_id(pid)
+            resp[chave] = self._loja_pedido(r, t) if chave == 'pedido' else self._presente_amigo_json(r)
+            resp['barras'] = self._barras_publico(conta['id'], False)
+            if 'saldo' in resp:
+                resp['saldo'] = self._loja_saldo(conta['id'], conta, self._loja_save(conta['id']))
+            if 'presentes' in resp:                     # o presente estornado devolve a vaga do dia
+                resp['presentes'] = self._presentes_dados(conta['id'], t)
+        if r['estado'] == 'estornado':
+            if chave == 'presente':                     # a carta do presente que não entrou não fica no correio
+                with self._escrita():
+                    self.con.execute("DELETE FROM moderacao_cartas WHERE conta_id = ? AND assunto = ? AND criado_em = ? "
+                                     "AND lida_em IS NULL", (alvo['id'], ASSUNTO_PRESENTE, r['criado_em']))
+            extra = {k: v for k, v in resp.items() if k not in ('ok', 'repetido')}
+            raise Recusa(409, 'a compra não pôde ser entregue (%s): nada foi cobrado'
+                         % FRASE_DO_MOTIVO.get(r['motivo'], 'o jogo recusou a entrega'),
+                         estornado=True, motivo=r['motivo'], **extra)
+        if r['estado'] == 'entregue':
+            resp['naHora'] = True
+        else:
+            resp[chave]['espera'] = ('juiz' if feito.get('falhou') else 'estado' if feito.get('semEstado')
+                                     else 'luta' if pid in (feito.get('esperando') or []) else 'juiz')
+        return status, resp
+
+    def _loja_depois_da_luta(self, conta):
+        """FORA da tranca (salas.py chama no fecho da sala): o que a loja segurou por causa da luta entra
+        agora. Devolve a resposta da entrega quando algo entrou (com o estado novo), senão None."""
+        try:
+            with self.tranca:
+                if self.con.execute("SELECT 1 FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado')",
+                                    (conta['id'],)).fetchone() is None:
+                    return None
+        except sqlite3.Error:
+            return None
+        feito = self._loja_na_hora(conta)
+        return feito if feito and feito.get('entregues') else None
+
+    def _loja_abertos_para_o_jogo(self, cid):
+        """Para o /api/eu (o jogo pergunta a cada 30 s): quantos pedidos esperam o jogo vir buscar. O que
+        está preso por uma luta aberta não conta — o jogo buscaria a cada 30 s sem nada para trazer."""
+        try:
+            with self.tranca:
+                linhas = self.con.execute("SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado = 'pendente'",
+                                          (cid,)).fetchall()
+                if not linhas:
+                    return 0
+                if getattr(self, '_autoridade_ligada', lambda: False)() and self._loja_em_luta(cid, agora()):
+                    linhas = [r for r in linhas if (_json(r['entrega']) or {}).get('tipo') not in TIPOS_DA_LUTA]
+                return len(linhas)
+        except sqlite3.Error:
+            return 0
+
+    def _loja_compra_grava(self, conta, corpo):
         sku, idem = corpo.get('sku'), corpo.get('idem')
         item = POR_SKU.get(sku) if isinstance(sku, str) else None
         if item is None:
@@ -1168,6 +1308,12 @@ class LojaMixin:
         return outros[0]['id']
 
     def loja_presentear(self, conta, corpo):
+        """O presente grava o pedido na conta de quem recebe (_loja_presente_grava) e, com a autoridade
+        ligada, o servidor já o entrega lá (04/10: o presente segue a mesma regra da compra)."""
+        status, resp = self._loja_presente_grava(conta, corpo)
+        return self._loja_fecha_na_hora(conta, status, resp, 'presente')
+
+    def _loja_presente_grava(self, conta, corpo):
         """POST /api/loja/presentear {sku, nome, idem}: quem dá paga as barras (o preço de hoje, com a
         oferta da semana); o pedido nasce na conta de quem recebe e anda pela fila de sempre, com uma carta
         no correio dizendo quem mandou. AS TRAVAS: moeda e o Pacote de Boas-Vindas não se presenteiam; a
@@ -1202,7 +1348,7 @@ class LojaMixin:
                 "SELECT COUNT(*) FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado') "
                 "AND id IN (SELECT pedido_id FROM loja_amigos)", (alvo,)).fetchone()[0]
             if esperando >= PRESENTES_AMIGO_ABERTOS:
-                raise Recusa(429, 'essa pessoa já tem presentes demais esperando o jogo dela abrir')
+                raise Recusa(429, 'essa pessoa já tem presentes demais esperando para entrar')
             save = self._loja_save(alvo)
             try:                                        # a regra do produto e o limite dele, em QUEM RECEBE
                 self._loja_confere_item(alvo, item, save['progress'] if save else None)
@@ -1222,10 +1368,13 @@ class LojaMixin:
                              (pid, cid, de_nome, idem, t))
             self.barras_move(cid, -preco_hoje, 'loja', 'pedido:%d' % pid, 'pedido:%d:custo' % pid, t)
             # a carta no correio do jogo (a mesma caixa das cartas da Equipe): diz quem mandou e o quê
+            # 04/10: com a autoridade o presente entra na conta na mesma chamada (_loja_fecha_na_hora)
             chega = ('Já é sua: escolha na ficha do Personagem.' if item['tipo'] == 'aura'
+                     else 'Já está na sua conta — ou chega assim que a luta em andamento terminar.'
+                     if getattr(self, '_autoridade_ligada', lambda: False)()
                      else 'Chega sozinho ao jogo, logado nesta conta.')
             self.con.execute("INSERT INTO moderacao_cartas(conta_id, assunto, texto, criado_em) VALUES (?, ?, ?, ?)",
-                             (alvo, 'Você ganhou um presente', '%s te mandou um presente da loja: %s. %s'
+                             (alvo, ASSUNTO_PRESENTE, '%s te mandou um presente da loja: %s. %s'
                               % (de_nome, item['nome'], chega), t))
             # a trilha dos dois lados (a ficha do Mestre lê o extrato das barras, e os eventos ficam no banco)
             self._evento(cid, 'loja-presenteou', {'id': pid, 'sku': sku, 'barras': preco_hoje, 'para': alvo})
@@ -1256,11 +1405,11 @@ class LojaMixin:
                 raise Recusa(404, 'pedido não encontrado')
             origem = origem_do_pedido(r)
             if origem == 'pagamento':
-                raise Recusa(409, 'vinténs de pacote não se cancelam: eles chegam quando o jogo abrir')
+                raise Recusa(409, 'vinténs de pacote não se cancelam: eles entram sozinhos na conta')
             if origem == 'presente':
                 raise Recusa(409, 'presente do Mestre: só o Mestre cancela')
             if origem == 'amigo':                       # as barras são de quem deu: quem recebe não as "cancela"
-                raise Recusa(409, 'presente de um amigo não se cancela: ele chega quando o jogo abrir')
+                raise Recusa(409, 'presente de um amigo não se cancela: ele entra sozinho na conta')
             if r['estado'] in ('entregue', 'estornado', 'cancelado'):
                 raise Recusa(409, 'pedido já fechado')
             if not self._loja_cancelavel(r, t):
@@ -1327,7 +1476,28 @@ class LojaMixin:
         reemite = getattr(self, '_pagamento_credito_recusado', None)
         return True, (reemite(cid, pid, motivo, versao, t) if reemite is not None else None)
 
-    def _loja_retirar_no_servidor(self, conta):
+    def _loja_anota_corrente(self, cid, entregues, estado, saida, na_hora, t):
+        """Dentro da _escrita que gravou o estado: um elo em `moderacao_entregas` (a mesma corrente das
+        entregas do Mestre). É ela que deixa a op que o jogador mandou ANTES de a compra entrar subir por
+        cima dela em vez de cair no 409 (salas.py, economia_op, `_rebase_entregas`): a entrega da loja só
+        acrescenta. `avisar` só na entrega NA HORA — o jogo aberto fica sabendo pelo /api/eu, adota o estado
+        sem recarregar e mostra "Chegou da loja: …"; quando é o próprio jogo que busca, ele já avisa."""
+        antes = saida.get('hashAntes') if isinstance(saida.get('hashAntes'), str) else estado['hash']
+        if not isinstance(saida.get('hash'), str) or saida['hash'] == antes:
+            return
+        nomes = []
+        for r, e in entregues:
+            nome = nome_do_pedido(r['sku'], e, r['credito_vintens'])
+            nomes.append('%s (presente de %s)' % (nome, r['amigo_nome']) if origem_do_pedido(r) == 'amigo' else nome)
+        try:
+            self.con.execute(
+                "INSERT INTO moderacao_entregas(conta_id, mestre_id, tipo, texto, hash_antes, hash_depois, avisar, criado_em) "
+                "VALUES (?, NULL, 'loja', ?, ?, ?, ?, ?)",
+                (cid, ', '.join(nomes)[:400], antes, saida['hash'], 1 if na_hora and nomes else 0, t))
+        except sqlite3.Error:                           # um banco de antes da tabela: sem corrente, o 409 de sempre
+            pass
+
+    def _loja_retirar_no_servidor(self, conta, na_hora=False):
         """Os pedidos abertos, em ordem de id, entregues pelo juiz (op interna
         'lojaEntregar', com a entrega e o preço CONGELADOS no banco — nada do
         cliente) no estado que o servidor guarda; 'entregue' na mesma transação
@@ -1335,21 +1505,32 @@ class LojaMixin:
         a recusa de regra (422) sai do lote e o resto é pedido de novo; a
         recusa que volta como resultado ({ok:false, motivo}) fecha junto com as
         entregas. Sem estado no servidor ainda, nada sai: os pedidos esperam o
-        primeiro save da conta."""
+        primeiro save da conta.
+
+        04/10: `na_hora` = quem chama é a própria compra (_loja_na_hora), não o jogo. E a LUTA ABERTA: o
+        que mexe no grupo que o juiz refaz no fim dela (TIPOS_DA_LUTA: a classe, e o Pacote que a traz)
+        espera a luta terminar — sai em `esperando`, o pedido segue aberto, e o resto é entregue já."""
         cid = conta['id']
-        estornados, reemitidos = [], []
+        estornados, reemitidos, esperando = [], [], []
         for _ in range(OPS_LOJA + 3):       # cada volta entrega, estorna uma recusada ou refaz um estado que mudou
             t = agora()
             with self.tranca:
                 estado = self._estado_ler(cid)
                 if estado is None:
                     return 200, {'ok': True, 'pedidos': [], 'entregues': [], 'estornados': estornados,
+                                 'esperando': [],
                                  'semEstado': True, 'versao': 0, 'hash': None, 'progress': None, 'db': None}
                 linhas = self.con.execute(
                     "SELECT %s FROM %s WHERE p.conta_id = ? AND p.estado IN ('pendente', 'retirado') ORDER BY p.id LIMIT ?"
                     % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, OPS_LOJA)).fetchall()
+                luta = self._loja_em_luta(cid, t)
+            da_luta = {r['id'] for r in linhas if (_json(r['entrega']) or {}).get('tipo') in TIPOS_DA_LUTA}
+            if luta:
+                esperando = sorted(da_luta)
+                linhas = [r for r in linhas if r['id'] not in da_luta]
             if not linhas:
                 return 200, {'ok': True, 'pedidos': [], 'entregues': [], 'estornados': estornados,
+                             'esperando': esperando,
                              'reemitidos': reemitidos, 'versao': estado['versao'], 'hash': estado['hash'],
                              'progress': estado['progress'], 'db': estado['db']}
             entregas = []
@@ -1400,7 +1581,11 @@ class LojaMixin:
                         % ','.join('?' * len(ids)), [cid] + ids)}
                     if abertos != set(ids):             # um cancelamento (ou o estorno do pagamento) no meio
                         raise EstadoMudou()
+                    # a luta pode ter aberto enquanto o juiz trabalhava (a abertura também escreve aqui dentro)
+                    if not luta and da_luta and self._loja_em_luta(cid, t):
+                        raise EstadoMudou()
                     nova, db = self._estado_grava(conta, estado, saida, t)
+                    self._loja_anota_corrente(cid, entregues, estado, saida, na_hora, t)
                     if entregues:
                         feitos = [r['id'] for r, _ in entregues]
                         self.con.execute(
@@ -1431,7 +1616,8 @@ class LojaMixin:
             log.info("loja: #%d — %d pedidos entregues no servidor, %d estornados", cid, len(pedidos), len(estornados))
             # `pedidos` são os JÁ ENTREGUES (aplicado=true): o cliente adota progress/db, não aplica de novo
             return 200, {'ok': True, 'aplicado': True, 'pedidos': pedidos, 'entregues': [p['id'] for p in pedidos],
-                         'estornados': estornados, 'reemitidos': reemitidos, 'versao': nova, 'hash': saida['hash'],
+                         'estornados': estornados, 'reemitidos': reemitidos, 'esperando': esperando,
+                         'versao': nova, 'hash': saida['hash'],
                          'progress': saida['progress'], 'db': db}
         raise Recusa(409, 'o estado da conta mudou no meio — tente de novo')
 

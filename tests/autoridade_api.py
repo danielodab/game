@@ -275,6 +275,33 @@ class ProvaDaAutoridade(unittest.TestCase):
     def eventos(self, c, tipo):
         return self.sql("SELECT dados FROM eventos WHERE conta_id = ? AND tipo = ?", c.conta['id'], tipo)
 
+    def pedido_a_mao(self, c, sku, entrega, preco=0, custo=0, ganho=0, idem=None):
+        """Um pedido posto direto na fila (o que já esperava antes do deploy, ou uma entrega que o catálogo
+        ainda não vende): devolve o id."""
+        b = sqlite3.connect(self.banco_arq)
+        try:
+            t = int(time.time())
+            pid = b.execute("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) "
+                            "VALUES (?, ?, ?, ?, 'pendente', ?, ?)",
+                            (c.conta['id'], sku, json.dumps(entrega), preco, idem, t)).lastrowid
+            if custo or ganho:
+                b.execute("INSERT INTO loja_barras(pedido_id, custo, ganho, criado_em) VALUES (?, ?, ?, ?)", (pid, custo, ganho, t))
+            b.commit()
+            return pid
+        finally:
+            b.close()
+
+    def da_barras(self, c, n):
+        self.sql("INSERT OR REPLACE INTO barras_saldo(conta_id, saldo, atualizado_em) VALUES (?, ?, ?)",
+                 c.conta['id'], n, int(time.time()))
+
+    def barras(self, c):
+        linhas = self.sql("SELECT saldo FROM barras_saldo WHERE conta_id = ?", c.conta['id'])
+        return linhas[0]['saldo'] if linhas else 0
+
+    def compra(self, c, sku, idem=None, **mais):
+        return c.pede('POST', '/api/loja/comprar', dict({'sku': sku, 'idem': idem or secrets.token_hex(8)}, **mais))
+
     def precisa_op(self):
         if not self.tem_op:
             self.skipTest('o juiz ainda não tem POST /op (servidor/juiz/economia.js): esta prova liga sozinha quando tiver')
@@ -577,17 +604,10 @@ class ProvaDaAutoridade(unittest.TestCase):
         p, d = self.estado_de_partida(carteira=1300)
         self.poe_estado(c, p, d)
         # 13/09: o que custa VINTÉNS na loja é a troca por barras de ouro (800 vinténs → 10 barras)
-        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'barras-por-vintens-10', 'idem': secrets.token_hex(8)})
-        self.assertEqual(status, 201, r)
-        pid = r['pedido']['id']
-        # e um pedido com uma entrega que o jogo não conhece: o juiz recusa, o servidor estorna
-        b = sqlite3.connect(self.banco_arq)
-        cur = b.execute("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, criado_em) "
-                        "VALUES (?, 'torto', '{\"tipo\":\"nada\",\"alvo\":\"x\",\"qtd\":1}', 0, 'pendente', ?)",
-                        (c.conta['id'], int(time.time())))
-        torto_id = cur.lastrowid
-        b.commit()
-        b.close()
+        # o pedido que já estava na fila (posto à mão, como o de antes do deploy da entrega na hora) e um com
+        # uma entrega que o jogo não conhece: o juiz entrega um, recusa o outro, e o servidor estorna
+        pid = self.pedido_a_mao(c, 'barras-por-vintens-10', {'tipo': 'barras', 'alvo': 'conta', 'qtd': 10}, preco=800, ganho=10)
+        torto_id = self.pedido_a_mao(c, 'torto', {'tipo': 'nada', 'alvo': 'x', 'qtd': 1})
         status, r = c.pede('POST', '/api/loja/retirar', {})
         self.assertEqual(status, 200, r)
         self.assertEqual(r['entregues'], [pid])
@@ -748,6 +768,149 @@ class ProvaDaAutoridade(unittest.TestCase):
                          'as peças da dona saem do jogo com a conta')
         status, r = c.pede('GET', '/api/guilda/minha')
         self.assertEqual([(x['iid'], x['motivo']) for x in r['avisos']], [(copia2, 'dono-excluiu')])
+
+    # -- 04/10: a compra vale NA HORA (o dono: "comprei barras de ouro com vinténs e as barras não entraram") --
+    def test_30_vintens_viram_barras_na_propria_compra(self):
+        self.precisa_op()
+        c = self.novo('Na Hora')
+        p, d = self.estado_de_partida(carteira=1300)
+        self.poe_estado(c, p, d)
+        idem = secrets.token_hex(8)
+        status, r = self.compra(c, 'barras-por-vintens-10', idem)
+        self.assertEqual(status, 201, r)
+        # sem o jogo abrir nem buscar a fila: o pedido já fechou, os vinténs saíram e as barras entraram
+        self.assertEqual((r['pedido']['estado'], r.get('naHora')), ('entregue', True), r)
+        self.assertEqual(r['barras']['saldo'], 10)
+        self.assertEqual((r['saldo']['carteira'], r['saldo']['reservado'], r['saldo']['disponivel']), (500, 0, 500))
+        s = self.save(c)
+        self.assertEqual((s['versao'], s['db']['carteira']['moedas']), (2, 500))
+        status, m = c.pede('GET', '/api/loja/minha')
+        self.assertEqual((m['barras']['saldo'], m['saldo']['carteira'], m['pedidos'][0]['estado']), (10, 500, 'entregue'))
+        # o mesmo clique chegando de novo: nada entra nem sai outra vez
+        status, r2 = self.compra(c, 'barras-por-vintens-10', idem)
+        self.assertEqual((status, r2['pedido']['id'], r2['barras']['saldo']), (200, r['pedido']['id'], 10), r2)
+        self.assertEqual((self.save(c)['versao'], self.save(c)['db']['carteira']['moedas'], self.barras(c)), (2, 500, 10))
+        # o jogo que busca a fila depois não acha nada a entregar (e não entrega em dobro)
+        status, r3 = c.pede('POST', '/api/loja/retirar', {})
+        self.assertEqual((status, r3['pedidos'], r3['versao']), (200, [], 2))
+        # o jogo aberto fica sabendo pelo /api/eu e pela caixa de entregas, e a op que ele mandou ANTES de a
+        # compra entrar (o hash de antes) sobe por cima dela em vez de cair no 409
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual((eu['entregas'], eu['lojaAbertos']), (1, 0), eu)
+        status, e = c.pede('GET', '/api/entregas')
+        self.assertEqual([(x['tipo'], x['texto']) for x in e['entregas']], [('loja', '10 barras de ouro')], e)
+        elo = self.sql("SELECT hash_antes, hash_depois FROM moderacao_entregas WHERE conta_id = ?", c.conta['id'])[0]
+        self.assertEqual(elo['hash_depois'], s['hash'])
+        status, r4 = c.pede('POST', '/api/op', {'hashAntes': elo['hash_antes'],
+                                                'ops': [{'nome': 'depositarMoedas', 'args': {'n': 100}}]})
+        self.assertEqual((status, r4.get('rebase')), (200, True), r4)
+        self.assertEqual(r4['db']['carteira']['moedas'], 400)
+
+    def test_31_classe_pedras_e_peca_entram_na_hora_e_a_peca_vai_para_o_banco(self):
+        self.precisa_op()
+        c = self.novo('Freguesa Na Hora')
+        p, d = self.estado_de_partida()
+        self.poe_estado(c, p, d)
+        self.da_barras(c, 1000)
+        antes = self.save(c)
+        self.assertNotIn('bruxo', antes['progress']['unlockedClasses'])
+        # a peça (o catálogo ainda não vende nenhuma: o pedido entra à mão) espera na fila…
+        peca = self.pedido_a_mao(c, 'peca-teste', {'tipo': 'peca', 'alvo': PECA, 'qtd': 2, 'nivel': 3, 'estrelas': 1})
+        # …e a compra seguinte leva tudo o que a conta tem aberto
+        status, r = self.compra(c, 'pedras-fogo')
+        self.assertEqual((status, r['pedido']['estado'], r['barras']['saldo']), (201, 'entregue', 960), r)
+        status, r = self.compra(c, 'classe-bruxo')
+        self.assertEqual((status, r['pedido']['estado'], r['barras']['saldo']), (201, 'entregue', 460), r)
+        s = self.save(c)
+        self.assertIn('bruxo', s['progress']['unlockedClasses'])
+        self.assertEqual(s['progress']['stones'].get('stone-ember', 0) - antes['progress']['stones'].get('stone-ember', 0), 10)
+        # a peça foi para o BANCO (o cofre do Acampamento), não para o saco, com série registrada no servidor
+        self.assertEqual(len(s['progress']['inventory']), len(antes['progress']['inventory']))
+        cofre = [x for x in s['db']['banco']['itens'] if x['itemId'] == PECA]
+        self.assertEqual([(x['level'], x['stars']) for x in cofre], [(3, 1), (3, 1)], s['db']['banco'])
+        series = sorted(x['iid'] for x in cofre)
+        self.assertEqual(len(set(series)), 2)
+        registro = self.sql("SELECT iid, origem, estado FROM itens WHERE conta_id = ? AND origem = 'loja' ORDER BY iid", c.conta['id'])
+        self.assertEqual([(x['iid'], x['estado']) for x in registro], [(i, 'vivo') for i in series])
+        self.assertEqual(self.sql("SELECT estado FROM loja_pedidos WHERE id = ?", peca), [{'estado': 'entregue'}])
+        # a classe comprada de novo é recusada antes de cobrar
+        status, r = self.compra(c, 'classe-bruxo')
+        self.assertEqual((status, self.barras(c)), (409, 460), r)
+
+    def test_32_a_entrega_que_falha_estorna_e_nada_e_cobrado(self):
+        self.precisa_op()
+        c = self.novo('Estorno Na Hora')
+        self.poe_estado(c)
+        self.da_barras(c, 0)
+        # o pedido cuja entrega o jogo recusa (pago com 40 barras): o mesmo clique chega e o servidor tenta entregar
+        idem = secrets.token_hex(8)
+        pid = self.pedido_a_mao(c, 'pedras-fogo', {'tipo': 'pedras', 'alvo': 'pedra-que-nao-existe', 'qtd': 10},
+                                custo=40, idem=idem)
+        status, r = self.compra(c, 'pedras-fogo', idem)
+        self.assertEqual((status, r.get('estornado'), r['pedido']['estado']), (409, True, 'estornado'), r)
+        self.assertIn('nada foi cobrado', r['erro'])
+        self.assertEqual((r['barras']['saldo'], self.barras(c)), (40, 40), 'as barras do custo voltaram')
+        self.assertFalse(self.save(c)['progress']['stones'].get('stone-ember'), 'nada entrou no estado')
+        # de novo: o pedido já fechou, nada é devolvido outra vez
+        status, r = self.compra(c, 'pedras-fogo', idem)
+        self.assertEqual((status, r['pedido']['estado'], self.barras(c)), (200, 'estornado', 40), r)
+        # o juiz fora do ar: a compra é gravada e NÃO se perde — fica aberta e entra na busca seguinte
+        caido = self.em(c, self.base_sem_juiz)
+        status, r = self.compra(caido, 'pedras-fogo')
+        self.assertEqual((status, r['pedido']['estado'], r['pedido'].get('espera'), r['barras']['saldo']),
+                         (201, 'pendente', 'juiz', 0), r)
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual(eu['lojaAbertos'], 1)
+        status, r2 = c.pede('POST', '/api/loja/retirar', {})
+        self.assertEqual((status, r2['entregues']), (200, [r['pedido']['id']]), r2)
+        self.assertEqual(r2['progress']['stones'].get('stone-ember'), 10)
+
+    def test_33_presente_de_amigo_entra_na_hora_na_conta_de_quem_recebe(self):
+        self.precisa_op()
+        a, b = self.novo('Quem Da'), self.novo('Quem Ganha')
+        self.poe_estado(a)
+        self.poe_estado(b)
+        self.da_barras(a, 100)
+        status, r = a.pede('POST', '/api/loja/presentear', {'sku': 'pedras-fogo', 'nome': b.conta['nome'],
+                                                            'idem': secrets.token_hex(8)})
+        self.assertEqual((status, r['presente']['estado'], r.get('naHora'), r['barras']['saldo']),
+                         (201, 'entregue', True, 60), r)
+        self.assertEqual(self.save(b)['progress']['stones'].get('stone-ember'), 10)
+        self.assertEqual(self.save(a)['versao'], 1, 'quem dá não muda de estado')
+        status, e = b.pede('GET', '/api/entregas')
+        self.assertEqual(len(e['entregas']), 1, e)
+        self.assertIn('presente de', e['entregas'][0]['texto'])
+
+    def test_34_luta_aberta_a_classe_espera_o_fecho_e_o_resto_entra_ja(self):
+        self.precisa_op()
+        c = self.novo('Comprou Lutando')
+        self.poe_estado(c)
+        self.da_barras(c, 1000)
+        b = self.abre(c)
+        # no meio da sala: as pedras entram já; a classe (que mexe no grupo que o juiz refaz) espera o fecho —
+        # cobrada, guardada e avisada, nunca perdida
+        status, r = self.compra(c, 'pedras-fogo')
+        self.assertEqual((status, r['pedido']['estado']), (201, 'entregue'), r)
+        status, r = self.compra(c, 'classe-bruxo')
+        self.assertEqual((status, r['pedido']['estado'], r['pedido'].get('espera'), r['barras']['saldo']),
+                         (201, 'pendente', 'luta', 460), r)
+        pid = r['pedido']['id']
+        status, m = c.pede('GET', '/api/loja/minha')
+        self.assertEqual([x.get('espera') for x in m['pedidos'] if x['id'] == pid], ['luta'])
+        status, eu = c.pede('GET', '/api/eu')
+        self.assertEqual(eu['lojaAbertos'], 0, 'o jogo não fica buscando o que a luta segura')
+        status, r = c.pede('POST', '/api/loja/retirar', {})
+        self.assertEqual((status, r['entregues'], r['esperando']), (200, [], [pid]), 'a busca do jogo também espera')
+        self.assertNotIn('bruxo', self.save(c)['progress']['unlockedClasses'])
+        # a sala fecha (a conferência do juiz passa com as pedras compradas no meio) e a classe entra no fecho
+        jogo = self.joga(c, b['bilhete'])
+        status, r = self.fecha(c, b['bilhete'], jogo)
+        self.assertEqual((status, r['fase']), (200, 'won'), r)
+        self.assertIn('bruxo', r['progress']['unlockedClasses'])
+        s = self.save(c)
+        self.assertEqual((s['versao'], s['hash']), (r['versao'], r['hash']))
+        self.assertIn('bruxo', s['progress']['unlockedClasses'])
+        self.assertEqual(self.sql("SELECT estado FROM loja_pedidos WHERE id = ?", pid), [{'estado': 'entregue'}])
 
 
 if __name__ == '__main__':

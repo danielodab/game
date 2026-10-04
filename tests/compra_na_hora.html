@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a compra da loja vale na hora (o lado do jogo)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- 04/10, o dono: "comprei barras de ouro com vinténs e as barras não entraram na minha conta.. esse
+     lance de compra na loja e já disponibilizar precisa ser na hora; se for item vai para o jogo (banco)".
+     O servidor é provado por tests/autoridade_api.py (a entrega dentro da compra) e tests/loja_api.py (a
+     fila de casa). Aqui se cobra o JOGO:
+       1. a PEÇA comprada vai para o banco (o cofre do Acampamento), nunca para o saco — nem com ele cheio;
+       2. o /api/eu que diz "há pedido esperando" faz o jogo buscar a fila já (fora da batalha);
+       3. o aviso do que a loja entregou na hora diz "Chegou da loja", sem pôr na conta do Mestre. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js',
+    'js/ui/moderacao.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; log.appendChild(h); }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  var P = JOGO.Progress, DB = JOGO.DB, L = JOGO.Loja;
+  var PECA = 'gh-wasp-sting';
+
+  DB._zerar().then(function () {
+    P.reset ? P.reset() : P.load();
+    if (!P.state) P.load();
+    secao('1. a peça comprada vai para o banco');
+    // o saco CHEIO: é o caso em que uma entrega no saco recusaria (ou perderia) a compra
+    var limite = P.bagLimit ? P.bagLimit() : 60;
+    while (P.state.inventory.length < limite) P.state.inventory.push(P.novaCopia(PECA, 'saque', 0, 0));
+    P.save();
+    var saco = P.state.inventory.length;
+    return L.aplicar({ id: 9001, sku: 'peca-teste', nome: 'Ferrão', preco: 0,
+                       entrega: { tipo: 'peca', alvo: PECA, qtd: 2, nivel: 3, estrelas: 1 } }).then(function (r) {
+      check('a entrega da peça é aceita mesmo com o saco cheio', r && r.ok === true, JSON.stringify(r));
+      check('o saco não mudou (nada entra nele, nada sai)', P.state.inventory.length === saco, P.state.inventory.length + ' de ' + saco);
+      return DB.banco();
+    });
+  }).then(function (b) {
+    var novas = (b.itens || []).filter(function (x) { return x.itemId === PECA; });
+    check('as duas cópias estão no banco, com o nível e as estrelas comprados',
+          novas.length === 2 && novas.every(function (x) { return x.level === 3 && x.stars === 1; }), JSON.stringify(novas));
+    check('cada cópia tem a sua série', novas.length === 2 && novas[0].iid && novas[1].iid && novas[0].iid !== novas[1].iid,
+          JSON.stringify(novas.map(function (x) { return x.iid; })));
+    var nasc = (P.state.nascimentos || []).filter(function (n) { return n.origem === 'loja'; });
+    check('o nascimento das duas é da loja (o servidor registra a série com essa origem)', nasc.length === 2, JSON.stringify(nasc));
+    return L.aplicar({ id: 9001, preco: 0, entrega: { tipo: 'peca', alvo: PECA, qtd: 2 } });
+  }).then(function (r) {
+    check('o mesmo pedido de novo não entrega duas vezes', r && r.ok === false && r.motivo === 'ja', JSON.stringify(r));
+    return L.aplicar({ id: 9002, preco: 0, entrega: { tipo: 'peca', alvo: 'peca-que-nao-existe', qtd: 1 } });
+  }).then(function (r) {
+    check('a peça que o jogo não conhece é recusada (o servidor estorna)', r && r.ok === false && r.motivo === 'item-invalido',
+          JSON.stringify(r));
+    return L.aplicar({ id: 9003, preco: 0, entrega: { tipo: 'peca', alvo: PECA, qtd: 500 } });
+  }).then(function (r) {
+    check('quantidade fora da régua é recusada', r && r.ok === false && r.motivo === 'item-invalido', JSON.stringify(r));
+    return DB.banco();
+  }).then(function (b) {
+    check('e as recusadas não deixaram nada no banco', (b.itens || []).length === 2, String((b.itens || []).length));
+
+    secao('2. o jogo busca a fila assim que o servidor diz que há pedido');
+    var buscas = 0, buscarDeVerdade = L.buscar;
+    // a Nuvem falou: o módulo fica liberado (a busca de verdade não sai: não há sessão nesta página)
+    window.dispatchEvent(new CustomEvent('soterra:nuvem', { detail: { tipo: 'emdia' } }));
+    L.buscar = function () { buscas++; return Promise.resolve({ ok: true }); };
+    JOGO.Game = { screen: 'hub' };
+    window.dispatchEvent(new CustomEvent('soterra:loja-abertos', { detail: { n: 1 } }));
+    check('na praça: busca já, sem esperar o ciclo de 5 minutos', buscas === 1, String(buscas));
+    JOGO.Game = { screen: 'battle' };
+    window.dispatchEvent(new CustomEvent('soterra:loja-abertos', { detail: { n: 1 } }));
+    check('na batalha: espera (o /api/eu seguinte pergunta de novo)', buscas === 1, String(buscas));
+    delete JOGO.Game;
+    L.buscar = buscarDeVerdade;
+
+    secao('3. o aviso do que chegou');
+    var E = JOGO.EntregasMestre;
+    check('a entrega da loja diz "Chegou da loja"',
+          E.texto([{ tipo: 'loja', texto: '10 barras de ouro' }]) === 'Chegou da loja: 10 barras de ouro.',
+          E.texto([{ tipo: 'loja', texto: '10 barras de ouro' }]));
+    check('a do Mestre continua dizendo que foi o Mestre',
+          E.texto([{ tipo: 'pedras', texto: '5 Brasas' }]) === 'O Mestre te enviou 5 Brasas.');
+    check('as duas juntas: uma frase para cada origem',
+          E.texto([{ tipo: 'pedras', texto: '5 Brasas' }, { tipo: 'loja', texto: 'Bruxo' }, { tipo: 'loja', texto: '10 Brasas Coaguladas' }]) ===
+          'O Mestre te enviou 5 Brasas. Chegou da loja: Bruxo e 10 Brasas Coaguladas.',
+          E.texto([{ tipo: 'pedras', texto: '5 Brasas' }, { tipo: 'loja', texto: 'Bruxo' }, { tipo: 'loja', texto: '10 Brasas Coaguladas' }]));
+    check('lista vazia: nenhum aviso', E.texto([]) === '');
+    check('a blindagem do save real segurou', JOGO.SaveSandbox.check().ok);
+    fecha();
+  }).catch(function (e) {
+    check('o fluxo não estoura', false, String(e && (e.stack || e.message) || e));
+    fecha();
+  });
+})();
+</script>
+</body>
+</html>

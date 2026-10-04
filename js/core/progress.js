@@ -280,7 +280,7 @@ var JOGO = (typeof window !== 'undefined')
    * `cunha` (com a origem que o servidor conhece); o que já existia no disco
    * ganha carimbo 'legado' no saneamento, uma vez só. `nascimentos` é a fila
    * do que nasceu e o servidor ainda não viu — a Nuvem (nuvem.js) esvazia. */
-  var IID_ORIGENS = { saque: 1, roleta: 1, mercador: 1, caixa: 1, forja: 1, troca: 1, banco: 1, legado: 1 };
+  var IID_ORIGENS = { saque: 1, roleta: 1, mercador: 1, caixa: 1, forja: 1, troca: 1, banco: 1, legado: 1, loja: 1 };
   var NASC_TETO = 400;
   function novoIid() {
     var r = '';

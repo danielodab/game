@@ -495,8 +495,8 @@
     presenteia({ sku: it.sku }, nome, 'sku:' + it.sku, {
       titulo: 'Dar de presente',
       texto: 'Dar ' + nome + ' de presente a ' + ficha.conta.nome + '?',
-      nota: 'Presente do Mestre: não gasta vinténs nem conta nos limites da loja. Chega quando o jogo dessa conta abrir ' +
-            'logado na conta Principal; até lá, dá para cancelar.',
+      nota: 'Presente do Mestre: não gasta vinténs nem conta nos limites da loja. Entra na conta na hora, mesmo com o jogo ' +
+            'dela fechado; se ela nunca abriu o jogo, espera a primeira vez (até lá, dá para cancelar).',
       sim: 'Dar de presente', nao: 'Voltar'
     });
   }

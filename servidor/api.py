@@ -1072,7 +1072,10 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # /api/eu a cada 30 s com a aba à vista (sessao.js): é por aqui que o presente chega sem mais um pedido
         return 200, {'ok': True, 'conta': {'id': conta['id'], 'nome': conta['nome'], 'email': conta['email'],
                                            'criadoEm': conta['criado_em'], 'gm': bool(conta['gm'])},
-                     'entregas': self._entregas_pendentes(conta['id'])}
+                     'entregas': self._entregas_pendentes(conta['id']),
+                     # 04/10: quantos pedidos da loja esperam o jogo vir buscar — o jogo aberto busca a fila
+                     # logo depois da compra (em até 30 s), em vez de esperar o ciclo de 5 minutos (loja.js)
+                     'lojaAbertos': self._loja_abertos_para_o_jogo(conta['id'])}
 
     # -- o save e o registro de instâncias ----------------------------------------
     def save_ler(self, conta, corpo):

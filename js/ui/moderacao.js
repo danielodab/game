@@ -605,11 +605,21 @@ var JOGO = (typeof window !== 'undefined')
   function emBatalha() {
     try { return !!(JOGO.Game && JOGO.Game.screen === 'battle'); } catch (e) { return false; }
   }
-  E.texto = function (lista) {
-    var t = (lista || []).map(function (x) { return x.texto; }).filter(Boolean);
+  function enumera(lista) {
+    var t = lista.map(function (x) { return x.texto; }).filter(Boolean);
     if (!t.length) return '';
     if (t.length > 3) t = t.slice(0, 3).concat(['e mais ' + (lista.length - 3)]);
-    return 'O Mestre te enviou ' + (t.length === 1 ? t[0] : t.slice(0, -1).join(', ') + ' e ' + t[t.length - 1]) + '.';
+    return t.length === 1 ? t[0] : t.slice(0, -1).join(', ') + ' e ' + t[t.length - 1];
+  }
+  /* 04/10: a mesma caixa traz o que a LOJA entregou na hora (tipo 'loja': o servidor aplicou a compra
+   * dentro dela mesma, servidor/loja.py) — o aviso diz de onde veio cada coisa. */
+  E.texto = function (lista) {
+    var loja = (lista || []).filter(function (x) { return x && x.tipo === 'loja'; });
+    var mestre = (lista || []).filter(function (x) { return x && x.tipo !== 'loja'; });
+    var frases = [], m = enumera(mestre), l = enumera(loja);
+    if (m) frases.push('O Mestre te enviou ' + m + '.');
+    if (l) frases.push('Chegou da loja: ' + l + '.');
+    return frases.join(' ');
   };
   E.confere = function () {
     var S = JOGO.Sessao;
