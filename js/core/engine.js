@@ -3276,7 +3276,8 @@ var JOGO = (typeof window !== 'undefined')
     // 03/10: no feitiço misto, também não atingem o lado dele.
     function hostileTargets() {
       var l = unitsInTiles(!!opts.selfHarm || precoProprio);
-      return misto ? l.filter(function (w) { return w.side !== caster.side; }) : l;
+      // 04/10: `soInimigos` (o Julgamento do Mestre) nunca fere o próprio lado — o pet morria junto com a sala
+      return (misto || spell.soInimigos) ? l.filter(function (w) { return w.side !== caster.side; }) : l;
     }
     // 03/10: o efeito a favor de um feitiço misto vai para o lado de quem
     // lança, e para quem lança sempre (ver feiticoMisto)

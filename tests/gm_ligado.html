@@ -132,6 +132,25 @@
     check('TODOS os monstros da sala morreram', vivosDepois === 0,
           vivosAntes + ' → ' + vivosDepois);
 
+    /* 04/10, o dono: "o ataque do admin eu só consigo usar uma vez... e o ataque mata o pet — jamais isso deve
+     * acontecer". Outra sala, com um ALIADO de pé ao lado do Mestre (o papel do pet, do parceiro e da invocação):
+     * o golpe mata a sala, o aliado segue inteiro, e o Mestre conjura DE NOVO no mesmo turno. */
+    var st2 = E.createBattle('greenhouse', 0, P.battleParty(['gm', 'sumo']));
+    var meus = st2.units.filter(function (u) { return u.side === 'player'; });
+    var gm2 = meus.filter(function (u) { return u.classId === 'gm'; })[0] || meus[0];
+    var aliado = meus.filter(function (u) { return u !== gm2; })[0];
+    var i2 = st2.order.indexOf(gm2.uid); if (i2 >= 0) st2.turnIndex = i2;
+    var hpAliado = aliado ? aliado.hp : -1;
+    check('o Julgamento conjura com um aliado na sala', E.cast(st2, gm2.uid, 'gm-julgamento', gm2.x, gm2.y) === true);
+    check('o aliado do Mestre NÃO é ferido pelo Julgamento', !!aliado && aliado.alive && aliado.hp === hpAliado,
+          aliado ? aliado.hp + ' de ' + hpAliado : 'sem aliado');
+    check('os monstros da sala morreram', st2.units.filter(function (u) { return u.side === 'enemy' && u.alive; }).length === 0);
+    var jz2 = JOGO.DATA.spells['gm-julgamento'];
+    check('o Julgamento não tem teto por turno nem custo', jz2.castsPerTurn === 0 && jz2.paCost === 0 && jz2.soInimigos === true);
+    check('no MESMO turno o Mestre pode conjurar de novo (a sala reabre quando um monstro invoca ao morrer)',
+          st2.phase !== 'playing' ||
+          E.cast(st2, gm2.uid, 'gm-julgamento', gm2.x, gm2.y) === true);
+
     try { localStorage.removeItem('soterra-gm-v1'); } catch (e) {}
     window.__done = true;
   });

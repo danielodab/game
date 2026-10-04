@@ -208,7 +208,11 @@ var JOGO = (typeof window !== 'undefined')
     D.spells['gm-julgamento'] = {
       id: 'gm-julgamento', name: 'Julgamento do Mestre', element: 'neutro',
       classId: 'gm', unlockLevel: 0,
-      paCost: 1, cooldown: 0, castsPerTurn: 1,
+      /* 04/10, o dono: "o ataque do admin eu só consigo usar uma vez; depois que um monstro que invoca quando
+       * morre invoca, não consigo usar de novo no mesmo turno. E o ataque mata o pet — jamais isso deve acontecer".
+       * Sem teto por turno e sem custo (a ferramenta do Mestre limpa a sala quantas vezes precisar), e
+       * `soInimigos`: a área só fere o OUTRO lado — pet, parceiro e invocação do próprio lado ficam de fora. */
+      paCost: 0, cooldown: 0, castsPerTurn: 0, soInimigos: true,
       range: rng(0, 99, false, false),
       aoe: { shape: 'circle', size: 99 },
       needsEmptyTile: false, targetSide: 'enemy',
