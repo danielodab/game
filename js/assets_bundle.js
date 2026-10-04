@@ -972,7 +972,11 @@ var JOGO = (typeof window !== 'undefined')
   function economiaDeDados() {
     var c = (typeof navigator !== 'undefined') &&
             (navigator.connection || navigator.mozConnection || navigator.webkitConnection);
-    return !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')));
+    // 04/10: o TELEFONE também não adianta nada — a pré-busca guarda os .glb baixados na memória da aba
+    // (até ~250 MB com tudo liberado), e era parte do que derrubava o navegador do celular
+    var fone = false;
+    try { fone = !!(JOGO.Mobile && JOGO.Mobile.qualidade && JOGO.Mobile.qualidade() === 'baixa' && JOGO.Mobile.economico && JOGO.Mobile.economico()); } catch (eF) {}
+    return fone || !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')));
   }
   B.economiaDeDados = economiaDeDados;
   B.preBusca = function () {

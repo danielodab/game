@@ -118,8 +118,15 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) { return false; }
   };
   M.padraoGrafico = function () {
-    if (!M.app()) return 'alta';
-    return M.aparelhoFraco() ? 'baixa' : 'media';
+    /* 04/10, o dono: "a conta superadmin, quando vou entrar pelo celular, abre o jogo e cai e fica carregando".
+     * No navegador do TELEFONE o padrão era 'alta', como no computador: a conta com tudo liberado abria a
+     * praça com ~700 MB de textura e a aba morria por falta de memória. Telefone (no navegador ou no app)
+     * começa em 'baixa' — a tela pequena não mostra a diferença; o computador segue em 'alta', e a escolha
+     * das Configurações continua vencendo. */
+    var telefone = false;
+    try { telefone = telaDeAparelho() || M.celular(); } catch (e) {}
+    if (!M.app() && !telefone) return 'alta';
+    return (telefone || M.aparelhoFraco()) ? 'baixa' : 'media';
   };
   M.qualidade = function () {
     if (nivelGrafico) return nivelGrafico;

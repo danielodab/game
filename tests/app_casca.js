@@ -91,12 +91,13 @@ M.segundoPlano(true);
 check('web: o segundo plano não cala o som', calou === 0 && !M.fora);
 
 w = janela({ memoria: 1, tela: [320, 568] });
-check('web em aparelho fraco: a qualidade padrão CONTINUA alta', w.JOGO.Mobile.qualidade() === 'alta');
+// 04/10: o telefone no navegador caía por falta de memória com a conta cheia — telefone abre em 'baixa'
+check('web em TELEFONE: a qualidade padrão é baixa (o computador segue em alta)', w.JOGO.Mobile.qualidade() === 'baixa');
 w = janela({ pref: { graficos: 'baixa' } });
 check('web: a escolha das Configurações segue valendo', w.JOGO.Mobile.qualidade() === 'baixa');
 w = janela({ busca: '?mobile=1' });
 check('web com ?mobile=1 (o perfil de celular no navegador) não é aplicativo',
-      w.JOGO.Mobile.app() === false && w.JOGO.Mobile.qualidade() === 'alta' && !w._classes.has('app'));
+      w.JOGO.Mobile.app() === false && w.JOGO.Mobile.qualidade() === 'baixa' && !w._classes.has('app'));
 w = janela({ busca: '?app=10' });
 check('?app=10 não liga o aplicativo (só ?app=1)', w.JOGO.Mobile.app() === false);
 
@@ -105,7 +106,7 @@ w = janela({ capacitor: true, memoria: 8, tela: [412, 915] });
 M = w.JOGO.Mobile;
 check('aplicativo (Capacitor nativo): app() e nativo() são verdadeiros', M.app() === true && M.nativo() === true);
 check('aplicativo: o <html> ganha a classe app', w._classes.has('app'));
-check('aplicativo: quem não escolheu abre na qualidade média', M.qualidade() === 'media' && M.grafico().escala === 0.75);
+check('aplicativo num telefone: quem não escolheu abre na qualidade baixa', M.qualidade() === 'baixa' && M.grafico().escala === 0.5);
 check('aplicativo: o segundo plano e o relógio da tela acesa são ligados',
       w._ouvintes.doc.indexOf('visibilitychange') >= 0 && w.relogios === 1);
 
@@ -119,7 +120,7 @@ check('aplicativo com 2 GB de memória: qualidade baixa', w.JOGO.Mobile.qualidad
 w = janela({ capacitor: true, memoria: 8, tela: [360, 640] });
 check('aplicativo em tela de 360 px: qualidade baixa', w.JOGO.Mobile.qualidade() === 'baixa');
 w = janela({ capacitor: true, tela: [412, 915] });
-check('aplicativo sem deviceMemory (WebView que não informa): média, não baixa', w.JOGO.Mobile.qualidade() === 'media');
+check('aplicativo num telefone sem deviceMemory: baixa (a tela decide)', w.JOGO.Mobile.qualidade() === 'baixa');
 
 w = janela({ capacitor: true, memoria: 2, tela: [360, 640], pref: { graficos: 'alta' } });
 check('aplicativo fraco: a escolha ALTA do jogador vence o padrão', w.JOGO.Mobile.qualidade() === 'alta');
