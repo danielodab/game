@@ -49,6 +49,21 @@ jogo.exemplo.com.br {
 		header @indice Cache-Control "no-cache"
 	}
 
+	# O APLICATIVO DE ANDROID abre de https://localhost (os arquivos do pacote)
+	# e baixa os modelos DAQUI, sob demanda, como a web. Buscar um .glb de outra
+	# origem pede esta licença — dada SÓ à origem do aplicativo e SÓ na pasta
+	# dos modelos, que já é pública. Para o navegador de quem joga na web (a
+	# mesma origem) nenhum cabeçalho muda. A API responde por conta própria
+	# (servidor/api.py) e o Relé é WebSocket, que não passa por isto.
+	@do_aplicativo {
+		path /assets/models/bundle/*
+		header Origin https://localhost
+	}
+	header @do_aplicativo {
+		Access-Control-Allow-Origin "https://localhost"
+		+Vary Origin
+	}
+
 	# A raiz cai na landing. O jogo continua em /index.html — quem já tem o
 	# link direto não sente nada. Só o caminho "/" exato é redirecionado.
 	redir / /site/ 302

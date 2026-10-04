@@ -222,6 +222,11 @@ var JOGO = (typeof window !== 'undefined')
   B.busca = function (opts) {
     opts = opts || {};
     var base = opts.base || '';
+    // NO APLICATIVO os modelos não vão no pacote (a loja limita o que se baixa de início, e eles pesam
+    // mais que isso): descem do servidor do jogo, sob demanda, como na web. O endereço é o que o
+    // tools/empacota_www.py gravou em window.SOTERRA_APP — fora da www/ do aplicativo ele não existe.
+    var doApp = (typeof window !== 'undefined' && window.SOTERRA_APP && window.SOTERRA_APP.servidor) || '';
+    if (doApp && !/^https?:/.test(base)) base = String(doApp).replace(/\/+$/, '') + '/';
     var pronto = opts.pronto || function () {};
     var progresso = opts.progresso || function () {};
     if (!B.servido) { pronto(null); return; }

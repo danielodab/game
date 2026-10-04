@@ -159,6 +159,9 @@ var JOGO = (typeof window !== 'undefined')
     try {
       var m = /[?&]rede=(wss?:\/\/[^&\s]+)/.exec(String(window.location.search || ''));
       if (m) return decodeURIComponent(m[1]);
+      // no aplicativo a página é https://localhost e o relé é o do servidor do jogo (ver Sessao.servidorDoApp)
+      var doApp = (JOGO.Sessao && JOGO.Sessao.servidorDoApp) ? JOGO.Sessao.servidorDoApp() : '';
+      if (doApp) return doApp.replace(/^http/, 'ws') + '/ws';
       var p = window.location.protocol;
       if (p !== 'http:' && p !== 'https:') return null;
       var h = window.location.hostname;

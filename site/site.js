@@ -71,6 +71,12 @@
   SITE.base = function () {
     // NO AR a API é sempre a mesma origem: um link com ?api= de fora mandaria a
     // senha para outro servidor (e ficaria gravado). Só em casa o ?api= vale.
+    // dentro do aplicativo (a www/ do tools/empacota_www.py) a API é a do servidor do jogo — o
+    // mesmo endereço que o js/core/sessao.js usa; na web window.SOTERRA_APP não existe
+    try {
+      var A = window.SOTERRA_APP;
+      if (A && typeof A.servidor === 'string' && A.servidor) return A.servidor.replace(/\/+$/, '');
+    } catch (eApp) { /* segue */ }
     var h = location.hostname;
     var local = location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
     if (!local) { gravaLocal(CHAVE_API, null); return ''; }

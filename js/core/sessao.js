@@ -49,7 +49,19 @@
   S.ehLocal = function (proto, host) {
     return proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
   };
+  /* DENTRO DO APLICATIVO a página vem de https://localhost (os arquivos do pacote) e a API mora no
+   * servidor do jogo: o endereço é o que o tools/empacota_www.py gravou em window.SOTERRA_APP (no
+   * js/versao.js da www/ — na web esse objeto não existe, e nada aqui muda). Vem ANTES do ?api= e
+   * do lembrado: lá dentro "localhost" não é a casa de ninguém, e um endereço de fora não entra. */
+  S.servidorDoApp = function () {
+    try {
+      var A = window.SOTERRA_APP;
+      return (A && typeof A.servidor === 'string') ? A.servidor.replace(/\/+$/, '') : '';
+    } catch (e) { return ''; }
+  };
   S.base = function () {
+    var doApp = S.servidorDoApp();
+    if (doApp) return doApp;
     if (!S.ehLocal(location.protocol, location.hostname)) {
       gravaLocal(S.CHAVE_API, null);
       return '';

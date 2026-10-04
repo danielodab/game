@@ -108,6 +108,8 @@ var JOGO = (typeof window !== 'undefined')
     if (typeof GM._noAr === 'boolean') return GM._noAr;
     try {
       var S = JOGO.Sessao;
+      // o aplicativo é servido de https://localhost, mas é jogo NO AR: a chave de casa não vale lá
+      if (S && S.servidorDoApp && S.servidorDoApp()) return true;
       if (S && S.ehLocal && typeof location !== 'undefined') return !S.ehLocal(location.protocol, location.hostname);
     } catch (e) {}
     return false;

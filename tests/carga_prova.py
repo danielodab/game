@@ -151,6 +151,11 @@ def _matchers(texto):
                 continue
             if t[0] in ('query', 'path') and len(t) > 1:
                 conds.append((t[0], t[1:]))
+            elif t[0] == 'header' and len(t) == 3:
+                # um cabecalho DO PEDIDO (o Origin do aplicativo de Android, no
+                # @do_aplicativo): fica anotado, e a imitacao — que pede como o
+                # navegador da web, sem esse cabecalho — nunca casa (ver _casa)
+                conds.append(('header', t[1:]))
             elif t == ['file', '{']:
                 opcoes = {}
                 while True:
@@ -191,6 +196,8 @@ def _troca(padrao, caminho, query):
 
 def _casa(cond, caminho, query, marcas):
     tipo, args = cond
+    if tipo == 'header':
+        return False                     # a imitacao nao manda cabecalho de pedido nenhum
     if tipo == 'query':
         # chaves iguais: OU; chaves diferentes: E (a regra do Caddy)
         por_chave = {}
