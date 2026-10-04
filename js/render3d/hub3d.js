@@ -1730,7 +1730,7 @@ var JOGO = (typeof window !== 'undefined')
     });
 
     // ---- o fundo: trono, o baú do cofre, o troféu e os estandartes da guilda
-    peca('sd_trono', 0, -9.5, 0, { alt: 3.9, teto: 3.6, solido: 1.7 });
+    var trono = peca('sd_trono', 0, -9.5, 0, { alt: 3.9, teto: 3.6, solido: 1.7 });
     peca('sd_trofeu', -3.4, -9.6, 0, { alt: 1.3, teto: 1.2, solido: 0.6 });
     var Rd = JOGO.Renderer3D2, texPano = null;
     try { texPano = (Rd && Rd.texturaBandeira) ? Rd.texturaBandeira(cor, String(info.emblema || '')) : null; } catch (eB) {}
@@ -1749,6 +1749,9 @@ var JOGO = (typeof window !== 'undefined')
     estandarte(5.8, -9.9, 0);
     ponto('sede-cofre', 'Cofre da guilda', peca('sd_bau', 3.3, -9.3, 0, { alt: 1.0, teto: 1.5, solido: 0.8 }), 3.3, -9.3, 2.3, 0.8, 2.0);
     ponto('sede-mural', 'Mural da guilda', estandarte(8.7, -9.7, 0), 8.7, -9.7, 2.3, 0.5, 5.2);
+    // 04/10 (dono: "a personalização da guilda deve ser dentro do salão"): o trono abre a ficha de gestão.
+    // Vem DEPOIS do cofre na lista: quem está entre os dois fala com o baú, que é o menor (o primeiro no raio vence)
+    ponto('sede-trono', 'Trono — a guilda', trono, 0, -9.5, 2.9, 1.7, 4.5);
 
     // ---- o meio: a mesa do conselho (comprida no eixo da porta) e os bancos corridos
     var mesa = peca('sd_mesa', 0, -1, Math.PI / 2, { larg: 5, alt: 1.2, prof: 2.6 });
@@ -4311,7 +4314,7 @@ var JOGO = (typeof window !== 'undefined')
    *                              se o jogador É da guilda é a HUD (e o relé confere a zona).
    * Hub.saiSede()                volta à praça, à frente da Sede das Guildas → false se não estava
    * Hub.naSede()                 → o id da guilda, ou null
-   * Lugares: sede-banco, sede-cofre, sede-mural, sede-guerra e sede-saida (aoAproximar). */
+   * Lugares: sede-trono, sede-banco, sede-cofre, sede-mural, sede-guerra e sede-saida (aoAproximar). */
   Hub.entraSede = function (g) {
     var id = (g && g.id != null) ? String(g.id).replace(/[^\w-]/g, '').slice(0, 40) : '';
     if (!id) return false;

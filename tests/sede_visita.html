@@ -18,10 +18,12 @@
 <!-- A SEDE DA GUILDA VISITÁVEL (04/10, dono: "os jogadores da mesma guild entrar nesse mapa
      (sem esses pilares estratégicos) e lá dentro ser o banco da guild e o pessoal ter um chat").
      Abre o jogo de verdade, entra no Acampamento e cobra, na ordem:
-       · o botão "Entrar na sede" só existe no painel da Sede para quem TEM guilda;
+       · na praça, quem TEM guilda só vê duas ações (entrar no salão e a guerra); quem não tem vê a porta
+         de fundar ou entrar numa — e a ficha de gestão não abre fora do salão (nem pelo cais);
+       · a guilda da equipe não sai na lista de quem não é o Mestre, e a doação em vinténs não existe mais;
        · entrar troca a cena e a zona ('sede:<id da guilda>'), com a câmera no aspecto da tela;
        · o salão montou com as peças do dono e SEM pilar solto (nenhuma sd_pilar);
-       · os cinco pontos (banco, cofre, mural, guerra, saída) abrem as fichas certas;
+       · os seis pontos (trono, banco, cofre, mural, guerra, saída) abrem as fichas certas;
        · o chat sem barra vai para a guilda (e "/p" ainda alcança a praça);
        · só o fantasma da MESMA sede ganha corpo — o de outra guilda, o da praça e o do Campo não;
        · sair devolve a praça, a câmera certa e o chat normal.
@@ -111,8 +113,8 @@
         // ---- 1. sem guilda não há botão
         UI._sede(null);
         chega('sede');
-        check('sem guilda: o painel da Sede abre a ficha como sempre', !!botao(/Abrir a ficha da guilda/));
-        check('sem guilda: NÃO há o botão "Entrar na sede"', !d.querySelector('.sede-entrar'));
+        check('sem guilda: o painel da Sede leva a fundar ou entrar numa guilda', !!d.querySelector('.hub-painel .sede-fundar') && !!botao(/Fundar ou entrar numa guilda/));
+        check('sem guilda: NÃO há o botão de entrar no salão nem a fila da guerra', !d.querySelector('.sede-entrar') && !d.querySelector('.hub-painel .guerra-bloco'));
         check('a API da cena existe (entraSede, saiSede, naSede)', typeof H.entraSede === 'function' &&
               typeof H.saiSede === 'function' && H.naSede() === null);
 
@@ -120,7 +122,37 @@
         var P = w.JOGO.Progress;
         P.insigniasVer = function () { return 99; };
         P.gastaInsignias = function () { return true; };
-        return w.JOGO.DB.jogador().then(function (j) { G.contaAtiva(j.id, j.nome); return G.criar('Casa da Prova', 'P'); });
+        // ---- 1b. a guilda da EQUIPE (04/10, dono: "guild staff não deve aparecer nem na lista de guild.. só o adm
+        // possui"): fundada pela conta do Mestre, não sai na lista do jogador nem na ficha de quem procura guilda
+        var M = w.JOGO.GM, eraMestre = M.ativo, staffId = null;
+        G.contaAtiva('conta-do-mestre', 'Zelador');
+        M.ativo = function () { return true; };
+        return G.criar('Staff', 'S').then(function (rs) {
+          check('a guilda da equipe foi fundada pelo Mestre', !!(rs && rs.ok), rs && rs.erro);
+          return G.lista();
+        }).then(function (ls) {
+          var st = ls.filter(function (x) { return x.nome === 'Staff'; })[0];
+          staffId = st ? st.id : null;
+          check('o Mestre vê a guilda dele na lista', !!st);
+          M.ativo = eraMestre;
+          return w.JOGO.DB.jogador();
+        }).then(function (j) {
+          G.contaAtiva(j.id, j.nome);
+          return G.lista();
+        }).then(function (ls) {
+          check('a lista do jogador NÃO traz a guilda da equipe', !ls.some(function (x) { return x.nome === 'Staff'; }), ls.map(function (x) { return x.nome; }).join(','));
+          return G.entrar(staffId);
+        }).then(function (re) {
+          check('…e ninguém entra nela por conta própria', re.ok === false, re.erro);
+          d.querySelector('.hub-painel .sede-fundar').click();
+          return quieto(espera(function () { return !!d.querySelector('.ms-caixa input[placeholder="nome da guilda"]'); }, 40, 150));
+        }).then(function (ok) {
+          var t = (d.querySelector('.ms-caixa') || {}).textContent || '';
+          check('sem guilda: a ficha abre no fundar/entrar', !!ok && !!botao(/^Fundar a guilda/));
+          check('na tela de quem procura guilda a da equipe não aparece', !/Staff/.test(t), t.slice(-160));
+          UI.closeSheet();
+          return G.criar('Casa da Prova', 'P');
+        });
       })
       .then(function (res) {
         check('a guilda da prova foi fundada', !!(res && res.ok), res && res.erro);
@@ -131,8 +163,23 @@
         UI._sede(g);
         chega('sede');
         var b = d.querySelector('.sede-entrar');
-        check('com guilda: o botão "Entrar na sede" aparece', !!b && /Entrar na sede/.test(b.textContent));
-        check('…e os menus de sempre continuam (ficha e guerra)', !!botao(/Abrir a ficha da guilda/) && !!d.querySelector('.hub-painel .guerra-bloco'));
+        check('com guilda: o botão "Entrar no salão" aparece', !!b && /Entrar no salão/.test(b.textContent));
+        // 04/10 (dono: "quando chegar na sede só deve perguntar de entrar no salão ou se inscrever para batalha")
+        var bsP = [].map.call(d.querySelectorAll('.hub-painel button'), function (x) { return x.textContent; });
+        check('a praça só tem as duas ações: o salão e a guerra de guilda', !!d.querySelector('.hub-painel .guerra-bloco') &&
+              bsP.filter(function (x) { return !/Entrar no salão|Inscrever/.test(x); }).length === 0, bsP.join(' | '));
+        // o cais segue a mesma regra: fora do salão a ficha é só a porta
+        UI.openSheet('guilda');
+        return quieto(espera(function () { return !!d.querySelector('.ms-caixa.guilda-porta'); }, 40, 150));
+      })
+      .then(function (ok) {
+        var cx = d.querySelector('.ms-caixa'), t = cx ? cx.textContent : '';
+        check('cais fora do salão: a ficha é só a porta (nome da guilda e "Entrar no salão")', !!ok && /Casa da Prova/.test(t) && !!cx.querySelector('.sede-entrar'));
+        check('…sem a gestão: nada de membros, mural, cofre, banco, governo nem ranking',
+              !!cx && !cx.querySelector('.guilda-grade, .guilda-mural, .guilda-cofre, .guilda-banco, .guilda-governo, .guilda-rank') && !botao(/Sair da guilda/));
+        UI.closeSheet();
+        chega('sede');
+        var b = d.querySelector('.hub-painel .sede-entrar');
 
         // os fantasmas: a mesma sede, outra sede, a praça e o Campo
         H.fantasmaEntra('f-mesma', { nome: 'Irmã', classe: 'sumo', zona: 'sede:' + gid, x: 2.2, z: 3.5 });
@@ -173,7 +220,7 @@
               [c.sd_estandarte, c.sd_armadura, c.sd_rack_armas].join('/'));
         check('baús (banco e cofre), bancos e estátuas', c.sd_bau >= 2 && c.sd_banco === 4 && c.sd_estatua === 2);
         var tipos = H._lugares().map(function (l) { return l.tipo; }).sort().join(',');
-        check('os lugares do salão são os cinco pontos', tipos === 'sede-banco,sede-cofre,sede-guerra,sede-mural,sede-saida', tipos);
+        check('os lugares do salão são os seis pontos (o trono é a gestão)', tipos === 'sede-banco,sede-cofre,sede-guerra,sede-mural,sede-saida,sede-trono', tipos);
         check('a parede do lado da câmera some (não tapa o salão)', m.paredes.s === false && m.paredes.n === true, JSON.stringify(m.paredes));
 
         // ---- 5. quem se vê
@@ -188,7 +235,24 @@
         return quieto(espera(function () { return window.__fotoFeita === 'sede_dentro'; }, 40, 250));
       })
       .then(function () {
-        // ---- 6. os cinco pontos
+        // ---- 6. os seis pontos — o trono abre a ficha de gestão inteira (04/10: a personalização é do salão)
+        return ponto('sede-trono', 'cab', 'TRONO');
+      })
+      .then(function () {
+        UI.openSheet('guilda');
+        return quieto(espera(function () { return !!d.querySelector('.ms-caixa .guilda-banco .bk2-duplo'); }, 40, 150));
+      })
+      .then(function (ok) {
+        var cx = d.querySelector('.ms-caixa'), t = cx ? cx.textContent : '';
+        check('dentro do salão a ficha é a de gestão: membros, mural, governo (porta e dízimo), cofre e banco', !!ok &&
+              !!cx.querySelector('.guilda-grade') && !!cx.querySelector('.guilda-mural') && !!cx.querySelector('.guilda-governo') &&
+              !!cx.querySelector('.guilda-cofre') && !!botao(/^Porta:/) && !!botao(/Sair da guilda/));
+        // 04/10 (dono: "dinheiro não dará mais XP para guild"): a oferenda em vinténs saiu da ficha
+        check('a doação em vinténs não existe mais (sem campo nem botão; a ficha diz de onde vem o XP)', !!cx &&
+              !cx.querySelector('.guilda-oferenda') && !botao(/Doar à guilda/) && !/2 vinténs = 1 XP/.test(t) &&
+              /Vinténs não compram XP/.test(t) && /\+120 XP por vitória/.test(t), (cx.querySelector('.guilda-xp-regra') || {}).textContent);
+        check('o ranking da ficha não traz a guilda da equipe', !!cx.querySelector('.guilda-rank') && !/Staff/.test(t));
+        UI.closeSheet();
         return ponto('sede-banco', 'banco', 'BANCO');
       })
       .then(function () { return ponto('sede-cofre', 'cofre', 'COFRE'); })

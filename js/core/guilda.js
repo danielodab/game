@@ -186,7 +186,7 @@ var JOGO = (typeof window !== 'undefined')
               liderId: conta.id, membros: [{ id: conta.id, nome: conta.nome }],
               xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora(),
               porta: 'aberta', dizimo: 0, pedidos: [] };
-    if (souMestre()) g.equipe = true;             // 04/10: a guilda da equipe não sai em lista
+    if (ehMestre()) g.equipe = true;             // 04/10: a guilda da equipe não sai em lista
     d.guildas[g.id] = g;
     d.porConta[conta.id] = g.id;
     grava(d);
@@ -197,18 +197,15 @@ var JOGO = (typeof window !== 'undefined')
    * só o adm possui"). No servidor é a que um Mestre lidera (guilda.py, _g_da_equipe). Em
    * casa não há contas.gm: a guilda leva a marca `equipe` quando o Mestre a funda — e as
    * que ele já liderava ganham a marca na primeira vez que ele abre a ficha. Marcada, ela
-   * some da lista de quem não é o Mestre e ninguém entra nela por conta própria. */
-  function souMestre() {
-    var M = JOGO.GM;
-    try { return !!(M && M.contaMestre && M.contaMestre()); } catch (e) { return false; }
-  }
-  function escondida(g) { return !!(g && g.equipe === true && !souMestre()); }
+   * some da lista de quem não é o Mestre e ninguém entra nela por conta própria. O
+   * Mestre aqui é o mesmo da lei dos nomes (ehMestre, acima): o modo Mestre ativo. */
+  function escondida(g) { return !!(g && g.equipe === true && !ehMestre()); }
 
   G.minha = function () {
     var d = le();
     var g = minhaG(d);
     if (!g) return responde(null);
-    if (conta && g.liderId === conta.id && !g.equipe && souMestre()) { g.equipe = true; grava(d); }
+    if (conta && g.liderId === conta.id && !g.equipe && ehMestre()) { g.equipe = true; grava(d); }
     var f = foto(g);
     f.nivel = G.nivelDe(g.xp);
     f.souLider = !!(conta && g.liderId === conta.id);

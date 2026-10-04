@@ -59,6 +59,8 @@
     s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
     window.__fail = falhas;
     window.__pronto = true;
+    // 04/10: o tests/santuario_navegador.py lê as linhas de falha daqui (o #log é um texto só, sem linha para ele achar)
+    window.__fim = { ok: !falhas, total: total, falhas: falhas, linhas: [s.textContent].concat(linhas.filter(function (x) { return /^FALHOU/.test(x); })) };
   }
   function ate(cond, ms) {
     var t1 = Date.now();
@@ -124,6 +126,12 @@
     if (J.Autoridade) { J.Autoridade.ligada = function () { return true; }; J.Autoridade.RETENTA_MS = 300; }   // 19/09: a retentativa do fechar, encurtada
     J.Guerra.CONSULTA_MS = 300;
     J.Guerra.CONSULTA_GRUPO_MS = 300;
+    // 04/10: a Sede da praça só mostra a guerra a quem TEM guilda — a Ana é das Lanças do Norte
+    respostas['/api/guilda/minha'] = function () {
+      return { ok: true, status: 200, guilda: { id: 1, nome: GUILDAS.A.nome, emblema: GUILDAS.A.emblema, liderId: 1, eu: 1, xp: 0, nivel: 1,
+               moedas: 0, bonus: {}, banco: [], treinos: 0, porta: 'aberta', dizimo: 0, pedidos: [], mural: null, souLider: true, meuCargo: 'lider',
+               membros: [{ id: 1, nome: 'Ana', cargo: 'lider', xpDoado: 0, dizimo: 0, dizimoProprio: false }] } };
+    };
     respostas['/api/guerra/estado'] = function () { return { ok: true, status: 200, agoraMs: agora(), fase: 'livre' }; };
   }
   function injetaGrupo(lider) {
@@ -180,6 +188,7 @@
   function semSessaoESemGrupo() {
     var ses = J.Sessao.ativa;
     J.Sessao.ativa = function () { return false; };
+    U._sede(GUILDAS.A);
     J.Hub.aoAproximar(SEDE);
     var t = painelTxt();
     check('sede · o bloco "Guerra de Guilda 2×2" explica (2 contra 2, oito heróis, +120 XP, a coroa não muda)',
@@ -190,7 +199,11 @@
     J.Hub.aoAproximar(SEDE);
     t = painelTxt();
     check('sede · com a conta e sem grupo: "Forme um grupo de 2 com alguém da sua guilda"',
-          /Forme um grupo de 2/.test(t) && !botao(painelAberto(), /Inscrever o grupo/) && !!botao(painelAberto(), /ficha da guilda/), t.slice(0, 260));
+          /Forme um grupo de 2/.test(t) && !botao(painelAberto(), /Inscrever o grupo/) && !!botao(painelAberto(), /Entrar no salão/), t.slice(0, 260));
+    // 04/10 (dono: "só deve perguntar de entrar no salão ou se inscrever para batalha"): a praça não abre mais a ficha
+    var bs = [].map.call(painelAberto().querySelectorAll('button'), function (x) { return x.textContent; });
+    check('sede · a praça só tem as duas ações (o salão e a guerra): nada de ficha da guilda', bs.length === 1 && /Entrar no salão/.test(bs[0]) &&
+          !!painelAberto().querySelector('.guerra-bloco') && !botao(painelAberto(), /ficha da guilda|Doar|Fundar/), bs.join(' | '));
     return Promise.resolve();
   }
 
@@ -354,7 +367,9 @@
       var p = ultPedido('/api/guerra/fechar');
       check('fim · quem manda fecha no servidor na hora, com o gid, o registro e o hash do fim',
             p && p.corpo.gid === 'guerra-0000000000000000abcd' && Array.isArray(p.corpo.lances) && typeof p.corpo.hashFinal === 'number', JSON.stringify(p && { g: p.corpo.gid, h: p.corpo.hashFinal }));
-      return ate(function () { return vezesFechar >= 3; }, 4000);
+      // 04/10: 15 s de espera (eram 4): com a máquina ocupada o headless leva ~2,3 s para disparar cada espera de
+      // 300 ms e o terceiro pedido chegava aos 4,6 s — a conta cobrada é a mesma (3 pedidos, nem mais nem menos)
+      return ate(function () { return vezesFechar >= 3; }, 15000);
     }).then(function (ok) {
       check('fim · o servidor fora (status 0) duas vezes: o fechar tenta de novo sozinho até responder (3 pedidos)', ok && vezesFechar === 3, String(vezesFechar));
       resolve();

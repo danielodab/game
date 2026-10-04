@@ -1235,6 +1235,7 @@ var JOGO = (typeof window !== 'undefined')
     // 14/09: quem desce a um calabouço (a antessala) deixou o Campo de PvP — a volta é à praça
     if (sala && campoHud) campoHud.dentro = false;
     if (sala && sedeHud) sedeHud.dentro = false;      // 04/10: e a sede da guilda também
+    hubEhSala = !!sala;                                // a ficha da guilda só oferece o salão a quem está na praça
     function perguntaSair() {
       // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
       if (emGrupo()) {
@@ -1322,9 +1323,10 @@ var JOGO = (typeof window !== 'undefined')
      // conta foi pintada; como a guilda carrega por promessa, quase nunca
      // tinha. Resultado: quem ESTAVA numa guilda não via o botão dela. E
      // quem não está precisa da porta ainda mais — é por ela que se funda.
-     // `remoto` avisa a ficha de que se está longe da Sede (cofre e banco
-     // continuam só lá).
-     { ic: '🛡️', ico: 'fc-guilda', rot: 'Guilda', abre: 'guilda', remoto: true },
+     // 04/10: fora do salão a ficha de quem tem guilda é só a PORTA (entrar
+     // no salão); a gestão inteira abre lá dentro (sheetGuilda decide pelo
+     // lugar onde o herói está, não por quem chamou).
+     { ic: '🛡️', ico: 'fc-guilda', rot: 'Guilda', abre: 'guilda' },
      // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
       { ic: '👥', ico: 'fc-amigos', rot: 'Amigos', abre: 'amigos' },
       // 02/10: o Eco Primordial — a porta é a ficha, não uma construção nova (o dono: "não amontoe a praça")
@@ -1341,7 +1343,7 @@ var JOGO = (typeof window !== 'undefined')
       b.appendChild(ic);
       b.appendChild(el('span', 'hd-rot', d.rot +
         (d.tecla ? ' <span class="tecla">' + d.tecla + '</span>' : '')));
-      tap(b, function () { openSheet(d.abre, d.remoto || undefined); });
+      tap(b, function () { openSheet(d.abre); });
       dock.appendChild(b);
       dockBotoes[d.abre] = b;
     });
@@ -1637,16 +1639,25 @@ var JOGO = (typeof window !== 'undefined')
         });
       } else if (lugar.tipo === 'sede') {
         painel.appendChild(tituloPainel('Sede das Guildas', 'fc-guilda'));
-        painel.appendChild(el('p', 'hub-nota',
-          'O estandarte dos clãs. A ficha resolve tudo daqui; quem é de uma guilda também entra no salão dela.'));
-        painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
-          openSheet('guilda');
-        }));
-        // 04/10 (dono): a sede por dentro — só quem TEM guilda vê o botão
-        if (resumoGuilda) painel.appendChild(btn('Entrar na sede', 'btn-gold btn-block sede-entrar', pedeEntrarNaSede));
-        painelGuerra(painel);         // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
+        /* 04/10 (dono: "quando chegar na sede só deve perguntar de entrar no salão ou se inscrever
+         * para batalha; o restante fica dentro do salão"). Quem TEM guilda vê só as duas ações: a
+         * porta do salão e a fila da guerra 2×2. A ficha (membros, mural, cofre, banco, governo) não
+         * abre mais daqui — mora no salão. Quem NÃO tem guilda não tem salão nem guerra: para ele a
+         * Sede segue sendo o lugar de fundar uma guilda ou entrar numa. */
+        if (resumoGuilda) {
+          painel.appendChild(el('p', 'hub-nota',
+            'O salão da sua guilda fica atrás desta porta: lá dentro estão os membros, o mural, o cofre, o banco e o trono.'));
+          painel.appendChild(btn('Entrar no salão', 'btn-primary btn-block sede-entrar', pedeEntrarNaSede));
+          painelGuerra(painel);       // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
+        } else {
+          painel.appendChild(el('p', 'hub-nota',
+            'O estandarte dos clãs. Você ainda não é de uma guilda: funde a sua ou entre numa que esteja de porta aberta.'));
+          painel.appendChild(btn('Fundar ou entrar numa guilda', 'btn-primary btn-block sede-fundar', function () {
+            openSheet('guilda');
+          }));
+        }
       } else if (/^sede-/.test(lugar.tipo)) {
-        painelSedeDentro(painel, lugar.tipo, tituloPainel);   // 04/10: os cinco pontos do salão da guilda
+        painelSedeDentro(painel, lugar.tipo, tituloPainel);   // 04/10: os seis pontos do salão da guilda
       } else if (lugar.tipo === 'loteria') {
         // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
         painel.appendChild(tituloPainel('Barraquinha da Sorte', 'fc-loteria'));
@@ -10157,11 +10168,39 @@ var JOGO = (typeof window !== 'undefined')
     pinta();
   }
 
+  /* A PORTA (04/10, dono: "a personalização da guilda deve ser dentro do salão … o restante
+   * fica dentro do salão"). Fora do salão, quem tem guilda não vê a ficha: vê o nome dela e o
+   * caminho para o salão. A inscrição na guerra não vem para cá — ela é viva (fila, prazo,
+   * confirmação) e mora nos dois painéis que se repintam: a Sede da praça e a mesa do conselho. */
+  var hubEhSala = false;
+  function portaDaGuilda(caixa, g) {
+    caixa.classList.add('guilda-porta');
+    var cab = el('div', 'guilda-cab');
+    var placa = elShield(g.emblema, 48);
+    placa.className = 'guilda-emblema';
+    cab.appendChild(placa);
+    var ct = el('div', 'guilda-cab-t');
+    ct.appendChild(el('h3', null, esc(g.nome) + ' <i>nível ' + g.nivel + '</i>'));
+    ct.appendChild(el('span', 'guilda-sub', g.membros.length + ' membro(s)'));
+    cab.appendChild(ct);
+    caixa.appendChild(cab);
+    caixa.appendChild(el('p', 'inv-dica',
+      'A guilda se resolve <b>dentro do salão</b>: membros e cargos, o mural, o cofre, o banco de empréstimos, ' +
+      'a porta e o dízimo ficam no trono e nos pontos de lá.'));
+    var naPraca = !hubEhSala && !campoDentro() && !!(JOGO.Hub && typeof JOGO.Hub.entraSede === 'function');
+    if (naPraca) {
+      caixa.appendChild(btn('Entrar no salão', 'btn-primary btn-block sede-entrar', pedeEntrarNaSede));
+      caixa.appendChild(el('p', 'inv-dica',
+        'A inscrição na <b>guerra de guilda</b> fica na Sede das Guildas, na praça, e na mesa do conselho do salão.'));
+    } else {
+      caixa.appendChild(el('p', 'inv-dica', 'O salão abre pela Sede das Guildas, na praça do acampamento.'));
+    }
+  }
   function sheetGuilda() {
-    var remoto = !!lastSheetArg;
-    var body = sheetShell('Guilda', remoto 
-      ? 'Lista de membros e informações do clã. O cofre e o banco só abrem na Sede.'
-      : 'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.');
+    var dentro = sedeDentro();
+    var body = sheetShell('Guilda', dentro
+      ? 'Cofre que só o líder gasta, bônus para todos, e um banco de empréstimos entre membros.'
+      : 'Sem guilda, é aqui que se funda ou se entra numa. Com guilda, tudo se resolve dentro do salão dela.');
     sheetName = 'guilda';
     var Gd = JOGO.Guilda;
     if (!Gd || !JOGO.DB) { body.appendChild(el('p', 'empty', 'A guilda não carregou.')); return; }
@@ -10263,6 +10302,9 @@ var JOGO = (typeof window !== 'undefined')
             sheetGuilda();
           });
         }));
+      } else if (!sedeDentro()) {
+        // 04/10: fora do salão, só a porta — a ficha de gestão abre nos pontos de dentro
+        portaDaGuilda(caixa, g);
       } else {
         // 11/09: quem sou eu na ficha — no servidor, a CONTA (g.eu); em casa, o jogador local
         var euId = (g.eu != null) ? g.eu : contaJ.id;
@@ -10509,34 +10551,31 @@ var JOGO = (typeof window !== 'undefined')
         }
 
         // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
-        // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
-        if (!remoto) {
-          var cofre = el('div', 'guilda-cofre');
-          cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
-          cofre.appendChild(el('p', 'inv-dica',
-            'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
-            '; a competição de verdade chega com o servidor). Líder e oficiais gastam — em bônus de 24h para TODOS.'));
-          ['drop', 'xp'].forEach(function (tipo) {
-            var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
-            var ate = g.bonus && g.bonus[tipo];
-            var vivo = ate && ate > Date.now();
-            var linha = el('div', 'guilda-bonus' + (vivo ? ' is-vivo' : ''));
-            linha.appendChild(el('span', null, '<b>' + rot + '</b>' +
-              (vivo ? ' · vivo por mais ' + Math.ceil((ate - Date.now()) / 3600000) + 'h' : '')));
-            if (g.souLider) {
-              linha.appendChild(btn((vivo ? 'Estender' : 'Comprar') + ' (' + Gd.CUSTO_BONUS + ')',
-                'btn-mini' + (g.moedas >= Gd.CUSTO_BONUS ? ' btn-gold' : ' is-off'), function () {
-                  Gd.compraBonus(tipo).then(function (res) {
-                    toast(res.ok ? 'O bônus de ' + rot + ' vale para toda a guilda!' : (res.erro || 'não deu'),
-                          res.ok ? 'good' : undefined);
-                    sheetGuilda();
-                  });
-                }));
-            }
-            cofre.appendChild(linha);
-          });
-          caixa.appendChild(cofre);
-        }
+        var cofre = el('div', 'guilda-cofre');
+        cofre.appendChild(el('h3', 'bk-tit', 'Cofre da guilda — <b>' + g.moedas + '</b> marcas'));
+        cofre.appendChild(el('p', 'inv-dica',
+          'Marcas nascem das competições da guilda (o treino paga ' + Gd.MOEDA_TREINO +
+          '; a competição de verdade chega com o servidor). Líder e oficiais gastam — em bônus de 24h para TODOS.'));
+        ['drop', 'xp'].forEach(function (tipo) {
+          var rot = tipo === 'drop' ? '+15% de saque' : '+15% de XP';
+          var ate = g.bonus && g.bonus[tipo];
+          var vivo = ate && ate > Date.now();
+          var linha = el('div', 'guilda-bonus' + (vivo ? ' is-vivo' : ''));
+          linha.appendChild(el('span', null, '<b>' + rot + '</b>' +
+            (vivo ? ' · vivo por mais ' + Math.ceil((ate - Date.now()) / 3600000) + 'h' : '')));
+          if (g.souLider) {
+            linha.appendChild(btn((vivo ? 'Estender' : 'Comprar') + ' (' + Gd.CUSTO_BONUS + ')',
+              'btn-mini' + (g.moedas >= Gd.CUSTO_BONUS ? ' btn-gold' : ' is-off'), function () {
+                Gd.compraBonus(tipo).then(function (res) {
+                  toast(res.ok ? 'O bônus de ' + rot + ' vale para toda a guilda!' : (res.erro || 'não deu'),
+                        res.ok ? 'good' : undefined);
+                  sheetGuilda();
+                });
+              }));
+          }
+          cofre.appendChild(linha);
+        });
+        caixa.appendChild(cofre);
 
         // ---- O BANCO DE EMPRÉSTIMOS — DUAS GRADES, como o cofre do Banco
         // (pedido 30/08: "igual ao cofre a maneira de transferir itens...
@@ -10546,8 +10585,7 @@ var JOGO = (typeof window !== 'undefined')
         //   banco → saco: sua peça volta DE VEZ; a dos outros sai EMPRESTADA
         //   (uma por conta); peça emprestada a alguém não sai.
         var bg = el('div', 'guilda-banco');
-        if (!remoto) {
-          bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
+        bg.appendChild(el('h3', 'bk-tit', 'Banco da guilda'));
         bg.appendChild(el('p', 'inv-dica',
           'Arraste (ou dois toques) entre o saco e o banco, como no cofre. ' +
           'Peça de outro dono sai <b>emprestada</b> — uma por vez — e se devolve ' +
@@ -10717,9 +10755,6 @@ var JOGO = (typeof window !== 'undefined')
             });
           }
         });
-        } else {
-          caixa.appendChild(el('p', 'inv-dica', 'Para acessar o Banco da Guilda e o Cofre, dirija-se à Sede da Guilda no acampamento.'));
-        }
       }
 
       // sem guilda o ranking também aparece — e é a PORTA DE ENTRADA
@@ -13397,11 +13432,12 @@ var JOGO = (typeof window !== 'undefined')
   }
   /* ------------------------------------------- A SEDE DA GUILDA POR DENTRO (04/10)
    * Dono: "os jogadores da mesma guild entrar nesse mapa … e lá dentro ser o banco da guild
-   * e o pessoal ter um chat". A Sede da praça segue abrindo os menus de sempre e ganhou um
-   * botão, "Entrar na sede" — só para quem tem guilda. Lá dentro (Hub.entraSede, a zona é
-   * 'sede:<id da guilda>') cinco pontos abrem as MESMAS fichas: banco, cofre e mural são a
-   * ficha da guilda já rolada até a parte certa; a mesa do conselho é a fila da guerra; a
-   * porta devolve à praça. E o chat sem barra passa a ser o da guilda. */
+   * e o pessoal ter um chat". A Sede da praça ganhou um botão para entrar — só para quem tem
+   * guilda — e, no mesmo dia, perdeu a ficha: para quem tem guilda ela só oferece o salão e a
+   * guerra. Lá dentro (Hub.entraSede, a zona é 'sede:<id da guilda>') seis pontos abrem a ficha:
+   * o TRONO é a guilda inteira (membros, cargos, porta, dízimo — o governo); banco, cofre e
+   * mural são a mesma ficha já rolada até a parte certa; a mesa do conselho é a fila da guerra;
+   * a porta devolve à praça. E o chat sem barra passa a ser o da guilda. */
   var sedeHud = { dentro: false, g: null };
   var guildaFoco = null;
   function sedeDentro() {
@@ -13462,12 +13498,17 @@ var JOGO = (typeof window !== 'undefined')
       p.appendChild(btn('Abrir o banco da guilda', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('banco'); }));
     } else if (tipo === 'sede-cofre') {
       p.appendChild(tituloPainel('Cofre da guilda', 'fc-guilda'));
-      p.appendChild(el('p', 'hub-nota', 'As marcas da guilda: todos doam, só o líder gasta nos bônus.'));
+      p.appendChild(el('p', 'hub-nota', 'As marcas da guilda: nascem das competições, e líder e oficiais gastam nos bônus de todos.'));
       p.appendChild(btn('Abrir o cofre da guilda', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('cofre'); }));
     } else if (tipo === 'sede-mural') {
       p.appendChild(tituloPainel('Mural da guilda', 'fc-guilda'));
       p.appendChild(el('p', 'hub-nota', 'A mensagem que o líder e os oficiais deixam para todos.'));
       p.appendChild(btn('Ler o mural', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('mural'); }));
+    } else if (tipo === 'sede-trono') {
+      // 04/10 (dono: "a personalização da guilda deve ser dentro do salão"): o trono é o governo
+      p.appendChild(tituloPainel('Trono — a guilda', 'fc-guilda'));
+      p.appendChild(el('p', 'hub-nota', 'Os membros e os cargos, a porta aberta ou por convite, o dízimo e os pedidos de entrada.'));
+      p.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('cab'); }));
     } else if (tipo === 'sede-guerra') {
       p.appendChild(tituloPainel('Mesa do conselho', 'fc-guilda'));
       painelGuerra(p);
