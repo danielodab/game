@@ -459,9 +459,11 @@ var JOGO = (typeof window !== 'undefined')
     // Porte: 1,6× um monstro comum (1,80 m × 1,6 = 2,88 m) — maior que todo
     // comum e ainda abaixo dos chefes (2,95 a 3,60 m).
     'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — basalto rachado com a crista de vulcao nos ombros
-    'colosso_agua':   { model: 'colosso-agua',   scale: 1.60 },  // 2,88 m — coral e agua viva
+    'colosso_agua':   { model: 'colosso-agua',   scale: 1.57 },  // 2,89 m — coral e agua viva (1,57: de pe, parado, ele estica mais que os irmaos; com 1,60 media 2,945 e encostava no menor chefe, 2,95)
     'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraca de lajes
-    'colosso_ar':     { model: 'colosso-ar',     scale: 1.60 },  // 2,88 m — correntes de vento preso
+    // (`retrato: 'inteiro'`: o da Ventania e esguio e passa na regra do busto, que dava um close do
+    //  rosto liso dele ao lado de tres irmaos de corpo inteiro — os quatro saem iguais na linha do tempo)
+    'colosso_ar':     { model: 'colosso-ar',     scale: 1.60, retrato: 'inteiro' },  // 2,88 m — correntes de vento preso
     // --- O SANTUARIO DOS ELEMENTOS (calabouco 'elementsanctum') — A ARTE E DO USUARIO (03/10).
     //
     // Os OITO sairam do Meshy (lote `santuario`, models-meshy-santuario.js),
@@ -469,12 +471,15 @@ var JOGO = (typeof window !== 'undefined')
     // (o mesmo par dos Colossos), por isso cada um precisa da linha: sem ela o
     // `proprio` do monsterLook procuraria o kit pelo id com '_' e nao acharia.
     // Escala = altura do briefing ÷ 1,80 (docs/PROMPTS_LANCAMENTO.md).
+    // `retrato: 'inteiro'` no Caramujo e na Garca: o busto por medida cortava o Caramujo na borda da
+    // concha (a cabeca dele sao duas antenas) e mostrava da Garca so o pescoco de costas (o bico
+    // comprido alarga a faixa). De corpo inteiro os dois se reconhecem na linha do tempo.
     // A Arraia PLANA em vez de andar: o `walk` dela e o clipe de nado do
     // Meshy (Swim_Forward), o corpo deita e desliza — foi o dono que escolheu.
     'el_fogo_1':  { model: 'el-fogo-1',  scale: 1.17 },  // 2,11 m — Vigia de Pavio: cabeca de vela com um olho so; distancia
     'el_fogo_2':  { model: 'el-fogo-2',  scale: 0.83 },  // 1,49 m — Mariposa de Cinza: as asas sao os bracos; rapida
-    'el_agua_1':  { model: 'el-agua-1',  scale: 1.06 },  // 1,91 m — Caramujo-Comporta: a concha de bronze rebitado; tanque (sem correr)
-    'el_agua_2':  { model: 'el-agua-2',  scale: 1.11 },  // 2,00 m — Garca de Galeria: arpoa de longe
+    'el_agua_1':  { model: 'el-agua-1',  scale: 1.06, retrato: 'inteiro' },  // 1,91 m — Caramujo-Comporta: a concha de bronze rebitado; tanque (sem correr)
+    'el_agua_2':  { model: 'el-agua-2',  scale: 1.11, retrato: 'inteiro' },  // 2,00 m — Garca de Galeria: arpoa de longe
     'el_terra_1': { model: 'el-terra-1', scale: 1.22 },  // 2,20 m — Pilarete: um pedaco do pilar vivo que andou; tanque
     'el_terra_2': { model: 'el-terra-2', scale: 0.89 },  // 1,60 m — Toupeira-Sentinela: garras de pa
     'el_ar_1':    { model: 'el-ar-1',    scale: 1.28 },  // 2,30 m — Cata-Vento: empurra de longe
@@ -519,7 +524,7 @@ var JOGO = (typeof window !== 'undefined')
     'eco_primordial':  { model: 'boss-eco-primordial', scale: 2.00, tintaDaFase: true },   // 5,90 m
     'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },   // 1,80 m — lava que esfriou e ganhou pernas
     'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },   // 1,80 m — galho de coral com água presa
-    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.11 },   // 2,00 m — o irmão atarracado, o tanque (sem correr)
+    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.05 },   // 2,00 m — o irmão atarracado, o tanque (sem correr); 1,05 é o que entrega 2,00 m POSADO (com 1,11 media 2,11)
     'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }    // ainda SEM arte: veste o Arauto do Vento (provisório)
   };
 
@@ -1341,6 +1346,7 @@ var JOGO = (typeof window !== 'undefined')
       model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o corpo provisório já foi trocado acima; corpoDe é a rede de segurança
       proc: !!base.proc, procId: defId,
       loco: base.loco || null,           // 03/10: o clipe de locomoção que passa na frente (a Arraia plana)
+      retrato: base.retrato || null,     // 03/10: 'inteiro' = o retrato da HUD sai de corpo inteiro (ver M.portrait)
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
       tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
@@ -2135,7 +2141,11 @@ var JOGO = (typeof window !== 'undefined')
 
     // ENQUADRAMENTO PELA GEOMETRIA (§ portraitFraming): sem isto, altura e
     // distância fixas decapitavam o Bárbaro e encolhiam o Xamã.
-    var f = M.portraitFraming(node, opts.corpoInteiro);
+    // 03/10: `retrato: 'inteiro'` no look pede a figura toda mesmo no retrato pequeno. A regra do
+    // busto é por medida e serve a quase todos; ela erra em corpo cuja "cabeça" não é um rosto
+    // (antenas, bico comprido, crânio liso). É dado declarado na linha do MONSTER_LOOK, não id
+    // escondido aqui dentro.
+    var f = M.portraitFraming(node, opts.corpoInteiro || look.retrato === 'inteiro');
     if (!f) { portScene.remove(node); return null; }
     var ca = Math.cos(PORT_ANG), sa = Math.sin(PORT_ANG);
     portCam.position.set(f.tx + sa * f.dist, f.cy, f.tz + ca * f.dist);

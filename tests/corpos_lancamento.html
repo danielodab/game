@@ -318,6 +318,35 @@ corpo provisório, sem erro.</div>
       check('o Eco Menor de Rocha (o tanque) é maior que os irmãos', !!rocha && !!brasa && rocha.h > brasa.h * 1.05,
             rocha && brasa ? rocha.h.toFixed(2) + ' vs ' + brasa.h.toFixed(2) : '');
 
+      // ---- o retrato da HUD: sai para os 15, e quem declara `retrato: 'inteiro'` no look (o busto por
+      // medida corta mal corpo sem rosto: antenas, bico comprido, crânio liso) recebe o quadro de corpo
+      // inteiro; os outros ficam no busto do motor. Lê-se o que M.portrait PEDE ao enquadramento.
+      var quadro = M.portraitFraming, pedido = null, retErr = [], inteiros = [];
+      M.portraitFraming = function (node, inteiro) { pedido = !!inteiro; return quadro(node, inteiro); };
+      try {
+        CORPOS.forEach(function (c) {
+          var lk = M.lookFor(c[0]); pedido = null;
+          var cv = null; try { cv = M.portrait(c[0], { size: 96, element: c[2] }); } catch (e) {}
+          if (!cv) { retErr.push(c[0] + ' (sem retrato)'); return; }
+          var quer = !!(lk && lk.retrato === 'inteiro');
+          if (quer) inteiros.push(c[0]);
+          if (pedido !== quer) retErr.push(c[0] + ' (pediu ' + (pedido ? 'inteiro' : 'busto') + ', o look diz ' + (quer ? 'inteiro' : 'busto') + ')');
+        });
+      } finally { M.portraitFraming = quadro; }
+      check('o retrato da HUD sai para os 15, de corpo inteiro só para quem o look declara', retErr.length === 0,
+            retErr.join(' · ') || ('inteiros: ' + inteiros.join(', ')));
+      var colRet = col.map(function (l) { var lk = M.lookFor(l.id); return lk && lk.retrato === 'inteiro'; });
+      check('os quatro Colossos saem iguais na linha do tempo: todos de corpo inteiro (três pela medida, o da Ventania pelo look)',
+            (function () {
+              var ok = true;
+              col.forEach(function (l) {
+                var o = monta(l.id, l.elem).obj; toca(o, 'idle', 0.3);
+                var lk = M.lookFor(l.id), f = M.portraitFraming(o, lk.retrato === 'inteiro');
+                if (!f || f.bottom > f.box.min.y + 0.01) ok = false;
+              });
+              return ok;
+            })(), colRet.join(' '));
+
       // ---- os dois que não chegaram: seguem no provisório, sem erro
       var prov = [];
       NAO_CHEGARAM.forEach(function (par) {
