@@ -457,7 +457,11 @@ var JOGO = (typeof window !== 'undefined')
   /* 04/10: a aura comprada na loja — só as cores que esta versão conhece (o gêmeo de loja.AURAS,
    * servidor/loja.py); qualquer outra coisa que chegue pelo fio vira null */
   var AURAS_COR = ['fogo', 'agua', 'terra', 'ar', 'neutra'];
-  function corAura(v) { return (typeof v === 'string' && AURAS_COR.indexOf(v) >= 0) ? v : null; }
+  // 04/10: 'mestre' (a Chama do Mestre) só vale em quem o relé conferiu como Mestre — `deMestre` falso derruba
+  function corAura(v, deMestre) {
+    if (v === 'mestre') return deMestre === false ? null : 'mestre';
+    return (typeof v === 'string' && AURAS_COR.indexOf(v) >= 0) ? v : null;
+  }
   R._corAura = corAura;             // provas
   function cartao(para) {
     if (eu) eu.zona = zonaAtual();
@@ -717,7 +721,7 @@ var JOGO = (typeof window !== 'undefined')
                     resumo: vit.resumo || null,
                     mestre: mestre,
                     nuvem: m.nuvem || null,           // a conta no cartório (10/09)
-                    aura: m.aura === true, auraCor: corAura(m.auraCor),
+                    aura: m.aura === true, auraCor: corAura(m.auraCor, mestre),
                     sala: m.sala || null,       // 03/09: a antessala em que ele está (null = praça)
                     zona: zonaDe(m.zona),       // 14/09: 'praca' | 'campo' (o Campo de PvP)
                     luta: m.luta === true,      // 14/09: numa batalha (o Campo não ataca quem já luta)

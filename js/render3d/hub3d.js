@@ -4141,7 +4141,8 @@ var JOGO = (typeof window !== 'undefined')
    * desenho: cada aura são 2 ou 3 (a antiga eram 5), porque as partículas de um tipo vão todas num só
    * THREE.Points / numa só malha, movidas na CPU. Quem tem a aura comprada E o Traje do Colecionador
    * veste a comprada. Sem `cor` (ou com uma que esta versão não conhece) fica a branca de sempre. */
-  var AURA_COR = { fogo: 0xff6a2a, agua: 0x3aa0ff, terra: 0x6fcf4a, ar: 0xbfefff, neutra: 0xe0b860 };
+  var AURA_COR = { fogo: 0xff6a2a, agua: 0x3aa0ff, terra: 0x6fcf4a, ar: 0xbfefff, neutra: 0xe0b860,
+                   mestre: 0x8a0d14 };      // 04/10: a Chama do Mestre, só da conta do Mestre
   var AURA_LONGE = 26;               // m: além disto a aura do vizinho não se desenha (nem se anima)
   var AURA_K_PONTO = 2.36;           // PointsMaterial mede em "metros / tan(fov/2)": 1 / tan(23°)
   var relogioAura = 0;               // anda mais devagar com "Menos movimento" ligado
@@ -4254,7 +4255,7 @@ var JOGO = (typeof window !== 'undefined')
   function fracao(x) { return x - Math.floor(x); }
   /* o CÍRCULO RÚNICO da Lousa, riscado em código (128 px): dois aros e oito runas de traço grosso entre
    * eles. O "círculo de runas" do atlas tem o traço fino demais — deitado no chão, a 10 m, não se via. */
-  var texRunasAura = null;
+  var texRunasAura = null, texSombraMestre = null;
   function runasAura() {
     if (texRunasAura) return texRunasAura;
     var cv = document.createElement('canvas');
@@ -4282,6 +4283,116 @@ var JOGO = (typeof window !== 'undefined')
 
   /* cada montador devolve { pecas: {nome: objeto}, anima: function (t, corpo) } e pendura as peças em g */
   var AURA_FORMA = {
+    /* A CHAMA DO MESTRE (04/10, o dono: "quero uma aura preta com vermelho escuro e chamas, especial para o gm,
+     * capriche! que combine com a skin dele" — o Cavaleiro Negro). Só a conta do Mestre a tem (loja.AURAS_MESTRE).
+     * É a maior das auras, e a única ESCURA: uma coluna de labaredas PRETAS por fora (a mistura é a normal, não a
+     * aditiva: preto aditivo não existe) com um miolo de fogo carmesim por dentro, o chão tomado por um selo de
+     * runas vermelho-sangue que gira em dois sentidos sobre uma mancha de sombra, lâminas negras em órbita na
+     * altura dos ombros e brasas vermelhas que sobem em espiral. */
+    mestre: function (g, leve) {
+      var nN = leve ? 8 : 16, nV = leve ? 5 : 9, nB = leve ? 7 : 14, nL = leve ? 2 : 4;
+      // a mancha é PRETA de verdade: textura própria, mistura normal (o clarão do atlas é luz, e preto de luz não existe)
+      if (!texSombraMestre) {
+        texSombraMestre = fazTexRadial([[0, 'rgba(255,255,255,0.96)'], [0.55, 'rgba(255,255,255,0.8)'],
+          [0.85, 'rgba(255,255,255,0.3)'], [1, 'rgba(255,255,255,0)']]);
+      }
+      // um disco deitado, simples (a placa de cor por vértice multiplicava a textura e a mancha não aparecia)
+      var sombra = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matAura('sombra-mestre', function () {
+        return new THREE.MeshBasicMaterial({ map: texSombraMestre, color: 0x000000, transparent: true, opacity: 0.62,
+          depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      }));
+      sombra.rotation.x = -Math.PI / 2;
+      sombra.position.y = 0.088;         // acima da calçada (0,05–0,08)
+      sombra.frustumCulled = false;
+      sombra.userData.n = 1;
+      var selo = placasAura(2, runasAura(), 'circulo');
+      function linguas(n) {
+        var geo = new THREE.BufferGeometry(), idx = [];
+        for (var q = 0; q < n; q++) {
+          var o4 = q * 4;
+          idx.push(o4, o4 + 2, o4 + 1, o4 + 1, o4 + 2, o4 + 3, o4, o4 + 1, o4 + 2, o4 + 1, o4 + 3, o4 + 2);
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 12), 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 16), 4));
+        geo.setIndex(idx);
+        var m = new THREE.Mesh(geo, matAura('labareda', function () {
+          return new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+        }));
+        m.frustumCulled = false;
+        m.userData.n = n;
+        return m;
+      }
+      // uma língua: pé, dois lados e a ponta; `cores` = [pé, barriga, ponta] em rgb
+      function poeLingua(m, i, a, raio, alt, larg, bal, vira, cores, alfa) {
+        var P = m.geometry.attributes.position.array, C = m.geometry.attributes.color.array;
+        var rx = Math.cos(a), rz = Math.sin(a);
+        var dx = -rz * Math.cos(vira) + rx * Math.sin(vira), dz = rx * Math.cos(vira) + rz * Math.sin(vira);
+        var cx = rx * raio, cz = rz * raio, o = i * 12, k = i * 16;
+        P[o] = cx; P[o + 1] = 0.06; P[o + 2] = cz;
+        P[o + 3] = cx - dx * larg; P[o + 4] = alt * 0.3; P[o + 5] = cz - dz * larg;
+        P[o + 6] = cx + dx * larg; P[o + 7] = alt * 0.3; P[o + 8] = cz + dz * larg;
+        P[o + 9] = cx * 0.78 + dx * bal; P[o + 10] = alt; P[o + 11] = cz * 0.78 + dz * bal;
+        C[k] = cores[0][0]; C[k + 1] = cores[0][1]; C[k + 2] = cores[0][2]; C[k + 3] = alfa;
+        C[k + 4] = cores[1][0]; C[k + 5] = cores[1][1]; C[k + 6] = cores[1][2]; C[k + 7] = alfa;
+        C[k + 8] = cores[1][0]; C[k + 9] = cores[1][1]; C[k + 10] = cores[1][2]; C[k + 11] = alfa;
+        C[k + 12] = cores[2][0]; C[k + 13] = cores[2][1]; C[k + 14] = cores[2][2]; C[k + 15] = alfa * (cores === PRETO ? 0.85 : 0.35);
+      }
+      var negras = linguas(nN), rubras = linguas(nV);
+      var brasas = pontosAura(nB, 5, 0.5, 'fagulha');
+      var laminas = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.2, 0), matAura('lamina-mestre', function () {
+        return new THREE.MeshPhongMaterial({ color: 0x050506, flatShading: true, shininess: 90, specular: 0x8a1016, emissive: 0x000000 });
+      }), nL);
+      laminas.frustumCulled = false;
+      laminas.userData.n = nL;
+      // a ordem importa: a sombra e o selo no chão; o negro alto primeiro e o fogo rubro, mais baixo, desenhado POR CIMA —
+      // com o negro por último ele tapava o miolo e a aura virava um borrão escuro (medido na foto de 04/10)
+      g.add(sombra); g.add(selo); g.add(negras); g.add(rubras); g.add(laminas); g.add(brasas);
+      var PRETO = [[0.2, 0.005, 0.01], [0.015, 0, 0], [0, 0, 0]];
+      var RUBRO = [[1, 0.36, 0.14], [0.72, 0.05, 0.06], [0.22, 0, 0.01]];
+      var aux = new THREE.Object3D();
+      return { pecas: { sombra: sombra, selo: selo, rubras: rubras, negras: negras, laminas: laminas, brasas: brasas },
+               anima: function (t) {
+        var pulso = Math.pow(0.5 + 0.5 * Math.sin(t * 2.1), 2), treme = 0.5 + 0.5 * Math.sin(t * 11.3);
+        // a mancha de sombra respira; o selo de fora gira devagar, o de dentro ao contrário e acende no pulso
+var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
+        poePlaca(selo, 0, 2.25, t * 0.22, 0.095, 1, 0.08, 0.08, 0.95);
+        poePlaca(selo, 1, 1.28 + pulso * 0.14, -t * 0.5, 0.1, 1, 0.16 + treme * 0.1, 0.1, 0.45 + pulso * 0.55);
+        sujaPlacas(selo);
+        var i, f, a;
+        for (i = 0; i < nV; i++) {            // o miolo: fogo carmesim, mais baixo e mais rápido
+          f = fracao(t * 1.25 + i * 0.57);
+          a = i * (Math.PI * 2 / nV) - t * 0.35;
+          poeLingua(rubras, i, a, 0.97, 0.45 + 1.15 * Math.pow(f, 0.7), 0.27 * (1 - f * 0.5),
+                    Math.sin(t * 7.1 + i * 1.9) * 0.12 * (0.4 + f), (i % 2) ? 0.7 : -0.7, RUBRO, 1 - f * f * f);
+        }
+        for (i = 0; i < nN; i++) {            // a casca: labaredas pretas, altas, que passam da cabeça
+          f = fracao(t * 0.8 + i * 0.61);
+          a = i * (Math.PI * 2 / nN) + t * 0.2;
+          poeLingua(negras, i, a, 1.12, 0.9 + 2.3 * Math.pow(f, 0.65), 0.42 * (1 - f * 0.4),
+                    Math.sin(t * 5.2 + i * 2.3) * 0.2 * (0.4 + f), (i % 2) ? 0.85 : -0.85, PRETO, 1 - f * f * f * f);
+        }
+        rubras.geometry.attributes.position.needsUpdate = true; rubras.geometry.attributes.color.needsUpdate = true;
+        negras.geometry.attributes.position.needsUpdate = true; negras.geometry.attributes.color.needsUpdate = true;
+        for (i = 0; i < nL; i++) {            // lâminas negras: finas, compridas, de ponta para baixo, em órbita
+          a = -t * 0.9 + i * (Math.PI * 2 / nL);
+          aux.position.set(Math.cos(a) * 1.42, 1.75 + Math.sin(t * 1.3 + i * 1.7) * 0.16, Math.sin(a) * 1.42);
+          aux.rotation.set(0, -a, 0.22);
+          aux.scale.set(0.42, 3.1, 0.2);
+          aux.updateMatrix();
+          laminas.setMatrixAt(i, aux.matrix);
+        }
+        laminas.instanceMatrix.needsUpdate = true;
+        for (i = 0; i < nB; i++) {            // brasas vermelhas em espiral, subindo e piscando
+          f = fracao(t * 0.55 + i * 0.317);
+          a = i * 2.4 + t * 1.6 + f * 3.5;
+          var rb = 1.15 - f * 0.55;
+          var pisca = (Math.floor(t * 12 + i * 5) % 4) ? 1 : 0.35;
+          poePonto(brasas, i, Math.cos(a) * rb, 0.3 + f * 3.3, Math.sin(a) * rb, 1, 0.12 + (1 - f) * 0.2, 0.06,
+                   Math.min(1, (1 - f) * 1.6) * pisca);
+        }
+        sujaPontos(brasas);
+      } };
+    },
     /* BRASA — o que se lê de longe é a COLUNA de fogo: labaredas grandes nascendo nos pés e afinando
      * para cima, fagulhas pequenas que sobem depressa aos trancos, e o chão que acende e apaga. */
     fogo: function (g, leve) {

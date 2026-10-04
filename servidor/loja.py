@@ -173,6 +173,10 @@ TIPOS_TROCA = ('vintens', 'barras')          # as trocas entre moedas: fora dos 
 FORA_DO_PRESENTE = TIPOS_TROCA + ('pacote',)
 # 04/10: as auras da praça (uma por elemento e a neutra) e o preço de cada uma, em barras
 AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')
+# 04/10, o dono: "quero uma aura preta com vermelho escuro e chamas, especial para o gm". Não se vende nem
+# se presenteia: só a conta marcada (contas.gm = 1) a tem, e só ela consegue escolhê-la.
+AURAS_MESTRE = ('mestre',)
+AURA_MESTRE_NOME = {'mestre': 'Chama do Mestre'}
 AURA_PRECO = 150
 # 04/10: o Pacote de Boas-Vindas — uma classe rara à escolha, PEDRAS_BOAS_VINDAS pedras de cada e uma aura
 BOAS_VINDAS_SKU = 'boas-vindas'
@@ -1196,7 +1200,7 @@ class LojaMixin:
         if not so_compradas:
             marca = self.con.execute("SELECT gm FROM contas WHERE id = ?", (cid,)).fetchone()
             if marca is not None and marca['gm']:
-                return set(AURAS)
+                return set(AURAS) | set(AURAS_MESTRE)
         tem = set()
         for r in self.con.execute(
                 "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado', 'entregue') "
@@ -1217,9 +1221,11 @@ class LojaMixin:
     def _auras_publico(self, cid):
         tem = self._auras(cid)
         r = self.con.execute("SELECT aura FROM aura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
-        return {'tem': [a for a in AURAS if a in tem],
+        do_mestre = [a for a in AURAS_MESTRE if a in tem]       # só aparece para quem a tem: o Mestre
+        return {'tem': do_mestre + [a for a in AURAS if a in tem],
                 'escolhida': r['aura'] if r is not None and r['aura'] in tem else None,
-                'todas': [{'cor': a, 'sku': 'aura-' + a, 'nome': POR_SKU['aura-' + a]['nome']} for a in AURAS]}
+                'todas': [{'cor': a, 'sku': None, 'nome': AURA_MESTRE_NOME[a]} for a in do_mestre] +
+                         [{'cor': a, 'sku': 'aura-' + a, 'nome': POR_SKU['aura-' + a]['nome']} for a in AURAS]}
 
     # -- GET /api/loja/aura · POST /api/loja/aura {aura: cor | null} ----------------------------------------
     def loja_aura_ver(self, conta, corpo):
@@ -1230,7 +1236,7 @@ class LojaMixin:
         """A aura que a conta veste na praça: uma das que ela TEM, ou null (desligada). Os outros jogadores
         passam a ver na próxima conferência do Relé (até ~2 min) ou quando ela entrar de novo na praça."""
         aura, cid, t = corpo.get('aura'), conta['id'], agora()
-        if aura is not None and aura not in AURAS:
+        if aura is not None and aura not in AURAS and aura not in AURAS_MESTRE:
             raise Recusa(400, 'aura desconhecida')
         with self._escrita():
             if aura is None:

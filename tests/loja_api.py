@@ -1063,8 +1063,10 @@ class ProvaDasNovidades(ProvaDaLoja):
         Mestre possui as cinco sem comprar: a ficha (GET /api/loja/aura e a vitrine) mostra todas, a
         escolha é aceita e o Relé carimba a escolhida. O jogador comum segue sem nenhuma."""
         import rele_ident
-        todas = list(loja_mod.AURAS)
+        # 04/10: e mais a CHAMA DO MESTRE, que só ele tem e que vem na frente (loja.AURAS_MESTRE)
+        todas = list(loja_mod.AURAS_MESTRE) + list(loja_mod.AURAS)
         m = self.novo('Zulu Todas Auras')
+        self.assertEqual(m.pede('POST', '/api/loja/aura', {'aura': 'mestre'})[0], 409)        # a comum não a veste
         self.assertEqual(m.pede('GET', '/api/loja/aura')[1]['auras']['tem'], [])              # ainda é conta comum
         self.assertEqual(m.pede('POST', '/api/loja/aura', {'aura': 'fogo'})[0], 409)
         self.mestre(m)
@@ -1088,6 +1090,13 @@ class ProvaDasNovidades(ProvaDaLoja):
         self.comprou(m, 'aura-agua')
         self.assertEqual(self.compra(m, 'aura-agua')[0], 409)
         self.assertEqual(m.pede('GET', '/api/loja/aura')[1]['auras']['tem'], todas)
+        # a Chama do Mestre: aceita para ele, carimbada pelo Relé, e sem produto na loja (não se vende)
+        status, r = m.pede('POST', '/api/loja/aura', {'aura': 'mestre'})
+        self.assertEqual((status, r['auras']['escolhida']), (200, 'mestre'))
+        self.assertEqual([a['sku'] for a in r['auras']['todas'] if a['cor'] == 'mestre'], [None])
+        conta, _ = rele_ident.confere(self.banco_arq, m.token)
+        self.assertEqual(conta['aura'], 'mestre')
+        self.assertNotIn('aura-mestre', loja_mod.POR_SKU)
         # o jogador comum não muda: nenhuma aura, nenhuma escolha aceita
         c = self.novo('Comum Sem Aura')
         self.assertEqual(c.pede('GET', '/api/loja/aura')[1]['auras']['tem'], [])

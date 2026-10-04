@@ -2128,14 +2128,15 @@ var JOGO = (typeof window !== 'undefined')
    *     conta não o comprou; depois, as ofertas da semana com a contagem regressiva;
    *   - a AURA: a comprada acende no herói (Hub.aura com a cor) e viaja no perfil da Rede; a ficha do
    *     Personagem liga, desliga e troca (secaoAura). */
-  var AURA_PT = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa' };
+  var AURA_PT = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa', mestre: 'Chama do Mestre' };
   // o que cada aura FAZ na praça (o mesmo que o js/render3d/hub3d.js desenha e que a loja do site descreve)
   var AURA_EFEITO = {
     fogo: 'labaredas que sobem dos pés, fagulhas que estalam e um clarão quente no chão',
     agua: 'anéis de água que se abrem no chão como onda, e gotas que orbitam e caem',
     terra: 'folhas e pétalas girando devagar, e brotos que nascem do chão e recolhem',
     ar: 'fitas de ar em espiral subindo em volta do corpo, e um rastro ao andar',
-    neutra: 'lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida'
+    neutra: 'lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida',
+    mestre: 'labaredas negras com miolo carmesim, um selo de runas vermelho-sangue no chão, lâminas em órbita e brasas em espiral'
   };
   function paginaLoja() {
     var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');

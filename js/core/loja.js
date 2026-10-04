@@ -109,6 +109,7 @@
                 peca: 1 };              // 04/10: a peça de equipamento, que vai para o banco
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra'];   // o gêmeo de loja.AURAS (servidor)
+  // 04/10: a 'mestre' (Chama do Mestre) não é entrega da loja — só a conta do Mestre a tem, pelo servidor
   var ITENS_DO_PACOTE = { pedras: 1, classe: 1 };          // o que um pacote pode trazer dentro
   var TETO_ITENS_PACOTE = 12;
   var ELEMENTOS_SELO = ['fogo', 'agua', 'terra', 'ar'];

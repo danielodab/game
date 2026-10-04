@@ -158,6 +158,7 @@ SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
 # tabela, e isso não pode virar "banco estranho" e deixar a praça inteira sem conferência
 SQL_AURA = "SELECT aura FROM aura_escolhida WHERE conta_id = ?"
 AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
+AURAS_MESTRE = ('mestre',)   # 04/10: a Chama do Mestre — a API só a grava para a conta marcada (loja.AURAS_MESTRE)
 
 # UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em um
 # dispositivo.. se outro tentar logar, no que estava logado cai o jogo"). O
@@ -251,7 +252,7 @@ def confere(caminho, token, agora=None):
         if linha is not None:
             try:
                 achada = con.execute(SQL_AURA, (linha[0],)).fetchone()
-                aura = achada[0] if achada is not None and achada[0] in AURAS else None
+                aura = achada[0] if achada is not None and (achada[0] in AURAS or achada[0] in AURAS_MESTRE) else None
             except sqlite3.Error:                    # o banco de antes de 04/10: ninguém tem aura ainda
                 aura = None
     except sqlite3.Error:

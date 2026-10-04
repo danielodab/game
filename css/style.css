@@ -2035,6 +2035,7 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .char-aura-cor.is-terra { background: #6fcf4a; color: #6fcf4a; }
 .char-aura-cor.is-ar { background: #bfefff; color: #bfefff; }
 .char-aura-cor.is-neutra { background: #e0b860; color: #e0b860; }
+.char-aura-cor.is-mestre { background: radial-gradient(circle at 50% 70%, #b3121a 0 35%, #1a0507 70%); color: #b3121a; }
 .char-aura-link { color: #ffe9a8; text-decoration: underline; }
 @media (pointer: coarse) { .char-aura-b { min-height: 44px; } }
 .hub-evento b { color: #9fd3ff; }
