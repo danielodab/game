@@ -230,10 +230,16 @@ class ProvaDaGuilda(unittest.TestCase):
         a, b = self.novo('Caixa'), self.novo('Soldado')
         gid = self.funda(a)
         self.g(b, 'entrar', {'gid': gid})
-        r = self.g(b, 'doar', {'xp': 100})
+        # 04/10 (dono: "dinheiro não dará mais XP para guild"): a doação sem a origem do dízimo — a oferenda
+        # em vinténs de antes — é recusada e não soma nada; o dízimo segue entrando
+        r = self.g(b, 'doar', {'xp': 100}, 403)
+        self.assertEqual(r['erro'], guilda_mod.SEM_OFERENDA)
+        self.g(b, 'doar', {'xp': 100, 'origem': 'oferenda'}, 403)
+        self.assertEqual(self.g(a, 'minha')['guilda']['xp'], 0, 'a doação recusada não rende XP')
+        r = self.g(b, 'doar', {'xp': 100, 'origem': 'dizimo'})
         self.assertEqual((r['xp'], r['nivel']), (100, guilda_mod.nivel_de(100)))
-        self.g(b, 'doar', {'xp': 0}, 400)
-        self.g(self.novo('Sem Guilda'), 'doar', {'xp': 5}, 409)
+        self.g(b, 'doar', {'xp': 0, 'origem': 'dizimo'}, 400)
+        self.g(self.novo('Sem Guilda'), 'doar', {'xp': 5, 'origem': 'dizimo'}, 409)
         r1 = self.g(b, 'treino', {})
         r2 = self.g(b, 'treino', {})
         self.assertTrue(r1['pago'])
@@ -258,7 +264,7 @@ class ProvaDaGuilda(unittest.TestCase):
         self.g(b, 'entrar', {'gid': gid})
         self.g(c, 'entrar', {'gid': gid})
         self.g(a, 'cargo', {'conta': c.conta['id'], 'cargo': 'oficial'})
-        self.g(b, 'doar', {'xp': 40})
+        self.g(b, 'doar', {'xp': 40, 'origem': 'dizimo'})
         self.g(a, 'dizimo', {'pct': 10})
         r = self.g(a, 'dizimo', {'pct': 20, 'conta': b.conta['id']})
         ms = {m['id']: m for m in r['guilda']['membros']}

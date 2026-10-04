@@ -26,12 +26,12 @@
        - "Adversários encontrados: <guilda> — Confirmar (30 s)" com os NOMES dos dois (e nenhuma dupla deles);
        - confirmado: a ata vai ao Coop, a batalha abre com as duas guildas e os quatro nomes no topo (dentro da tela do
          celular), o menu tem "Sair da guerra";
-       - o fim: "A guilda <nome> venceu!", "conferindo…" e, com a resposta do servidor, "+40 XP para a guilda" — ou o
+       - o fim: "A guilda <nome> venceu!", "conferindo…" e, com a resposta do servidor, "+120 XP para a guilda" — ou o
          porquê de não render (o teto).
      19/09 (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário"):
        - a partida casada com `semXp` avisa ANTES de confirmar que não vai render XP;
        - o fechar passa pela Autoridade: /api/guerra/fechar respondendo status 0 duas vezes e ok na terceira ainda
-         chega a "+40 XP" (a fila de retentativa);
+         chega a "+120 XP" (a fila de retentativa);
        - "Voltar à Sede" fecha a sessão (sem modo de rede, sem sessão de guerra) e a Sede volta a oferecer "Inscrever
          o grupo na guerra": a segunda inscrição sai (antes a fila ficava presa em "abre em instantes"). -->
 <iframe id="tela"></iframe>
@@ -182,8 +182,8 @@
     J.Sessao.ativa = function () { return false; };
     J.Hub.aoAproximar(SEDE);
     var t = painelTxt();
-    check('sede · o bloco "Guerra de Guilda 2×2" explica (2 contra 2, oito heróis, +40 XP, a coroa não muda)',
-          /Guerra de Guilda 2×2/.test(t) && /oito heróis/.test(t) && /\+40 XP/.test(t) && /coroa não muda/.test(t), t.slice(0, 260));
+    check('sede · o bloco "Guerra de Guilda 2×2" explica (2 contra 2, oito heróis, +120 XP, a coroa não muda)',
+          /Guerra de Guilda 2×2/.test(t) && /oito heróis/.test(t) && /\+120 XP/.test(t) && /coroa não muda/.test(t), t.slice(0, 260));
     check('sede · sem a conta do site a guerra aparece desligada com o porquê (e sem botão de inscrever)',
           /precisa da sua conta do site/.test(t) && !botao(painelAberto(), /Inscrever o grupo/), t.slice(0, 260));
     J.Sessao.ativa = ses;
@@ -342,7 +342,7 @@
       vezesFechar++;
       if (vezesFechar <= 2) return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
       return espera.then(function () {
-        return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 40,
+        return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 120,
                  guilda: GUILDAS.A, guildas: GUILDAS, vida: {} };
       });
     };
@@ -358,11 +358,11 @@
     }).then(function (ok) {
       check('fim · o servidor fora (status 0) duas vezes: o fechar tenta de novo sozinho até responder (3 pedidos)', ok && vezesFechar === 3, String(vezesFechar));
       resolve();
-      return ate(function () { var s2 = telaAberta(); return s2 && /\+40 XP para a guilda/.test(s2.textContent); }, 4000);
+      return ate(function () { var s2 = telaAberta(); return s2 && /\+120 XP para a guilda/.test(s2.textContent); }, 4000);
     }).then(function (ok) {
       var t = (telaAberta() || {}).textContent || '';
-      check('fim · com a resposta: "A guilda Lanças do Norte venceu — +40 XP para a guilda" e as duas guildas com os nomes',
-            ok && /A guilda Lanças do Norte venceu — \+40 XP para a guilda/.test(t) && /Raízes Fundas/.test(t) && /Cris e Duda/.test(t) &&
+      check('fim · com a resposta: "A guilda Lanças do Norte venceu — +120 XP para a guilda" e as duas guildas com os nomes',
+            ok && /A guilda Lanças do Norte venceu — \+120 XP para a guilda/.test(t) && /Raízes Fundas/.test(t) && /Cris e Duda/.test(t) &&
             /a coroa não muda/.test(t) && !!botao(telaAberta(), /Voltar à Sede/), t.slice(0, 400));
       respostas['/api/guerra/fechar'] = function (op) {
         return { ok: true, status: 200, gid: op.body.gid, fase: 'won', venc: 'A', lado: 'A', venceu: true, xp: 0, motivo: 'teto',

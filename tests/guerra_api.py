@@ -10,7 +10,7 @@ um herói só e herói a 0 PV recusados), juntar (a inscrição só vale com as 
 OUTRA guilda, a mais antiga primeiro, dentro da paridade de 10 (e nunca na mesma guilda), a casada com as duplas dos
 adversários OCULTAS, os QUATRO confirmando (pronta com gid, semente e a ata do juiz: oito heróis com o dono de cada e a
 vida de cada um), o prazo (quem não confirmou sai, o lado inteiro que confirmou volta à fila com o lugar), a recusa,
-fechar a vitória (a guilda vencedora ganha 40 XP, a contribuição dos dois, a vida dos oito gravada na conta de cada
+fechar a vitória (a guilda vencedora ganha 120 XP, a contribuição dos dois, a vida dos oito gravada na conta de cada
 um), idempotente por gid, o empate sem XP, os tetos (3 por par de guildas e 10 por guilda em 24 h), a forja (lance fora
 da vez: 422 — e o limpo de outro vence), rápido demais, fotografado e quem não lutou.
 19/09, a revisão da guerra (o dono: "dê uma revisada na guerra de guild do meu jogo e ajuste o que for necessário"):
@@ -52,6 +52,8 @@ sys.path.insert(0, os.path.join(AQUI, '..', 'servidor'))
 from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402
 from autoridade_api import BAIXA, ESTADO_JS, JUIZ, NODE, adota_regras, espera_url, roda_node  # noqa: E402
 import guerra as guerra_mod  # noqa: E402
+
+XP = guerra_mod.GUERRA_XP   # 04/10: o XP da vitória subiu de 40 para 120; a prova cobra o número do servidor (e o 120, no test da paridade)
 
 JOGA = os.path.join(AQUI, 'juiz_guerra.js')
 DUPLA = ['sumo', 'curandeiro']
@@ -312,6 +314,7 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual(self.estado(b1)['fase'], 'inscrito')
         self.assertEqual(self.estado(b3)['fase'], 'inscrito')
         self.assertEqual(guerra_mod.GUERRA_PARIDADE, 10)
+        self.assertEqual(guerra_mod.GUERRA_XP, 120, '04/10 (dono): sem a doação em dinheiro, a vitória na guerra rende +120 XP')
 
     def test_03_casada_oculta_e_os_quatro_confirmam(self):
         (a1, a2, b1, b2), (ga, gb) = self.casada()
@@ -385,14 +388,14 @@ class ProvaDaGuerra(unittest.TestCase):
         self.envelhece(e['gid'])
         s, r = self.fecha(a2, e['gid'], jogo)
         self.assertEqual(s, 200, r)
-        self.assertEqual((r['fase'], r['venc'], r['xp'], r['lado'], r.get('fechada')), (jogo['fase'], jogo['venc'], 40, 'A', True))
+        self.assertEqual((r['fase'], r['venc'], r['xp'], r['lado'], r.get('fechada')), (jogo['fase'], jogo['venc'], XP, 'A', True))
         self.assertEqual(r['venceu'], jogo['venc'] == 'A')
         self.assertEqual(r['guilda']['id'], gv)
         self.assertEqual((self.xp(gv), self.xp(gp)), (antes[0] + guerra_mod.GUERRA_XP, antes[1]),
-                         'a vencedora ganha 40 XP; a perdedora não perde')
+                         'a vencedora ganha 120 XP; a perdedora não perde')
         vencedores = (a1, a2) if jogo['venc'] == 'A' else (b1, b2)
         contrib = {x['conta_id']: x['xp'] for x in self.sql("SELECT conta_id, xp FROM guilda_contrib WHERE guilda_id = ?", gv)}
-        self.assertEqual(sum(contrib.get(c.conta['id'], 0) for c in vencedores), 40, contrib)
+        self.assertEqual(sum(contrib.get(c.conta['id'], 0) for c in vencedores), XP, contrib)
         vidas = self.sql("SELECT conta_id, heroi FROM vida_heroi")
         for c in (a1, a2, b1, b2):
             self.assertEqual(sorted(v['heroi'] for v in vidas if v['conta_id'] == c.conta['id']), sorted(DUPLA),
@@ -404,16 +407,16 @@ class ProvaDaGuerra(unittest.TestCase):
                          {'fechada'}, 'a luta aberta dos quatro fecha')
         # idempotente: quem fecha depois recebe o guardado, e o XP não dobra
         s, r2 = self.fecha(b2, e['gid'], jogo)
-        self.assertEqual((s, r2['xp'], r2['venc'], r2['lado']), (200, 40, jogo['venc'], 'B'))
+        self.assertEqual((s, r2['xp'], r2['venc'], r2['lado']), (200, XP, jogo['venc'], 'B'))
         self.assertEqual(self.xp(gv), antes[0] + guerra_mod.GUERRA_XP)
         s, r3 = self.fecha(a1, e['gid'], {'lances': [], 'hashFinal': None})
-        self.assertEqual((s, r3['xp']), (200, 40), 'o guardado vale mesmo com outro registro')
+        self.assertEqual((s, r3['xp']), (200, XP), 'o guardado vale mesmo com outro registro')
         estranho = self.conta('Zeca')
         s, r = self.fecha(estranho, e['gid'], jogo)
         self.assertEqual((s, r.get('motivo')), (404, 'sem-partida'), 'quem não lutou não fecha')
         # 19/09: a guerra recém-fechada aparece no estado como 'fechada' (para quem perdeu a resposta) e não prende
         est = self.estado(a1)
-        self.assertEqual((est['fase'], est['gid'], est['xp'], est['venceu']), ('fechada', e['gid'], 40, jogo['venc'] == 'A'), est)
+        self.assertEqual((est['fase'], est['gid'], est['xp'], est['venceu']), ('fechada', e['gid'], XP, jogo['venc'] == 'A'), est)
         self.sql("UPDATE guerra_resultados SET criado_em = criado_em - ? WHERE gid = ?", guerra_mod.GUERRA_FECHADA_MS // 1000 + 5, e['gid'])
         self.assertEqual(self.estado(a1)['fase'], 'livre', 'depois de um minuto a guerra fechada sai do estado')
 
@@ -456,7 +459,7 @@ class ProvaDaGuerra(unittest.TestCase):
         t = int(time.time())
         for i in range(guerra_mod.GUERRAS_XP_POR_PAR):
             self.sql("INSERT INTO guerra_resultados(gid, fase, venc, xp, guilda_xp, a_guilda, b_guilda, criado_em) "
-                     "VALUES (?, 'won', 'A', 40, ?, ?, ?, ?)", 'velha-par-%d' % i, gb, gb, ga, t - 3600)
+                     "VALUES (?, 'won', 'A', %d, ?, ?, ?, ?)" % XP, 'velha-par-%d' % i, gb, gb, ga, t - 3600)
         jogo = self.joga(e['ata'])
         self.envelhece(e['gid'])
         s, r = self.fecha(a1, e['gid'], jogo)
@@ -466,7 +469,7 @@ class ProvaDaGuerra(unittest.TestCase):
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
         for i in range(guerra_mod.GUERRAS_XP_POR_GUILDA):
             self.sql("INSERT INTO guerra_resultados(gid, fase, venc, xp, guilda_xp, a_guilda, b_guilda, criado_em) "
-                     "VALUES (?, 'won', 'A', 40, ?, ?, ?, ?)", 'velha-g-%d' % i, ga, ga, 900000 + i, t - 3600)
+                     "VALUES (?, 'won', 'A', %d, ?, ?, ?, ?)" % XP, 'velha-g-%d' % i, ga, ga, 900000 + i, t - 3600)
         jogo = self.joga(e['ata'])
         self.envelhece(e['gid'])
         s, r = self.fecha(b1, e['gid'], jogo)
@@ -477,7 +480,7 @@ class ProvaDaGuerra(unittest.TestCase):
         jogo = self.joga(e['ata'])
         self.envelhece(e['gid'])
         s, r = self.fecha(b1, e['gid'], jogo)
-        self.assertEqual((s, r['xp']), (200, 40), r)
+        self.assertEqual((s, r['xp']), (200, XP), r)
 
     def test_09_forja_fotografada(self):
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -495,8 +498,8 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual(self.resultados(), 0, '19/09: o registro recusado não fecha a guerra (era um veto de graça)')
         self.assertEqual(self.contas_com_vida(), set(), 'registro recusado não grava vida')
         s, r = self.fecha(a2, e['gid'], jogo)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp']), (200, jogo['fase'], jogo['venc'], 40), 'o registro limpo de outro dos quatro vence o torto')
-        self.assertEqual(self.xp(ga if jogo['venc'] == 'A' else gb), 40)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp']), (200, jogo['fase'], jogo['venc'], XP), 'o registro limpo de outro dos quatro vence o torto')
+        self.assertEqual(self.xp(ga if jogo['venc'] == 'A' else gb), XP)
         # só fotografados, e a espera vencida: 'nao-conferida' (sem XP e sem vida)
         self.sql("DELETE FROM vida_heroi")
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -516,7 +519,7 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual((s, r['fase']), (200, 'aguardando'))
         self.espera_vencida(e['gid'])
         s, r = self.fecha(b1, e['gid'], jogo)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp']), (200, jogo['fase'], jogo['venc'], 40), r)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp']), (200, jogo['fase'], jogo['venc'], XP), r)
         s, r = a1.pede('POST', '/api/guerra/fechar', {'gid': 'nada'})
         self.assertEqual((s, r.get('motivo')), (400, 'gid'))
 
@@ -545,11 +548,11 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertTrue(all(hp == 0 for hp, _ in self.vida(b2).values()), self.vida(b2))
         self.assertEqual(self.estado(b2)['fase'], 'livre')
         s, r = self.fecha(a1, e['gid'], jogo)
-        self.assertEqual((s, r['venc'], r['xp'], r.get('fechada')), (200, jogo['venc'], 40, True), 'o registro com fim vence o vazio')
-        self.assertEqual(self.xp(gv), 40)
+        self.assertEqual((s, r['venc'], r['xp'], r.get('fechada')), (200, jogo['venc'], XP, True), 'o registro com fim vence o vazio')
+        self.assertEqual(self.xp(gv), XP)
         self.assertEqual(len(self.sql("SELECT 1 FROM vida_heroi")), 8)
         s, rb = self.fecha(b1, e['gid'], {'lances': [], 'hashFinal': None})
-        self.assertEqual((s, rb['xp']), (200, 40))
+        self.assertEqual((s, rb['xp']), (200, XP))
         self.assertEqual({h: v[0] for h, v in self.vida(b1).items()}, rb['vida'], 'a vida de quem fechou vazio é regravada com o fim de verdade')
         self.assertTrue(all(hp == 0 for hp, _ in self.vida(b2).values()), 'quem largou não é regravado')
 
@@ -562,13 +565,13 @@ class ProvaDaGuerra(unittest.TestCase):
         for c in (b1, b2):
             self.presenca(c, 'caiu', agora - 70000)          # caíram há 70 s (depois da pronta), sem voltar
         s, r = self.fecha(a1, e['gid'], largada, wo=True)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim'), r['venceu']), (200, 'won', 'A', 40, 'wo', True), r)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim'), r['venceu']), (200, 'won', 'A', XP, 'wo', True), r)
         for c in (b1, b2):
             v = self.vida(c)
             self.assertEqual(sorted(v), sorted(DUPLA))
             self.assertTrue(all(hp == 0 and mx > 60 for hp, mx in v.values()), 'o lado ausente sai a 0, com o máximo de verdade: %r' % v)
         self.assertEqual(sorted(self.vida(a1)), sorted(DUPLA), 'quem ficou grava a vida do replay')
-        self.assertEqual((self.xp(ga), self.xp(gb)), (40, 0), 'decisão do coordenador: o W.O. provado rende XP nos tetos')
+        self.assertEqual((self.xp(ga), self.xp(gb)), (XP, 0), 'decisão do coordenador: o W.O. provado rende XP nos tetos')
         # a queda recente ('cedo') espera até os 60 s; a volta dentro dos 60 s desfaz a prova: 'wo-sem-prova' (na espera)
         self.sql("DELETE FROM vida_heroi")
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -658,15 +661,15 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual(s, 200, r)
         # os dois de B fora: qualquer um que feche agora dá a vitória a A, com XP, fim 'saida'
         s, r = self.fecha(a2, e['gid'], largada)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim'), r['venceu']), (200, 'won', 'A', 40, 'saida', True), r)
-        self.assertEqual((self.xp(ga), self.xp(gb)), (40, 0))
+        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim'), r['venceu']), (200, 'won', 'A', XP, 'saida', True), r)
+        self.assertEqual((self.xp(ga), self.xp(gb)), (XP, 0))
         for c in (b1, b2):
             self.assertTrue(all(hp == 0 for hp, _ in self.vida(c).values()))
         self.assertEqual(sorted(self.vida(a1)), sorted(DUPLA))
         self.assertEqual(self.estado(a1)['fase'], 'fechada')
 
     def test_14_marcas_forjadas_contra_o_adversario_caem(self):
-        """o achado do juiz: quatro marcas `morte` nos heróis do adversário, sem lance, davam +40 XP e o outro lado a 0.
+        """o achado do juiz: quatro marcas `morte` nos heróis do adversário, sem lance, davam o XP da vitória e o outro lado a 0.
         2ª rodada: a marca `ia` passa de quem for — o parceiro marca por PRAZO (sem queda no Relé) e a voz entra nos
         quatro registros; exigir prova recusava o registro limpo do adversário e o lado que perdia vetava a guerra."""
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -684,7 +687,7 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual((s, r['fase'], r['motivo']), (200, 'aguardando', 'sem-fim'), r)
         self.assertEqual((self.resultados(), self.contas_com_vida()), (0, {a2.conta['id']}))
         s, r = self.fecha(b2, e['gid'], jogo)
-        self.assertEqual((s, r['venc'], r['xp']), (200, jogo['venc'], 40), 'o registro limpo vence')
+        self.assertEqual((s, r['venc'], r['xp']), (200, jogo['venc'], XP), 'o registro limpo vence')
         # o CRÍTICO da 2ª rodada: a Ana marca a Bia por PRAZO (sem 'caiu' no Relé); a marca entra nos quatro registros e
         # o registro limpo da Cris (o lado oposto) vale — era 422 marca-sem-prova, e a guerra acabava 'sem-fim' com a
         # vida do começo para os oito (ou 'recusada'), sem XP para quem venceu
@@ -705,7 +708,7 @@ class ProvaDaGuerra(unittest.TestCase):
         for c in (b1, b2):
             self.presenca(c, 'caiu', agora - 70000)
         s, r = self.fecha(a1, e['gid'], largada, wo=True)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', 40, 'wo'), r)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', XP, 'wo'), r)
 
     def test_15_a_pronta_nao_some_em_3_min_e_outra_luta_a_larga(self):
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -768,7 +771,7 @@ class ProvaDaGuerra(unittest.TestCase):
         t = int(time.time())
         for i in range(guerra_mod.GUERRAS_XP_POR_PAR):
             self.sql("INSERT INTO guerra_resultados(gid, fase, venc, xp, guilda_xp, a_guilda, b_guilda, criado_em) "
-                     "VALUES (?, 'won', 'A', 40, ?, ?, ?, ?)", 'velha-par-%d' % i, ga, ga, gb, t - 3600)
+                     "VALUES (?, 'won', 'A', %d, ?, ?, ?, ?)" % XP, 'velha-par-%d' % i, ga, ga, gb, t - 3600)
         self.assertTrue(self.estado(b2)['semXp'], 'os tetos avisam ANTES de confirmar')
         for c in (a1, a2, b1, b2):
             self.assertEqual(c.pede('POST', '/api/guerra/confirmar', {})[0], 200)
@@ -802,8 +805,8 @@ class ProvaDaGuerra(unittest.TestCase):
         for f in fios:
             f.join()
         self.assertEqual([saidas[k][0] for k in sorted(saidas)], [200] * 4, saidas)
-        self.assertEqual({saidas[k][1]['xp'] for k in saidas}, {40})
-        self.assertEqual(self.xp(gv), 40, 'os quatro fechando juntos pagam o XP uma vez só')
+        self.assertEqual({saidas[k][1]['xp'] for k in saidas}, {XP})
+        self.assertEqual(self.xp(gv), XP, 'os quatro fechando juntos pagam o XP uma vez só')
         self.assertEqual(self.resultados(), 1)
         self.assertEqual(len(self.sql("SELECT 1 FROM vida_heroi")), 8)
 
@@ -916,12 +919,12 @@ class ProvaDaGuerra(unittest.TestCase):
         for c in (b1, b2):
             self.presenca(c, 'caiu', agora - 70000)
         s, r = self.fecha(a1, e['gid'], largada, fotografada=True, wo=True)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', 40, 'wo'), r)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', XP, 'wo'), r)
         for c in (b1, b2):
             self.assertTrue(all(hp == 0 and mx > 60 for hp, mx in self.vida(c).values()), self.vida(c))
         self.assertTrue(all(hp == mx for hp, mx in self.vida(a1).values()), 'o fotografado não refaz: a vida do começo %r' % self.vida(a1))
         self.assertEqual(len(self.sql("SELECT 1 FROM vida_heroi")), 8)
-        self.assertEqual((self.xp(ga), self.xp(gb)), (40, 0))
+        self.assertEqual((self.xp(ga), self.xp(gb)), (XP, 0))
         # os dois adversários declararam a saída, e quem ficou é fotografado: 'won' fim 'saida' na hora
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
         largada = self.joga(e['ata'], para=4)
@@ -929,8 +932,8 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual(self.sair(b1, e['gid'])[0], 200)
         self.assertEqual(self.sair(b2, e['gid'])[0], 200)
         s, r = self.fecha(a1, e['gid'], largada, fotografada=True)
-        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', 40, 'saida'), r)
-        self.assertEqual(self.xp(ga), 40)
+        self.assertEqual((s, r['fase'], r['venc'], r['xp'], r.get('fim')), (200, 'won', 'A', XP, 'saida'), r)
+        self.assertEqual(self.xp(ga), XP)
         # o fotografado com o W.O. ainda sem a prova madura: 'aguardando wo' (em-luta, o vazio na espera) — e a prova
         # madura fecha o W.O. pela CONSULTA de qualquer um, com a vida do começo para quem ficou
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -946,7 +949,7 @@ class ProvaDaGuerra(unittest.TestCase):
         self.sql("UPDATE rele_presenca SET em_ms = em_ms - 70000")
         self.sql("UPDATE guerra_wo SET pedido_ms = pedido_ms - 70000 WHERE gid = ?", e['gid'])
         est = self.estado(b2)
-        self.assertEqual((est['fase'], est['venc'], est['fim'], est['xp'], est['venceu']), ('fechada', 'A', 'wo', 40, False), est)
+        self.assertEqual((est['fase'], est['venc'], est['fim'], est['xp'], est['venceu']), ('fechada', 'A', 'wo', XP, False), est)
         self.assertTrue(all(hp == 0 for hp, _ in self.vida(b1).values()))
         self.assertTrue(all(hp == mx for hp, mx in self.vida(a2).values()), self.vida(a2))
         # o fotografado sem fim forçado nenhum segue esperando como antes
@@ -999,8 +1002,8 @@ class ProvaDaGuerra(unittest.TestCase):
         self.sql("UPDATE rele_presenca SET em_ms = em_ms - 70000")
         self.sql("UPDATE guerra_wo SET pedido_ms = pedido_ms - 70000 WHERE gid = ?", e['gid'])
         est = self.estado(a2)
-        self.assertEqual((est['fase'], est['venc'], est['fim'], est['xp'], est['venceu']), ('fechada', 'A', 'wo', 40, True), est)
-        self.assertEqual((self.xp(ga), self.xp(gb)), (40, 0))
+        self.assertEqual((est['fase'], est['venc'], est['fim'], est['xp'], est['venceu']), ('fechada', 'A', 'wo', XP, True), est)
+        self.assertEqual((self.xp(ga), self.xp(gb)), (XP, 0))
         for c in (b1, b2):
             self.assertTrue(all(hp == 0 and mx > 60 for hp, mx in self.vida(c).values()), self.vida(c))
         self.assertFalse(all(hp == 0 for hp, _ in self.vida(a1).values()), 'quem ficou e declarou o W.O. não acaba a 0')
@@ -1012,7 +1015,7 @@ class ProvaDaGuerra(unittest.TestCase):
         self.assertEqual(self.saidas(e['gid']), {})
         # o W.O. da Ana repetido depois lê o guardado
         s, r = self.fecha(a1, e['gid'], largada, wo=True)
-        self.assertEqual((s, r['fase'], r['xp'], r.get('fim')), (200, 'won', 40, 'wo'))
+        self.assertEqual((s, r['fase'], r['xp'], r.get('fim')), (200, 'won', XP, 'wo'))
         # o único fechar é um W.O. sem queda anotada e ninguém mais fecha: a espera acaba pela consulta, 'wo-sem-prova'
         self.sql("DELETE FROM vida_heroi")
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
@@ -1045,7 +1048,7 @@ class ProvaDaGuerra(unittest.TestCase):
         for c in (b1, b2):
             self.presenca(c, 'caiu', p['pronta_ms'] - 5000)      # 5 s antes da pronta (depois da casada), sem voltar
         s, r = self.fecha(a1, e['gid'], largada, wo=True)
-        self.assertEqual((s, r['fase'], r['venc'], r.get('fim'), r['xp']), (200, 'won', 'A', 'wo', 40), r)
+        self.assertEqual((s, r['fase'], r['venc'], r.get('fim'), r['xp']), (200, 'won', 'A', 'wo', XP), r)
         # a queda de ANTES da casada não é desta guerra
         (a1, a2, b1, b2), (ga, gb), e = self.pronta()
         largada = self.joga(e['ata'], para=6)

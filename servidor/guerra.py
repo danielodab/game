@@ -52,7 +52,7 @@ AS DECISÕES (15/09)
   - O PRAZO: quem não confirmou sai; o lado que confirmou inteiro volta à fila com o lugar de antes.
   - A ATA É DO SERVIDOR: os oito payloads saem do juiz (Progress.battleParty no estado de cada conta) e a vida de
     cada herói da linha da conta dele — o cliente não escolhe com quanto entra nem com que números luta.
-  - O XP (decisão do coordenador): GUERRA_XP (40) para a guilda vencedora, dividido na contribuição dos dois que
+  - O XP (decisão do coordenador): GUERRA_XP (120; eram 40 até 04/10) para a guilda vencedora, dividido na contribuição dos dois que
     lutaram por ela; a perdedora não perde; empate não rende. A COROA NÃO MUDA (a Brasa é do PvP individual).
     Tetos contra combinação: GUERRAS_XP_POR_PAR com XP entre as mesmas duas guildas e GUERRAS_XP_POR_GUILDA por
     guilda em 24 h; acima, a guerra vale sem XP e o motivo fica guardado — e o estado casada/pronta já avisa
@@ -123,7 +123,8 @@ from salas import LARGADA_JANELA_MS, SALA_MIN_S, SALA_S_POR_TURNO, TENTATIVAS, _
 
 log = logging.getLogger('api')
 
-GUERRA_XP = 40                      # XP da guerra vencida para a guilda (decisão do coordenador, 15/09)
+GUERRA_XP = 120                     # XP da guerra vencida para a guilda (15/09: 40; 04/10, dono: sem a doação em
+                                    # dinheiro a guilda sobe pelo dízimo e pela guerra, "que o XP será maior")
 GUERRA_PARIDADE = 10                # níveis entre o herói mais forte de cada guilda-dupla (idem)
 GUERRA_CONFIRMA_MS = 30000          # o tempo de os quatro confirmarem
 GUERRA_JUNTAR_MS = 60000            # o tempo de o parceiro pôr a dupla dele

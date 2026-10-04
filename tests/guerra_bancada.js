@@ -95,7 +95,7 @@ function fakeRede(id) {
 function dubles(c) {
   c.fechou = []; c.vidaFim = []; c.saidas = []; c.lutas = [];
   c.J.Guerra = {
-    fechar: (corpo) => { c.fechou.push({ t: relogio.t, corpo: JSON.parse(JSON.stringify(corpo)) }); return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 }); },
+    fechar: (corpo) => { c.fechou.push({ t: relogio.t, corpo: JSON.parse(JSON.stringify(corpo)) }); return Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 120 }); },
     sairDaPartida: (gid) => { c.saidas.push({ via: 'guerra', gid }); return Promise.resolve({ ok: true }); }
   };
   c.J.Autoridade = {
@@ -105,7 +105,7 @@ function dubles(c) {
     esqueceLuta: (ref) => { c.lutas.push({ op: 'esquece', ref }); },
     lutaAberta: () => null,
     saiDaGuerra: (gid) => { c.saidas.push({ via: 'autoridade', gid }); return Promise.resolve({ ok: true }); },
-    fechaGuerra: (corpo) => Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 40 })
+    fechaGuerra: (corpo) => Promise.resolve({ ok: true, gid: corpo.gid, fase: 'won', xp: 120 })
   };
   c.J.Vida = { fim: (m, mx) => { c.vidaFim.push({ t: relogio.t, fim: JSON.parse(JSON.stringify(m)), max: JSON.parse(JSON.stringify(mx || {})) }); return true; },
                sincroniza() {} };

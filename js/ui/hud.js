@@ -10430,36 +10430,15 @@ var JOGO = (typeof window !== 'undefined')
         });
         rolo.appendChild(grade);
         caixa.appendChild(rolo);
-        caixa.appendChild(el('p', 'inv-dica', 'Ordem: cargo, depois o XP doado à guilda (dízimo, oferenda e treino).' +
+        caixa.appendChild(el('p', 'inv-dica', 'Ordem: cargo, depois o XP que cada um rendeu à guilda (dízimo, guerra e treino).' +
           (g.souLider ? ' Mude o dízimo de cada um direto na grade — campo vazio volta ao padrão.' : '')));
 
-        // ---- A OFERENDA (30/08): "a guild upa conforme os usuários doam
-        // xp" — vinténs da conta viram XP da guilda, 2 por 1. Qualquer
-        // membro doa; o dreno de moeda é o preço da vaidade coletiva.
-        if (!remoto) {
-          var of = el('div', 'guilda-oferenda');
-          of.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0';
-          var ofInp = document.createElement('input');
-          ofInp.type = 'number'; ofInp.min = '2'; ofInp.step = '2';
-          ofInp.placeholder = 'vinténs';
-          ofInp.className = 'hub-input';
-          ofInp.style.cssText = 'width:110px;margin:0';
-          of.appendChild(ofInp);
-          of.appendChild(btn('Doar à guilda (2 vinténs = 1 XP)', 'btn-mini btn-gold', function () {
-            var v = Math.floor(Number(ofInp.value) || 0);
-            if (v < 2) { toast('doe ao menos 2 vinténs'); return; }
-            v -= v % 2;
-            JOGO.DB.gastarMoedas(v).then(function (res) {
-              if (!res.ok) { toast(res.erro || 'vinténs insuficientes'); return; }
-              Gd.doarXp(v / 2).then(function (r2) {
-                toast(r2.ok ? 'A guilda recebeu ' + (v / 2) + ' XP — nível ' + r2.nivel + '.'
-                            : (r2.erro || 'não deu'), r2.ok ? 'good' : undefined);
-                sheetGuilda();
-              });
-            });
-          }));
-          caixa.appendChild(of);
-        }
+        // A OFERENDA (30/08: vinténs viravam XP da guilda, 2 por 1) morou aqui até 04/10. Dono:
+        // "dinheiro não dará mais XP para guild; somente % de XP doada de batalha OU guerra de
+        // guild" — o campo e o botão saíram; o servidor recusa a doação que não é o dízimo.
+        caixa.appendChild(el('p', 'inv-dica guilda-xp-regra',
+          'A guilda sobe pelo <b>dízimo</b> (a parte do XP de cada batalha que o membro doa) e pela <b>guerra de guilda</b>' +
+          (Gu() ? ' (+' + Gu().XP + ' XP por vitória)' : '') + '. Vinténs não compram XP.'));
 
         // ---- A PORTA E O DÍZIMO (30/08): governo do líder. A porta decide
         // se a sede aceita qualquer um ou só pedido; o dízimo é a % do XP

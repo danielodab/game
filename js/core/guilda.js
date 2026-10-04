@@ -406,9 +406,10 @@ var JOGO = (typeof window !== 'undefined')
     return responde({ ok: true });
   };
 
-  /* A OFERENDA (30/08): "a guild upa conforme os usuários doam xp" — o core
-   * recebe XP já convertida (a HUD cobra os vinténs da conta ANTES; a taxa
-   * de conversão é dela). Qualquer membro doa. */
+  /* O XP DO DÍZIMO. Nasceu como a oferenda (30/08: vinténs da conta viravam XP da
+   * guilda, 2 por 1). 04/10, dono: "dinheiro não dará mais XP para guild; somente %
+   * de XP doada de batalha OU guerra de guild" — a HUD perdeu o botão e esta porta
+   * ficou só para o dízimo, que o game.js entrega no fim de cada sala. */
   G.doarXp = function (n) {
     if (!conta) return responde({ ok: false });
     n = Math.floor(n);
@@ -661,7 +662,8 @@ var JOGO = (typeof window !== 'undefined')
   peloServidor('doarXp', function (n) {
     n = Math.floor(n);
     if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
-    return pede('/api/guilda/doar', { xp: n }).then(function (r) { if (r.ok && ficha) ficha.xp = r.xp; return r; });
+    // 04/10: a origem vai dita — o servidor recusa a doação que não é o dízimo (a oferenda em vinténs acabou)
+    return pede('/api/guilda/doar', { xp: n, origem: 'dizimo' }).then(function (r) { if (r.ok && ficha) ficha.xp = r.xp; return r; });
   });
   peloServidor('registraTreino', function () { return pede('/api/guilda/treino', {}); });
   peloServidor('compraBonus', function (tipo) { return pede('/api/guilda/bonus', { tipo: tipo }); });

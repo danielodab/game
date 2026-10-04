@@ -535,7 +535,7 @@ guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiên
   Estava provado: qualquer um dos quatro fechava com `lances: []` e o servidor guardava `sem-fim` como final, com a vida
   dos oito cheia e o registro do vencedor no guardado (o lado que perdia anulava a guerra do console); o primeiro
   registro recusado (422) fechava tudo como `recusada`; sair ou cair não custava nada; e o juiz aceitava marcas
-  `morte`/`ia` forjadas contra o adversário (quatro marcas, sem lance, 4 s depois da pronta = +40 XP e o outro lado a 0).
+  `morte`/`ia` forjadas contra o adversário (quatro marcas, sem lance, 4 s depois da pronta = +40 XP (hoje +120) e o outro lado a 0).
   O contrato servidor↔jogo agora:
   1. **Só um registro COM FIM fecha a guerra na hora** (venc A/B/empate no replay, ou o fim forçado abaixo). O registro
      SEM fim (hashFinal null, fase `playing`) vai para `guerra_espera(gid, conta_id, lances, primeiro_ms, motivo,

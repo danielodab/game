@@ -1982,7 +1982,7 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.Guerra = Guerra;
   Guerra.CONSULTA_MS = 2500;
   Guerra.CONSULTA_GRUPO_MS = 8000;
-  Guerra.XP = 40;                    // espelha GUERRA_XP (servidor/guerra.py): só para a tela explicar
+  Guerra.XP = 120;                   // espelha GUERRA_XP (servidor/guerra.py): só para a tela explicar (04/10: eram 40)
   Guerra.PARIDADE = 10;              // espelha GUERRA_PARIDADE
   Guerra.FECHA_REPETE_MS = 20000;    // o fechamento fotografado pergunta de novo (sem a Autoridade: o registro limpo de outro chega)
   Guerra._agora = function () { return Date.now(); };

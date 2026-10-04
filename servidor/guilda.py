@@ -38,8 +38,11 @@ AS REGRAS (as mesmas do guilda.js, que tem a cópia dos números):
              (retire antes); o último a sair dissolve; se o líder sai, o
              membro mais antigo herda
 Os tempos vão ao cliente em milissegundos (o relógio dele); aqui, segundos.
-A autoridade é a mesma do saque (o topo do api.py): o XP da oferenda e do
-dízimo o cliente calcula; o teto por pedido segura erro, não trapaça.
+A autoridade é a mesma do saque (o topo do api.py): o XP do dízimo o cliente
+calcula; o teto por pedido segura erro, não trapaça. 04/10 (dono: "dinheiro não
+dará mais XP para guild; somente % de XP doada de batalha OU guerra de guild"):
+a oferenda em vinténs acabou — POST /api/guilda/doar só aceita o dízimo
+(`origem: 'dizimo'`) e recusa o resto.
 """
 import logging
 import re
@@ -58,7 +61,8 @@ BONUS_S = 24 * 3600               # espelha JOGO.Guilda.BONUS_MS (em segundos)
 XP_TREINO = 6                     # espelha JOGO.Guilda.XP_TREINO
 MOEDA_TREINO = 1                  # espelha JOGO.Guilda.MOEDA_TREINO
 TREINO_INTERVALO = 20             # segundos entre dois treinos que pagam, por conta
-DOAR_MAX = 50000                  # XP numa oferenda só (o dízimo de uma sala é bem menos)
+DOAR_MAX = 50000                  # XP num dízimo só (o de uma sala é bem menos)
+SEM_OFERENDA = 'a guilda não recebe mais doação em dinheiro: o XP dela vem do dízimo das batalhas e da guerra de guilda'
 CONVITES_MAX = 50                 # convites em aberto por guilda (os mais velhos saem)
 CONVITE_VALIDADE = 7 * 86400
 BANCO_MAX = 200                   # peças no banco de uma guilda
@@ -127,7 +131,7 @@ CREATE TABLE IF NOT EXISTS guilda_emprestimos(
 );
 CREATE INDEX IF NOT EXISTS guilda_emprestimos_iid ON guilda_emprestimos(iid);
 -- 13/09 (pedido do dono: a grade de membros, o dízimo de cada um e a mensagem da guilda).
--- Tabelas novas, nada de ALTER: o XP que cada membro já doou (dízimo, oferenda, treino),
+-- Tabelas novas, nada de ALTER: o XP que cada membro já doou (dízimo, treino, guerra; até 04/10 a oferenda),
 -- o dízimo PRÓPRIO de um membro (sem linha = o padrão guildas.dizimo) e o mural
 CREATE TABLE IF NOT EXISTS guilda_contrib(
   guilda_id   INTEGER NOT NULL REFERENCES guildas(id) ON DELETE CASCADE,
@@ -579,6 +583,11 @@ class GuildaMixin:
         # do cliente seria XP inventado
         if self._g_autoridade():
             raise Recusa(403, 'o dízimo é creditado pelo servidor ao fechar a sala')
+        # 04/10: a oferenda em vinténs acabou (dono: "dinheiro não dará mais XP para guild"). Sem a
+        # autoridade esta rota fica só para o dízimo, que o jogo manda com a origem dita; o pedido sem
+        # ela é o da oferenda de antes (ou de um jogo velho na memória do navegador) e é recusado
+        if corpo.get('origem') != 'dizimo':
+            raise Recusa(403, SEM_OFERENDA)
         xp = corpo.get('xp')
         if isinstance(xp, bool) or not isinstance(xp, int) or xp < 1 or xp > DOAR_MAX:
             raise Recusa(400, 'quantia inválida')
