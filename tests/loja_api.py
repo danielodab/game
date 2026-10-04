@@ -1040,6 +1040,45 @@ class ProvaDasNovidades(ProvaDaLoja):
         self.assertEqual(c.pede('GET', '/api/loja/vitrine')[1]['boasVindas']['disponivel'], False)
 
     # -- as auras -----------------------------------------------------------------------------
+    def test_mestre_tem_todas_as_auras(self):
+        """04/10, o dono: "o super admin tem que ter todas auras liberadas". A conta marcada como
+        Mestre possui as cinco sem comprar: a ficha (GET /api/loja/aura e a vitrine) mostra todas, a
+        escolha é aceita e o Relé carimba a escolhida. O jogador comum segue sem nenhuma."""
+        import rele_ident
+        todas = list(loja_mod.AURAS)
+        m = self.novo('Zulu Todas Auras')
+        self.assertEqual(m.pede('GET', '/api/loja/aura')[1]['auras']['tem'], [])              # ainda é conta comum
+        self.assertEqual(m.pede('POST', '/api/loja/aura', {'aura': 'fogo'})[0], 409)
+        self.mestre(m)
+        self.assertEqual(self.barras(m), 0)                                                   # sem comprar nada
+        status, r = m.pede('GET', '/api/loja/aura')
+        self.assertEqual((status, r['auras']['tem'], r['auras']['escolhida']), (200, todas, None))
+        self.assertEqual(m.pede('GET', '/api/loja/vitrine')[1]['auras']['tem'], todas)
+        for cor in todas:                                                                     # cada uma é aceita
+            status, r = m.pede('POST', '/api/loja/aura', {'aura': cor})
+            self.assertEqual((status, r['auras']['escolhida'], r['auras']['tem']), (200, cor, todas))
+        self.assertEqual(m.pede('GET', '/api/loja/vitrine')[1]['auras']['escolhida'], todas[-1])
+        self.assertEqual(m.pede('POST', '/api/loja/aura', {'aura': 'dourada'})[0], 400)       # a que não existe, não
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM loja_pedidos WHERE conta_id = ?", m.conta['id'])[0]['n'], 0)
+        # o Relé lê a escolhida do banco e a carimba no oi do Mestre
+        conta, _ = rele_ident.confere(self.banco_arq, m.token)
+        self.assertEqual((conta['gm'], conta['aura']), (True, todas[-1]))
+        oi = {'t': 'oi', 'de': 'xm', 'nome': 'Oda'}
+        self.assertEqual(rele_ident.carimba(oi, conta, so_cache=True)['auraCor'], todas[-1])
+        # a compra confere só o que foi COMPRADO: o Mestre segue podendo comprar (e testar) a loja
+        self.da_barras(m, 400)
+        self.comprou(m, 'aura-agua')
+        self.assertEqual(self.compra(m, 'aura-agua')[0], 409)
+        self.assertEqual(m.pede('GET', '/api/loja/aura')[1]['auras']['tem'], todas)
+        # o jogador comum não muda: nenhuma aura, nenhuma escolha aceita
+        c = self.novo('Comum Sem Aura')
+        self.assertEqual(c.pede('GET', '/api/loja/aura')[1]['auras']['tem'], [])
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': 'fogo'})[0], 409)
+        # tirada a marca, a escolhida que ele não comprou deixa de valer; a comprada fica
+        self.sql("UPDATE contas SET gm = 0 WHERE id = ?", m.conta['id'])
+        r = m.pede('GET', '/api/loja/aura')[1]['auras']
+        self.assertEqual((r['tem'], r['escolhida']), (['agua'], None))
+
     def test_aura_comprada_escolhida_e_lida_de_volta(self):
         import rele_ident
         self.assertEqual(rele_ident.AURAS, loja_mod.AURAS)                                   # os gêmeos

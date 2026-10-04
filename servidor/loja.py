@@ -883,14 +883,14 @@ class LojaMixin:
         (e para o presente dele: a classe a caminho, comprada OU presenteada, barra as duas).
         `entrega` só no Pacote de Boas-Vindas (as escolhas de quem compra)."""
         if item['tipo'] == 'aura':                      # 04/10: comprada, presenteada ou vinda no Pacote
-            if item['alvo'] in self._auras(cid):
+            if item['alvo'] in self._auras(cid, so_compradas=True):
                 raise Recusa(409, 'essa aura já é sua')
         elif item['tipo'] == 'pacote':
             if entrega is not None:
                 for sub in entrega['itens']:
                     if sub['tipo'] == 'classe':
                         self._loja_confere_item(cid, POR_SKU['classe-' + sub['alvo']], progress)
-                if entrega['aura'] in self._auras(cid):
+                if entrega['aura'] in self._auras(cid, so_compradas=True):
                     raise Recusa(409, 'essa aura já é sua: escolha outra para o pacote')
         elif item['tipo'] == 'classe':
             if item['alvo'] in liberadas(progress):
@@ -1042,10 +1042,20 @@ class LojaMixin:
         return cur.lastrowid
 
     # -- as auras (04/10) -----------------------------------------------------------------------------
-    def _auras(self, cid):
+    def _auras(self, cid, so_compradas=False):
         """As auras da conta: as dos pedidos VIVOS (pendente, retirado, entregue) de aura — comprados,
         presenteados pelo Mestre ou por um amigo — e a que veio num Pacote de Boas-Vindas. Sem tabela de
-        posse: pedido cancelado ou estornado deixa de contar sozinho."""
+        posse: pedido cancelado ou estornado deixa de contar sozinho.
+        O MESTRE TEM TODAS (04/10, o dono: "o super admin tem que ter todas auras liberadas"): a conta
+        marcada (contas.gm = 1) possui as cinco sem comprar — a ficha do jogo mostra todas, a escolha é
+        aceita e o Relé a carimba como a de qualquer um. Vale enquanto a marca estiver ligada; tirada a
+        marca, a ficha volta a mostrar só o que foi comprado (a linha da escolhida fica até a próxima escolha).
+        `so_compradas`: sem esse atalho — é o que a COMPRA confere, para o Mestre poder seguir comprando
+        (e testando) a aura e o Pacote como qualquer conta."""
+        if not so_compradas:
+            marca = self.con.execute("SELECT gm FROM contas WHERE id = ?", (cid,)).fetchone()
+            if marca is not None and marca['gm']:
+                return set(AURAS)
         tem = set()
         for r in self.con.execute(
                 "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado', 'entregue') "
