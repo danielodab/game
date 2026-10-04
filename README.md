@@ -565,6 +565,24 @@ bicho que plana: confira `M.locoAjustada()` e a linha dele em `tests/corpos_lanc
 `tests/corpos_lancamento.html` e `tests/corpos_tabuleiro.html`, e a pasta nova tem de ganhar grupo
 no `GRUPO_DA_PASTA` do `tools/extrai_assets.py` (senão cai na base, que todo jogador baixa).
 
+**O jogo mostra só o COMEÇO do clipe de golpe** (medido na revisão de 03/10): o tabuleiro toca o
+`attack` por 0,72 s no corpo a corpo e 0,94 s à distância, a 1,1× (`renderer3d_v2.js`, evento
+`cast`), e solta para o parado. Clipe de 2,5 a 2,9 s tem o golpe nesse trecho (os 8 do Santuário e
+os 3 Ecos Menores: algum osso anda de 48% a 135% da altura do corpo em 0,79 s). O clipe LONGO do
+Meshy, de ~5,9 s, passa esse tempo se preparando: os **quatro Colossos** mexem 6% a 9% da altura
+(o salto e a pancada vêm aos 2,2 s e ninguém vê), igual a pelo menos onze que já estavam no ar (`faceless-smith`,
+`slag-bit`, `plank-shrike`, `kite-serpent`, `mote-swarm`, `nail-sprite`, `ore-chip`, `shaft-bat`,
+`tide-herald`, `mirror-twin`, `boss-riftheart`). Não é defeito do lote e não foi mexido: encaixar o
+golpe na janela muda a cara de pelo menos quinze monstros e pede o olho do dono (ou um clipe curto no Meshy).
+Fotos quadro a quadro em `.wt/_fotos/arte/monstros/revisao-golpe-em-tiras-*.png`.
+
+**`tests/sob_demanda.py` segue 24 de 34 vermelho desde antes deste lote** (rodado na revisão de
+03/10: estoura em `avatar:corpo` e acusa 4,1 MB com Economia de Dados, a mesma assinatura de 22/09).
+O conserto daquela noite (`Hub.cobreABatalha`, `economiaDeDados()` no hub3d, o passo `avatar:lider`)
+nunca entrou no main. Por isso a descida servida até um Colosso não tem prova automática; o que a
+cobre hoje é `tests/pacote_servido.py` (25 de 25: os 348 itens do bundle descem e abrem) e o plano
+por chave do `js/assets_bundle.js` (`doMonstro` pede a chave que o `lookFor` devolve).
+
 ---
 
 ## 9. Migração para Unity
