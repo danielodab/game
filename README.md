@@ -242,7 +242,9 @@ jogador. Página nova sem essa linha é bug.
 | `validate_world.html` | **7.914 checagens, 0 falhas** depois da junção de 03/10 (servido; com a seção 9 do Eco e os traços dos Colossos). 19/09: cobra "alcance > 0 ⇒ los:true"; a varredura de fonte exige `http://` |
 | **`visao_mapas.js`** (Node) | 218 passaram / 0 falharam (02/10: + a Câmara do Eco) — 21 salas + 10 andares do Poço: 0 vazamentos por muro, 0 assimétricos, 0 frestas de canto, área sem casa atrás de muro, cobertura −25% (depois da dificuldade, medida de onde a visão do golpe é exigida: conjurador, centro da área, vítima anterior do raio), raio e explosão de morte presos pelo muro |
 | **`poco_perigos.js`** (Node) | 42 passaram / 0 falharam (02/10) — o chão do Poço e os Colossos: semente decide tudo, perigo nunca na entrada nem em casa de monstro, buraco nunca separa o mapa (nem o rachado debaixo de muro invocado deixa de virar buraco), todo disparo avisado com uma vez inteira para sair, a IA não para em casa avisada (0 em 1.303 decisões), um colosso e um chefe por andar múltiplo de 5, os quatro traços, o juiz refaz andares com perigo e colosso e chega ao mesmo hash |
-| `poco_chao_tela.html` | passou (02/10) — 7 perigos desenhados, avisos acendem e apagam, nada vaza; o colosso mede ~1,5× um comum de escala 1,0 |
+| `poco_chao_tela.html` | passou (02/10; 03/10: o Colosso veste o corpo PRÓPRIO) — 7 perigos desenhados, avisos acendem e apagam, nada vaza; o colosso mede 1,44× um comum de escala 1,0 |
+| **`corpos_lancamento.html`** | 22 de 22 (03/10) — os 15 corpos do lote do lançamento (4 Colossos, 3 Ecos Menores, 8 do Santuário), cada um sozinho pelo `Models3D2.unit`: chave própria, pele com esqueleto, clipe por papel que mexe os ossos, golpe e reação destrocados, altura do briefing, pés no chão, frente em +Z, andar no lugar, morte que derruba, tinta do elemento, retrato da HUD; só o nado da Arraia é ajustado; os dois que não chegaram seguem no provisório. Fecha com quatro folhas de fotos na mesma régua |
+| **`corpos_tabuleiro.html`** | 8 de 8 (03/10; ~6 min em tempo real) — os mesmos 15 numa SALA REAL (motor + renderizador): um nó por unidade, pele visível, porte do briefing, pés no piso do herói, retrato da linha do tempo com figura. Uma foto por personagem |
 | **`eco_motor.js`** (Node) | 74 de 74 (02/10; 03/10: o sorteio rodada a rodada) — o corpo 2×2 (as quatro casas, a área que acerta uma vez, passagem, fixação, nada de empurrão), a visão simétrica em toda casa da Câmara, invisível/armadilha/raio sem brecha, as quatro fases, o golpe avisado, o placar (só o que o grupo tirou), o bônus de derrubar, a 13ª rodada, o hash, a IA jogando a tentativa inteira; e a virada que para esperando o sal (nada anda, sal de outra rodada não entra, a sorte da rodada sai SÓ do sal, um sal por rodada da 2 à 12) e o caminho (SHA-256 conferido com o do Node, JSON canônico que sobrevive à viagem) |
 | **`juiz_supremo.js`** (Node) | 27 de 27 (02/10; 03/10: o ensaio) — o juiz refaz a tentativa e chega ao mesmo dano do cliente; um "dano" mandado é ignorado; a largada pontua até onde foi (também parada na virada); lance trocado, hash mentido e outra semente = `divergiu`; outra versão = `regras-mudaram`; e o ENSAIO recusado: outro caminho com o sal de um (`caminho-trocado`), sal inventado (`sal-forjado`), sal nunca dado (`sal-nao-pedido`), rodada pulada (`sal-faltando`), sal fora da virada (`sal-fora-da-hora`), sem a chave |
 | **`supremo_api.py`** (Python, juiz + API) | 14 do Eco + as 15 do palco da autoridade (02/10; 03/10: o banimento vencido não tira do ranking, o juiz refaz com o estado da abertura, e a tentativa jogada AO VIVO pedindo o sal de cada rodada) — 3 por dia, versão das regras, o Mestre fora, o placar do replay, recusada/vencida/regras-mudaram, a semana que fecha uma vez só com os prêmios entregues pelo juiz (vinténs, selos, o título), o evento semanal em `/api/eventos`; o ensaio tentado contra o servidor de verdade (409 `caminho-preso`, 422 `caminho-trocado`/`sal-forjado`/`sal-faltando`, 409 `rodada-fora`, 410 vencida), o mesmo caminho dando o mesmo sal nos dois contêineres, e a conta do sal em Python igual à do juiz. O herói das provas do Eco é nível 26 (no 22 a IA zerava o dano em ~4% das tentativas e a prova falhava por sorte) |
@@ -311,6 +313,17 @@ da base) e `site_prova.py` só com os retratos dos Colossos. `celular.html` e `t
 `juiz_grupo_jogador.js` não são provas: são o jogador de mentira que as provas da API chamam (lê o
 pedido da entrada padrão).
 
+**Depois do lote dos personagens (03/10 à noite, `arte/monstros`)**, no Chrome headless pela vez da
+máquina, em tempo real: `corpos_lancamento` 22, `corpos_tabuleiro` 8, `poco_chao_tela` passou,
+`eco_hud` 49, `validate_world` 7.914/0, `texturas_abrem` **348/348** (eram 333: os 15 kits novos
+abrem e desenham), `carga.html` 40,19 MB até o menu (os três pacotes novos têm grupo próprio e NÃO
+entram na base); Node — `poco_perigos` 42, `eco_motor` 74, `visao_mapas` 218; Python —
+`texturas_prova` 16, `extrai_assets --conferir` em dia (348 itens), `retratos_site --so-confere`
+131 de 131. O `site_prova.py` fecha **174 de 174** e **deixou de acusar os retratos dos Colossos** (uma
+rodada antes deu 1 falha no filtro de itens da wiki, a oscilação de sempre do tempo virtual; 72 fotos em 72
+cartões). Com TODOS os 183 modelos embutidos carregados, o ajuste de locomoção por medida
+(`M.locoAjustada()`) pega um clipe só, o nado da Arraia: nenhum andar que já estava no ar mudou.
+
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
 
@@ -330,7 +343,9 @@ os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
 calabouços são arte própria do dono, gerada no Meshy e embutida em
 `assets/embedded/models-meshy-<calabouço>.js` — a linha do Quaternius acima
 vale hoje para as invocações, os pets e os dois monstros da Mina que não
-couberam no saldo. Créditos completos em [`docs/CREDITS_3D.md`](docs/CREDITS_3D.md).
+couberam no saldo. Desde 03/10 também são do dono os quatro Colossos do Poço
+(`models-meshy-colossos.js`), três Ecos Menores (`models-meshy-eco.js`) e os
+oito do Santuário dos Elementos (`models-meshy-santuario.js`). Créditos completos em [`docs/CREDITS_3D.md`](docs/CREDITS_3D.md).
 
 **A regra do `.gitignore` é por LICENÇA, não por nome de arquivo.** Isso já deu
 problema: a regra `assets/embedded/fx-*.js` era por prefixo e deixava de fora o
@@ -404,6 +419,28 @@ espinhos — esse comentário foi o único conflito, e ficou com as duas coisas.
 - **Consequência aceita:** quem fecha a aba no meio de uma sala fica até 2 h sem receber cartas nem
   bicho do Mestre (o resto entra). Cada recusa do pedido do sal grava um `supremo-ensaio` na conta,
   sem teto por tentativa (o save recusado já fazia igual).
+
+### 7.0.2 A arte do lançamento: os personagens (03/10 à noite)
+
+O dono entregou 15 personagens e eles entraram pelo caminho de sempre (`docs/RECEBER_LOTE.md`,
+manifesto à mão em `tools/monstros/{colossos,eco,santuario}.json`):
+
+- **os 4 Colossos do Poço** (`models-meshy-colossos.js`, grupo `poco:colossos`) e **3 Ecos Menores**
+  — Brasa, Coral e Rocha (`models-meshy-eco.js`, grupo `evento:eco`) saíram do corpo provisório.
+  **Não chegaram** o Eco Primordial e o Eco Menor de Vento: seguem em `M.CORPO_PROVISORIO`
+  (Coração Partido a 2,44× e Arauto do Vento), sem erro;
+- **os 8 do Santuário dos Elementos** (`models-meshy-santuario.js`, grupo
+  `calabouco:elementsanctum`, chaves `el-fogo-1` … `el-ar-2`): o MODELO está pronto para a chave;
+  as fichas (`DATA.monsters`) e o mapa são de outra frente (`arte/santuario`);
+- a arte veio **cinza de propósito**: quem diz o elemento é a tinta do jogo;
+- nenhuma regra de batalha mudou: `Engine.VERSAO_REGRAS` continua **6**.
+
+Três coisas novas no `models3d_v2.js`, todas dado declarado ou medida, nunca id escondido: o clipe
+de locomoção fica no lugar e em cima do chão (`prendeNoLugar`, `assentaLocomocao` — o nado da
+Arraia trazia o avanço dentro do clipe e vinha um metro abaixo do piso); `loco: 'walk'` no look
+põe um clipe na frente da corrida (a Arraia plana); `retrato: 'inteiro'` no look pede a figura toda
+no retrato da HUD (o busto por medida corta mal corpo sem rosto: o Caramujo, a Garça e o Colosso da
+Ventania). As fotos para o dono olhar estão em `.wt/_fotos/arte/monstros/`.
 
 ### 7.1 O equilíbrio: medido, acertado, e o que sobrou
 
@@ -516,6 +553,35 @@ delas (`docs/EQUILIBRIO.md` §3.6).
 `Game.state` fica nulo até entrar na sala. Página de prova que desce assim e
 espera a batalha fecha com zero checagens — o `muro_visual.html` ficou parado
 um mês desse jeito até 03/10.
+
+**Clipe de NADO ou de VOO do Meshy traz o deslocamento dentro** (03/10): a raiz avança dois corpos
+por ciclo e volta num salto, e o corpo deitado fica abaixo do piso. O `models3d_v2.js` conserta por
+medida ao abrir o kit, mas só o clipe que o `autoActions` escolheu como `walk`/`run`. Lote novo com
+bicho que plana: confira `M.locoAjustada()` e a linha dele em `tests/corpos_lancamento.html`
+(`PLANA`), e declare `loco` no look se o planar não for a corrida.
+
+**Lote sem calabouço não passa pelo bestiário** (03/10): `tests/bestiario.html` filtra por
+`dungeonId`. Colossos, Ecos e o que mais vier sem calabouço entram nas tabelas de
+`tests/corpos_lancamento.html` e `tests/corpos_tabuleiro.html`, e a pasta nova tem de ganhar grupo
+no `GRUPO_DA_PASTA` do `tools/extrai_assets.py` (senão cai na base, que todo jogador baixa).
+
+**O jogo mostra só o COMEÇO do clipe de golpe** (medido na revisão de 03/10): o tabuleiro toca o
+`attack` por 0,72 s no corpo a corpo e 0,94 s à distância, a 1,1× (`renderer3d_v2.js`, evento
+`cast`), e solta para o parado. Clipe de 2,5 a 2,9 s tem o golpe nesse trecho (os 8 do Santuário e
+os 3 Ecos Menores: algum osso anda de 48% a 135% da altura do corpo em 0,79 s). O clipe LONGO do
+Meshy, de ~5,9 s, passa esse tempo se preparando: os **quatro Colossos** mexem 6% a 9% da altura
+(o salto e a pancada vêm aos 2,2 s e ninguém vê), igual a pelo menos onze que já estavam no ar (`faceless-smith`,
+`slag-bit`, `plank-shrike`, `kite-serpent`, `mote-swarm`, `nail-sprite`, `ore-chip`, `shaft-bat`,
+`tide-herald`, `mirror-twin`, `boss-riftheart`). Não é defeito do lote e não foi mexido: encaixar o
+golpe na janela muda a cara de pelo menos quinze monstros e pede o olho do dono (ou um clipe curto no Meshy).
+Fotos quadro a quadro em `.wt/_fotos/arte/monstros/revisao-golpe-em-tiras-*.png`.
+
+**`tests/sob_demanda.py` segue 24 de 34 vermelho desde antes deste lote** (rodado na revisão de
+03/10: estoura em `avatar:corpo` e acusa 4,1 MB com Economia de Dados, a mesma assinatura de 22/09).
+O conserto daquela noite (`Hub.cobreABatalha`, `economiaDeDados()` no hub3d, o passo `avatar:lider`)
+nunca entrou no main. Por isso a descida servida até um Colosso não tem prova automática; o que a
+cobre hoje é `tests/pacote_servido.py` (25 de 25: os 348 itens do bundle descem e abrem) e o plano
+por chave do `js/assets_bundle.js` (`doMonstro` pede a chave que o `lookFor` devolve).
 
 ---
 

@@ -110,6 +110,12 @@ escolhido entra como emissivo, não como cor de corpo.
 > no saldo (Lasca de Veio e Cantor de Cristal, que vestem corpo de outro
 > lote, declarado) e o Esporinho do Rebanho do Invocador. O mapa que vale é
 > o `MONSTER_LOOK` de `js/render3d/models3d_v2.js`.
+>
+> **03/10/2026:** também são do dono, gerados no Meshy, os quatro Colossos do
+> Poço (`models-meshy-colossos.js`), os Ecos Menores de Brasa, Coral e Rocha
+> (`models-meshy-eco.js`) e os oito monstros do Santuário dos Elementos
+> (`models-meshy-santuario.js`). Seguem em corpo provisório, de outro kit do
+> próprio dono, o Eco Primordial e o Eco Menor de Vento (`M.CORPO_PROVISORIO`).
 
 Sem correspondência exata em acervo CC0 para um bestiário autoral. A regra usada:
 

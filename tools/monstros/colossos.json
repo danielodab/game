@@ -1,0 +1,67 @@
+{
+  "calabouco": "colossos",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\Os Colossos do Poco\\monstros",
+  "saida": "assets/embedded/models-meshy-colossos.js",
+  "monstros": [
+    {
+      "id": "colosso-fogo",
+      "nome": "Colosso de Brasa",
+      "boss": false,
+      "pasta": "Colosso de Brasa",
+      "prefixo": "Colosso de Brasa",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "colosso-agua",
+      "nome": "Colosso da Maré",
+      "boss": false,
+      "pasta": "Colosso da Maré",
+      "prefixo": "Colosso da Maré",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "colosso-terra",
+      "nome": "Colosso de Rocha",
+      "boss": false,
+      "pasta": "Colosso Rocha",
+      "prefixo": "Colosso de Rocha",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "colosso-ar",
+      "nome": "Colosso da Ventania",
+      "boss": false,
+      "pasta": "Colosso da Ventania",
+      "prefixo": "Colosso da Ventania",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    }
+  ]
+}

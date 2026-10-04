@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — os 15 corpos do lançamento NO TABULEIRO</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:1100px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  #app{position:fixed;left:-4000px;top:0;width:960px;height:600px}
+  #fotos canvas{display:inline-block;margin:6px 6px 0 0;border:1px solid #2b3542;width:470px}
+</style>
+</head>
+<body>
+<h1>Os 15 corpos do lote do lançamento — no tabuleiro de verdade</h1>
+<div class="sub">03/10. A página irmã (<code>corpos_lancamento.html</code>) mede cada corpo sozinho; esta põe cada um
+numa SALA REAL (o Vestíbulo das Heras, sala 1 da Estufa), pelo caminho inteiro do jogo — motor, renderizador,
+retrato da linha do tempo — e conta o que o renderizador criou: um nó por unidade, com pele e esqueleto, no
+corpo da chave própria, do porte certo ao lado de um herói. No canto de cada foto vai o retrato que a HUD usa.
+<br>Os oito do Santuário ainda podem não ter ficha em <code>DATA.monsters</code> (quem a escreve é a frente do
+mapa): sem ficha, a página empresta a de um monstro da Estufa SÓ para a foto, com o nome e o elemento certos.
+Quando a ficha existir, vale a dela.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<div id="fotos"></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/eco.js','js/core/poco.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/cenario-jardim.js',
+    'assets/embedded/models-meshy-colossos.js',
+    'assets/embedded/models-meshy-eco.js',
+    'assets/embedded/models-meshy-santuario.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/render3d/portraits3d.js','js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam') : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+
+  // [id do monstro, chave do modelo, elemento, altura do briefing (m), nome] — a mesma tabela da página irmã
+  var CORPOS = [
+    ['colosso_fogo',   'colosso-fogo',   'fogo',  2.88, 'Colosso de Brasa'],
+    ['colosso_agua',   'colosso-agua',   'agua',  2.88, 'Colosso da Maré'],
+    ['colosso_terra',  'colosso-terra',  'terra', 2.88, 'Colosso de Rocha'],
+    ['colosso_ar',     'colosso-ar',     'ar',    2.88, 'Colosso da Ventania'],
+    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  1.80, 'Eco Menor de Brasa'],
+    ['eco_menor_agua', 'eco-menor-agua', 'agua',  1.80, 'Eco Menor de Coral'],
+    ['eco_menor_terra','eco-menor-terra','terra', 2.00, 'Eco Menor de Rocha'],
+    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.10, 'Vigia de Pavio'],
+    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.50, 'Mariposa de Cinza'],
+    ['el_agua_1',  'el-agua-1',  'agua',  1.90, 'Caramujo-Comporta'],
+    ['el_agua_2',  'el-agua-2',  'agua',  2.00, 'Garça de Galeria'],
+    ['el_terra_1', 'el-terra-1', 'terra', 2.20, 'Pilarete'],
+    ['el_terra_2', 'el-terra-2', 'terra', 1.60, 'Toupeira-Sentinela'],
+    ['el_ar_1',    'el-ar-1',    'ar',    2.30, 'Cata-Vento'],
+    ['el_ar_2',    'el-ar-2',    'ar',    1.80, 'Arraia de Rajada']
+  ];
+  var TW = 960, TH = 600;
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var J = window.JOGO || {}, D = J.DATA, R = J.Renderer, G = J.Game, M = J.Models3D2, E = J.Engine;
+    if (!D || !R || !M || !E) { check('os módulos carregaram', false); return fecha(); }
+    var canvas = document.getElementById('game-canvas');
+    try { R.init(canvas, { preserveDrawingBuffer: true }); } catch (e) { check('o renderizador abriu', false, e.message); return fecha(); }
+    try { J.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+
+    var voltas = 0;
+    (function espera() {
+      var ok = false;
+      try { ok = M.isReady() && J.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && ++voltas < 720) return setTimeout(espera, 250);
+      check('os modelos e o renderizador ficaram prontos', !!ok);
+      try { roda(); } catch (e) { check('a página rodou até o fim', false, String(e && e.stack || e)); fecha(); }
+    })();
+
+    // poucos quadros, de passo largo: o WebGL por software leva ~1 s por quadro nesta janela, e a
+    // entrada da unidade (o "pop") e a câmera assentam pelo TEMPO somado, não pela contagem
+    function quadros(n) {
+      for (var q = 0; q < n; q++) {
+        while (E.events && E.events.length) {
+          var ev = E.events.shift();
+          [R, J.UI, G].forEach(function (m) { if (m && m.handleEvent) { try { m.handleEvent(ev); } catch (e) {} } });
+        }
+        try { R.render(0.25); } catch (e) {}
+      }
+    }
+    // a caixa do corpo POSADO (a da geometria é a da pose de bind)
+    function caixaPosada(obj) {
+      obj.updateMatrixWorld(true);
+      var box = new THREE.Box3(), v = new THREE.Vector3(), achou = false;
+      obj.traverse(function (n) {
+        if (!n.isSkinnedMesh || !n.geometry || !n.visible) return;
+        var pos = n.geometry.attributes.position;
+        for (var i = 0; i < pos.count; i += 7) {
+          v.fromBufferAttribute(pos, i); n.boneTransform(i, v); v.applyMatrix4(n.matrixWorld);
+          box.expandByPoint(v); achou = true;
+        }
+      });
+      return achou ? box : null;
+    }
+
+    function roda() {
+      var sala0 = D.dungeons.filter(function (d) { return d.id === 'greenhouse'; })[0].rooms[0];
+      var original = sala0.monsters;
+      J.Progress.reset();
+      var ids = J.Progress.heroIds();
+      while (ids.length < 2) { J.Progress.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = J.Progress.heroIds(); }
+      var emprestadas = [], erros = { nasce: [], no: [], corpo: [], pele: [], porte: [], chao: [], retrato: [], tinta: [] };
+      var linhas = [], fotos = {};
+      window.__fotos = fotos;
+
+      // um corpo por volta do relógio: a página respira entre um e outro (quem a embrulha num
+      // iframe para colher o resultado divide a mesma linha de execução)
+      var vez = 0;
+      (function proximo() {
+        if (vez >= CORPOS.length) { try { conclui(); } catch (e) { check('a página rodou até o fim', false, String(e && e.stack || e)); } return fecha(); }
+        try { um(CORPOS[vez]); } catch (e) { check('a página rodou até o fim', false, CORPOS[vez][0] + ': ' + String(e && e.stack || e)); }
+        vez++;
+        setTimeout(proximo, 30);
+      })();
+
+      function um(c) {
+        var id = c[0], chave = c[1], elem = c[2], alvo = c[3], nome = c[4];
+        // sem ficha (os do Santuário antes da frente do mapa juntar): empresta uma, só para a foto
+        if (!E.monster(id)) {
+          var base = D.monsters['pollen-puff'], copia = {};
+          for (var k in base) copia[k] = base[k];
+          copia.id = id; copia.name = nome; copia.element = elem; copia.dungeonId = null;
+          D.monsters[id] = copia; emprestadas.push(id);
+        }
+        sala0.monsters = { a: id, b: id, c: id };
+        var bt = null;
+        try { bt = E.createBattle('greenhouse', 0, J.Progress.battleParty(ids.slice(0, 2))); }
+        catch (e) { erros.nasce.push(id + ' (' + e.message + ')'); return; }
+        G.state = bt;
+        quadros(4);
+        var us = bt.units.filter(function (u) { return u.defId === id; });
+        if (us.length !== 5) erros.nasce.push(id + ' (' + us.length + ' de 5 na sala)');
+        var alturas = [], solas = [];
+        us.forEach(function (u) {
+          var no = R.unitNode(u.uid);
+          if (!no) { erros.no.push(id + '#' + u.uid); return; }
+          var peles = 0, ossos = 0, visivel = true;
+          for (var p = no; p; p = p.parent) if (!p.visible) visivel = false;
+          no.traverse(function (n) { if (n.isSkinnedMesh && n.visible) peles++; if (n.isBone) ossos++; });
+          if (!visivel || peles < 1 || ossos < 15) erros.pele.push(id + ' (' + peles + ' peles, ' + ossos + ' ossos' + (visivel ? '' : ', invisível') + ')');
+          var cx = caixaPosada(no);
+          if (cx) { alturas.push(cx.max.y - cx.min.y); solas.push(cx.min.y); }
+        });
+        var lk = M.lookFor(id);
+        if (!lk || lk.model !== chave || !(J.MODELS || {})[chave]) erros.corpo.push(id + ' → ' + (lk && lk.model));
+        // o porte NO TABULEIRO: a escala do renderizador não pode desfazer a do look
+        var h = alturas.length ? alturas.reduce(function (a, b) { return a + b; }, 0) / alturas.length : 0;
+        if (Math.abs(h - alvo) > alvo * 0.08) erros.porte.push(id + ' ' + h.toFixed(2) + ' m (pedia ' + alvo.toFixed(2) + ')');
+        // os pés na altura do piso da sala: a sola de todos fica a menos de 15 cm do piso onde o herói pisa
+        var heroi = bt.units.filter(function (u) { return u.side === 'player'; })[0];
+        var cxH = heroi && R.unitNode(heroi.uid) ? caixaPosada(R.unitNode(heroi.uid)) : null;
+        var piso = cxH ? cxH.min.y : 0;
+        var pior = 0; solas.forEach(function (s) { pior = Math.max(pior, Math.abs(s - piso)); });
+        if (pior > 0.15) erros.chao.push(id + ' (sola a ' + pior.toFixed(2) + ' m do piso)');
+
+        // o retrato da HUD (o mesmo da linha do tempo): sai, e tem figura (não é fundo liso)
+        var ret = null;
+        try { ret = M.portrait(id, { size: 128, element: elem }); } catch (e) {}
+        var temFigura = false;
+        if (ret) {
+          var d = ret.getContext('2d').getImageData(32, 32, 64, 64).data, mn = 255, mx = 0;
+          for (var q = 0; q < d.length; q += 16) { var l = (d[q] + d[q + 1] + d[q + 2]) / 3; if (l < mn) mn = l; if (l > mx) mx = l; }
+          temFigura = (mx - mn) > 40;
+        }
+        if (!temFigura) erros.retrato.push(id);
+
+        // ---- a foto: a câmera perto do grupo da direita (duas letras b e a c)
+        try { R.setCamera({ centerX: 15, centerY: 8, dist: 15 }); } catch (e) {}
+        quadros(5);
+        var cv = document.createElement('canvas'); cv.width = TW; cv.height = TH;
+        var g = cv.getContext('2d');
+        g.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, TW, TH);
+        g.fillStyle = 'rgba(8,10,14,0.82)'; g.fillRect(0, TH - 30, TW, 30);
+        g.fillStyle = '#ffd98a'; g.font = 'bold 15px Segoe UI, sans-serif';
+        g.fillText(nome + ' · ' + chave + ' · ' + h.toFixed(2) + ' m · ' + elem + (emprestadas.indexOf(id) >= 0 ? ' · ficha emprestada só para a foto' : ''), 150, TH - 10);
+        if (ret) { g.drawImage(ret, 8, TH - 136, 128, 128); g.strokeStyle = '#ffd98a'; g.strokeRect(8.5, TH - 135.5, 127, 127); }
+        document.getElementById('fotos').appendChild(cv);
+        fotos['tabuleiro-' + chave] = cv.toDataURL('image/png');
+        linhas.push({ id: id, chave: chave, h: +h.toFixed(3), n: us.length, sola: +pior.toFixed(3), retrato: !!ret });
+      }
+
+      function conclui() {
+      // devolve a sala e as fichas emprestadas: outra prova na mesma aba não herda nada
+      sala0.monsters = original;
+      emprestadas.forEach(function (id) { delete D.monsters[id]; });
+
+      check('os 15 nascem na sala pelo motor (5 de cada, nas letras da sala)', erros.nasce.length === 0 && linhas.length === CORPOS.length, erros.nasce.join(' · '));
+      check('o renderizador criou um nó por unidade', erros.no.length === 0, erros.no.join(' · '));
+      check('cada nó tem pele com esqueleto e está visível', erros.pele.length === 0, erros.pele.join(' · '));
+      check('cada um veste a chave PRÓPRIA no tabuleiro', erros.corpo.length === 0, erros.corpo.join(' · '));
+      check('o porte no tabuleiro é o do briefing (±8%)', erros.porte.length === 0, erros.porte.join(' · '));
+      check('os pés pisam o mesmo piso do herói (±15 cm)', erros.chao.length === 0, erros.chao.join(' · '));
+      check('o retrato da HUD sai com figura para os 15', erros.retrato.length === 0, erros.retrato.join(' · '));
+      window.__medidas = linhas;
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

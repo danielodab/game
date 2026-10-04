@@ -1,0 +1,130 @@
+{
+  "calabouco": "santuario",
+  "origem": "C:\\Users\\danie\\Downloads\\assets_ok\\mapa\\O Santuario dos Elementos\\monstros",
+  "saida": "assets/embedded/models-meshy-santuario.js",
+  "monstros": [
+    {
+      "id": "el-fogo-1",
+      "nome": "Vigia de Pavio",
+      "boss": false,
+      "pasta": "Vigia de Pavio",
+      "prefixo": "Vigia de Pavio",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      },
+      "arquivos": {
+        "attack": "attack.glb"
+      }
+    },
+    {
+      "id": "el-fogo-2",
+      "nome": "Mariposa de Cinza",
+      "boss": false,
+      "pasta": "Mariposa de Cinza",
+      "prefixo": "Mariposa de Cinza",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-agua-1",
+      "nome": "Caramujo-Comporta",
+      "boss": false,
+      "pasta": "Caramujo-Comporta",
+      "prefixo": "Caramujo-Comporta",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-agua-2",
+      "nome": "Garça de Galeria",
+      "boss": false,
+      "pasta": "Garça de Galeria",
+      "prefixo": "Garça de Galeria",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-terra-1",
+      "nome": "Pilarete",
+      "boss": false,
+      "pasta": "Pilarete",
+      "prefixo": "Pilarete",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-terra-2",
+      "nome": "Toupeira-Sentinela",
+      "boss": false,
+      "pasta": "Toupeira-Sentinela",
+      "prefixo": "Toupeira-Sentinela",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-ar-1",
+      "nome": "Cata-Vento",
+      "boss": false,
+      "pasta": "Cata-Vento",
+      "prefixo": "Cata-Vento",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    },
+    {
+      "id": "el-ar-2",
+      "nome": "Arraia de Rajada",
+      "boss": false,
+      "pasta": "Arraia de Rajada",
+      "prefixo": "Arraia de Rajada",
+      "mapa": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "run",
+        "attack": "HitReact",
+        "hit": "attack",
+        "death": "death"
+      }
+    }
+  ]
+}

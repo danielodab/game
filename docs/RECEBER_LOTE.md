@@ -27,6 +27,24 @@
 > 5 não serve: o bestiário também filtra pelo `dungeonId`, então reprova na
 > primeira linha sem conferir nenhum bicho. O 6 e o 7 não existem aqui, porque não há cenário de
 > calabouço nem portal.
+>
+> **03/10 à noite — esse lote ENTROU** (4 Colossos, 3 Ecos Menores e os 8 do
+> Santuário dos Elementos; faltam o Eco Primordial e o Eco Menor de Vento). O
+> que ele acrescentou ao caminho:
+> - **arquivo com nome fora da regra**: o manifesto aceita
+>   `"arquivos": {"attack": "attack.glb"}` no monstro (o golpe do Vigia de
+>   Pavio veio sem o nome dele na frente). A pasta do dono não se renomeia;
+> - **a régua no lugar do bestiário**: `tests/corpos_lancamento.html` (cada
+>   corpo sozinho: malhas, ossos, clipes, altura, pés, frente, tinta) e
+>   `tests/corpos_tabuleiro.html` (cada um numa sala de verdade, com o
+>   retrato da HUD). Lote novo sem calabouço entra nas tabelas dessas duas;
+> - **clipe de nado traz o deslocamento dentro**: a Arraia de Rajada plana
+>   com o `Swim_Forward` do Meshy, que anda dois corpos por ciclo e vem um
+>   metro abaixo do piso. O `models3d_v2.js` prende no lugar e ergue por
+>   MEDIDA (`prendeNoLugar`, `assentaLocomocao`), e o look diz qual clipe é a
+>   locomoção (`loco: 'walk'`). `M.locoAjustada()` conta quem foi mexido;
+> - **retrato do site**: monstro sem calabouço que a wiki mostra precisa de
+>   lote próprio no `tools/retratos_site.py` (`bichos-colossos`).
 
 Este é o caminho do lote, do mesmo jeito que os cinco anteriores entraram, só
 que agora com ferramenta genérica em vez de script copiado.
