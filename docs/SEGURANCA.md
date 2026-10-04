@@ -304,10 +304,24 @@ nunca ALTER. Um advogado revisa os textos antes de abrir ao público (`docs/REVI
   dinheiro (pagamentos, extrato das barras, alertas) fica sem a conta — e no MESMO id nasce a
   **lápide** (`excluída#<id>`, e-mail `.invalid`, senha impossível, `banido = 1`): sem ela o
   SQLite daria o maior id apagado à próxima conta criada. `contas_excluidas(conta_id,
-  excluida_em, guilda)` anota a exclusão. A cópia que a conta emprestou pelo banco da guilda fica
-  com quem pegou (a original some com a conta: não é duplicação). E-mail de confirmação ao
+  excluida_em, guilda)` anota a exclusão. O banco da guilda (04/10): a peça que a conta PEGOU volta
+  ao banco na mesma transação, livre e do dono; a que ela EMPRESTOU é recolhida de quem pegou (o
+  juiz tira a cópia do estado dele, op interna `bancoGuildaRecolhe`, e ele recebe o recado
+  `dono-excluiu`) e sai do jogo com a conta — só se o juiz não responder a cópia fica com quem
+  pegou, porque excluir não espera por ele. E-mail de confirmação ao
   endereço que era da conta. A prova lê o esquema: nenhuma coluna com chave para `contas` (nem
   `conta_id` sem chave) pode apontar para a conta depois.
+- **O empréstimo que volta sozinho (04/10, `servidor/guilda.py`).** Quem pega uma peça no banco da
+  guilda e fica mais de `EMPRESTIMO_AUSENCIA_DIAS` (3) sem entrar perde o empréstimo: a vaga fica
+  livre (a peça segue do dono) e a cópia sai do estado dele pelo juiz (`bancoGuildaRecolhe`: do
+  saco, do herói que a veste ou do cofre do Acampamento), com ele fora; a série da cópia vira
+  `fora`. A régua é `contas_visto(conta_id, em)`, gravada ao abrir a sessão e junto com o
+  `ultimo_uso` dela (a sessão sozinha não serve: some no sair e no login em outro aparelho).
+  Confere-se em `GET /api/guilda/minha` (só a guilda de quem abriu) e num passo de hora em hora
+  no `despacha`, antes de a conta do pedido contar como presente. `guilda_avisos` guarda o recado;
+  o `/minha` o entrega em `avisos` e o jogo confirma em `POST /api/guilda/avisos/visto {ate}`. Sem
+  o juiz o saco mora no navegador: o servidor solta a vaga e o jogo tira a cópia ao ler o recado.
+  Não existe expulsão de membro; sair da guilda segue exigindo devolver antes (409).
 - **Baixar meus dados.** `GET /api/conta/meus-dados`: o JSON de tudo o que o servidor guarda da
   conta (dados, aceites, save, sessões com IP, eventos, itens, salas, duelos, Arena, guerras,
   salas em grupo, tentativas e prêmios do Eco Primordial, guilda — com as peças no banco, o XP doado, o mural, pedidos e convites —, amigos,

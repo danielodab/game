@@ -652,6 +652,78 @@ class ProvaDaAutoridade(unittest.TestCase):
         self.assertEqual(self.sql("SELECT conta_id, estado FROM itens WHERE iid = ?", ig),
                          [{'conta_id': a.conta['id'], 'estado': 'vivo'}])
 
+    def test_24_o_emprestimo_volta_sozinho_pelo_juiz(self):
+        """04/10: a devolução forçada (mais de 3 dias sem entrar; o dono excluiu a conta) tira a
+        cópia do estado de quem pegou pelo juiz, com ele fora — do saco e do herói que a veste."""
+        self.precisa_op()
+        import guilda as guilda_mod
+        a, b, c = self.novo('Dona Volta'), self.novo('Sumido Volta'), self.novo('Vestido Volta')
+        i1, i2 = self.serie('gv'), self.serie('gw')
+        pa, da = self.estado_de_partida(pecas=[i1, i2])
+        self.poe_estado(a, pa, da, pecas=[i1, i2])
+        self.poe_estado(b)
+        self.poe_estado(c)
+        status, g = a.pede('POST', '/api/guilda/criar', {'nome': 'Volta %d' % ProvaDaAutoridade._n})
+        self.assertEqual(status, 200, g)
+        for x in (b, c):
+            self.assertEqual(x.pede('POST', '/api/guilda/entrar', {'gid': g['guilda']['id']})[0], 200)
+        for i in (i1, i2):
+            status, r = a.pede('POST', '/api/guilda/banco/depositar', {'item': {'itemId': PECA, 'iid': i}})
+            self.assertEqual(status, 200, r)
+        vagas = {v['iid']: v['id'] for v in r['guilda']['banco']}
+        todas = lambda s: ([e.get('iid') for e in s['progress']['inventory'] if isinstance(e, dict)] +
+                           [v.get('iid') for h in s['progress'].get('heroes', {}).values()
+                            for v in (h.get('itemVar') or {}).values() if isinstance(v, dict)])
+        # --- (b) mais de 3 dias sem entrar: B tem a cópia no saco
+        status, r = b.pede('POST', '/api/guilda/banco/pegar', {'id': vagas[i1]})
+        self.assertEqual(status, 200, r)
+        copia = r['item']['iid']
+        versao = self.save(b)['versao']
+        self.sql("UPDATE contas_visto SET em = em - ? WHERE conta_id = ?",
+                 guilda_mod.EMPRESTIMO_AUSENCIA_S - 600, b.conta['id'])
+        status, r = a.pede('GET', '/api/guilda/minha')
+        self.assertEqual([v['emprestadoPara'] for v in r['guilda']['banco'] if v['iid'] == i1], [b.conta['id']],
+                         'menos de 3 dias: não devolve')
+        self.sql("UPDATE contas_visto SET em = em - 1200 WHERE conta_id = ?", b.conta['id'])
+        status, r = a.pede('GET', '/api/guilda/minha')
+        self.assertEqual([v['emprestadoPara'] for v in r['guilda']['banco'] if v['iid'] == i1], [None],
+                         'a dona vê a peça livre')
+        sb = self.save(b)
+        self.assertNotIn(copia, todas(sb), 'a cópia saiu do estado de quem pegou, com ele fora')
+        self.assertEqual(sb['versao'], versao + 1)
+        self.assertEqual(self.sql("SELECT estado FROM itens WHERE iid = ?", copia)[0]['estado'], 'fora')
+        self.assertEqual(self.sql("SELECT conta_id, estado FROM itens WHERE iid = ?", i1),
+                         [{'conta_id': a.conta['id'], 'estado': 'vivo'}], 'a original segue da dona: nem duplica nem some')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_emprestimos WHERE iid = ?", copia)[0]['n'], 0)
+        status, r = b.pede('GET', '/api/guilda/minha')
+        self.assertEqual([(x['itemId'], x['iid'], x['motivo']) for x in r['avisos']], [(PECA, copia, 'ausencia')])
+        # --- a dona exclui a conta com a outra peça emprestada a C, que a VESTE (fora do saco)
+        status, r = c.pede('POST', '/api/guilda/banco/pegar', {'id': vagas[i2]})
+        self.assertEqual(status, 200, r)
+        copia2 = r['item']['iid']
+        sc = self.save(c)
+        prog = sc['progress']
+        entrada = [e for e in prog['inventory'] if isinstance(e, dict) and e.get('iid') == copia2][0]
+        prog['inventory'] = [e for e in prog['inventory'] if not (isinstance(e, dict) and e.get('iid') == copia2)]
+        hid = sorted(prog['heroes'])[0]
+        heroi = prog['heroes'][hid]
+        heroi.setdefault('items', {})['punho'] = PECA
+        heroi.setdefault('itemVar', {})['punho'] = {'level': entrada.get('level', 0), 'stars': entrada.get('stars', 0),
+                                                 'iid': copia2}
+        self.sql("UPDATE saves SET progress = ? WHERE conta_id = ?", json.dumps(prog), c.conta['id'])
+        self.assertIn(copia2, todas(self.save(c)))
+        status, r = a.pede('POST', '/api/conta/excluir', {'nome': a.conta['nome'], 'senha': 'segredo-bom-8'})
+        self.assertEqual(status, 200, r)
+        sc = self.save(c)
+        self.assertNotIn(copia2, todas(sc), 'a cópia vestida é recolhida na exclusão do dono')
+        self.assertIsNone(sc['progress']['heroes'][hid]['items']['punho'])
+        self.assertEqual(self.sql("SELECT estado FROM itens WHERE iid = ?", copia2)[0]['estado'], 'fora')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_banco WHERE dono_id = ?", a.conta['id'])[0]['n'], 0)
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM itens WHERE iid IN (?, ?)", i1, i2)[0]['n'], 0,
+                         'as peças da dona saem do jogo com a conta')
+        status, r = c.pede('GET', '/api/guilda/minha')
+        self.assertEqual([(x['iid'], x['motivo']) for x in r['avisos']], [(copia2, 'dono-excluiu')])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

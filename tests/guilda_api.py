@@ -332,6 +332,80 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertEqual(self.estado(iid), 'fora', 'fora do banco, a varredura volta a valer')
         self.g(a, 'banco/pegar', {'id': vaga['id']}, 404)
 
+    def test_06b_o_emprestimo_volta_sozinho_depois_de_3_dias(self):
+        """04/10 (dono: "caso o usuário ... fique mais de 3 dias sem entrar, a peça volta
+        automaticamente para o cofre da guilda"). A data do último acesso é mexida no banco."""
+        a, b = self.novo('Dona Prazo'), self.novo('Sumido')
+        gid = self.funda(a)
+        self.g(b, 'entrar', {'gid': gid})
+        iid = 'jprazo%d' % ProvaDaGuilda._n
+        self.salva(a, [iid])
+        vaga = self.g(a, 'banco/depositar', {'item': {'itemId': 'gh-wasp-sting', 'level': 1, 'iid': iid}})['guilda']['banco'][0]
+        self.g(b, 'banco/pegar', {'id': vaga['id']})
+        bid, dia = b.conta['id'], 86400
+        self.assertEqual(guilda_mod.EMPRESTIMO_AUSENCIA_DIAS, 3)
+        visto = self.sql("SELECT em FROM contas_visto WHERE conta_id = ?", bid)
+        self.assertEqual(len(visto), 1, 'pegar emprestado marca a presença: o prazo parte dali')
+        # menos de 3 dias: nada volta
+        self.sql("UPDATE contas_visto SET em = em - ? WHERE conta_id = ?", 3 * dia - 600, bid)
+        f = self.g(a, 'minha')
+        self.assertEqual(f['guilda']['banco'][0]['emprestadoPara'], bid, 'antes do prazo o empréstimo segue')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_avisos WHERE conta_id = ?", bid)[0]['n'], 0)
+        # mais de 3 dias: abrir o banco devolve — a dona vê a peça livre, uma só, e ainda dela
+        self.sql("UPDATE contas_visto SET em = em - ? WHERE conta_id = ?", 1200, bid)
+        f = self.g(a, 'minha')
+        self.assertEqual([(v['iid'], v['dono'], v['emprestadoPara']) for v in f['guilda']['banco']],
+                         [(iid, a.conta['id'], None)])
+        self.assertEqual(self.estado(iid), 'vivo')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_banco WHERE iid = ?", iid)[0]['n'], 1, 'não duplica')
+        # quem pegou volta: o recado diz o porquê, repete até ser confirmado e depois some
+        r = self.g(b, 'minha')
+        self.assertEqual([(x['itemId'], x['level'], x['motivo'], x['dias']) for x in r['avisos']],
+                         [('gh-wasp-sting', 1, 'ausencia', 3)])
+        self.assertEqual(len(self.g(b, 'minha')['avisos']), 1, 'sem confirmar, o recado volta')
+        self.g(b, 'avisos/visto', {'ate': r['avisos'][0]['id']})
+        self.assertEqual(self.g(b, 'minha')['avisos'], [])
+        self.assertEqual(self.g(a, 'minha')['avisos'], [], 'o recado é só de quem perdeu o empréstimo')
+        self.g(b, 'banco/devolver', {'id': vaga['id']}, 409)       # já voltou: não há o que devolver
+        self.g(b, 'sair', {})                                       # e nada mais o prende à guilda
+        # a peça ficou livre de verdade: a dona retira de vez a MESMA série
+        r = self.g(a, 'banco/pegar', {'id': vaga['id']})
+        self.assertEqual((r['definitivo'], r['item']['iid']), (True, iid))
+
+    def test_06c_o_passo_periodico_recolhe_sem_ninguem_abrir_o_banco(self):
+        import api as cartorio
+        pasta = tempfile.mkdtemp(prefix='soterra-guilda-passo-')
+        try:
+            srv = cartorio.Api(os.path.join(pasta, 'soterra.db'))
+            t = int(time.time())
+            for cid in (1, 2):
+                srv.con.execute("INSERT INTO contas(id, nome, email, senha_hash, sal, criado_em) VALUES (?, ?, ?, '!', '!', ?)",
+                                (cid, 'Passo %d' % cid, 'passo%d@soterra.test' % cid, t))
+            srv.con.execute("INSERT INTO guildas(id, nome, emblema, lider_id, criada_em) VALUES (1, 'Do Passo', 'x', 1, ?)", (t,))
+            srv.con.executemany("INSERT INTO guilda_membros(guilda_id, conta_id, cargo, entrou_em) VALUES (1, ?, 'membro', ?)",
+                                [(1, t), (2, t)])
+            srv.con.execute("INSERT INTO guilda_banco(id, guilda_id, item_id, iid, dono_id, emprestado_para, em) "
+                            "VALUES (1, 1, 'gh-wasp-sting', NULL, 1, 2, ?)", (t,))
+            srv.con.commit()
+            emprestada = lambda: srv.con.execute("SELECT emprestado_para FROM guilda_banco WHERE id = 1").fetchone()[0]
+            # o empréstimo de antes da regra não tem data: o primeiro passo só começa a contar o prazo
+            srv._g_recolhe_em = 0
+            srv._g_passo_emprestimos()
+            self.assertEqual(emprestada(), 2)
+            self.assertIsNotNone(srv.con.execute("SELECT em FROM contas_visto WHERE conta_id = 2").fetchone())
+            srv.con.execute("UPDATE contas_visto SET em = em - ? WHERE conta_id = 2",
+                            (guilda_mod.EMPRESTIMO_AUSENCIA_S + 5,))
+            srv.con.commit()
+            srv._g_passo_emprestimos()
+            self.assertEqual(emprestada(), 2, 'no máximo uma vez por hora: o passo de agora há pouco não repete')
+            srv._g_recolhe_em = 0
+            srv._g_passo_emprestimos()
+            self.assertIsNone(emprestada(), 'vencido o prazo, o passo devolve sem ninguém abrir o banco')
+            self.assertEqual(srv.con.execute("SELECT motivo FROM guilda_avisos WHERE conta_id = 2").fetchone()[0], 'ausencia')
+            srv.con.close()
+        finally:
+            shutil.rmtree(pasta, ignore_errors=True)
+
     def test_07_sair_heranca_e_dissolucao(self):
         a, b = self.novo('Fundadora'), self.novo('Herdeira')
         gid = self.funda(a)

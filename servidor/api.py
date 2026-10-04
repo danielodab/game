@@ -329,6 +329,7 @@ ROTAS = {
     ('POST', '/api/guilda/banco/depositar'):  ('guilda_banco_depositar', True),
     ('POST', '/api/guilda/banco/pegar'):      ('guilda_banco_pegar', True),
     ('POST', '/api/guilda/banco/devolver'):   ('guilda_banco_devolver', True),
+    ('POST', '/api/guilda/avisos/visto'):     ('guilda_avisos_visto', True),   # 04/10: o recado da peça que voltou
     # a autoridade (13/09, salas.py; docs/SEGURANCA.md §4): o servidor dá a semente da
     # sala, o juiz refaz e paga; as operações de economia rodam no estado do servidor
     ('POST', '/api/sala/abrir'):              ('sala_abrir', True),
@@ -844,6 +845,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self._faxina_privacidade(t)   # 02/10: as vencidas saem com o IP delas (privacidade.py), no máximo 1 vez por hora
         self.con.execute("INSERT INTO sessoes(token, conta_id, criado_em, ultimo_uso) VALUES (?, ?, ?, ?)",
                          (token, conta_id, t, t))
+        self._g_visto(conta_id, t)            # 04/10: entrou — o prazo do empréstimo da guilda conta daqui (guilda.py)
         if isinstance(corpo, dict):
             self.con.execute("INSERT INTO sessoes_extra(token, ip, agente, criado_em) VALUES (?, ?, ?, ?)",
                              (token, corpo.get('_ip') or None, (corpo.get('_agente') or '')[:160] or None, t))
@@ -865,6 +867,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 return None
             if t - r['sessao_uso'] > 60:          # não escrever a cada pedido
                 self.con.execute("UPDATE sessoes SET ultimo_uso = ? WHERE token = ?", (t, token))
+                self._g_visto(r['id'], t)         # 04/10: o "visto por último" que sobrevive à sessão (guilda.py)
                 self.con.commit()
             return dict(r)
 
@@ -875,6 +878,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         nome, precisa_conta = rota[0], rota[1]
         so_mestre = len(rota) > 2 and rota[2]
         conta = None
+        # 04/10: os empréstimos do banco da guilda vencidos por ausência voltam (guilda.py), no
+        # máximo uma vez por hora — e ANTES de a conta deste pedido contar como presente
+        self._g_passo_emprestimos()
         if precisa_conta or so_mestre:
             conta = self.conta_do_token(token)
             if conta is None:

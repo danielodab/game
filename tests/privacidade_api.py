@@ -23,7 +23,7 @@ O que se cobra:
   - fica o que a lei manda (o pagamento, o extrato das barras, o evento do pagamento),
     sem a conta; o nome e o e-mail voltam a ficar livres, e o id não é reaproveitado;
   - a guilda: o membro mais antigo herda; sozinho, a guilda se desfaz; o empréstimo
-    que a conta deu fica com quem pegou, o que ela pegou volta ao dono;
+    que a conta deu é recolhido de quem pegou (04/10), o que ela pegou volta ao banco, livre;
   - o mercadinho: o anúncio dela some com as propostas nele; a proposta dela some; a
     venda antiga fica para o comprador sem dizer quem era;
   - o e-mail de confirmação sai;
@@ -51,6 +51,7 @@ from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402  (p
 import api as cartorio  # noqa: E402
 import comum  # noqa: E402
 import conta as conta_mod  # noqa: E402
+import guilda as guilda_mod  # noqa: E402
 import loja as loja_mod  # noqa: E402
 import mercado as mercado_mod  # noqa: E402
 import pagamento as pagamento_mod  # noqa: E402
@@ -379,12 +380,28 @@ class ProvaDaPrivacidade(unittest.TestCase):
                          {b.conta['id'], c.conta['id']})
         mu = self.um("SELECT * FROM guilda_mural WHERE guilda_id = ?", gid)
         self.assertEqual((mu['texto'], mu['autor_id']), ('bem-vindos', None))
-        # o empréstimo que A deu: a cópia fica com B; o que A pegou volta a ser só do dono (C)
+        # 04/10: o empréstimo que A deu é RECOLHIDO de B na mesma transação (a peça sai do jogo com a
+        # conta de A). Esta prova roda sem o juiz: o servidor solta a vaga e deixa o recado com a série
+        # da cópia, que o jogo de B tira do saco ao ler (com o juiz, tests/autoridade_api.py test_24)
         self.assertIsNone(self.um("SELECT id FROM guilda_banco WHERE id = 9001"))
-        copia = self.um("SELECT * FROM itens WHERE iid = 'jpriv-copia'")
-        self.assertEqual((copia['conta_id'], copia['estado']), (b.conta['id'], 'vivo'))
+        self.assertIsNone(self.um("SELECT banco_id FROM guilda_emprestimos WHERE banco_id = 9001"))
+        recado = self.sql("SELECT item_id, iid, motivo FROM guilda_avisos WHERE conta_id = ?", b.conta['id'])
+        self.assertEqual([tuple(r) for r in recado], [('it-y', 'jpriv-copia', 'dono-excluiu')])
+        st, r = b.pede('GET', '/api/guilda/minha')
+        self.assertEqual((st, [(x['itemId'], x['iid'], x['motivo']) for x in r['avisos']]),
+                         (200, [('it-y', 'jpriv-copia', 'dono-excluiu')]), r)
+        self.assertEqual(b.pede('POST', '/api/guilda/avisos/visto', {'ate': r['avisos'][-1]['id']})[0], 200)
+        self.assertEqual(b.pede('GET', '/api/guilda/minha')[1]['avisos'], [], 'confirmado, o recado sai')
+        # o que A PEGOU volta ao banco na hora: livre, do dono (C), sem empréstimo anotado e sem duplicar
         volta = self.um("SELECT * FROM guilda_banco WHERE id = 9002")
         self.assertEqual((volta['dono_id'], volta['emprestado_para']), (c.conta['id'], None))
+        self.assertIsNone(self.um("SELECT banco_id FROM guilda_emprestimos WHERE banco_id = 9002"))
+        self.assertIsNone(self.um("SELECT iid FROM itens WHERE iid = 'jpriv-copia-a'"), 'a cópia que A tinha some com ela')
+        st, r = c.pede('GET', '/api/guilda/minha')
+        vagas = [v for v in r['guilda']['banco'] if v['id'] == 9002]
+        self.assertEqual([(v['dono'], v['emprestadoPara']) for v in vagas], [(c.conta['id'], None)], 'o dono vê a peça livre')
+        st, r = c.pede('POST', '/api/guilda/banco/pegar', {'id': 9002})
+        self.assertEqual((st, r.get('definitivo')), (200, True), 'livre: o dono retira de vez')
         # o mercadinho
         self.assertIsNone(self.um("SELECT id FROM mercado_anuncios WHERE id = 9101"))
         self.assertIsNone(self.um("SELECT id FROM mercado_propostas WHERE id = 9201"))
@@ -640,6 +657,7 @@ class ProvaDoTexto(unittest.TestCase):
             'VINTENS_POR_BARRA_FARMADA': loja_mod.VINTENS_POR_BARRA_FARMADA,
             'TAXA_MERCADO': mercado_mod.TAXA_PCT,
             'SELOS_POR_GIRO': int(por_giro.group(1)),
+            'EMPRESTIMO_DIAS': guilda_mod.EMPRESTIMO_AUSENCIA_DIAS,   # 04/10: o empréstimo que volta sozinho
         }
         self.assertEqual(privacidade.PAGAMENTO_ABERTO, pagamento_mod.PREFERENCIA_VALIDADE,
                          'a exclusão espera o mesmo prazo do link de pagamento')

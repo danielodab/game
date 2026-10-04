@@ -276,6 +276,42 @@ const INTERNAS = {
     J.Progress.save();
     return { item };
   },
+  /* A DEVOLUÇÃO FORÇADA (04/10, dono: "caso o usuário exclua a conta ou fique mais de 3 dias
+   * sem entrar, a peça volta automaticamente para o cofre da guilda"). Quem pegou não está
+   * aqui para levar a cópia ao saco, então ela é tirada de ONDE ESTIVER: no saco, vestida
+   * num herói ou guardada no cofre do Acampamento. Não achar não é erro (a vaga do banco
+   * tem de se soltar de qualquer jeito); `onde` conta o que houve. */
+  bancoGuildaRecolhe: (J, a) => {
+    const iid = txt(a, 'iid');
+    const st = J.Progress.state;
+    const i = (st.inventory || []).findIndex((e) => e && e.iid === iid);
+    if (i >= 0) {
+      st.inventory.splice(i, 1);
+      J.Progress.save();
+      return { ok: true, onde: 'saco' };
+    }
+    for (const hid of Object.keys(st.heroes || {})) {
+      const h = st.heroes[hid] || {};
+      for (const slot of Object.keys(h.itemVar || {})) {
+        const v = h.itemVar[slot];
+        if (v && v.iid === iid) {
+          if (h.items) h.items[slot] = null;
+          h.itemVar[slot] = null;
+          J.Progress.save();
+          return { ok: true, onde: 'vestida' };
+        }
+      }
+    }
+    const d = J.DB.exportar();
+    const itens = (d.banco && Array.isArray(d.banco.itens)) ? d.banco.itens : [];
+    const ib = itens.findIndex((e) => e && e.iid === iid);
+    if (ib >= 0) {
+      itens.splice(ib, 1);
+      J.DB.importar(d);
+      return { ok: true, onde: 'cofre' };
+    }
+    return { ok: true, onde: null };
+  },
   // …e entra no saco de quem pega (a própria série, ou uma cópia nova do empréstimo)
   bancoGuildaPoe: (J, a) => {
     const it = a.item;

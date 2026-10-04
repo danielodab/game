@@ -41,8 +41,12 @@ entra na prova sozinha):
      id em `dados` de eventos de outras contas, a presença que o relé grava depois).
      A lápide segura o número; banida, nenhuma rota a atende, e o ranking não a lista.
      `contas_excluidas` anota o id e a data (sem nada da pessoa).
-A peça que a conta EMPRESTOU pelo banco da guilda fica com quem pegou (a original some
-com a conta; não é duplicação). A peça que ela PEGOU volta a ser só do dono. Barras de
+O BANCO DA GUILDA (04/10, dono: "caso o usuário exclua a conta ou fique mais de 3 dias sem
+entrar, a peça volta automaticamente para o cofre da guilda"): a peça que a conta PEGOU
+emprestada volta ao banco na mesma transação, livre e do dono dela. A peça que ela EMPRESTOU
+é recolhida de quem pegou (o juiz tira a cópia do estado dele; guilda.py, _g_excluir_emprestimos)
+e sai do jogo com a conta, como o resto dos itens dela — antes a cópia ficava de presente com
+quem pegou. Só se o juiz não responder a cópia fica (excluir não espera por ele). Barras de
 ouro e vinténs que sobrarem somem com a conta: os Termos dizem isso, e o arrependimento
 de 7 dias se pede ANTES de excluir.
 
@@ -60,7 +64,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 
-from comum import SESSAO_DIAS, Recusa, agora
+from comum import SESSAO_DIAS, EstadoMudou, Recusa, agora
 from conta import FAXINA
 from registros import RETENCAO_DIAS
 
@@ -316,6 +320,35 @@ class PrivacidadeMixin:
             if novo != r['dados']:
                 self.con.execute("UPDATE moderacao_auditoria SET dados = ? WHERE id = ?", (novo, r['id']))
 
+    def _excluir_grava(self, cid, preparos, ultima):
+        """A transação da exclusão. Devolve (o nome da guilda, a hora)."""
+        t = agora()
+        with self._escrita():
+            # a conta pode ter mudado entre a conferência e aqui (outra aba abriu uma luta)
+            barrado = self._excluir_barrado(cid, t)
+            if barrado:
+                raise Recusa(409, barrado[1], motivo=barrado[0])
+            # antes de a guilda se resolver: sozinha, ela se desfaz e leva o banco junto
+            self._g_excluir_emprestimos(cid, preparos, t, ultima)
+            guilda = self._excluir_guilda(cid)
+            self.con.execute("DELETE FROM eventos WHERE conta_id = ? AND tipo NOT LIKE 'pagamento-%'", (cid,))
+            for tabela, coluna in SEM_CHAVE:
+                self.con.execute("DELETE FROM %s WHERE %s = ?" % (tabela, coluna), (cid,))
+            self._excluir_auditoria(cid)
+            try:
+                self.con.execute("DELETE FROM contas WHERE id = ?", (cid,))
+            except sqlite3.IntegrityError as e:
+                # uma tabela que aponta para contas SEM dizer o que fazer na exclusão (como
+                # guildas.lider_id, resolvida acima): a transação inteira volta, nada some
+                log.error("excluir conta #%d: uma chave estrangeira barrou (%s)", cid, e)
+                raise Recusa(500, 'a exclusão não fechou: nada foi apagado; avise o suporte')
+            self.con.execute(
+                "INSERT INTO contas(id, nome, email, senha_hash, sal, criado_em, gm, banido) VALUES (?, ?, ?, ?, ?, ?, 0, 1)",
+                (cid, LAPIDE_NOME % cid, LAPIDE_EMAIL % cid, '!', '!', t))
+            self.con.execute("INSERT OR REPLACE INTO contas_excluidas(conta_id, excluida_em, guilda) VALUES (?, ?, ?)",
+                             (cid, t, guilda))
+        return guilda, t
+
     def conta_excluir(self, conta, corpo):
         cid = conta['id']
         nome, senha = corpo.get('nome'), corpo.get('senha')
@@ -334,29 +367,17 @@ class PrivacidadeMixin:
         # a senha por último (o PBKDF2 custa): conferida como na troca de senha, com o freio
         # por IP no balde próprio da exclusão
         self._confere_senha(conta, senha, 'senha errada', corpo, 'excluir')
-        email, t = conta['email'], agora()
-        with self._escrita():
-            # a conta pode ter mudado entre a conferência e aqui (outra aba abriu uma luta)
-            barrado = self._excluir_barrado(cid, t)
-            if barrado:
-                raise Recusa(409, barrado[1], motivo=barrado[0])
-            guilda = self._excluir_guilda(cid)
-            self.con.execute("DELETE FROM eventos WHERE conta_id = ? AND tipo NOT LIKE 'pagamento-%'", (cid,))
-            for tabela, coluna in SEM_CHAVE:
-                self.con.execute("DELETE FROM %s WHERE %s = ?" % (tabela, coluna), (cid,))
-            self._excluir_auditoria(cid)
+        email = conta['email']
+        # 04/10: as peças do banco da guilda. O juiz (que tira a cópia do estado de quem pegou uma
+        # peça DESTA conta) responde fora da transação; se o empréstimo mudar no meio, prepara-se
+        # de novo — e na última volta a exclusão fecha mesmo assim (a cópia fica com quem pegou)
+        for tentativa in range(3):
+            preparos = self._g_recolhas_do_dono(cid)
             try:
-                self.con.execute("DELETE FROM contas WHERE id = ?", (cid,))
-            except sqlite3.IntegrityError as e:
-                # uma tabela que aponta para contas SEM dizer o que fazer na exclusão (como
-                # guildas.lider_id, resolvida acima): a transação inteira volta, nada some
-                log.error("excluir conta #%d: uma chave estrangeira barrou (%s)", cid, e)
-                raise Recusa(500, 'a exclusão não fechou: nada foi apagado; avise o suporte')
-            self.con.execute(
-                "INSERT INTO contas(id, nome, email, senha_hash, sal, criado_em, gm, banido) VALUES (?, ?, ?, ?, ?, ?, 0, 1)",
-                (cid, LAPIDE_NOME % cid, LAPIDE_EMAIL % cid, '!', '!', t))
-            self.con.execute("INSERT OR REPLACE INTO contas_excluidas(conta_id, excluida_em, guilda) VALUES (?, ?, ?)",
-                             (cid, t, guilda))
+                guilda, t = self._excluir_grava(cid, preparos, ultima=tentativa == 2)
+                break
+            except EstadoMudou:
+                continue
         # o que mora só na memória deste processo — DENTRO da tranca (03/10, revisão): a troca (api.py)
         # mexe em `intencoes` com ela pega, e percorrer o dicionário enquanto outra thread insere levanta
         # RuntimeError DEPOIS do commit: a conta já tinha saído, a resposta era 500 e o e-mail não ia
@@ -487,6 +508,12 @@ class PrivacidadeMixin:
         dados['guilda_emprestimos_comigo'] = [dict(r) for r in self.con.execute(
             "SELECT b.item_id, b.nivel, b.estrelas, e.iid, e.em FROM guilda_emprestimos e "
             "JOIN guilda_banco b ON b.id = e.banco_id WHERE e.conta_id = ? ORDER BY e.em", (cid,))]
+        # 04/10: o recado da peça emprestada que voltou sozinha ao banco, e a data do último acesso
+        # (a régua dos dias de ausência; guilda.py)
+        dados['guilda_avisos'] = [dict(r) for r in self.con.execute(
+            "SELECT item_id, nivel, estrelas, iid, motivo, em FROM guilda_avisos WHERE conta_id = ? ORDER BY id", (cid,))]
+        visto = self.con.execute("SELECT em FROM contas_visto WHERE conta_id = ?", (cid,)).fetchone()
+        dados['visto_por_ultimo'] = visto['em'] if visto is not None else None
         dados['guilda_mural_escrito'] = [dict(r) for r in self.con.execute(
             "SELECT g.nome AS guilda, m.texto, m.em FROM guilda_mural m JOIN guildas g ON g.id = m.guilda_id "
             "WHERE m.autor_id = ?", (cid,))]

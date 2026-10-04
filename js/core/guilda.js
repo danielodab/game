@@ -31,6 +31,8 @@ var JOGO = (typeof window !== 'undefined')
  *   banco da guilda  membros depositam itens; QUALQUER membro pega
  *                    emprestado (um empréstimo ativo por conta); devolve
  *                    quem pegou; o DONO retira de vez se não está emprestado.
+ *                    04/10: quem pegou e fica mais de EMPRESTIMO_AUSENCIA_DIAS
+ *                    sem entrar perde o empréstimo — a peça volta sozinha.
  *   liderança        quem cria lidera; se sair, passa ao membro mais
  *                    antigo; o último a sair dissolve a guilda.
  * Quem move o ITEM de verdade (saco ↔ banco da guilda) é a HUD, como no
@@ -63,8 +65,115 @@ var JOGO = (typeof window !== 'undefined')
   var conta = null;
   G.contaAtiva = function (id, nome) {
     if (id) conta = { id: id, nome: nome || '?' };
+    // 04/10: a conta entrou — confere os empréstimos vencidos e marca a presença (jogo local)
+    if (id) { try { if (!G.noServidor()) presencaLocal(); } catch (e) {} }
     return conta;
   };
+
+  /* ============================================ A PEÇA EMPRESTADA QUE VOLTA SOZINHA (04/10)
+   * Pedido do dono: "caso o usuário exclua a conta ou fique mais de 3 dias sem
+   * entrar, a peça volta automaticamente para o cofre da guilda". No servidor
+   * quem confere é o servidor/guilda.py (EMPRESTIMO_AUSENCIA_DIAS, o espelho
+   * deste número) e o jogo só recebe o recado. Aqui, no jogo LOCAL, a régua é a
+   * data desta máquina: `visto[conta]` guarda a última vez que cada conta entrou
+   * e a conferência roda quando alguém entra ou abre a guilda. Conta local não
+   * se exclui, então só existe a regra dos dias. */
+  G.EMPRESTIMO_AUSENCIA_DIAS = 3;
+  G.EMPRESTIMO_AUSENCIA_MS = G.EMPRESTIMO_AUSENCIA_DIAS * 24 * 3600 * 1000;
+  var PRESENCA_MS = 3600 * 1000;          // a presença regrava no máximo de hora em hora
+  var CHAVE_RECADOS = 'soterra-guilda-recados-v1';
+
+  /* Dentro de uma leitura `d`: devolve true se mudou algo (quem chama grava). */
+  function recolheAusentes(d) {
+    if (!conta) return false;
+    var t = agora(), mudou = false;
+    if (!d.visto) d.visto = {};
+    Object.keys(d.guildas).forEach(function (gid) {
+      var banco = (d.guildas[gid] && d.guildas[gid].banco) || [];
+      for (var i = 0; i < banco.length; i++) {
+        var e = banco[i], quem = e && e.emprestadoPara;
+        if (!quem) continue;
+        // empréstimo de antes desta regra não tem data: o prazo dele começa agora
+        if (typeof d.visto[quem] !== 'number') { d.visto[quem] = t; mudou = true; continue; }
+        if (t - d.visto[quem] <= G.EMPRESTIMO_AUSENCIA_MS) continue;
+        if (!d.recados) d.recados = {};
+        (d.recados[quem] = d.recados[quem] || []).push({
+          itemId: e.itemId, level: e.level || 0, stars: e.stars || 0,
+          motivo: 'ausencia', dias: G.EMPRESTIMO_AUSENCIA_DIAS });
+        e.emprestadoPara = null;
+        delete e.tomadorNome;
+        mudou = true;
+      }
+    });
+    // só DEPOIS de julgar: quem volta fora do prazo perde o empréstimo antes de contar como presente
+    if (!(t - d.visto[conta.id] < PRESENCA_MS)) { d.visto[conta.id] = t; mudou = true; }
+    return mudou;
+  }
+  function presencaLocal() {
+    var d = le();
+    var mudou = recolheAusentes(d);
+    var meus = (d.recados && d.recados[conta.id]) || [];
+    if (meus.length) { delete d.recados[conta.id]; mudou = true; }
+    if (mudou) grava(d);
+    // o saco local é desta página: a cópia sai dele aqui mesmo (o recado já saiu do disco, não repete)
+    if (meus.length) trataRecados(meus, true);
+    else mostraRecados();
+  }
+
+  /* A cópia emprestada sai do saco (ou do herói que a veste). Com a série, por
+   * ela; sem (o jogo local e o servidor sem juiz não a conhecem), pela peça
+   * IGUAL — o mesmo critério da devolução pelo gesto na HUD. */
+  function tiraCopia(av) {
+    var P = JOGO.Progress, st = P && P.state;
+    if (!st || !av) return false;
+    function igual(id, v) {
+      if (av.iid) return !!(v && v.iid === av.iid);
+      return id === av.itemId && ((v && v.level) || 0) === (av.level || 0) && ((v && v.stars) || 0) === (av.stars || 0);
+    }
+    var inv = st.inventory || [], achou = false;
+    for (var i = 0; i < inv.length && !achou; i++) {
+      if (inv[i] && igual(inv[i].itemId, inv[i])) { inv.splice(i, 1); achou = true; }
+    }
+    var hs = st.heroes || {};
+    Object.keys(hs).forEach(function (hid) {
+      var h = hs[hid] || {};
+      Object.keys(h.items || {}).forEach(function (slot) {
+        var v = h.itemVar && h.itemVar[slot];
+        if (achou || !h.items[slot] || !igual(h.items[slot], v)) return;
+        h.items[slot] = null;
+        if (h.itemVar) h.itemVar[slot] = null;
+        achou = true;
+      });
+    });
+    if (achou) { try { P.save(); } catch (e) {} }
+    return achou;
+  }
+  G.textoRecado = function (av) {
+    var def = (JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[av.itemId]) || null;
+    var nome = (def && def.name) || 'emprestada';
+    if (av.motivo === 'dono-excluiu') {
+      return 'A peça ' + nome + ' saiu do seu saco: quem a emprestou excluiu a conta.';
+    }
+    return 'A peça ' + nome + ' voltou para o banco da guilda: você ficou mais de ' +
+           (av.dias || G.EMPRESTIMO_AUSENCIA_DIAS) + ' dias sem entrar.';
+  };
+  /* O recado pode chegar antes de a HUD existir (a conta é reconhecida cedo):
+   * fica na fila e sai no próximo pedido à guilda. */
+  var recadosNaFila = [];
+  function mostraRecados() {
+    if (!recadosNaFila.length || !(JOGO.UI && typeof JOGO.UI.toast === 'function')) return;
+    var fila = recadosNaFila;
+    recadosNaFila = [];
+    for (var i = 0; i < fila.length; i++) { try { JOGO.UI.toast(fila[i], 'info'); } catch (e) {} }
+  }
+  function trataRecados(lista, tira) {
+    for (var i = 0; i < lista.length; i++) {
+      if (tira) tiraCopia(lista[i]);
+      recadosNaFila.push(G.textoRecado(lista[i]));
+    }
+    mostraRecados();
+  }
+  G._recadosNaFila = function () { return recadosNaFila.slice(); };   // provas
 
   function armazem() {
     try {
@@ -202,6 +311,7 @@ var JOGO = (typeof window !== 'undefined')
   function escondida(g) { return !!(g && g.equipe === true && !ehMestre()); }
 
   G.minha = function () {
+    if (conta) presencaLocal();          // 04/10: os empréstimos vencidos voltam antes da foto
     var d = le();
     var g = minhaG(d);
     if (!g) return responde(null);
@@ -531,6 +641,7 @@ var JOGO = (typeof window !== 'undefined')
     return responde({ ok: true, total: g.banco.length });
   };
   G.bancoLista = function () {
+    if (conta) presencaLocal();          // 04/10: abrir o banco confere os empréstimos vencidos
     var d = le();
     var g = minhaG(d);
     return responde(g ? foto(g).banco : []);
@@ -556,6 +667,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     e.emprestadoPara = conta.id;
     e.tomadorNome = conta.nome;
+    if (!d.visto) d.visto = {};
+    d.visto[conta.id] = agora();          // 04/10: quem pega está aqui — o prazo da ausência parte de agora
     grava(d);
     return responde({ ok: true, item: e, definitivo: false });
   };
@@ -594,9 +707,38 @@ var JOGO = (typeof window !== 'undefined')
     return JOGO.Sessao.api(rota, op).then(function (r) {
       r = (r && typeof r === 'object') ? r : { ok: false };
       if (r.ok && Object.prototype.hasOwnProperty.call(r, 'guilda')) guardaFicha(r.guilda);
+      if (r.ok && r.avisos && r.avisos.length) { try { recebeAvisos(r.avisos); } catch (eA) {} }
+      else mostraRecados();
       if (!r.ok && !r.erro) r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)' : 'não deu';
       return r;
     });
+  }
+  /* 04/10: os recados do servidor (a peça emprestada voltou ao banco sem você). Com a
+   * autoridade o servidor já tirou a cópia do estado: o jogo só adota o estado de lá. Sem
+   * ela o saco mora aqui, e é esta página que tira a cópia — UMA vez por recado: os já
+   * tratados ficam anotados no disco, porque a confirmação pode se perder no caminho e o
+   * recado repetido tiraria outra peça igual. */
+  function recadosVistos() {
+    var s = armazem();
+    try { var v = JSON.parse((s && s.getItem(CHAVE_RECADOS)) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function recebeAvisos(lista) {
+    var vistos = recadosVistos(), novos = [], ate = 0;
+    for (var i = 0; i < lista.length; i++) {
+      var av = lista[i];
+      if (!av || typeof av.id !== 'number') continue;
+      ate = Math.max(ate, av.id);
+      if (vistos.indexOf(av.id) < 0) { novos.push(av); vistos.push(av.id); }
+    }
+    if (novos.length) {
+      var s = armazem();
+      try { if (s) s.setItem(CHAVE_RECADOS, JSON.stringify(vistos.slice(-50))); } catch (e) {}
+      var A = JOGO.Autoridade;
+      var ligada = !!(A && A.ligada && A.ligada());
+      trataRecados(novos, !ligada);
+      if (ligada && A.sincroniza) { try { A.sincroniza(); } catch (e2) {} }
+    }
+    if (ate) JOGO.Sessao.api('/api/guilda/avisos/visto', { method: 'POST', body: { ate: ate } });
   }
   function renova() {
     if (fichaPedida) return;

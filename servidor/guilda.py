@@ -34,6 +34,16 @@ AS REGRAS (as mesmas do guilda.js, que tem a cópia dos números):
              retira de vez; os outros pegam EMPRESTADO, um por conta, e o
              jogo dá a eles uma cópia nova (origem 'banco'); devolver solta
              a vaga
+  a volta    04/10 (dono: "caso o usuário exclua a conta ou fique mais de 3
+             dias sem entrar, a peça volta automaticamente para o cofre da
+             guilda"): a peça emprestada volta SOZINHA ao banco, livre e
+             ainda do dono dela, quando quem pegou fica mais de
+             EMPRESTIMO_AUSENCIA_DIAS sem entrar (contas_visto) ou exclui a
+             conta (privacidade.py). A cópia sai do estado dele pelo juiz
+             (op interna 'bancoGuildaRecolhe': do saco, do herói ou do cofre),
+             mesmo com ele fora; guilda_avisos guarda o recado para a volta.
+             Confere-se ao abrir o banco (GET /api/guilda/minha) e num passo
+             de hora em hora (despacha, api.py) — nunca a cada pedido
   sair       com empréstimo ativo, não; com peça sua no banco, também não
              (retire antes); o último a sair dissolve; se o líder sai, o
              membro mais antigo herda
@@ -66,6 +76,14 @@ SEM_OFERENDA = 'a guilda não recebe mais doação em dinheiro: o XP dela vem do
 CONVITES_MAX = 50                 # convites em aberto por guilda (os mais velhos saem)
 CONVITE_VALIDADE = 7 * 86400
 BANCO_MAX = 200                   # peças no banco de uma guilda
+# 04/10: quem pegou emprestado e fica mais que isto sem entrar perde o empréstimo (a peça volta
+# ao banco). O espelho do jogo local é JOGO.Guilda.EMPRESTIMO_AUSENCIA_DIAS; a Política de
+# Privacidade cita o número (data-regua EMPRESTIMO_DIAS, conferido em tests/privacidade_api.py)
+EMPRESTIMO_AUSENCIA_DIAS = 3
+EMPRESTIMO_AUSENCIA_S = EMPRESTIMO_AUSENCIA_DIAS * 86400
+RECOLHE_INTERVALO = 3600          # o passo periódico: no máximo uma vez por hora por processo
+RECOLHE_LOTE = 20                 # empréstimos vencidos tratados de cada vez (o resto fica para o próximo passo)
+AVISOS_MAX = 20                   # recados de devolução entregues de uma vez
 LISTA_MAX = 100
 MURAL_MAX = 500                   # espelha JOGO.Guilda.MURAL_MAX
 NOME_RESERVADO = 'esse nome é reservado à equipe do jogo'
@@ -130,6 +148,26 @@ CREATE TABLE IF NOT EXISTS guilda_emprestimos(
   em          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS guilda_emprestimos_iid ON guilda_emprestimos(iid);
+-- 04/10 (a peça emprestada volta sozinha): a última vez que a conta ENTROU. A sessão não serve
+-- de régua: ela some no sair, no login em outro aparelho e na faxina, e a conta pareceria nunca
+-- ter vindo. Gravado junto com o ultimo_uso da sessão (no máximo 1 escrita por minuto por conta)
+CREATE TABLE IF NOT EXISTS contas_visto(
+  conta_id INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  em       INTEGER NOT NULL
+);
+-- o recado para quem perdeu o empréstimo sem estar aqui: o jogo mostra na volta e confirma
+-- (POST /api/guilda/avisos/visto); só então a linha sai. `iid` é a série da cópia, quando há
+CREATE TABLE IF NOT EXISTS guilda_avisos(
+  id       INTEGER PRIMARY KEY,
+  conta_id INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  item_id  TEXT NOT NULL,
+  nivel    INTEGER NOT NULL DEFAULT 0,
+  estrelas INTEGER NOT NULL DEFAULT 0,
+  iid      TEXT,
+  motivo   TEXT NOT NULL,
+  em       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS guilda_avisos_conta ON guilda_avisos(conta_id, id);
 -- 13/09 (pedido do dono: a grade de membros, o dízimo de cada um e a mensagem da guilda).
 -- Tabelas novas, nada de ALTER: o XP que cada membro já doou (dízimo, treino, guerra; até 04/10 a oferenda),
 -- o dízimo PRÓPRIO de um membro (sem linha = o padrão guildas.dizimo) e o mural
@@ -338,9 +376,192 @@ class GuildaMixin:
     def guilda_minha(self, conta, corpo):
         with self.tranca:
             g, _ = self._g_membro(conta['id'])
+        if g is not None:
+            # 04/10: abrir o banco é a hora barata de conferir os empréstimos DESTA guilda (uma
+            # consulta pelo índice; o juiz só é chamado se houver vencido)
+            self._g_recolhe_ausentes(g['id'])
+        with self.tranca:
+            g, _ = self._g_membro(conta['id'])
+            avisos = self._g_avisos(conta['id'])
             if g is not None:
-                return 200, {'ok': True, 'guilda': self._g_foto(g['id'], conta['id'])}
-            return 200, {'ok': True, 'guilda': None, 'antiga': self._g_antiga(conta['id'])}
+                return 200, {'ok': True, 'guilda': self._g_foto(g['id'], conta['id']), 'avisos': avisos}
+            return 200, {'ok': True, 'guilda': None, 'antiga': self._g_antiga(conta['id']), 'avisos': avisos}
+
+    # -- a peça emprestada que volta sozinha (04/10) -------------------------------------
+    def _g_visto(self, cid, t):
+        """Dentro da transação de quem chama: a conta entrou agora."""
+        self.con.execute("INSERT OR REPLACE INTO contas_visto(conta_id, em) VALUES (?, ?)", (cid, t))
+
+    def _g_avisos(self, cid):
+        return [{'id': r['id'], 'itemId': r['item_id'], 'level': r['nivel'], 'stars': r['estrelas'],
+                 'iid': r['iid'], 'motivo': r['motivo'], 'dias': EMPRESTIMO_AUSENCIA_DIAS}
+                for r in self.con.execute("SELECT * FROM guilda_avisos WHERE conta_id = ? ORDER BY id LIMIT ?",
+                                          (cid, AVISOS_MAX))]
+
+    def guilda_avisos_visto(self, conta, corpo):
+        """O jogo mostrou os recados até `ate`: saem. Confirmado, e não apagado na leitura: sem
+        a autoridade é o jogo que tira a cópia do saco ao ler o recado, e uma resposta perdida
+        no caminho deixaria a cópia com ele e a original no banco."""
+        ate = _id_positivo(corpo.get('ate'), 'ate')
+        with self._escrita():
+            self.con.execute("DELETE FROM guilda_avisos WHERE conta_id = ? AND id <= ?", (conta['id'], ate))
+        return 200, {'ok': True}
+
+    def _g_solta_emprestimo(self, b, motivo, t, iid=None, avisa=True):
+        """Dentro de _escrita: a vaga `b` fica livre e quem pegou ganha o recado."""
+        tomador = b['emprestado_para']
+        self.con.execute("UPDATE guilda_banco SET emprestado_para = NULL WHERE id = ?", (b['id'],))
+        self.con.execute("DELETE FROM guilda_emprestimos WHERE banco_id = ?", (b['id'],))
+        if avisa and tomador is not None:
+            self.con.execute("INSERT INTO guilda_avisos(conta_id, item_id, nivel, estrelas, iid, motivo, em) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (tomador, b['item_id'], b['nivel'], b['estrelas'], iid, motivo, t))
+            self._evento(tomador, 'guilda', {'acao': 'recolhida', 'gid': b['guilda_id'], 'banco': b['id'],
+                                             'iid': iid, 'motivo': motivo})
+
+    def _g_recolhe_prepara(self, bid):
+        """FORA da tranca: lê o empréstimo da vaga e, com a autoridade, pede ao juiz o estado
+        de quem pegou SEM a cópia. Devolve None (a vaga não está emprestada) ou o preparo que
+        o _g_recolhe_aplica confere e grava. O juiz fora do ar levanta Recusa (503)."""
+        with self.tranca:
+            b = self.con.execute("SELECT * FROM guilda_banco WHERE id = ?", (bid,)).fetchone()
+            if b is None or b['emprestado_para'] is None:
+                return None
+            tomador = b['emprestado_para']
+            emp = self.con.execute("SELECT iid FROM guilda_emprestimos WHERE banco_id = ? AND conta_id = ?",
+                                   (bid, tomador)).fetchone()
+            conta_t = self.con.execute("SELECT * FROM contas WHERE id = ?", (tomador,)).fetchone()
+            # sem a autoridade o saco mora no navegador de quem pegou: o servidor só solta a vaga
+            # e o jogo dele tira a cópia ao ler o recado. Empréstimo de antes da autoridade não
+            # tem série anotada: também só solta a vaga, como a devolução comum
+            estado = self._estado_ler(tomador) if (emp is not None and conta_t is not None
+                                                   and self._g_autoridade()) else None
+        saida = None
+        if estado is not None:
+            saida = self._juiz_op(dict(conta_t), estado,
+                                  [{'nome': 'bancoGuildaRecolhe', 'args': {'iid': emp['iid']}}], interno=True)
+        return {'bid': bid, 'tomador': tomador, 'iid': emp['iid'] if emp is not None else None,
+                'conta': dict(conta_t) if conta_t is not None else None, 'estado': estado, 'saida': saida}
+
+    def _g_recolhe_aplica(self, p, motivo, t, limite=None):
+        """Dentro de _escrita: grava o que o preparo calculou, se a vaga ainda é o MESMO
+        empréstimo (senão EstadoMudou: quem chama prepara de novo). Com `limite`, só recolhe
+        se quem pegou continua ausente — ele pode ter entrado enquanto o juiz respondia.
+        True se a peça voltou ao banco."""
+        b = self.con.execute("SELECT * FROM guilda_banco WHERE id = ?", (p['bid'],)).fetchone()
+        if b is None or b['emprestado_para'] is None:
+            return False
+        emp = self.con.execute("SELECT iid FROM guilda_emprestimos WHERE banco_id = ? AND conta_id = ?",
+                               (b['id'], b['emprestado_para'])).fetchone()
+        if b['emprestado_para'] != p['tomador'] or (emp['iid'] if emp is not None else None) != p['iid']:
+            raise EstadoMudou()
+        if limite is not None and not self.con.execute(
+                "SELECT 1 FROM contas_visto WHERE conta_id = ? AND em < ?", (p['tomador'], limite)).fetchone():
+            return False
+        if p['saida'] is not None:
+            # a cópia sai do estado dele e a série dela vira 'fora' (não duplica nem some: a
+            # original nunca saiu do banco)
+            self._estado_grava(p['conta'], p['estado'], p['saida'], t)
+        self._g_solta_emprestimo(b, motivo, t, iid=p['iid'])
+        return True
+
+    def _g_recolhe_ausentes(self, gid=None):
+        """FORA da tranca. As peças emprestadas a quem está há mais de EMPRESTIMO_AUSENCIA_DIAS
+        sem entrar voltam ao banco (de uma guilda, ou de todas no passo periódico). Barato
+        quando não há nada: uma consulta. Nunca derruba quem chamou: o que falhar fica para a
+        próxima vez. Devolve quantas voltaram."""
+        try:
+            limite = agora() - EMPRESTIMO_AUSENCIA_S
+            with self.tranca:
+                q = ("SELECT b.id FROM guilda_banco b JOIN contas_visto v ON v.conta_id = b.emprestado_para "
+                     "WHERE v.em < ?%s ORDER BY v.em LIMIT ?" % (" AND b.guilda_id = ?" if gid is not None else ""))
+                args = (limite,) + ((gid,) if gid is not None else ()) + (RECOLHE_LOTE,)
+                vencidos = [r[0] for r in self.con.execute(q, args)]
+            voltaram = 0
+            for bid in vencidos:
+                for _ in range(3):
+                    try:
+                        p = self._g_recolhe_prepara(bid)
+                        if p is None:
+                            break
+                        with self._escrita():
+                            voltaram += 1 if self._g_recolhe_aplica(p, 'ausencia', agora(), limite) else 0
+                        break
+                    except EstadoMudou:
+                        continue
+                    except Recusa as e:      # o juiz fora do ar, o estado torto: esta fica para depois
+                        log.warning("banco da guilda: a vaga #%d não pôde ser recolhida agora (%s)", bid, e)
+                        break
+            if voltaram:
+                log.info("banco da guilda: %d peça(s) emprestada(s) voltaram (mais de %d dias sem entrar)",
+                         voltaram, EMPRESTIMO_AUSENCIA_DIAS)
+            return voltaram
+        except Exception:                    # o passo é faxina: nunca pode custar o pedido de quem passou
+            log.exception("banco da guilda: o passo que recolhe os empréstimos vencidos falhou")
+            return 0
+
+    def _g_passo_emprestimos(self):
+        """O passo periódico (o despacha do api.py chama ANTES de reconhecer a conta do
+        pedido: quem volta depois do prazo é conferido antes de contar como presente). Um
+        número comparado por pedido; o trabalho, no máximo uma vez por RECOLHE_INTERVALO."""
+        t = agora()
+        if t - getattr(self, '_g_recolhe_em', 0) < RECOLHE_INTERVALO:
+            return
+        self._g_recolhe_em = t
+        try:
+            with self._escrita():
+                # o empréstimo de antes desta regra não tem "visto por último": o prazo dele
+                # começa a contar do último uso de uma sessão viva, ou de agora
+                self.con.execute(
+                    "INSERT OR IGNORE INTO contas_visto(conta_id, em) "
+                    "SELECT DISTINCT b.emprestado_para, COALESCE((SELECT MAX(s.ultimo_uso) FROM sessoes s "
+                    "WHERE s.conta_id = b.emprestado_para), ?) FROM guilda_banco b "
+                    "WHERE b.emprestado_para IS NOT NULL "
+                    "AND b.emprestado_para NOT IN (SELECT conta_id FROM contas_visto)", (t,))
+        except sqlite3.Error:
+            log.exception("banco da guilda: não deu para datar os empréstimos antigos")
+        self._g_recolhe_ausentes()
+
+    # -- excluir a conta com peça emprestada (privacidade.py chama) -------------------------
+    def _g_recolhas_do_dono(self, cid):
+        """FORA da tranca: o preparo de cada peça DESTA conta que está emprestada a alguém."""
+        with self.tranca:
+            ids = [r[0] for r in self.con.execute(
+                "SELECT id FROM guilda_banco WHERE dono_id = ? AND emprestado_para IS NOT NULL", (cid,))]
+        preparos = {}
+        for bid in ids:
+            try:
+                p = self._g_recolhe_prepara(bid)
+            except Recusa as e:
+                # excluir a conta é direito de quem pede e não espera o juiz: sem ele, a cópia
+                # fica com quem pegou (a original some com a conta: não é duplicação)
+                log.warning("excluir conta #%d: a cópia da vaga #%d fica com quem pegou (%s)", cid, bid, e)
+                p = None
+            if p is not None:
+                preparos[bid] = p
+        return preparos
+
+    def _g_excluir_emprestimos(self, cid, preparos, t, ultima):
+        """Dentro da transação da exclusão. (1) O que a conta PEGOU volta ao banco, livre e do
+        dono (o estado dela some com a conta: nada a tirar). (2) O que ela EMPRESTOU é recolhido
+        de quem pegou — a peça é dela e sai do jogo com ela, como o resto dos itens; deixar a
+        cópia com quem pegou seria dar de presente uma peça emprestada. Se o empréstimo mudou
+        desde o preparo, EstadoMudou (quem chama prepara de novo); na `ultima` tentativa a
+        cópia fica com quem pegou em vez de segurar a exclusão."""
+        for b in self.con.execute("SELECT * FROM guilda_banco WHERE emprestado_para = ?", (cid,)).fetchall():
+            self._g_solta_emprestimo(b, 'conta-excluida', t, avisa=False)
+        self.con.execute("DELETE FROM guilda_emprestimos WHERE conta_id = ?", (cid,))
+        for b in self.con.execute("SELECT * FROM guilda_banco WHERE dono_id = ? AND emprestado_para IS NOT NULL",
+                                  (cid,)).fetchall():
+            p = preparos.get(b['id'])
+            try:
+                if p is None:
+                    raise EstadoMudou()
+                self._g_recolhe_aplica(p, 'dono-excluiu', t)
+            except EstadoMudou:
+                if not ultima:
+                    raise
+                log.warning("excluir conta #%d: a cópia da vaga #%d ficou com quem pegou", cid, b['id'])
 
     def guilda_trazer(self, conta, corpo):
         """Traz a guilda de antes (13/09): a primeira conta da foto a funda sem
@@ -789,6 +1010,7 @@ class GuildaMixin:
                         self.con.execute("UPDATE guilda_banco SET emprestado_para = ? WHERE id = ?", (cid, b['id']))
                         self.con.execute("INSERT OR REPLACE INTO guilda_emprestimos(banco_id, conta_id, iid, em) "
                                          "VALUES (?, ?, ?, ?)", (b['id'], cid, serie, t))
+                        self._g_visto(cid, t)       # 04/10: quem pega está aqui — o prazo da ausência parte de agora
                     self._evento(cid, 'guilda', {'acao': 'pegar' if proprio else 'emprestimo', 'gid': g['id'],
                                                  'banco': b['id'], 'iid': serie, 'versao': nova})
             except EstadoMudou:
@@ -862,6 +1084,7 @@ class GuildaMixin:
                                 (g['id'], cid)).fetchone():
                 raise Recusa(409, 'devolva o empréstimo atual primeiro')
             self.con.execute("UPDATE guilda_banco SET emprestado_para = ? WHERE id = ?", (cid, b['id']))
+            self._g_visto(cid, agora())             # 04/10: o prazo da ausência parte de agora
             foto = self._g_ficha(g['id'], cid)
         return 200, {'ok': True, 'item': item, 'definitivo': False, 'guilda': foto}
 
