@@ -1467,7 +1467,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
             # são as guildas do servidor: membros = quem está nela (menos banido nem
             # a equipe), XP = soma dos mesmos. A regra de 10/09 fica: a
             # equipe não soma nem conta membro, então a guilda SÓ da equipe (a STAFF)
-            # não entra na vitrine pública — no jogo ela aparece como qualquer outra.
+            # não entra na vitrine pública — e, desde 04/10, nem na lista do jogo (guilda.py).
             # A guilda de antes sobe pelo "trazer" da ficha (guilda.py, _g_antiga).
             guildas = self.con.execute(
                 "SELECT nome, emblema, membros, xp FROM ("
@@ -1477,7 +1477,10 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
                 "    COALESCE((SELECT SUM(r.xp_total) FROM guilda_membros m JOIN contas c ON c.id = m.conta_id "
                 "      JOIN resumos r ON r.conta_id = m.conta_id "
                 "      WHERE m.guilda_id = g.id AND c.banido = 0 AND c.gm = 0), 0) AS xp "
-                "  FROM guildas g"
+                # 04/10 (dono: "guild staff não deve aparecer nem na lista de guild"): a guilda que um
+                # Mestre lidera fica fora mesmo com jogador comum dentro (convidado por ele) — antes
+                # ela só sumia enquanto TODOS os membros eram da equipe
+                "  FROM guildas g WHERE NOT EXISTS (SELECT 1 FROM contas l WHERE l.id = g.lider_id AND l.gm = 1)"
                 ") WHERE membros > 0 ORDER BY xp DESC, membros DESC, nome COLLATE NOCASE LIMIT 50").fetchall()
             # o melhor de cada classe (10/09): uma linha por conta (a melhor ficha
             # daquela classe, escolhida no _resumo), sem banidas nem a equipe; as 7 chaves sempre

@@ -186,16 +186,29 @@ var JOGO = (typeof window !== 'undefined')
               liderId: conta.id, membros: [{ id: conta.id, nome: conta.nome }],
               xp: 0, moedas: 0, bonus: {}, banco: [], treinos: 0, criadaEm: agora(),
               porta: 'aberta', dizimo: 0, pedidos: [] };
+    if (souMestre()) g.equipe = true;             // 04/10: a guilda da equipe não sai em lista
     d.guildas[g.id] = g;
     d.porConta[conta.id] = g.id;
     grava(d);
     return responde({ ok: true, guilda: foto(g) });
   };
 
+  /* A GUILDA DA EQUIPE (04/10, dono: "guild staff não deve aparecer nem na lista de guild..
+   * só o adm possui"). No servidor é a que um Mestre lidera (guilda.py, _g_da_equipe). Em
+   * casa não há contas.gm: a guilda leva a marca `equipe` quando o Mestre a funda — e as
+   * que ele já liderava ganham a marca na primeira vez que ele abre a ficha. Marcada, ela
+   * some da lista de quem não é o Mestre e ninguém entra nela por conta própria. */
+  function souMestre() {
+    var M = JOGO.GM;
+    try { return !!(M && M.contaMestre && M.contaMestre()); } catch (e) { return false; }
+  }
+  function escondida(g) { return !!(g && g.equipe === true && !souMestre()); }
+
   G.minha = function () {
     var d = le();
     var g = minhaG(d);
     if (!g) return responde(null);
+    if (conta && g.liderId === conta.id && !g.equipe && souMestre()) { g.equipe = true; grava(d); }
     var f = foto(g);
     f.nivel = G.nivelDe(g.xp);
     f.souLider = !!(conta && g.liderId === conta.id);
@@ -273,7 +286,7 @@ var JOGO = (typeof window !== 'undefined')
     var d = le();
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
     var g = d.guildas[gid];
-    if (!g) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    if (!g || escondida(g)) return responde({ ok: false, erro: 'essa guilda não existe mais' });
     if (portaDe(g) === 'aberta') {
       // porta aberta não tem fila: pedir É entrar
       g.membros.push({ id: conta.id, nome: conta.nome });
@@ -416,6 +429,7 @@ var JOGO = (typeof window !== 'undefined')
     for (var gid in d.guildas) {
       if (!d.guildas.hasOwnProperty(gid)) continue;
       var g = d.guildas[gid];
+      if (escondida(g)) continue;                 // 04/10: a guilda da equipe só o Mestre vê
       fora.push({ id: g.id, nome: g.nome, emblema: g.emblema, xp: g.xp,
                   nivel: G.nivelDe(g.xp), membros: g.membros.length,
                   porta: portaDe(g) });
@@ -429,7 +443,8 @@ var JOGO = (typeof window !== 'undefined')
     var d = le();
     if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
     var g = d.guildas[gid];
-    if (!g) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    // 04/10: na guilda da equipe só se entra pelo convite do Mestre
+    if (!g || (escondida(g) && !(op && op.convite === true))) return responde({ ok: false, erro: 'essa guilda não existe mais' });
     // porta fechada (30/08): entrar direto só em guilda ABERTA — na de
     // convite o caminho é a fila (pedirEntrada) ou o convite da praça. 11/09:
     // o convite da praça ({ convite: true }) entra — antes ele batia nesta

@@ -265,6 +265,26 @@ class GuildaMixin:
             raise Recusa(404, 'essa guilda não existe mais')
         return g
 
+    def _g_da_equipe(self, g):
+        """04/10 (dono: "guild staff não deve aparecer nem na lista de guild.. só o adm possui"):
+        a guilda da EQUIPE é a que um Mestre lidera (contas.gm = 1 no líder). Ela não sai em
+        lista nem em ranking para quem não é da equipe, e jogador comum não entra nela por
+        conta própria — para ele é como se não existisse."""
+        r = self.con.execute("SELECT gm FROM contas WHERE id = ?", (g['lider_id'],)).fetchone()
+        return bool(r is not None and r['gm'])
+
+    def _g_existe_para(self, gid, conta, t):
+        """A guilda `gid` como ESTA conta a enxerga: a da equipe só existe para o Mestre e
+        para quem o Mestre convidou (o convite ainda válido); o resto recebe o mesmo 404 da
+        guilda que não existe — a recusa não confirma que ela está lá."""
+        g = self._g_existe(gid)
+        if not conta['gm'] and self._g_da_equipe(g):
+            cv = self.con.execute("SELECT em FROM guilda_convites WHERE guilda_id = ? AND conta_id = ?",
+                                  (gid, conta['id'])).fetchone()
+            if cv is None or cv['em'] < t - CONVITE_VALIDADE:
+                raise Recusa(404, 'essa guilda não existe mais')
+        return g
+
     def _g_entra(self, cid, gid, t):
         """Põe a conta na guilda; a fila e os convites dela, em qualquer guilda, saem."""
         self.con.execute("INSERT INTO guilda_membros(conta_id, guilda_id, cargo, entrou_em) VALUES (?, ?, 'membro', ?)",
@@ -353,8 +373,12 @@ class GuildaMixin:
         with self.tranca:
             rs = self.con.execute(
                 "SELECT g.id, g.nome, g.emblema, g.xp, g.porta, COUNT(m.conta_id) AS membros FROM guildas g "
-                "LEFT JOIN guilda_membros m ON m.guilda_id = g.id GROUP BY g.id ORDER BY g.xp DESC, g.id LIMIT ?",
-                (LISTA_MAX,)).fetchall()
+                "LEFT JOIN guilda_membros m ON m.guilda_id = g.id "
+                # 04/10: a guilda da equipe (líder Mestre) só sai na lista do próprio Mestre — a lista é o
+                # ranking da ficha E a porta de entrada de quem não tem guilda (ver _g_da_equipe)
+                "WHERE (? = 1 OR NOT EXISTS (SELECT 1 FROM contas l WHERE l.id = g.lider_id AND l.gm = 1)) "
+                "GROUP BY g.id ORDER BY g.xp DESC, g.id LIMIT ?",
+                (1 if conta['gm'] else 0, LISTA_MAX)).fetchall()
         return 200, {'ok': True, 'guildas': [
             {'id': r['id'], 'nome': r['nome'], 'emblema': r['emblema'], 'xp': r['xp'], 'nivel': nivel_de(r['xp']),
              'membros': r['membros'], 'porta': r['porta']} for r in rs]}
@@ -390,7 +414,7 @@ class GuildaMixin:
         with self.tranca:
             if self._g_membro(cid)[0] is not None:
                 raise Recusa(409, 'você já tem guilda')
-            g = self._g_existe(gid)
+            g = self._g_existe_para(gid, conta, t)
             if g['porta'] == 'convite':
                 cv = self.con.execute("SELECT em FROM guilda_convites WHERE guilda_id = ? AND conta_id = ?",
                                       (gid, cid)).fetchone()
@@ -406,7 +430,7 @@ class GuildaMixin:
         with self.tranca:
             if self._g_membro(cid)[0] is not None:
                 raise Recusa(409, 'você já tem guilda')
-            g = self._g_existe(gid)
+            g = self._g_existe_para(gid, conta, t)
             if g['porta'] == 'aberta':                    # porta aberta não tem fila: pedir É entrar
                 self._g_entra(cid, gid, t)
                 return 200, {'ok': True, 'entrou': True, 'guilda': self._g_ficha(gid, cid)}

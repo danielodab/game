@@ -139,6 +139,35 @@ class ProvaDaGuilda(unittest.TestCase):
         status, _ = Cliente(self.base).pede('GET', '/api/guilda/minha')
         self.assertEqual(status, 401, 'sem conta, nada de guilda')
 
+    def test_01b_a_guilda_da_equipe_nao_sai_em_lista_nem_em_ranking(self):
+        """04/10 (dono: "guild staff não deve aparecer nem na lista de guild.. só o adm possui"): a guilda
+        que um Mestre lidera some da lista e do ranking de quem não é da equipe, ninguém entra nela por
+        conta própria, e o Mestre segue vendo e usando a dele."""
+        m, j, k = self.novo('Zelador'), self.novo('Curioso'), self.novo('Chamado')
+        self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
+        staff = self.g(m, 'criar', {'nome': 'Staff'})['guilda']
+        comum = self.funda(j)
+        vista = [x['id'] for x in self.g(j, 'lista')['guildas']]
+        self.assertNotIn(staff['id'], vista, 'a lista do jogador não traz a guilda da equipe')
+        self.assertIn(comum, vista)
+        self.assertIn(staff['id'], [x['id'] for x in self.g(m, 'lista')['guildas']], 'o Mestre vê a dele')
+        self.assertEqual(self.g(m, 'minha')['guilda']['id'], staff['id'])
+        self.g(m, 'mural', {'texto': 'só a equipe'})                # e usa normalmente
+        # por conta própria ninguém entra: o mesmo 404 da guilda que não existe
+        r = self.g(k, 'entrar', {'gid': staff['id']}, 404)
+        self.assertEqual(r['erro'], 'essa guilda não existe mais')
+        self.g(k, 'pedir', {'gid': staff['id']}, 404)
+        # com o convite do Mestre entra — e mesmo com jogador comum dentro ela segue fora da vitrine
+        self.g(m, 'convidar', {'conta': k.conta['id']})
+        self.g(k, 'entrar', {'gid': staff['id']})
+        self.assertNotIn(staff['id'], [x['id'] for x in self.g(j, 'lista')['guildas']])
+        self.sql("UPDATE contas SET gm = gm WHERE id = ?", m.conta['id'])   # outra conexão gravou: o ranking guardado cai
+        status, rk = j.pede('GET', '/api/ranking')
+        self.assertEqual(status, 200, rk)
+        nomes_rk = [x['nome'] for x in rk['guildas']]
+        self.assertNotIn('Staff', nomes_rk, 'o ranking público não traz a guilda da equipe')
+        self.assertTrue(any(x.startswith('Guilda ') for x in nomes_rk), nomes_rk)
+
     def test_02_o_convite_entre_contas_abre_a_porta_fechada(self):
         """O defeito do ar (11/09): "eu convidei, o usuário aceitou, mas não foi"."""
         a, b, c = self.novo('Lider'), self.novo('Convidada'), self.novo('Curioso')
