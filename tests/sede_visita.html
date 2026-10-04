@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a sede da guilda por dentro</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1000px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1000px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  .p{color:#7fe08a}.f{color:#ff8a7a}
+  body.foto #tela{width:100%;height:100%} body.foto #saida{display:none}
+</style>
+</head>
+<body>
+<!-- A SEDE DA GUILDA VISITÁVEL (04/10, dono: "os jogadores da mesma guild entrar nesse mapa
+     (sem esses pilares estratégicos) e lá dentro ser o banco da guild e o pessoal ter um chat").
+     Abre o jogo de verdade, entra no Acampamento e cobra, na ordem:
+       · o botão "Entrar na sede" só existe no painel da Sede para quem TEM guilda;
+       · entrar troca a cena e a zona ('sede:<id da guilda>'), com a câmera no aspecto da tela;
+       · o salão montou com as peças do dono e SEM pilar solto (nenhuma sd_pilar);
+       · os cinco pontos (banco, cofre, mural, guerra, saída) abrem as fichas certas;
+       · o chat sem barra vai para a guilda (e "/p" ainda alcança a praça);
+       · só o fantasma da MESMA sede ganha corpo — o de outra guilda, o da praça e o do Campo não;
+       · sair devolve a praça, a câmera certa e o chat normal.
+     No meio pede UMA foto do salão (window.__foto, que o tests/santuario_navegador.py tira). -->
+<iframe id="tela" src="../index.html?sandbox=1"></iframe>
+<div id="saida"><div id="summary">abrindo o jogo…</div><div id="linhas"></div></div>
+<script>
+(function () {
+  var f = document.getElementById('tela');
+  var linhas = [], falhas = [];
+  function check(nome, ok, extra) {
+    linhas.push('<div class="' + (ok ? 'p' : 'f') + '">' + (ok ? 'PASSOU' : 'FALHOU') + ' · ' +
+                nome + (extra != null && extra !== '' ? ' (' + extra + ')' : '') + '</div>');
+    if (!ok) falhas.push(nome + (extra != null && extra !== '' ? ' (' + extra + ')' : ''));
+  }
+  function fecha() {
+    document.getElementById('linhas').innerHTML = linhas.join('');
+    var s = document.getElementById('summary');
+    s.className = falhas.length ? 'fail' : 'allpass';
+    s.textContent = falhas.length ? ('FALHOU: ' + falhas.join(' · ')) : ('tudo passou (' + linhas.length + ')');
+    window.__fail = falhas.length;
+    window.__pronto = true;
+    window.__fim = { ok: !falhas.length, total: linhas.length, falhas: falhas.length, linhas: falhas.slice() };
+  }
+  // esperas por TENTATIVAS (o relógio do headless é virtual)
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 400);
+      })();
+    });
+  }
+  function respiro(n) { var k = 0; return espera(function () { return ++k >= n; }, n + 1, 100); }
+  function quieto(p) { return p.then(function (v) { return v; }, function () { return null; }); }
+
+  f.onload = function () {
+    var w = f.contentWindow, d = w.document, H = null, UI = null, R = null, G = null, gid = null;
+    var paraGuilda = [], paraPraca = [];
+    function botao(re) {
+      return [].filter.call(d.querySelectorAll('button'), function (b) { return re.test(b.textContent); })[0] || null;
+    }
+    function chega(tipo) { H.aoAproximar(null); H.aoAproximar({ id: tipo, tipo: tipo, nome: tipo }); }
+    function fala(texto) {
+      var ci = d.querySelector('.hub-chat-input');
+      if (!ci) return false;
+      ci.value = texto;
+      ci.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      return true;
+    }
+    // um ponto da sede: chega, toca o botão do painel e espera a ficha rolar até a parte certa
+    function ponto(tipo, foco, rotulo) {
+      chega(tipo);
+      var b = d.querySelector('.hub-painel .sede-ponto');
+      check(rotulo + ': o painel do ponto tem o botão', !!b, b ? b.textContent : 'sem botão');
+      if (!b) return Promise.resolve();
+      b.click();
+      return quieto(espera(function () { return !!d.querySelector('.ms-caixa[data-foco="' + foco + '"] .guilda-' + foco); }, 40, 150))
+        .then(function (ok) {
+          check(rotulo + ': abre a ficha da guilda na parte "' + foco + '"', !!ok);
+          UI.closeSheet();
+        });
+    }
+
+    espera(function () { return !!d.querySelector('.screen-menu.is-on'); }, 400)
+      .then(function () { return w.JOGO.DB.batizar('Prova Sede'); })
+      .then(function () {
+        botao(/^Descer$/).click();
+        return espera(function () { return !!botao(/^Escolher$/); }, 100);
+      })
+      .then(function () { botao(/^Escolher$/).click(); return respiro(4); })
+      .then(function () {
+        botao(/Confirmar/).click();
+        return espera(function () {
+          H = w.JOGO.Hub; UI = w.JOGO.UI; R = w.JOGO.Rede; G = w.JOGO.Guilda;
+          return H && H._estado && H._estado().pos && d.querySelector('.hub-canvas') &&
+                 H._lugares().some(function (l) { return l.tipo === 'sede'; });
+        }, 400);
+      })
+      .then(function () { return quieto(espera(function () { return !!d.querySelector('.hub-chat-input'); }, 30, 200)); })
+      .then(function () {
+        try { botao(/^Entendi$/).click(); } catch (eT) {}
+        // ---- 1. sem guilda não há botão
+        UI._sede(null);
+        chega('sede');
+        check('sem guilda: o painel da Sede abre a ficha como sempre', !!botao(/Abrir a ficha da guilda/));
+        check('sem guilda: NÃO há o botão "Entrar na sede"', !d.querySelector('.sede-entrar'));
+        check('a API da cena existe (entraSede, saiSede, naSede)', typeof H.entraSede === 'function' &&
+              typeof H.saiSede === 'function' && H.naSede() === null);
+
+        // ---- 2. com guilda (uma de verdade, local — as insígnias da fundação são da prova)
+        var P = w.JOGO.Progress;
+        P.insigniasVer = function () { return 99; };
+        P.gastaInsignias = function () { return true; };
+        return w.JOGO.DB.jogador().then(function (j) { G.contaAtiva(j.id, j.nome); return G.criar('Casa da Prova', 'P'); });
+      })
+      .then(function (res) {
+        check('a guilda da prova foi fundada', !!(res && res.ok), res && res.erro);
+        return G.minha();
+      })
+      .then(function (g) {
+        gid = String(g.id);
+        UI._sede(g);
+        chega('sede');
+        var b = d.querySelector('.sede-entrar');
+        check('com guilda: o botão "Entrar na sede" aparece', !!b && /Entrar na sede/.test(b.textContent));
+        check('…e os menus de sempre continuam (ficha e guerra)', !!botao(/Abrir a ficha da guilda/) && !!d.querySelector('.hub-painel .guerra-bloco'));
+
+        // os fantasmas: a mesma sede, outra sede, a praça e o Campo
+        H.fantasmaEntra('f-mesma', { nome: 'Irmã', classe: 'sumo', zona: 'sede:' + gid, x: 2.2, z: 3.5 });
+        H.fantasmaEntra('f-outra', { nome: 'Rival', classe: 'bruxo', zona: 'sede:outra-guilda', x: -2.2, z: 3.5 });
+        H.fantasmaEntra('f-praca', { nome: 'Bia', classe: 'sumo', x: 1.5, z: 4.5 });
+        H.fantasmaEntra('f-campo', { nome: 'Caio', classe: 'bruxo', zona: 'campo', x: -1.5, z: 4.5 });
+        // o chat: a prova só quer saber PARA ONDE a fala vai
+        if (R) {
+          R.falarGuilda = function (t) { paraGuilda.push(t); return true; };
+          R.falar = function (t) { paraPraca.push(t); return true; };
+        }
+        b.click();
+        return quieto(espera(function () { return H.naSede() === gid && H._sedeMontagem(); }, 60, 150));
+      })
+      .then(function (ok) {
+        // ---- 3. a cena e a zona
+        var e = H._estado();
+        check('entrar troca a cena: Hub.naSede() é o id da guilda', !!ok && e.sede === gid, e.sede);
+        check('a zona é a da guilda (sede:<id>)', e.zona === 'sede:' + gid && H.zona() === 'sede:' + gid, e.zona);
+        check('a sede não é o Campo de PvP (naCampo falso: ninguém ataca ninguém)', H.naCampo() === false && e.campo === false);
+        check('a Rede anuncia a zona da sede', !R || R.zona() === 'sede:' + gid, R && R.zona());
+        check('a Rede aceita só zona de sede bem formada', !R || (R._zonaDe('sede:abc-1') === 'sede:abc-1' &&
+              R._zonaDe('sede:<x>') === 'praca' && R._zonaDe('campo') === 'campo' && R._zonaDe('lua') === 'praca'));
+        check('o herói nasce à frente da porta', e.pos && Math.abs(e.pos.x) < 0.5 && Math.abs(e.pos.z - 6) < 0.5, JSON.stringify(e.pos));
+        check('a câmera bate com a tela (aspecto 1)', e.aspecto === 1, e.aspecto);
+        check('a HUD sabe que está dentro', UI._sede().dentro === true);
+        return quieto(espera(function () { var m = H._sedeMontagem(); return m && m.vestidas === m.pecas; }, 150, 400));
+      })
+      .then(function () {
+        // ---- 4. o salão
+        var m = H._sedeMontagem() || { porChave: {}, pontos: [], paredes: {} }, c = m.porChave;
+        check('o salão vestiu todas as peças do dono', m.pecas >= 50 && m.vestidas === m.pecas, m.vestidas + '/' + m.pecas + ' · faltam ' + m.pendentes);
+        check('SEM pilar solto: nenhuma sd_pilar no salão', m.pilares === 0 && !c.sd_pilar, m.pilares);
+        var paredes = (c.sd_parede_lisa || 0) + (c.sd_parede_esteio || 0) + (c.sd_parede_tocha || 0);
+        check('quatro paredes fechadas e uma porta', paredes === 35 && c.sd_porta === 1, paredes + ' módulos + ' + c.sd_porta + ' porta');
+        check('trono, mesa do conselho e lareira', c.sd_trono === 1 && c.sd_mesa === 1 && c.sd_lareira === 1);
+        check('estandartes, armaduras e cavaletes', c.sd_estandarte === 3 && c.sd_armadura === 4 && c.sd_rack_armas === 2,
+              [c.sd_estandarte, c.sd_armadura, c.sd_rack_armas].join('/'));
+        check('baús (banco e cofre), bancos e estátuas', c.sd_bau >= 2 && c.sd_banco === 4 && c.sd_estatua === 2);
+        var tipos = H._lugares().map(function (l) { return l.tipo; }).sort().join(',');
+        check('os lugares do salão são os cinco pontos', tipos === 'sede-banco,sede-cofre,sede-guerra,sede-mural,sede-saida', tipos);
+        check('a parede do lado da câmera some (não tapa o salão)', m.paredes.s === false && m.paredes.n === true, JSON.stringify(m.paredes));
+
+        // ---- 5. quem se vê
+        check('o fantasma da MESMA sede ganha corpo', H._fantasmaVisivel('f-mesma') === true);
+        check('o de OUTRA guilda não aparece', H._fantasmaVisivel('f-outra') === false);
+        check('o da praça (sem guilda) não aparece', H._fantasmaVisivel('f-praca') === false);
+        check('o do Campo não aparece', H._fantasmaVisivel('f-campo') === false);
+
+        // ---- a foto (uma), com o salão limpo
+        H.aoAproximar(null);
+        window.__foto = 'sede_dentro';
+        return quieto(espera(function () { return window.__fotoFeita === 'sede_dentro'; }, 40, 250));
+      })
+      .then(function () {
+        // ---- 6. os cinco pontos
+        return ponto('sede-banco', 'banco', 'BANCO');
+      })
+      .then(function () { return ponto('sede-cofre', 'cofre', 'COFRE'); })
+      .then(function () { return ponto('sede-mural', 'mural', 'MURAL'); })
+      .then(function () {
+        chega('sede-guerra');
+        check('GUERRA: a mesa do conselho mostra a fila da guerra de guilda', !!d.querySelector('.hub-painel .guerra-bloco'));
+        chega('sede-saida');
+        check('SAÍDA: a porta oferece voltar à praça', !!d.querySelector('.hub-painel .sede-sair'));
+
+        // ---- 7. o chat
+        var ci = d.querySelector('.hub-chat-input');
+        if (!ci) { check('o chat existe para a prova (precisa de http)', location.protocol === 'file:', 'sem caixa de chat'); return; }
+        check('a caixa de chat diz que fala com a guilda', ci.parentNode.classList.contains('is-guilda') && /guilda/.test(ci.placeholder), ci.placeholder);
+        fala('oi, guilda');
+        check('sem barra, a fala vai para a GUILDA', paraGuilda.join('|') === 'oi, guilda' && !paraPraca.length, paraGuilda.join('|') + ' / ' + paraPraca.join('|'));
+        fala('/p oi, praça');
+        check('"/p" ainda alcança a praça', paraPraca.join('|') === 'oi, praça' && paraGuilda.length === 1, paraPraca.join('|'));
+      })
+      .then(function () {
+        // ---- 8. a saída
+        chega('sede-saida');
+        d.querySelector('.hub-painel .sede-sair').click();
+        return quieto(espera(function () { return H.naSede() === null && H._lugares().some(function (l) { return l.tipo === 'sede'; }); }, 60, 150));
+      })
+      .then(function () { return respiro(6); })
+      .then(function () {
+        var e = H._estado(), sd = H._lugares().filter(function (l) { return l.tipo === 'sede'; })[0];
+        check('sair volta à praça (zona praca, sem sede)', e.sede === null && e.zona === 'praca' && !UI._sede().dentro, e.zona);
+        check('a câmera volta certa (aspecto 1)', e.aspecto === 1, e.aspecto);
+        var dist = (sd && e.pos) ? Math.hypot(e.pos.x - sd.x, e.pos.z - sd.z) : -1;
+        check('o herói reaparece à frente da Sede, fora do raio de conversa', dist > sd.raio && dist < sd.raio + 4, dist.toFixed(1));
+        check('a Rede volta a anunciar a praça', !R || R.zona() === 'praca');
+        check('na praça aparece o da praça, e o da sede some', H._fantasmaVisivel('f-praca') === true && H._fantasmaVisivel('f-mesma') === false);
+        var ci = d.querySelector('.hub-chat-input');
+        if (ci) {
+          check('a caixa de chat volta ao normal', !ci.parentNode.classList.contains('is-guilda') && /diga algo/.test(ci.placeholder), ci.placeholder);
+          fala('oi, praça de novo');
+          check('sem barra, a fala volta a ser da praça', paraPraca[paraPraca.length - 1] === 'oi, praça de novo' && paraGuilda.length === 1);
+        }
+      })
+      .then(fecha, function (err) { check('a prova chegou ao fim', false, String(err && err.stack || err)); fecha(); });
+  };
+})();
+</script>
+</body>
+</html>

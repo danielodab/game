@@ -1505,6 +1505,7 @@ var JOGO = (typeof window !== 'undefined')
     boardKey = null;                    // o próximo quadro remonta com as bandeiras novas
     return guildasSede;
   };
+  R.texturaBandeira = function (cor, emblema) { return texturaBandeira(cor, emblema); };   // 04/10: a sede visitável (hub3d) pinta o mesmo pano
   function texturaBandeira(cor, emblema) {
     var chave = 'bandeira|' + cor + '|' + (emblema || '');
     if (texSedeCache[chave]) return texSedeCache[chave];

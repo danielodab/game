@@ -1234,6 +1234,7 @@ var JOGO = (typeof window !== 'undefined')
     var chaveSala = sala ? (sala.dungeonId + ':' + sala.roomIndex) : null;
     // 14/09: quem desce a um calabouço (a antessala) deixou o Campo de PvP — a volta é à praça
     if (sala && campoHud) campoHud.dentro = false;
+    if (sala && sedeHud) sedeHud.dentro = false;      // 04/10: e a sede da guilda também
     function perguntaSair() {
       // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
       if (emGrupo()) {
@@ -1404,6 +1405,7 @@ var JOGO = (typeof window !== 'undefined')
         if (selHeroes[0] && JOGO.Hub && JOGO.Hub.entrar) {
           JOGO.Hub.entrar(mundo, selHeroes[0], { sala: sala });
           if (!sala) reentraCampo();    // 14/09: quem lutou no Campo volta ao Campo
+          if (!sala) reentraSede();     // 04/10: e quem saiu da sede para a guerra volta ao salão
         }
         // a plaquinha: nome, título — e a CHAMA DA BRASA. A Fagulha é uma
         // faísca de vagalume, mas SÓ para quem já pisou na arena: quem nunca
@@ -1636,11 +1638,15 @@ var JOGO = (typeof window !== 'undefined')
       } else if (lugar.tipo === 'sede') {
         painel.appendChild(tituloPainel('Sede das Guildas', 'fc-guilda'));
         painel.appendChild(el('p', 'hub-nota',
-          'O estandarte dos clãs. A casa própria de cada guilda vem com o lobby — por ora, a ficha resolve tudo.'));
+          'O estandarte dos clãs. A ficha resolve tudo daqui; quem é de uma guilda também entra no salão dela.'));
         painel.appendChild(btn('Abrir a ficha da guilda', 'btn-primary btn-block', function () {
           openSheet('guilda');
         }));
+        // 04/10 (dono): a sede por dentro — só quem TEM guilda vê o botão
+        if (resumoGuilda) painel.appendChild(btn('Entrar na sede', 'btn-gold btn-block sede-entrar', pedeEntrarNaSede));
         painelGuerra(painel);         // 15/09: a guerra de guilda 2×2 (a fila, os quatro confirmando)
+      } else if (/^sede-/.test(lugar.tipo)) {
+        painelSedeDentro(painel, lugar.tipo, tituloPainel);   // 04/10: os cinco pontos do salão da guilda
       } else if (lugar.tipo === 'loteria') {
         // A BARRAQUINHA DA SORTE (03/09): a roleta dos selos mora aqui
         painel.appendChild(tituloPainel('Barraquinha da Sorte', 'fc-loteria'));
@@ -2012,6 +2018,8 @@ var JOGO = (typeof window !== 'undefined')
             // 13/09: o chat da guilda (/g) — só os membros recebem (o relé confere)
             if (mutados[ev.id]) return;
             chatLinha('[' + (ev.guilda || 'Guilda') + '] ' + ev.nome, R.filtra ? R.filtra(ev.texto) : ev.texto, '#7fc8ff', ev.id);
+            // 04/10: no salão a fala da guilda também sai em balão, sobre quem falou
+            if (sedeDentro()) safe(function () { return JOGO.Hub.fala(ev.id, R.filtra ? R.filtra(ev.texto) : ev.texto); }, null);
             safe(function () { return JOGO.Denuncia && JOGO.Denuncia.anota(ev.id, ev.nome, ev.texto); }, null);
           } else if (ev.tipo === 'gchat-nao') {
             toast(ev.motivo === 'sem-guilda' ? 'Você não está numa guilda: o /g não tem para quem ir.'
@@ -2054,6 +2062,8 @@ var JOGO = (typeof window !== 'undefined')
           if (evk.key === 'Enter') {
             var t = ci.value.trim();
             // 13/09 (dono): "/Nome texto" é particular e "/g texto" vai à guilda; sem barra, a praça
+            // 04/10: dentro da sede o padrão vira a guilda — sem barra é como se fosse "/g"
+            if (t && t.charAt(0) !== '/' && !chatAlvo && sedeDentro()) t = '/g ' + t;
             if (t && t.charAt(0) === '/') {
               if (comandoDoChat(t, j, chatLinha)) ci.value = '';
               evk.stopPropagation();
@@ -10706,6 +10716,15 @@ var JOGO = (typeof window !== 'undefined')
               });
           }));
 
+          // 04/10: aberta de um ponto da sede (banco, cofre, mural), a ficha já rola até ele
+          if (guildaFoco) {
+            var focoG = guildaFoco, alvoG = caixa.querySelector('.guilda-' + focoG);
+            guildaFoco = null;
+            caixa.setAttribute('data-foco', focoG);
+            if (alvoG && alvoG.scrollIntoView) {
+              setTimeout(function () { try { alvoG.scrollIntoView({ block: 'start' }); } catch (eF) {} }, 60);
+            }
+          }
           // ---- o ranking, no pé
           if (ranking.length) {
             caixa.appendChild(el('h3', 'bk-tit', 'Ranking das guildas'));
@@ -12346,7 +12365,12 @@ var JOGO = (typeof window !== 'undefined')
     clear(c.chip);
     c.chip.classList.toggle('is-on', !!chatAlvo);
     c.input.classList.toggle('is-privado', !!chatAlvo);
-    c.input.placeholder = chatAlvo ? 'para ' + chatAlvo.nome + '… (Enter)' : 'diga algo…  /g guilda · /Nome particular';
+    // 04/10: na sede a caixa diz para quem a fala vai (a faixa "Chat da guilda" é do CSS)
+    var naSede = sedeDentro();
+    if (c.input.parentNode) c.input.parentNode.classList.toggle('is-guilda', naSede);
+    c.input.classList.toggle('is-guilda', naSede && !chatAlvo);
+    c.input.placeholder = chatAlvo ? 'para ' + chatAlvo.nome + '… (Enter)'
+      : naSede ? 'fale com a guilda…  /p praça · /Nome particular' : 'diga algo…  /g guilda · /Nome particular';
     if (!chatAlvo) return;
     c.chip.appendChild(el('span', null, 'para'));
     c.chip.appendChild(el('span', 'chat-chip-nm', esc(chatAlvo.nome)));
@@ -12367,6 +12391,16 @@ var JOGO = (typeof window !== 'undefined')
       if (!txtG) { toast('Escreva a mensagem depois do /g — por exemplo: /g bora descer?'); return false; }
       if (!R || !R.falarGuilda || !R.falarGuilda(txtG)) { toast(textoMotivo('privado', null)); return false; }
       if (linha) linha('[Guilda] ' + (j.nome || 'você'), txtG, '#7fc8ff');
+      if (sedeDentro()) safe(function () { return JOGO.Hub.fala(null, txtG); }, null);   // no salão, o meu balão também
+      return true;
+    }
+    // 04/10: dentro da sede a fala sem barra é da guilda — "/p texto" ainda alcança a praça
+    var mP = sedeDentro() ? /^p(?:\s+([\s\S]*))?$/i.exec(corpo) : null;
+    if (mP) {
+      var txtP0 = (mP[1] || '').trim();
+      if (!txtP0) { toast('Escreva a mensagem depois do /p — ela vai para a praça.'); return false; }
+      if (!R || !R.falar || !R.falar(txtP0)) return false;
+      if (linha) linha('[Praça] ' + (j.nome || 'você'), txtP0, '#9bd06a');
       return true;
     }
     var baixo = corpo.toLowerCase(), achado = null;
@@ -13189,7 +13223,7 @@ var JOGO = (typeof window !== 'undefined')
   function mostraGuerraCasada(e) {
     e = e || (Gu() && Gu().estado());
     if (!e || e.fase !== 'casada') return;
-    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'sede' && painelVivo()) { repintaLugar(); return; }
+    if (painelModo === 'lugar' && painelLugar && lugarDaGuerra(painelLugar) && painelVivo()) { repintaLugar(); return; }
     var p = abrePainel('convite');
     if (!p) { toast('Guerra de guilda: adversários encontrados — confirme em 30 s!'); return; }
     painelConv = { tipo: 'guerra' };
@@ -13212,7 +13246,7 @@ var JOGO = (typeof window !== 'undefined')
       if (e.fase === 'casada' && pv) { clear(pv); pv.appendChild(el('h3', null, 'Guerra de Guilda')); pintaGuerraCasada(pv, e); }
       else fechaPainel();
     }
-    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'sede') repintaLugar();
+    if (painelModo === 'lugar' && painelLugar && lugarDaGuerra(painelLugar)) repintaLugar();
     if (current === 'duelFim' && lastDuelFim && lastDuelFim.guerra) buildDuelFim(lastDuelFim);
   }
   function pedeGuerraInscricao() {
@@ -13382,6 +13416,92 @@ var JOGO = (typeof window !== 'undefined')
     pintaSeloArena();
     toast('Você voltou à praça.');
   }
+  /* ------------------------------------------- A SEDE DA GUILDA POR DENTRO (04/10)
+   * Dono: "os jogadores da mesma guild entrar nesse mapa … e lá dentro ser o banco da guild
+   * e o pessoal ter um chat". A Sede da praça segue abrindo os menus de sempre e ganhou um
+   * botão, "Entrar na sede" — só para quem tem guilda. Lá dentro (Hub.entraSede, a zona é
+   * 'sede:<id da guilda>') cinco pontos abrem as MESMAS fichas: banco, cofre e mural são a
+   * ficha da guilda já rolada até a parte certa; a mesa do conselho é a fila da guerra; a
+   * porta devolve à praça. E o chat sem barra passa a ser o da guilda. */
+  var sedeHud = { dentro: false, g: null };
+  var guildaFoco = null;
+  function sedeDentro() {
+    var H = JOGO.Hub;
+    return !!(H && typeof H.naSede === 'function' && safe(function () { return H.naSede(); }, null));
+  }
+  function lugarDaGuerra(l) { return l.tipo === 'sede' || l.tipo === 'sede-guerra'; }
+  // o que a cena precisa da guilda: o id (a zona), e a cor e o emblema dos estandartes
+  function infoDaSede(g) {
+    var B = JOGO.Brasao, cod = g.emblema || '', cor = null, emb = '';
+    if (B && B.ehCodigo && B.ehCodigo(cod)) cor = safe(function () { return B.partes(cod)[2]; }, null);
+    else emb = String(cod).slice(0, 2);
+    return { id: g.id, nome: g.nome || '', cor: cor, emblema: emb };
+  }
+  function pedeEntrarNaSede() {
+    var Gd = JOGO.Guilda, H = JOGO.Hub;
+    if (!Gd || !H || typeof H.entraSede !== 'function') { toast('A sede ainda está sendo construída.'); return; }
+    if (safe(function () { return Dl().estado().fase; }, 'livre') !== 'livre') { toast('Termine o duelo antes.'); return; }
+    // quem diz se você É da guilda é a ficha de agora (o servidor), não o que a tela lembra
+    Gd.minha().then(function (g) {
+      if (!g || g.id == null) { toast('Só quem é de uma guilda entra na sede.'); return; }
+      entraNaSede(g);
+    });
+  }
+  function entraNaSede(g) {
+    var info = infoDaSede(g);
+    if (!safe(function () { return JOGO.Hub.entraSede(info); }, false)) { toast('Não deu para entrar na sede.'); return; }
+    sedeHud.dentro = true;
+    sedeHud.g = info;
+    closeSheet();
+    if (painelModo === 'lugar') fechaPainel();
+    reanunciaPerfil();
+    safe(function () { return JOGO.Rede._tique(); }, null);
+    pintaChip();
+    toast('Você entrou na sede da ' + txtGuilda(g.emblema, g.nome) + '. Aqui o chat é da guilda.', 'good');
+  }
+  function saiDaSede() {
+    sedeHud.dentro = false;
+    fechaPainel();
+    safe(function () { JOGO.Hub.saiSede(); return true; }, null);
+    reanunciaPerfil();
+    safe(function () { return JOGO.Rede._tique(); }, null);
+    pintaChip();
+    toast('Você voltou à praça.');
+  }
+  function reentraSede() {
+    var H = JOGO.Hub;
+    if (!sedeHud.dentro || !sedeHud.g || !H || typeof H.entraSede !== 'function' || sedeDentro()) return;
+    safe(function () { H.entraSede(sedeHud.g); return true; }, null);
+    safe(function () { return JOGO.Rede._tique(); }, null);
+  }
+  function abreGuildaEm(foco) { guildaFoco = foco; openSheet('guilda'); }
+  function painelSedeDentro(p, tipo, tituloPainel) {
+    if (tipo === 'sede-banco') {
+      p.appendChild(tituloPainel('Banco da guilda', 'fc-banco'));
+      p.appendChild(el('p', 'hub-nota', 'As peças que os membros deixam para emprestar uns aos outros.'));
+      p.appendChild(btn('Abrir o banco da guilda', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('banco'); }));
+    } else if (tipo === 'sede-cofre') {
+      p.appendChild(tituloPainel('Cofre da guilda', 'fc-guilda'));
+      p.appendChild(el('p', 'hub-nota', 'As marcas da guilda: todos doam, só o líder gasta nos bônus.'));
+      p.appendChild(btn('Abrir o cofre da guilda', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('cofre'); }));
+    } else if (tipo === 'sede-mural') {
+      p.appendChild(tituloPainel('Mural da guilda', 'fc-guilda'));
+      p.appendChild(el('p', 'hub-nota', 'A mensagem que o líder e os oficiais deixam para todos.'));
+      p.appendChild(btn('Ler o mural', 'btn-primary btn-block sede-ponto', function () { abreGuildaEm('mural'); }));
+    } else if (tipo === 'sede-guerra') {
+      p.appendChild(tituloPainel('Mesa do conselho', 'fc-guilda'));
+      painelGuerra(p);
+    } else if (tipo === 'sede-saida') {
+      p.appendChild(el('h3', null, 'Sair da sede'));
+      p.appendChild(el('p', 'hub-nota', 'A porta dá na praça, em frente à Sede das Guildas.'));
+      p.appendChild(btn('Voltar à praça', 'btn-warn btn-block sede-sair', saiDaSede));
+    }
+  }
+  // provas (tests/sede_visita.html): o estado, e o `guilda` que finge a resposta da ficha
+  UI._sede = function (guilda) {
+    if (guilda !== undefined) resumoGuilda = guilda ? { nome: guilda.nome, emblema: guilda.emblema } : null;
+    return { dentro: sedeHud.dentro, g: sedeHud.g, temGuilda: !!resumoGuilda, foco: guildaFoco };
+  };
   function reentraCampo() {
     var H = JOGO.Hub;
     if (!campoHud.dentro || !H || typeof H.entraCampo !== 'function' || campoDentro()) return;

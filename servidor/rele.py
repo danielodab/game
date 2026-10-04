@@ -1006,9 +1006,9 @@ async def _busca(par, m, agora):
     if par.conta is None or VERIFICADOR.caminho is None:
         return
     t, cid = m['t'], par.conta['id']
-    if t == 'gchat':
+    if t == 'gchat' or _zona_de_sede(m):
         achado = GUILDA.get(cid)
-        if not _tem_ficha(par.balde_chat, agora) or (achado is not None and agora - achado[0] < GUILDA_S):
+        if (t == 'gchat' and not _tem_ficha(par.balde_chat, agora)) or (achado is not None and agora - achado[0] < GUILDA_S):
             return
         g, definitivo = await _le_banco(le_guilda, cid)
         if definitivo:
@@ -1238,6 +1238,7 @@ def _processa(par, m, agora):
         v = _num(m.get('v'))
         par.versao = int(v) if v is not None else 0
     if t in PRESENCA:
+        _confere_zona(par, m)                        # 04/10: a zona de sede é só de quem é da guilda
         par.luta = m.get('luta') is True             # 13/09: está numa batalha? (só o true vale; o cliente antigo nunca está)
     mudou_de = _NADA
     if t in PRESENCA:
@@ -1329,6 +1330,27 @@ def _processa(par, m, agora):
     if dest and par.apresentou is None and (t == 'oi' or t == 'eco'):
         par.apresentou = agora                       # alguém já o conhece: se cair sem tchau, o relé despede por ele
     return dest
+
+
+def _zona_de_sede(m):
+    """04/10: a presença (oi, eco, pulso) que diz estar na sede de uma guilda —
+    `zona` = 'sede:<id da guilda>'. É a única zona que o relé confere."""
+    z = m.get('zona')
+    return m.get('t') in PRESENCA and isinstance(z, str) and z.startswith('sede:')
+
+
+def _confere_zona(par, m):
+    """A SEDE É SÓ DOS MEMBROS (04/10): quem diz estar em 'sede:<id>' sem ser da
+    guilda <id> (pela CONTA conferida, a mesma leitura do gchat, que o _busca
+    trouxe antes) sai com 'sede:-' — uma sede que não é de ninguém: não ganha
+    corpo no salão dos outros nem aparece andando na praça. Sem banco (relé de
+    desenvolvimento) não há o que conferir e a zona passa como veio."""
+    if not _zona_de_sede(m) or VERIFICADOR.caminho is None:
+        return
+    achado = GUILDA.get(par.conta['id']) if par.conta is not None else None
+    g = achado[1] if achado is not None else None
+    if g is None or str(g[0]) != m['zona'][5:]:
+        m['zona'] = 'sede:-'
 
 
 def _abusou(par, agora):
@@ -1722,7 +1744,7 @@ async def trata(ws, path=None):                 # path: assinatura antiga
                         # 02/10: a conta silenciada pela Equipe não fala (moderacao.py); ouve o porquê
                         dest = _cala_pela_equipe(par, SILENCIOS[par.conta['id']][1], time.monotonic())
                     else:
-                        if par.conta is not None and (m['t'] == 'gchat' or m['t'] in SEM_INIMIGOS):
+                        if par.conta is not None and (m['t'] == 'gchat' or m['t'] in SEM_INIMIGOS or _zona_de_sede(m)):
                             # 13/09: a guilda e os inimigos vêm do banco numa thread
                             # ANTES do _processa, que só lê o cache (o laço não espera)
                             await _busca(par, m, agora)

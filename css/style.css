@@ -2482,6 +2482,13 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   border: 1px solid var(--line2); border-radius: 9px; outline: none;
 }
 .hub-chat-input:focus { border-color: var(--gold); }
+/* 04/10: dentro da sede a caixa fala com a GUILDA — a faixa diz isso antes de digitar */
+.hub-chat.is-guilda::before {
+  content: 'Chat da guilda'; align-self: flex-start; padding: 2px 9px; border-radius: 9px;
+  font: 600 11px var(--ui-sans, system-ui); letter-spacing: .04em; text-transform: uppercase;
+  color: #0c1620; background: #7fc8ff;
+}
+.hub-chat-input.is-guilda { border-color: #7fc8ff; }
 
 /* ------------------------------------------------------------ ACAMPAMENTO */
 /* SO COM .is-on — a regra que eu quebrei e que apagou o jogo inteiro.

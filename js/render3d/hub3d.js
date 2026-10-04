@@ -67,7 +67,23 @@ var JOGO = (typeof window !== 'undefined')
   var auraDoHeroi = false;
   var caixas = [];
   var CAMPO_RESERVA = { meioLado: 30, chao: {}, muros: [], tochas: [], saida: { x: 0, z: 24 }, nasce: { x: 0, z: 20 } };
+  /* A SEDE POR DENTRO (04/10, dono: "os jogadores da mesma guild entrar nesse mapa (sem esses
+   * pilares estratégicos) e lá dentro ser o banco da guild e o pessoal ter um chat"). É a
+   * TERCEIRA cena desta máquina e anda pelos trilhos do Campo: `campoAtivo` continua
+   * dizendo "cena quadrada e murada" (chão, clamp, sem Árvore), e `sedeId` diz QUAL — o id
+   * da guilda. A zona é 'sede:<id>': só ganha corpo o fantasma da MESMA sede. Para fora,
+   * Hub.naCampo() segue sendo só o Campo de PvP (a HUD ataca por ele). */
+  var sedeId = null, sedeInfo = null, sedeObra = null;
+  var SEDE_PAREDE = 11.25, SEDE_MODULOS = 9;       // meia-largura até o eixo da parede; módulos por lado
+  var SEDE_CFG = { meioLado: 11, chao: { pedra: '#6b5a49', junta: '#2a211b', terra: '#5b4635' }, muros: [], tochas: [],
+                   saida: { x: 0, z: 9.4 }, nasce: { x: 0, z: 6 }, tema: 'sede', borda: {}, enfeites: [], bandeiras: [] };
+  function zonaDaCena() { return sedeId ? ('sede:' + sedeId) : (campoAtivo ? 'campo' : 'praca'); }
+  function normZona(z) {
+    if (z === 'campo') return 'campo';
+    return (typeof z === 'string' && /^sede:[\w-]{1,40}$/.test(z)) ? z : 'praca';
+  }
   function campoCfg() {
+    if (sedeId) return SEDE_CFG;
     var C = (JOGO.DATA && JOGO.DATA.campoPvp) || CAMPO_RESERVA;
     return {
       meioLado: (+C.meioLado > 5) ? +C.meioLado : 30,
@@ -97,7 +113,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function naZona(reg) {
     var z = reg && reg.perfil && reg.perfil.zona;
-    return ((z === 'campo') ? 'campo' : 'praca') === zonaAtual;
+    return normZona(z) === zonaAtual;
   }
   var fantasmas = {};               // id da Rede -> corpo igual ao do heroi
   var bicho = null;                 // o PET do avatar: { node, alvo, andando, petId, semCorrida }
@@ -600,6 +616,14 @@ var JOGO = (typeof window !== 'undefined')
       scene.add(contraluz);
     }
 
+    if (sedeId) {
+      // o salão é INTERIOR: fundo quase preto, sem névoa por perto, luz âmbar de lareira
+      scene.background = new THREE.Color(0x120d0a);
+      scene.fog = new THREE.Fog(0x120d0a, 60, 160);
+      hemi.color.set(0xffe2bd); hemi.groundColor.set(0x3a2a20); hemi.intensity = 1.0;
+      sol.color.set(0xffd9a8); sol.intensity = 0.85;
+      sol.position.set(-6, 20, 12);
+    }
     // O CHÃO SEM GRADE — agora QUADRADO e de LAJOTAS CINZA (pedido 30/08:
     // "o chão cinza como se fosse lajotas"). A textura é desenhada em canvas
     // na hora — pedras de tons variados com junta escura, padrão corrido —
@@ -621,7 +645,7 @@ var JOGO = (typeof window !== 'undefined')
     // a antessala é OUTRA cena: pátio murado, porta e saída — sem praça
     if (salaAtual) { montaSala(); return; }
     // o Campo de PvP também (14/09): muros, tochas e o portal de volta — sem praça
-    if (campoAtivo) { montaCampo(); return; }
+    if (campoAtivo) { if (sedeId) montaSedeDentro(); else montaCampo(); return; }
 
     montaPortais();
     montaBanco();
@@ -1567,6 +1591,211 @@ var JOGO = (typeof window !== 'undefined')
     lugares.push({ id: 'campo-saida', tipo: 'campo-saida', nome: 'Voltar à praça',
                    pos: new THREE.Vector3(sd.x, 0, sd.z), raio: 3.8, node: s.g, miolo: s.miolo });
   }
+  /* ============================================== A SEDE DA GUILDA POR DENTRO (04/10)
+   * O salão usa as MESMAS peças do dono que a guerra de guilda (catálogo sd_* de
+   * assets/embedded/cenario-sede.js), mas arrumado como CASA e não como mapa de luta: sem
+   * os pilares soltos (nenhuma sd_pilar entra), trono ao fundo, tapete da porta ao trono,
+   * mesa do conselho no meio, lareira acesa a oeste, estandartes com a cor e o emblema da
+   * guilda, armaduras e cavaletes nas paredes. Cinco pontos de conversa (lugares, como os
+   * da praça): BANCO (baú a leste), COFRE (baú ao pé do trono), MURAL (estandarte do canto),
+   * GUERRA (a mesa) e SAÍDA (a porta, ao sul).
+   * Não passa pelo instanciador do Campo: são ~60 peças, e as PAREDES precisam ficar em
+   * quatro grupos soltos — o lado que fica entre a câmera e o herói some (tique), senão a
+   * órbita livre da praça olharia para as costas de um muro de 4 m.
+   * Cada peça nasce numa primitiva de reserva e veste quando o modelo abre (no file://
+   * já vem aberto; servido, pede ao Bundle e tenta de novo, como o Campo). */
+  var SEDE_COR = { parede: 0x6a5d52, madeira: 0x5a3d26, pano: 0x8c1f24, metal: 0x8a8f96, ouro: 0xd6a443 };
+  function encaixaSede(chave, o) {
+    var m2 = M2(), cena = null;
+    try { cena = m2 && m2.rawScene && m2.rawScene(chave); } catch (e) {}
+    if (!cena) return null;
+    var no = cena.clone(true);
+    no.updateMatrixWorld(true);
+    var cx = new THREE.Box3().setFromObject(no);
+    var a = cx.max.y - cx.min.y, l = cx.max.x - cx.min.x, p = cx.max.z - cx.min.z;
+    if (!(a > 0.01) || !(l > 0.01) || !(p > 0.01)) return null;
+    // `alt` só: escala por igual (com teto de largura). `larg` + `alt`: estica na caixa —
+    // é o módulo de parede e a mesa. `prof` é sempre teto, nunca alvo.
+    var ky = o.alt ? o.alt / a : o.larg / l, kx = o.larg ? o.larg / l : ky, kz = o.larg ? Math.max(kx, ky) : ky;
+    if (!o.larg && o.teto && Math.max(l, p) * ky > o.teto) { kx = ky = kz = o.teto / Math.max(l, p); }
+    if (o.prof && p * kz > o.prof) kz = o.prof / p;
+    no.scale.set(no.scale.x * kx, no.scale.y * ky, no.scale.z * kz);
+    no.updateMatrixWorld(true);
+    cx = new THREE.Box3().setFromObject(no);
+    no.position.x -= (cx.min.x + cx.max.x) / 2;
+    no.position.y -= cx.min.y;
+    no.position.z -= (cx.min.z + cx.max.z) / 2;
+    return no;
+  }
+  function reservaSede(p) {
+    var parede = /^sd_(parede|porta)/.test(p.chave);
+    var w = p.larg || (parede ? 2.5 : 0.9), h = p.alt || 0.6, d = parede ? 0.6 : Math.min(p.prof || 0.9, 1.6);
+    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({ color: parede ? SEDE_COR.parede : SEDE_COR.madeira, roughness: 1 }));
+    m.position.y = h / 2;
+    return m;
+  }
+  function vesteSede() {
+    var o = sedeObra;
+    if (!o || !scene || o.cena !== scene) return;
+    var faltam = {};
+    o.pecas.forEach(function (p) {
+      if (p.vestida) return;
+      var no = null;
+      try { no = encaixaSede(p.chave, p); } catch (e) { no = null; }
+      if (!no) { faltam[p.chave] = true; return; }
+      if (p.prov) { p.g.remove(p.prov); p.prov = null; }
+      p.g.add(no);
+      p.vestida = true;
+    });
+    var chaves = Object.keys(faltam);
+    o.pendentes = chaves.length;
+    if (!chaves.length) return;
+    var novas = chaves.filter(function (k) { return o.pedidas.indexOf(k) < 0; });
+    if (novas.length) {
+      novas.forEach(function (k) { o.pedidas.push(k); });
+      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(novas); } catch (eP) {}
+    }
+    if (o.voltas++ < 400) setTimeout(function () { if (sedeObra === o) vesteSede(); }, 500);
+  }
+  function montaSedeDentro() {
+    var W = SEDE_PAREDE, info = sedeInfo || {};
+    var cor = /^#[0-9a-f]{6}$/i.test(info.cor || '') ? info.cor : '#8c1f24';
+    var obra = sedeObra = { cena: scene, pecas: [], pedidas: [], pendentes: 0, voltas: 0, lados: {}, pontos: [] };
+    ['n', 's', 'o', 'l'].forEach(function (k) { obra.lados[k] = new THREE.Group(); scene.add(obra.lados[k]); });
+    if (!texBrilhoTocha) {
+      texBrilhoTocha = fazTexRadial([[0, 'rgba(255,214,140,1)'], [0.3, 'rgba(255,150,60,0.55)'], [1, 'rgba(255,90,20,0)']]);
+    }
+    function halo(pai, x, y, z, esc) {
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texBrilhoTocha, transparent: true,
+        depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffffff }));
+      sp.scale.setScalar(esc);
+      sp.position.set(x, y, z);
+      pai.add(sp);
+      var t = { brilho: sp, base: esc, fase: tochasCampo.length * 1.7 };
+      tochasCampo.push(t);
+      return t;
+    }
+    // uma peça: o berço fica (é ele que o toque acha); dentro, a reserva e depois o modelo
+    function peca(chave, x, z, rot, o, pai) {
+      var g = new THREE.Group();
+      g.position.set(x, 0, z);
+      g.rotation.y = rot || 0;
+      var p = { chave: chave, g: g, alt: o.alt, larg: o.larg, prof: o.prof, teto: o.teto, vestida: false };
+      p.prov = reservaSede(p);
+      g.add(p.prov);
+      (pai || scene).add(g);
+      obra.pecas.push(p);
+      if (o.solido) marcaSolido(x, z, o.solido);
+      return g;
+    }
+    function ponto(id, nome, g, x, z, raio, solido, altRotulo) {
+      // o letreiro vem um passo para dentro do salão: colado à parede, ela o cortava
+      var r = rotulo(nome, '#f0d48a', 0.6);
+      if (id === 'sede-saida') r.position.set(x, altRotulo, z + 1.4);    // o da saída fica NA porta, não sobre quem acabou de entrar
+      else r.position.set(x * 0.9, altRotulo, z * 0.9);
+      scene.add(r);
+      var l = { id: id, tipo: id, nome: nome, pos: new THREE.Vector3(x, 0, z), raio: raio, node: g };
+      if (solido) l.solido = solido;
+      lugares.push(l);
+      obra.pontos.push(id);
+    }
+
+    // ---- as quatro paredes: 9 módulos por lado, a frente (+z local) para o meio do salão
+    var w = (2 * W) / SEDE_MODULOS;
+    var lados = [{ k: 'n', ax: 'x', fixo: -W, rot: 0 }, { k: 's', ax: 'x', fixo: W, rot: Math.PI },
+                 { k: 'o', ax: 'z', fixo: -W, rot: Math.PI / 2 }, { k: 'l', ax: 'z', fixo: W, rot: -Math.PI / 2 }];
+    lados.forEach(function (L) {
+      for (var k = 0; k < SEDE_MODULOS; k++) {
+        var t = -W + (k + 0.5) * w, x = L.ax === 'x' ? t : L.fixo, z = L.ax === 'x' ? L.fixo : t;
+        var meio = k === (SEDE_MODULOS - 1) / 2;
+        var chave = (L.k === 's' && meio) ? 'sd_porta'
+                  : (k % 2 || meio) ? 'sd_parede_lisa' : (k % 4 ? 'sd_parede_tocha' : 'sd_parede_esteio');
+        var g = peca(chave, x, z, L.rot, { larg: w * 1.02, alt: 4, prof: 1.0 }, obra.lados[L.k]);
+        // a chama da tocha é do código (a peça do dono traz só o suporte)
+        if (chave === 'sd_parede_tocha') halo(g, 0, 2.75, 0.6, 1.5);
+      }
+    });
+
+    // ---- o tapete, da porta ao trono (pintura no chão: não barra ninguém)
+    var tap = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 19), new THREE.MeshStandardMaterial({ color: new THREE.Color(cor).multiplyScalar(0.5), roughness: 1 }));   // meio-tom: sob a luz âmbar a cor cheia estourava em rosa
+    tap.rotation.x = -Math.PI / 2;
+    tap.position.set(0, 0.02, 0.9);
+    scene.add(tap);
+    [-1.5, 1.5].forEach(function (dx) {
+      var fio = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 19), new THREE.MeshStandardMaterial({ color: SEDE_COR.ouro, roughness: 0.8 }));
+      fio.rotation.x = -Math.PI / 2;
+      fio.position.set(dx, 0.03, 0.9);
+      scene.add(fio);
+    });
+
+    // ---- o fundo: trono, o baú do cofre, o troféu e os estandartes da guilda
+    peca('sd_trono', 0, -9.5, 0, { alt: 3.9, teto: 3.6, solido: 1.7 });
+    peca('sd_trofeu', -3.4, -9.6, 0, { alt: 1.3, teto: 1.2, solido: 0.6 });
+    var Rd = JOGO.Renderer3D2, texPano = null;
+    try { texPano = (Rd && Rd.texturaBandeira) ? Rd.texturaBandeira(cor, String(info.emblema || '').slice(0, 2)) : null; } catch (eB) {}
+    var matPano = texPano
+      ? new THREE.MeshStandardMaterial({ map: texPano, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.95 })
+      : new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.95 });
+    function estandarte(x, z, rot) {
+      var g = peca('sd_estandarte', x, z, rot, { alt: 4.5, teto: 1.9, solido: 0.5 });
+      // o pano é do código: pende da travessa do mastro do dono (a 86,6% da altura)
+      var pano = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.03), matPano);
+      pano.position.set(0, 4.5 * 0.866 - 0.04 - 1.015, 0.1);
+      g.add(pano);
+      return g;
+    }
+    estandarte(-5.8, -9.9, 0);
+    estandarte(5.8, -9.9, 0);
+    ponto('sede-cofre', 'Cofre da guilda', peca('sd_bau', 3.3, -9.3, 0, { alt: 1.0, teto: 1.5, solido: 0.8 }), 3.3, -9.3, 2.3, 0.8, 2.0);
+    ponto('sede-mural', 'Mural da guilda', estandarte(8.7, -9.7, 0), 8.7, -9.7, 2.3, 0.5, 5.2);
+
+    // ---- o meio: a mesa do conselho (comprida no eixo da porta) e os bancos corridos
+    var mesa = peca('sd_mesa', 0, -1, Math.PI / 2, { larg: 5, alt: 1.2, prof: 2.6 });
+    [-1, 1].forEach(function (sx) {
+      [-1.3, 1.3].forEach(function (dz) { peca('sd_banco', sx * 1.95, -1 + dz, Math.PI / 2, { larg: 2.3 }); });
+    });
+    caixas.push({ x: 0, z: -1, hx: 2.3, hz: 2.6, rot: 0, alt: 1.2 });
+    ponto('sede-guerra', 'Mesa do conselho', mesa, 0, -1, 4.6, 3.0, 2.2);
+
+    // ---- oeste: a lareira acesa, entre armadura e cavalete
+    var lar = peca('sd_lareira', -9.8, -2, Math.PI / 2, { larg: 4.2, alt: 2.6, prof: 1.9 });
+    caixas.push({ x: -9.8, z: -2, hx: 1.0, hz: 2.2, rot: 0, alt: 2.6 });
+    var fogo = new THREE.Group();
+    [[0, 0.62, 0xff8a2a], [-0.3, 0.42, 0xffc24a], [0.3, 0.46, 0xff6a1a]].forEach(function (f) {
+      var c = new THREE.Mesh(new THREE.ConeGeometry(0.2, f[1], 7), new THREE.MeshBasicMaterial({ color: f[2] }));
+      c.position.set(f[0], 0.3 + f[1] / 2, 0);
+      fogo.add(c);
+    });
+    fogo.position.z = 0.1;
+    lar.add(fogo);
+    halo(lar, 0, 0.75, 0.45, 2.8).chama = fogo;
+    var luzFogo = braseiroComLuz('garden', 0).luz;      // só o disco de luz pintada no chão
+    luzFogo.position.set(-8.0, 0.04, -2);
+    scene.add(luzFogo);
+    peca('sd_armadura', -10.1, -6.8, Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
+    peca('sd_rack_armas', -10.1, 2.8, Math.PI / 2, { alt: 2.4, teto: 2.0, solido: 0.8 });
+    peca('sd_armadura', -10.1, 6.8, Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
+
+    // ---- leste: o baú do banco, entre armadura e cavalete
+    peca('sd_armadura', 10.1, -6.8, -Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
+    ponto('sede-banco', 'Banco da guilda', peca('sd_bau', 9.8, -1.8, -Math.PI / 2, { alt: 1.1, teto: 1.7, solido: 0.9 }), 9.8, -1.8, 2.5, 0.9, 2.1);
+    peca('sd_bau', 9.9, -3.6, -Math.PI / 2, { alt: 0.8, teto: 1.2, solido: 0.6 });
+    peca('sd_rack_armas', 10.1, 2.8, -Math.PI / 2, { alt: 2.4, teto: 2.0, solido: 0.8 });
+    peca('sd_armadura', 10.1, 6.8, -Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
+
+    // ---- sul: a porta entre duas estátuas, e a saída
+    peca('sd_estatua', -4.2, 9.9, Math.PI, { alt: 1.6, teto: 1.3, solido: 0.6 });
+    peca('sd_estatua', 4.2, 9.9, Math.PI, { alt: 1.6, teto: 1.3, solido: 0.6 });
+    var sd = SEDE_CFG.saida;
+    var soleira = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.6, 1.2),
+      new THREE.MeshBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.08, depthWrite: false }));
+    soleira.position.set(sd.x, 1.3, sd.z + 1.0);
+    scene.add(soleira);
+    ponto('sede-saida', 'Sair para a praça', soleira, sd.x, sd.z, 1.9, 0, 3.2);
+
+    vesteSede();
+  }
   /* O MURO RETANGULAR barra como o círculo barra: o ponto que entrou sai pela face mais
    * próxima (a de menor penetração), e o corpo DESLIZA ao longo dela no passo seguinte.
    * A conta é no referencial do muro (rotation.y = rot leva o x local a (cos, -sen)).
@@ -1596,6 +1825,7 @@ var JOGO = (typeof window !== 'undefined')
     caixas.length = 0;
     tochasCampo.length = 0;
     campoObra = null;                 // 19/09: a obra do Campo é da cena que se vai
+    sedeObra = null;
     chefesParados.length = 0;
     chefesFicha.length = 0;
     ultimoPerto = null;
@@ -1623,6 +1853,7 @@ var JOGO = (typeof window !== 'undefined')
     caixas.length = 0;
     tochasCampo.length = 0;
     campoObra = null;
+    sedeObra = null;
     chefesParados.length = 0;
     chefesFicha.length = 0;
     ultimoPerto = null;
@@ -3622,6 +3853,13 @@ var JOGO = (typeof window !== 'undefined')
       camera.lookAt(hp.x, 1.6, hp.z);
     }
 
+    // 04/10: na sede, o lado de parede que ficou entre a câmera e o salão some
+    if (sedeObra && sedeObra.cena === scene && camera) {
+      var cpS = camera.position, wS = SEDE_PAREDE - 0.6, lS = sedeObra.lados;
+      lS.n.visible = cpS.z > -wS; lS.s.visible = cpS.z < wS;
+      lS.o.visible = cpS.x > -wS; lS.l.visible = cpS.x < wS;
+    }
+
     // aviso de proximidade: quem escuta decide o que mostrar
     if (heroi && Hub.aoAproximar) {
       var perto = null;
@@ -3772,9 +4010,9 @@ var JOGO = (typeof window !== 'undefined')
     salaAtual = salaNova;
     salaCfg = (opts && opts.sala) || null;
     campoAtivo = campoNovo;
-    if (!campoAtivo) aparenciaCampo = null;
+    if (!campoAtivo) { aparenciaCampo = null; sedeId = null; sedeInfo = null; }
     else if (opts && opts.aparencia) aparenciaCampo = opts.aparencia;
-    if (trocouSala || trocouCampo) zonaAtual = campoAtivo ? 'campo' : 'praca';
+    if (trocouSala || trocouCampo) zonaAtual = zonaDaCena();
     // o corpo de SEMPRE é o do avatar; no Campo, o da aparência escolhida (o 1º herói)
     if (classId) classeAvatar = classId;
     var corpoDe = (campoAtivo && aparenciaCampo) ? aparenciaCampo : (classId || classeAvatar);
@@ -4036,6 +4274,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   Hub.entraCampo = function (opts) {
     var ap = (opts && opts.aparencia) || null;
+    if (sedeId) { sedeId = null; sedeInfo = null; campoAtivo = false; }    // da sede direto ao Campo: é troca de cena
     if (campoAtivo) {
       if (ap && ap !== aparenciaCampo) {
         aparenciaCampo = ap;
@@ -4062,9 +4301,57 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   Hub.saiCampo = function () {
-    if (!campoAtivo) return false;
+    if (!campoAtivo || sedeId) return false;
+    return voltaAPraca('campo');
+  };
+  /* A SEDE POR DENTRO — A API (04/10)
+   * Hub.entraSede({id, nome, cor, emblema})  a praça vira o salão da guilda `id`; o herói
+   *                              nasce à frente da porta com o corpo de sempre. A zona
+   *                              vira 'sede:<id>' (só letras, números, _ e -). Quem decide
+   *                              se o jogador É da guilda é a HUD (e o relé confere a zona).
+   * Hub.saiSede()                volta à praça, à frente da Sede das Guildas → false se não estava
+   * Hub.naSede()                 → o id da guilda, ou null
+   * Lugares: sede-banco, sede-cofre, sede-mural, sede-guerra e sede-saida (aoAproximar). */
+  Hub.entraSede = function (g) {
+    var id = (g && g.id != null) ? String(g.id).replace(/[^\w-]/g, '').slice(0, 40) : '';
+    if (!id) return false;
+    var info = { id: id, nome: g.nome || '', cor: g.cor || null, emblema: g.emblema || '' };
+    if (sedeId === id) { sedeInfo = info; return true; }
+    if (heroi && heroi.classId && !campoAtivo) classeAvatar = heroi.classId;
+    sedeId = id;
+    sedeInfo = info;
+    campoAtivo = true;
+    aparenciaCampo = null;
+    salaAtual = null;
+    salaCfg = null;
+    zonaAtual = zonaDaCena();
+    if (!renderer || !THREE) return true;        // monta na próxima Hub.entrar
+    trocaDeCena();
+    remontaNoLugar(classeAvatar);
+    Hub.defineZona(zonaAtual);
+    avisaZona();
+    return true;
+  };
+  Hub.saiSede = function () {
+    if (!sedeId) return false;
+    return voltaAPraca('sede');
+  };
+  Hub.naSede = function () { return sedeId; };
+  Hub._sedeMontagem = function () {
+    var o = sedeObra;
+    if (!o || o.cena !== scene) return null;
+    var porChave = {}, vestidas = 0;
+    o.pecas.forEach(function (p) { porChave[p.chave] = (porChave[p.chave] || 0) + 1; if (p.vestida) vestidas++; });
+    return { pecas: o.pecas.length, vestidas: vestidas, pendentes: o.pendentes, porChave: porChave,
+             pilares: porChave.sd_pilar || 0, pontos: o.pontos.slice(), pedidas: o.pedidas.slice(),
+             paredes: { n: o.lados.n.visible, s: o.lados.s.visible, o: o.lados.o.visible, l: o.lados.l.visible } };
+  };
+  // a volta à praça, do Campo ou da sede: à frente do lugar de onde se entrou (`tipo`)
+  function voltaAPraca(tipo) {
     campoAtivo = false;
     aparenciaCampo = null;
+    sedeId = null;
+    sedeInfo = null;
     zonaAtual = 'praca';
     if (!renderer || !THREE) return true;
     trocaDeCena();
@@ -4077,7 +4364,7 @@ var JOGO = (typeof window !== 'undefined')
     var x = null, z = null;
     for (var i = 0; i < lugares.length; i++) {
       var lg = lugares[i];
-      if (lg.tipo !== 'campo') continue;
+      if (lg.tipo !== tipo) continue;
       var r0 = Math.hypot(lg.pos.x, lg.pos.z) || 1, d = lg.raio + 1.2;
       var p = empurraDosSolidos({ x: lg.pos.x - lg.pos.x / r0 * d, z: lg.pos.z - lg.pos.z / r0 * d }, 0.4);
       x = p.x;
@@ -4087,12 +4374,12 @@ var JOGO = (typeof window !== 'undefined')
     Hub.defineZona('praca');
     avisaZona();
     return true;
-  };
-  Hub.naCampo = function () { return campoAtivo; };
+  }
+  Hub.naCampo = function () { return campoAtivo && !sedeId; };
   Hub.zona = function () { return zonaAtual; };
   Hub.aoTrocarZona = null;
   Hub.defineZona = function (z) {
-    zonaAtual = (z === 'campo') ? 'campo' : 'praca';
+    zonaAtual = normZona(z);
     if (!scene) return zonaAtual;
     var hp = heroi ? heroi.node.position : null, lista = [];
     for (var id in fantasmas) {
@@ -4409,7 +4696,8 @@ var JOGO = (typeof window !== 'undefined')
                        z: +bicho.node.position.z.toFixed(2), andando: !!bicho.andando,
                        clipe: bicho.clipe || 'idle' } : null,
       sala: salaAtual,                    // 03/09: null = praça
-      campo: campoAtivo,                  // 14/09: o Campo de PvP
+      campo: campoAtivo && !sedeId,       // 14/09: o Campo de PvP
+      sede: sedeId,                       // 04/10: a sede da guilda por dentro (o id), ou null
       zona: zonaAtual,
       aparencia: aparenciaCampo,
       avatar: classeAvatar,

@@ -436,10 +436,20 @@ var JOGO = (typeof window !== 'undefined')
    * fantasmas da sua zona (o hub3d filtra por `zona`). Quem diz é o Hub (Hub.naCampo); sem ele, 'praca'.
    * No Campo a aparência (`classe`) que a HUD põe é a do 1º herói da dupla — o 2º não viaja em nada. */
   function zonaAtual() {
-    try { return (JOGO.Hub && typeof JOGO.Hub.naCampo === 'function' && JOGO.Hub.naCampo()) ? 'campo' : 'praca'; }
+    try {
+      // 04/10: a sede da guilda é a terceira zona ('sede:<id da guilda>') — o Hub diz qual
+      if (JOGO.Hub && typeof JOGO.Hub.zona === 'function') return zonaDe(JOGO.Hub.zona());
+      return (JOGO.Hub && typeof JOGO.Hub.naCampo === 'function' && JOGO.Hub.naCampo()) ? 'campo' : 'praca';
+    }
     catch (e) { return 'praca'; }
   }
-  function zonaDe(v) { return v === 'campo' ? 'campo' : 'praca'; }
+  /* 04/10: 'sede:<id>' passa inteira (o hub3d só dá corpo a quem está na MESMA sede; o relé
+   * troca por 'sede:-' a de quem não é da guilda). Qualquer outra coisa é praça. */
+  function zonaDe(v) {
+    if (v === 'campo') return 'campo';
+    return (typeof v === 'string' && /^sede:[\w-]{1,40}$/.test(v)) ? v : 'praca';
+  }
+  R._zonaDe = zonaDe;               // provas
   R.zona = zonaAtual;
   function cartao(para) {
     if (eu) eu.zona = zonaAtual();
