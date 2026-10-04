@@ -1,12 +1,14 @@
 # SOTERRA no celular
 
-Este arquivo é o passo a passo para transformar o SOTERRA num aplicativo de
-Android (ou iOS) com o Capacitor, e o registro do que foi mudado no jogo para
-que ele funcione no telefone.
+Este arquivo é o registro do que o SOTERRA é como aplicativo de Android (feito
+com o Capacitor) e do que foi mudado no jogo para ele funcionar no telefone.
 
-**Nada aqui foi instalado ou construído nesta máquina** — Node não está
-instalado. O que existe é a estrutura pronta (`capacitor.config.json`,
-`tools/empacota_www.py`) e as instruções abaixo, que você roda quando quiser.
+**Para publicar na Google Play** — instalar o Android Studio, assinar, a ficha
+da loja, os formulários — o passo a passo é o [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md).
+
+**O estado (04/10/2026):** o projeto Android existe (`android/`, criado com
+`npx cap add android`) e a `www/` é montada e sincronizada. **Nunca foi
+compilado**: esta máquina tem Node, mas não tem Java nem o Android SDK.
 
 ---
 
@@ -14,79 +16,123 @@ instalado. O que existe é a estrutura pronta (`capacitor.config.json`,
 
 | o que | por quê | onde |
 |---|---|---|
-| **Node.js 20 LTS** | o Capacitor é uma ferramenta Node; é o único jeito | <https://nodejs.org> |
-| **Java JDK 21** | o Gradle do Android precisa | <https://adoptium.net> |
-| **Android Studio** | traz o SDK, o Gradle e o emulador | <https://developer.android.com/studio> |
-| **Python 3** | já está instalado; monta a `www/` | — |
+| **Node.js** | o Capacitor é uma ferramenta Node (já instalado) | <https://nodejs.org> |
+| **Android Studio** | traz o Java, o SDK, o Gradle e o emulador | <https://developer.android.com/studio> |
+| **Python 3** | monta a `www/` (já instalado) | — |
 
 No Android Studio, abra **SDK Manager** e garanta:
-*Android SDK Platform 34* (ou mais recente) e *Android SDK Build-Tools*.
+*Android SDK Platform 36* e *Android SDK Build-Tools*.
 
 ---
 
 ## 2. Os comandos, em ordem
 
-Tudo a partir da raiz do projeto (`C:\Users\danie\Documents\Jogo`).
+Tudo a partir da raiz do projeto.
 
 ```bash
-# --- uma vez só, para criar o projeto ---------------------------------
-npm init -y
-npm install @capacitor/core @capacitor/cli @capacitor/android
-npx cap add android
+npm install                       # uma vez: traz o Capacitor (lê o package.json)
 
 # --- toda vez que você mexer no jogo ----------------------------------
-python tools/extrai_assets.py     # 1. .glb de verdade a partir do base64
-python tools/empacota_www.py      # 2. monta a www/ (~25 MB)
-npx cap sync android              # 3. leva a www/ para o projeto Android
+npm run sync                      # = python tools/empacota_www.py && npx cap sync android
 
-# --- gerar o APK ------------------------------------------------------
-npx cap open android              # abre o Android Studio; Build > Build APK
+# --- rodar no telefone / gerar o APK de teste --------------------------
+npx cap open android              # abre o Android Studio; ▶ Run, ou Build > Build APK
 #   ou, sem abrir o estúdio:
 cd android && ./gradlew assembleDebug
 #   o APK sai em android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-> `npm init -y` cria um `package.json`. Ele **não existe** no repositório de
-> propósito: o jogo não tem dependências de Node e não deve passar a ter. O
-> `package.json` que o Capacitor cria é ferramenta de empacotamento, não do jogo.
+O AAB assinado, que é o que a loja recebe, está no `GOOGLE_PLAY.md` §1.
 
-### Deixar em pé (retrato)
+### O que está no Git e o que não está
 
-O jogo foi desenhado para retrato. Depois do `npx cap add android`, abra
-`android/app/src/main/AndroidManifest.xml` e acrescente ao `<activity>`:
+| | no Git? | por quê |
+|---|---|---|
+| `package.json`, `package-lock.json` | sim | dizem quais versões do Capacitor instalar |
+| `capacitor.config.json` | sim | a configuração de publicação |
+| `android/` | **sim** | é o projeto do aplicativo: versão, ícone, manifesto, receita de assinatura |
+| `node_modules/` | não | volta inteira com `npm install` |
+| `www/` | não | gerada pelo `tools/empacota_www.py` |
+| `android/keystore.properties`, `*.jks` | **nunca** | a chave de assinatura e as senhas |
 
-```xml
-android:screenOrientation="portrait"
-```
+Nada disso entra no servidor da web: o `.dockerignore` e o `tools/sobe_vps.py`
+deixam `android/`, `www/`, `node_modules/` e os dois `package*.json` de fora.
+
+### Em pé e deitado
+
+A orientação é **livre**: o jogo tem desenho para as duas (em pé, a HUD
+empilhada; deitado, o cais vira ícones no canto), e o `AndroidManifest.xml` não
+prende nenhuma. Para prender, acrescente ao `<activity>`
+`android:screenOrientation="portrait"` (ou `"sensorLandscape"`).
+
+### Depurar o jogo rodando no telefone
+
+O `capacitor.config.json` **não** tem a chave `webContentsDebuggingEnabled`, de
+propósito: sem ela o Capacitor liga a depuração só no aplicativo de teste
+(o "debug", que o ▶ Run e o `assembleDebug` geram) e desliga no de publicação.
+Com o telefone no USB, abra `chrome://inspect` no Chrome do computador.
+Escrever `true` ali abriria também o aplicativo publicado — não escreva.
 
 ---
 
-## 3. Por que existe uma pasta `www/`
+## 3. Por que existe uma pasta `www/` — e por que ela não leva os modelos
 
 `webDir` no `capacitor.config.json` aponta para `www/`, não para a raiz.
-Apontar para a raiz funcionaria — e empacotaria no telefone o `.git`, os
-`docs/`, o `unity/`, as 55 páginas de `tests/`, os 42 MB de modelos originais
-em `assets/models/kaykit_*` e, o pior, os **28 MB de
-`assets/embedded/models-*.js` que o aplicativo não usa**.
+Apontar para a raiz empacotaria no telefone o `.git`, os `docs/`, o `unity/`, as
+páginas de `tests/` e os `assets/embedded/models-*.js` que o aplicativo não usa.
 
-Não usa porque dentro do APK o Capacitor serve os arquivos por
-`https://localhost` — ou seja, **servido**. E nesse caso
-`js/assets_bundle.js` busca os `.glb` de verdade em `assets/models/bundle/`.
-O base64 embutido existe só para o caso `file://`, que é o duplo clique no
-computador, e esse caso não existe dentro do telefone.
+**Os modelos 3D não vão no pacote.** A Google Play limita a 200 MB o que um
+aplicativo baixa de início, e `assets/models/bundle` tem ~246 MB. Então o
+aplicativo abre só com o código e a interface e **baixa os modelos do servidor
+do jogo, sob demanda, igual à web**: a base antes do menu, cada calabouço na
+hora de descer (`js/assets_bundle.js`).
 
-MEDIDO: `www/` sai com **25,01 MB**.
+MEDIDO em 04/10/2026: `www/` sai com **13,71 MB**.
 
 | pasta | MB |
 |---|---|
-| `assets/models/bundle` | 20,93 |
-| `js` | 2,08 |
-| `vendor` | 1,14 |
-| `assets/embedded` (só os dois atlas de efeito) | 0,80 |
-| `css` | 0,06 |
-| **total** | **25,01** |
+| `assets/embedded` (sons, ícones, efeitos — o que o `index.html` servido pede) | 4,96 |
+| `js` | 4,78 |
+| `site` (a porta da conta: entrar, criar, excluir) | 2,56 |
+| `vendor` (three.js e os três arquivos do Capacitor) | 1,15 |
+| `css` | 0,19 |
+| `assets/models/bundle/tabelas` | 0,02 |
+| **total** | **13,71** |
 
-`www/` fica fora do Git: é gerada, e versioná-la seria guardar 25 MB de cópia.
+### Como o aplicativo acha o servidor
+
+Dentro do aplicativo a página vem de `https://localhost` (os arquivos do
+pacote), então a API, o relé e os modelos precisam de um endereço inteiro. Ele
+está escrito num lugar só: a constante **`SERVIDOR`** no começo do
+`tools/empacota_www.py` (`https://soterra.viidoo.io`). O script grava, no
+`js/versao.js` **da `www/`**, uma linha a mais:
+
+```js
+window.SOTERRA_APP = { servidor: "https://soterra.viidoo.io" };
+```
+
+É por ela que `js/core/sessao.js` e `site/site.js` (a API), `js/core/rede.js`
+(o relé, `wss://…/ws`), `js/assets_bundle.js` (os modelos) e `js/core/gm.js`
+(que trata o aplicativo como jogo no ar, e não como "em casa") sabem onde estão.
+**Na web essa linha não existe**, e os cinco seguem como sempre foram.
+
+Para apontar para outro servidor sem mexer no arquivo:
+`python tools/empacota_www.py --servidor https://outro.dominio`.
+
+### O que o servidor precisa ter
+
+Buscar um `.glb` de outra origem pede licença (CORS). As duas `Caddyfile`
+(`servidor/` e `servidor/coolify/`) dão essa licença **só** à origem do
+aplicativo (`https://localhost`) e **só** na pasta `/assets/models/bundle/`. A
+API já respondia a qualquer origem (a sessão vai no cabeçalho `Authorization`,
+não em cookie), e o relé é WebSocket, que não passa por isso.
+**O aplicativo só funciona depois que essa Caddyfile estiver no ar.**
+
+### Quando o jogo muda
+
+O código vai dentro do aplicativo; só os modelos vêm do servidor. Mudou o jogo
+na web → `npm run sync`, some 1 ao `versionCode` e envie outro AAB. Ver a
+decisão 10 do `GOOGLE_PLAY.md` §7.
 
 ---
 
@@ -237,5 +283,50 @@ Em headless:
    outro dono; o ganho não pagava o conflito. `tools/extrai_assets.py` já sabe
    lidar com `.png`, é só acrescentar os dois à lista `FONTES`.
 
-4. **Ícone e tela de abertura do aplicativo** não existem. O Capacitor gera
+4. **Ícone e tela de abertura do aplicativo** não existem (está o padrão do
+   Capacitor). Tamanhos e comando: `GOOGLE_PLAY.md` §2.
+
+5. **A loja dentro do aplicativo** ainda é a do Mercado Pago, que a Play não
+   aceita para item digital. Fica para a etapa da compra pela Google
+   (`GOOGLE_PLAY.md` §7, item 4).
    placeholders; trocar exige `@capacitor/assets` e uma arte de 1024×1024.
+
+---
+
+## 7. O que o jogo faz de diferente dentro do aplicativo (04/10)
+
+A regra: **o jogo da web não muda**. Tudo abaixo pergunta antes
+`JOGO.Mobile.app()` — verdadeiro só dentro do Capacitor (`window.Capacitor`
+nativo) ou com `?app=1` no endereço, que é como as provas fingem a casca no
+navegador. O `<html>` ganha a classe `app`, para o CSS que precisar.
+
+| | o que acontece | onde |
+|---|---|---|
+| **Botão voltar** | fecha a ficha aberta, depois o painel da praça; sem nada aberto, pergunta "Sair do SOTERRA?"; na batalha avisa que a luta continua sem ele. Voltar de novo desfaz a pergunta — só o botão **Sair** sai | `M.voltar` em `js/mobile.js`, `UI.voltar` em `js/ui/hud.js` |
+| **Segundo plano** | o som cala e volta ao retornar. O desenho para sozinho (o WebView escondido não roda `requestAnimationFrame`), igual à aba escondida da web — e é por isso que o turno e a rede se acertam na volta pelo mesmo caminho que a web já usa | `M.segundoPlano`, `Audio.pausa` |
+| **Tela acesa** | só durante a batalha e com o aplicativo na frente | plugin `@capacitor-community/keep-awake` |
+| **Qualidade gráfica** | quem nunca escolheu abre em **média**; em aparelho fraco (até 2 GB de memória ou tela de até 360 px no lado curto), em **baixa**. A escolha das Configurações sempre vence | `M.padraoGrafico` |
+| **Sessão** | o Android não copia os dados do aplicativo para a nuvem do Google (`allowBackup="false"`): a sessão da conta não viaja para outro telefone | `AndroidManifest.xml` |
+
+Os três arquivos do Capacitor (`vendor/capacitor/`) só existem na `www/` e são
+carregados pelo `js/mobile.js` **depois** de ele confirmar que está na casca: o
+`index.html` da web nunca os pede.
+
+### As provas
+
+```bash
+node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa · a escolha vence · onde mora a API
+# tests/app_casca.html             # botão voltar, segundo plano e tela acesa, com eventos simulados
+```
+
+### Trocar o identificador do aplicativo
+
+`br.com.soterra.jogo` aparece em `capacitor.config.json` (`appId`),
+`android/app/build.gradle` (`namespace` e `applicationId`),
+`android/app/src/main/res/values/strings.xml` e no caminho de
+`android/app/src/main/java/br/com/soterra/jogo/MainActivity.java`. O jeito mais
+seguro de trocar é apagar `android/`, mudar o `appId` e rodar `npx cap add
+android` de novo — e refazer as três mudanças feitas à mão no projeto: a
+assinatura e a versão no `android/app/build.gradle`, o `allowBackup="false"` no
+manifesto e as linhas da chave no `android/.gitignore`. **Só dá para trocar
+antes do primeiro envio à Play.**

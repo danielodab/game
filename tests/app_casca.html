@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a casca do aplicativo: botão voltar, segundo plano, tela acesa</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:300px;height:200px;border:1px solid #333}</style>
+</head>
+<body>
+<!-- 04/10: o jogo vira aplicativo de Android. Aqui o js/mobile.js de verdade roda
+     com `?app=1` (a casca fingida) e os eventos do aparelho são simulados:
+       · VOLTAR fecha a ficha aberta; sem ficha, pergunta antes de sair; voltar de
+         novo desfaz a pergunta; na batalha a pergunta avisa — e só "Sair" sai;
+       · SEGUNDO PLANO cala o som e, ao voltar, o som volta — uma vez cada;
+       · a TELA fica acesa só na batalha e com o aplicativo na frente;
+     e, num quadro com um Capacitor de mentira, que o botão voltar e o estado do
+     aplicativo chegam pelos ouvintes do plugin App e que "Sair" chama o exitApp.
+     A metade "na web nada muda" está em tests/app_casca.js (Node). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  // a casca fingida: o mobile.js lê o endereço no instante em que é avaliado
+  history.replaceState(null, '', location.pathname + '?app=1');
+  window.__V = '?v=' + Date.now();
+  document.write('<scr' + 'ipt src="../js/mobile.js' + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  var M = JOGO.Mobile;
+  var texto = function () { var e = document.getElementById('app-sair'); return e ? e.textContent : null; };
+
+  check('com ?app=1 o jogo se vê no aplicativo e o <html> ganha a classe app',
+        M.app() === true && M.nativo() === false && document.documentElement.classList.contains('app'));
+  check('a qualidade padrão do aplicativo é média ou baixa, nunca alta',
+        M.qualidade() === (M.aparelhoFraco() ? 'baixa' : 'media'), M.qualidade());
+
+  // ---- VOLTAR ---------------------------------------------------------------
+  var fichas = 2, pausas = [];
+  JOGO.UI = { voltar: function () { if (fichas > 0) { fichas--; return true; } return false; } };
+  JOGO.Audio = { pausa: function (on) { pausas.push(on); } };
+  JOGO.Game = { screen: 'hub', state: null };
+
+  check('voltar com ficha aberta fecha a ficha e não pergunta nada', M.voltar() === 'fechou' && fichas === 1 && !texto());
+  check('voltar de novo fecha a de baixo', M.voltar() === 'fechou' && fichas === 0 && !texto());
+  check('na praça, sem nada aberto, voltar PERGUNTA antes de sair',
+        M.voltar() === 'perguntou' && /Sair do SOTERRA\?/.test(texto() || '') && !M.saiu, texto());
+  check('voltar com a pergunta na tela a desfaz — e o aplicativo fica', M.voltar() === 'pergunta-fechada' && !texto() && !M.saiu);
+  M.voltar();
+  document.getElementById('app-sair-nao').click();
+  check('o botão Ficar fecha a pergunta sem sair', !texto() && !M.saiu);
+
+  JOGO.Game = { screen: 'battle', state: { turno: 1 } };
+  check('na batalha voltar não sai: pergunta, avisando que a luta segue',
+        M.voltar() === 'perguntou' && /batalha/.test(texto() || '') && !M.saiu, texto());
+  M.voltar();
+  check('na batalha, voltar duas vezes NÃO fecha o aplicativo', !texto() && !M.saiu);
+  M.voltar();
+  document.getElementById('app-sair-sim').click();
+  check('só o botão Sair sai', M.saiu === true && !texto());
+
+  // ---- TELA ACESA e SEGUNDO PLANO --------------------------------------------
+  M._vigia();
+  check('na batalha a tela fica acesa', M.telaAcesa === true);
+  var escondida = false;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: function () { return escondida; } });
+  function visibilidade(v) { escondida = v; document.dispatchEvent(new Event('visibilitychange')); }
+
+  var relogio = { inicio: Date.now() };          // o turno conta por relógio de parede: nada aqui o toca
+  visibilidade(true);
+  check('aplicativo em segundo plano: o som cala', pausas.length === 1 && pausas[0] === true && M.fora === true);
+  check('em segundo plano a tela pode apagar', M.telaAcesa === false);
+  visibilidade(true);
+  check('um segundo aviso de "escondido" não cala de novo', pausas.length === 1);
+  visibilidade(false);
+  check('de volta à frente: o som retoma, uma vez só', pausas.length === 2 && pausas[1] === false && M.fora === false);
+  check('… e a tela volta a ficar acesa, porque a batalha segue', M.telaAcesa === true);
+  check('a batalha não foi tocada pela ida e volta (mesma tela, mesmo estado)',
+        JOGO.Game.screen === 'battle' && JOGO.Game.state.turno === 1 && Date.now() >= relogio.inicio);
+  JOGO.Game = { screen: 'hub', state: null };
+  M._vigia();
+  check('fora da batalha a tela volta a poder apagar', M.telaAcesa === false);
+  JOGO.Audio = { pausa: function () { throw new Error('som quebrado'); } };
+  var caiu = false;
+  try { visibilidade(true); visibilidade(false); } catch (e) { caiu = true; }
+  check('um erro no som não derruba a ida ao segundo plano', !caiu && M.fora === false);
+
+  // ---- O CAPACITOR DE MENTIRA: os ouvintes do plugin App ----------------------
+  var q = document.createElement('iframe');
+  q.srcdoc = '<!DOCTYPE html><html><body><script>' +
+    'window.Capacitor = { isNativePlatform: function () { return true; } };' +
+    'window.__ouv = {}; window.__saiu = 0; window.__vigilia = [];' +
+    'window.capacitorApp = { App: { addListener: function (n, f) { window.__ouv[n] = f; }, exitApp: function () { window.__saiu++; } } };' +
+    'window.capacitorKeepAwake = { KeepAwake: { keepAwake: function () { window.__vigilia.push("acesa"); }, allowSleep: function () { window.__vigilia.push("livre"); } } };' +
+    '<\/script><script src="../js/mobile.js' + window.__V + '"><\/script></body></html>';
+  q.onload = function () {
+    var w = q.contentWindow, Mq = w.JOGO.Mobile, sons = [];
+    w.JOGO.Audio = { pausa: function (on) { sons.push(on); } };
+    w.JOGO.Game = { screen: 'battle', state: {} };
+    check('no Capacitor nativo: app() e nativo() verdadeiros, classe app no <html>',
+          Mq.app() === true && Mq.nativo() === true && w.document.documentElement.classList.contains('app'));
+    check('o jogo se inscreve no botão voltar e no estado do aplicativo',
+          typeof w.__ouv.backButton === 'function' && typeof w.__ouv.appStateChange === 'function');
+    w.__ouv.backButton();
+    check('o botão voltar do Android abre a pergunta — e não fecha o aplicativo',
+          !!w.document.getElementById('app-sair') && w.__saiu === 0);
+    w.document.getElementById('app-sair-sim').click();
+    check('"Sair" chama o exitApp do aparelho, uma vez', w.__saiu === 1);
+    Mq._vigia();
+    w.__ouv.appStateChange({ isActive: false });
+    w.__ouv.appStateChange({ isActive: true });
+    check('o estado do aplicativo cala e devolve o som', sons.length === 2 && sons[0] === true && sons[1] === false, JSON.stringify(sons));
+    check('a tela acesa segue a batalha: acende, solta em segundo plano, acende de novo',
+          w.__vigilia.join(',') === 'acesa,livre,acesa', w.__vigilia.join(','));
+    fim();
+  };
+  document.body.appendChild(q);
+})();
+</script>
+</body>
+</html>
