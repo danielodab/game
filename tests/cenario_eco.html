@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o cenário da Câmara do Eco</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  #app{position:absolute;left:-4000px;top:0;width:1280px;height:720px}
+  canvas#game-canvas{width:1280px;height:720px;display:block}
+  body.foto{padding:0;overflow:hidden}
+  body.foto h1, body.foto .sub, body.foto #summary, body.foto #lista{display:none}
+  body.foto #app{left:0;width:100vw;height:100vh}
+  body.foto canvas#game-canvas{width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<h1>A Câmara do Eco — o kit do dono no lugar do Coração emprestado</h1>
+<div class="sub">03/10: a arena do Eco Primordial vestia o cenário do Coração Partido (<code>theme: 'heart'</code>).
+Com a arte do dono ela tem o tema dela, <code>'eco'</code> (<code>assets/embedded/cenario-eco.js</code>): a colunata
+partida nos <code>#</code>, o entulho nos <code>=</code> e três peças na beira do abismo. Esta página mede as cinco
+peças com a régua do jogo, monta a Câmara de verdade (motor + renderizador) e CONTA: cada casa alta e cada casa baixa
+da grade saiu com a peça certa, nenhuma peça do Coração sobrou, e a GRADE é a mesma (a roupa mudou, a regra não: o
+juiz refaz a luta da semente e tem de chegar ao mesmo hash).
+<br><code>?foto=1</code> mostra a sala em tela cheia; <code>window.__tema('heart'|'eco')</code> troca o kit (o antes | depois)
+e <code>window.__vista('padrao'|'cima'|'perto')</code> enquadra.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/arenas.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/eco.js','js/core/engine.js','js/core/fusion.js','js/core/ai.js',
+    'js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-brokenheart.js',   // o corpo provisório do Eco é o do Coração
+    'assets/embedded/cenario-coracao.js',            // só para a foto do ANTES (window.__tema('heart'))
+    'assets/embedded/cenario-eco.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js',
+    'js/render3d/renderer3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var FOTO = /[?&]foto=1/.test(location.search);
+  if (FOTO) document.body.className = 'foto';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det != null && det !== '' ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; }
+    else {
+      var mau = res.filter(function (x) { return !x; }).length;
+      s.className = mau ? 'fail' : 'allpass';
+      s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) + ' de ' + res.length + ' checagens ok';
+      window.__fail = mau;
+    }
+    window.__done = true; window.__pronto = true;
+  }
+
+  var CELL = 2.0, WALL_H = CELL * 1.55, LOW_H = CELL * 0.46;
+  /* A GRADE DA CÂMARA, como estava no ar antes da troca de roupa (02/10). É a mesma lista de
+   * js/core/data/arenas.js, repetida AQUI de propósito: esta prova existe para acusar quem
+   * mexer na grade junto com o cenário. Se o mapa mudar por decisão de regra, muda-se aqui
+   * também — e sobe-se a VERSAO_REGRAS, porque o juiz refaz a luta casa por casa. */
+  var GRADE = [
+    '~~~~~~~~~~~~~~~~~~', '~~~~~........~~~~~', '~~~~..=....=..~~~~', '~~~.....##.....~~~',
+    '~~..............~~', '~................~', '~.=...#....#...=.~', '~................~',
+    '~..#....e.....#..~', '~..#..........#..~', '~................~', '~.=...#....#...=.~',
+    '~................~', '~~..............~~', '~~~.....==.....~~~', '~~~~..P....P..~~~~',
+    '~~~~~..P..P..~~~~~', '~~~~~~~~~~~~~~~~~~'];
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, R = JOGO.Renderer, E = JOGO.Engine, G = JOGO.Game;
+    var canvas = document.getElementById('game-canvas');
+    try { R.init(canvas, { preserveDrawingBuffer: true }); }
+    catch (e) { check('Renderer.init', false, e.message); return fecha(); }
+    try { if (G.init) G.init(); } catch (e) {}
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var voltas = 0;
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && ++voltas < 2400) return setTimeout(espera, 100);
+      check('os modelos carregaram', !!ok, erro || '');
+      try { roda(); } catch (e2) { check('a prova rodou até o fim', false, e2 && e2.message); }
+      fecha();
+      if (FOTO) { window.__vista('padrao'); (function anda() { try { R.render(0.016); } catch (e) {} requestAnimationFrame(anda); })(); }
+    })();
+
+    function quadros(n) {
+      for (var f = 0; f < n; f++) {
+        try { if (G.update) G.update(0.05); } catch (e) {}
+        try { R.render(0.05); } catch (e) { check('o quadro desenha', false, e.message); }
+      }
+    }
+    function caixa(no) {
+      no.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(no);
+      return { alt: b.max.y - b.min.y, larg: Math.max(b.max.x - b.min.x, b.max.z - b.min.z), base: b.min.y,
+               desvio: Math.max(Math.abs(b.min.x + b.max.x) / 2, Math.abs(b.min.z + b.max.z) / 2) };
+    }
+
+    function roda() {
+      var cat = JOGO.CENARIO && JOGO.CENARIO.eco;
+      check('o catálogo `eco` existe (cenario-eco.js)', !!cat);
+      if (!cat) return;
+      check('o `alto` é a colunata partida, e só ela', (cat.alto || []).join(',') === 'ce_pilar_quebrado', (cat.alto || []).join(','));
+      check('o `baixo` é o entulho, e só ele', (cat.baixo || []).join(',') === 'ce_entulho', (cat.baixo || []).join(','));
+      check('a `borda` são as três peças da beira do abismo',
+            (cat.borda || []).slice().sort().join(',') === 'ce_borda_abismo,ce_cristal_eco,ce_obelisco', (cat.borda || []).join(','));
+      var chaves = ['ce_pilar_quebrado', 'ce_entulho', 'ce_borda_abismo', 'ce_cristal_eco', 'ce_obelisco'];
+      var semModelo = chaves.filter(function (c) { var s = null; try { s = M.rawScene(c); } catch (e) {} return !s; });
+      check('as cinco peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
+      if (semModelo.length) return;
+
+      // A FOLHA VEIO INVERTIDA (o entulho à esquerda): a peça do `alto` tem de ser a alta
+      var cruA = caixa(M.rawScene('ce_pilar_quebrado').clone(true)), cruB = caixa(M.rawScene('ce_entulho').clone(true));
+      check('a colunata é mais alta que larga e o entulho é o baixo e comprido (a folha veio na ordem inversa do nome)',
+            cruA.alt > cruA.larg && cruB.alt < cruB.larg * 0.6,
+            'colunata ' + (cruA.larg / cruA.alt).toFixed(2) + ' larg/alt · entulho ' + (cruB.larg / cruB.alt).toFixed(2));
+
+      // ---- as medidas, com a função do jogo
+      var alto = R.muroDaCasa('eco', 'alto', 0, WALL_H, R.LARG_MURO), baixo = R.muroDaCasa('eco', 'baixo', 0, LOW_H, R.LARG_MURO);
+      var ca = alto && caixa(alto), cb = baixo && caixa(baixo);
+      check('a colunata fecha a altura da parede (' + WALL_H.toFixed(2) + ' m): bloqueia a visão', !!ca && Math.abs(ca.alt - WALL_H) <= 0.02, ca && ca.alt.toFixed(2));
+      check('o entulho fica na altura da mureta (' + LOW_H.toFixed(2) + ' m): dá para ver por cima', !!cb && Math.abs(cb.alt - LOW_H) <= 0.02, cb && cb.alt.toFixed(2));
+      check('as duas passam da própria casa sem cobrir a vizinha (1,2 a 1,6 casa): o par emenda',
+            !!ca && !!cb && [ca, cb].every(function (c) { return c.larg >= CELL * 1.2 && c.larg <= CELL * 1.6; }),
+            ca && cb && ca.larg.toFixed(2) + ' / ' + cb.larg.toFixed(2));
+      check('as duas assentam no chão e ficam centradas', !!ca && !!cb && [ca, cb].every(function (c) { return Math.abs(c.base) <= 0.02 && c.desvio <= 0.05; }));
+      check('o esticão fica dentro do aceitável (≤ 4,2×; aqui quase não há: as peças já vieram na proporção da caixa)',
+            !!alto && !!baixo && alto.userData.estica <= 4.2 && baixo.userData.estica <= 4.2,
+            alto && baixo && alto.userData.estica.toFixed(2) + '× / ' + baixo.userData.estica.toFixed(2) + '×');
+
+      // ---- o mapa: tema novo, GRADE de sempre
+      var arena = JOGO.DATA.arena('camara_eco');
+      check('a Câmara declara o tema `eco` (sala e mapa)', !!arena && arena.theme === 'eco' && arena.rooms[0].sceneryTheme === 'eco',
+            arena && arena.theme + ' / ' + arena.rooms[0].sceneryTheme);
+      var igual = !!arena && arena.rooms[0].layout.length === GRADE.length &&
+                  arena.rooms[0].layout.every(function (l, i) { return l === GRADE[i]; });
+      check('a GRADE tática é a mesma de antes da troca, casa por casa', igual);
+      check('o chão continua o do Coração (o kit básico do tema `eco`)', R.temaDoKit('eco') === 'heart', R.temaDoKit('eco'));
+      check('o tema `eco` tem ambiente próprio (não cai na luz do jardim)', !!R.ambienteDoTema('eco'));
+
+      // ---- a sala de verdade
+      try { JOGO.Progress.reset(); } catch (e) {}
+      var ids = [];
+      try { ids = JOGO.Progress.heroIds().slice(0, 2); } catch (e) {}
+      var st = E.createBattle('camara_eco', 0, JOGO.Progress.battleParty(ids), { seed: 7, dificuldade: 'normal', escolhePosicao: true });
+      G.state = st;
+      quadros(16);
+      var uso = R.ultimaMontagem || {}, casas = R.ultimaMontagemCasas || {};
+      var nAlto = 0, nBaixo = 0, erradas = [];
+      st.grid.tiles.forEach(function (row, y) {
+        row.forEach(function (t, x) {
+          var k = casas[x + ',' + y];
+          if (t.type === 'wall') { nAlto++; if (k !== 'ce_pilar_quebrado') erradas.push(x + ',' + y + ' # ' + k); }
+          else if (t.type === 'cover') { nBaixo++; if (k !== 'ce_entulho') erradas.push(x + ',' + y + ' = ' + k); }
+          else if (k) erradas.push(x + ',' + y + ' chão ' + k);
+        });
+      });
+      check('toda casa ALTA da grade (' + nAlto + ') veste a colunata e toda casa BAIXA (' + nBaixo + ') o entulho',
+            nAlto > 0 && nBaixo > 0 && erradas.length === 0, erradas.join(' · '));
+      check('a conta fecha: ' + nAlto + ' colunatas e ' + nBaixo + ' entulhos na montagem',
+            uso.ce_pilar_quebrado === nAlto && uso.ce_entulho === nBaixo, JSON.stringify(uso));
+      var borda = (uso.ce_borda_abismo || 0) + (uso.ce_cristal_eco || 0) + (uso.ce_obelisco || 0);
+      check('as 18 peças de fora da arena são do kit, com as três aparecendo',
+            borda === 18 && uso.ce_borda_abismo > 0 && uso.ce_cristal_eco > 0 && uso.ce_obelisco > 0,
+            (uso.ce_borda_abismo || 0) + ' + ' + (uso.ce_cristal_eco || 0) + ' + ' + (uso.ce_obelisco || 0));
+      var alheias = Object.keys(uso).filter(function (k) { return k.indexOf('ce_') !== 0; });
+      check('nenhuma peça do Coração Partido (nem de outro tema) sobrou na Câmara', alheias.length === 0, alheias.join(', '));
+      var eco = st.units.filter(function (u) { return u.side === 'enemy'; })[0];
+      check('o Eco Primordial está na sala, no meio do círculo', !!eco && eco.defId === 'eco_primordial' && eco.x === 8 && eco.y === 8,
+            eco && eco.defId + ' @' + eco.x + ',' + eco.y);
+    }
+
+    window.__vista = function (qual) {
+      if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 52, ang: 0.0001, panX: 0, panZ: 0 });
+      else if (qual === 'perto') R.setCamera({ tilt: 1.12, dist: 18, ang: -0.5, centerX: 8, centerY: 6 });
+      else if (qual === 'sul') R.setCamera({ tilt: 1.1, dist: 20, ang: 0.3, centerX: 8, centerY: 12 });
+      else { R.setCamera({ rot: 0, animate: false, tilt: 0.98 }); R.recentrar(); }   // 0,98 = a inclinação padrão do jogo; sem ela a foto depois da 'cima' saía de cima
+      for (var i = 0; i < 4; i++) { try { R.render(0.016); } catch (e) {} }
+      return R.getCamera();
+    };
+    // o antes | depois: o estado aceita um tema por cima do da sala (é o que o Poço usa)
+    window.__tema = function (tema) {
+      if (!G.state) return null;
+      G.state.sceneryTheme = tema;
+      // a chave do tabuleiro não olha o tema: uma casa trocada e destrocada força a remontagem
+      try { R.setGuildasSede(null); } catch (e) {}
+      for (var i = 0; i < 6; i++) { try { R.render(0.016); } catch (e) {} }
+      return JSON.stringify(R.ultimaMontagem);
+    };
+  });
+})();
+</script>
+</body>
+</html>

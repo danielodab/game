@@ -1066,7 +1066,8 @@ Nada disto é para fazer agora; é o que o lote vai pedir quando chegar:
   `normaliza_muros_eco.py`) com as tabelas `ORIG`/`ARQUIVOS` que estão em cada
   seção. O embutidor de cenário de cada lote junta as duas saídas:
   `muros\_separado\` e `itens mapa\_separado\`.
-- **Sala de Guerra**: o salão hoje não lê catálogo nenhum, monta as
+- **Sala de Guerra** (FEITO em 03/10, ver "O cenário chegou e entrou"; o texto
+  abaixo fica como registro do que foi pedido): o salão não lia catálogo nenhum, montava as
   primitivas direto (`montaPecaDaSede`). A arte pede um `cenario-sede.js`
   (catálogo `JOGO.CENARIO['sede']`, nome `cenario-*` obrigatório para o jogo
   servido o achar) e um ramo em `montaPecaDaSede` que use a peça quando ela
@@ -1086,6 +1087,67 @@ Nada disto é para fazer agora; é o que o lote vai pedir quando chegar:
   `MONSTER_LOOK`, como a Mina fez). Lembre a regra da tinta da Mina: doador do
   MESMO elemento sai idêntico na tela ao dono do corpo, então escolha um doador
   que não apareça no mesmo quadrante.
+
+---
+
+## O cenário chegou e entrou (03/10): Sala de Guerra, Câmara do Eco e Santuário
+
+O dono entregou as três encomendas de cenário em
+`Downloads\assets_ok\mapa\`. As 38 peças estão no jogo, e esta seção diz o
+que veio diferente do combinado, porque o próximo lote vai tropeçar nas mesmas
+coisas.
+
+**O caminho mudou num ponto: a pasta do dono só se lê.** Os lotes dos
+calabouços rodavam o separador dentro dela. Agora
+`python tools/prepara_cenario_lancamento.py` copia as folhas para uma pasta de
+trabalho, separa (`separa_pecas.py`), normaliza os muros
+(`normaliza_muros_lancamento.py`, o do Fecho com a pasta por argumento) e
+entrega as peças com o nome do jogo; `python tools/embute_cenario_lancamento.py`
+escreve os três `cenario-*.js` (e já reduz o relevo e o brilho a 512). Depois,
+`python tools/extrai_assets.py`.
+
+| lote | o que veio | o que saiu diferente do pedido |
+|---|---|---|
+| Sala de Guerra (`sd_`, 16 peças) | `muros\parede_lisa.glb`, `parede_cortada.glb`, `porta.glb`; `muros\paredes esteio-tocha.glb`; as três folhas de itens | as folhas de itens vieram na RAIZ do lote, não em `itens mapa\`; a parede com esteio e a com tocha (P2 e P3 do apêndice) vieram juntas numa folha de dois muros, que passou pelo separador e saiu inteira |
+| Câmara do Eco (`ce_`, 5 peças) | `Eco Primordial\muro\pilar quebrado-entulho.glb` e `itens mapa\borda do abismo-cristal do eco-obelisco dos seis.glb` | a pasta é `Eco Primordial` (`O eco primordial` chegou vazia); os dois muros vieram numa folha só e **na ordem inversa do nome**: o entulho está à esquerda. O de-para do `prepara_cenario_lancamento.py` desfaz a troca e para se o `alto` sair mais baixo que o `baixo` |
+| Santuário (`el_`, 17 peças) | `muros\muro fogo/agua/terra/ar.glb`, `pilar vivo.glb` e as três folhas de quatro | o pilar vivo e as folhas vieram na RAIZ do lote |
+
+As oito folhas saíram limpas no separador, pela contagem do nome do arquivo,
+sem `--bruto` e sem mapa à mão.
+
+**Onde cada um mora no jogo:**
+
+- **Sala de Guerra**: `assets/embedded/cenario-sede.js`, catálogo
+  `JOGO.CENARIO['sede']`. Os papéis são os das `pecas` do mapa (`trono`,
+  `pilar`, `mesa`…) e a variante é papel + `_` + o campo `arte` da peça no mapa
+  (`pilar_rack_armas`, `bau_trofeu`). O cavalete de armas entrou nos quatro
+  pilares que ladeiam as armaduras da colunata norte e o troféu nos dois baús
+  dos cantos do sul. As primitivas de 15/09 continuam no código como reserva
+  (enquanto o modelo não abriu, e em `file://` sem o embutido). A parede usa a
+  peça do dono como FACE por instância (a lisa em todo o contorno, o esteio a
+  cada 6 casas e a tocha entre dois esteios, a cortada do lado da câmera); a
+  chama da tocha, o fogo e a luz da lareira, a chaminé e o pano do estandarte
+  seguem do código. Prova: `tests/cenario_sede.html`.
+- **Câmara do Eco**: `assets/embedded/cenario-eco.js`, catálogo
+  `JOGO.CENARIO['eco']`, e a arena passou de `theme: 'heart'` para `'eco'`. A
+  grade é a mesma, casa por casa (a prova guarda uma cópia e acusa quem mexer),
+  então o juiz refaz a luta igual e `Engine.VERSAO_REGRAS` não mudou. O chão
+  continua o do Coração (`TEMA_DO_KIT` no renderizador). Prova:
+  `tests/cenario_eco.html`.
+- **Santuário**: `assets/embedded/cenario-santuario.js`, catálogo
+  `JOGO.CENARIO['santuario']`, tema de renderização `'santuario'`. O catálogo
+  traz `regioes` (o muro e os enfeites de cada quadrante), `mecanica` (as oito
+  peças que o código do Santuário mexe), `pilar_vivo`, `marco_no_chao` (o Altar
+  dos Quatro é um tablado baixo: pousa numa casa de enfeite `,` perto do
+  centro, e não no lugar de um muro), `piso_sob_muro` e `enfeite_sobre_piso`.
+  **A sala diz de quem é cada casa**: `regioes: [{x, y, w, h, elemento}]` na
+  sala do calabouço (é dado de aparência; o motor e o juiz não leem). Casa fora
+  de toda região usa as listas gerais. O mapa e as regras são da frente do
+  Santuário; a prova do kit é `tests/cenario_santuario.html`, que monta uma
+  sala de teste e mostra a tabela de medidas de cada peça no jogo.
+
+**O que NÃO chegou** e segue como estava: as quatro brechas do Santuário e as
+folhas P13 a P16 do apêndice.
 
 ---
 
@@ -1212,8 +1274,9 @@ A single full-body small creature for a 3D game, alone in the image, one view on
 
 ### P6 a P8 · A Câmara do Eco (a arena do chefe) — prefixo `ce_`
 
-Hoje a Câmara do Eco veste o kit do Coração Partido (`theme: 'heart'` em
-`js/core/data/arenas.js`). Ela funciona assim; estas três gerações dão a ela
+**Entregue em 03/10** (ver "O cenário chegou e entrou"): a Câmara vestia o kit
+do Coração Partido (`theme: 'heart'` em `js/core/data/arenas.js`) e agora tem o
+tema `eco`. O texto abaixo é o pedido original; estas três gerações dão a ela
 cara própria: câmara circular sobre o vazio, pilares quebrados de cobertura.
 Os arquivos ficam na pasta do Eco (`...\O Eco Primordial\`).
 

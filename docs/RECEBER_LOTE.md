@@ -28,6 +28,17 @@
 > primeira linha sem conferir nenhum bicho. O 6 e o 7 não existem aqui, porque não há cenário de
 > calabouço nem portal.
 
+> **03/10 — cenário que não é de calabouço** (a Sala de Guerra, a Câmara do Eco
+> e o kit do Santuário): o passo 6 virou dois comandos,
+> `python tools/prepara_cenario_lancamento.py` e
+> `python tools/embute_cenario_lancamento.py`, que **não gravam nada na pasta do
+> dono** (copiam as folhas para uma pasta de trabalho). A tabela de cada lote
+> (de onde vem cada arquivo, o nome de cada peça, os papéis) está no topo dos
+> dois scripts. O embutido novo entra no `index.html` e no `GRUPO_DA_PASTA` do
+> `tools/extrai_assets.py` (`mapa:<id da arena>` para mapa de luta que não é
+> calabouço). O que este lote ensinou está em `docs/PROMPTS_LANCAMENTO.md`, "O
+> cenário chegou e entrou".
+
 Este é o caminho do lote, do mesmo jeito que os cinco anteriores entraram, só
 que agora com ferramenta genérica em vez de script copiado.
 

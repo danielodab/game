@@ -2638,7 +2638,9 @@ var JOGO = (typeof window !== 'undefined')
     ember: 'brasa', emberlock: 'brasa', fogo: 'brasa', fire: 'brasa', forja: 'brasa', fecho: 'brasa', brasa: 'brasa',
     wind: 'vento', ar: 'vento', air: 'vento', andaime: 'vento', andaimes: 'vento', vendaval: 'vento', vento: 'vento',
     mine: 'mina', terra: 'mina', earth: 'mina', tremor: 'mina', mina: 'mina',
-    heart: 'coracao', coracao: 'coracao', 'coração': 'coracao', final: 'coracao', partido: 'coracao'
+    heart: 'coracao', coracao: 'coracao', 'coração': 'coracao', final: 'coracao', partido: 'coracao',
+    // 03/10: a Câmara do Eco tem tema próprio no 3D ('eco'); no desenho 2D segue a do Coração
+    eco: 'coracao'
   };
   function themeOf(theme) {
     if (!theme) return THEMES.estufa;

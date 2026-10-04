@@ -264,8 +264,12 @@ JOGO.DATA.arenas = [
           {papel: 'pilar', x: 11, y: 5, w: 1, h: 1}, {papel: 'pilar', x: 13, y: 5, w: 1, h: 1},
           // AS ALAS: colunatas (a do norte pilar, armadura, pilar; a do sul três pilares — a armadura ali tapava os pés de (4,11)),
           // quinas da arena, o pilar da boca, a lareira com o banco e os baús a 2 dos nascimentos
-          {papel: 'pilar', x: 2, y: 5, w: 1, h: 1}, {papel: 'armadura', x: 3, y: 5, w: 1, h: 1}, {papel: 'pilar', x: 4, y: 5, w: 1, h: 1},
-          {papel: 'pilar', x: 20, y: 5, w: 1, h: 1}, {papel: 'armadura', x: 21, y: 5, w: 1, h: 1}, {papel: 'pilar', x: 22, y: 5, w: 1, h: 1},
+          // 03/10 (a arte do dono): `arte` troca SÓ a roupa da peça, nunca o papel nem a casa. Os dois pilares que
+          // ladeiam a armadura da colunata norte viram CAVALETE DE ARMAS (a colunata vira a armaria do salão) e os dois
+          // baús dos cantos do sul viram PEDESTAL DE TROFÉU. Cada um entra na altura do que substitui (cavalete ≤ pilar,
+          // troféu ≤ 1,2 m), então a régua tática não se mexe; sem a arte carregada a peça sai como pilar e como baú.
+          {papel: 'pilar', x: 2, y: 5, w: 1, h: 1, arte: 'rack_armas'}, {papel: 'armadura', x: 3, y: 5, w: 1, h: 1}, {papel: 'pilar', x: 4, y: 5, w: 1, h: 1, arte: 'rack_armas'},
+          {papel: 'pilar', x: 20, y: 5, w: 1, h: 1, arte: 'rack_armas'}, {papel: 'armadura', x: 21, y: 5, w: 1, h: 1}, {papel: 'pilar', x: 22, y: 5, w: 1, h: 1, arte: 'rack_armas'},
           {papel: 'pilar', x: 7, y: 6, w: 1, h: 1}, {papel: 'pilar', x: 17, y: 6, w: 1, h: 1},
           {papel: 'bau', x: 1, y: 7, w: 1, h: 1}, {papel: 'bau', x: 23, y: 7, w: 1, h: 1},
           {papel: 'lareira', x: 1, y: 8, w: 1, h: 3}, {papel: 'lareira', x: 23, y: 8, w: 1, h: 3},
@@ -288,7 +292,7 @@ JOGO.DATA.arenas = [
           {papel: 'banco_salao', x: 7, y: 15, w: 1, h: 1}, {papel: 'banco_salao', x: 17, y: 15, w: 1, h: 1},
           {papel: 'pilar', x: 8, y: 15, w: 1, h: 1}, {papel: 'pilar', x: 16, y: 15, w: 1, h: 1},
           {papel: 'armadura', x: 8, y: 16, w: 1, h: 1}, {papel: 'armadura', x: 16, y: 16, w: 1, h: 1},
-          {papel: 'bau', x: 1, y: 17, w: 1, h: 1}, {papel: 'bau', x: 23, y: 17, w: 1, h: 1},
+          {papel: 'bau', x: 1, y: 17, w: 1, h: 1, arte: 'trofeu'}, {papel: 'bau', x: 23, y: 17, w: 1, h: 1, arte: 'trofeu'},
           {papel: 'pilar', x: 10, y: 17, w: 1, h: 1}, {papel: 'pilar', x: 14, y: 17, w: 1, h: 1}
         ]
       }
@@ -318,7 +322,11 @@ JOGO.DATA.arenas.push({
   id: 'camara_eco',
   name: 'A Câmara do Eco',
   modo: 'eco',
-  theme: 'heart',
+  /* 03/10: o tema era 'heart' — a Câmara vestia o kit do Coração Partido emprestado. Com a
+   * arte do dono (assets/embedded/cenario-eco.js) ela tem o tema dela: a colunata partida nos
+   * `#`, o entulho nos `=` e a beira do abismo em volta. SÓ a roupa mudou: a grade abaixo é a
+   * mesma, casa por casa, e o tema não entra no Engine.hash (o juiz refaz a luta igual). */
+  theme: 'eco',
   palette: {
     primary: '#9a7ad8', secondary: '#241f38', accent: '#ffcf6b',
     floor1: '#2b2838', floor2: '#332f44', wall: '#191624', lowWall: '#4a4160', voidColor: '#07050d'
@@ -331,7 +339,7 @@ JOGO.DATA.arenas.push({
     {
       name: 'A Câmara do Eco',
       weather: 'calmo',
-      sceneryTheme: 'heart',
+      sceneryTheme: 'eco',
       layout: [
         '~~~~~~~~~~~~~~~~~~',
         '~~~~~........~~~~~',
