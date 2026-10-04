@@ -83,8 +83,19 @@
     bonus: { titulo: 'Bônus de XP', sub: 'Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.' },
     pedras: { titulo: 'Pedras de forja', sub: 'Pacotes de pedras para a Forja do Acampamento. A Âncora de Forja não está à venda: ela se conquista lá embaixo.' },
     guilda: { titulo: 'Guilda', sub: 'Dez Insígnias fundam uma guilda.' },
-    pergaminhos: { titulo: 'Pergaminhos', sub: 'Chegam guardados no jogo; você lê quando quiser.' }
+    pergaminhos: { titulo: 'Pergaminhos', sub: 'Chegam guardados no jogo; você lê quando quiser.' },
+    // 04/10: as auras da praça — só aparência, e por isso podem se vender
+    aparencia: { titulo: 'Aparência', sub: 'Auras para a praça: um anel de luz aos pés do herói, que todo mundo vê. Só aparência — não muda nada em batalha. A aura é sua na hora; liga, desliga e troca na ficha do Personagem, no jogo.' }
   };
+  /* 04/10 — AS NOVIDADES (servidor/loja.py manda tudo; aqui não mora número nenhum):
+   *   - o PACOTE DE BOAS-VINDAS (seção 'boas-vindas'): não é uma seção comum, é o destaque do topo,
+   *     com as duas escolhas de quem compra (o personagem e a aura); some para quem já o comprou;
+   *   - as OFERTAS DA SEMANA (catalogo.ofertas): os mesmos cartões, com o preço cheio riscado, numa
+   *     seção própria no topo e também no lugar de sempre, com a contagem regressiva até `fim`;
+   *   - PRESENTEAR: o botão em cada produto que o servidor deixa presentear (catalogo.presente.fora
+   *     diz os tipos que não: moeda e o Pacote). */
+  var bvClasse = '', bvAura = '';      // as escolhas do Pacote de Boas-Vindas (sobrevivem ao redesenho)
+  var presenteAberto = null, presenteNome = '';   // o sku com o formulário de presente aberto e o nome digitado
   var ESTADO = { pendente: 'esperando o jogo abrir', retirado: 'a caminho do jogo', entregue: 'entregue',
                  estornado: 'devolvido', cancelado: 'cancelado' };
   var MOTIVO = { 'sem-saldo': 'vinténs insuficientes no jogo', 'classe-ja-liberada': 'a classe já estava liberada no jogo',
@@ -408,7 +419,8 @@
       var id = secaoDe(it);
       if (!proprio(vistas, id)) { vistas[id] = true; ordem.push(id); }
     });
-    var html = ordem.map(function (id) {
+    ordem = ordem.filter(function (id) { return id !== 'boas-vindas'; });   // 04/10: o Pacote é o destaque do topo
+    var html = destaqueBoasVindas(itens) + secaoOfertas(itens) + ordem.map(function (id) {
       var s = proprio(SECOES, id) ? SECOES[id]
         : { titulo: id === 'outros' ? 'Outros' : id.charAt(0).toUpperCase() + id.slice(1), sub: '' };
       var dela = itens.filter(function (it) { return secaoDe(it) === id; });
@@ -781,9 +793,23 @@
       : emBarras
         ? 'As barras de ouro saem da sua conta agora. Se o pedido for cancelado ou o jogo o devolver, elas voltam; depois de entregue, não há devolução.'
         : 'Os vinténs saem da carteira do jogo quando ele receber o pedido. Depois de entregue, não há devolução.';
+    // 04/10: o Pacote de Boas-Vindas leva as duas escolhas; a aura já nasce entregue (não há o que cancelar)
+    var corpo = { sku: it.sku };
+    var oQue = it.nome;
+    if (it.tipo === 'pacote') {
+      if (!bvClasse || !bvAura) return;
+      corpo.classe = bvClasse;
+      corpo.aura = bvAura;
+      var nc = acha('classe-' + bvClasse), na = acha('aura-' + bvAura);
+      oQue += ' (' + (nc ? nc.nome : bvClasse) + ' e ' + (na ? na.nome : bvAura) + ')';
+      if (!mestre) nota += ' Este pacote só pode ser comprado uma vez por conta.';
+    }
+    if (it.tipo === 'aura' && !mestre) {
+      nota = 'As barras de ouro saem da sua conta agora e a aura já é sua, na hora: não há cancelamento nem devolução.';
+    }
     SITE.confirma({
       titulo: 'Confirmar a compra',
-      texto: 'Comprar ' + it.nome + ' por ' + precoTexto(it) + '?',
+      texto: 'Comprar ' + oQue + ' por ' + precoTexto(it) + '?',
       nota: nota + (!mestre && it.tipo === 'bonus-xp' ? ' O prazo do bônus corre a partir da entrega no jogo.' : ''),
       sim: emBarras ? 'Comprar com barras' : 'Comprar com vinténs', nao: 'Voltar'
     }).then(function (sim) {

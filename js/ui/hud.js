@@ -1286,6 +1286,10 @@ var JOGO = (typeof window !== 'undefined')
     var faixaEv = sala ? null : el('div', 'hub-evento is-off');
     if (faixaEv) s.appendChild(faixaEv);
     ligaFaixaEventos(faixaEv);
+    /* A CHAMADA DA LOJA (04/10): uma pílula discreta no canto direito (abaixo da dos eventos), só na praça — o Pacote de
+     * Boas-Vindas para quem ainda não o comprou; senão, as ofertas da semana com o tempo que falta. */
+    var chamaLj = sala ? null : el('a', 'hub-loja is-off');
+    if (chamaLj) { s.appendChild(chamaLj); ligaChamadaLoja(chamaLj); }
 
     var mundo = el('div', 'hub-mundo');
     s.appendChild(mundo);

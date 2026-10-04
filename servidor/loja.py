@@ -75,9 +75,31 @@ todos sem ser um jogo pay to win"). A loja do site passa a vender em BARRAS:
   volta (4× mais): não há como girar vinténs e barras e sair com mais.
   O pacote antigo de vinténs (PACOTES_RETIRADOS) saiu da venda, mas o pagamento
   criado antes do deploy e aprovado depois ainda credita os vinténs que vendeu.
+
+AS QUATRO NOVIDADES DE 04/10 (docs/LOJA_SUGESTOES.md, itens 2, 7, 8 e 10; o dono: "pode implantar").
+Nenhuma vende poder de PvP, sorteio, equipamento, estrela, selo ou bicho, e todas se pagam em barras:
+  - AS AURAS (seção 'aparencia', tipo 'aura'): cosmético que a praça inteira vê, uma por elemento e a
+    neutra. A POSSE não é tabela: é o pedido vivo da conta (pendente, retirado ou entregue) com
+    sku 'aura-<cor>' ou o Pacote de Boas-Vindas que a trouxe — cancelar ou estornar o pedido tira a aura
+    sem nada a apagar (`_auras`). A compra nasce 'entregue' (não há nada a pôr no save do jogo). A
+    ESCOLHIDA mora em `aura_escolhida` (uma linha por conta), e o Relé a carimba no oi/eco de quem a
+    veste (rele_ident.py): o que o cliente disser de si mesmo não vale.
+  - O PACOTE DE BOAS-VINDAS (sku 'boas-vindas', tipo 'pacote'): um pedido só, com a entrega congelada
+    {itens:[10 pedras de cada, a classe rara escolhida], aura}. Um por conta para sempre (o grupo de
+    limite), e o jogo o entrega inteiro ou o recusa inteiro (a classe já liberada devolve as barras).
+  - AS OFERTAS DA SEMANA (`ofertas_da_semana`): OFERTAS_POR_SEMANA itens com OFERTA_DESCONTO % a menos,
+    escolhidos por uma conta feita com o NÚMERO DA SEMANA (segunda 00:00 de Brasília) — nenhum sorteio
+    pago, nenhum estado guardado: dois contêineres dão a mesma resposta, e a semana vira sozinha. O
+    desconto vale no preço COBRADO (`preco_de`), e é esse que o pedido guarda em loja_barras.custo.
+  - O PRESENTE A UM AMIGO (POST /api/loja/presentear): quem dá paga as barras; o pedido nasce na conta
+    de quem recebe, marcado em `loja_amigos` (quem deu e o idem dele), anda pela fila de sempre e leva
+    uma carta ao correio. O estorno devolve as barras a QUEM PAGOU. Vinténs, barras e o Pacote de
+    Boas-Vindas não se presenteiam (moeda presenteada vira venda de moeda e lavagem de pacote).
 """
+import hashlib
 import json
 import logging
+import os
 import re
 
 from comum import (CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_do_heroi, inteiro,  # noqa: F401
@@ -114,6 +136,30 @@ BARRAS_TETO = 10 ** 9            # saldo de uma conta (o CHECK do banco só segu
 MOVIMENTOS_LISTA = 20            # o extrato que o site e a ficha do Mestre mostram
 MOTIVOS_BARRAS = ('pacote', 'loja', 'estorno-loja', 'troca-vintens', 'presente', 'estorno-pagamento', 'ajuste')
 TIPOS_TROCA = ('vintens', 'barras')          # as trocas entre moedas: fora dos presentes do Mestre
+# 04/10: o que NÃO se dá de presente — nem o Mestre, nem um amigo. Moeda presenteada é venda de moeda (e
+# lavagem de pacote pago com cartão alheio); o Pacote de Boas-Vindas é a primeira compra de cada conta
+FORA_DO_PRESENTE = TIPOS_TROCA + ('pacote',)
+# 04/10: as auras da praça (uma por elemento e a neutra) e o preço de cada uma, em barras
+AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')
+AURA_PRECO = 150
+# 04/10: o Pacote de Boas-Vindas — uma classe rara à escolha, PEDRAS_BOAS_VINDAS pedras de cada e uma aura
+BOAS_VINDAS_SKU = 'boas-vindas'
+BOAS_VINDAS_PRECO = 250
+BOAS_VINDAS_CLASSES = ('invocador', 'bruxo')
+PEDRAS_BOAS_VINDAS = 10
+# 04/10: as ofertas da semana. A semana vira na segunda 00:00 de Brasília (UTC−3; o Brasil não tem horário
+# de verão desde 2019): 05/01/1970 foi uma segunda, e a meia-noite de lá são 03:00 UTC
+OFERTA_DESCONTO = 25             # por cento
+OFERTAS_POR_SEMANA = 3
+SEMANA_S = 7 * 86400
+SEMANA_ZERO = 4 * 86400 + 3 * 3600
+# LOJA_OFERTAS=0 no ambiente desliga as ofertas (o catálogo sai com a lista vazia e tudo custa o preço
+# cheio): é a chave do dono, e é como as provas da API ficam com preços fixos (tests/servidor_api.py)
+OFERTAS_LIGADAS = os.environ.get('LOJA_OFERTAS', '1').strip() != '0'
+SECOES_OFERTA = ('personagens', 'bonus', 'pedras', 'guilda', 'aparencia')   # moeda, Reescrita e o Pacote ficam fora
+# 04/10: o presente a um amigo
+PRESENTES_AMIGO_DIA = 3          # presentes que UMA conta dá em 24 h (em qualquer estado)
+PRESENTES_AMIGO_ABERTOS = 5      # presentes de amigo esperando o jogo na conta de quem recebe
 
 ESQUEMA_LOJA = """
 CREATE TABLE IF NOT EXISTS loja_pedidos(
@@ -317,7 +363,27 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
      'descricao': ('Troca um caminho elemental de um herói por outro que a classe tenha, sem mexer em nível, '
                    'itens e estrelas. Alternar entre os caminhos que ele já tem continua grátis.'),
      'preco': 250, 'moeda': 'barras', 'limite': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}},
+    _aura('fogo', 'Aura de Brasa', 'cor de brasa'),
+    _aura('agua', 'Aura de Maré', 'azul de maré'),
+    _aura('terra', 'Aura de Raiz', 'verde de raiz'),
+    _aura('ar', 'Aura de Vento', 'clara de vento'),
+    _aura('neutra', 'Aura da Lousa', 'cor de ouro velho'),
 )
+POR_SKU = {i['sku']: i for i in CATALOGO}
+# 04/10: o Pacote de Boas-Vindas. O preço cheio é a soma do que vem dentro, pelos preços do catálogo
+# (a classe rara, 10 pedras de cada uma das cinco e uma aura): o desconto que o site mostra sai daqui
+_BV_PEDRAS = tuple(POR_SKU['pedras-' + p[0]] for p in _PEDRAS)
+BOAS_VINDAS_CHEIO = (POR_SKU['classe-' + BOAS_VINDAS_CLASSES[0]]['preco'] + sum(i['preco'] for i in _BV_PEDRAS)
+                     + AURA_PRECO)
+CATALOGO = ({
+    'sku': BOAS_VINDAS_SKU, 'secao': 'boas-vindas', 'tipo': 'pacote', 'alvo': 'boas-vindas', 'qtd': 1,
+    'nome': 'Pacote de Boas-Vindas',
+    'descricao': ('Uma vez por conta: um personagem raro à sua escolha (Xamã ou Bruxo), %d pedras de forja de '
+                  'cada tipo (%d ao todo) e uma aura para a praça, também à sua escolha.'
+                  % (PEDRAS_BOAS_VINDAS, PEDRAS_BOAS_VINDAS * len(_BV_PEDRAS))),
+    'preco': BOAS_VINDAS_PRECO, 'precoCheio': BOAS_VINDAS_CHEIO, 'moeda': 'barras',
+    'escolhas': {'classe': list(BOAS_VINDAS_CLASSES), 'aura': list(AURAS)},
+    'limite': {'grupo': BOAS_VINDAS_SKU, 'max': 1, 'dias': None}},) + CATALOGO
 POR_SKU = {i['sku']: i for i in CATALOGO}
 SKUS_VINTENS = tuple(i['sku'] for i in CATALOGO if i['tipo'] == 'vintens')   # os vinténs comprados com barras
 # fora da venda: só o nome, para o pedido antigo ainda aberto sair com o nome certo
@@ -783,6 +849,16 @@ class LojaMixin:
             raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
         cid, t, mestre = conta['id'], agora(), bool(conta['gm'])
         em_barras = item['moeda'] == 'barras'
+        entrega = entrega_de(item)
+        if item['tipo'] == 'pacote':                    # 04/10: as duas escolhas do Pacote de Boas-Vindas
+            classe, aura = corpo.get('classe'), corpo.get('aura')
+            if classe not in BOAS_VINDAS_CLASSES:
+                raise Recusa(400, 'escolha o personagem do pacote: Xamã ou Bruxo')
+            if aura not in AURAS:
+                raise Recusa(400, 'escolha a aura do pacote')
+            entrega = entrega_boas_vindas(classe, aura)
+        # 04/10: o preço cobrado é o de AGORA no relógio do servidor (a oferta da semana, se o item estiver nela)
+        preco_hoje = preco_de(item, t)
         # tudo numa transação de escrita: saldo, reserva, barras e limites lidos
         # com a trava entre processos pega — duas compras (até em dois
         # contêineres) não gastam o mesmo vintém nem a mesma barra

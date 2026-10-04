@@ -37,3 +37,17 @@ ficar de olho para que quem compra não atropele a paridade do PvP.
 - **Títulos do Eco Primordial, do Poço e da Brasa:** só se ganham, nunca se compram — é o que dá valor a eles.
 - **Qualquer sorteio pago** (caixa, roleta, pacote surpresa): além de proibido para menores pela Lei 15.211/2025
   (ECA Digital), quebra a confiança que a roleta só de selos construiu.
+
+## O que já entrou (04/10/2026)
+
+Os itens 2, 7, 8 e 10 da tabela, todos em barras de ouro e com o servidor mandando em preço, posse,
+limite e entrega (`servidor/loja.py`; o porquê de cada trava em `docs/SEGURANCA.md` §4.5):
+
+| o quê | preço | limite |
+|---|---|---|
+| **Auras na praça** (Brasa, Maré, Raiz, Vento e a neutra, da Lousa) | 150 barras cada | uma de cada por conta |
+| **Pacote de Boas-Vindas** (Xamã ou Bruxo + 10 pedras de cada tipo + uma aura) | 250 barras (o conteúdo avulso soma 820: −70%) | 1 por conta, para sempre |
+| **Ofertas da semana** (3 itens de 3 seções diferentes) | −25%, arredondado para cima | giram toda segunda, 00:00 de Brasília |
+| **Presentear um amigo** | o preço do produto no dia | 3 presentes por dia; moeda e o Pacote não se presenteiam |
+
+O Pacote cabe no Saco de 280 barras (R$ 19,90), com 30 de troco: a primeira compra é uma só.

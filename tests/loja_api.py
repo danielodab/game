@@ -58,7 +58,8 @@ except Exception:
 
 DIA = 86400
 # 13/09: em barras de ouro, menos a troca de vinténs por barras (em vinténs)
-PRECOS = {'vintens-1000': 50, 'vintens-5000': 250, 'vintens-12000': 600, 'vintens-25000': 1250,
+PRECOS = {'boas-vindas': 250,                 # 04/10: o Pacote de Boas-Vindas, no topo
+          'vintens-1000': 50, 'vintens-5000': 250, 'vintens-12000': 600, 'vintens-25000': 1250,
           'barras-por-vintens-10': 800, 'barras-por-vintens-50': 4000, 'barras-por-vintens-100': 8000,
           'barras-por-vintens-250': 20000,
           'classe-invocador': 500, 'classe-bruxo': 500, 'classe-espadachim': 1000, 'classe-arqueiro': 1250,

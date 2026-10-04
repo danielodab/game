@@ -58,6 +58,15 @@
  *               titulo: 'Voz do Eco'|null}
  * de preço 0: os selos entram por Progress.addSelo e o título por
  * Progress.addTituloEco (só os do catálogo JOGO.Titulos.ECO). Origem 'eco'.
+ * AS NOVIDADES DE 04/10 (servidor/loja.py):
+ *   pacote    {alvo:'boas-vindas', qtd:1, itens:[{tipo:'pedras'|'classe', …}], aura}: o
+ *             Pacote de Boas-Vindas. TODOS os itens são conferidos antes de qualquer
+ *             entrega — a classe já liberada recusa o pacote INTEIRO (as barras voltam
+ *             no servidor) —, e só então entram um a um. A aura não mora no save: a
+ *             posse é do servidor (o pedido), e a ficha do Personagem a lê de lá.
+ *   aura      {alvo: cor, qtd:1}: a aura presenteada pelo Mestre (a comprada já nasce
+ *             entregue e nem passa por aqui). Nada a pôr no save: só o aviso.
+ *   origem 'amigo' (com `pedido.de`, o nome de quem mandou): o presente de um amigo.
  * AS ORIGENS: o pedido pode trazer `origem` — 'presente' (o Mestre deu, pelo
  * painel dele: preço 0, o MESMO caminho, nenhuma regra à parte) ou 'pagamento'
  * (os vinténs de um pacote pago). Sem ela, ou com outra coisa, é compra da
@@ -85,7 +94,11 @@
 
   // as entregas que esta versão sabe aplicar (a tabela 4.6 do plano da loja 2)
   var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1,
-                'premio-eco': 1 };   // 02/10: o prêmio da semana do Eco Primordial
+                'premio-eco': 1,     // 02/10: o prêmio da semana do Eco Primordial
+                pacote: 1, aura: 1 };   // 04/10: o Pacote de Boas-Vindas e a aura da praça
+  var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra'];   // o gêmeo de loja.AURAS (servidor)
+  var ITENS_DO_PACOTE = { pedras: 1, classe: 1 };          // o que um pacote pode trazer dentro
+  var TETO_ITENS_PACOTE = 12;
   var ELEMENTOS_SELO = ['fogo', 'agua', 'terra', 'ar'];
   var TETO_SELOS = 999;           // selos de um elemento numa entrega do Eco
   var TETO_DIAS = 366;            // bônus de XP: dias numa entrega
@@ -351,6 +364,27 @@
       }
       return algum ? null : 'item-invalido';
     }
+    // 04/10: a aura (só a cor conhecida; nada entra no save)
+    if (ent.tipo === 'aura') {
+      return (AURAS.indexOf(ent.alvo) >= 0 && ent.qtd === 1) ? null : 'item-invalido';
+    }
+    /* 04/10: o Pacote de Boas-Vindas. Cada item passa pela MESMA checagem de quando é vendido
+     * avulso, e todos antes de qualquer entrega: o primeiro que não puder entrar recusa o pacote
+     * inteiro com o motivo dele (a classe já liberada devolve as barras, nunca vira pedra solta). */
+    if (ent.tipo === 'pacote') {
+      var its = ent.itens;
+      if (ent.alvo !== 'boas-vindas' || ent.qtd !== 1 || AURAS.indexOf(ent.aura) < 0) return 'item-invalido';
+      if (Object.prototype.toString.call(its) !== '[object Array]' || !its.length || its.length > TETO_ITENS_PACOTE) {
+        return 'item-invalido';
+      }
+      for (var pi = 0; pi < its.length; pi++) {
+        var it = its[pi];
+        if (!it || typeof it !== 'object' || ITENS_DO_PACOTE[it.tipo] !== 1) return 'item-invalido';
+        var ruimI = confere(it);
+        if (ruimI) return ruimI;
+      }
+      return null;
+    }
     return 'item-invalido';
   }
   /* 5. a entrega — lança se o Progress não aceitar (o chamador desfaz); o
@@ -385,6 +419,11 @@
       return;
     }
     if (ent.tipo === 'barras') return;   // os vinténs já saíram no lojaAplica; as barras, o servidor credita
+    if (ent.tipo === 'aura') return;     // 04/10: a posse da aura é do servidor; aqui só sai o aviso
+    if (ent.tipo === 'pacote') {         // 04/10: o Pacote de Boas-Vindas, item a item (já conferidos todos)
+      for (var qi = 0; qi < ent.itens.length; qi++) entrega(ent.itens[qi]);
+      return;
+    }
     if (ent.tipo === 'premio-eco') {     // 02/10: os selos e o título do pódio da semana do Eco
       var sl2 = ent.selos || {};
       for (var e2 = 0; e2 < ELEMENTOS_SELO.length; e2++) {
