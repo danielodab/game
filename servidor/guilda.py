@@ -47,6 +47,15 @@ AS REGRAS (as mesmas do guilda.js, que tem a cópia dos números):
   sair       com empréstimo ativo, não; com peça sua no banco, também não
              (retire antes); o último a sair dissolve; se o líder sai, o
              membro mais antigo herda
+  desfazer   04/10 (dono: "exclua a guilda Game Over do jogo.. vou refazer para sair os
+             bugs"): a EQUIPE desfaz uma guilda inteira (POST /api/mestre/guilda/desfazer,
+             ou `admin desfazer-guilda` no Terminal). Os empréstimos são recolhidos de quem
+             pegou; cada peça do banco vira uma DEVOLUÇÃO ao dono (guilda_devolucoes), que
+             o juiz entrega no saco dele, ou no cofre do Acampamento com o saco cheio; sem
+             o juiz é o jogo do dono que a põe no saco ao ler a devolução, e a série não é
+             varrida enquanto espera. Membros, pedidos, convites, mural, dízimos,
+             contribuições e a inscrição na guerra saem na MESMA transação; cada membro
+             recebe uma carta da Equipe; o nome fica livre. Repetir não quebra
 Os tempos vão ao cliente em milissegundos (o relógio dele); aqui, segundos.
 A autoridade é a mesma do saque (o topo do api.py): o XP do dízimo o cliente
 calcula; o teto por pedido segura erro, não trapaça. 04/10 (dono: "dinheiro não
@@ -54,6 +63,7 @@ dará mais XP para guild; somente % de XP doada de batalha OU guerra de guild"):
 a oferenda em vinténs acabou — POST /api/guilda/doar só aceita o dízimo
 (`origem: 'dizimo'`) e recusa o resto.
 """
+import json
 import logging
 import re
 import sqlite3
@@ -85,6 +95,12 @@ RECOLHE_INTERVALO = 3600          # o passo periódico: no máximo uma vez por h
 RECOLHE_LOTE = 20                 # empréstimos vencidos tratados de cada vez (o resto fica para o próximo passo)
 AVISOS_MAX = 20                   # recados de devolução entregues de uma vez
 LISTA_MAX = 100
+MESTRE_GUILDAS_MAX = 500          # a lista do painel do Mestre (todas, até a da equipe)
+MESTRE_MEMBROS_MAX = 60           # nomes de membros que cada linha do painel leva
+DESFAZER_POR_HORA = 20            # guildas que um Mestre desfaz por hora (freio de dedo, não de abuso)
+DEVOLUCAO_GRACA = 10 * 60         # a série devolvida não é varrida por isto depois de entregue (como a troca, api.py)
+DEVOLUCOES_MAX = 50               # devoluções entregues ao jogo de uma vez (sem o juiz)
+FRASE_DESFEITA = 'A guilda %s foi desfeita pela equipe.'
 MURAL_MAX = 500                   # espelha JOGO.Guilda.MURAL_MAX
 NOME_RESERVADO = 'esse nome é reservado à equipe do jogo'
 RE_ITEM = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
@@ -168,6 +184,23 @@ CREATE TABLE IF NOT EXISTS guilda_avisos(
   em       INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS guilda_avisos_conta ON guilda_avisos(conta_id, id);
+-- 04/10 (a guilda desfeita pela Equipe): a peça que estava no banco e ESPERA voltar ao dono. Enquanto a
+-- linha existe a série dela não é varrida pelo save do dono (api.py, salvar) — a guilda sumiu, a peça não.
+-- Com o juiz a linha sai na mesma transação que põe a peça no estado dele; sem o juiz o jogo do dono a põe
+-- no saco e confirma (`entregue_em`), e a linha ainda segura a varredura por DEVOLUCAO_GRACA
+CREATE TABLE IF NOT EXISTS guilda_devolucoes(
+  id          INTEGER PRIMARY KEY,
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  item_id     TEXT NOT NULL,
+  nivel       INTEGER NOT NULL DEFAULT 0,
+  estrelas    INTEGER NOT NULL DEFAULT 0,
+  iid         TEXT,
+  guilda      TEXT NOT NULL,
+  em          INTEGER NOT NULL,
+  entregue_em INTEGER
+);
+CREATE INDEX IF NOT EXISTS guilda_devolucoes_conta ON guilda_devolucoes(conta_id, id);
+CREATE INDEX IF NOT EXISTS guilda_devolucoes_iid ON guilda_devolucoes(iid);
 -- 13/09 (pedido do dono: a grade de membros, o dízimo de cada um e a mensagem da guilda).
 -- Tabelas novas, nada de ALTER: o XP que cada membro já doou (dízimo, treino, guerra; até 04/10 a oferenda),
 -- o dízimo PRÓPRIO de um membro (sem linha = o padrão guildas.dizimo) e o mural
@@ -380,12 +413,18 @@ class GuildaMixin:
             # 04/10: abrir o banco é a hora barata de conferir os empréstimos DESTA guilda (uma
             # consulta pelo índice; o juiz só é chamado se houver vencido)
             self._g_recolhe_ausentes(g['id'])
+        # 04/10: a peça que voltou de uma guilda desfeita e ainda não entrou (o juiz estava fora, a
+        # conta não tinha estado): tenta de novo aqui. Uma consulta pelo índice quando não há nada
+        self._g_entrega_devolucoes(conta['id'])
         with self.tranca:
             g, _ = self._g_membro(conta['id'])
             avisos = self._g_avisos(conta['id'])
+            resposta = {'ok': True, 'avisos': avisos, 'devolucoes': self._g_devolucoes(conta['id'])}
             if g is not None:
-                return 200, {'ok': True, 'guilda': self._g_foto(g['id'], conta['id']), 'avisos': avisos}
-            return 200, {'ok': True, 'guilda': None, 'antiga': self._g_antiga(conta['id']), 'avisos': avisos}
+                resposta['guilda'] = self._g_foto(g['id'], conta['id'])
+            else:
+                resposta.update(guilda=None, antiga=self._g_antiga(conta['id']))
+            return 200, resposta
 
     # -- a peça emprestada que volta sozinha (04/10) -------------------------------------
     def _g_visto(self, cid, t):
@@ -879,6 +918,241 @@ class GuildaMixin:
             self.con.commit()
         return 200, {'ok': True, 'dissolveu': not resto}
 
+    # -- a guilda desfeita pela Equipe (04/10) ---------------------------------------------
+    def _g_devolucoes(self, cid):
+        """Dentro da tranca: as peças que esperam voltar a esta conta (o jogo sem o juiz as põe no saco)."""
+        return [{'id': r['id'], 'itemId': r['item_id'], 'level': r['nivel'], 'stars': r['estrelas'],
+                 'iid': r['iid'], 'guilda': r['guilda']}
+                for r in self.con.execute("SELECT * FROM guilda_devolucoes WHERE conta_id = ? AND entregue_em IS NULL "
+                                          "ORDER BY id LIMIT ?", (cid, DEVOLUCOES_MAX))]
+
+    def guilda_devolucoes_visto(self, conta, corpo):
+        """Sem o juiz: o jogo pôs no saco as devoluções até `ate` e confirma. A linha fica mais
+        DEVOLUCAO_GRACA segurando a varredura (um PUT que já estava a caminho, sem a peça, a
+        marcaria 'fora' e ela não voltaria nunca mais) e sai na faxina da confirmação seguinte."""
+        ate, t = _id_positivo(corpo.get('ate'), 'ate'), agora()
+        with self._escrita():
+            self.con.execute("DELETE FROM guilda_devolucoes WHERE conta_id = ? AND entregue_em IS NOT NULL "
+                             "AND entregue_em < ?", (conta['id'], t - DEVOLUCAO_GRACA))
+            n = self.con.execute("UPDATE guilda_devolucoes SET entregue_em = ? WHERE conta_id = ? AND id <= ? "
+                                 "AND entregue_em IS NULL", (t, conta['id'], ate)).rowcount
+        return 200, {'ok': True, 'marcadas': n}
+
+    def _g_entrega_devolucoes(self, cid):
+        """FORA da tranca, e só com a autoridade: o juiz põe no estado do dono cada peça que
+        espera por ele (op interna 'bancoGuildaVolta': no saco, ou no cofre do Acampamento se o
+        saco está cheio) e a linha sai na MESMA transação que grava o estado — nem some nem
+        duplica. Nunca derruba quem chamou: o que falhar (o juiz fora, a conta ainda sem estado)
+        continua esperando, com a série protegida. Devolve quantas entraram."""
+        if not self._g_autoridade():
+            return 0
+        entraram = 0
+        try:
+            with self.tranca:
+                ids = [r[0] for r in self.con.execute(
+                    "SELECT id FROM guilda_devolucoes WHERE conta_id = ? AND entregue_em IS NULL ORDER BY id LIMIT ?",
+                    (cid, BANCO_MAX))]
+            for did in ids:
+                for _ in range(3):
+                    t = agora()
+                    with self.tranca:
+                        d = self.con.execute("SELECT * FROM guilda_devolucoes WHERE id = ? AND entregue_em IS NULL",
+                                             (did,)).fetchone()
+                        dono = self.con.execute("SELECT * FROM contas WHERE id = ?", (cid,)).fetchone()
+                        estado = self._estado_ler(cid) if d is not None and dono is not None else None
+                    if estado is None:
+                        break
+                    dono = dict(dono)
+                    args = {'item': {'itemId': d['item_id'], 'level': d['nivel'], 'stars': d['estrelas']}}
+                    if d['iid']:
+                        args['iid'] = d['iid']
+                    saida = self._juiz_op(dono, estado, [{'nome': 'bancoGuildaVolta', 'args': args}], interno=True)
+                    res = (saida.get('resultados') or [None])[0]
+                    serie = res.get('iid') if isinstance(res, dict) else None
+                    onde = res.get('onde') if isinstance(res, dict) else None
+                    if not iid_valido(serie) or ('iid' in args and serie != args['iid']) or onde not in ('saco', 'cofre'):
+                        raise Recusa(503, 'o juiz respondeu torto — a peça segue esperando')
+                    try:
+                        with self._escrita():
+                            if self.con.execute("SELECT 1 FROM guilda_devolucoes WHERE id = ? AND entregue_em IS NULL",
+                                                (did,)).fetchone() is None:
+                                break                                   # outro pedido já a entregou
+                            nova, _ = self._estado_grava(dono, estado, saida, t,
+                                                         poupar=[args['iid']] if 'iid' in args else [])
+                            self.con.execute("DELETE FROM guilda_devolucoes WHERE id = ?", (did,))
+                            # o recado para a volta do dono: o jogo mostra e adota o estado daqui
+                            self.con.execute("INSERT INTO guilda_avisos(conta_id, item_id, nivel, estrelas, iid, motivo, em) "
+                                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                             (cid, d['item_id'], d['nivel'], d['estrelas'], serie, 'devolvida-' + onde, t))
+                            self._evento(cid, 'guilda', {'acao': 'devolvida', 'guilda': d['guilda'], 'iid': serie,
+                                                         'onde': onde, 'versao': nova})
+                        entraram += 1
+                        break
+                    except EstadoMudou:
+                        continue
+        except Recusa as e:
+            log.warning("guilda desfeita: a devolução a #%d fica esperando (%s)", cid, e)
+        except Exception:
+            log.exception("guilda desfeita: a devolução a #%d falhou e fica esperando", cid)
+        return entraram
+
+    def _g_desfaz_grava(self, gid, por, origem, t):
+        """Dentro de _escrita: a guilda `gid` sai inteira. EstadoMudou se alguém pegou uma peça
+        emprestada depois do recolhimento (quem chama recolhe de novo); None se ela já não existe."""
+        g = self.con.execute("SELECT * FROM guildas WHERE id = ?", (gid,)).fetchone()
+        if g is None:
+            return None
+        if self.con.execute("SELECT 1 FROM guilda_banco WHERE guilda_id = ? AND emprestado_para IS NOT NULL",
+                            (gid,)).fetchone():
+            raise EstadoMudou()
+        membros = [r[0] for r in self.con.execute("SELECT conta_id FROM guilda_membros WHERE guilda_id = ? "
+                                                  "ORDER BY entrou_em, conta_id", (gid,))]
+        pecas = self.con.execute("SELECT * FROM guilda_banco WHERE guilda_id = ? ORDER BY id", (gid,)).fetchall()
+        for b in pecas:
+            # a peça muda de gaveta ANTES de a guilda sair: a série nunca fica um instante sem proteção
+            self.con.execute("INSERT INTO guilda_devolucoes(conta_id, item_id, nivel, estrelas, iid, guilda, em) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (b['dono_id'], b['item_id'], b['nivel'], b['estrelas'], b['iid'], g['nome'], t))
+        donos = sorted({b['dono_id'] for b in pecas})
+        # a guerra: a inscrição em aberto sai; a partida que ainda não começou cai e o OUTRO lado
+        # volta à fila com o lugar dele. A que já está lutando segue até o fim (o XP da guilda que
+        # não existe mais não vai a lugar nenhum) e o histórico das guerras fechadas fica: é também
+        # do adversário
+        try:
+            self.con.execute("DELETE FROM guerra_inscricoes WHERE guilda_id = ?", (gid,))
+            for p in self.con.execute("SELECT * FROM guerra_partidas WHERE (a_guilda = ? OR b_guilda = ?) "
+                                      "AND (estado = 'casada' OR (estado = 'pronta' AND ata IS NULL))",
+                                      (gid, gid)).fetchall():
+                volta = [lado for lado, dela in (('A', p['a_guilda']), ('B', p['b_guilda'])) if dela != gid]
+                if p['estado'] == 'casada':
+                    self._guerra_cai(p, t * 1000, volta, 'guilda-desfeita')
+                else:
+                    self._guerra_pronta_cai(p, t * 1000, 'guilda-desfeita', volta)
+        except (sqlite3.OperationalError, AttributeError):       # um banco sem a guerra: nada a limpar
+            pass
+        # tudo o que aponta para a guilda, lido do próprio banco: uma tabela nova da guilda entra
+        # sozinha nesta faxina (as de CASCADE sairiam com ela; as outras deixariam linha órfã)
+        for tabela in [r[0] for r in self.con.execute("SELECT name FROM sqlite_master WHERE type = 'table' "
+                                                      "AND name NOT LIKE 'sqlite_%'").fetchall()]:
+            for fk in self.con.execute('PRAGMA foreign_key_list("%s")' % tabela).fetchall():
+                if fk[2] == 'guildas':
+                    self.con.execute('DELETE FROM "%s" WHERE "%s" = ?' % (tabela, fk[3]), (gid,))
+        self.con.execute("DELETE FROM guildas WHERE id = ?", (gid,))
+        # a foto das guildas de antes do servidor com este nome: sem isto quem ainda não a "trouxe"
+        # a fundaria de novo de graça, por cima de quem for refazê-la
+        self.con.execute("DELETE FROM guildas_antigas WHERE nome = ?", (g['nome'],))
+        texto = FRASE_DESFEITA % g['nome']
+        for cid in membros:
+            extra = (' As suas peças que estavam no banco dela voltam para você: para o saco ou, com o saco cheio, '
+                     'para o cofre do Acampamento.') if cid in donos else ''
+            try:
+                self.con.execute("INSERT INTO moderacao_cartas(conta_id, assunto, texto, criado_em) VALUES (?, ?, ?, ?)",
+                                 (cid, 'A sua guilda foi desfeita', texto + extra, t))
+            except sqlite3.OperationalError:                      # um banco de antes do correio da Equipe
+                pass
+            self._evento(cid, 'guilda', {'acao': 'desfeita', 'gid': gid, 'nome': g['nome'], 'origem': origem})
+        resumo = {'id': gid, 'nome': g['nome'], 'membros': len(membros), 'pecas': len(pecas), 'donos': donos}
+        dados = {'guilda': gid, 'nome': g['nome'], 'lider': g['lider_id'], 'membros': membros, 'pecas': len(pecas),
+                 'xp': g['xp'], 'origem': origem}
+        try:
+            if isinstance(por, dict):
+                self._audita(por, 'guilda-desfazer', g['lider_id'], dados, t=t)
+            else:                                                 # o Terminal: sem conta de Mestre por trás
+                self.con.execute("INSERT INTO moderacao_auditoria(mestre_id, mestre_nome, acao, alvo_id, dados, criado_em) "
+                                 "VALUES (NULL, ?, 'guilda-desfazer', ?, ?, ?)",
+                                 ('Terminal (admin desfazer-guilda)', g['lider_id'],
+                                  json.dumps(dados, ensure_ascii=False, sort_keys=True), t))
+        except (sqlite3.OperationalError, AttributeError):
+            log.warning("guilda desfeita: sem a tabela da auditoria neste banco")
+        return resumo
+
+    def _g_desfaz(self, gid, por=None, origem='painel'):
+        """FORA da tranca: desfaz a guilda `gid` (ver o topo). (1) recolhe de quem pegou cada
+        empréstimo, pelo mesmo caminho da ausência; o juiz fora do ar levanta Recusa (503) ANTES
+        de qualquer coisa ser destruída. (2) uma transação só: as peças viram devoluções aos
+        donos e a guilda sai com tudo o que pende dela. (3) o juiz entrega as devoluções.
+        Devolve o resumo, ou None se a guilda já não existe (repetir não quebra)."""
+        resumo, recolhidos = None, 0
+        for _ in range(5):
+            with self.tranca:
+                if self.con.execute("SELECT 1 FROM guildas WHERE id = ?", (gid,)).fetchone() is None:
+                    return None
+                emprestadas = [r[0] for r in self.con.execute(
+                    "SELECT id FROM guilda_banco WHERE guilda_id = ? AND emprestado_para IS NOT NULL ORDER BY id", (gid,))]
+            for bid in emprestadas:
+                for _ in range(3):
+                    p = self._g_recolhe_prepara(bid)
+                    if p is None:
+                        break
+                    try:
+                        with self._escrita():
+                            recolhidos += 1 if self._g_recolhe_aplica(p, 'guilda-desfeita', agora()) else 0
+                        break
+                    except EstadoMudou:
+                        continue
+            try:
+                with self._escrita():
+                    resumo = self._g_desfaz_grava(gid, por, origem, agora())
+                break
+            except EstadoMudou:
+                continue
+        else:
+            raise Recusa(409, 'o banco da guilda não parou de mudar — tente de novo')
+        if resumo is None:
+            return None
+        resumo['recolhidos'] = recolhidos
+        resumo['entregues'] = sum(self._g_entrega_devolucoes(cid) for cid in resumo.pop('donos'))
+        log.info("guilda desfeita: #%d (%d membro(s), %d peça(s) devolvida(s), %d empréstimo(s) recolhido(s)) por %s",
+                 gid, resumo['membros'], resumo['pecas'], recolhidos,
+                 ('#%d' % por['id']) if isinstance(por, dict) else origem)
+        return resumo
+
+    # GET /api/mestre/guildas — TODAS, até a da equipe: o painel do Mestre é onde se vê quem está em qual
+    def mestre_guildas(self, conta, corpo):
+        with self.tranca:
+            gs = self.con.execute(
+                "SELECT g.*, (SELECT gm FROM contas l WHERE l.id = g.lider_id) AS lider_gm, "
+                "(SELECT COUNT(*) FROM guilda_banco b WHERE b.guilda_id = g.id) AS pecas, "
+                "(SELECT COUNT(*) FROM guilda_banco b WHERE b.guilda_id = g.id AND b.emprestado_para IS NOT NULL) AS emprestadas "
+                "FROM guildas g ORDER BY g.xp DESC, g.id LIMIT ?", (MESTRE_GUILDAS_MAX,)).fetchall()
+            ms = self.con.execute("SELECT guilda_id, conta_id, cargo FROM guilda_membros ORDER BY entrou_em, conta_id").fetchall()
+            nm = self._g_nomes([m['conta_id'] for m in ms] + [g['lider_id'] for g in gs])
+        por_guilda = {}
+        for m in ms:
+            por_guilda.setdefault(m['guilda_id'], []).append(m)
+        fora = []
+        for g in gs:
+            dela = por_guilda.get(g['id'], [])
+            fora.append({
+                'id': g['id'], 'nome': g['nome'], 'emblema': g['emblema'], 'xp': g['xp'], 'nivel': nivel_de(g['xp']),
+                'porta': g['porta'], 'criadaEm': g['criada_em'] * 1000, 'daEquipe': bool(g['lider_gm']),
+                'lider': {'id': g['lider_id'], 'nome': nm.get(g['lider_id'], '?')},
+                'totalMembros': len(dela), 'pecas': g['pecas'], 'emprestadas': g['emprestadas'],
+                'membros': [{'id': m['conta_id'], 'nome': nm.get(m['conta_id'], '?'),
+                             'cargo': 'lider' if m['conta_id'] == g['lider_id'] else m['cargo']}
+                            for m in dela[:MESTRE_MEMBROS_MAX]]})
+        return 200, {'ok': True, 'guildas': fora}
+
+    # POST /api/mestre/guilda/desfazer {gid, nome} — `nome` é a confirmação digitada no painel
+    def mestre_guilda_desfazer(self, conta, corpo):
+        gid = _id_positivo(corpo.get('gid'), 'gid')
+        nome = corpo.get('nome')
+        if not isinstance(nome, str) or not nome.strip():
+            raise Recusa(400, 'digite o nome da guilda para confirmar')
+        with self.tranca:
+            g = self.con.execute("SELECT nome FROM guildas WHERE id = ?", (gid,)).fetchone()
+        if g is None:                                            # o segundo clique, ou outro Mestre chegou antes
+            return 200, {'ok': True, 'jaDesfeita': True}
+        if nome.strip() != g['nome']:
+            raise Recusa(400, 'o nome digitado não confere com o da guilda', motivo='nome-nao-confere')
+        freio = getattr(self, '_mestre_freio', None)
+        if freio is not None:
+            freio(conta, 'guilda-desfazer', DESFAZER_POR_HORA, 'guildas demais desfeitas nesta hora; espere um pouco')
+        resumo = self._g_desfaz(gid, por=conta, origem='painel')
+        if resumo is None:
+            return 200, {'ok': True, 'jaDesfeita': True}
+        return 200, {'ok': True, 'desfeita': resumo}
+
     # -- o banco de empréstimos ----------------------------------------------------------
     def guilda_banco_depositar(self, conta, corpo):
         it = corpo.get('item')
@@ -1104,3 +1378,59 @@ class GuildaMixin:
             self.con.execute("UPDATE guilda_banco SET emprestado_para = NULL WHERE id = ?", (b['id'],))
             foto = self._g_ficha(g['id'], cid)
         return 200, {'ok': True, 'guilda': foto}
+
+
+# ---- o Terminal do servidor (servidor/coolify/admin.sh: `admin desfazer-guilda "NOME"`) ---------
+def _terminal():
+    """Desfaz uma guilda pelo MESMO caminho do painel do Mestre (o juiz devolve as peças), de
+    dentro do contêiner, para quando o painel não serve. Pede o nome de novo, digitado."""
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(description="Desfaz uma guilda inteira (as peças do banco voltam aos donos)")
+    ap.add_argument('--banco', required=True)
+    ap.add_argument('--juiz', default=None, help="o endereço do juiz (o mesmo da API); sem ele, sem a autoridade")
+    ap.add_argument('--desfazer', metavar='NOME', required=True)
+    args = ap.parse_args()
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+    from api import Api
+    from juiz_ponte import Juiz
+    api = Api(args.banco, juiz=Juiz(args.juiz))
+    g = api.con.execute("SELECT g.id, g.nome, g.xp, (SELECT nome FROM contas c WHERE c.id = g.lider_id) AS lider, "
+                        "(SELECT COUNT(*) FROM guilda_membros m WHERE m.guilda_id = g.id) AS membros, "
+                        "(SELECT COUNT(*) FROM guilda_banco b WHERE b.guilda_id = g.id) AS pecas "
+                        "FROM guildas g WHERE g.nome = ?", (args.desfazer,)).fetchone()
+    if g is None:
+        print('não há guilda chamada "%s" (já foi desfeita? confira com: admin guildas)' % args.desfazer)
+        return 0
+    print('A guilda "%s" (nº %d): líder %s, %d membro(s), nível %d, %d peça(s) no banco.'
+          % (g['nome'], g['id'], g['lider'] or '?', g['membros'], nivel_de(g['xp']), g['pecas']))
+    print('Ela sai do jogo inteira: as peças do banco voltam aos donos e cada membro recebe uma carta.')
+    print('Digite o nome da guilda para confirmar (ou Enter para desistir): ', end='', flush=True)
+    try:
+        digitado = sys.stdin.readline().strip()
+    except (EOFError, KeyboardInterrupt):
+        digitado = ''
+    if digitado != g['nome']:
+        print('\nnão confere: nada foi mexido.')
+        return 1
+    try:
+        r = api._g_desfaz(g['id'], por=None, origem='terminal')
+    except Recusa as e:
+        print('não deu: %s (nada foi apagado; tente de novo)' % e)
+        return 1
+    if r is None:
+        print('ela já não existia: nada a fazer.')
+        return 0
+    espera = r['pecas'] - r['entregues']
+    print('"%s" foi desfeita: %d membro(s) avisado(s), %d empréstimo(s) recolhido(s), %d peça(s) devolvida(s)%s. '
+          'O nome está livre.' % (r['nome'], r['membros'], r['recolhidos'], r['pecas'],
+                                  (' (%d esperam o dono entrar no jogo)' % espera) if espera else ''))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(_terminal())

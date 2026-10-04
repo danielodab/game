@@ -351,6 +351,7 @@ ROTAS = {
     ('POST', '/api/guilda/banco/pegar'):      ('guilda_banco_pegar', True),
     ('POST', '/api/guilda/banco/devolver'):   ('guilda_banco_devolver', True),
     ('POST', '/api/guilda/avisos/visto'):     ('guilda_avisos_visto', True),   # 04/10: o recado da peça que voltou
+    ('POST', '/api/guilda/devolucoes/visto'): ('guilda_devolucoes_visto', True),   # 04/10: a peça da guilda desfeita, sem o juiz
     # a autoridade (13/09, salas.py; docs/SEGURANCA.md §4): o servidor dá a semente da
     # sala, o juiz refaz e paga; as operações de economia rodam no estado do servidor
     ('POST', '/api/sala/abrir'):              ('sala_abrir', True),
@@ -423,6 +424,9 @@ ROTAS = {
     ('POST', '/api/mestre/denuncia'):         ('mestre_denuncia', True, True, FRASE_SO_MESTRE),
     ('GET',  '/api/mestre/auditoria'):        ('mestre_auditoria', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/dar'):              ('mestre_dar', True, True, FRASE_SO_MESTRE),
+    # 04/10 (guilda.py): o Mestre vê TODAS as guildas (até a da equipe) e desfaz uma inteira
+    ('GET',  '/api/mestre/guildas'):          ('mestre_guildas', True, True, FRASE_SO_MESTRE),
+    ('POST', '/api/mestre/guilda/desfazer'):  ('mestre_guilda_desfazer', True, True, FRASE_SO_MESTRE),
 }
 ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a conta, baixar os dados
 ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
@@ -1317,8 +1321,12 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
                     "AND NOT (origem = 'troca' AND criado_em > ?) "
                     "AND iid NOT IN (SELECT iid FROM guilda_banco WHERE iid IS NOT NULL AND dono_id = ?) "
                     "AND iid NOT IN (SELECT iid FROM mercado_anuncios WHERE iid IS NOT NULL AND vendedor_id = ? "
-                    "AND estado = 'aberto')",
-                    (cid, t - TROCA_GRACA, cid, cid)).fetchall()
+                    "AND estado = 'aberto') "
+                    # 04/10: e a peça que voltou de uma guilda DESFEITA e espera o dono (guilda.py,
+                    # guilda_devolucoes): fora do banco e ainda fora do save, mas não do jogo
+                    "AND iid NOT IN (SELECT iid FROM guilda_devolucoes WHERE iid IS NOT NULL AND conta_id = ? "
+                    "AND (entregue_em IS NULL OR entregue_em > ?))",
+                    (cid, t - TROCA_GRACA, cid, cid, cid, t - TROCA_GRACA)).fetchall()
                 consumidos = [(r['iid'],) for r in vivos if r['iid'] not in no_save]
                 self.con.executemany("UPDATE itens SET estado = 'fora' WHERE iid = ?", consumidos)
 

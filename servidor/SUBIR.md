@@ -86,6 +86,14 @@ mudam alguns rótulos.
   (`/site/mestre.html`) mostra a mesma fila, os banidos e a auditoria. No
   Terminal: `admin denuncias` e `admin auditoria`. Detalhes em
   `docs/SEGURANCA.md` §10.
+- **Desfazer uma guilda** (04/10): no jogo, o painel do Mestre (F9), aba
+  **Guildas** — lista TODAS as guildas (até a da equipe, que os jogadores não
+  veem), com líder, membros e peças no banco; **Desfazer…** pede o nome da
+  guilda digitado. As peças do banco voltam aos donos (saco, ou cofre do
+  Acampamento se o saco estiver cheio), o empréstimo é recolhido de quem pegou,
+  cada membro recebe uma carta e o nome fica livre. No Terminal: `admin guildas`
+  e `admin desfazer-guilda "NOME"` (pede o nome de novo; é o mesmo caminho do
+  painel, pelo juiz — nunca um `delete` direto no banco).
 - **Outros comandos** no Terminal: `admin` (a ajuda), `admin banir "NOME"`,
   `admin eventos 50`, `admin agenda`, `admin backup`, `admin email-teste
   SEU@gmail.com`, `admin trocar-email "NOME" certo@exemplo.com`, `admin loja`

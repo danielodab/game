@@ -252,7 +252,8 @@ DO_BANIDO = frozenset({'logout', 'moderacao_eu'})
 # rotas do Mestre ganham a linha do gancho genérico do despacha (_audita_rota)
 AUDITA_SOZINHA = frozenset({'mestre_banir', 'mestre_desbanir', 'mestre_silenciar', 'mestre_dessilenciar',
                             'mestre_denuncia', 'mestre_dar', 'mestre_denuncias', 'mestre_banimentos',
-                            'mestre_auditoria'})
+                            'mestre_auditoria',
+                            'mestre_guilda_desfazer'})   # 04/10 (guilda.py): a linha sai na transação que desfaz
 CONTROLE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 
 

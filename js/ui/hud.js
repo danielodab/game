@@ -13828,15 +13828,47 @@ var JOGO = (typeof window !== 'undefined')
     if (safe(function () { return Dl().estado().fase; }, 'livre') !== 'livre') { toast('Termine o duelo antes.'); return; }
     // quem diz se você É da guilda é a ficha de agora (o servidor), não o que a tela lembra
     Gd.minha().then(function (g) {
-      if (!g || g.id == null) { toast('Só quem é de uma guilda entra na sede.'); return; }
+      var falha = !g && Gd.falhaDaFicha ? Gd.falhaDaFicha() : null;
+      if (falha) { toast('Não deu para ler a sua guilda agora (' + falha + '). Tente de novo.'); return; }
+      anotaGuilda(g && g.id != null ? g : null);
+      if (!g || g.id == null) {
+        toast('Só quem é de uma guilda entra na sede.');
+        if (painelModo === 'lugar') fechaPainel();        // a Sede reabre já dizendo a verdade
+        return;
+      }
       entraNaSede(g);
     });
   }
+  /* 04/10: a guilda pode ACABAR com você dentro do salão (a equipe a desfez, o líder te tirou).
+   * O salão de uma guilda que não é mais a sua não tem dono nem ficha: cada ponto responderia
+   * "sem guilda" e a pessoa ficaria presa numa sala morta. De tempos em tempos o salão confere a
+   * ficha; se o servidor RESPONDEU que você não é mais dela, a porta te devolve à praça. A leitura
+   * que falha não tira ninguém (Gd.minha devolve a ficha guardada). */
+  var SEDE_VIGIA_MS = 20000, sedeVigia = null;
+  function vigiaSede() {
+    var Gd = JOGO.Guilda;
+    if (!sedeHud.dentro || !Gd || !Gd.minha) return Promise.resolve(false);
+    return Gd.minha().then(function (g) {
+      if (!sedeHud.dentro || !sedeHud.g) return false;
+      if (!g && Gd.falhaDaFicha && Gd.falhaDaFicha()) return false;
+      if (g && String(g.id) === String(sedeHud.g.id)) return false;
+      var nome = sedeHud.g.nome || 'guilda';
+      anotaGuilda(g || null);
+      if (sheetName === 'guilda') closeSheet();
+      saiDaSede();
+      toast(g ? 'Você não é mais da ' + nome + ': a porta do salão te devolveu à praça.'
+              : 'A ' + nome + ' não existe mais: você voltou à praça.', 'info');
+      return true;
+    }, function () { return false; });
+  }
+  UI._vigiaSede = vigiaSede;                                // provas (tests/sede_visita.html)
   function entraNaSede(g) {
     var info = infoDaSede(g);
     if (!safe(function () { return JOGO.Hub.entraSede(info); }, false)) { toast('Não deu para entrar na sede.'); return; }
     sedeHud.dentro = true;
     sedeHud.g = info;
+    if (sedeVigia) clearInterval(sedeVigia);
+    sedeVigia = setInterval(vigiaSede, SEDE_VIGIA_MS);
     closeSheet();
     if (painelModo === 'lugar') fechaPainel();
     reanunciaPerfil();
@@ -13846,6 +13878,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function saiDaSede() {
     sedeHud.dentro = false;
+    if (sedeVigia) { clearInterval(sedeVigia); sedeVigia = null; }
     fechaPainel();
     safe(function () { JOGO.Hub.saiSede(); return true; }, null);
     reanunciaPerfil();

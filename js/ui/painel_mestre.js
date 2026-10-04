@@ -54,7 +54,8 @@ var JOGO = (typeof window !== 'undefined')
 
   var M = JOGO.Moderacao;
   var PM = JOGO.PainelMestre = {};
-  PM.ABAS = [['caixa', 'Caixa'], ['moedas', 'Moedas'], ['jogadores', 'Jogadores'], ['denuncias', 'Denúncias'],
+  PM.ABAS = [['caixa', 'Caixa'], ['moedas', 'Moedas'], ['jogadores', 'Jogadores'], ['guildas', 'Guildas'],
+             ['denuncias', 'Denúncias'],
              ['banimentos', 'Banimentos'], ['auditoria', 'Auditoria'], ['eventos', 'Eventos'], ['grimorio', 'Grimório'],
              ['ferramentas', 'Ferramentas']];
   // os nomes de antes: 'itens' (a primeira aba deste painel até 03/10) e as fichas da HUD
@@ -906,6 +907,86 @@ var JOGO = (typeof window !== 'undefined')
       secao('Banimentos', (r.banimentos || []).concat(banTodos ? [] : r.legado || []), true);
       secao('Silêncios', r.silencios || [], false);
     });
+  };
+
+  /* ------------------------------------------------------------ Guildas (04/10)
+   * Dono: "analise a guilda, está confuso; a da minha conta teste sumiu.. na verdade exclua a guilda Game Over
+   * do jogo.. vou refazer para sair os bugs". A aba mostra TODAS as guildas do servidor — até a da equipe, que
+   * no jogo não sai em lista nem em ranking — com o líder, quem está dentro e o que há no banco: é aqui que se
+   * vê em que guilda uma conta está de verdade. E desfaz uma guilda inteira (servidor/guilda.py, _g_desfaz):
+   * as peças do banco voltam aos donos, o empréstimo é recolhido, os membros recebem uma carta e o nome fica
+   * livre. Não tem volta, então a confirmação é DIGITAR o nome da guilda. */
+  ABAS.guildas = function (alvo) {
+    if (!PM.noServidor()) { semServidor(alvo, 'A lista de guildas'); return; }
+    alvo.appendChild(el('p', 'pm-dim', 'Todas as guildas do servidor, até a da equipe (que os jogadores não veem em lista ' +
+      'nem em ranking). Desfazer devolve as peças do banco aos donos e avisa cada membro por carta.'));
+    var lista = el('div');
+    alvo.appendChild(lista);
+    carregando(lista);
+    api('/api/mestre/guildas').then(function (r) {
+      lista.textContent = '';
+      if (!r || !r.ok) { lista.appendChild(el('p', 'pm-aviso', M.erro(r, 'a lista não abriu'))); return; }
+      var gs = r.guildas || [];
+      lista.appendChild(el('h3', null, 'Guildas (' + gs.length + ')'));
+      if (!gs.length) { lista.appendChild(el('p', 'pm-dim', 'nenhuma guilda no servidor')); return; }
+      gs.forEach(function (g) {
+        var row = el('div', 'pm-item pm-guilda');
+        var nm = el('div', 'pm-nome');
+        var t = el('b', null, g.nome + ' · nº ' + g.id);
+        if (g.daEquipe) t.appendChild(etiqueta('da equipe · escondida dos jogadores', 'is-gm'));
+        nm.appendChild(t);
+        var lider = g.lider || {};
+        nm.appendChild(el('span', 'pm-dim', 'nível ' + g.nivel + ' · ' + g.xp + ' XP · líder ' + (lider.nome || '?') +
+          ' (#' + lider.id + ') · ' + g.totalMembros + ' membro(s) · ' + g.pecas + ' peça(s) no banco' +
+          (g.emprestadas ? ' (' + g.emprestadas + ' emprestada(s))' : '') +
+          ' · porta ' + (g.porta === 'convite' ? 'por convite' : 'aberta')));
+        var ms = (g.membros || []).map(function (m) {
+          return m.nome + ' #' + m.id + (m.cargo === 'lider' ? ' (líder)' : m.cargo === 'oficial' ? ' (oficial)' : '');
+        });
+        if (g.totalMembros > ms.length) ms.push('… e mais ' + (g.totalMembros - ms.length));
+        nm.appendChild(el('span', 'pm-dim', 'membros: ' + (ms.join(', ') || 'ninguém')));
+        row.appendChild(nm);
+        row.appendChild(bt('Desfazer…', 'mod-b mod-b-perigo', function () { PM.desfazGuilda(g); }));
+        lista.appendChild(row);
+      });
+    });
+  };
+  PM.desfazGuilda = function (g) {
+    var j = M.janela('Desfazer a guilda ' + g.nome);
+    j.caixa.appendChild(el('p', null, 'A guilda sai do jogo inteira e não tem volta: os ' + g.totalMembros +
+      ' membro(s) ficam sem guilda e recebem uma carta da Equipe; as ' + g.pecas + ' peça(s) do banco voltam aos donos ' +
+      '(para o saco, ou para o cofre do Acampamento se o saco estiver cheio); a cópia emprestada é recolhida de quem ' +
+      'pegou; mural, cofre, dízimos, pedidos, convites e a inscrição na guerra são apagados. O nome fica livre.'));
+    var inp = entrada('text', '', function () { ok.disabled = inp.value.trim() !== g.nome; },
+                      { placeholder: g.nome, maxlength: '24', autocomplete: 'off' });
+    j.caixa.appendChild(campo('para confirmar, digite o nome da guilda', inp));
+    var erro = el('p', 'pm-aviso');
+    erro.style.display = 'none';
+    j.caixa.appendChild(erro);
+    var acoes = el('div', 'mod-acoes');
+    acoes.appendChild(bt('Cancelar', 'mod-b', j.fecha));
+    var ok = bt('Desfazer a guilda', 'mod-b mod-b-perigo pm-desfaz', function () {
+      if (inp.value.trim() !== g.nome) return;
+      ok.disabled = true;
+      api('/api/mestre/guilda/desfazer', { method: 'POST', body: { gid: g.id, nome: inp.value.trim() } }).then(function (r) {
+        if (!r || !r.ok) {
+          ok.disabled = false;
+          erro.textContent = M.erro(r, 'a guilda não foi desfeita') + ' — nada foi apagado.';
+          erro.style.display = '';
+          return;
+        }
+        j.fecha();
+        var d = r.desfeita;
+        aviso(d ? 'A guilda ' + d.nome + ' foi desfeita: ' + d.membros + ' membro(s) avisado(s), ' + d.pecas +
+                  ' peça(s) devolvida(s), ' + d.recolhidos + ' empréstimo(s) recolhido(s).'
+                : 'A guilda ' + g.nome + ' já tinha sido desfeita.', 'good');
+        if (PM.aberto() && aba === 'guildas') desenha();
+      });
+    });
+    ok.disabled = true;
+    acoes.appendChild(ok);
+    j.caixa.appendChild(acoes);
+    return j;
   };
 
   /* ------------------------------------------------------------ Auditoria */

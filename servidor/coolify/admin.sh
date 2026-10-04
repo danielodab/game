@@ -17,13 +17,15 @@
 #   admin barras "NOME"        o saldo de barras de ouro da conta e os 20 últimos movimentos
 #   admin denuncias            as denúncias abertas e em análise (quem decide é o Mestre, no jogo ou no site)
 #   admin auditoria [N]        as N últimas ações do Mestre (30 se omitir)
+#   admin guildas              TODAS as guildas (até a da equipe): líder, membros, nível e peças no banco
+#   admin desfazer-guilda "NOME"  desfaz a guilda inteira (as peças do banco voltam aos donos; pede o nome de novo)
 #   admin backup               faz um backup agora, em /dados/backups
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
 # =============================================================================
 set -eu
 BANCO=/dados/soterra.db
 
-ajuda() { sed -n '4,21p' "$0" | sed 's/^# \{0,1\}//'; }
+ajuda() { sed -n '4,23p' "$0" | sed 's/^# \{0,1\}//'; }
 sql() { su-exec soterra sqlite3 "$BANCO" "$@"; }
 texto() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 tem_tabela() { [ "$(sql "select count(*) from sqlite_master where type = 'table' and name = '$1'")" = "1" ]; }
@@ -50,6 +52,8 @@ case "$acao" in
     [ $# -eq 2 ] || { echo "uso: admin email-teste seu@endereco.com"; exit 1; } ;;
   loja-cancelar)
     [ $# -eq 2 ] || { echo "uso: admin loja-cancelar ID (o número do pedido: veja em admin loja)"; exit 1; } ;;
+  desfazer-guilda)
+    [ $# -eq 2 ] || { echo "uso: admin desfazer-guilda \"NOME DA GUILDA\" (o nome inteiro, entre aspas se tiver espaço; veja em: admin guildas)"; exit 1; } ;;
   barras)
     [ $# -eq 2 ] || { echo "o NOME vai inteiro, num argumento só; com espaço, entre aspas: admin barras \"Ana Clara\""; exit 1; } ;;
 esac
@@ -184,6 +188,19 @@ case "$acao" in
     case "$n" in ''|*[!0-9]*) echo "N tem de ser um número"; exit 1 ;; esac
     tem_tabela moderacao_auditoria || { echo "este banco ainda não tem a auditoria: a API nova cria as tabelas quando sobe"; exit 1; }
     sql -header -column "select a.id, datetime(a.criado_em, 'unixepoch', '-3 hours') as quando, coalesce(m.nome, a.mestre_nome, '-') as mestre, a.acao, coalesce(c.nome, '-') as alvo, substr(coalesce(a.dados, ''), 1, 80) as dados from moderacao_auditoria a left join contas m on m.id = a.mestre_id left join contas c on c.id = a.alvo_id order by a.id desc limit $n" ;;
+  guildas)
+    # só leitura (04/10): TODAS, até a que o Mestre lidera (no jogo ela não sai em lista para jogador comum)
+    tem_tabela guildas || { echo "este banco ainda não tem as guildas: a API nova cria as tabelas quando sobe"; exit 1; }
+    sql -header -column "select g.id, g.nome, coalesce(l.nome, '-') as lider, l.gm as equipe, (select count(*) from guilda_membros m where m.guilda_id = g.id) as membros, g.xp, (select count(*) from guilda_banco b where b.guilda_id = g.id) as pecas, (select count(*) from guilda_banco b where b.guilda_id = g.id and b.emprestado_para is not null) as emprestadas, datetime(g.criada_em, 'unixepoch', '-3 hours') as criada from guildas g left join contas l on l.id = g.lider_id order by g.xp desc, g.id"
+    echo
+    echo "Quem está em cada uma:"
+    sql -header -column "select g.nome as guilda, c.nome as conta, case when g.lider_id = c.id then 'lider' else m.cargo end as cargo, datetime(m.entrou_em, 'unixepoch', '-3 hours') as entrou from guilda_membros m join guildas g on g.id = m.guilda_id join contas c on c.id = m.conta_id order by g.id, m.entrou_em" ;;
+  desfazer-guilda)
+    # 04/10 (dono: "exclua a guilda … vou refazer"). NÃO é um delete no SQL: as peças do banco têm de voltar
+    # ao estado de cada dono pelo JUIZ (o mesmo caminho do painel do Mestre: servidor/guilda.py, _g_desfaz),
+    # e a cópia emprestada tem de sair de quem pegou. Pede o nome da guilda de novo, digitado.
+    # O --juiz é o mesmo endereço que a API usa (entrada.sh)
+    exec su-exec soterra python3 /app/servidor/guilda.py --banco "$BANCO" --juiz http://127.0.0.1:8792 --desfazer "$nome" ;;
   *)
     echo "não conheço \"$acao\""; ajuda; exit 1 ;;
 esac

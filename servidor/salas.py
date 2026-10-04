@@ -82,7 +82,7 @@ DIFICULDADES = ('facil', 'normal', 'dificil')
 # as ops que só o servidor pede (o juiz também exige contexto.interno): a loja, a troca e o banco da guilda
 OPS_INTERNAS = frozenset({'lojaEntregar', 'trocaTira', 'trocaPoe', 'bancoGuildaTira', 'bancoGuildaPoe',
                           # 04/10: a devolução forçada do empréstimo (guilda.py: conta excluída ou ausente)
-                          'bancoGuildaRecolhe',
+                          'bancoGuildaRecolhe', 'bancoGuildaVolta',
                           # 13/09: o mercadinho entre contas (mercado.py)
                           'mercadoTira', 'mercadoPoe', 'mercadoPaga', 'mercadoRecebe', 'mercadoLegadoTira',
                           # 22/09: o lote de pedras de forja no mercadinho (mercado.py)

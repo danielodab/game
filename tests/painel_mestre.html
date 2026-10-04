@@ -116,8 +116,8 @@
     check('o painel recebe clique (pointer-events: auto; fora do #ui-root)',
           pe(capa) === 'auto' && !document.getElementById('ui-root').contains(capa));
     // 03/10: o painel ÚNICO — o de antes da tecla M (grimório, Caixa, eventos do mundo) virou as abas Caixa, Eventos e Grimório
-    check('as nove abas do painel único', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
-          'Caixa,Moedas,Jogadores,Denúncias,Banimentos,Auditoria,Eventos,Grimório,Ferramentas',
+    check('as dez abas do painel único (04/10: Guildas)', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
+          'Caixa,Moedas,Jogadores,Guildas,Denúncias,Banimentos,Auditoria,Eventos,Grimório,Ferramentas',
           qq('.pm-aba').map(function (x) { return x.textContent; }).join(','));
     var focP = M.focaveis(capa);
     focP[focP.length - 1].focus();
@@ -322,6 +322,46 @@
     check('procedente com a ação ligada: banir 30 dias, com a resposta ao denunciante',
           pdn && pdn.op.body.estado === 'procedente' && pdn.op.body.acao.tipo === 'banir' && pdn.op.body.acao.duracao === '30d' &&
           pdn.op.body.resposta === 'Obrigado pelo aviso.', JSON.stringify(pdn && pdn.op.body));
+
+    // ============================================================ Guildas (04/10): todas, e desfazer digitando o nome
+    respostas['/api/mestre/guildas'] = { ok: true, guildas: [
+      { id: 3, nome: 'Game Over', emblema: '⚔', xp: 200, nivel: 2, porta: 'aberta', daEquipe: false,
+        lider: { id: 42, nome: 'Bia' }, totalMembros: 2, pecas: 3, emprestadas: 1,
+        membros: [{ id: 42, nome: 'Bia', cargo: 'lider' }, { id: 43, nome: 'Teste', cargo: 'membro' }] },
+      { id: 4, nome: 'STAFF', emblema: '⚑', xp: 0, nivel: 1, porta: 'convite', daEquipe: true,
+        lider: { id: 1, nome: 'GM' }, totalMembros: 1, pecas: 0, emprestadas: 0,
+        membros: [{ id: 1, nome: 'GM', cargo: 'lider' }] }] };
+    PM.abrir('guildas');
+    await espera(30);
+    var linhasG = qq('.pm-corpo .pm-guilda');
+    check('a aba Guildas lista TODAS, com líder, membros e banco — e marca a da equipe',
+          linhasG.length === 2 && linhasG[0].textContent.indexOf('líder Bia (#42)') >= 0 &&
+          linhasG[0].textContent.indexOf('Teste #43') >= 0 && linhasG[0].textContent.indexOf('3 peça(s) no banco (1 emprestada(s))') >= 0 &&
+          linhasG[1].textContent.indexOf('da equipe') >= 0 && linhasG[0].textContent.indexOf('da equipe') < 0,
+          linhasG.map(function (x) { return x.textContent; }).join(' | '));
+    botaoCom('Desfazer…', linhasG[0]).click();
+    var janG = qq('.mod-capa').pop(), inpG = janG.querySelector('input'), okG = janG.querySelector('.pm-desfaz');
+    function digitaG(v) { inpG.value = v; inpG.dispatchEvent(new Event('input', { bubbles: true })); }
+    digitaG('game over');
+    var presoG = okG.disabled;
+    okG.click();
+    digitaG('Game Over');
+    check('desfazer só destrava com o nome da guilda digitado igualzinho, e nada é pedido antes disso',
+          presoG === true && okG.disabled === false && !ultimo('/api/mestre/guilda/desfazer'));
+    respostas['/api/mestre/guilda/desfazer'] = { ok: false, status: 503, erro: 'o juiz do servidor não respondeu' };
+    okG.click();
+    await espera(30);
+    check('a recusa do servidor fica na janela, dizendo que nada foi apagado',
+          !!janG.parentNode && janG.textContent.indexOf('nada foi apagado') >= 0 && okG.disabled === false);
+    respostas['/api/mestre/guilda/desfazer'] = { ok: true, desfeita: { id: 3, nome: 'Game Over', membros: 2, pecas: 3,
+                                                                       recolhidos: 1, entregues: 3 } };
+    respostas['/api/mestre/guildas'] = { ok: true, guildas: [respostas['/api/mestre/guildas'].guildas[1]] };
+    okG.click();
+    await espera(40);
+    var pedG = ultimo('/api/mestre/guilda/desfazer').op.body;
+    check('desfazer manda o número e o nome digitado, fecha a janela, avisa e relê a lista',
+          pedG.gid === 3 && pedG.nome === 'Game Over' && !janG.parentNode && qq('.pm-corpo .pm-guilda').length === 1 &&
+          q('.pm-toast').textContent.indexOf('foi desfeita') >= 0, q('.pm-toast').textContent);
 
     // ============================================================ Banimentos e auditoria
     respostas['/api/mestre/banimentos'] = { ok: true, banimentos: [{ id: 9, conta: { id: 42, nome: 'Bia' }, motivo: 'golpe',

@@ -154,6 +154,16 @@ var JOGO = (typeof window !== 'undefined')
     if (av.motivo === 'dono-excluiu') {
       return 'A peça ' + nome + ' saiu do seu saco: quem a emprestou excluiu a conta.';
     }
+    // 04/10: a guilda desfeita pela equipe — quem pegou emprestado perde a cópia, o dono recebe a peça
+    if (av.motivo === 'guilda-desfeita') {
+      return 'A peça ' + nome + ' saiu do seu saco: a guilda que a emprestou foi desfeita pela equipe.';
+    }
+    if (av.motivo === 'devolvida-cofre') {
+      return 'A guilda foi desfeita pela equipe: a sua peça ' + nome + ' voltou do banco dela para o cofre do Acampamento (o saco estava cheio).';
+    }
+    if (av.motivo === 'devolvida-saco' || av.motivo === 'devolvida') {
+      return 'A guilda foi desfeita pela equipe: a sua peça ' + nome + ' voltou do banco dela para o seu saco.';
+    }
     return 'A peça ' + nome + ' voltou para o banco da guilda: você ficou mais de ' +
            (av.dias || G.EMPRESTIMO_AUSENCIA_DIAS) + ' dias sem entrar.';
   };
@@ -168,7 +178,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   function trataRecados(lista, tira) {
     for (var i = 0; i < lista.length; i++) {
-      if (tira) tiraCopia(lista[i]);
+      // o recado 'devolvida' é o contrário: a peça ENTROU (é do dono) — nunca se tira nada por ele
+      if (tira && !/^devolvida/.test(String(lista[i].motivo || ''))) tiraCopia(lista[i]);
       recadosNaFila.push(G.textoRecado(lista[i]));
     }
     mostraRecados();
@@ -709,6 +720,7 @@ var JOGO = (typeof window !== 'undefined')
       if (r.ok && Object.prototype.hasOwnProperty.call(r, 'guilda')) guardaFicha(r.guilda);
       if (r.ok && r.avisos && r.avisos.length) { try { recebeAvisos(r.avisos); } catch (eA) {} }
       else mostraRecados();
+      if (r.ok && r.devolucoes && r.devolucoes.length) { try { recebeDevolucoes(r.devolucoes); } catch (eD) {} }
       if (!r.ok && !r.erro) r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)' : 'não deu';
       return r;
     });
@@ -739,6 +751,43 @@ var JOGO = (typeof window !== 'undefined')
       if (ligada && A.sincroniza) { try { A.sincroniza(); } catch (e2) {} }
     }
     if (ate) JOGO.Sessao.api('/api/guilda/avisos/visto', { method: 'POST', body: { ate: ate } });
+  }
+  /* A GUILDA DESFEITA PELA EQUIPE (04/10): as peças que esta conta tinha no banco voltam para
+   * ela. Com a autoridade o servidor já as pôs no estado (chega só o recado 'devolvida' acima) e
+   * esta lista vem vazia. SEM ela o saco mora aqui: é esta página que põe cada peça de volta —
+   * no saco, ou no cofre do Acampamento se o saco está cheio — com a MESMA série, e confirma.
+   * Uma vez por devolução: as já tratadas ficam anotadas no disco, como os recados, porque a
+   * confirmação pode se perder e a lista repetida poria outra peça igual. */
+  var CHAVE_DEVOLUCOES = 'soterra-guilda-devolucoes-v1';
+  function recebeDevolucoes(lista) {
+    var A = JOGO.Autoridade;
+    if (A && A.ligada && A.ligada()) return;        // o servidor entrega pelo juiz; aqui não se mexe no saco
+    var P = JOGO.Progress, st = P && P.state;
+    if (!st || !Array.isArray(st.inventory)) return;
+    var s = armazem(), vistos = [];
+    try { vistos = JSON.parse((s && s.getItem(CHAVE_DEVOLUCOES)) || '[]'); if (!Array.isArray(vistos)) vistos = []; } catch (e) { vistos = []; }
+    var ate = 0, pus = 0;
+    for (var i = 0; i < lista.length; i++) {
+      var dv = lista[i];
+      if (!dv || typeof dv.id !== 'number' || typeof dv.itemId !== 'string') continue;
+      ate = Math.max(ate, dv.id);
+      if (vistos.indexOf(dv.id) >= 0) continue;
+      var peca = { itemId: dv.itemId, level: dv.level || 0, stars: dv.stars || 0 };
+      if (dv.iid) peca.iid = dv.iid;
+      var noCofre = !(typeof P.bagFree === 'function' ? P.bagFree(1) : true) &&
+                    !!(JOGO.DB && typeof JOGO.DB.depositarItem === 'function');
+      if (noCofre) JOGO.DB.depositarItem(peca);
+      else st.inventory.push(peca);
+      vistos.push(dv.id);
+      pus++;
+      recadosNaFila.push(G.textoRecado({ itemId: dv.itemId, motivo: noCofre ? 'devolvida-cofre' : 'devolvida-saco' }));
+    }
+    if (pus) {
+      try { P.save(); } catch (e2) {}
+      try { if (s) s.setItem(CHAVE_DEVOLUCOES, JSON.stringify(vistos.slice(-200))); } catch (e3) {}
+      mostraRecados();
+    }
+    if (ate) JOGO.Sessao.api('/api/guilda/devolucoes/visto', { method: 'POST', body: { ate: ate } });
   }
   function renova() {
     if (fichaPedida) return;

@@ -109,6 +109,26 @@ class ProvaDaGuilda(unittest.TestCase):
         r = self.sql("SELECT estado FROM itens WHERE iid = ?", iid)
         return r[0]['estado'] if r else None
 
+    def orfas_da_guilda(self, gid):
+        """Toda linha que ainda cita a guilda `gid`, lida do próprio banco (sqlite_master): as chaves
+        estrangeiras que apontam para guildas e toda coluna chamada guilda_id — uma tabela nova da
+        guilda que a faxina esquecer aparece aqui sozinha. {tabela.coluna: quantas}."""
+        achados = {}
+        con = sqlite3.connect(self.banco_arq, timeout=10)
+        try:
+            for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").fetchall():
+                colunas = {r[3] for r in con.execute('PRAGMA foreign_key_list("%s")' % t) if r[2] == 'guildas'}
+                colunas |= {r[1] for r in con.execute('PRAGMA table_info("%s")' % t) if r[1] == 'guilda_id'}
+                if t == 'guildas':
+                    colunas.add('id')
+                for col in colunas:
+                    n = con.execute('SELECT COUNT(*) FROM "%s" WHERE "%s" = ?' % (t, col), (gid,)).fetchone()[0]
+                    if n:
+                        achados['%s.%s' % (t, col)] = n
+        finally:
+            con.close()
+        return achados
+
     # -- as provas ------------------------------------------------------------------
     def test_01_fundar_ler_e_a_lei_dos_nomes(self):
         a, b = self.novo('Ana'), self.novo('Bia')
@@ -432,6 +452,92 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertTrue(r['dissolveu'], 'o último apaga a luz')
         self.assertFalse(any(x['id'] == gid for x in self.g(a, 'lista')['guildas']))
         self.g(b, 'sair', {}, 409)
+
+
+    def test_08_o_mestre_desfaz_a_guilda_inteira(self):
+        """04/10 (dono: "exclua a guilda Game Over do jogo.. vou refazer para sair os bugs"). Só o Mestre;
+        pede o nome digitado; o empréstimo é recolhido, as peças do banco voltam ao dono sem a série ser
+        varrida, nada da guilda fica no banco (lido do sqlite_master), cada membro recebe a carta, o nome
+        fica livre e repetir não quebra. Aqui SEM o juiz: quem põe a peça no saco é o jogo do dono."""
+        m, a, b, c, d = (self.novo('Zelador'), self.novo('Dona'), self.novo('Tomador'), self.novo('Na Fila'),
+                         self.novo('Convidado'))
+        self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
+        nome = self.nome('Game Over')
+        gid = self.g(a, 'criar', {'nome': nome, 'emblema': '⚔'})['guilda']['id']
+        self.g(b, 'entrar', {'gid': gid})
+        self.g(a, 'porta', {'modo': 'convite'})
+        self.g(c, 'pedir', {'gid': gid})
+        self.g(a, 'convidar', {'conta': d.conta['id']})
+        self.g(a, 'mural', {'texto': 'adeus'})
+        self.g(a, 'dizimo', {'pct': 5, 'conta': b.conta['id']})
+        self.g(b, 'treino', {})
+        self.sql("INSERT INTO guerra_inscricoes(lider_id, parceiro_id, guilda_id, lider_herois, lider_dono, criada_ms, "
+                 "lider_visto_ms) VALUES (?, ?, ?, '[]', '{}', 1, 1)", a.conta['id'], b.conta['id'], gid)
+        i1, i2 = 'jdesf%da' % ProvaDaGuilda._n, 'jdesf%db' % ProvaDaGuilda._n
+        self.salva(a, [i1, i2])
+        for i in (i1, i2):
+            r = self.g(a, 'banco/depositar', {'item': {'itemId': 'gh-wasp-sting', 'level': 3, 'stars': 1, 'iid': i}})
+        vagas = {v['iid']: v['id'] for v in r['guilda']['banco']}
+        self.salva(a, [])
+        self.g(b, 'banco/pegar', {'id': vagas[i1]})
+        self.assertTrue(self.orfas_da_guilda(gid), 'a prova das órfãs enxerga a guilda viva')
+        # o portão: só o Mestre vê a lista inteira e desfaz
+        corpo = {'gid': gid, 'nome': nome}
+        self.assertEqual(Cliente(self.base).pede('GET', '/api/mestre/guildas')[0], 401)
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/mestre/guilda/desfazer', corpo)[0], 401)
+        self.assertEqual(a.pede('GET', '/api/mestre/guildas')[0], 403)
+        self.assertEqual(a.pede('POST', '/api/mestre/guilda/desfazer', corpo)[0], 403, 'nem a líder desfaz por aqui')
+        # a lista do Mestre: todas, com líder, membros e o banco
+        status, r = m.pede('GET', '/api/mestre/guildas')
+        self.assertEqual(status, 200, r)
+        linha = [x for x in r['guildas'] if x['id'] == gid][0]
+        self.assertEqual((linha['nome'], linha['lider']['id'], linha['totalMembros'], linha['pecas'], linha['emprestadas'],
+                          linha['daEquipe']), (nome, a.conta['id'], 2, 2, 1, False))
+        self.assertEqual(sorted(x['id'] for x in linha['membros']), sorted([a.conta['id'], b.conta['id']]))
+        # a confirmação: o nome digitado tem de ser o da guilda
+        for torto in ({'gid': gid}, {'gid': gid, 'nome': 'outro nome'}, {'gid': gid, 'nome': nome.lower()},
+                      {'gid': 'x', 'nome': nome}):
+            status, r = m.pede('POST', '/api/mestre/guilda/desfazer', torto)
+            self.assertEqual(status, 400, (torto, r))
+        self.assertEqual(self.g(a, 'minha')['guilda']['id'], gid, 'nada mudou')
+        # desfaz
+        status, r = m.pede('POST', '/api/mestre/guilda/desfazer', corpo)
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['desfeita'], {'id': gid, 'nome': nome, 'membros': 2, 'pecas': 2, 'recolhidos': 1, 'entregues': 0})
+        self.assertEqual(self.orfas_da_guilda(gid), {}, 'nada da guilda fica no banco')
+        self.assertNotIn(gid, [x['id'] for x in m.pede('GET', '/api/mestre/guildas')[1]['guildas']])
+        # quem pegou emprestado: o recado (sem o juiz é o jogo dele que tira a cópia do saco)
+        rb = self.g(b, 'minha')
+        self.assertIsNone(rb['guilda'])
+        self.assertEqual([(x['itemId'], x['motivo']) for x in rb['avisos']], [('gh-wasp-sting', 'guilda-desfeita')])
+        # a dona: as duas peças esperam por ela, com a série protegida da varredura
+        ra = self.g(a, 'minha')
+        self.assertIsNone(ra['guilda'])
+        self.assertEqual(sorted((x['iid'], x['level'], x['stars'], x['guilda']) for x in ra['devolucoes']),
+                         sorted([(i1, 3, 1, nome), (i2, 3, 1, nome)]))
+        self.salva(a, [])
+        self.assertEqual((self.estado(i1), self.estado(i2)), ('vivo', 'vivo'), 'esperando o dono, a série não é varrida')
+        self.salva(a, [i1, i2])                                      # o jogo dela pôs as peças no saco
+        ate = max(x['id'] for x in ra['devolucoes'])
+        self.assertEqual(self.g(a, 'devolucoes/visto', {'ate': ate})['marcadas'], 2)
+        self.assertEqual(self.g(a, 'devolucoes/visto', {'ate': ate})['marcadas'], 0, 'confirmar de novo não muda nada')
+        self.assertEqual(self.g(a, 'minha')['devolucoes'], [], 'entregue: não volta a oferecer (não duplica)')
+        self.salva(a, [i1, i2])
+        self.assertEqual((self.estado(i1), self.estado(i2)), ('vivo', 'vivo'))
+        # a carta da Equipe: só para quem era membro
+        for x, tem in ((a, True), (b, True), (c, False), (d, False)):
+            cartas = [k['texto'] for k in x.pede('GET', '/api/correio')[1]['cartas']]
+            self.assertEqual([k.startswith(guilda_mod.FRASE_DESFEITA % nome) for k in cartas], [True] if tem else [])
+        # repetir não quebra, e a auditoria leva uma linha só
+        status, r = m.pede('POST', '/api/mestre/guilda/desfazer', corpo)
+        self.assertEqual((status, r.get('jaDesfeita')), (200, True), r)
+        linhas = [x for x in self.sql("SELECT * FROM moderacao_auditoria WHERE acao = 'guilda-desfazer'")
+                  if ('"guilda": %d,' % gid) in x['dados'] and nome in x['dados']]
+        self.assertEqual([(x['mestre_id'], x['alvo_id']) for x in linhas], [(m.conta['id'], a.conta['id'])])
+        # o nome fica livre, e a inscrição na guerra não prende ninguém
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guerra_inscricoes WHERE lider_id = ?", a.conta['id'])[0]['n'], 0)
+        nova = self.g(c, 'criar', {'nome': nome})['guilda']
+        self.assertEqual((nova['nome'], nova['xp'], len(nova['membros']), nova['banco']), (nome, 0, 1, []))
 
 
 if __name__ == '__main__':

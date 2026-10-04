@@ -32,6 +32,11 @@ retorno, auditoria de toda ação do Mestre):
     registradas com a origem 'caixa', o estado devolvido ao próprio Mestre (o
     jogo adota), idem, selos em outra conta, op interna recusada do cliente,
     sem juiz 503;
+  - 04/10, DESFAZER A GUILDA (dono: "exclua a guilda Game Over do jogo.. vou refazer"): só o
+    Mestre, com o nome digitado; o juiz recolhe a cópia emprestada e devolve cada peça do
+    banco ao dono (no saco, ou no cofre do Acampamento com o saco cheio), sem sumir nem
+    duplicar; nenhuma linha órfã; a carta; o nome livre; repetir não quebra; sem o juiz
+    nada é destruído; e o mesmo pelo Terminal (servidor/guilda.py --desfazer);
   - 03/10, o painel ÚNICO: tudo o que a Caixa dá (peça, conjunto, bicho, pedras,
     selos, insígnias, cartas, pergaminhos, bônus de XP) no inventário de
     QUALQUER jogador, com as réguas (quantidade, teto do pergaminho, vaga do
@@ -76,7 +81,10 @@ ROTAS_MESTRE = (('POST', '/api/mestre/banir', {'conta': 1, 'duracao': '1h', 'mot
                 ('GET', '/api/mestre/banimentos', None), ('GET', '/api/mestre/denuncias', None),
                 ('POST', '/api/mestre/denuncia', {'id': 1, 'estado': 'em-analise'}),
                 ('GET', '/api/mestre/auditoria', None),
-                ('POST', '/api/mestre/dar', {'tipo': 'selos', 'elemento': 'fogo', 'n': 1, 'idem': 'abcdefgh1'}))
+                ('POST', '/api/mestre/dar', {'tipo': 'selos', 'elemento': 'fogo', 'n': 1, 'idem': 'abcdefgh1'}),
+                # 04/10: a lista de todas as guildas e o desfazer (servidor/guilda.py)
+                ('GET', '/api/mestre/guildas', None),
+                ('POST', '/api/mestre/guilda/desfazer', {'gid': 1, 'nome': 'x'}))
 
 
 def idem():
@@ -198,6 +206,26 @@ class ProvaDaModeracao(unittest.TestCase):
         return self.sql(q + ' ORDER BY id', *args)
 
     # -- o portão ----------------------------------------------------------------------------------
+    def orfas_da_guilda(self, gid):
+        """Toda linha que ainda cita a guilda `gid`, lida do próprio banco (sqlite_master): as chaves
+        estrangeiras que apontam para guildas e toda coluna chamada guilda_id — uma tabela nova da
+        guilda que a faxina esquecer aparece aqui sozinha. {tabela.coluna: quantas}."""
+        achados = {}
+        con = sqlite3.connect(self.banco_arq, timeout=10)
+        try:
+            for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").fetchall():
+                colunas = {r[3] for r in con.execute('PRAGMA foreign_key_list("%s")' % t) if r[2] == 'guildas'}
+                colunas |= {r[1] for r in con.execute('PRAGMA table_info("%s")' % t) if r[1] == 'guilda_id'}
+                if t == 'guildas':
+                    colunas.add('id')
+                for col in colunas:
+                    n = con.execute('SELECT COUNT(*) FROM "%s" WHERE "%s" = ?' % (t, col), (gid,)).fetchone()[0]
+                    if n:
+                        achados['%s.%s' % (t, col)] = n
+        finally:
+            con.close()
+        return achados
+
     def test_01_portao_das_rotas_do_mestre(self):
         comum = self.novo('Comum Portao')
         for metodo, rota, corpo in ROTAS_MESTRE:
@@ -799,6 +827,134 @@ class ProvaDaModeracao(unittest.TestCase):
                  'duelo-prova-luta', j.conta['id'], '["sumo"]', int(time.time()))
         status, r = self.dar(m, j, 'pet', petId='pet-galehawk', topo=True)
         self.assertEqual((status, r.get('motivo')), (409, 'em-luta'), r)
+
+
+    def test_17_desfazer_a_guilda_pelo_juiz(self):
+        """04/10 (dono: "exclua a guilda Game Over do jogo.. vou refazer para sair os bugs")."""
+        import guilda as guilda_mod
+        m, a, b, c = self.mestre('Guia Guilda'), self.novo('Dona Desfaz'), self.novo('Tomador Desfaz'), self.novo('Cheio Desfaz')
+        n = ProvaDaModeracao._n
+        i1, i2, i3 = 'jdz%da' % n, 'jdz%db' % n, 'jdz%dc' % n
+
+        def comeca(x, pecas):
+            p, d = copy.deepcopy(self.inicial['progress']), copy.deepcopy(self.inicial['db'])
+            for i in pecas:
+                p['inventory'].append({'itemId': PECA, 'level': 0, 'stars': 0, 'iid': i})
+            status, r = x.salva(0, p, d, [{'iid': i, 'itemId': PECA, 'origem': 'saque'} for i in pecas])
+            self.assertEqual(status, 200, r)
+
+        def save(x):
+            status, r = x.pede('GET', '/api/save')
+            self.assertEqual(status, 200, r)
+            return r
+
+        def saco(x):
+            return [e.get('iid') for e in save(x)['progress']['inventory'] if isinstance(e, dict)]
+
+        comeca(a, [i1, i2])
+        comeca(b, [])
+        comeca(c, [i3])
+        nome = 'Game Over %d' % n
+        status, g = a.pede('POST', '/api/guilda/criar', {'nome': nome})
+        self.assertEqual(status, 200, g)
+        gid = g['guilda']['id']
+        for x in (b, c):
+            self.assertEqual(x.pede('POST', '/api/guilda/entrar', {'gid': gid})[0], 200)
+        for x, i in ((a, i1), (a, i2), (c, i3)):
+            status, r = x.pede('POST', '/api/guilda/banco/depositar', {'item': {'itemId': PECA, 'iid': i}})
+            self.assertEqual(status, 200, r)
+        vagas = {v['iid']: v['id'] for v in r['guilda']['banco']}
+        status, r = b.pede('POST', '/api/guilda/banco/pegar', {'id': vagas[i1]})
+        self.assertEqual(status, 200, r)
+        copia = r['item']['iid']
+        self.assertIn(copia, saco(b))
+        # o saco de C fica cheio: a peça dele tem de ir para o cofre do Acampamento
+        prog = save(c)['progress']
+        prog['inventory'] = prog['inventory'] + [{'itemId': PECA, 'level': 0, 'stars': 0} for _ in range(400)]
+        self.sql("UPDATE saves SET progress = ? WHERE conta_id = ?", json.dumps(prog), c.conta['id'])
+        versoes = {x.conta['id']: save(x)['versao'] for x in (a, b, c)}
+        corpo = {'gid': gid, 'nome': nome}
+        # só o Mestre (o 401 e o 403 de todas as rotas dele estão no test_01); a lista traz a guilda inteira
+        self.assertEqual(a.pede('POST', '/api/mestre/guilda/desfazer', corpo)[0], 403)
+        linha = [x for x in m.pede('GET', '/api/mestre/guildas')[1]['guildas'] if x['id'] == gid][0]
+        self.assertEqual((linha['totalMembros'], linha['pecas'], linha['emprestadas'], linha['lider']['id']),
+                         (3, 3, 1, a.conta['id']))
+        self.assertEqual(m.pede('POST', '/api/mestre/guilda/desfazer', {'gid': gid, 'nome': 'Outra'})[0], 400)
+        # com o juiz fora do ar NADA é destruído: a cópia emprestada só sai de quem pegou pelo juiz
+        status, r = self.em(m, self.base_sem_juiz).pede('POST', '/api/mestre/guilda/desfazer', corpo)
+        self.assertEqual(status, 503, r)
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_banco WHERE guilda_id = ?", gid)[0]['n'], 3)
+        self.assertEqual(a.pede('GET', '/api/guilda/minha')[1]['guilda']['id'], gid)
+        self.assertIn(copia, saco(b))
+        # desfaz
+        status, r = m.pede('POST', '/api/mestre/guilda/desfazer', corpo)
+        self.assertEqual(status, 200, r)
+        self.assertEqual(r['desfeita'], {'id': gid, 'nome': nome, 'membros': 3, 'pecas': 3, 'recolhidos': 1, 'entregues': 3})
+        self.assertEqual(self.orfas_da_guilda(gid), {}, 'nada da guilda fica no banco')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM guilda_devolucoes")[0]['n'], 0, 'tudo entregue')
+        # o empréstimo foi recolhido de quem pegou, e a série da cópia saiu do jogo
+        self.assertNotIn(copia, saco(b))
+        self.assertEqual(self.sql("SELECT estado FROM itens WHERE iid = ?", copia)[0]['estado'], 'fora')
+        self.assertEqual(save(b)['versao'], versoes[b.conta['id']] + 1)
+        # as peças voltaram à dona: a MESMA série, uma vez só
+        sa = saco(a)
+        self.assertEqual((sa.count(i1), sa.count(i2)), (1, 1), sa)
+        self.assertEqual(self.sql("SELECT conta_id, estado FROM itens WHERE iid IN (?, ?)", i1, i2),
+                         [{'conta_id': a.conta['id'], 'estado': 'vivo'}] * 2)
+        # o saco cheio: a peça foi para o cofre do Acampamento, e não sumiu
+        sc = save(c)
+        self.assertNotIn(i3, [e.get('iid') for e in sc['progress']['inventory'] if isinstance(e, dict)])
+        self.assertEqual([e.get('iid') for e in sc['db']['banco']['itens']], [i3])
+        self.assertEqual(self.sql("SELECT conta_id, estado FROM itens WHERE iid = ?", i3),
+                         [{'conta_id': c.conta['id'], 'estado': 'vivo'}])
+        # os recados e a carta de cada membro
+        motivos = {x.conta['id']: sorted(k['motivo'] for k in x.pede('GET', '/api/guilda/minha')[1]['avisos'])
+                   for x in (a, b, c)}
+        self.assertEqual(motivos, {a.conta['id']: ['devolvida-saco', 'devolvida-saco'], b.conta['id']: ['guilda-desfeita'],
+                                   c.conta['id']: ['devolvida-cofre']})
+        for x in (a, b, c):
+            r = x.pede('GET', '/api/guilda/minha')[1]
+            self.assertEqual((r['guilda'], r['devolucoes']), (None, []))
+            cartas = [k['texto'] for k in x.pede('GET', '/api/correio')[1]['cartas']]
+            self.assertEqual([k.startswith(guilda_mod.FRASE_DESFEITA % nome) for k in cartas], [True], cartas)
+        # repetir não quebra nem mexe em mais nada
+        antes = {x.conta['id']: save(x)['versao'] for x in (a, b, c)}
+        status, r = m.pede('POST', '/api/mestre/guilda/desfazer', corpo)
+        self.assertEqual((status, r.get('jaDesfeita')), (200, True), r)
+        self.assertEqual({x.conta['id']: save(x)['versao'] for x in (a, b, c)}, antes)
+        self.assertEqual((saco(a).count(i1), saco(a).count(i2)), (1, 1))
+        linhas = [x for x in self.auditoria('guilda-desfazer') if json.loads(x['dados'])['nome'] == nome]
+        self.assertEqual([(x['mestre_id'], x['alvo_id'], json.loads(x['dados'])['pecas']) for x in linhas],
+                         [(m.conta['id'], a.conta['id'], 3)])
+        # o nome está livre: a guilda é refeita do zero, e o TERMINAL a desfaz pelo mesmo caminho
+        status, g2 = b.pede('POST', '/api/guilda/criar', {'nome': nome})
+        self.assertEqual(status, 200, g2)
+        gid2 = g2['guilda']['id']
+        self.assertEqual((g2['guilda']['xp'], g2['guilda']['banco'], len(g2['guilda']['membros'])), (0, [], 1))
+        self.assertEqual(a.pede('POST', '/api/guilda/entrar', {'gid': gid2})[0], 200)
+        status, r = a.pede('POST', '/api/guilda/banco/depositar', {'item': {'itemId': PECA, 'iid': i1}})
+        self.assertEqual(status, 200, r)
+
+        def terminal(digitado):
+            env = dict(os.environ, PYTHONUTF8='1')
+            return subprocess.run([sys.executable, os.path.join(os.path.dirname(API), 'guilda.py'), '--banco', self.banco_arq,
+                                   '--juiz', self.juiz, '--desfazer', nome], input=digitado, capture_output=True,
+                                  text=True, encoding='utf-8', env=env, timeout=120, creationflags=BAIXA)
+
+        r = terminal('nao e esse\n')
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(b.pede('GET', '/api/guilda/minha')[1]['guilda']['id'], gid2, 'nome errado: nada mexido')
+        r = terminal(nome + '\n')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('foi desfeita', r.stdout)
+        self.assertEqual(self.orfas_da_guilda(gid2), {})
+        self.assertEqual(saco(a).count(i1), 1, 'a peça voltou à dona pelo juiz, também pelo Terminal')
+        self.assertEqual([x['mestre_nome'] for x in self.auditoria('guilda-desfazer')
+                          if json.loads(x['dados'])['guilda'] == gid2 and json.loads(x['dados'])['origem'] == 'terminal'],
+                         ['Terminal (admin desfazer-guilda)'])
+        r = terminal(nome + '\n')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('não há guilda', r.stdout)
 
 
 if __name__ == '__main__':

@@ -294,6 +294,47 @@
           check('sem barra, a fala volta a ser da praça', paraPraca[paraPraca.length - 1] === 'oi, praça de novo' && paraGuilda.length === 1);
         }
       })
+      // ---- 9. 04/10 (dono: "analise a guilda, está confuso; a da minha conta teste sumiu … exclua a guilda")
+      .then(function () {
+        // a leitura que FALHA não é "sem guilda": a ficha diz que não leu, e não oferece fundar outra
+        var S0 = w.JOGO.Sessao, api0 = S0 && S0.api;
+        if (!S0) w.JOGO.Sessao = { api: null };
+        w.JOGO.Sessao.api = function () { return Promise.resolve({ ok: false, status: 0 }); };
+        G._servidor = true;
+        UI.openSheet('guilda');
+        return quieto(espera(function () { return !!d.querySelector('.ms-caixa .guilda-falha'); }, 60, 150)).then(function (ok) {
+          check('o servidor não respondeu: a ficha avisa que não leu, em vez de mandar fundar uma guilda',
+                !!ok && !!botao(/^Tentar de novo$/) && !d.querySelector('.brasao-ed') && UI._sede().temGuilda === true,
+                ((d.querySelector('.ms-caixa') || {}).textContent || '').slice(0, 120));
+          G._servidor = null;
+          if (S0) S0.api = api0; else delete w.JOGO.Sessao;
+          UI.closeSheet();
+        });
+      })
+      .then(function () {
+        chega('sede');
+        d.querySelector('.sede-entrar').click();
+        return quieto(espera(function () { return H.naSede() === gid && UI._sede().dentro; }, 80, 200));
+      })
+      .then(function () { return UI._vigiaSede(); })
+      .then(function (saiu) {
+        check('a guilda segue viva: a conferência do salão não tira ninguém', saiu === false && H.naSede() === gid && UI._sede().dentro);
+        return G.sair();                      // o último membro sai: a guilda da prova deixa de existir, com ele DENTRO do salão
+      })
+      .then(function (r) {
+        check('a guilda da prova foi desfeita', !!(r && r.ok), r && r.erro);
+        return UI._vigiaSede();
+      })
+      .then(function (saiu) { return respiro(6).then(function () { return saiu; }); })
+      .then(function (saiu) {
+        var e = H._estado();
+        check('a guilda acabou com o jogador dentro do salão: ele volta à praça sem travar',
+              saiu === true && e.sede === null && e.zona === 'praca' && !UI._sede().dentro, e.zona);
+        check('e a praça já sabe que ele não tem guilda', UI._sede().temGuilda === false);
+        chega('sede');
+        check('a Sede volta a oferecer fundar ou entrar, sem o botão do salão',
+              !!d.querySelector('.hub-painel .sede-fundar') && !d.querySelector('.sede-entrar'));
+      })
       .then(fecha, function (err) { check('a prova chegou ao fim', false, String(err && err.stack || err)); fecha(); });
   };
 })();

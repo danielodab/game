@@ -325,6 +325,31 @@ const INTERNAS = {
     J.Progress.save();
     return { ok: true, iid: entrada.iid };
   },
+  /* A GUILDA DESFEITA PELA EQUIPE (04/10, dono: "exclua a guilda … vou refazer"). A peça
+   * guardada no banco volta ao DONO, que quase nunca está aqui para abrir vaga: cabe no
+   * saco, vai para o saco; com o saco cheio, vai para o cofre do Acampamento, que não tem
+   * teto. Recusar por falta de vaga (como o bancoGuildaPoe) deixaria a peça sem lugar
+   * nenhum depois que a guilda some. `onde` conta para onde foi. */
+  bancoGuildaVolta: (J, a) => {
+    const it = a.item;
+    if (!it || typeof it.itemId !== 'string' || !(J.DATA.items || {})[it.itemId]) throw falha('peça inválida');
+    const lv = Math.max(0, Math.floor(Number(it.level) || 0)), stars = Math.max(0, Math.floor(Number(it.stars) || 0));
+    const iid = txt(a, 'iid', true);
+    const entrada = iid ? { itemId: it.itemId, level: lv, stars, iid }
+                        : J.Progress.novaCopia(it.itemId, 'banco', lv, stars);
+    if (J.Progress.bagFree(1)) {
+      J.Progress.state.inventory.push(entrada);
+      J.Progress.save();
+      return { ok: true, iid: entrada.iid, onde: 'saco' };
+    }
+    J.Progress.save();                      // a série nova (peça de antes das séries) fica registrada
+    const d = J.DB.exportar();
+    if (!d.banco) d.banco = { moedas: 0, itens: [] };
+    if (!Array.isArray(d.banco.itens)) d.banco.itens = [];
+    d.banco.itens.push({ itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0, iid: entrada.iid });
+    J.DB.importar(d);
+    return { ok: true, iid: entrada.iid, onde: 'cofre' };
+  },
 
   /* O MERCADINHO ENTRE CONTAS (13/09, servidor/mercado.py). A peça anunciada fica em
    * custódia no servidor, fora do estado de qualquer conta; a API pede estas ops e
