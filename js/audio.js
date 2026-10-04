@@ -257,7 +257,9 @@ var JOGO = (typeof window !== 'undefined')
         case 'trapSet':       Audio.play('confirma', { gain: 0.6 }); break;
         case 'trapTriggered': Audio.play('fogo', { gain: 0.8 }); break;
         case 'shield':        Audio.play('impacto', { gain: 0.55, rate: 1.25 }); break;
-        case 'pushed':        Audio.play('impacto', { gain: 0.6 }); break;
+        // 03/10: a correnteza e a rajada do Santuário levam várias unidades de uma vez (ev.causa) —
+        // o som delas é um só, o do evento da regra, e não um baque por unidade
+        case 'pushed':        if (!ev.causa) Audio.play('impacto', { gain: 0.6 }); break;
         case 'poison':        Audio.play('dano', { gain: 0.4, rate: 0.85 }); break;
 
         // 02/10: o chão do Poço, com os sons que já existem — o aviso é um
@@ -271,6 +273,20 @@ var JOGO = (typeof window !== 'undefined')
         case 'perigoRuna':    Audio.play('magia', { gain: 0.5, rate: 1.35 }); break;
         case 'couracaCaiu':   Audio.play('impacto', { gain: 0.9, rate: 0.6 }); break;
         case 'ventania':      Audio.play('golpe', { gain: 0.6, rate: 0.75 }); break;
+
+        // 03/10: o Santuário dos Elementos, com os sons que já existem — o braseiro que acende é fogo,
+        // o que apaga é um chiado baixo; o pilar é pedra pesada; a correnteza e a rajada só soam
+        // quando levam alguém; o aviso da troca é o mesmo zumbido do aviso do Poço
+        case 'santuarioBraseiro':
+          if (ev.aceso) Audio.play('fogo', { gain: 0.75 });
+          else Audio.play('magia', { gain: 0.45, rate: 0.6 });
+          break;
+        case 'santuarioPilares':
+          if ((ev.sobem || []).length || (ev.descem || []).length) Audio.play('impacto', { gain: 0.85, rate: 0.62 });
+          break;
+        case 'santuarioAviso':    Audio.play('magia', { gain: 0.4, rate: 0.7 }); break;
+        case 'santuarioMare':     if ((ev.movidos || []).length) Audio.play('magia', { gain: 0.5, rate: 1.25 }); break;
+        case 'santuarioRajada':   if ((ev.movidos || []).length) Audio.play('golpe', { gain: 0.55, rate: 0.7 }); break;
 
         case 'battleEnd':
           Audio.play(ev.winner === 'player' ? 'vitoria' : 'derrota');

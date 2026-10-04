@@ -27,7 +27,7 @@ import json, os, shutil, subprocess, sys, tempfile, time, urllib.request, base64
 
 FICHAS = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
           'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
-          'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'eco', 'praca', 'praca-poco',
+          'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'eco', 'santuario', 'praca', 'praca-poco',
           'praca-sede', 'praca-arena']
 CHROME = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
 BAIXA = 0x00004000          # BELOW_NORMAL_PRIORITY_CLASS: o dono joga nesta máquina

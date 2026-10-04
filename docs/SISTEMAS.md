@@ -105,10 +105,11 @@ O que "obstáculos atrapalham" quer dizer no motor, medido em **todas** as salas
   dois heróis, como o motor já permitia ao jogador.
 
 O juiz refaz a sala com esta mesma função, então mudar a visão muda o fim de
-salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **6**
-— uma subida só, na junção de 03/10, para as três frentes que mudaram o fim de uma sala: o
+salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **7**.
+A 6 foi uma subida só, na junção de 03/10, para as três frentes que mudaram o fim de uma sala: o
 equilíbrio (docs/EQUILIBRIO.md), o chão do Poço e os Colossos (§6) e o corpo grande com o Eco
-Primordial (§6-B).
+Primordial (§6-B). A 7 é a do Santuário dos Elementos (§6-C): o juiz passou a carregar o calabouço
+especial e os oito guardiões, e a página de antes não saberia refazer uma sala dele.
 
 ### Alcance e área
 
@@ -450,6 +451,74 @@ os Ecos Menores, os quatro Arautos do Coração. Cada um tem chave de modelo pr�
 (`boss-eco-primordial`, `eco-menor-*`): a arte final do dono entra embutida com essa chave e passa na
 frente sozinha; para aposentar o provisório, apaga-se a linha dele em `M.CORPO_PROVISORIO`
 (`js/render3d/models3d_v2.js`).
+
+---
+
+## 6-C. O Santuário dos Elementos — o calabouço especial (03/10)
+
+O pedido do dono: "um mapa dos elementos; uma parte escura que só consegue ver quem é de
+inteligência [o caminho do Fogo]; e outras ideias para os outros elementos, algo que mude no mapa
+relacionado a elementos". É o calabouço `elementsanctum`: **cinco salas, sem chefe e sem
+armadilha**, nível recomendado 30. As quatro primeiras são um quadrante cada, com uma regra de
+terreno e os dois guardiões dele; a quinta, o Altar dos Quatro, junta os quatro quadrantes em volta
+do altar, com os oito guardiões. O resumo de uma página está em
+[`docs/SANTUARIO.md`](SANTUARIO.md); aqui fica o que o sistema precisa saber.
+
+**Onde mora.** O dado em `js/core/data/santuario.js` — em `DATA.especiais`, e **não** em
+`DATA.dungeons`: tudo que lê aquela lista trata o que acha como um dos seis portais (a praça ergue
+um portal, o Poço empresta o palco, a Arena sorteia a sala, o Calabouço do Dia a escolhe, a régua
+do mundo cobra três salas com chefe). Quem precisa de um calabouço pelo id usa
+`DATA.calabouco(id)` (o motor, o jogo, o juiz, a tela). A regra em `js/core/santuario.js`
+(`Santuario.regras`), chamada pelo motor só quando a sala tem `state.santuario` — o desenho do
+chão do Poço. A sala guarda no estado só o que muda (braseiros acesos, pilares de pé, quem espera)
+e isso entra no `Engine.hash`.
+
+**As quatro regras** (os números em `DATA.santuario`; todas valem para os dois lados):
+
+| quadrante | a regra | o que avisa |
+|---|---|---|
+| **Fogo** — A Câmara Apagada | casa escura só se **mira** a 2 casas; quem é do caminho do Fogo (e o Vigia de Pavio) mira de longe. O braseiro aceso clareia 2 casas em volta (as que ele vê); golpe de Fogo acende, de Água apaga | o breu está na tela desde a preparação; a casa que o escuro tira do alcance aparece roxa e o motivo sai escrito |
+| **Água** — A Galeria Alagada | o passo que entra em casa alagada custa 2 PP (1 para a Água); no fim da rodada a correnteza leva 1 casa quem está na água, para onde a bica que verte aponta; troca de bica a cada 2 rodadas; a ponte é seca | os veios correm na direção de agora; a bica que vai verter ganha o sinal uma rodada antes |
+| **Terra** — O Salão dos Pilares Vivos | os pilares trocam (o de pé desce, o baixo sobe) no começo das rodadas 3, 5, 7…; pilar de pé fecha passo e visão | uma rodada antes a casa pisca: ▲ vai subir, ▼ vai descer |
+| **Ar** — O Terraço da Ventania | no fim da rodada a rajada empurra 1 casa quem está na zona do vento; gira norte → leste → sul → oeste a cada 2 rodadas; feitiço de Ar lançado de dentro alcança +1; as quatro casas ao lado de um respiro são calmas | as setas do chão e o cata-vento mostram a direção; a seta-fantasma mostra a próxima uma rodada antes |
+
+**O que nunca acontece.** Nada sorteia (a regra não gasta o rng da sala). O pilar nunca esmaga: com
+alguém em cima do soquete ele **espera** e tenta de novo a cada rodada — deslocar à força tiraria a
+casa de quem está preso por raiz ou fixação e cobraria um dano que ninguém escolheu. Os pilares
+nunca fecham o único caminho (com todos de pé, todo chão segue ligado a todo chão). O empurrão da
+correnteza e da rajada não fere, não joga em buraco nem em parede, e não mexe em quem é imune a
+empurrão nem em corpo grande. Ninguém nasce dentro de uma regra: a entrada de toda sala é seca,
+clara e sem vento.
+
+**O escuro na tela e na IA.** A tela do grupo esconde o monstro que está numa casa escura que
+ninguém do grupo vê, pelo mesmo caminho da invisibilidade (`Engine.ocultoDe`,
+`Game.ocultoNaTela`): a fila dos turnos não entrega a casa, o passo que dá nele esbarra. O golpe
+que sai do breu aparece. Do outro lado, os monstros conhecem a casa (não ficam cegos para o
+grupo), mas **miram com a mesma régua**: fora o Vigia de Pavio, só acertam de longe quem está na
+luz. A IA dos dois lados lê as regras: o caminho conta o custo da água, ela não planeja golpe que o
+escuro recusa, mede a rota sem contar com o vão de um pilar (que abre e fecha), prefere não
+terminar a vez na água quando não é dela e, quem atira de longe, prefere a casa calma do respiro.
+
+**A recompensa.** O saque é o do Coração Partido (`saqueDe: 'brokenheart'`, com o mesmo peso de
+"nada"): as quatro salas de quadrante sorteiam como a última sala comum de lá, e o Altar como a do
+chefe (dois sorteios, com épica e lendária). A mais, cada guardião deixa **pedra do elemento dele**
+(75%, de 2 a 5). Sem chefe não há selo, insígnia, âncora, carta de classe nem de bicho.
+
+**A porta.** A oitava do cais do Acampamento (a praça não ganhou portal, como no Eco). A ficha diz
+as regras em português simples, quem mora lá, o que paga e quem desce — e avisa quando a dupla não
+tem ninguém do Fogo. A descida é a de qualquer calabouço (antessala, bilhete do servidor, vida
+única, uma recompensa por sala), sozinho, em dupla ou em grupo pela Rede. Cada sala abre com o
+cartão da regra dela na primeira visita (`js/ui/tutor.js`), e a linha da sala na batalha mostra o
+estado de agora e o que vem na próxima rodada.
+
+**O servidor.** O juiz carrega os dois arquivos, anuncia `elementsanctum: 5` em `GET /regras` e
+refaz as salas como as dos seis. `Engine.VERSAO_REGRAS` é **7**.
+
+**A arte.** Os guardiões (`el-fogo-1` … `el-ar-2`) e o kit `santuario` (peças `el_*`) chegam por
+outras frentes. Sem eles: corpo provisório do mesmo elemento (`M.CORPO_PROVISORIO`, só enquanto a
+chave própria não tem kit), o tema veste o kit do Coração Partido (`temaReserva`) e as peças de
+mecânica saem em primitiva (`js/render3d/santuario3d.js`). A chave própria vence sozinha quando o
+embutido chega.
 
 ---
 

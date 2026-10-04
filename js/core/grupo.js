@@ -309,7 +309,9 @@ var JOGO = (typeof window !== 'undefined')
     var ds = D().dungeons || [];
     var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });
     for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].id === id) return lista[i];
-    return null;
+    // 03/10: o calabouço especial (o Santuário dos Elementos) desce em grupo como os seis — a regra dele
+    // não sorteia e mora no estado da batalha, então os dois motores a refazem igual
+    return safe(function () { return D().especial(id); }, null) || null;
   }
   /* 11/09 (revisão): a dificuldade que vem do outro lado — um id conhecido (sem a
    * tabela na página, só a forma) */

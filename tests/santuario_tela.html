@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o Santuário dos Elementos na tela</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  html, body { margin: 0; background: #0f1216; color: #e8eef6; font: 13px system-ui, Segoe UI, sans-serif; overflow: auto; height: auto; }
+  #palco { position: relative; width: 1180px; height: 720px; margin: 0; overflow: hidden; background: #000; }
+  #app { position: absolute; inset: 0; }
+  #game-canvas { width: 100%; height: 100%; display: block; }
+  #ui-root { position: absolute; inset: 0; }
+  h1 { font-size: 15px; margin: 10px 14px 2px; }
+  .sub { color: #8895a6; font-size: 12px; margin: 0 14px 6px; max-width: 1100px; }
+  #st { font: 12px monospace; margin: 8px 14px; padding: 5px 9px; border-radius: 5px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  #linhas { font: 12px/1.5 monospace; margin: 0 14px 20px; white-space: pre-wrap; }
+  #linhas .f { color: #f77; }
+</style>
+</head>
+<body>
+<div id="palco"><div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div></div>
+<h1>O Santuário dos Elementos na tela — as cinco salas no renderizador de verdade</h1>
+<div class="sub">03/10. A regra mora em <code>js/core/santuario.js</code> (provada em <code>node tests/santuario_regras.js</code>);
+aqui a prova é do DESENHO: o que o <code>santuario3d.js</code> pôs na cena (o breu, a água, os pilares, as setas, os
+avisos), quem some no escuro, as casas que o escuro tira do alcance e a linha da sala na HUD. A página CONTA o que
+foi desenhado (<code>Santuario3D.naTela()</code>) — a foto é para o dono olhar. Roda por
+<code>python tests/santuario_navegador.py --so tela</code> (tempo real, uma prova de navegador por vez).</div>
+<div id="st">rodando…</div>
+<div id="linhas"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  window.__linhas = [];
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/mobile.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js','js/core/data/arenas.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
+    'js/core/data/santuario.js',
+    'js/core/poco.js','js/core/santuario.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js','assets/embedded/models-anims.js',
+    'assets/embedded/models-heroes.js',
+    // os corpos provisórios dos oito guardiões (um doador por calabouço) e o kit de reserva do tema
+    'assets/embedded/models-meshy-cisterna.js','assets/embedded/models-meshy-emberlock.js',
+    'assets/embedded/models-meshy-windscaffold.js','assets/embedded/models-meshy-quakemine.js',
+    'assets/embedded/models-meshy-brokenheart.js','assets/embedded/cenario-coracao.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js','js/render3d/santuario3d.js',
+    'js/render2d/art.js','js/ui/icones_ui.js','js/ui/hud.js','js/ui/tutor.js'];
+  // a junção traz a arte do dono: se os embutidos do Santuário já existem na árvore, a página os usa
+  // (e passa a cobrar o corpo próprio e a peça do kit em vez do provisório e da primitiva)
+  var opcionais = ['assets/embedded/models-meshy-santuario.js', 'assets/embedded/cenario-santuario.js'];
+  function existe(rel) {
+    try { var x = new XMLHttpRequest(); x.open('HEAD', '../' + rel, false); x.send(); return x.status >= 200 && x.status < 300; }
+    catch (e) { return false; }
+  }
+  window.__comArte = { monstros: existe(opcionais[0]), cenario: existe(opcionais[1]) };
+  var antes = arquivos.indexOf('js/render3d/models3d_v2.js');
+  if (window.__comArte.monstros) arquivos.splice(antes, 0, opcionais[0]);
+  if (window.__comArte.cenario) arquivos.splice(antes, 0, opcionais[1]);
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var ID = 'elementsanctum';
+  var st = document.getElementById('st'), saida = document.getElementById('linhas');
+  var total = 0, falhas = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var linha = (ok ? 'PASSOU' : 'FALHOU') + ' · ' + nome + (!ok && extra !== undefined ? ' — ' + extra : '');
+    window.__linhas.push(linha);
+    var d = document.createElement('div');
+    if (!ok) d.className = 'f';
+    d.textContent = linha;
+    saida.appendChild(d);
+  }
+  function fim() {
+    st.className = falhas ? 'fail' : 'allpass';
+    st.textContent = falhas ? 'FALHOU ' + falhas + ' de ' + total : 'TUDO PASSOU (' + total + ')';
+    window.__fim = { ok: !falhas, total: total, falhas: falhas, linhas: window.__linhas };
+  }
+  var comFotos = /[?&]fotos=1/.test(location.search);
+  // a foto da janela inteira é do script (CDP): a página pede e espera; aberta à mão, segue sem ela
+  function foto(nome) {
+    if (!comFotos) return Promise.resolve();
+    window.__foto = nome;
+    return new Promise(function (ok) {
+      var t0 = Date.now(), vivo = true;
+      /* enquanto espera, a página segue DESENHANDO (o laço do jogo de verdade): parada, sem quadro novo
+       * para compor, a captura do Chrome headless fica esperando um quadro que nunca vem */
+      (function quadro() {
+        if (!vivo) return;
+        try { JOGO.Renderer.render(0.016); } catch (e) {}
+        requestAnimationFrame(quadro);
+      })();
+      (function olha() {
+        if (window.__fotoFeita === nome || Date.now() - t0 > 150000) { vivo = false; return ok(); }
+        setTimeout(olha, 100);
+      })();
+    });
+  }
+  function dorme(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, M = JOGO.Models3D2, E = JOGO.Engine, P = JOGO.Progress, S3 = JOGO.Santuario3D, Sa = JOGO.Santuario;
+    var D = JOGO.DATA, dg = D.especial(ID), CFG = D.santuario;
+    try { R.init(document.getElementById('game-canvas')); }
+    catch (e) { check('o renderizador sobe', false, e.message); return fim(); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+    try { JOGO.Tutor._zera(); } catch (e) {}
+
+    // os eventos do motor como o main.js os entrega (o desenho, os efeitos e a HUD ouvem)
+    function bombeia() {
+      while (E.events.length) {
+        var ev = E.events.shift(), tela = ev;
+        try { tela = G.eventoParaTela(ev); } catch (e) { tela = ev; }
+        R.handleEvent(tela || ev);
+        if (tela) { try { JOGO.FX.handleEvent(tela); } catch (e1) {} try { JOGO.UI.handleEvent(tela); } catch (e2) {} }
+      }
+    }
+    /* os quadros da prova: passo de 0,1 s (o teto do renderizador) — dez quadros são um segundo de jogo,
+     * o bastante para o pilar subir (0,7 s), o cata-vento girar e o empurrão acabar. O brilho (bloom)
+     * fica desligado: são doze passes de tela cheia por quadro no WebGL por software, e a prova conta
+     * nós, não pixels. */
+    try { R.setBloom(false); } catch (e) {}
+    function quadros(n, dt) {
+      for (var q = 0; q < n; q++) {
+        bombeia();
+        try { JOGO.UI.update(dt || 0.1); } catch (e) {}
+        try { R.render(dt || 0.1); } catch (err) { check('um quadro desenha sem erro', false, err.message); }
+      }
+    }
+    function viraRodada(bt) {
+      var r = bt.round;
+      for (var g = 0; bt.phase === 'playing' && bt.round === r && g < 200; g++) E.endTurn(bt);
+      quadros(12);
+    }
+    var ids = null;
+    /* uma sala do Santuário em jogo, com a dupla nos caminhos pedidos (nível 30) */
+    function abre(ri, elementos) {
+      // dois que atiram de longe (o escuro e o +1 do vento só se leem em feitiço de alcance)
+      ids = ['bruxo', 'arqueiro'];
+      ids.forEach(function (hid, i) {
+        try { P.unlockClass(hid); } catch (e) {}
+        var h = P.hero(hid);
+        h.level = 30; h.element = elementos[i];
+      });
+      if (!G.startRun(ids, ID, { direto: true })) throw new Error('a descida não começou');
+      if (ri > 0) {
+        G.roomIndex = ri;
+        G.state = E.createBattle(ID, ri, P.battleParty(ids), { seed: 7, dificuldade: 'normal' });
+        JOGO.UI.showScreen('battle');
+      }
+      quadros(8);
+      return G.state;
+    }
+    function herois(bt) { return bt.units.filter(function (u) { return u.kind === 'hero'; }); }
+    function monstros(bt) { return bt.units.filter(function (u) { return u.side === 'enemy' && u.alive; }); }
+    function conta(lay, ch) { var n = 0; lay.forEach(function (l) { for (var i = 0; i < l.length; i++) if (l[i] === ch) n++; }); return n; }
+    function chips() {
+      return [].slice.call(document.querySelectorAll('.bt-room .sant-chip')).map(function (c) { return { regra: c.getAttribute('data-regra'), tx: c.textContent, aviso: c.classList.contains('is-aviso') }; });
+    }
+    function vista(nome) { try { R.setCamera({ dist: 50, tilt: 0.72, centerX: (G.state.grid.w - 1) / 2, centerY: (G.state.grid.h - 1) / 2 }); } catch (e) {} quadros(6); return foto(nome); }
+
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = M && M.isReady() && JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 180000) return setTimeout(espera, 250);
+      check('os modelos abriram (o tabuleiro, os heróis e os corpos dos guardiões)', ok);
+      if (!ok) return fim();
+      Promise.resolve().then(roda).then(fim, function (e) { check('a página rodou até o fim', false, (e && e.stack) || String(e)); fim(); });
+    })();
+
+    function roda() {
+      var bt, n, p;
+      // =============================================================== FOGO
+      window.__onde = 'fogo';
+      bt = abre(0, ['agua', 'terra']);
+      p = Sa.planta(bt); n = S3.naTela();
+      check('a Câmara Apagada monta: o santuario3d está na cena, com a regra do Fogo', !!n && n.naCena && n.regras.join() === 'fogo', JSON.stringify(n && n.regras));
+      check('a luz geral da Câmara é a dela (ambiente próprio, escuro), não a do tema', S3.ambiente(bt, 'santuario') === 'santuario:fogo');
+      check('um braseiro desenhado por braseiro do mapa, e só os acesos têm chama',
+            n.braseiros.length === p.braseiros.length && n.braseiros.every(function (b, i) { return b.aceso === !!bt.santuario.br[i] && b.chama === b.aceso; }) &&
+            n.braseiros.filter(function (b) { return b.aceso; }).length === 3, JSON.stringify(n.braseiros));
+      check('o véu cobre a zona escura inteira: breu + penumbra + luz = casas da zona (e há as três)',
+            n.veu.breu + n.veu.penumbra + n.veu.luz === n.veu.casas && n.veu.breu > 50 && n.veu.luz > 5, JSON.stringify(n.veu));
+      check('o volume de breu cobre exatamente as casas que o meu lado não vê', n.veu.volume === n.veu.breu, JSON.stringify(n.veu));
+      // quem some
+      var ms = monstros(bt);
+      var somem = ms.filter(function (u) { return G.ocultoNaTela(u); });
+      var nosDaCena = ms.every(function (u) { var no = R.unitNode(u.uid); return !!no && no.visible === !G.ocultoNaTela(u); });
+      check('sem ninguém do Fogo na dupla, o monstro no breu some da tela (o corpo e a barra) e o da luz aparece',
+            somem.length > 0 && somem.length < ms.length + 1 && nosDaCena &&
+            somem.every(function (u) { return Sa.regras.escura(bt, u.x, u.y); }), somem.length + ' de ' + ms.length + ' escondidos');
+      check('quem some na tela é quem a regra esconde do grupo (Engine.ocultoDe), nem um a mais',
+            ms.every(function (u) { return G.ocultoNaTela(u) === E.ocultoDe(herois(bt)[0], u, bt); }));
+      // o alcance que o escuro tira, com cor própria
+      var h0 = herois(bt)[0];
+      bt.activeIdx = bt.order.indexOf(h0.uid); h0.pa = 12; h0.pp = 4;
+      h0.x = 5; h0.y = 9;
+      G.selectedSpellId = h0.spells.filter(function (s) { var sp = E.spell(s); return sp.range.max >= 5 && sp.aoe.shape === 'single'; })[0];
+      quadros(4);
+      var roxas = R.destaqueNaTela().filter(function (c) { return c.cor === '#8a63d2'; });
+      var noEscuro = E.casasNoEscuro(bt, h0.uid, G.selectedSpellId);
+      check('as casas no alcance que o escuro não deixa mirar ganham cor própria (roxo), uma por casa',
+            noEscuro.length > 3 && roxas.length === noEscuro.length, roxas.length + ' pintadas, ' + noEscuro.length + ' na regra');
+      check('tocar numa delas diz o porquê (e fala do braseiro e do caminho do Fogo)',
+            /No escuro/.test(R.explainNoCast(noEscuro[0].x, noEscuro[0].y) || '') && /braseiro/.test(R.explainNoCast(noEscuro[0].x, noEscuro[0].y)));
+      G.selectedSpellId = null;
+      var c = chips();
+      check('a linha da sala diz a regra: "Escuro · 3 de 7 braseiros acesos"', c.length === 1 && c[0].regra === 'fogo' && /3\s*de 7 braseiros/.test(c[0].tx), JSON.stringify(c));
+      check('o cartão de primeira visita da sala explica a regra em português simples (e não o cartão genérico da batalha)',
+            !!document.querySelector('.tutor-caixa') && /Câmara Apagada/.test(document.querySelector('.tutor-caixa').textContent) &&
+            /Fogo/.test(document.querySelector('.tutor-caixa').textContent));
+      return vista('1_fogo_sem_luz').then(function () {
+        var b1 = document.querySelector('.tutor-caixa .btn-primary');
+        if (b1) b1.click();
+        // acende um braseiro: a chama, a luz e a casa que clareia
+        var antesLuz = S3.naTela().veu.luz, antesBreu = S3.naTela().veu.breu;
+        var i = bt.santuario.br.indexOf(0);
+        bt.santuario.br[i] = 1;
+        E.emit({ type: 'santuarioBraseiro', x: p.braseiros[i].x, y: p.braseiros[i].y, aceso: true });
+        quadros(8);
+        n = S3.naTela();
+        check('o braseiro que acende ganha chama, clareia casas em volta (mais luz, menos breu) e a linha da sala conta 4',
+              n.braseiros[i].chama === true && n.veu.luz > antesLuz && n.veu.breu < antesBreu && /4\s*de 7/.test(chips()[0].tx), JSON.stringify(n.veu));
+        check('as luzes pontuais são um número FIXO na sala (não recompila o shader) e acendem só para braseiro aceso',
+              n.luzesNaSala === Math.min(4, p.braseiros.length) && n.luzes === Math.min(n.luzesNaSala, 4), n.luzes + ' de ' + n.luzesNaSala);
+        // com um herói do Fogo: tudo em penumbra, ninguém some
+        herois(bt)[1].element = 'fogo';
+        quadros(4);
+        n = S3.naTela();
+        check('com um herói do Fogo no grupo não há breu (penumbra na zona inteira) e nenhum monstro some',
+              n.veu.breu === 0 && n.veu.volume === 0 && monstros(bt).every(function (u) { return !G.ocultoNaTela(u) && R.unitNode(u.uid).visible; }), JSON.stringify(n.veu));
+        return vista('2_fogo_com_heroi_de_fogo');
+      }).then(function () {
+        // =============================================================== ÁGUA
+        window.__onde = 'agua';
+        bt = abre(1, ['agua', 'terra']);
+        p = Sa.planta(bt); n = S3.naTela();
+        var info = Sa.info(bt);
+        check('a Galeria Alagada: a lâmina cobre as casas alagadas do mapa, com dois veios por casa e uma laje por ponte',
+              !!n.agua && n.agua.casas === info.agua.casas.length && n.agua.veios === 2 * n.agua.casas && n.agua.pontes === info.agua.pontes.length,
+              JSON.stringify([n.agua.casas, info.agua.casas.length, n.agua.veios, n.agua.pontes]));
+        check('as duas bicas estão na tela e só a que verte tem jorro; a correnteza desenhada é a da regra',
+              n.agua.bicas.length === 2 && n.agua.bicas.filter(function (b) { return b.verte && b.jorro; }).length === 1 &&
+              n.agua.bicas.filter(function (b) { return !b.verte && !b.jorro; }).length === 1 && n.agua.correnteza === info.agua.dir, JSON.stringify(n.agua.bicas));
+        var c1 = chips();
+        check('a linha da sala mostra a correnteza com a seta NA TELA', c1.length === 1 && c1[0].regra === 'agua' && /Correnteza\s*[→↘↓↙←↖↑↗]/.test(c1[0].tx), JSON.stringify(c1));
+        // a rodada antes da virada: a outra bica avisa, e a pílula pulsa
+        var hs = herois(bt), agua0 = info.agua.casas[40];
+        hs[0].x = agua0.x; hs[0].y = agua0.y;
+        var de = { x: hs[0].x, y: hs[0].y };
+        viraRodada(bt);                                       // fim da rodada 1: a correnteza leva
+        var v = { n: [0, -1], s: [0, 1], l: [1, 0], o: [-1, 0] }[info.agua.dir];
+        check('no fim da rodada o herói na água é levado 1 casa para onde os veios corriam (e a tela o mostra na casa nova)',
+              hs[0].x === de.x + v[0] && hs[0].y === de.y + v[1] && Math.abs(R.unitWorld(hs[0].uid).x - hs[0].x) < 0.01);
+        n = S3.naTela(); info = Sa.info(bt);
+        check('na rodada 2 (a virada é na 3) a bica que vai verter ganha o sinal e a pílula avisa "vira na próxima"',
+              bt.round === 2 && n.agua.bicas.filter(function (b) { return b.proxima; }).length === 1 && chips()[0].aviso && /vira/.test(chips()[0].tx),
+              JSON.stringify([bt.round, n.agua.bicas, chips()]));
+        return vista('3_agua');
+      }).then(function () {
+        viraRodada(bt);
+        n = S3.naTela();
+        var info = Sa.info(bt);
+        check('na rodada 3 a OUTRA bica verte: o jorro troca de bica e os veios mudam de direção',
+              bt.round === 3 && n.agua.correnteza === info.agua.dir && n.agua.bicas.filter(function (b) { return b.jorro; })[0].dir === info.agua.dir &&
+              n.agua.bicas.filter(function (b) { return b.proxima; }).length === 0, JSON.stringify(n.agua.bicas));
+        // =============================================================== TERRA
+        window.__onde = 'terra';
+        bt = abre(2, ['terra', 'ar']);
+        p = Sa.planta(bt); n = S3.naTela();
+        var montagem = R.ultimaMontagem;
+        check('o Salão dos Pilares Vivos: um soquete e um bloco por pilar do mapa, os de pé no alto e os baixos no chão',
+              !!n.pilares && n.pilares.soquetes === p.pilares.length && n.pilares.blocos === p.pilares.length &&
+              n.pilares.lista.every(function (q, i) { return q.alto === !!bt.santuario.pl[i] && q.k === (q.alto ? 1 : 0); }),
+              JSON.stringify([n.pilares.soquetes, n.pilares.blocos]));
+        check('sem aviso na rodada 1: nenhuma seta, nenhuma casa pintada', n.pilares.avisosSobe === 0 && n.pilares.avisosDesce === 0);
+        // o tabuleiro não veste as casas de mecânica: os pilares de pé não viraram muro de cenário
+        var lay = dg.rooms[2].layout, nAltos = conta(lay, '#'), nBaixos = conta(lay, '=');
+        var postas = 0; Object.keys(montagem).forEach(function (k) { postas += montagem[k]; });
+        var nMec = p.pilares.filter(function (q) { return q.alto; }).length;
+        check('o tabuleiro NÃO põe muro de cenário em cima do pilar vivo (peças postas = paredes e muretas − pilares de pé + 18 de borda)',
+              postas === nAltos + nBaixos - nMec + 18, postas + ' postas, ' + nAltos + ' altos, ' + nBaixos + ' baixos, ' + nMec + ' pilares de pé');
+        var hs = herois(bt);
+        var iBaixo = p.pilares.findIndex(function (q) { return !q.alto; });
+        hs[0].x = p.pilares[iBaixo].x; hs[0].y = p.pilares[iBaixo].y;          // em cima de um soquete
+        viraRodada(bt);                                                         // rodada 2: o aviso
+        n = S3.naTela();
+        var sobem = p.pilares.filter(function (q) { return !q.alto; }).length, descem = p.pilares.length - sobem;
+        check('na rodada 2 TODO pilar está avisado: ▲ e a casa âmbar em quem vai subir, ▼ e a casa verde em quem vai descer',
+              bt.round === 2 && n.pilares.avisosSobe === sobem && n.pilares.avisosDesce === descem &&
+              n.pilares.lista.every(function (q) { return q.alto ? (q.avisoDesce && !q.avisoSobe) : (q.avisoSobe && !q.avisoDesce); }),
+              JSON.stringify([n.pilares.avisosSobe, sobem, n.pilares.avisosDesce, descem]));
+        check('a pílula da sala avisa "Pilares trocam na próxima rodada" e pulsa', chips().length === 1 && /próxima rodada/.test(chips()[0].tx) && chips()[0].aviso, JSON.stringify(chips()));
+        return vista('4_terra_aviso');
+      }).then(function () {
+        p = Sa.planta(bt);
+        var montagem = R.ultimaMontagem;
+        viraRodada(bt);                                                         // rodada 3: a troca
+        quadros(6);                                                             // a animação acaba (0,7 s)
+        n = S3.naTela();
+        var iBaixo = p.pilares.findIndex(function (q) { return !q.alto; });
+        check('na rodada 3 os blocos trocam de altura na tela (o de pé desce, o baixo sobe), acompanhando o estado',
+              bt.round === 3 && n.pilares.lista.every(function (q, i) { return q.alto === !!bt.santuario.pl[i] && q.k === (q.alto ? 1 : 0); }) &&
+              n.pilares.lista.filter(function (q, i) { return q.alto !== p.pilares[i].alto; }).length === p.pilares.length - 1);
+        check('o pilar com o herói em cima ESPERA: não subiu, e ganhou o sinal de espera (os outros avisos apagaram)',
+              n.pilares.lista[iBaixo].alto === false && n.pilares.lista[iBaixo].espera && n.pilares.lista[iBaixo].avisoEspera &&
+              n.pilares.avisosSobe === 1 && n.pilares.avisosDesce === 0 && /1 esperando/.test(chips()[0].tx), JSON.stringify([n.pilares.lista[iBaixo], chips()]));
+        check('a troca dos pilares NÃO refaz o tabuleiro (a montagem da sala é a mesma)', R.ultimaMontagem === montagem);
+        return vista('5_terra_trocou');
+      }).then(function () {
+        // =============================================================== AR
+        window.__onde = 'ar';
+        bt = abre(3, ['ar', 'fogo']);
+        p = Sa.planta(bt); n = S3.naTela();
+        var info = Sa.info(bt);
+        var zona = p.vento[0], esperadas = 0;
+        for (var y = zona[1]; y <= zona[3]; y++) for (var x = zona[0]; x <= zona[2]; x++) {
+          var t = bt.grid.tiles[y][x];
+          if (t.type === 'floor' && !p.calmas[x + ',' + y] && !((x + y) & 1)) esperadas++;
+        }
+        check('o Terraço da Ventania: setas no chão da zona do vento (uma a cada duas casas, nenhuma na casa calma nem no pórtico)',
+              !!n.vento && n.vento.setas === esperadas && esperadas > 60, n.vento.setas + ' de ' + esperadas);
+        check('um respiro desenhado por respiro, um aro por casa calma de chão, e o cata-vento no lugar dele',
+              n.vento.respiros === p.respiros.length && n.vento.calmas === info.vento.calmas.filter(function (c) { return bt.grid.tiles[c.y][c.x].type === 'floor'; }).length &&
+              n.vento.cataVentos.length === 1 && n.vento.cataVentos[0].x === p.cataVentos[0].x, JSON.stringify([n.vento.respiros, n.vento.calmas, n.vento.cataVentos]));
+        var vv = { n: [0, -1], s: [0, 1], l: [1, 0], o: [-1, 0] }[info.vento.dir];
+        check('o cata-vento aponta para onde a rajada sopra (e as setas do chão também)',
+              n.vento.dir === info.vento.dir && Math.abs(n.vento.cataVentos[0].angulo - Math.atan2(vv[0], vv[1])) < 0.05 && !n.vento.cataVentos[0].fantasma,
+              JSON.stringify(n.vento.cataVentos[0]));
+        var c3 = chips();
+        check('a linha da sala mostra a rajada com a seta na tela', c3.length === 1 && c3[0].regra === 'ar' && /Rajada\s*[→↘↓↙←↖↑↗]/.test(c3[0].tx) && !c3[0].aviso, JSON.stringify(c3));
+        // a seta da pílula é a direção NA TELA: nas quatro posições da câmera, a tabela da HUD bate com a
+        // projeção de verdade (o centro da sala e três casas adiante), e a pílula repinta quando a câmera gira
+        var GLIFOS = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'], VET = { n: [0, -1], s: [0, 1], l: [1, 0], o: [-1, 0] };
+        function projetada(dir) {
+          var cx = (bt.grid.w - 1) / 2, cy = (bt.grid.h - 1) / 2;
+          var a = R.project(cx, cy, 0), b = R.project(cx + VET[dir][0] * 3, cy + VET[dir][1] * 3, 0);
+          var k = Math.round(Math.atan2(b.y - a.y, b.x - a.x) / (Math.PI / 4));
+          return GLIFOS[((k % 8) + 8) % 8];
+        }
+        var rot0 = R.rotation(), erradas = [], naPilula = [];
+        for (var giro = 0; giro < 4; giro++) {
+          R.setCamera({ rot: (rot0 + giro) % 4, animate: false });
+          quadros(2);
+          ['n', 's', 'l', 'o'].forEach(function (d) {
+            if (JOGO.UI._santSeta(d) !== projetada(d)) erradas.push(giro + d + ':' + JOGO.UI._santSeta(d) + '≠' + projetada(d));
+          });
+          naPilula.push(chips()[0].tx.indexOf(projetada(info.vento.dir)) >= 0);
+        }
+        R.setCamera({ rot: rot0, animate: false });
+        quadros(2);
+        check('a seta da linha da sala é a direção NA TELA: bate com a projeção nas quatro posições da câmera, e a pílula repinta a cada giro',
+              erradas.length === 0 && naPilula.every(Boolean), erradas.join(' ') + ' ' + JSON.stringify(naPilula));
+        // a rajada leva; na rodada 2 a virada é avisada
+        var hs = herois(bt), livre = null;
+        for (var yy = 3; yy < bt.grid.h - 3 && !livre; yy++) for (var xx = 8; xx < bt.grid.w - 3 && !livre; xx++) {
+          if (bt.grid.tiles[yy][xx].type === 'floor' && bt.grid.tiles[yy + vv[1]][xx + vv[0]].type === 'floor' && !p.calmas[xx + ',' + yy] &&
+              !E.unitAt(bt, xx, yy) && !E.unitAt(bt, xx + vv[0], yy + vv[1])) livre = { x: xx, y: yy };
+        }
+        hs[0].x = livre.x; hs[0].y = livre.y;
+        quadros(3);
+        viraRodada(bt);
+        check('no fim da rodada a rajada leva o herói 1 casa na direção das setas, e a tela o mostra na casa nova',
+              hs[0].x === livre.x + vv[0] && hs[0].y === livre.y + vv[1] && Math.abs(R.unitWorld(hs[0].uid).x - hs[0].x) < 0.01 &&
+              Math.abs(R.unitWorld(hs[0].uid).y - hs[0].y) < 0.01);
+        n = S3.naTela(); info = Sa.info(bt);
+        check('na rodada 2 (a rajada gira na 3) a seta-fantasma da próxima direção aparece no cata-vento e a pílula avisa "gira na próxima"',
+              bt.round === 2 && n.vento.depois === info.vento.proxima && n.vento.cataVentos[0].fantasma && chips()[0].aviso && /gira/.test(chips()[0].tx),
+              JSON.stringify([n.vento.depois, chips()]));
+        return vista('6_ar_aviso');
+      }).then(function () {
+        viraRodada(bt);
+        quadros(6);
+        n = S3.naTela();
+        var info = Sa.info(bt), vv = { n: [0, -1], s: [0, 1], l: [1, 0], o: [-1, 0] }[info.vento.dir];
+        check('na rodada 3 o cata-vento GIROU para a direção nova (e a seta-fantasma some)',
+              bt.round === 3 && n.vento.dir === info.vento.dir && !n.vento.cataVentos[0].fantasma &&
+              Math.abs(Math.atan2(Math.sin(n.vento.cataVentos[0].angulo - Math.atan2(vv[0], vv[1])), Math.cos(n.vento.cataVentos[0].angulo - Math.atan2(vv[0], vv[1])))) < 0.08,
+              JSON.stringify(n.vento.cataVentos[0]));
+        // =============================================================== O ALTAR
+        window.__onde = 'altar';
+        bt = abre(4, ['fogo', 'agua']);
+        n = S3.naTela();
+        check('o Altar dos Quatro tem as quatro regras na tela de uma vez e o altar no meio',
+              n.regras.join() === 'fogo,agua,terra,ar' && !!n.veu && !!n.agua && !!n.pilares && !!n.vento && n.altar === true, JSON.stringify(n.regras));
+        check('a linha da sala tem as quatro pílulas, na ordem dos quadrantes',
+              chips().map(function (c) { return c.regra; }).join() === 'fogo,agua,terra,ar', JSON.stringify(chips()));
+        check('o cartão do Altar diz que são as quatro regras, cada uma no seu canto',
+              !!document.querySelector('.tutor-caixa') && /Altar dos Quatro/.test(document.querySelector('.tutor-caixa').textContent));
+        var b2 = document.querySelector('.tutor-caixa .btn-primary');
+        if (b2) b2.click();
+        // os corpos: provisório sem a arte, o próprio com ela
+        var comArte = window.__comArte.monstros;
+        var corpos = ['el_fogo_1', 'el_fogo_2', 'el_agua_1', 'el_agua_2', 'el_terra_1', 'el_terra_2', 'el_ar_1', 'el_ar_2'].map(function (id) {
+          var lk = M.lookFor(id), chave = id.replace(/_/g, '-');
+          return { id: id, modelo: lk.model, chave: chave, prov: (M.CORPO_PROVISORIO[chave] || {}).model || null, tem: M.hasModel(lk.model) };
+        });
+        if (comArte) {
+          check('com a arte do dono embutida, os oito guardiões vestem o corpo PRÓPRIO (e saem da tabela do provisório)',
+                corpos.every(function (c) { return c.modelo === c.chave && !c.prov && c.tem; }), JSON.stringify(corpos));
+        } else {
+          check('sem a arte na árvore, os oito guardiões vestem um corpo provisório do mesmo elemento, oito corpos diferentes, todos carregados',
+                corpos.every(function (c) { return c.modelo === c.prov && c.tem && D.monsters[c.modelo].element === D.monsters[c.id].element; }) &&
+                Object.keys(corpos.reduce(function (o, c) { o[c.modelo] = 1; return o; }, {})).length === 8, JSON.stringify(corpos));
+        }
+        check('todo monstro da sala tem corpo na cena', monstros(bt).every(function (u) { return !!R.unitNode(u.uid); }));
+        var prim = n.primitivas, kit = window.__comArte.cenario;
+        check(kit ? 'com o kit do dono embutido, nenhuma peça de mecânica fica em primitiva'
+                  : 'sem o kit na árvore, as peças de mecânica saem em primitiva (e o tema veste o kit de reserva, sem peça de mecânica no enfeite)',
+              kit ? prim.length === 0 : (prim.length >= 6 && JOGO.CENARIO.santuario.deReserva === 'heart'), JSON.stringify(prim));
+        return vista('7_altar');
+      }).then(function () {
+        // saindo do Santuário, nada dele fica na cena
+        G.dungeonId = 'greenhouse'; G.roomIndex = 0;
+        G.state = E.createBattle('greenhouse', 0, P.battleParty(ids), { seed: 3 });
+        JOGO.UI.showScreen('battle');
+        quadros(10);
+        check('fora do Santuário nada dele fica na cena, nem pílula na linha da sala', S3.naTela() === null && chips().length === 0 &&
+              !R.scene().getObjectByName('santuario'));
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>

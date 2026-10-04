@@ -100,6 +100,12 @@ var JOGO = (typeof window !== 'undefined')
         if (D.dungeons[i].theme === theme || D.dungeons[i].id === theme) return D.dungeons[i].palette;
       }
     }
+    // 03/10: os calabouços especiais (js/core/data/santuario.js) moram fora de DATA.dungeons — sem
+    // isto o tema 'santuario' não achava a paleta dele e o piso saía com o verde de reserva do jardim
+    var es = (D && D.especiais) || [];
+    for (var j = 0; j < es.length; j++) {
+      if (es[j] && (es[j].theme === theme || es[j].id === theme) && es[j].palette) return es[j].palette;
+    }
     return FALLBACK_PAL[theme] || FALLBACK_PAL.garden;
   };
 

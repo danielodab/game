@@ -458,7 +458,25 @@ var JOGO = (typeof window !== 'undefined')
   function calabouco(id) {
     var ds = lista(D().dungeons);
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === id) return ds[i];
+    // 03/10: o calabouço especial (js/core/data/santuario.js) mora fora de DATA.dungeons
+    var es = lista(D().especiais);
+    for (var j = 0; j < es.length; j++) if (es[j] && es[j].id === id) return es[j];
     return null;
+  }
+  /* 03/10: o tema de uma sala para o PLANO da descida. O kit do Santuário (JOGO.CENARIO['santuario'])
+   * pode ainda não estar embutido: até lá a sala veste o kit de reserva do calabouço (`temaReserva`,
+   * o do Coração Partido) — o renderizador faz a mesma troca (renderer3d_v2.js, temaDoCenario) — e é
+   * ESSE que a descida tem de baixar. Com o catálogo próprio, vão as peças dele, e as de mecânica
+   * (braseiro, pilar vivo, soquete…) entram mesmo sem papel no catálogo: o santuario3d.js as pede
+   * pelo nome. Só entra no plano o que o manifesto conhece. */
+  var PECAS_SANTUARIO = ['el_braseiro', 'el_bica', 'el_cata_vento', 'el_soquete', 'el_poca', 'el_ponte',
+                         'el_respiro', 'el_pilar_vivo', 'el_marco_altar',
+                         'el_muro_fogo', 'el_muro_agua', 'el_muro_terra', 'el_muro_ar'];
+  function temaDaSala(dg, r, fora) {
+    var tema = (r && r.sceneryTheme) || dg.theme;
+    var tem = !!(tema && JOGO.CENARIO && JOGO.CENARIO[tema]);
+    doTema(tem ? tema : (dg.temaReserva || tema), fora);
+    if (r && r.santuario) for (var i = 0; i < PECAS_SANTUARIO.length; i++) fora.push(PECAS_SANTUARIO[i]);
   }
   /* 02/10: o mapa de luta que não é calabouço (DATA.arenas) e que tem monstro — a Câmara do Eco. Os de
    * duelo seguem pelo `cenario` de sempre (o pedido de duelo nem passa por aqui). */
@@ -570,7 +588,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (dg) {
       if (pedido.duelo || !salas.length) doTema(dg.theme, fora);
-      salas.forEach(function (r) { doTema((r && r.sceneryTheme) || dg.theme, fora); });
+      salas.forEach(function (r) { temaDaSala(dg, r, fora); });
     }
     salas.forEach(function (r) {
       lista(r && r.monsters).forEach(function (mid) { if (typeof mid === 'string') doMonstro(mid, fora); });

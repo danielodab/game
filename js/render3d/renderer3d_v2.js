@@ -230,11 +230,23 @@ var JOGO = (typeof window !== 'undefined')
     if (t.deco) return 'deco';
     return 'floor';
   }
+  /* 03/10 — AS CASAS DE MECÂNICA DO SANTUÁRIO SÃO CHÃO PARA O DESENHO. O braseiro, o respiro,
+   * a bica, o cata-vento, o altar e o pilar vivo ocupam casas que para a REGRA são mureta ou
+   * parede — mas quem as desenha é o santuario3d.js (a peça certa, que acende, gira, sobe e
+   * desce). Se o montador as visse como '#' e '=', poria um muro de cenário em cima do pilar
+   * que sobe e desce e uma mureta qualquer no lugar do braseiro, e a chave da sala mudaria a
+   * cada troca de pilar (o tabuleiro inteiro refeito a cada duas rodadas). Como no muro
+   * invocado e no chão que desabou: `gridTile` só serve ao desenho, a regra lê o estado. */
+  var PISO_DE_MECANICA = { type: 'floor', deco: false };
   function gridTile(st, x, y) {
     if (!st || !st.grid || !st.grid.tiles) return null;
     if (y < 0 || x < 0 || y >= st.grid.h || x >= st.grid.w) return null;
     var row = st.grid.tiles[y];
     if (!row) return null;
+    if (st.santuario && JOGO.Santuario3D) {
+      var mec = JOGO.Santuario3D.casas(st);
+      if (mec && mec.mapa[y * mec.w + x]) return PISO_DE_MECANICA;
+    }
     return typeof row === 'string' ? row.charAt(x) : row[x];
   }
   function dungeonOf(st) {
@@ -245,6 +257,8 @@ var JOGO = (typeof window !== 'undefined')
     // 14/09: o mapa de luta que não é calabouço (js/core/data/arenas.js — a praça). Sem
     // isto o duelo na praça caía no tema do jardim e na paleta de reserva.
     for (i = 0; D.arenas && i < D.arenas.length; i++) if (D.arenas[i] && D.arenas[i].id === st.dungeonId) return D.arenas[i];
+    // 03/10: os calabouços especiais (js/core/data/santuario.js — o Santuário dos Elementos)
+    for (i = 0; D.especiais && i < D.especiais.length; i++) if (D.especiais[i] && D.especiais[i].id === st.dungeonId) return D.especiais[i];
     return null;
   }
   function themeOf(st) {
@@ -506,6 +520,21 @@ var JOGO = (typeof window !== 'undefined')
     lights.sun.color = col3(E.sun);
     lights.sun.intensity = E.sunI;
     lights.rim.color = col3(E.rim);
+  }
+
+  /* 03/10 — O AMBIENTE DA SALA PODE SER MAIS FINO QUE O DO TEMA. O Santuário dos Elementos é um
+   * tema só ('santuario') com cinco salas, e uma delas — a Câmara Apagada — é ESCURA por regra:
+   * a luz geral dela não pode ser a das outras quatro. Quem sabe disso é o santuario3d.js, que
+   * declara o ambiente dele (`R.poeAmbiente`) e diz qual vale em cada sala. Sem resposta, vale o
+   * do tema, como sempre. `soSeFalta`: não troca o ambiente que a tabela já tem. */
+  R.poeAmbiente = function (nome, env, soSeFalta) {
+    if (!nome || !env || (soSeFalta && THEME_ENV[nome])) return;
+    THEME_ENV[nome] = env;
+  };
+  function ambienteDaSala(st, theme) {
+    var S3 = JOGO.Santuario3D, a = null;
+    try { a = (S3 && S3.ambiente && st && st.santuario) ? S3.ambiente(st, theme) : null; } catch (e) { a = null; }
+    return (a && THEME_ENV[a]) ? a : theme;
   }
 
   // ================================================================ TABULEIRO
@@ -2360,7 +2389,7 @@ var JOGO = (typeof window !== 'undefined')
     moldura.jaAjustou = false;          // sala nova: vale reenquadrar de novo
     gridW = st.grid.w; gridH = st.grid.h;
     var pal0 = paletteOf(st), theme0 = themeOf(st);
-    applyTheme(theme0);
+    applyTheme(ambienteDaSala(st, theme0));
     boardProcedural = false;
     if (buildBoardKit(st, pal0, theme0)) {
       var fw0 = gridW * CELL, fh0 = gridH * CELL;
@@ -2384,7 +2413,7 @@ var JOGO = (typeof window !== 'undefined')
   function buildBoardProc(st) {
     var pal = paletteOf(st);
     var theme = themeOf(st);
-    applyTheme(theme);
+    applyTheme(ambienteDaSala(st, theme));
 
     var floorMat1 = new THREE.MeshStandardMaterial({ color: col3(pal.floor1), roughness: 0.94, metalness: 0.0 });
     var floorMat2 = new THREE.MeshStandardMaterial({ color: col3(pal.floor2), roughness: 0.94, metalness: 0.0 });
@@ -3192,6 +3221,14 @@ var JOGO = (typeof window !== 'undefined')
       var m = lista[i].muro;
       return 'Sem linha de visão' + (m ? ': muro em (' + m.x + ',' + m.y + ')' : '') + '.';
     }
+    // 03/10: a casa no alcance que o ESCURO do Santuário não deixa mirar de longe
+    var breu = safe(function () { return en.casasNoEscuro ? en.casasNoEscuro(st, u.uid, spellId) : null; }, null) || [];
+    for (var b = 0; b < breu.length; b++) {
+      if (breu[b].x === x && breu[b].y === y) {
+        return 'No escuro: essa casa só se mira a ' + (((DATA().santuario || {}).escuro || {}).visao || 2) +
+               ' casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.';
+      }
+    }
     return null;
   };
   function explicaToque(x, y) {
@@ -3703,6 +3740,8 @@ var JOGO = (typeof window !== 'undefined')
       active ? active.pp + ':' + active.pa : '-',
       hv ? hv.x + ':' + hv.y : '-', mira ? 'M' + mira.x + ':' + mira.y : '-',
       evs.length, R.isBusy() ? 1 : 0, pos,
+      // 03/10: o braseiro que acende e o pilar que sobe mudam o que se mira e por onde se anda
+      st.santuario ? st.santuario.br.join('') + st.santuario.pl.join('') : '',
       g && g.isPlayerTurn ? (g.isPlayerTurn() ? 1 : 0) : 1].join('|');
   }
 
@@ -3796,6 +3835,12 @@ var JOGO = (typeof window !== 'undefined')
        * menor (0,55) que o do alcance: lê como "chega, mas há muro no caminho". */
       var semVisao = casasSemVisao(st, active, spellId, spell, range);
       for (var sv = 0; sv < semVisao.length; sv++) ovTile(semVisao[sv].x, semVisao[sv].y, '#9aa3ad', 0.16, 0.06, 0.55);
+      /* 03/10: AS CASAS QUE O ESCURO TIRA (o Santuário, a Câmara Apagada). Estão no alcance e à
+       * vista, e mesmo assim quem não enxerga no breu não pode mirá-las de longe: sem cor
+       * própria o alcance sairia "comido" sem dizer por quê. Roxo, no mesmo quadrado pequeno
+       * da casa sem visão; o toque nela diz a regra (R.explainNoCast). */
+      var noEscuro = safe(function () { return en.casasNoEscuro ? en.casasNoEscuro(st, active.uid, spellId) : null; }, null) || [];
+      for (var ne = 0; ne < noEscuro.length; ne++) ovTile(noEscuro[ne].x, noEscuro[ne].y, '#8a63d2', 0.30, 0.06, 0.55);
 
       // ALVOS por cima, forte: quem dá para acertar de verdade.
       // 22/09: as casas que ESTA tela vê como alvo (Game.alvosNaTela): a do
@@ -4911,6 +4956,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!ev) return;
     if (!ready) { if (pendingEvents.length < 400) pendingEvents.push(ev); return; }
     var v, u;
+    // 03/10: o que a regra do Santuário avisa (a correnteza e a rajada no instante em que levam)
+    if (JOGO.Santuario3D && typeof ev.type === 'string' && ev.type.indexOf('santuario') === 0) JOGO.Santuario3D.evento(ev);
     switch (ev.type) {
       case 'battleStart':
         resetAll(ev.state || state());
@@ -5055,6 +5102,7 @@ var JOGO = (typeof window !== 'undefined')
     boardKey = null; ovSig = ''; evSig = '~init~';
     limpaMuros();
     limpaPerigos();
+    if (JOGO.Santuario3D) JOGO.Santuario3D.limpa();      // 03/10
     weather.id = '';
     if (st && st.grid) {
       buildBoard(st);
@@ -5306,6 +5354,8 @@ var JOGO = (typeof window !== 'undefined')
       rebuildPerigos(st);                 // 02/10: o chão do Poço
       rebuildWalls(st);
       pintaAvisoEco(st);                  // 02/10: as casas do golpe grande do Eco
+      // 03/10: as quatro regras do Santuário dos Elementos (santuario3d.js desmonta sozinho fora dele)
+      if (JOGO.Santuario3D) JOGO.Santuario3D.quadro(st, dtv, nowT);
       vigiaAreaUtil(st);                  // 15/09: a HUD cresceu? reenquadra (só no desktop)
       var en = engine();
       drawActiveRing(safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null));

@@ -161,6 +161,21 @@ var JOGO = (typeof window !== 'undefined')
  *     As decisões 19 e 20 subiram Engine.VERSAO_REGRAS para 6: a tentativa
  *     refeita no juiz (servidor/juiz/supremo.js) só bate com estas regras, e a
  *     área que cobre a mesma unidade em duas casas deixou de repetir.
+ * 21. O SANTUÁRIO DOS ELEMENTOS (03/10): o calabouço especial em que o MAPA
+ *     tem regra — escuro, água, pilares vivos e vento. A regra mora em
+ *     js/core/santuario.js (Santuario.regras) e o dado em
+ *     js/core/data/santuario.js; aqui ficam só as chamadas, por `Sg()`, e só
+ *     com `state.santuario` presente (toda outra sala não passa por nenhuma):
+ *       - o passo pode custar mais que 1 PP (a casa alagada): a busca de
+ *         caminho vira busca por CUSTO, e o PP cobrado é o custo do trecho;
+ *       - uma casa pode não ser mirável de longe (o escuro), e um objeto do
+ *         mapa pode ser alvo (o braseiro, do golpe de Fogo ou de Água);
+ *       - o alcance pode crescer com o lugar de quem lança (o Ar no vento);
+ *       - o monstro que o grupo não vê no escuro some como o invisível
+ *         (ocultoDe), só para o lado do grupo;
+ *       - no FIM de cada rodada a correnteza e a rajada deslocam, e no COMEÇO
+ *         da seguinte os pilares trocam — a casa do pilar vira muro e volta.
+ *     Nada disso sorteia. Sobe Engine.VERSAO_REGRAS para 7.
  * ==========================================================================*/
 
 (function () {
@@ -254,8 +269,14 @@ var JOGO = (typeof window !== 'undefined')
    *       (d) 03/10, ainda antes de o 6 ir ao ar: o MURO QUE FERE QUEM ENCOSTA
    *       (a escolha do dono para o Minotauro — o bloco de mesmo nome perto de
    *       forcedMove; docs/EQUILIBRIO.md §3.6). Entra no mesmo 6: nenhuma sala
-   *       foi jogada sob o 6 sem ele. */
-  Engine.VERSAO_REGRAS = 6;
+   *       foi jogada sob o 6 sem ele.
+   *   7 — 03/10: O SANTUÁRIO DOS ELEMENTOS (decisão 21 no topo deste arquivo;
+   *       js/core/santuario.js e js/core/data/santuario.js). As salas de
+   *       sempre não mudam de regra, mas o juiz passa a carregar dois arquivos
+   *       novos e oito monstros no bestiário: a página de antes não conhece o
+   *       calabouço 'elementsanctum' nem refaz uma sala dele, e o número diz
+   *       ao servidor qual das duas páginas está falando. */
+  Engine.VERSAO_REGRAS = 7;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -288,6 +309,12 @@ var JOGO = (typeof window !== 'undefined')
    * nenhuma delas. `INTERNO` (lá embaixo) entrega a Poco.regras as funções
    * privadas do motor de que a regra precisa — dano, empurrão, cura. */
   function Pg() { var p = JOGO.Poco; return (p && p.regras) || null; }
+  /* O SANTUÁRIO DOS ELEMENTOS (03/10, decisão de design 21). O mesmo desenho:
+   * a regra dos quatro quadrantes mora em js/core/santuario.js
+   * (Santuario.regras) e o motor só a chama por `Sg()`, com `state.santuario`
+   * presente. Uma página que montasse a sala sem aquele arquivo jogaria sem
+   * escuro, sem água, sem pilar e sem vento — e divergiria do juiz. */
+  function Sg() { var s = JOGO.Santuario; return (s && s.regras) || null; }
 
   /* OS MULTIPLICADORES DA SALA. Devolve sempre um objeto util — uma batalha
    * antiga, salva antes desta funcao existir, cai em `normal` e nao quebra. */
@@ -784,8 +811,13 @@ var JOGO = (typeof window !== 'undefined')
     // 14/09: os mapas de luta entre jogadores que não são calabouço (js/core/data/arenas.js — a praça)
     var ar = DATA().arenas || [];
     for (var j = 0; j < ar.length; j++) if (ar[j] && ar[j].id === dungeonId) return ar[j];
+    // 03/10: os calabouços especiais (js/core/data/santuario.js — o Santuário dos Elementos)
+    var es = DATA().especiais || [];
+    for (var k = 0; k < es.length; k++) if (es[k] && es[k].id === dungeonId) return es[k];
     return null;
   }
+  // o mapa de uma batalha pelo id: calabouço, arena ou especial (para quem lê a sala fora do motor)
+  Engine.calabouco = function (dungeonId) { return getDungeon(dungeonId); };
 
   // v2: stats efetivos de um herói do grupo (nível + itens ficam com Progress;
   // aqui só há uma escala defensiva de nível quando o chamador não os fornece).
@@ -991,6 +1023,8 @@ var JOGO = (typeof window !== 'undefined')
     log(dungeon.name + ' — ' + room.name);
     // 02/10: o chão do andar do Poço (e a couraça de quem nasce com ela)
     if (room.perigos && Pg()) Pg().monta(state, room, INTERNO);
+    // 03/10: a regra do quadrante do Santuário (braseiros, pilares e os avisos da rodada 1)
+    if (room.santuario && Sg()) Sg().monta(state, room, INTERNO);
 
     // A ESCOLHA DA POSIÇÃO (03/09, pedido do dono): "a posição no início da
     // batalha o usuário que escolhe. O jogo dá 4 opções aleatórias… quando
@@ -1255,8 +1289,14 @@ var JOGO = (typeof window !== 'undefined')
    * do outro lado: a casa dele parece chão livre. É a mesma régua da IA
    * (ai.js isInvisible), agora no motor — e vale igual para gente, porque a
    * tela do adversário não desenha o corpo (Game.ocultoNaTela). */
-  function ocultoDe(quem, o) {
-    return !!(quem && o && o.side !== quem.side && Engine.unitHasEffect(o, 'invisible'));
+  /* 03/10: `st` (o estado) entra para o ESCURO do Santuário — o monstro numa
+   * casa escura que ninguém do grupo vê some para o grupo do mesmo jeito
+   * (Santuario.regras.oculto). Quem chama sem o estado pergunta só pela
+   * invisibilidade, como sempre. */
+  function ocultoDe(quem, o, st) {
+    if (!quem || !o || o.side === quem.side) return false;
+    if (Engine.unitHasEffect(o, 'invisible')) return true;
+    return !!(st && st.santuario && Sg() && Sg().oculto(st, quem, o));
   }
   Engine.ocultoDe = ocultoDe;
 
@@ -1265,11 +1305,53 @@ var JOGO = (typeof window !== 'undefined')
   function isWalkable(state, x, y, mover) {
     if (!isFloor(state, x, y)) return false;
     var o = Engine.unitAt(state, x, y);
-    return !o || ocultoDe(mover, o);
+    return !o || ocultoDe(mover, o, state);
   }
   var DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
+  /* 03/10 — O PASSO QUE CUSTA MAIS (o Santuário: a casa alagada custa 2 PP).
+   * Com custo por casa a busca em largura deixa de achar o caminho mais
+   * barato; esta é a mesma busca por CUSTO (baldes de custo inteiro, na ordem
+   * fixa das direções: o mesmo caminho no cliente e no juiz). `passo(x, y)` é
+   * o custo de ENTRAR na casa. Só as salas com água passam por aqui — todas
+   * as outras seguem na busca de sempre, bit a bit. */
+  function bfsCusto(state, sx, sy, maxCost, mover, passo) {
+    var dist = {}, parent = {};
+    var baldes = [[{ x: sx, y: sy }]];
+    dist[sx + ',' + sy] = 0;
+    for (var c = 0; c < baldes.length; c++) {
+      var balde = baldes[c];
+      if (!balde) continue;
+      for (var b = 0; b < balde.length; b++) {
+        var cur = balde[b], curKey = cur.x + ',' + cur.y;
+        if (dist[curKey] !== c) continue;                 // já foi alcançada por menos
+        for (var i = 0; i < DIRS.length; i++) {
+          var nx = cur.x + DIRS[i][0], ny = cur.y + DIRS[i][1];
+          if (!isWalkable(state, nx, ny, mover)) continue;
+          var nc = c + Math.max(1, passo(nx, ny));
+          if (maxCost >= 0 && nc > maxCost) continue;
+          var key = nx + ',' + ny;
+          if (dist[key] !== undefined && dist[key] <= nc) continue;
+          dist[key] = nc;
+          parent[key] = curKey;
+          (baldes[nc] = baldes[nc] || []).push({ x: nx, y: ny });
+        }
+      }
+    }
+    return { dist: dist, parent: parent };
+  }
+  // o custo de andar por `path` (a soma do custo de entrar em cada casa)
+  function custoDoCaminho(state, mover, path) {
+    var passo = (state.santuario && Sg()) ? Sg().custoPasso(state, mover) : null;
+    if (!passo) return path.length;
+    var c = 0;
+    for (var i = 0; i < path.length; i++) c += Math.max(1, passo(path[i].x, path[i].y));
+    return c;
+  }
+
   function bfs(state, sx, sy, maxCost, mover) {
+    var passoS = (state.santuario && Sg()) ? Sg().custoPasso(state, mover) : null;
+    if (passoS) return bfsCusto(state, sx, sy, maxCost, mover, passoS);
     var dist = {};
     var parent = {};
     var queue = [{ x: sx, y: sy }];
@@ -1321,7 +1403,7 @@ var JOGO = (typeof window !== 'undefined')
       var e = state.units[i];
       if (!e.alive || e.offBoard || e === unit) continue;
       if (e.side === unit.side) continue;
-      if (soVistos && ocultoDe(unit, e)) continue;
+      if (soVistos && ocultoDe(unit, e, state)) continue;
       if (distA(e, x, y) === 1) out.push(e);       // 02/10: colado em QUALQUER casa do corpo
     }
     return out;
@@ -1437,7 +1519,8 @@ var JOGO = (typeof window !== 'undefined')
       return false;
     }
     var path = Engine.path(state, uid, x, y);
-    if (!path || path.length > u.pp) { explainNoStep(state, u, x, y); return false; }
+    // 03/10: no Santuário o passo na água custa mais que 1 — a conta é o custo, não o número de casas
+    if (!path || custoDoCaminho(state, u, path) > u.pp) { explainNoStep(state, u, x, y); return false; }
 
     /* 22/09 — O CAMINHO PLANEJADO É O QUE A UNIDADE CONHECE. Ele atravessa a
      * casa de um inimigo invisível como se fosse chão (ocultoDe) e não sabe da
@@ -1483,7 +1566,7 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
 
-    u.pp -= path.length;
+    u.pp -= custoDoCaminho(state, u, path);             // 03/10: o custo do trecho ANDADO (a água do Santuário pesa 2)
     var deX = u.x, deY = u.y;                           // 02/10: o rastro do Colosso de Brasa começa aqui
     u.x = x; u.y = y;
     emit({ type: 'move', uid: uid, path: path });
@@ -1907,6 +1990,8 @@ var JOGO = (typeof window !== 'undefined')
     // 02/10: o chão do Poço (placa armada, chão que caiu, poça). Só existe no
     // Poço — a sala de sempre não muda de hash
     if (st.perigos) p.push('G', JSON.stringify(st.perigos));
+    // 03/10: o Santuário — braseiros acesos, pilares de pé, quem espera e o aviso (só nas salas dele)
+    if (st.santuario) p.push('SA', JSON.stringify(st.santuario));
     if (st.pendingFusion) p.push('F', st.pendingFusion.a, st.pendingFusion.b);
     if (st.desafio) {
       p.push('D', st.desafio.vivo ? 1 : 0, nh(st.desafio.passos), st.desafio.executado ? 1 : 0,
@@ -1925,7 +2010,8 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   /* A FOTO: o JSON do estado SEM `grid.tiles` — no lugar, `gridStr` com 2
-   * caracteres por casa (o tipo e um dígito: 1 = enfeite, 2 = muro invocado).
+   * caracteres por casa (o tipo e um dígito: 1 = enfeite, 2 = muro invocado,
+   * 4 = a casa de um pilar vivo do Santuário — 03/10).
    * ~9 KB. Nunca em `placing` (o `placement` guarda referência de unidade). */
   var CASA_LETRA = { floor: 'f', wall: 'w', cover: 'c', hole: 'h' };
   var LETRA_CASA = { f: 'floor', w: 'wall', c: 'cover', h: 'hole' };
@@ -1937,7 +2023,7 @@ var JOGO = (typeof window !== 'undefined')
         t = (g.tiles[y] && g.tiles[y][x]) || {};
         ch = CASA_LETRA[t.type];
         if (!ch) { cheia = true; ch = 'f'; }
-        gs.push(ch, String((t.deco ? 1 : 0) | (t.invocado ? 2 : 0)));
+        gs.push(ch, String((t.deco ? 1 : 0) | (t.invocado ? 2 : 0) | (t.pilar ? 4 : 0)));
       }
     }
     var c = {}, k;
@@ -1960,6 +2046,7 @@ var JOGO = (typeof window !== 'undefined')
           var i = (y * w + x) * 2, f = parseInt(s.charAt(i + 1), 10) || 0;
           var t = { type: LETRA_CASA[s.charAt(i)] || 'floor', deco: !!(f & 1) };
           if (f & 2) t.invocado = true;
+          if (f & 4) t.pilar = true;
           row.push(t);
         }
         tiles.push(row);
@@ -2075,7 +2162,7 @@ var JOGO = (typeof window !== 'undefined')
    * porte 1 é a própria casa, sem conta nenhuma. */
   function origemPara(state, unit, spell, tx, ty) {
     if (porteDe(unit) === 1) return { x: unit.x, y: unit.y };
-    var rg = sRange(spell), cs = casasDe(unit);
+    var rg = sRange(spell), cs = casasDe(unit);   // o corpo grande não ganha o alcance do vento (não há um no Santuário)
     cs.sort(function (a, b) {
       return (manhattan(a.x, a.y, tx, ty) - manhattan(b.x, b.y, tx, ty)) || (a.y - b.y) || (a.x - b.x);
     });
@@ -2097,18 +2184,29 @@ var JOGO = (typeof window !== 'undefined')
   // nela — é como quem mira vê a casa de um invisível do outro lado
   function validTargetCell(state, unit, spell, tx, ty, vazia) {
     if (!inBounds(state, tx, ty)) return false;
-    if (!isFloor(state, tx, ty)) return false;
-    var rg = sRange(spell);
+    var sant = (state.santuario && Sg()) ? Sg() : null;
+    /* 03/10: o BRASEIRO do Santuário não é chão, mas é alvo do golpe de Fogo
+     * (acende) e do de Água (apaga) — a distância, a linha, a visão e o escuro
+     * valem para ele como para qualquer casa. */
+    var fixo = false;
+    if (!isFloor(state, tx, ty)) {
+      fixo = !!(sant && sant.alvoFixo(state, spell, tx, ty));
+      if (!fixo) return false;
+    }
     var o = origemPara(state, unit, spell, tx, ty);     // 02/10: o corpo grande mira da casa certa
+    var rg = alcanceDe(state, unit, spell, o.x, o.y);   // 03/10: o feitiço de Ar lançado do vento alcança mais
     var d = manhattan(o.x, o.y, tx, ty);
     if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
     if (rg.line && !(tx === o.x || ty === o.y)) return false;
     if (rg.los && !Engine.los(state, o.x, o.y, tx, ty)) return false;
+    // 03/10: a casa ESCURA do Santuário só se mira de perto (ou por quem enxerga no escuro)
+    if (sant && !sant.podeMirar(state, unit, o.x, o.y, tx, ty)) return false;
+    if (fixo) return true;
     var occupant = vazia ? null : Engine.unitAt(state, tx, ty);
     // o corpo existe (a casa não está vazia para invocar ou saltar), mas quem
     // mira não vê inimigo invisível: para ele a casa está sem ninguém (22/09)
     if (spell.needsEmptyTile && occupant) return false;
-    if (occupant && ocultoDe(unit, occupant)) occupant = null;
+    if (occupant && ocultoDe(unit, occupant, state)) occupant = null;
     if (spellHasEffect(spell, 'swap') && (!occupant || occupant === unit)) return false;
     // v2: targetSide
     var ts = spell.targetSide;
@@ -2132,6 +2230,20 @@ var JOGO = (typeof window !== 'undefined')
   }
   Engine.validTargetCell = validTargetCell;
 
+  /* 03/10 — O ALCANCE DE UM FEITIÇO PARA QUEM O LANÇA DE (ox, oy). É o do dado
+   * (sRange) em toda sala; no Santuário o feitiço de Ar lançado de dentro da
+   * zona do vento ganha uma casa (Santuario.regras.alcance). A IA usa a mesma
+   * conta (ai.js), com a casa em que ela ESTARIA. */
+  function alcanceDe(state, unit, spell, ox, oy) {
+    var rg = sRange(spell);
+    if (state && state.santuario && Sg()) return Sg().alcance(state, unit, spell, rg, ox, oy);
+    return rg;
+  }
+  Engine.alcance = function (state, unit, spell, ox, oy) {
+    if (!unit || !spell) return null;
+    return alcanceDe(state, unit, spell, ox != null ? ox : unit.x, oy != null ? oy : unit.y);
+  };
+
   /* ALCANCE do feitiço, para a interface desenhar.
    * `castTargets` devolve só as células com ALVO VÁLIDO: para um ataque de
    * corpo a corpo sem ninguém ao lado, devolve VAZIO — e o tabuleiro não pinta
@@ -2145,17 +2257,43 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     var spell = spellDef(spellId);
     if (!u || !spell) return [];
-    var rg = sRange(spell);
+    var sant = (state.santuario && Sg()) ? Sg() : null;
     var out = [];
     for (var y = 0; y < state.grid.h; y++) {
       for (var x = 0; x < state.grid.w; x++) {
         if (!isFloor(state, x, y)) continue;
         var o = origemPara(state, u, spell, x, y);
+        var rg = alcanceDe(state, u, spell, o.x, o.y);
         var d = manhattan(o.x, o.y, x, y);
         if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
         if (rg.line && !(x === o.x || y === o.y)) continue;
         if (rg.los && !Engine.los(state, o.x, o.y, x, y)) continue;
+        if (sant && !sant.podeMirar(state, u, o.x, o.y, x, y)) continue;   // 03/10: o escuro (ver casasNoEscuro)
         out.push({ x: x, y: y });
+      }
+    }
+    return out;
+  };
+
+  /* AS CASAS NO ALCANCE QUE O ESCURO NÃO DEIXA MIRAR (03/10, o Santuário), para
+   * a tela pintar com cor própria e dizer o porquê — a mesma ideia de
+   * casasSemVisao: a casa tem distância, linha e visão, e só o escuro a tira
+   * de quem não enxerga nele. Fora do Santuário devolve vazio. */
+  Engine.casasNoEscuro = function (state, uid, spellId) {
+    var u = Engine.findUnit(state, uid);
+    var spell = spellDef(spellId);
+    var out = [];
+    if (!u || !spell || !state.santuario || !Sg()) return out;
+    for (var y = 0; y < state.grid.h; y++) {
+      for (var x = 0; x < state.grid.w; x++) {
+        if (!isFloor(state, x, y)) continue;
+        var o = origemPara(state, u, spell, x, y);
+        var rg = alcanceDe(state, u, spell, o.x, o.y);
+        var d = manhattan(o.x, o.y, x, y);
+        if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
+        if (rg.line && !(x === o.x || y === o.y)) continue;
+        if (rg.los && !Engine.los(state, o.x, o.y, x, y)) continue;
+        if (!Sg().podeMirar(state, u, o.x, o.y, x, y)) out.push({ x: x, y: y });
       }
     }
     return out;
@@ -2171,13 +2309,13 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     var spell = spellDef(spellId);
     if (!u || !spell) return [];
-    var rg = sRange(spell);
     var out = [];
-    if (!rg.los) return out;
+    if (!sRange(spell).los) return out;
     for (var y = 0; y < state.grid.h; y++) {
       for (var x = 0; x < state.grid.w; x++) {
         if (!isFloor(state, x, y)) continue;
         var o = origemPara(state, u, spell, x, y);
+        var rg = alcanceDe(state, u, spell, o.x, o.y);
         var d = manhattan(o.x, o.y, x, y);
         if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) continue;
         if (rg.line && !(x === o.x || y === o.y)) continue;
@@ -2947,7 +3085,7 @@ var JOGO = (typeof window !== 'undefined')
       // 22/09: quem mira uma casa que pede chão livre e acha um corpo que não
       // via fica sabendo ali mesmo — como quem anda e esbarra (nada é gasto)
       var ali = spell.needsEmptyTile ? Engine.unitAt(state, x, y) : null;
-      if (ali && ocultoDe(caster, ali)) log(caster.name + ' não acha espaço ali: há alguém que não se vê.');
+      if (ali && ocultoDe(caster, ali, state)) log(caster.name + ' não acha espaço ali: há alguém que não se vê.');
       return false;
     }
 
@@ -3015,6 +3153,11 @@ var JOGO = (typeof window !== 'undefined')
     if (saiDasSombras) log(caster.name + ' sai das sombras!');
     applyEffects(state, caster, spell, x, y, opts);
     if (state.eco) ecoConfere(state);              // 02/10: a troca de fase só depois do golpe inteiro
+    // 03/10: no Santuário, o golpe de Fogo acende e o de Água apaga os braseiros que a área cobre
+    if (state.santuario && Sg() && state.phase === 'playing') {
+      Sg().aposLance(state, caster, spell, opts.casterX != null ? opts.casterX : caster.x,
+                     opts.casterY != null ? opts.casterY : caster.y, x, y, INTERNO);
+    }
   }
   Engine.castCore = castCore;
 
@@ -3623,7 +3766,7 @@ var JOGO = (typeof window !== 'undefined')
         var u = state.units[i];
         if (!u.alive || u.offBoard || hit[u.uid]) continue;
         if (u.side === caster.side) continue;
-        if (ocultoDe(caster, u)) continue;               // 22/09: o raio não acha quem não se vê
+        if (ocultoDe(caster, u, state)) continue;        // 22/09: o raio não acha quem não se vê (03/10: nem no escuro)
         // 02/10: o salto mede da casa mais perto, com visão, entre os dois corpos (ligacao) — com
         // porte 1 é o manhattan e o los de sempre
         var lg = ligacao(state, cur, u);
@@ -4177,6 +4320,12 @@ var JOGO = (typeof window !== 'undefined')
       Pg().inicioRodada(state, INTERNO);
       if (state.phase !== 'playing') return;
     }
+    // 03/10: o Santuário — os pilares trocam, o que muda na próxima rodada é avisado, e a
+    // correnteza e a rajada dizem para onde vão no fim desta
+    if (state.santuario && Sg()) {
+      Sg().inicioRodada(state, INTERNO);
+      if (state.phase !== 'playing') return;
+    }
     spawnTileEvents(state);
   }
 
@@ -4191,6 +4340,11 @@ var JOGO = (typeof window !== 'undefined')
         // 03/10: a rodada nova do Eco espera o sal dela (ecoPedeSal): a vez fica com ninguém
         // (activeIdx além da ordem) até Engine.ecoSal, que volta para cá
         if (state.eco && ecoPedeSal(state)) return;
+        // 03/10: o FIM da rodada no Santuário — a correnteza e a rajada deslocam antes de a rodada virar
+        if (state.santuario && Sg()) {
+          Sg().fimDaRodada(state, INTERNO);
+          if (state.phase !== 'playing') return;
+        }
         state.activeIdx = 0;
         state.round++;
         // desafio RELÂMPAGO: começou a rodada 6, o contrato já era — avisar
@@ -4287,7 +4441,7 @@ var JOGO = (typeof window !== 'undefined')
       for (i = 0; i < state.units.length; i++) {
         u = state.units[i];
         if (!u.alive || u.offBoard || u === pet) continue;
-        if (u.side !== pet.side) { if (!Engine.unitHasEffect(u, 'invisible')) enemies.push(u); }
+        if (u.side !== pet.side) { if (!ocultoDe(pet, u, state)) enemies.push(u); }   // 03/10: nem o invisível nem quem o escuro esconde
         else if (u.hp / u.hpMax < woundedPct) { woundedPct = u.hp / u.hpMax; woundedAlly = u; }
       }
 
@@ -4363,7 +4517,8 @@ var JOGO = (typeof window !== 'undefined')
   /* 02/10 — O QUE A REGRA DO POÇO PODE USAR DO MOTOR (js/core/poco.js,
    * Poco.regras). São as funções privadas de sempre, entregues em cada
    * chamada em vez de expostas em Engine.*: ninguém de fora passa a ferir,
-   * empurrar ou curar sem os funis de dano, colisão e fúria. */
+   * empurrar ou curar sem os funis de dano, colisão e fúria.
+   * 03/10: a regra do Santuário (js/core/santuario.js) recebe o mesmo. */
   var INTERNO = {
     dano: dealDamage, empurra: forcedMove, cura: applyHeal,
     tileAt: tileAt, isFloor: isFloor, isWalkable: isWalkable,

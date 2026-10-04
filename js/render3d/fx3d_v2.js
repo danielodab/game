@@ -1778,6 +1778,53 @@ var JOGO = (typeof window !== 'undefined')
         })(ev);
         break;
 
+      /* 03/10 — O SANTUÁRIO DOS ELEMENTOS (js/core/santuario.js). O que fica na tela é do
+       * santuario3d.js (o breu, a água, o pilar, as setas); aqui só o INSTANTE em que a regra
+       * age, com os efeitos que já existem: a labareda (ou o vapor) do braseiro que muda, a
+       * poeira do pilar que troca, o respingo de quem a correnteza leva e o risco de vento de
+       * quem a rajada empurra. Tudo sem número: nenhuma dessas regras fere. */
+      case 'santuarioBraseiro':
+        (function (ev2) {
+          var pb = cellPos(ev2.x, ev2.y, 1.4);
+          if (ev2.aceso) {
+            burst(pb.x, pb.y, pb.z, 26, { color: '#ffb24a', speed: 3.2, life: 0.6, up: 2.2, size: 0.3, grav: -1.2 });
+            shockRing(cellPos(ev2.x, ev2.y, 0.15), '#ffb24a', 0.3, 4.2, 0.7);
+          } else {
+            burst(pb.x, pb.y, pb.z, 18, { color: '#b9c7d2', speed: 1.4, life: 0.9, up: 2.6, size: 0.34, grav: -0.8, drag: 1.2 });
+            shockRing(cellPos(ev2.x, ev2.y, 0.15), '#5a6f80', 0.3, 1.8, 0.5);
+          }
+        })(ev);
+        break;
+
+      case 'santuarioPilares':
+        (function (ev2) {
+          var todos = (ev2.sobem || []).concat(ev2.descem || []);
+          // no máximo doze nuvens de pó: no Salão trocam 24 pilares de uma vez
+          for (var pi = 0; pi < todos.length; pi += Math.max(1, Math.floor(todos.length / 12))) {
+            var pp = cellPos(todos[pi].x, todos[pi].y, 0.2);
+            burst(pp.x, 0.2, pp.z, 9, { color: '#c8b48a', speed: 1.8, life: 0.7, up: 0.5, size: 0.3, flat: true, drag: 1.5 });
+          }
+          if (todos.length) addShake(3);
+        })(ev);
+        break;
+
+      case 'santuarioMare':
+      case 'santuarioRajada':
+        (function (ev2) {
+          var agua = ev2.type === 'santuarioMare';
+          var d = { n: [0, -1], s: [0, 1], l: [1, 0], o: [-1, 0] }[ev2.dir] || [0, 0];
+          (ev2.movidos || []).forEach(function (uid) {
+            var pu = unitPos(uid, agua ? 0.12 : 0.55);
+            for (var k = 0; k < (agua ? 9 : 7); k++) {
+              spawn({ x: pu.x - d[0] * 0.5 + (Math.random() - 0.5) * 0.6, y: pu.y + Math.random() * (agua ? 0.25 : 0.7),
+                      z: pu.z - d[1] * 0.5 + (Math.random() - 0.5) * 0.6,
+                      vx: d[0] * (3 + Math.random() * 2), vy: agua ? 0.8 + Math.random() : 0.1, vz: d[1] * (3 + Math.random() * 2),
+                      life: 0.45, color: agua ? '#9fdcff' : '#e2d8ff', size: agua ? 0.22 : 0.18, grav: agua ? 2.4 : 0, drag: 1.2 });
+            }
+          });
+        })(ev);
+        break;
+
       /* 03/10 — OS ESPINHOS DO MURO (engine.js, "O MURO QUE FERE QUEM ENCOSTA"). O número
        * sai no `damage` que vem logo atrás; aqui o porquê: lascas na cor do elemento saindo
        * da pedra para quem encostou, um anel baixo ao pé dela e a palavra miúda acima. A

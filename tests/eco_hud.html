@@ -374,15 +374,17 @@
 
   // ---- 7) o cais da praça com a 7ª porta (o Eco) cabe no celular (03/10, a revisão mediu os botões até 335 px
   // numa tela de 320). O CSS de verdade num iframe da largura do aparelho — a media query é a do iframe.
+  // 03/10 (o Santuário dos Elementos): a 8ª porta. Oito numa fileira só dariam 40 px por botão a 320 — o
+  // nome não cabe e o dedo erra —, então no celular o cais quebra em DUAS fileiras de quatro (css/style.css).
   var medidas = [];
   p(function () {
-    var ROT = ['Personagem', 'Inventário', 'Feitiços', 'Missões', 'Guilda', 'Amigos', 'Eco'];
+    var ROT = ['Personagem', 'Inventário', 'Feitiços', 'Missões', 'Guilda', 'Amigos', 'Eco', 'Santuário'];
     return Promise.all([320, 360, 390].map(function (w) {
       return new Promise(function (ok) {
         var f = document.createElement('iframe');
-        f.style.cssText = 'width:' + w + 'px;height:120px;border:0;position:absolute;left:-2000px;top:0';
+        f.style.cssText = 'width:' + w + 'px;height:220px;border:0;position:absolute;left:-2000px;top:0';
         f.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../css/style.css' +
-          window.__V + '"></head><body style="margin:0"><div style="position:relative;height:120px"><div class="hub-dock">' +
+          window.__V + '"></head><body style="margin:0"><div style="position:relative;height:220px"><div class="hub-dock">' +
           ROT.map(function (r) {
             return '<button class="hub-dock-b"><span class="hd-ic">◆</span><span class="hd-rot">' + r +
               (r === 'Inventário' ? ' <span class="tecla">I</span>' : '') + '</span></button>';
@@ -391,7 +393,15 @@
           var d = f.contentDocument, bs = [].slice.call(d.querySelectorAll('.hub-dock-b'));
           var dir = Math.max.apply(null, bs.map(function (b) { return b.getBoundingClientRect().right; }));
           var esq = Math.min.apply(null, bs.map(function (b) { return b.getBoundingClientRect().left; }));
-          medidas.push({ w: w, esq: Math.round(esq), dir: Math.round(dir), n: bs.length });
+          // as fileiras: quantos botões em cada altura, e o mais estreito (o dedo precisa de ~64 px)
+          var filas = {}, estreito = Infinity;
+          bs.forEach(function (b) {
+            var r = b.getBoundingClientRect(), t = Math.round(r.top);
+            filas[t] = (filas[t] || 0) + 1;
+            estreito = Math.min(estreito, r.width);
+          });
+          medidas.push({ w: w, esq: Math.round(esq), dir: Math.round(dir), n: bs.length,
+                         filas: Object.keys(filas).map(function (k) { return filas[k]; }), estreito: Math.round(estreito) });
           f.parentNode.removeChild(f);
           ok();
         };
@@ -400,8 +410,10 @@
     }));
   });
   p(function () {
-    check('o cais com as 7 portas cabe inteiro na tela a 320, 360 e 390 px', medidas.length === 3 &&
-          medidas.every(function (m) { return m.n === 7 && m.esq >= 0 && m.dir <= m.w; }), JSON.stringify(medidas));
+    check('o cais com as 8 portas cabe inteiro na tela a 320, 360 e 390 px', medidas.length === 3 &&
+          medidas.every(function (m) { return m.n === 8 && m.esq >= 0 && m.dir <= m.w; }), JSON.stringify(medidas));
+    check('no celular o cais são duas fileiras de quatro, e nenhuma porta fica com menos de 64 px de largura',
+          medidas.every(function (m) { return m.filas.join(',') === '4,4' && m.estreito >= 64; }), JSON.stringify(medidas));
   });
 
   try {

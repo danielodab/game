@@ -267,7 +267,8 @@ var JOGO = (typeof window !== 'undefined')
     if (JOGO.DATA && JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(dungeonId)) return false;
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return true;
-    return false;
+    // 03/10: o calabouço ESPECIAL (js/core/data/santuario.js — o Santuário dos Elementos) desce como os seis
+    return !!(JOGO.DATA && JOGO.DATA.especial && JOGO.DATA.especial(dungeonId));
   }
 
   // grupo no formato do Engine (contrato §9); sem Progress, cai nos ids crus
@@ -747,7 +748,15 @@ var JOGO = (typeof window !== 'undefined')
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });
     for (var k = 0; k < lista.length; k++) if (lista[k] && lista[k].id === dungeonId) return lista[k];
-    return null;
+    // 03/10: os calabouços especiais moram fora de DATA.dungeons (o porquê está em js/core/data/santuario.js)
+    return (JOGO.DATA && JOGO.DATA.especial) ? JOGO.DATA.especial(dungeonId) : null;
+  }
+  /* A ÚLTIMA SALA da descida (a que fecha o calabouço): 2 nos seis portais, 4 no Santuário. Era a
+   * mesma busca em DATA.dungeons escrita três vezes — e as três davam "2" para um calabouço que não
+   * estivesse lá: o Santuário acabaria na terceira sala. */
+  function ultimaSalaDe(dungeonId) {
+    var d = dungeonDefDe(dungeonId);
+    return (d && d.rooms && d.rooms.length) ? d.rooms.length - 1 : 2;
   }
   /* Quem espera na sala — "mostrará os monstros ao confirmar a batalha":
    * [{id, name, qtd, boss, element}] lido do layout (letras → room.monsters). */
@@ -781,6 +790,9 @@ var JOGO = (typeof window !== 'undefined')
     return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex, total: n,
              nome: (room && room.name) || ('Sala ' + (Game.roomIndex + 1)),
              tema: (d && d.theme) || null, calabouco: (d && d.name) || Game.dungeonId,
+             // 03/10: a regra de terreno da sala do Santuário ('fogo' | 'agua' | 'terra' | 'ar' | 'altar'):
+             // a porta da antessala a diz ANTES de a luta começar
+             regra: (room && room.santuario && room.santuario.regra) || null,
              monstros: Game.monstrosDaSala(Game.dungeonId, Game.roomIndex) };
   };
 
@@ -1076,7 +1088,19 @@ var JOGO = (typeof window !== 'undefined')
   Game.ocultoNaTela = function (u) {
     if (!u || !u.alive || u.offBoard || Game.telaVeTudo()) return false;
     if (u.side === Game.meuLado()) return false;
-    return !!E().unitHasEffect(u, 'invisible');
+    if (E().unitHasEffect(u, 'invisible')) return true;
+    return Game.ocultoPeloEscuro(u);
+  };
+  /* 03/10 — O ESCURO DO SANTUÁRIO (a Câmara Apagada; js/core/santuario.js). O monstro numa casa
+   * escura que ninguém do meu lado vê some desta tela pelo MESMO caminho do invisível (corpo, barra,
+   * anel, câmera, a casa dele pintada como chão livre). Quem decide é a regra do motor
+   * (Santuario.regras.ocultoDoLado): só o lado do grupo deixa de ver, e basta um herói de Fogo —
+   * ou alguém a duas casas — para o monstro aparecer para todos. */
+  Game.ocultoPeloEscuro = function (u) {
+    var st = Game.state, S = JOGO.Santuario;
+    if (!u || !st || !st.santuario || !S || !S.regras || Game.telaVeTudo()) return false;
+    if (!u.alive || u.offBoard || u.side === Game.meuLado()) return false;
+    try { return !!S.regras.ocultoDoLado(st, Game.meuLado(), u); } catch (e) { return false; }
   };
   Game.veArmadilha = function (tr) {
     if (!tr) return false;
@@ -1141,6 +1165,11 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (EV_PUBLICO[ev.type] || ev.uid == null) return ev;
     var u = E().findUnit(st, ev.uid);
+    /* 03/10: o golpe que sai do ESCURO aparece (o clarão do feitiço entrega de onde veio; o corpo
+     * segue escondido pelo estado). Sem isto o herói perdia vida sem a tela mostrar por quê — o
+     * escuro esconde quem está parado nele, não o tiro. O invisível continua mudo: lá o golpe já
+     * o tira das sombras. */
+    if (u && ev.type === 'cast' && !E().unitHasEffect(u, 'invisible') && Game.ocultoPeloEscuro(u)) return ev;
     if (u && Game.ocultoNaTela(u)) return null;
     // quem arma do outro lado aparece conjurando, mas a casa escolhida não:
     // sem x/y o efeito toca no conjurador e o corpo não se vira para ela
@@ -2843,10 +2872,7 @@ var JOGO = (typeof window !== 'undefined')
     promessa.then(sincronizaVida);                     // 14/09: o servidor gravou a vida do fim (vitória e derrota)
     if (fase !== 'won') return;
     conferindoSala = true;
-    var lastRoom = 2, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
-    for (var k = 0; k < ds.length; k++) {
-      if (ds[k] && ds[k].id === Game.dungeonId && ds[k].rooms && ds[k].rooms.length) lastRoom = ds[k].rooms.length - 1;
-    }
+    var lastRoom = ultimaSalaDe(Game.dungeonId);
     var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
     try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória com o servidor…'); } catch (eT) {}
     promessa.then(function (r) {
@@ -2886,10 +2912,7 @@ var JOGO = (typeof window !== 'undefined')
     promessa.then(sincronizaVida);                     // 14/09: o servidor gravou a vida do fim dos dois
     if (fase !== 'won') return;
     conferindoSala = true;
-    var lastRoom = 2, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
-    for (var k = 0; k < ds.length; k++) {
-      if (ds[k] && ds[k].id === Game.dungeonId && ds[k].rooms && ds[k].rooms.length) lastRoom = ds[k].rooms.length - 1;
-    }
+    var lastRoom = ultimaSalaDe(Game.dungeonId);
     var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
     try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória do grupo com o servidor…'); } catch (eT) {}
     promessa.then(function (r) {
@@ -2985,10 +3008,7 @@ var JOGO = (typeof window !== 'undefined')
       if (ataSolo) { fechaNoServidor('won'); return; }   // 13/09: com bilhete, quem paga é o servidor
       if (grupoNoServidor()) { fechaGrupoNoServidor('won'); return; }
       var rewards = computeRewards();
-      var lastRoom = 2;
-      var d = null, ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
-      for (var k = 0; k < ds.length; k++) if (ds[k] && ds[k].id === Game.dungeonId) d = ds[k];
-      if (d && d.rooms && d.rooms.length) lastRoom = d.rooms.length - 1;
+      var lastRoom = ultimaSalaDe(Game.dungeonId);
       returnScreen = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
       if (rede && rede.tipo === 'grupo') marcaRecompensaRede(rewards);
       setScreen(returnScreen, rewards);

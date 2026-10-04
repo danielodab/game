@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOTERRA — o Santuário dos Elementos no jogo inteiro</title>
+<style>
+  html, body { margin: 0; background: #0f1216; color: #e8eef6; font: 12px monospace; }
+  iframe { width: 100vw; height: 100vh; border: 0; display: block; }
+  #summary { padding: 6px 10px; margin: 8px; }
+  .allpass { background: #16241b; color: #7fe08a; } .fail { background: #3d1414; color: #f77; }
+  #log { margin: 0 10px 20px; white-space: pre-wrap; line-height: 1.5; }
+</style>
+</head>
+<body>
+<!-- A PROVA DO JOGO DE VERDADE (03/10): o index.html INTEIRO num quadro do tamanho da janela, com o save
+     na memória (?sandbox=1) e sem servidor (a recompensa é a do próprio jogo; a conferida pelo juiz é a
+     prova de API, tests/santuario_api.py). O que ela cobra, do começo ao fim de uma descida:
+       - a 8ª porta do cais (o desenho, o nome, o cais cabendo na tela — no celular, duas fileiras de
+         quatro com toda porta ≥ 44 px e o painel de aproximação um degrau acima);
+       - a ficha do Santuário: as cinco salas com a regra de cada uma, o aviso de quem desce sem
+         ninguém do Fogo, o medalhão, o botão;
+       - a descida: a antessala diz a regra da sala na porta, a batalha abre com o cartão da sala (e
+         não o genérico), a linha da sala tem a pílula da regra e o santuario3d está na cena;
+       - a sala vencida paga (XP, vinténs, pedra do elemento do quadrante; nenhum selo, insígnia ou
+         carta) e leva à sala seguinte; a quinta sala fecha o calabouço.
+     Quem a roda é o tests/santuario_navegador.py (a página pede as fotos da janela com window.__foto).
+     ?celular=1: a janela é de 390×844 com toque, e a prova mede o que muda no celular. -->
+<iframe id="f"></iframe>
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+(function () {
+  'use strict';
+  var ID = 'elementsanctum';
+  var celular = /[?&]celular=1/.test(location.search), comFotos = /[?&]fotos=1/.test(location.search);
+  var f = document.getElementById('f'), logEl = document.getElementById('log');
+  var falhas = 0, total = 0;
+  window.__linhas = [];
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    window.__linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? ' — ' + extra : ''));
+    logEl.textContent = window.__linhas.join('\n');
+  }
+  function fim() {
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? 'FALHOU — ' + falhas + ' de ' + total : 'tudo passou (' + total + ')';
+    window.__fim = { ok: !falhas, total: total, falhas: falhas, linhas: window.__linhas };
+  }
+  function ate(fn, ms) {
+    return new Promise(function (ok) {
+      var limite = Date.now() + (ms || 20000);
+      (function volta() {
+        var r = false;
+        try { r = !!fn(); } catch (e) { r = false; }
+        if (r) return ok(true);
+        if (Date.now() > limite) return ok(false);
+        setTimeout(volta, 200);
+      })();
+    });
+  }
+  function dorme(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+  function foto(nome) {
+    if (!comFotos) return Promise.resolve();
+    window.__foto = nome;
+    return ate(function () { return window.__fotoFeita === nome; }, 150000);
+  }
+
+  f.onload = function () {
+    if (window.__rodou) return;
+    window.__rodou = true;
+    var w = f.contentWindow, d = w.document, erros = [];
+    w.addEventListener('error', function (e) { erros.push(e.message + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno); });
+    window.__onde = 'abrindo';
+    ate(function () {
+      return d.querySelector('.screen-menu.is-on') && w.JOGO && w.JOGO.UI && w.JOGO.UI.openSheet && w.JOGO.Renderer && w.JOGO.Renderer.isReady();
+    }, 420000).then(function (ok) {
+      check('o jogo inteiro abriu no menu', ok, 'estourou o prazo');
+      if (!ok) return fim();
+      return roda(w, d, erros).then(fim, function (e) { check('a prova rodou até o fim', false, (e && e.stack) || String(e)); fim(); });
+    });
+  };
+  f.src = '../index.html?sandbox=1&v=' + Date.now() + (celular ? '&mobile=1' : '');
+
+  function roda(w, d, erros) {
+    var J = w.JOGO, G = J.Game, UI = J.UI, P = J.Progress, E = J.Engine, D = J.DATA;
+    var q = function (s, raiz) { return (raiz || d).querySelector(s); };
+    var qa = function (s, raiz) { return [].slice.call((raiz || d).querySelectorAll(s)); };
+    var dg = D.especial ? D.especial(ID) : null;
+    check('o index.html carrega o dado, a regra e o desenho do Santuário (os três arquivos novos, na ordem)',
+          !!dg && !!(J.Santuario && J.Santuario.regras) && !!J.Santuario3D && E.VERSAO_REGRAS >= 7 && !!E.calabouco(ID));
+    check('o Santuário não entrou na lista dos seis portais', !D.dungeons.some(function (x) { return x.id === ID; }) && D.dungeons.filter(function (x) { return x.order; }).length === 6);
+
+    // a dupla: dois de alcance, nível 30, nenhum do Fogo
+    ['bruxo', 'arqueiro'].forEach(function (c, i) {
+      try { P.unlockClass(c); } catch (e) {}
+      var h = P.hero(c);
+      h.level = 30; h.element = i ? 'ar' : 'agua';
+    });
+    UI.selection(['bruxo', 'arqueiro']);
+    try { J.Tutor._zera(); } catch (e) {}
+    if (!G.goTo('hub')) UI.showScreen('hub');
+    window.__onde = 'praça';
+
+    return ate(function () { return qa('.screen-hub.is-on .hub-dock-b').length >= 7; }, 60000).then(function () {
+      // ---------------------------------------------------------------- a porta no cais
+      var bs = qa('.screen-hub.is-on .hub-dock-b');
+      var rots = bs.map(function (b) { return (q('.hd-rot', b) || {}).textContent.trim(); });
+      check('o cais tem oito portas e a oitava é a do Santuário, com o ícone desenhado',
+            bs.length === 8 && rots[7] === 'Santuário' && !!q('.hd-ic.is-svg svg.ico-fc-santuario', bs[7]), rots.join(','));
+      var L = w.innerWidth, A = w.innerHeight;
+      var caixas = bs.map(function (b) { return b.getBoundingClientRect(); });
+      check('o cais cabe inteiro na janela (' + L + '×' + A + ')', caixas.every(function (r) { return r.left >= 0 && r.right <= L + 0.5 && r.bottom <= A + 0.5; }),
+            JSON.stringify(caixas.map(function (r) { return [Math.round(r.left), Math.round(r.right)]; })));
+      check('toda porta do cais mede ao menos 44 px de altura', caixas.every(function (r) { return r.height >= 43.5; }));
+      if (celular) {
+        var linhasY = {};
+        caixas.forEach(function (r) { linhasY[Math.round(r.top)] = (linhasY[Math.round(r.top)] || 0) + 1; });
+        check('no celular o cais vira duas fileiras de quatro, cada porta com 44 px ou mais de largura e o nome inteiro',
+              Object.keys(linhasY).length === 2 && Object.keys(linhasY).every(function (k) { return linhasY[k] === 4; }) &&
+              caixas.every(function (r) { return r.width >= 44; }) &&
+              bs.every(function (b) { var t = q('.hd-rot', b); return t.scrollWidth <= b.clientWidth + 1; }),
+              JSON.stringify([linhasY, caixas.map(function (r) { return Math.round(r.width); })]));
+        // o painel de aproximação fica acima do cais
+        J.Hub.aoAproximar({ tipo: 'banco' });
+        var pn = q('.hub-painel').getBoundingClientRect(), topoCais = Math.min.apply(null, caixas.map(function (r) { return r.top; }));
+        check('no celular o painel de aproximação fica um degrau acima do cais de duas fileiras (não se tapam)', pn.bottom <= topoCais + 0.5,
+              'painel até ' + Math.round(pn.bottom) + ', cais a partir de ' + Math.round(topoCais));
+        J.Hub.aoAproximar(null);
+      } else {
+        check('na tela de mesa o cais segue numa fileira só', caixas.every(function (r) { return Math.abs(r.top - caixas[0].top) < 1; }));
+      }
+      return foto('1_praca_cais');
+    }).then(function () {
+      // ---------------------------------------------------------------- a ficha
+      window.__onde = 'ficha';
+      qa('.screen-hub.is-on .hub-dock-b')[7].click();
+      return dorme(400);
+    }).then(function () {
+      var painel = q('.ui-sheet.is-on .sheet-panel');
+      check('a porta abre a ficha "O Santuário dos Elementos", com o medalhão do desenho da porta e a porta acesa no cais',
+            !!painel && /Santuário dos Elementos/.test(q('#sheet-titulo', painel).textContent) && !!q('.sheet-ico .ico-fc-santuario', painel) &&
+            qa('.screen-hub.is-on .hub-dock-b')[7].classList.contains('is-on'));
+      var salas = qa('.sant-sala', painel);
+      var nomes = salas.map(function (s) { return q('.sant-sala-tit', s).textContent; });
+      check('a ficha lista as cinco salas na ordem, cada uma com a regra em português simples e os guardiões dela',
+            salas.length === 5 && /Câmara Apagada/.test(nomes[0]) && /Galeria Alagada/.test(nomes[1]) && /Pilares Vivos/.test(nomes[2]) &&
+            /Ventania/.test(nomes[3]) && /Altar dos Quatro/.test(nomes[4]) &&
+            /2 casas/.test(salas[0].textContent) && /2 PP/.test(salas[1].textContent) && /a cada 2 rodadas/.test(salas[2].textContent) &&
+            /1 casa a mais/.test(salas[3].textContent) && /Vigia de Pavio/.test(salas[0].textContent) && /Arraia de Rajada/.test(salas[3].textContent),
+            nomes.join(' | '));
+      check('os números da ficha saem do dado (DATA.santuario): mudar a regra muda o texto',
+            salas[0].textContent.indexOf(D.santuario.escuro.visao + ' casas') >= 0 && salas[1].textContent.indexOf(D.santuario.agua.custo + ' PP') >= 0);
+      check('a dupla sem ninguém do Fogo é avisada antes de descer (a Câmara Apagada fica cega para ela)',
+            qa('.sant-aviso', painel).some(function (a) { return /Ninguém do Fogo/.test(a.textContent); }));
+      check('a ficha diz o que paga e que não há chefe (nem selo, insígnia, âncora ou carta)',
+            /Sem chefe/.test(q('.sant-paga', painel).textContent) && /Coração Partido/.test(q('.sant-paga', painel).textContent));
+      var bEnt = q('.sant-entra', painel);
+      var semBarra = painel.scrollWidth <= painel.clientWidth + 1;
+      check('o botão de descer mede 44 px ou mais e a ficha não vaza para o lado', !!bEnt && bEnt.getBoundingClientRect().height >= 43.5 && semBarra,
+            bEnt && Math.round(bEnt.getBoundingClientRect().height) + ' px, ' + painel.scrollWidth + '/' + painel.clientWidth);
+      return foto('2_ficha').then(function () {
+        // ---------------------------------------------------------------- a descida
+        window.__onde = 'descendo';
+        bEnt.click();
+        return ate(function () { return G.screen === 'antessala' && UI.telaAtual() === 'antessala' && G.dungeonId === ID; }, 300000);
+      });
+    }).then(function (ok) {
+      var info = G.salaInfo();
+      check('"Descer ao Santuário" leva à antessala da primeira sala (1 de 5), como em todo calabouço',
+            ok && info.roomIndex === 0 && info.total === 5 && info.regra === 'fogo' && /Câmara Apagada/.test(info.nome), JSON.stringify(info && [info.roomIndex, info.total, info.regra]));
+      if (!ok) throw new Error('a descida não chegou à antessala');
+      J.Hub.aoAproximar({ tipo: 'porta' });
+      // cada tela de praça (o Acampamento, a antessala) tem o SEU painel de aproximação: o da tela aberta
+      var porta = qa('.hub-painel').filter(function (p) { return p.offsetParent !== null && !/is-off/.test(p.className); })[0] || null;
+      var regraNaPorta = porta && q('.sant-porta', porta);
+      check('a porta da antessala diz quem espera e a REGRA da sala, antes de a luta começar',
+            !!regraNaPorta && /Escuro/.test(regraNaPorta.textContent) && /Vigia de Pavio/.test(porta.textContent) &&
+            /Mariposa de Cinza/.test(porta.textContent), porta ? porta.textContent.slice(0, 120) : 'sem painel aberto');
+      return foto('3_antessala');
+    }).then(function () { return entraEvence(0, 'fogo'); })
+      .then(function () {
+        // ---------------------------------------------------------------- a sala paga e leva à seguinte
+        var rw = q('.screen-roomClear.is-on');
+        check('a sala vencida abre a tela de sala limpa (não a de calabouço vencido: ainda faltam quatro)', !!rw && UI.telaAtual() === 'roomClear');
+        var tx = rw ? rw.textContent : '';
+        check('a recompensa mostra a experiência e não promete selo, insígnia nem carta de chefe', /Experiência/.test(tx) && !/Insígnia/.test(tx) && !/Selo/.test(tx));
+        return foto('5_sala_limpa');
+      }).then(function () {
+        G.roomIndex = 3;                       // a prova pula para a última: a quinta sala é a que fecha
+        check('"Próxima sala" segue a descida', G.nextRoom() !== false);
+        return ate(function () { return G.screen === 'antessala' && G.roomIndex === 4; }, 300000);
+      }).then(function (ok) {
+        var info = G.salaInfo();
+        check('a quinta sala é o Altar dos Quatro, com os oito guardiões na porta', ok && info.regra === 'altar' && info.monstros.length === 8, JSON.stringify(info && info.monstros.length));
+        if (!ok) throw new Error('não chegou ao Altar');
+        return entraEvence(4, 'altar');
+      }).then(function () {
+        check('vencer o Altar FECHA o calabouço (a tela de calabouço vencido)', UI.telaAtual() === 'dungeonComplete' && !!q('.screen-dungeonComplete.is-on'));
+        return foto('7_santuario_vencido');
+      }).then(function () {
+        check('nenhum erro de script no jogo durante a descida', erros.length === 0, erros.slice(0, 4).join(' | '));
+      });
+
+    /* entra na sala (a preparação: marca a casa e dá PRONTO), confere a batalha e vence pela mão do jogador
+     * (selecionar o feitiço e tocar a casa, o caminho da HUD): os monstros são trazidos para perto, na luz, a
+     * 1 PV, e o herói bate com um feitiço do grimório DELE até a sala fechar — a prova é da descida e da
+     * tela, não da luta (a luta de verdade está em tests/santuario_regras.js e tests/santuario_api.py) */
+    function entraEvence(ri, regra) {
+      window.__onde = 'sala ' + ri;
+      var r = G.entrarNaSala();
+      check('entrar na sala ' + (ri + 1) + ' abre a batalha', r === true || r === 'esperando', String(r));
+      return ate(function () { return G.screen === 'battle' && G.state && G.state.santuario; }, 120000).then(function () {
+        var st = G.state;
+        if (st.phase === 'placing') {
+          var op = G.minhasOpcoes()[0];
+          G.marcaCasa(op.x, op.y);
+          G.prontoPrep(true);
+        }
+        return ate(function () { return G.state && G.state.phase === 'playing'; }, 60000);
+      }).then(function () {
+        var st = G.state;
+        var cartao = q('.tutor-caixa');
+        var t = UI.santuarioTexto(regra);
+        check('a batalha da sala ' + (ri + 1) + ' abre com o cartão da REGRA dela ("' + t.sala + '"), e não com o cartão genérico da batalha',
+              !!cartao && cartao.textContent.indexOf(t.sala) >= 0, cartao ? cartao.textContent.slice(0, 60) : 'sem cartão');
+        var chips = qa('.bt-room .sant-chip');
+        check('a linha da sala tem a pílula de cada regra da sala (' + (regra === 'altar' ? 4 : 1) + ')',
+              chips.length === (regra === 'altar' ? 4 : 1) && chips[0].getAttribute('data-regra') === (regra === 'altar' ? 'fogo' : regra), chips.length + '');
+        var linha = q('.bt-room').getBoundingClientRect();
+        check('a linha da sala não passa da largura da janela', linha.right <= w.innerWidth + 0.5 && chips.every(function (c) { return c.getBoundingClientRect().right <= w.innerWidth + 0.5; }),
+              Math.round(linha.right) + ' de ' + w.innerWidth);
+        return ate(function () { var n = J.Santuario3D.naTela(); return n && n.naCena; }, 30000).then(function (okN) {
+          var n = J.Santuario3D.naTela();
+          check('o santuario3d desenha a sala no jogo de verdade (' + (regra === 'altar' ? 'as quatro regras e o altar' : 'a regra do quadrante') + ')',
+                okN && (regra === 'altar' ? (n.regras.length === 4 && n.altar) : n.regras[0] === regra), JSON.stringify(n && n.regras));
+          if (ri === 0) {
+            var ms = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; });
+            check('na Câmara Apagada, sem ninguém do Fogo, há monstro que a tela esconde no breu (e a fila dos turnos não o entrega)',
+                  ms.some(function (u) { return G.ocultoNaTela(u); }) && n.veu.breu > 50);
+          }
+          return foto((ri === 0 ? '4' : '6') + '_batalha_' + regra);
+        });
+      }).then(function () {
+        var b1 = q('.tutor-caixa .btn-primary');
+        if (b1) b1.click();
+        var st = G.state, R = J.Renderer;
+        var chao = function (x, y) { var tl = st.grid.tiles[y] && st.grid.tiles[y][x]; return !!tl && tl.type === 'floor' && !tl.pilar; };
+        var dano = function (sid) {
+          var sp = E.spell(sid);
+          return !!sp && sp.targetSide !== 'ally' && sp.targetSide !== 'self' && (sp.effects || []).some(function (e) { return e.type === 'damage'; });
+        };
+        var golpes = 0, ultimo = '';
+        function golpeia() {
+          if (!G.state || G.state !== st || st.phase !== 'playing') return Promise.resolve();
+          var ms = st.units.filter(function (u) { return u.side === 'enemy' && u.alive; });
+          if (!ms.length || golpes >= 14) return Promise.resolve();
+          var h = st.units.filter(function (u) { return u.kind === 'hero' && u.alive; })[0];
+          // a vez é do herói, com fôlego para o golpe
+          st.activeIdx = st.order.indexOf(h.uid);
+          h.pa = 12; h.cooldowns = {}; h.castsThisTurn = {};
+          // tira os monstros do tabuleiro e devolve em volta de uma casa na luz, à vista do herói
+          ms.forEach(function (m) { m.x = -1; m.y = -1; m.hp = 1; m.shield = 0; });
+          var feito = false;
+          for (var y = 1; y < st.grid.h - 1 && !feito; y++) for (var x = 1; x < st.grid.w - 1 && !feito; x++) {
+            var dd = Math.abs(x - h.x) + Math.abs(y - h.y);
+            if (!chao(x, y) || dd < 2 || dd > 4 || E.unitAt(st, x, y) || J.Santuario.regras.escura(st, x, y) || !E.los(st, h.x, h.y, x, y)) continue;
+            var perto = [[x, y]];
+            for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) {
+              var cx = x + dx, cy = y + dy;
+              if ((!dx && !dy) || Math.abs(dx) + Math.abs(dy) > 2 || !chao(cx, cy) || E.unitAt(st, cx, cy)) continue;
+              if (J.Santuario.regras.escura(st, cx, cy) || !E.los(st, x, y, cx, cy)) continue;
+              perto.push([cx, cy]);
+            }
+            ms.forEach(function (m, i) { if (perto[i]) { m.x = perto[i][0]; m.y = perto[i][1]; } });
+            // o feitiço: o primeiro do grimório do herói que a TELA aceita naquela casa
+            var sids = (h.spells || []).filter(dano);
+            for (var k = 0; k < sids.length && !feito; k++) {
+              var alvos = G.alvosNaTela(h.uid, sids[k]) || [];
+              if (!alvos.some(function (a) { return a.x === x && a.y === y; })) continue;
+              G.selectSpell(null);
+              G.selectSpell(sids[k]);
+              G.onTileClicked(x, y);
+              ultimo = sids[k] + ' em ' + x + ',' + y;
+              feito = true;
+            }
+            if (!feito) ms.forEach(function (m) { m.x = -1; m.y = -1; });
+          }
+          if (!feito) throw new Error('não achei golpe do herói para fechar a sala ' + ri + ' (grimório: ' + (h.spells || []).join(' ') + ')');
+          golpes++;
+          // quem ficou fora do tabuleiro volta ao golpe seguinte; espera o desenho do golpe acabar
+          return dorme(400).then(function () {
+            return ate(function () { return !G.state || G.state !== st || st.phase !== 'playing' || !R.isBusy(); }, 60000);
+          }).then(golpeia);
+        }
+        return golpeia().then(function () {
+          window.__onde = 'sala ' + ri + ': ' + golpes + ' golpes (' + ultimo + ')';
+          return ate(function () { return UI.telaAtual() === 'roomClear' || UI.telaAtual() === 'dungeonComplete'; }, 120000);
+        });
+      }).then(function (ok) {
+        check('a sala ' + (ri + 1) + ' vencida fecha a batalha e abre a recompensa', ok, 'tela: ' + UI.telaAtual() + ', fase: ' + (G.state && G.state.phase));
+        if (!ok) throw new Error('a sala ' + ri + ' não fechou');
+      });
+    }
+  }
+})();
+</script>
+</body>
+</html>

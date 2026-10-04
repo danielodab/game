@@ -454,6 +454,16 @@ var JOGO = (typeof window !== 'undefined')
     cheio('M12 6.6L17.4 12L12 17.4L6.6 12Z', MEIA) +
     disco(12, 12, 2.3));
 
+  // o Santuário dos Elementos (03/10): o templo visto de cima — os quatro quadrantes
+  // separados pela cruz do corredor (dois cheios, dois a meia tinta, como as facetas)
+  // e o altar no meio
+  poe('fc-santuario',
+    cheio('M10.8 10.8H2.07A10 10 0 0 1 10.8 2.07Z') +
+    cheio('M13.2 10.8V2.07A10 10 0 0 1 21.93 10.8Z', MEIA) +
+    cheio('M13.2 13.2H21.93A10 10 0 0 1 13.2 21.93Z') +
+    cheio('M10.8 13.2V21.93A10 10 0 0 1 2.07 13.2Z', MEIA) +
+    disco(12, 12, 2.5));
+
   /* --------------------------------------------------------------- a API */
   function tem(id) { return Object.prototype.hasOwnProperty.call(DESENHO, id); }
 

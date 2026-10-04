@@ -74,6 +74,12 @@
    * jogados do PvP eram os únicos lugares de luta sem mapinha. Ali `P` é o lado A e a
    * letra minúscula é o lado B, não monstro. */
   var ARENAS = (Array.isArray(D.arenas) ? D.arenas : valores(D.arenas)).filter(Boolean);
+  /* OS CALABOUÇOS ESPECIAIS (03/10, o Santuário dos Elementos). Moram em DATA.especiais, fora dos seis
+   * portais (js/core/data/santuario.js diz por quê), então nada que enumera DGS os vê: nem a grade de
+   * calabouços, nem o Calabouço do Dia, nem o Poço. Aqui eles entram em "Os outros tabuleiros", com
+   * página própria — e os monstros deles passam a ter casa (nome do lugar, "onde aparece"). */
+  var ESPECIAIS = (Array.isArray(D.especiais) ? D.especiais : []).filter(Boolean);
+  function especial(id) { for (var i = 0; i < ESPECIAIS.length; i++) if (ESPECIAIS[i].id === id) return ESPECIAIS[i]; return null; }
 
   /* ---- VOCABULÁRIO (o dono confere) ----------------------------------------- */
   var PAPEL = { tanque: 'Tanque', atirador: 'Atirador', mago: 'Mago', assassino: 'Assassino',
@@ -148,8 +154,10 @@
 
   /* ---- procuras ---------------------------------------------------------------- */
   function dg(id) { for (var i = 0; i < DGS.length; i++) if (DGS[i].id === id) return DGS[i]; return null; }
-  function nomeDg(id) { var d = dg(id); return d ? d.name : ''; }
-  function aberto(id) { return !!dg(id) && !FECHADO(id); }
+  function nomeDg(id) { var d = dg(id) || especial(id); return d ? d.name : ''; }
+  function aberto(id) { return !!especial(id) || (!!dg(id) && !FECHADO(id)); }
+  // o link para a página do lugar onde um monstro mora: calabouço dos seis, ou o tabuleiro do especial
+  function linkLugar(id) { return link(especial(id) ? 'tabuleiro' : 'calabouco', id, nomeDg(id)); }
   function monstroVisivel(m) { return !!m && (m.dungeonId ? aberto(m.dungeonId) : true); }
   function feitico(id) { return SPELLS[id] || MSPELLS[id] || ISPELLS[id] || PSPELLS[id] || null; }
   function nomeClasse(id) { return (CLASSES[id] && CLASSES[id].name) || String(id); }
@@ -258,7 +266,9 @@
     couraca: function (e) {
       return 'couraça: corta ' + pct(e.reducao) + ' de cada golpe até perder ' + num(e.pontos) + ' placas (golpe de ar arranca duas)';
     },
-    ventania: function (e) { return 'quem o golpeia de perto é soprado ' + casas(e.tiles) + ' para longe'; }
+    ventania: function (e) { return 'quem o golpeia de perto é soprado ' + casas(e.tiles) + ' para longe'; },
+    // 03/10: o guardião do Fogo do Santuário dos Elementos (js/core/santuario.js)
+    veNoEscuro: function () { return 'enxerga no escuro: mira de longe mesmo na casa sem luz, como quem é do caminho do Fogo'; }
   };
   function efeito(e) { var f = e && EFEITO[e.type]; return f ? f(e) : 'efeito especial'; }
   function alcance(r) {
@@ -722,6 +732,12 @@
     var ce = D.eco ? arena(D.eco.arena) : null;
     if (ce) out.push({ id: ce.id, nome: ce.name, selo: 'chefe supremo da semana',
       resumo: 'A arena do Eco Primordial: 12 rodadas para tirar dele o máximo de dano. O placar é semanal, conferido pelo servidor, e o pódio leva prêmio.' });
+    // 03/10: os calabouços especiais — a porta fica no cais do Acampamento, não num portal
+    ESPECIAIS.forEach(function (e) {
+      out.push({ id: e.id, nome: e.name, selo: 'calabouço especial',
+        resumo: 'Cinco salas sem chefe, para quem já chegou ao fim: cada uma tem uma regra de terreno ligada a um elemento — ' +
+                'o escuro, a água, os pilares que andam, o vento — e a última junta as quatro em volta do altar.' });
+    });
     return out;
   }
   function calaboucos() {
@@ -768,6 +784,52 @@
       return { titulo: t.nome, html: h };
     }
 
+    if (especial(id)) {
+      // 03/10: o Santuário dos Elementos. Os números das regras saem de DATA.santuario (o mesmo dado que o
+      // motor e o juiz leem): mudou o dado, mudou a frase.
+      var es = especial(id), S = D.santuario || {};
+      var esc = S.escuro || {}, ag = S.agua || {}, pil = S.pilares || {}, ve = S.vento || {};
+      var REGRA = {
+        fogo: 'Escuro. Quem <b>não</b> é do caminho do <b>Fogo</b> só mira uma casa escura a <b>' + casas(esc.visao) + '</b>, e não vê o monstro que está no breu. ' +
+              'O braseiro aceso clareia ' + casas(esc.raio) + ' em volta: um golpe de Fogo acende, um de Água apaga.',
+        agua: 'Entrar numa casa com água custa <b>' + num(ag.custo) + ' PP</b> (' + num(ag.custoAgua) + ' para quem é do caminho da <b>Água</b>). No fim de cada rodada a correnteza ' +
+              'leva 1 casa quem está na água; ela troca de direção a cada ' + num(ag.trocaACada) + ' rodadas, e a bica que vai verter avisa antes. A ponte é seca.',
+        terra: 'Os pilares <b>sobem e descem a cada ' + num(pil.periodo) + ' rodadas</b>, avisados uma rodada antes (▲ vai subir, ▼ vai descer). Pilar de pé fecha o caminho e a visão. ' +
+               'Ninguém é esmagado: quem está em cima do soquete segura o pilar até sair — e nunca se fecha o único caminho.',
+        ar: 'No fim de cada rodada a <b>rajada</b> empurra todo mundo 1 casa para onde o cata-vento aponta; ela gira a cada ' + num(ve.giraACada) + ' rodadas, avisada antes. ' +
+            'Feitiço de <b>Ar</b> lançado do terraço alcança ' + casas(ve.alcance) + ' a mais. Ao lado de um respiro o vento não pega.',
+        altar: 'As quatro regras de uma vez, cada uma no seu canto: escuro a noroeste, água a nordeste, pilares a sudoeste e vento a sudeste, em volta do altar.'
+      };
+      h += '<span class="wk-selo">nível recomendado ' + num(es.recommendedLevel) + '</span><span class="wk-selo">' + (es.rooms || []).length +
+        ' salas, sem chefe</span></p><p>' + E(es.description) + '</p></div></header>';
+      h += '<div class="wk-nota">A porta fica no <b>cais do Acampamento</b> (o botão Santuário), não num portal. A descida é a de qualquer calabouço: ' +
+        'sozinho, com dois heróis ou em dupla pela Rede; a vida atravessa de uma sala para a outra. Não há armadilha no chão, e nenhuma regra ' +
+        'acontece sem aviso: o que muda no mapa é avisado na rodada anterior.</div>';
+      h += '<h2>As salas</h2>';
+      (es.rooms || []).forEach(function (s, i) {
+        var regra = s.santuario && s.santuario.regra;
+        h += blocoSala(s, {
+          titulo: 'Sala ' + (i + 1) + ' — ' + E(s.name) + (ELINFO[regra] ? ' ' + elem(regra) : ''),
+          legenda: i === 0,
+          antes: REGRA[regra] ? '<p><b>A regra.</b> ' + REGRA[regra] + '</p>' : ''
+        });
+      });
+      var fonte = dg(es.saqueDe), guard = valores(MONSTROS).filter(function (m) { return m.dungeonId === id; });
+      var itensS = [];
+      if (fonte) {
+        itensS.push('<li><b>Peças</b>: as mesmas ' + link('calabouco', fonte.id, contrai(DE, 'de', fonte.name)) +
+          '. Nas quatro primeiras salas, comuns e raras; no Altar, dois sorteios, com épicas e lendárias.</li>');
+      }
+      var sdS = guard[0] && guard[0].stoneDrop;
+      if (sdS) {
+        itensS.push('<li><b>Pedras de forja</b>: cada guardião deixa a do elemento dele, de ' + num(sdS.min) + ' a ' + num(sdS.max) +
+          (MOSTRA_CHANCES ? ' (' + pct(sdS.chance) + ')' : '') + ' — é o que o Santuário paga a mais.</li>');
+      }
+      itensS.push('<li>Sem chefe, não há selo, insígnia, âncora nem carta: isso continua sendo dos chefes dos seis calabouços.</li>');
+      h += '<h2>O que cai</h2><ul class="wk-defs">' + itensS.join('') + '</ul>';
+      return { titulo: t.nome, html: h };
+    }
+
     var a = arena(id);
     var sala = (a.rooms || [])[0];
     if (a.modo === 'eco' && D.eco) {
@@ -809,6 +871,7 @@
     return { titulo: t.nome, html: h };
   }
   function calabouco(id) {
+    if (especial(id)) return tabuleiro(id);          // 03/10: o especial tem página de tabuleiro
     var d = dg(id);
     if (!d) return naoAchou();
     var fechado = FECHADO(id), dia = diaHoje();
@@ -903,6 +966,15 @@
     if (col.length) h += '<h2>Colossos do Poço</h2><div class="wk-grade">' + col.map(cartaoMonstro).join('') + '</div>';
     var inv = valores(MONSTROS).filter(function (m) { return !m.dungeonId && !m.colosso; }).sort(ordemBichos);
     if (inv.length) h += '<h2>Invocações dos heróis</h2><div class="wk-grade">' + inv.map(cartaoMonstro).join('') + '</div>';
+    /* 03/10: os guardiões dos calabouços especiais não entram na grade ainda — cada cartão daqui mostra o
+     * retrato tirado do 3D do jogo (tools/retratos_site.py), e a arte deles chega em outro lote. Enquanto
+     * isso a lista deles está na página do lugar, e cada um tem a ficha inteira. */
+    ESPECIAIS.forEach(function (e) {
+      var gs = valores(MONSTROS).filter(function (m) { return m.dungeonId === e.id; }).sort(ordemBichos);
+      if (!gs.length) return;
+      h += '<h2>' + link('tabuleiro', e.id, e.name) + '</h2><p class="apoio">Os ' + gs.length + ' guardiões: ' +
+        lista(gs.map(function (m) { return link('monstro', m.id, m.name); })) + '.</p>';
+    });
     var fechados = DGS.filter(function (d) { return !aberto(d.id); });
     if (fechados.length) {
       h += '<div class="wk-nota">Em breve: os monstros ' + lista(fechados.map(function (d) { return contrai(DE, 'de', d.name); }).map(E)) +
@@ -941,7 +1013,7 @@
     h += '<header class="wk-cabeca">' + bustoMonstro(m) + '<div class="wk-cabeca-tx"><h1>' + E(m.name) + '</h1><p class="wk-chips">' + elem(m.element) +
       (m.boss ? '<span class="wk-selo chefe">chefe</span>' : '') + (m.family ? '<span class="wk-selo">' + E(m.family) + '</span>' : '') +
       (IA[m.ai] && m.ai !== 'boss' ? '<span class="wk-selo">' + IA[m.ai] + '</span>' : '') +
-      (m.dungeonId ? '<span class="wk-selo">' + link('calabouco', m.dungeonId, nomeDg(m.dungeonId)) + '</span>' : '') +
+      (m.dungeonId ? '<span class="wk-selo">' + linkLugar(m.dungeonId) + '</span>' : '') +
       (m.colosso ? '<span class="wk-selo">' + link('tabuleiro', 'poco', 'O Poço sem Fundo') + '</span>' : '') + '</p>' +
       '<p>' + E(m.description) + '</p>' + (sabor ? '<p class="wk-lore">' + E(sabor) + '</p>' : '') + '</div></header>';
     if (jeito) h += '<div class="wk-nota"><b>Como luta.</b> ' + E(jeito) + '</div>';
@@ -958,6 +1030,13 @@
       (d.rooms || []).forEach(function (s, i) {
         contaBichos(s).forEach(function (b) {
           if (b.id === id && aberto(d.id)) onde.push(link('calabouco', d.id, d.name) + ', sala ' + (i + 1) + ' (' + E(s.name) + ')' + (b.n > 1 ? ' ×' + b.n : ''));
+        });
+      });
+    });
+    ESPECIAIS.forEach(function (d) {
+      (d.rooms || []).forEach(function (s, i) {
+        contaBichos(s).forEach(function (b) {
+          if (b.id === id) onde.push(link('tabuleiro', d.id, d.name) + ', sala ' + (i + 1) + ' (' + E(s.name) + ')' + (b.n > 1 ? ' ×' + b.n : ''));
         });
       });
     });
@@ -1418,7 +1497,7 @@
     });
     tabuleiros().forEach(function (t) {
       add('Tabuleiro', t.nome, [t.selo, t.resumo].join(' '), rota('tabuleiro', t.id));
-      var a = arena(t.id);
+      var a = arena(t.id) || especial(t.id);
       if (a) (a.rooms || []).forEach(function (s) { add('Tabuleiro', s.name, t.nome + ' ' + t.selo, rota('tabuleiro', t.id)); });
     });
     valores(PEDRAS).forEach(function (p) { add('Pedra de forja', p.name, p.description, rota('sistemas', 'forja')); });

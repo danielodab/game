@@ -16,6 +16,13 @@ var JOGO = (typeof window !== 'undefined')
  * de Contas): a conta 2 da mesma máquina é um jogador novo e vê as dicas.
  * O gancho é um EMBRULHO em UI.showScreen — o Tutor não conhece o miolo da
  * HUD, só o nome da tela que acabou de abrir.
+ *
+ * O SANTUÁRIO DOS ELEMENTOS (03/10): a batalha numa sala dele mostra, na
+ * primeira visita de CADA sala, o cartão da regra de terreno dela (escuro,
+ * água, pilares, vento, e o Altar com as quatro) em vez do cartão genérico da
+ * batalha — quem chega lá já sabe jogar, o que não sabe é a regra do mapa. O
+ * texto é o MESMO da ficha e da linha da sala (UI.santuarioTexto, no hud.js):
+ * uma frase só para cada regra. `reveSantuario` esquece os cinco "Entendi".
  */
 (function () {
   'use strict';
@@ -69,11 +76,35 @@ var JOGO = (typeof window !== 'undefined')
     caixa = null;
   }
 
-  T.aoTela = function (nome) {
-    fecha();
+  // a dica de uma tela: as fixas e, na batalha de uma sala do Santuário, a da regra dela
+  var REGRAS_SANTUARIO = ['fogo', 'agua', 'terra', 'ar', 'altar'];
+  function dicaDe(nome) {
+    if (nome === 'battle') {
+      var st = JOGO.Game && JOGO.Game.state, room = null;
+      try {
+        var dg = (st && st.santuario && JOGO.Engine.calabouco) ? JOGO.Engine.calabouco(st.dungeonId) : null;
+        room = dg && dg.rooms ? dg.rooms[st.roomIndex] : null;
+      } catch (e) { room = null; }
+      var regra = room && room.santuario && room.santuario.regra;
+      var tx = (regra && JOGO.UI && JOGO.UI.santuarioTexto) ? JOGO.UI.santuarioTexto(regra) : null;
+      if (tx) return { chave: 'santuario-' + regra, titulo: tx.sala, texto: tx.texto };
+    }
+    return DICAS[nome] ? { chave: nome, titulo: DICAS[nome].titulo, texto: DICAS[nome].texto } : null;
+  }
+  T.reveSantuario = function () {
     var d = le();
-    if (d.off || d.vistos[nome] || !DICAS[nome]) return false;
-    var dica = DICAS[nome];
+    if (d.off) return 0;
+    REGRAS_SANTUARIO.forEach(function (r) { delete d.vistos['santuario-' + r]; });
+    grava(d);
+    return REGRAS_SANTUARIO.length;
+  };
+
+  T.aoTela = function (tela) {
+    fecha();
+    var d = le(), dica = dicaDe(tela);
+    if (!dica) return false;
+    var nome = dica.chave;
+    if (d.off || d.vistos[nome]) return false;
     caixa = document.createElement('div');
     caixa.className = 'tutor-caixa';
     caixa.innerHTML = '<b>' + dica.titulo + '</b><p>' + dica.texto + '</p>';
