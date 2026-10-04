@@ -1518,9 +1518,14 @@ var JOGO = (typeof window !== 'undefined')
     c.fillStyle = cor; c.fill();
     c.save(); c.clip(); c.lineWidth = 16; c.strokeStyle = CORES_SEDE_NEUTRAS.ouro; c.stroke(); c.restore();
     c.fillStyle = CORES_SEDE_NEUTRAS.ouro;
-    if (emblema) {
+    // 04/10, o dono: "o estandarte deve ter o brasão da guild". Guilda com brasão DESENHADO (código 'shield|…')
+    // ganha o próprio brasão no pano, pelo mesmo desenhista da ficha e da plaquinha; antes saía o escudo padrão.
+    var Bz = (typeof JOGO !== 'undefined') ? JOGO.Brasao : null;
+    if (emblema && Bz && Bz.ehCodigo && Bz.ehCodigo(emblema) && Bz.desenha) {
+      try { Bz.desenha(c, 18, 36, 92, emblema); } catch (eBz) {}
+    } else if (emblema) {
       c.font = 'bold 64px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(emblema, 64, 90);
+      c.fillText(String(emblema).slice(0, 2), 64, 90);
     } else {
       c.beginPath(); c.moveTo(38, 46); c.lineTo(90, 46); c.lineTo(90, 88);
       c.quadraticCurveTo(90, 118, 64, 134); c.quadraticCurveTo(38, 118, 38, 88); c.closePath(); c.fill();

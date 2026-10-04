@@ -1733,7 +1733,7 @@ var JOGO = (typeof window !== 'undefined')
     peca('sd_trono', 0, -9.5, 0, { alt: 3.9, teto: 3.6, solido: 1.7 });
     peca('sd_trofeu', -3.4, -9.6, 0, { alt: 1.3, teto: 1.2, solido: 0.6 });
     var Rd = JOGO.Renderer3D2, texPano = null;
-    try { texPano = (Rd && Rd.texturaBandeira) ? Rd.texturaBandeira(cor, String(info.emblema || '').slice(0, 2)) : null; } catch (eB) {}
+    try { texPano = (Rd && Rd.texturaBandeira) ? Rd.texturaBandeira(cor, String(info.emblema || '')) : null; } catch (eB) {}
     var matPano = texPano
       ? new THREE.MeshStandardMaterial({ map: texPano, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.95 })
       : new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.95 });

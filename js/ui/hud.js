@@ -13433,7 +13433,8 @@ var JOGO = (typeof window !== 'undefined')
   // o que a cena precisa da guilda: o id (a zona), e a cor e o emblema dos estandartes
   function infoDaSede(g) {
     var B = JOGO.Brasao, cod = g.emblema || '', cor = null, emb = '';
-    if (B && B.ehCodigo && B.ehCodigo(cod)) cor = safe(function () { return B.partes(cod)[2]; }, null);
+    // 04/10: o brasão desenhado vai INTEIRO para o pano (o dono: "o estandarte deve ter o brasão da guild")
+    if (B && B.ehCodigo && B.ehCodigo(cod)) { cor = safe(function () { return B.partes(cod)[2]; }, null); emb = cod; }
     else emb = String(cod).slice(0, 2);
     return { id: g.id, nome: g.nome || '', cor: cor, emblema: emb };
   }
