@@ -381,7 +381,10 @@ var JOGO = (typeof window !== 'undefined')
     var ent = (ped.entrega && typeof ped.entrega === 'object') ? ped.entrega : {};
     var origem = (d.origem === 'presente' || ped.origem === 'presente') ? 'presente'
       : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento'
-      : ((d.origem === 'eco' || ped.origem === 'eco') ? 'eco' : 'loja'));
+      : ((d.origem === 'eco' || ped.origem === 'eco') ? 'eco'
+      : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja')));
+    // 04/10: o presente de um amigo (servidor/loja.py, loja_presentear) — o pedido traz quem mandou
+    var deQuem = (origem === 'amigo' && ped.de) ? String(ped.de) : '';
     // 02/10: o prêmio da semana do Eco Primordial (servidor/supremo.py) — vinténs, selos e o título
     if (origem === 'eco') {
       if (d.tipo !== 'entregue') return { texto: 'O prêmio do Eco não entrou aqui: ele volta na próxima abertura', tipo: null };
@@ -400,7 +403,10 @@ var JOGO = (typeof window !== 'undefined')
       // 13/09: a troca de vinténs por barras de ouro não traz nada para o jogo — as barras vão para a conta do site
       var txt = (origem === 'pagamento') ? 'Chegaram ' + lojaMilhar(ent.qtd) + ' vinténs do seu pacote'
         : (ent.tipo === 'barras' && origem === 'loja') ? 'Troca feita: ' + nome + ' na sua conta do site'
+        : (origem === 'amigo') ? 'Presente de ' + (deQuem || 'um amigo') + ': ' + nome
         : (origem === 'presente' ? 'Presente do Mestre: ' : 'Chegou da loja: ') + nome;
+      // 04/10: a aura não vai para o inventário — diz onde ela se liga
+      if (ent.tipo === 'aura' || ent.tipo === 'pacote') txt += ' — a aura se liga na ficha do Personagem';
       if (ent.tipo === 'bonus-xp') {
         var ate = (typeof d.ate === 'number' && d.ate > 0) ? d.ate : safe(function () { return P().bonusXpAte(); }, 0);
         var quando = (ate > 0) ? lojaQuando(ate) : '';
@@ -411,7 +417,10 @@ var JOGO = (typeof window !== 'undefined')
     if (origem === 'pagamento') {
       return { texto: 'O pacote de vinténs não entrou aqui: ele volta na próxima abertura (' + nome + ')', tipo: null };
     }
-    var mot = (origem === 'presente' && MOTIVO_PRESENTE[d.motivo]) || MOTIVO_LOJA[d.motivo] || 'recusado';
+    var mot = ((origem === 'presente' || origem === 'amigo') && MOTIVO_PRESENTE[d.motivo]) || MOTIVO_LOJA[d.motivo] || 'recusado';
+    if (origem === 'amigo') {            // as barras voltam para quem deu, não para cá
+      return { texto: 'O presente de ' + (deQuem || 'um amigo') + ' não entrou: ' + mot + ' (' + nome + ')', tipo: null };
+    }
     return { texto: (origem === 'presente' ? 'Presente do Mestre devolvido: ' : 'Pedido devolvido: ') + mot + ' (' + nome + ')',
              tipo: null };
   };

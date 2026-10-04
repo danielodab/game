@@ -640,16 +640,31 @@
       return { chave: 'limite', texto: 'Limite atingido: ' + (Number(lim.liberaEm) > 0 ? SITE.deNovo(lim.liberaEm) : 'espere a janela passar') + '.' };
     }
     if (emBarras) {
-      var faltaB = Number(it.preco) - barrasNoSaldo();
+      var faltaB = precoDe(it) - barrasNoSaldo();
       if (faltaB > 0) return { chave: 'saldo-barras', texto: 'Faltam ' + nBarras(faltaB) + ' na sua conta.' };
       return null;
     }
-    var falta = Number(it.preco) - Number(s.disponivel);
+    var falta = precoDe(it) - Number(s.disponivel);
     if (falta > 0) return { chave: 'saldo', texto: 'Faltam ' + N(falta) + ' vinténs no disponível.' };
     return null;
   }
 
-  function cartao(it, itens) {
+  /* 04/10: o presente a um amigo. O botão abre, no próprio cartão, o campo do nome de quem recebe;
+   * o cartão repetido na seção das ofertas (`vitrine`) não o tem — um formulário só por produto. */
+  function presenteHtml(it) {
+    if (estadoMinha !== 'ok' || !presenteavel(it)) return '';
+    if (presenteAberto !== it.sku) {
+      return '<div class="presente"><button type="button" class="btn btn-mini btn-borda" data-presentear="' + E(it.sku) + '"' +
+        (ocupado ? ' disabled' : '') + '>Presentear um amigo</button></div>';
+    }
+    return '<div class="presente presente-aberto"><label>Para quem? <input type="text" data-presente-nome maxlength="60" ' +
+      'autocomplete="off" placeholder="o nome do jogador" value="' + E(presenteNome) + '"></label>' +
+      '<div class="presente-botoes"><button type="button" class="btn btn-mini btn-ouro" data-presente-envia="' + E(it.sku) + '"' +
+      (ocupado ? ' disabled' : '') + '>Enviar o presente</button>' +
+      '<button type="button" class="btn btn-mini" data-presente-fecha>fechar</button></div>' +
+      '<p class="apoio">Você paga ' + E(precoTexto(it)) + '; o presente chega ao jogo dele com uma carta dizendo quem mandou.</p></div>';
+  }
+  function cartao(it, itens, vitrine) {
     var logado = estadoMinha === 'ok';
     var motivo = logado ? trancado(it) : null;
     var extra = '';
@@ -688,7 +703,8 @@
   }
   function linhaPedido(p) {
     var est = proprio(ESTADO, p.estado) ? p.estado : 'outro';
-    var pago = p.origem === 'pagamento', presente = p.origem === 'presente';
+    var pago = p.origem === 'pagamento', presente = p.origem === 'presente' || p.origem === 'amigo';
+    var deAmigo = p.origem === 'amigo';   // 04/10: o presente de outro jogador (as barras foram dele)
     var txt = est === 'outro' ? String(p.estado == null ? '' : p.estado) : ESTADO[est];
     var emBarras = p.moeda === 'barras';
     if (est === 'estornado') {
@@ -703,7 +719,7 @@
     var preso = est === 'retirado' && desde > 0 && SITE.agora() - desde > DIA;
     // crédito de pacote e presente do Mestre não se cancelam por aqui
     var pode = !pago && !presente && p.cancelavel !== false && (est === 'pendente' || preso);
-    var custo = pago ? 'pacote pago' : presente ? 'presente do Mestre'
+    var custo = pago ? 'pacote pago' : deAmigo ? 'presente de ' + (p.de || 'um amigo') : presente ? 'presente do Mestre'
       : emBarras ? nBarras(p.barras) : Number(p.preco) === 0 ? 'sem custo (Mestre)' : N(p.preco) + ' vinténs';
     var miudo = [custo,
                  Number(p.criadoEm) > 0 ? (pago ? 'aprovado ' : presente ? 'dado ' : 'pedido ') + SITE.quando(p.criadoEm) : '',
@@ -885,6 +901,45 @@
     });
   }
 
+  /* 04/10: presentear um amigo. Quem dá paga; o servidor confere quem recebe (existe, não é você, não
+   * tem o produto ainda) e o limite do dia. A chave do clique é a mesma da compra: sem resposta, repete. */
+  function presenteia(sku) {
+    var it = acha(sku);
+    var nome = String(presenteNome || '').trim();
+    if (!it || ocupado || estadoMinha !== 'ok') return;
+    if (!nome) { aviso('Diga o nome do jogador que vai receber o presente.'); return; }
+    var porDia = Number(((catalogo || {}).presente || {}).porDia) || 0;
+    SITE.confirma({
+      titulo: 'Confirmar o presente',
+      texto: 'Dar ' + it.nome + ' de presente para ' + nome + ' por ' + precoTexto(it) + '?',
+      nota: 'As barras de ouro saem da SUA conta agora. Presente não se cancela; se o jogo de quem recebe o devolver, as barras voltam para você.' +
+            (porDia ? ' Dá para dar até ' + N(porDia) + ' presentes por dia.' : ''),
+      sim: 'Dar o presente', nao: 'Voltar'
+    }).then(function (sim) {
+      if (!sim || ocupado) return;
+      var idem = chave('presente', it.sku + '|' + nome);
+      ocupa(true);
+      aviso('Mandando o presente…', 'neutro');
+      return SITE.api('/api/loja/presentear', { method: 'POST', body: { sku: it.sku, nome: nome, idem: idem } }).then(function (r) {
+        ocupado = false;
+        if (r.status === 401) { sessaoVencida(); return; }
+        if (r.status === 0) {
+          semResposta = { tipo: 'presente', id: it.sku + '|' + nome, idem: idem };
+          aviso('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o presente não sai dobrado.');
+          desenha();
+          return;
+        }
+        if (!r.ok) { aviso(SITE.erro(r, 'não deu para mandar o presente')); desenha(); return carregaMinha(); }
+        aviso('Presente enviado: ' + it.nome + ' para ' + ((r.presente || {}).para || nome) + '.', 'certo');
+        presenteAberto = null;
+        presenteNome = '';
+        if (r.barras && typeof r.barras === 'object' && temBarras()) minha.barras.saldo = r.barras.saldo;
+        desenha();
+        return carregaMinha();
+      });
+    });
+  }
+
   function compraPacote(id) {
     var pc = achaPacote(id);
     if (!pc || ocupado || estadoMinha !== 'ok' || !pagamentoLigado()) return;
@@ -957,8 +1012,29 @@
     volta = leVolta();          // antes de qualquer pedido: o endereço sai limpo
     $('lj-catalogo').addEventListener('click', function (ev) {
       var bt = ev.target.closest ? ev.target.closest('button[data-comprar]') : null;
-      if (bt && !bt.disabled) compra(bt.getAttribute('data-comprar'));
+      if (bt && !bt.disabled) { compra(bt.getAttribute('data-comprar')); return; }
+      // 04/10: o presente — abre o campo do nome, fecha, envia
+      var alvo = ev.target.closest ? ev.target.closest('button[data-presentear],button[data-presente-envia],button[data-presente-fecha]') : null;
+      if (!alvo || alvo.disabled) return;
+      if (alvo.hasAttribute('data-presentear')) {
+        presenteAberto = alvo.getAttribute('data-presentear');
+        desenhaCatalogo();
+        var campo = $('lj-catalogo').querySelector('input[data-presente-nome]');
+        if (campo) campo.focus();
+      } else if (alvo.hasAttribute('data-presente-fecha')) {
+        presenteAberto = null;
+        desenhaCatalogo();
+      } else presenteia(alvo.getAttribute('data-presente-envia'));
     });
+    $('lj-catalogo').addEventListener('input', function (ev) {
+      if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-presente-nome')) presenteNome = ev.target.value;
+    });
+    $('lj-catalogo').addEventListener('change', function (ev) {      // as escolhas do Pacote de Boas-Vindas
+      var qual = ev.target && ev.target.getAttribute ? ev.target.getAttribute('data-bv') : null;
+      if (qual === 'classe') bvClasse = ev.target.value;
+      else if (qual === 'aura') bvAura = ev.target.value;
+    });
+    setInterval(andaOfertas, 30 * 1000);
     $('lj-pacotes').addEventListener('click', function (ev) {
       var bt = ev.target.closest ? ev.target.closest('button[data-pacote]') : null;
       if (bt && !bt.disabled) compraPacote(bt.getAttribute('data-pacote'));

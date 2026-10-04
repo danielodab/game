@@ -655,6 +655,7 @@ class ProvaDoTexto(unittest.TestCase):
             'PAGAMENTO_HORAS': pagamento_mod.PREFERENCIA_VALIDADE // 3600,
             'VINTENS_POR_BARRA': loja_mod.VINTENS_POR_BARRA,
             'VINTENS_POR_BARRA_FARMADA': loja_mod.VINTENS_POR_BARRA_FARMADA,
+            'PRESENTES_AMIGO_DIA': loja_mod.PRESENTES_AMIGO_DIA,      # 04/10: o presente a um amigo
             'TAXA_MERCADO': mercado_mod.TAXA_PCT,
             'SELOS_POR_GIRO': int(por_giro.group(1)),
             'EMPRESTIMO_DIAS': guilda_mod.EMPRESTIMO_AUSENCIA_DIAS,   # 04/10: o empréstimo que volta sozinho

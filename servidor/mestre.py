@@ -44,7 +44,7 @@ import re
 from comum import CLASSES_RANK, Recusa, agora, liberadas, limita
 from conta import mascara_email
 from loja import (CARTEIRA_TETO, CATALOGO, COLUNAS_PEDIDO, DE_PEDIDOS, POR_SKU, RE_IDEM, SKU_PRESENTE_VINTENS,
-                  TIPOS_TROCA, entrega_de, id_valido, le_json, milhar, nome_do_pedido)
+                  FORA_DO_PRESENTE, entrega_de, id_valido, le_json, milhar, nome_do_pedido)
 from pagamento import FRASE_EM_BREVE, PAGAMENTOS_LISTA
 
 log = logging.getLogger('api')
@@ -192,7 +192,7 @@ class MestreMixin:
             progress = save['progress'] if save else None
             catalogo = []
             for item in CATALOGO:
-                if item['tipo'] in TIPOS_TROCA:         # 13/09: a troca de moedas não é presente
+                if item['tipo'] in FORA_DO_PRESENTE:         # 13/09: a troca de moedas não é presente
                     continue
                 pode, motivo = True, None
                 if alvo['banido']:
@@ -250,7 +250,7 @@ class MestreMixin:
             sku = SKU_PRESENTE_VINTENS
         else:
             item = POR_SKU.get(sku) if isinstance(sku, str) else None
-            if item is None or item['tipo'] in TIPOS_TROCA:     # a troca de moedas não é presente (13/09)
+            if item is None or item['tipo'] in FORA_DO_PRESENTE:     # a troca de moedas não é presente (13/09)
                 raise Recusa(400, 'produto desconhecido')
         if not isinstance(idem, str) or not RE_IDEM.match(idem):
             raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')

@@ -228,6 +228,23 @@ CREATE TABLE IF NOT EXISTS loja_barras(
   ganho     INTEGER NOT NULL DEFAULT 0 CHECK (ganho >= 0),
   criado_em INTEGER NOT NULL
 );
+-- 04/10: a aura que a conta veste na praça (a posse é o pedido da loja; ver _auras). O Relé lê daqui
+CREATE TABLE IF NOT EXISTS aura_escolhida(
+  conta_id      INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  aura          TEXT NOT NULL,
+  atualizado_em INTEGER NOT NULL
+);
+-- 04/10: o presente a um amigo. O pedido mora na conta de quem RECEBE; esta linha diz quem pagou (o
+-- estorno volta para ele) e guarda o idem de quem deu (o de loja_pedidos é por conta de quem recebe)
+CREATE TABLE IF NOT EXISTS loja_amigos(
+  pedido_id INTEGER PRIMARY KEY REFERENCES loja_pedidos(id) ON DELETE CASCADE,
+  de        INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  de_nome   TEXT NOT NULL,
+  idem      TEXT,
+  criado_em INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS loja_amigos_idem ON loja_amigos(de, idem) WHERE idem IS NOT NULL;
+CREATE INDEX IF NOT EXISTS loja_amigos_de ON loja_amigos(de, criado_em);
 """
 
 # os filtros dos limites do JOGADOR: créditos (pacote pago, presente de vinténs)
@@ -238,11 +255,17 @@ CREATE TABLE IF NOT EXISTS loja_barras(
 SEM_EXTRA = ("id NOT IN (SELECT pedido_id FROM loja_presentes) "
              "AND id NOT IN (SELECT pedido_id FROM loja_creditos) "
              "AND sku NOT LIKE 'eco-%'")
+# 04/10: o presente de um amigo CONTA no limite do produto de quem recebe (a Reescrita do mês, a aura que
+# ele já tem), mas não nos tetos de abuso dele (5 abertos, 10 compras por hora, 30 linhas por hora): quem
+# dá não pode travar a loja de quem recebe. Os tetos do presente são os de quem dá (loja_presentear)
+SEM_GANHO = SEM_EXTRA + " AND id NOT IN (SELECT pedido_id FROM loja_amigos)"
 # um pedido com as marcas de presente e de crédito (para _loja_pedido e o retirar)
 COLUNAS_PEDIDO = ("p.*, (pr.pedido_id IS NOT NULL) AS presente, cr.vintens AS credito_vintens, "
-                  "cr.origem AS credito_origem, lb.custo AS barras_custo, lb.ganho AS barras_ganho")
+                  "cr.origem AS credito_origem, lb.custo AS barras_custo, lb.ganho AS barras_ganho, "
+                  "(am.pedido_id IS NOT NULL) AS amigo, am.de_nome AS amigo_nome")
 DE_PEDIDOS = ("loja_pedidos p LEFT JOIN loja_presentes pr ON pr.pedido_id = p.id "
-              "LEFT JOIN loja_creditos cr ON cr.pedido_id = p.id LEFT JOIN loja_barras lb ON lb.pedido_id = p.id")
+              "LEFT JOIN loja_creditos cr ON cr.pedido_id = p.id LEFT JOIN loja_barras lb ON lb.pedido_id = p.id "
+              "LEFT JOIN loja_amigos am ON am.pedido_id = p.id")
 
 
 # ---- números para gente ---------------------------------------------------------------
@@ -544,6 +567,8 @@ def origem_do_pedido(r):
         return 'eco'
     if 'presente' in chaves and r['presente']:
         return 'presente'
+    if 'amigo' in chaves and r['amigo']:              # 04/10: o presente de um amigo (loja_amigos)
+        return 'amigo'
     if 'credito_origem' in chaves and r['credito_origem'] == 'pagamento':
         return 'pagamento'
     return None
@@ -654,9 +679,18 @@ class LojaMixin:
             save antigo) já tirou os vinténs. E o pedido que tinha sido cancelado (as barras
             devolvidas) e o jogo aplicou mesmo assim: o custo sai de novo, até o que houver;
             o que faltar vira alerta para o Mestre."""
+        if estado in ('cancelado', 'estornado'):
+            self._aura_poda(cid)                        # 04/10: a aura que saiu com o pedido deixa de ser vestida
         lb = self.con.execute("SELECT custo, ganho FROM loja_barras WHERE pedido_id = ?", (pid,)).fetchone()
         if lb is None:
             return
+        # 04/10: no presente de um amigo as barras são de QUEM DEU — o estorno volta para ele, não para
+        # quem recebeu. A conta de quem deu foi excluída (de NULL): não há a quem devolver
+        am = self.con.execute("SELECT de FROM loja_amigos WHERE pedido_id = ?", (pid,)).fetchone()
+        if am is not None:
+            if am['de'] is None:
+                return
+            cid = am['de']
         ref = 'pedido:%d' % pid
         if estado in ('cancelado', 'estornado'):
             if lb['custo'] > 0:
@@ -686,6 +720,15 @@ class LojaMixin:
             for p in self.con.execute("SELECT id, sku, entrega FROM loja_pedidos WHERE id IN (%s)"
                                       % ','.join('?' * len(pedidos)), pedidos):
                 nomes['pedido:%d' % p['id']] = nome_do_pedido(p['sku'], _json(p['entrega']))
+            # 04/10: o presente a um amigo aparece no extrato de quem pagou com o nome de quem recebeu
+            # (é por aqui que o Mestre vê, na ficha da conta, para quem as barras foram)
+            for a in self.con.execute(
+                    "SELECT am.pedido_id, COALESCE(NULLIF(r.nome, ''), c.nome) AS para FROM loja_amigos am "
+                    "JOIN loja_pedidos p ON p.id = am.pedido_id JOIN contas c ON c.id = p.conta_id "
+                    "LEFT JOIN resumos r ON r.conta_id = c.id WHERE am.pedido_id IN (%s)"
+                    % ','.join('?' * len(pedidos)), pedidos):
+                chave = 'pedido:%d' % a['pedido_id']
+                nomes[chave] = '%s (presente para %s)' % (nomes.get(chave), a['para'])
         pags = [int(r['ref'][10:]) for r in linhas
                 if (r['ref'] or '').startswith('pagamento:') and r['ref'][10:].isdigit()]
         if pags:
@@ -768,12 +811,16 @@ class LojaMixin:
         if origem is not None:
             saida['origem'] = origem
             saida['cancelavel'] = False
+        if origem == 'amigo':                           # 04/10: quem mandou o presente
+            saida['de'] = r['amigo_nome']
         if vintens:
             saida['vintens'] = vintens
         # 13/09: em que moeda o pedido foi pago — 'barras' (o custo saiu na compra), 'vintens' (o preço sai na
         # entrega) ou None (crédito, presente, Mestre); `ganhaBarras` na troca de vinténs por barras
         custo = r['barras_custo'] if 'barras_custo' in r.keys() else None
         ganho = r['barras_ganho'] if 'barras_ganho' in r.keys() else None
+        if origem == 'amigo':                           # no presente, as barras são de quem deu
+            custo = None
         saida['moeda'] = 'barras' if custo else ('vintens' if r['preco'] > 0 else None)
         if custo:
             saida['barras'] = custo
@@ -792,6 +839,10 @@ class LojaMixin:
         return 200, {'ok': True, 'versao': LOJA_VERSAO,
                      'itens': [dict(i, limite=dict(i['limite']) if i['limite'] else None) for i in CATALOGO],
                      'pacotes': [pacote_publico(p) for p in PACOTES],
+                     # 04/10: as ofertas da semana e o relógio do servidor (a contagem regressiva não confia
+                     # no relógio do aparelho); o que não se presenteia e os tetos do presente
+                     'agora': agora(), 'ofertas': ofertas_publico(agora()),
+                     'presente': {'fora': list(FORA_DO_PRESENTE), 'porDia': PRESENTES_AMIGO_DIA},
                      'barras': {'nome': 'Barras de Ouro', 'vintensPorBarra': VINTENS_POR_BARRA,
                                 'vintensPorBarraFarmada': VINTENS_POR_BARRA_FARMADA},
                      'pagamento': {'ligado': ligado, 'teste': bool(ligado and mp.teste)}}
@@ -867,12 +918,12 @@ class LojaMixin:
                 raise Recusa(429, 'limite deste produto: %d por conta' % lim['max'])
         abertos = self.con.execute(
             "SELECT COUNT(*) FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado') AND "
-            + SEM_EXTRA, (cid,)).fetchone()[0]
+            + SEM_GANHO, (cid,)).fetchone()[0]
         if abertos >= ABERTOS_MAX:
             raise Recusa(429, 'pedidos abertos demais (%d)' % ABERTOS_MAX)
         na_hora = [r[0] for r in self.con.execute(
             "SELECT criado_em FROM loja_pedidos WHERE conta_id = ? AND criado_em > ? "
-            "AND estado IN ('pendente', 'retirado', 'entregue') AND " + SEM_EXTRA + " ORDER BY criado_em",
+            "AND estado IN ('pendente', 'retirado', 'entregue') AND " + SEM_GANHO + " ORDER BY criado_em",
             (cid, t - 3600))]
         if len(na_hora) >= COMPRAS_POR_HORA:
             raise Recusa(429, 'compras demais na última hora (%d)' % COMPRAS_POR_HORA,
@@ -889,7 +940,7 @@ class LojaMixin:
         pode encher o disco. Presentes e créditos ficam fora: têm os tetos
         deles (por Mestre, mestre.py; por conta e por pagamento, pagamento.py)."""
         criados = [r[0] for r in self.con.execute(
-            "SELECT criado_em FROM loja_pedidos WHERE conta_id = ? AND criado_em > ? AND " + SEM_EXTRA
+            "SELECT criado_em FROM loja_pedidos WHERE conta_id = ? AND criado_em > ? AND " + SEM_GANHO
             + " ORDER BY criado_em", (cid, t - 3600))]
         if len(criados) >= PEDIDOS_POR_HORA:
             raise Recusa(429, 'pedidos demais na última hora (%d)' % PEDIDOS_POR_HORA,
@@ -1187,6 +1238,8 @@ class LojaMixin:
                 raise Recusa(409, 'vinténs de pacote não se cancelam: eles chegam quando o jogo abrir')
             if origem == 'presente':
                 raise Recusa(409, 'presente do Mestre: só o Mestre cancela')
+            if origem == 'amigo':                       # as barras são de quem deu: quem recebe não as "cancela"
+                raise Recusa(409, 'presente de um amigo não se cancela: ele chega quando o jogo abrir')
             if r['estado'] in ('entregue', 'estornado', 'cancelado'):
                 raise Recusa(409, 'pedido já fechado')
             if not self._loja_cancelavel(r, t):
@@ -1233,6 +1286,8 @@ class LojaMixin:
             origem = origem_do_pedido(r)
             if origem is not None:
                 p['origem'] = origem
+            if origem == 'amigo':
+                p['de'] = r['amigo_nome']
             pedidos.append(p)
         return 200, {'ok': True, 'pedidos': pedidos}
 
@@ -1349,6 +1404,8 @@ class LojaMixin:
                 origem = origem_do_pedido(r)
                 if origem is not None:
                     p['origem'] = origem
+                if origem == 'amigo':
+                    p['de'] = r['amigo_nome']
                 pedidos.append(p)
             log.info("loja: #%d — %d pedidos entregues no servidor, %d estornados", cid, len(pedidos), len(estornados))
             # `pedidos` são os JÁ ENTREGUES (aplicado=true): o cliente adota progress/db, não aplica de novo
