@@ -10,6 +10,11 @@ da loja, os formulários — o passo a passo é o [`GOOGLE_PLAY.md`](GOOGLE_PLAY
 `npx cap add android`) e a `www/` é montada e sincronizada. **Nunca foi
 compilado**: esta máquina tem Node, mas não tem Java nem o Android SDK.
 
+**Duas decisões do dono, do mesmo dia** (seções 3 e 8): o aplicativo **abre o
+jogo direto do servidor** — atualiza junto com a web, sem esperar a loja — e os
+modelos 3D têm **duas opções** na primeira abertura: *Jogar agora* ou *Baixar
+tudo*, as duas guardando no aparelho o que baixam.
+
 ---
 
 ## 1. O que precisa estar instalado
@@ -32,7 +37,8 @@ Tudo a partir da raiz do projeto.
 ```bash
 npm install                       # uma vez: traz o Capacitor (lê o package.json)
 
-# --- toda vez que você mexer no jogo ----------------------------------
+# --- só quando mudar a CASCA (a tela "sem conexão", um plugin, o ícone) --
+#     mexer no JOGO não pede nada disto: o aplicativo o abre do servidor
 npm run sync                      # = python tools/empacota_www.py && npx cap sync android
 
 # --- rodar no telefone / gerar o APK de teste --------------------------
@@ -56,7 +62,9 @@ O AAB assinado, que é o que a loja recebe, está no `GOOGLE_PLAY.md` §1.
 | `android/keystore.properties`, `*.jks` | **nunca** | a chave de assinatura e as senhas |
 
 Nada disso entra no servidor da web: o `.dockerignore` e o `tools/sobe_vps.py`
-deixam `android/`, `www/`, `node_modules/` e os dois `package*.json` de fora.
+deixam `android/`, `app/`, `www/`, `node_modules/` e os dois `package*.json` de
+fora. **A exceção é `vendor/capacitor/`** (três arquivos, 13 KB): é o servidor
+que os entrega ao aplicativo, e só a ele — a web nunca os pede.
 
 ### Em pé e deitado
 
@@ -75,64 +83,76 @@ Escrever `true` ali abriria também o aplicativo publicado — não escreva.
 
 ---
 
-## 3. Por que existe uma pasta `www/` — e por que ela não leva os modelos
+## 3. O aplicativo abre o jogo do servidor
 
-`webDir` no `capacitor.config.json` aponta para `www/`, não para a raiz.
-Apontar para a raiz empacotaria no telefone o `.git`, os `docs/`, o `unity/`, as
-páginas de `tests/` e os `assets/embedded/models-*.js` que o aplicativo não usa.
+**A decisão (04/10):** o código do jogo **não vai dentro do aplicativo**. O
+`capacitor.config.json` tem `server.url: "https://soterra.viidoo.io"`, e a cada
+abertura o WebView carrega o jogo que está no ar. Mudou uma regra na web → o
+celular recebe na próxima abertura, sem AAB novo e sem revisão da loja.
 
-**Os modelos 3D não vão no pacote.** A Google Play limita a 200 MB o que um
-aplicativo baixa de início, e `assets/models/bundle` tem ~246 MB. Então o
-aplicativo abre só com o código e a interface e **baixa os modelos do servidor
-do jogo, sob demanda, igual à web**: a base antes do menu, cada calabouço na
-hora de descer (`js/assets_bundle.js`).
+| | onde | o que faz |
+|---|---|---|
+| `server.url` | `capacitor.config.json` | o endereço que o aplicativo abre |
+| `server.errorPath: "index.html"` | idem | o que mostrar quando o servidor não responde |
+| `app/index.html` | vira `www/index.html` | a tela **"Sem conexão — Tentar de novo"** |
+| `vendor/capacitor/*.js` | servidos pelo servidor | a parte JS dos plugins (voltar, segundo plano, tela acesa) |
 
-MEDIDO em 04/10/2026: `www/` sai com **13,71 MB**.
+**A `www/` agora é um arquivo só** — MEDIDO em 04/10/2026: **3,3 KB** (era
+13,71 MB com o jogo dentro). É a tela que aparece no lugar da tela branca quando
+não há internet ou o jogo está em manutenção; ela tenta de novo no toque e
+sozinha quando a rede volta. Tem de ser um arquivo só: com o `server.url`
+ligado, o Capacitor entrega do pacote **apenas** o endereço exato dessa página
+(lido no código dele, `WebViewLocalServer.java`) — folha de estilo ou imagem à
+parte seriam pedidas à rede.
 
-| pasta | MB |
-|---|---|
-| `assets/embedded` (sons, ícones, efeitos — o que o `index.html` servido pede) | 4,96 |
-| `js` | 4,78 |
-| `site` (a porta da conta: entrar, criar, excluir) | 2,56 |
-| `vendor` (three.js e os três arquivos do Capacitor) | 1,15 |
-| `css` | 0,19 |
-| `assets/models/bundle/tabelas` | 0,02 |
-| **total** | **13,71** |
+**Por que o `server.url` e não outra coisa.** A alternativa seria abrir uma
+página do pacote e, dela, navegar para o servidor (`allowNavigation`). Lido no
+código do Capacitor 8 (`Bridge.java`): a ponte dos plugins só é posta nas
+páginas da origem do aplicativo — que, com o `server.url`, **é** o servidor do
+jogo. Pelo outro caminho o jogo abriria sem botão voltar, sem tela acesa e, mais
+tarde, sem a compra pela Google.
 
-### Como o aplicativo acha o servidor
+**`JOGO.Mobile.app()` continua valendo:** o Capacitor põe o `window.Capacitor`
+na página do servidor antes do primeiro script, como fazia na do pacote.
 
-Dentro do aplicativo a página vem de `https://localhost` (os arquivos do
-pacote), então a API, o relé e os modelos precisam de um endereço inteiro. Ele
-está escrito num lugar só: a constante **`SERVIDOR`** no começo do
-`tools/empacota_www.py` (`https://soterra.viidoo.io`). O script grava, no
-`js/versao.js` **da `www/`**, uma linha a mais:
+**A navegação fica presa ao domínio do jogo.** Não há `allowNavigation`:
+qualquer link para outro domínio abre no navegador do aparelho, não dentro do
+aplicativo (é o comportamento padrão do Capacitor, `Bridge.launchIntent`). O
+`site/conta.html` é do mesmo domínio e abre dentro.
 
-```js
-window.SOTERRA_APP = { servidor: "https://soterra.viidoo.io" };
-```
+**O WebView não prende código velho.** É o mesmo arranjo da web: a página, o
+`js/versao.js` e o manifesto dos modelos vão com `no-cache` (o WebView sempre
+confere com o servidor), e todo o resto é pedido com o hash do conteúdo no
+endereço — arquivo que mudou tem endereço novo. Os três arquivos de
+`vendor/capacitor/` entram pelo mesmo carimbo (`window.__url`). O jogo não
+registra service worker.
 
-É por ela que `js/core/sessao.js` e `site/site.js` (a API), `js/core/rede.js`
-(o relé, `wss://…/ws`), `js/assets_bundle.js` (os modelos) e `js/core/gm.js`
-(que trata o aplicativo como jogo no ar, e não como "em casa") sabem onde estão.
-**Na web essa linha não existe**, e os cinco seguem como sempre foram.
+### O endereço do servidor
 
-Para apontar para outro servidor sem mexer no arquivo:
-`python tools/empacota_www.py --servidor https://outro.dominio`.
+Decide-se num lugar só: a constante **`SERVIDOR`** no começo do
+`tools/empacota_www.py`. O `capacitor.config.json` o repete (é de lá que o
+Capacitor lê) e o script **recusa montar** se os dois não baterem. Como o jogo
+agora é servido do próprio domínio, a API, o relé e os modelos são endereços da
+mesma origem — a linha `window.SOTERRA_APP`, que servia para isso, só existe no
+jeito antigo (abaixo).
 
-### O que o servidor precisa ter
+### O jeito antigo continua guardado: `--embutida`
 
-Buscar um `.glb` de outra origem pede licença (CORS). As duas `Caddyfile`
-(`servidor/` e `servidor/coolify/`) dão essa licença **só** à origem do
-aplicativo (`https://localhost`) e **só** na pasta `/assets/models/bundle/`. A
-API já respondia a qualquer origem (a sessão vai no cabeçalho `Authorization`,
-não em cookie), e o relé é WebSocket, que não passa por isso.
-**O aplicativo só funciona depois que essa Caddyfile estiver no ar.**
+`python tools/empacota_www.py --embutida` monta a `www/` de 13,7 MB com o código
+do jogo dentro e a linha `window.SOTERRA_APP = { servidor: … }` no
+`js/versao.js`. É a saída se a loja recusar o jogo servido: tire `url` e
+`errorPath` do `capacitor.config.json` e use essa opção. Nesse jeito a página
+vem de `https://localhost`, e é para ele que as duas `Caddyfile` dão licença de
+origem (CORS) na pasta dos modelos. Os modelos guardados no aparelho (seção 8)
+funcionam nos dois jeitos.
 
 ### Quando o jogo muda
 
-O código vai dentro do aplicativo; só os modelos vêm do servidor. Mudou o jogo
-na web → `npm run sync`, some 1 ao `versionCode` e envie outro AAB. Ver a
-decisão 10 do `GOOGLE_PLAY.md` §7.
+Publicou na web → o aplicativo já está atualizado. **Só se envia outro AAB**
+quando muda a casca: a tela "sem conexão", um plugin do Capacitor (aí copie de
+novo o `vendor/capacitor/` e publique na web **antes**), o ícone, a versão do
+Android. O `tools/empacota_www.py` confere que `vendor/capacitor/` é igual ao
+`node_modules/` e recusa montar se não for.
 
 ---
 
@@ -289,7 +309,6 @@ Em headless:
 5. **A loja dentro do aplicativo** ainda é a do Mercado Pago, que a Play não
    aceita para item digital. Fica para a etapa da compra pela Google
    (`GOOGLE_PLAY.md` §7, item 4).
-   placeholders; trocar exige `@capacitor/assets` e uma arte de 1024×1024.
 
 ---
 
@@ -308,15 +327,20 @@ navegador. O `<html>` ganha a classe `app`, para o CSS que precisar.
 | **Qualidade gráfica** | quem nunca escolheu abre em **média**; em aparelho fraco (até 2 GB de memória ou tela de até 360 px no lado curto), em **baixa**. A escolha das Configurações sempre vence | `M.padraoGrafico` |
 | **Sessão** | o Android não copia os dados do aplicativo para a nuvem do Google (`allowBackup="false"`): a sessão da conta não viaja para outro telefone | `AndroidManifest.xml` |
 
-Os três arquivos do Capacitor (`vendor/capacitor/`) só existem na `www/` e são
-carregados pelo `js/mobile.js` **depois** de ele confirmar que está na casca: o
-`index.html` da web nunca os pede.
+| **Modelos no aparelho** | a escolha *Jogar agora* / *Baixar tudo* na primeira abertura; o modelo é procurado primeiro no aparelho (seção 8) | `js/app_modelos.js` |
+
+Os três arquivos do Capacitor (`vendor/capacitor/`) são carregados pelo
+`js/mobile.js` **depois** de ele confirmar que está na casca, e o
+`js/app_modelos.js` só é escrito pelo `index.html` dentro do aplicativo: a web
+não pede nenhum dos quatro.
 
 ### As provas
 
 ```bash
 node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa · a escolha vence · onde mora a API
 # tests/app_casca.html             # botão voltar, segundo plano e tela acesa, com eventos simulados
+node tests/app_modelos.js         # o que baixar/apagar pelo manifesto · retomada · MB · a web não usa · a casca
+# tests/app_modelos.html           # a escolha, o progresso, a rede que cai, apagar, o Cache Storage de verdade
 ```
 
 ### Trocar o identificador do aplicativo
@@ -330,3 +354,54 @@ android` de novo — e refazer as três mudanças feitas à mão no projeto: a
 assinatura e a versão no `android/app/build.gradle`, o `allowBackup="false"` no
 manifesto e as linhas da chave no `android/.gitignore`. **Só dá para trocar
 antes do primeiro envio à Play.**
+
+---
+
+## 8. Os modelos 3D no aparelho: as duas opções (04/10)
+
+O pedido do dono: *"sim, tem que ter as duas opções"*. Na primeira abertura do
+aplicativo, antes de baixar qualquer modelo, o jogador escolhe:
+
+| | o que acontece |
+|---|---|
+| **Jogar agora** | abre na hora; cada mapa baixa o que precisa na primeira vez, como na web — e o que baixou **fica guardado** |
+| **Baixar tudo — 246,5 MB** | baixa o pacote inteiro com barra (`123,4 de 246,5 MB · faltam … · cerca de N min`); depois os mapas abrem sem esperar e sem gastar dados |
+
+**As regras**
+
+- **Fora do Wi-Fi** (quando o aparelho informa — `navigator.connection.type`):
+  a tela de escolha já avisa, e "Baixar tudo" pergunta de novo com o tamanho.
+  *Esperar o Wi-Fi* abre o jogo e deixa o download para a próxima abertura.
+- **O download continua de onde parou.** Cada arquivo é guardado assim que
+  chega (são 386, o maior com 1,7 MB). Caiu a rede, ou o aplicativo fechou: na
+  volta só desce o que falta. Com a rede de volta, continua sozinho.
+- **A arte mudou no servidor:** a cada abertura o jogo compara o manifesto com
+  o que está guardado. Desce **só** o arquivo cujo hash mudou e o que é novo;
+  o que saiu do manifesto e a versão velha do que mudou são apagados.
+- **Faltou espaço:** antes de começar, a tela diz quanto o pacote precisa e
+  quanto há; se encher no meio, diz quanto liberar e oferece continuar.
+- **Nas Configurações** (seção *Modelos no aparelho*, só no aplicativo): o
+  espaço usado, **Baixar tudo** para quem escolheu jogar agora, e **Apagar**
+  (pergunta antes; quem apaga volta a "jogar agora").
+- **Pausar e jogar agora** durante o download: o jogo abre com o que já baixou.
+
+**Onde fica guardado, e por quê.** No **Cache Storage do WebView**, na origem do
+jogo (`soterra-modelos-1`). Ele mora nos *dados* do aplicativo — o "limpar
+cache" do Android não o apaga, só "limpar dados" ou desinstalar — e é da mesma
+origem do jogo servido, então ler um modelo não passa pela ponte nativa. O
+plugin Filesystem obrigaria a passar 250 MB em base64 pela ponte (ou a incluir
+mais um plugin nativo de download) sem que nada disso pudesse ser compilado ou
+provado aqui. O ponto fraco é conhecido: com o aparelho quase sem espaço, o
+WebView **pode** despejar esse armazenamento; o jogo pede que não
+(`navigator.storage.persist()`) e, se acontecer, só baixa de novo o que faltar.
+
+**Como funciona por dentro.** A chave de cada arquivo guardado leva o hash do
+conteúdo (o do manifesto). `JOGO.AppModelos.plano(manifesto, guardados)` faz a
+conta — o que baixar, o que apagar, quantos MB. O `js/assets_bundle.js` tem dois
+desvios, e só eles: antes de baixar a base chama `AppModelos.abertura` (a
+escolha), e cada modelo passa por `AppModelos.le` antes de ir à rede (o que veio
+da rede vai para `AppModelos.grava`). **Na web `JOGO.AppModelos` não existe** e
+os dois desvios caem no caminho de sempre.
+
+**O que muda se o domínio mudar:** o Cache Storage é da origem. Jogo em outro
+endereço = pacote baixado de novo.

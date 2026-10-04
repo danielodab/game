@@ -6,8 +6,10 @@ em [`CELULAR.md`](CELULAR.md); aqui é só o **como publicar**.
 
 **O estado de hoje (04/10/2026):** o projeto Android existe (pasta `android/`),
 o jogo já se comporta como aplicativo (botão voltar, segundo plano, tela acesa
-na batalha, qualidade média), e a pasta `www/` sai com **13,7 MB**. O que **não**
-foi feito nesta máquina: compilar. Ela não tem Java nem o Android SDK — o
+na batalha, qualidade média), **abre o jogo direto do servidor** (atualiza junto
+com a web — ver a seção 8) e oferece **Jogar agora** ou **Baixar tudo** para os
+modelos 3D. A pasta `www/` sai com **3,3 KB**: é só a tela "sem conexão". O que
+**não** foi feito nesta máquina: compilar. Ela não tem Java nem o Android SDK — o
 primeiro APK e o primeiro AAB são seus, seguindo a seção 1.
 
 > **O jogo da web não muda.** Tudo o que é do aplicativo só liga dentro dele
@@ -47,7 +49,14 @@ computador: é assim que se lê o console do jogo rodando no telefone. O de
 publicação **não** aceita — o Capacitor desliga isso sozinho no AAB, e por isso
 o `capacitor.config.json` não tem a chave `webContentsDebuggingEnabled`.
 
-**Toda vez que mexer no jogo:** `npm run sync` e Run de novo.
+**Mexeu no jogo?** Basta publicar na web: o aplicativo abre o jogo do servidor.
+O `npm run sync` + Run só é preciso quando muda a casca (a tela "sem conexão",
+um plugin, o ícone).
+
+> O aplicativo de teste também abre `https://soterra.viidoo.io`. Para testar no
+> telefone uma mudança que ainda **não** está no ar, troque o `server.url` do
+> `capacitor.config.json` pelo endereço do seu computador na rede de casa, só
+> durante o teste — e **não** envie esse arquivo assim.
 
 ### 1.3 Criar a chave de assinatura (uma vez na vida)
 
@@ -201,8 +210,9 @@ A MESMA CONTA NO CELULAR E NO COMPUTADOR
 O progresso fica guardado no servidor: comece no telefone e continue no
 navegador do computador, com a mesma conta.
 
-SOTERRA precisa de internet para jogar. Na primeira abertura o jogo baixa os
-modelos 3D; os de cada calabouço descem quando você entra nele.
+SOTERRA precisa de internet para jogar. Na primeira abertura você escolhe:
+jogar agora, baixando cada mapa quando entra nele, ou baixar tudo de uma vez
+(cerca de 250 MB, de preferência no Wi-Fi) para os mapas abrirem sem esperar.
 ```
 
 Confira os números antes de colar: se for citar quantas classes, calabouços ou
@@ -337,15 +347,14 @@ mas é o melhor jeito de você mesmo instalar pela Play antes de chamar os outro
 1. **Instalar o Android Studio e gerar o primeiro APK** (seção 1). Nada foi
    compilado até agora: o projeto `android/` nunca passou pelo Gradle. Se algo
    falhar no primeiro `Run`, é ali que aparece.
-2. **Jogar no telefone de verdade.** O botão voltar, o segundo plano e a tela
-   acesa foram provados com eventos simulados no navegador
-   (`tests/app_casca.html`); o aparelho é a prova que falta.
-3. **Publicar na web a mudança do servidor.** O aplicativo baixa os modelos de
-   `https://soterra.viidoo.io`, e isso só funciona depois que o
-   `servidor/coolify/Caddyfile` deste lote estiver no ar (ele dá ao aplicativo a
-   licença de buscar os modelos). **Sem esse deploy o aplicativo para na tela de
-   carga.** O build do contêiner confere o Caddyfile (`caddy validate`) antes de
-   trocar o que está no ar.
+2. **Jogar no telefone de verdade.** O botão voltar, o segundo plano, a tela
+   acesa, a escolha dos modelos e a tela "sem conexão" foram provados no
+   navegador (`tests/app_casca.html`, `tests/app_modelos.html`); o aparelho é a
+   prova que falta. A lista do que conferir nele está na seção 8.4.
+3. **Publicar este lote na web ANTES de instalar o aplicativo.** O aplicativo
+   abre `https://soterra.viidoo.io`: enquanto o servidor estiver com o código
+   antigo, ele abre o jogo **sem** a escolha dos modelos e **sem** botão voltar
+   (o servidor ainda não entrega `js/app_modelos.js` nem `vendor/capacitor/`).
 4. **A loja dentro do aplicativo.** A Play **não aceita** que um aplicativo
    venda itens digitais por outro meio que não a cobrança dela — e hoje a loja
    do jogo usa o Mercado Pago. Enquanto a compra pela Google não entrar (é a
@@ -360,19 +369,96 @@ mas é o melhor jeito de você mesmo instalar pela Play antes de chamar os outro
 
 **Para decidir**
 
-8. **O domínio.** O aplicativo aponta para `https://soterra.viidoo.io` (a
-   constante `SERVIDOR` em `tools/empacota_www.py`, o único lugar). Se o jogo
+8. **O domínio.** O aplicativo abre `https://soterra.viidoo.io` (a constante
+   `SERVIDOR` em `tools/empacota_www.py` e o `server.url` do
+   `capacitor.config.json` — o script recusa montar se diferirem). Se o jogo
    for mudar de endereço, mude **antes** de publicar: aplicativo já instalado
-   continua procurando o endereço antigo até o jogador atualizar.
+   continua abrindo o endereço antigo até o jogador atualizar, e os modelos
+   guardados no aparelho são do endereço antigo (baixam de novo).
 9. **O identificador `br.com.soterra.jogo`.** Depois do primeiro envio não muda
    mais. O costume é usar um domínio que seja seu ao contrário (por exemplo
    `io.viidoo.soterra`).
-10. **Quando o jogo muda, o aplicativo tem de ser enviado de novo.** O código do
-    jogo vai **dentro** do aplicativo; só os modelos vêm do servidor. Se a web
-    receber uma mudança de regra (a `VERSAO_REGRAS`) e o aplicativo não, quem
-    está no celular e quem está no computador ficam com regras diferentes até a
-    atualização passar pela revisão da Play (de horas a alguns dias). A saída,
-    se isso incomodar, é o aplicativo abrir o jogo direto do servidor (o
-    `server.url` do Capacitor): atualiza junto com a web, mas não abre sem
-    internet nem na primeira tela. É uma decisão sua — hoje está do primeiro jeito.
+10. **O jogo vem do servidor — decidido em 04/10.** Mudou a web, mudou o
+    celular, sem AAB novo. O preço e o que a Play pode perguntar estão na seção 8.
 11. **iOS** não foi tocado.
+
+---
+
+## 8. O jogo vem do servidor: o que isso é e o que a Play pode questionar
+
+**O que foi decidido (04/10):** o aplicativo não leva o código do jogo. A cada
+abertura ele carrega o jogo de `https://soterra.viidoo.io` (o `server.url` do
+Capacitor). Assim a web e o celular têm sempre as mesmas regras, na hora, sem
+esperar a revisão da loja. O lado técnico está no `CELULAR.md` §3.
+
+### 8.1 É permitido?
+
+**Sim, com cuidados.** A regra da Play contra "baixar código de fora da loja"
+fala de código executável nativo (dex, JAR, `.so`) e **abre exceção, por
+escrito, para código que roda numa máquina virtual ou interpretador com acesso
+indireto às APIs do Android — "como JavaScript num WebView ou navegador"**
+(política *Abuso de dispositivo e rede*). É o caso: o jogo é JavaScript num
+WebView, e a parte nativa (o Capacitor e os plugins) vai inteira no AAB.
+
+### 8.2 O que a revisão pode perguntar — e a resposta
+
+| o que a Play olha | o risco | o que já está feito / o que responder |
+|---|---|---|
+| **"É só um site embrulhado"** (*Funcionalidade mínima*, *Webviews*) | recusa de aplicativo que só mostra uma página da web sem nada de aplicativo | é um jogo, não uma página de conteúdo; tem botão voltar próprio, tela acesa na batalha, segundo plano, modelos guardados no aparelho, tela de "sem conexão". O site é **seu** — se pedirem, comprove a posse do domínio (Play Console → verificação do site, ou o arquivo `assetlinks.json`) |
+| **Tela branca ou travada sem internet** (*Funcionalidade quebrada*) | o revisor abre em modo avião e vê nada | a tela "Sem conexão — Tentar de novo" (`app/index.html`) |
+| **O aplicativo muda depois da revisão** (*Comportamento enganoso*) | usar o servidor para ligar algo que a revisão não viu | **tudo o que for publicado na web passa a valer para o aplicativo, e as regras da Play valem para tudo isso.** Não publique na web nada que a Play proíbe (ver 8.3) sem antes esconder do aplicativo |
+| **Pagamento** | vender item digital por fora da cobrança da Google | ver 8.3 — é o ponto mais sério |
+| **A ficha e a classificação continuam verdadeiras** | o jogo ganha chat, compra ou conteúdo novo e a ficha não acompanha | mudou algo assim na web → refaça o questionário de classificação e a *Segurança dos dados* no Play Console, mesmo sem enviar AAB |
+| **Links para fora** | — | qualquer domínio que não seja o do jogo abre no navegador do aparelho, não dentro do aplicativo |
+
+O próprio Capacitor escreve, na documentação do `server.url`, que ele foi
+pensado para desenvolvimento e "não para produção". **Não é uma proibição da
+loja**; é um aviso de que o aplicativo passa a depender do servidor: sem
+internet não abre (por isso a tela "sem conexão"), e um servidor fora do ar
+derruba o celular junto com a web.
+
+**Se a Play recusar** esse modelo, a volta é curta e está guardada: tire `url`
+e `errorPath` do `capacitor.config.json` e monte a `www/` com
+`python tools/empacota_www.py --embutida` (o código vai dentro do aplicativo,
+13,7 MB, como era antes). O preço volta a ser um AAB a cada mudança do jogo.
+
+### 8.3 A compra de item digital tem de ser pela Google
+
+Dentro do aplicativo da Play, **todo item digital do jogo** (moedas, pacotes,
+qualquer coisa que se usa dentro do jogo) só pode ser vendido pela **cobrança
+do Google Play** (Play Billing). Hoje a loja do jogo usa o Mercado Pago. Isso
+vale mesmo com o jogo vindo do servidor — **e fica mais delicado**, porque a
+loja da web aparece no aplicativo no instante em que for publicada.
+
+- **Antes do primeiro envio:** a loja precisa estar **escondida dentro do
+  aplicativo** (`JOGO.Mobile.app()`), sem botão, sem preço e **sem link ou
+  texto mandando comprar pelo site** — a Play, em regra, também proíbe levar o jogador
+  para pagar fora. **Isto ainda não foi feito.**
+- **A etapa seguinte** (não feita, de propósito): a compra pela Google, com um
+  plugin de cobrança no aplicativo e a conferência do recibo no servidor. A
+  Google fica com uma parte de cada venda (confira a taxa atual no Play Console).
+- A loja da web, para quem joga no computador, **continua como está**.
+
+### 8.4 O que conferir no aparelho (nada disto pôde ser provado aqui)
+
+Esta máquina não compila. Tudo abaixo foi lido no código do Capacitor 8 ou
+provado no Chrome com a casca fingida — falta o telefone:
+
+1. **Abre do servidor** e o `JOGO.Mobile.app()` é verdadeiro (a qualidade abre
+   em média, o `<html>` tem a classe `app`).
+2. **Botão voltar e tela acesa** funcionam com o jogo servido (a ponte do
+   Capacitor na página do servidor).
+3. **Modo avião ao abrir:** aparece "Sem conexão"; ligando a rede, o jogo abre.
+   Confira também o botão voltar **nessa** tela (lá o jogo não está carregado).
+4. **A escolha dos modelos:** aparece na primeira abertura; "Baixar tudo" mostra
+   a barra em MB.
+5. **A retomada:** no meio do download, feche o aplicativo (tire da lista de
+   recentes) e abra de novo — a barra tem de recomeçar de onde parou.
+6. **Dados móveis:** com o Wi-Fi desligado, a tela avisa antes de baixar.
+7. **O espaço:** Configurações → *Modelos no aparelho* mostra os MB; em
+   Android → Apps → SOTERRA → Armazenamento, o número aparece em **Dados** (não
+   em Cache). "Limpar cache" do Android **não** pode apagar os modelos.
+8. **Depois de um deploy na web:** feche e abra o aplicativo — o jogo novo tem
+   de aparecer sem reinstalar.
+9. **Um link para fora** (por exemplo o do Mercado Pago, enquanto a loja não
+   for escondida) abre no navegador do aparelho.
