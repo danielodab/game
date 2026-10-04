@@ -39,8 +39,8 @@ embaixo é só para o dono olhar.</div>
     'assets/embedded/env-kit.js','js/render3d/models3d.js',
     'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js','assets/embedded/models-anims.js',
     'assets/embedded/models-heroes.js','assets/embedded/models-meshy-jardim.js',
-    // o corpo provisório do Colosso de Brasa (o Monte de Escória do Fecho)
-    'assets/embedded/models-meshy-emberlock.js',
+    // 03/10: o Colosso de Brasa tem corpo próprio (antes vestia o Monte de Escória do Fecho)
+    'assets/embedded/models-meshy-colossos.js',
     'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
     'js/render2d/art.js','js/ui/icones_ui.js','js/ui/hud.js'];
   for (var i = 0; i < arquivos.length; i++)
@@ -135,12 +135,12 @@ embaixo é só para o dono olhar.</div>
       quadros(4);
       check('sem perigo no estado, nada fica no chão', R.perigosNaTela().length === 0, R.perigosNaTela().length + ' sobraram de ' + antes);
 
-      // ---- o colosso: corpo provisório e porte
+      // ---- o colosso: corpo PRÓPRIO (03/10, a arte do dono chegou) e porte
       var col = bt.units.filter(function (u) { return u.defId === 'colosso_fogo'; })[0];
       var comum = bt.units.filter(function (u) { return u.side === 'enemy' && u.defId === 'thorn-lasher'; })[0];
       var lk = M.lookFor('colosso_fogo');
-      check('o Colosso de Brasa veste o corpo provisório (Monte de Escória) pela chave própria',
-            !!lk && lk.model === 'slag-mound' && (M.CORPO_PROVISORIO['colosso-fogo'] || {}).model === 'slag-mound', lk && lk.model);
+      check('o Colosso de Brasa veste o corpo dele (chave própria colosso-fogo, fora da tabela do provisório)',
+            !!lk && lk.model === 'colosso-fogo' && !!(JOGO.MODELS || {})['colosso-fogo'] && !M.CORPO_PROVISORIO['colosso-fogo'], lk && lk.model);
       var nc = col && R.unitNode(col.uid), nm = comum && R.unitNode(comum.uid);
       if (nc && nm) {
         var hc = altura(nc), hm = altura(nm);

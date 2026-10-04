@@ -25,6 +25,8 @@
                                bichos-invocacoes e pets (11/09): os retratos
                                da wiki, com o quadro do próprio motor, e a
                                capa larga de cada chefe para a landing.
+                               bichos-colossos (03/10): os quatro Colossos
+                               do Poço, que a wiki mostra no bestiário.
     ?ver=1                     a FOLHA DE CONFERÊNCIA: tudo de site/img/ numa
                                grade, com o tamanho de cada arquivo e o alerta
                                do que falta. O dono aprova antes do commit (D12).
@@ -141,6 +143,10 @@
       // 21/09 a noite: o Coracao Partido abriu com os DEZ proprios — nenhum
       // emprestimo, entao o lote carrega so o pacote dele
       'bichos-coracao':    ['assets/embedded/models-meshy-brokenheart.js'],
+      // 03/10: os QUATRO Colossos do Poco ganharam corpo proprio. Nao moram em
+      // calabouco nenhum, mas a wiki os mostra no bestiario (o id tem '_':
+      // monstro-colosso_fogo.webp) e sem este lote a prova do site reprova
+      'bichos-colossos':   ['assets/embedded/models-meshy-colossos.js'],
       'bichos-invocacoes': ['assets/embedded/models-meshy-sum.js', 'assets/embedded/models-monsters.js'],
       'pets':              ['assets/embedded/models-pets.js']
     };
@@ -731,7 +737,7 @@
       if (Q.ver) return folha();
       if (!Q.lote) {
         SUM.textContent = 'use ?lote=<nome> (classes, fus-sumo, fus-minotauro, fus-cacador, fus-curandeira, fus-bruxo-ladino, fus-xama, obras, equipe, ' +
-                          'bichos-estufa, bichos-cisterna, bichos-invocacoes, pets) ou ?ver=1';
+                          'bichos-estufa, bichos-cisterna, bichos-fecho, bichos-andaimes, bichos-mina, bichos-coracao, bichos-colossos, bichos-invocacoes, pets) ou ?ver=1';
         return;
       }
       rodaLote(Q.lote);

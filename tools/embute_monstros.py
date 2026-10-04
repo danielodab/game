@@ -57,6 +57,9 @@ NOMES_CALABOUCO = {
     "greenhouse": "A Estufa Soterrada", "cistern": "A Corte Afogada",
     "emberlock": "O Fecho de Brasa", "windscaffold": "Andaimes do vento",
     "quakemine": "Mina Tremula", "brokenheart": "O Coração partido",
+    # 03/10: os três lotes que não são de calabouço (manifesto à mão)
+    "colossos": "Os Colossos do Poço", "eco": "O Eco Primordial (Ecos Menores)",
+    "santuario": "O Santuário dos Elementos",
 }
 
 
@@ -139,7 +142,14 @@ def dentro_do_blender():
         return False
 
 
-def arquivo_de(pasta, prefixo, papel_arquivo):
+def arquivo_de(pasta, prefixo, papel_arquivo, arquivos=None):
+    # 03/10: o lote do Santuário trouxe o ataque do Vigia de Pavio como
+    # "attack.glb", sem o nome do bicho na frente. A pasta do dono não se
+    # mexe, então o manifesto pode dizer o nome exato de um arquivo:
+    # "arquivos": {"attack": "attack.glb"}. Sem essa chave vale a regra de
+    # sempre, "<prefixo> <papel>.glb".
+    if arquivos and papel_arquivo in arquivos:
+        return os.path.join(pasta, arquivos[papel_arquivo])
     return os.path.join(pasta, "%s %s.glb" % (prefixo, papel_arquivo))
 
 
@@ -153,7 +163,7 @@ def raio_x(man):
             print("   FALTA A PASTA:", pasta); continue
         decisao = {}
         for papel in PAPEIS:
-            cam = arquivo_de(pasta, mo["prefixo"], papel)
+            cam = arquivo_de(pasta, mo["prefixo"], papel, mo.get("arquivos"))
             if not os.path.exists(cam):
                 print("   %-8s FALTA %s" % (papel, os.path.basename(cam))); continue
             bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -201,13 +211,13 @@ def reamostra():
     return n
 
 
-def funde(pasta, prefixo, mapa):
+def funde(pasta, prefixo, mapa, arquivos=None):
     """Importa os seis GLBs, guarda uma ação por PAPEL (renomeada pelo papel),
     mantém a malha do primeiro e apaga as repetidas — o mesmo funil dos lotes."""
     import bpy
     achadas, perdidas = {}, []
     for i, (arquivo_papel, papel) in enumerate(mapa.items()):
-        cam = arquivo_de(pasta, prefixo, arquivo_papel)
+        cam = arquivo_de(pasta, prefixo, arquivo_papel, arquivos)
         if not os.path.exists(cam):
             perdidas.append(os.path.basename(cam)); continue
         antes_obj = set(o.name for o in bpy.data.objects)
@@ -258,7 +268,7 @@ def embute(man):
             rel.append((mo["id"], 0, 0, 0, [], ["PASTA INTEIRA"])); continue
         print("\n--- %s (%s)" % (mo["nome"], mo["id"]))
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        achadas, perdidas = funde(pasta, mo["prefixo"], mo["mapa"])
+        achadas, perdidas = funde(pasta, mo["prefixo"], mo["mapa"], mo.get("arquivos"))
         reamostra()
         tris, alt = 0, 0.0
         for o in bpy.data.objects:

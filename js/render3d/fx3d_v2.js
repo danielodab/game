@@ -925,7 +925,11 @@ var JOGO = (typeof window !== 'undefined')
     mine:    { color: '#c9a227', rate: 6,  up: 0.25, size: 0.20 },
     heart:   { color: '#ffd166', rate: 8,  up: 0.5,  size: 0.22 },
     // 15/09: o Salão da Sede — poeira dourada devagar na luz das lareiras (poucas: é salão, não forja)
-    sede:    { color: '#ffc27a', rate: 3,  up: 0.28, size: 0.14 }
+    sede:    { color: '#ffc27a', rate: 3,  up: 0.28, size: 0.14 },
+    // 03/10: a Câmara do Eco tem tema próprio agora; a poeira é a mesma do Coração, que ela vestia
+    eco:     { color: '#ffd166', rate: 8,  up: 0.5,  size: 0.22 },
+    // 03/10: o Santuário — pó claro e devagar, sem a cor de um quadrante só
+    santuario: { color: '#e6e0ff', rate: 5, up: 0.3, size: 0.16 }
   };
   function updateAmbient(dt) {
     var a = AMB[ambientTheme];

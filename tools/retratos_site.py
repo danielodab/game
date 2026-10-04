@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Os retratos do site, fotografados do próprio 3D do jogo (10/09).
 
-    python tools/retratos_site.py                     # os 11 lotes (classes, fusões e bichos)
+    python tools/retratos_site.py                     # os 16 lotes (classes, fusões e bichos)
     python tools/retratos_site.py --lote classes      # só um lote (pode repetir)
     python tools/retratos_site.py --lote pets         # um dos 4 lotes dos bichos da wiki (11/09)
     python tools/retratos_site.py --obras             # soma o lote das 6 obras de fusão
@@ -89,7 +89,7 @@ PAGINA = 'tools/retratos_site.html'
 NOME_OK = re.compile(r'^(classe|fusao|obra|equipe|monstro|pet)-[a-z0-9_-]+(-busto)?\.(webp|png)$')
 # 11/09: os bichos da wiki — monstros dos portais abertos, invocações do Xamã e pets
 LOTES_BICHOS = ['bichos-estufa', 'bichos-cisterna', 'bichos-fecho', 'bichos-andaimes', 'bichos-mina',
-                'bichos-coracao', 'bichos-invocacoes', 'pets']
+                'bichos-coracao', 'bichos-colossos', 'bichos-invocacoes', 'pets']
 LOTES = ['classes', 'fus-sumo', 'fus-minotauro', 'fus-cacador', 'fus-curandeira', 'fus-bruxo-ladino', 'fus-xama'] + LOTES_BICHOS
 LOTE_OBRAS = 'obras'
 LOTE_EQUIPE = 'equipe'           # o Cavaleiro Negro (meshy_gm): a caixa da equipe no ranking
@@ -169,6 +169,16 @@ def invocacoes_sem_calabouco():
             if re.search(r'\bstats\s*:', corpo) and 'dungeonId' not in corpo]
 
 
+def colossos_do_poco():
+    """Os Colossos do Poço (03/10): `colosso: true` em monsters.js. O id tem `_`
+    (colosso_fogo), por isso a lista das invocações acima, que só aceita hífen,
+    não os vê. A wiki os mostra no bestiário e pede o retrato pelo id."""
+    with open(os.path.join(RAIZ, 'js', 'core', 'data', 'monsters.js'), encoding='utf-8') as f:
+        fonte = f.read()
+    return [i for i, corpo in re.findall(r"(?s)\n    '([a-z0-9_-]+)': \{(.*?)\n    \}", fonte)
+            if re.search(r'\bcolosso\s*:\s*true', corpo)]
+
+
 def esperados_bichos():
     """[(nome sem extensão, (largura, altura))] dos bichos da wiki (11/09). Os
     corpos da Estufa e da Cisterna têm o nome do monstro que os veste."""
@@ -180,7 +190,7 @@ def esperados_bichos():
              # os dois da Mina que vestem corpo emprestado nao tem chave propria
              # em nenhum arquivo: a wiki pede o retrato pelo ID DO MONSTRO
              ['ore-chip', 'crystal-chanter'])
-    for i in sorted(set(donos + invocacoes_sem_calabouco())):
+    for i in sorted(set(donos + invocacoes_sem_calabouco() + colossos_do_poco())):
         out.append(('monstro-' + i, (TAM['bicho'], TAM['bicho'])))
         if i.startswith('boss-'):
             out.append(('monstro-%s-capa' % i, CAPA))

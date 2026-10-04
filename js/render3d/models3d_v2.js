@@ -447,18 +447,43 @@ var JOGO = (typeof window !== 'undefined')
     'stone-herald':   { model: 'stone-herald',   scale: 1.28 },  // 2,30 m — a armadura cheia de alicerce; o tanque
     'heartroot':      { model: 'heartroot',      scale: 1.33 },  // 2,39 m — a raiz que veio abracar o Coracao
     'boss-riftheart': { model: 'boss-riftheart', scale: 1.22 },  // 3,60 m — o maior bicho do jogo, o teto da regua
-    // --- Os COLOSSOS DO POÇO (02/10) — ainda SEM a arte do dono.
+    // --- Os COLOSSOS DO POÇO — A ARTE E DO USUARIO (03/10).
     //
-    // Cada um tem chave de modelo PRÓPRIA ('colosso-fogo'...): quando o lote
-    // dele for embutido com essa chave, ele veste o corpo dele sozinho. Até lá
-    // a chave cai no CORPO PROVISÓRIO (M.CORPO_PROVISORIO, logo abaixo da
-    // tabela) — um monstro de arte própria do calabouço do MESMO elemento.
+    // Os quatro sairam do Meshy (tools/embute_monstros.py, lote `colossos`,
+    // manifesto a mao porque nao tem calabouco) e moram em
+    // assets/embedded/models-meshy-colossos.js com a chave PROPRIA
+    // ('colosso-fogo'...). Enquanto a arte nao existia, a chave caia num corpo
+    // provisorio (M.CORPO_PROVISORIO); as quatro linhas de la sairam junto.
+    // A arte veio CINZA de proposito: sao irmaos de corpo e quem diz o elemento
+    // e a tinta do jogo (52% da cor do elemento) — laranja, azul, verde, lilas.
     // Porte: 1,6× um monstro comum (1,80 m × 1,6 = 2,88 m) — maior que todo
     // comum e ainda abaixo dos chefes (2,95 a 3,60 m).
-    'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — rocha vulcânica com fendas de lava
-    'colosso_agua':   { model: 'colosso-agua',   scale: 1.60 },  // 2,88 m — coral e água viva
-    'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraça de lajes
-    'colosso_ar':     { model: 'colosso-ar',     scale: 1.60 },  // 2,88 m — correntes de vento preso
+    'colosso_fogo':   { model: 'colosso-fogo',   scale: 1.60 },  // 2,88 m — basalto rachado com a crista de vulcao nos ombros
+    'colosso_agua':   { model: 'colosso-agua',   scale: 1.57 },  // 2,89 m — coral e agua viva (1,57: de pe, parado, ele estica mais que os irmaos; com 1,60 media 2,945 e encostava no menor chefe, 2,95)
+    'colosso_terra':  { model: 'colosso-terra',  scale: 1.60 },  // 2,88 m — couraca de lajes
+    // (`retrato: 'inteiro'`: o da Ventania e esguio e passa na regra do busto, que dava um close do
+    //  rosto liso dele ao lado de tres irmaos de corpo inteiro — os quatro saem iguais na linha do tempo)
+    'colosso_ar':     { model: 'colosso-ar',     scale: 1.60, retrato: 'inteiro' },  // 2,88 m — correntes de vento preso
+    // --- O SANTUARIO DOS ELEMENTOS (calabouco 'elementsanctum') — A ARTE E DO USUARIO (03/10).
+    //
+    // Os OITO sairam do Meshy (lote `santuario`, models-meshy-santuario.js),
+    // dois por quadrante. O id do monstro usa '_' e a chave do modelo usa '-'
+    // (o mesmo par dos Colossos), por isso cada um precisa da linha: sem ela o
+    // `proprio` do monsterLook procuraria o kit pelo id com '_' e nao acharia.
+    // Escala = altura do briefing ÷ 1,80 (docs/PROMPTS_LANCAMENTO.md).
+    // `retrato: 'inteiro'` no Caramujo e na Garca: o busto por medida cortava o Caramujo na borda da
+    // concha (a cabeca dele sao duas antenas) e mostrava da Garca so o pescoco de costas (o bico
+    // comprido alarga a faixa). De corpo inteiro os dois se reconhecem na linha do tempo.
+    // A Arraia PLANA em vez de andar: o `walk` dela e o clipe de nado do
+    // Meshy (Swim_Forward), o corpo deita e desliza — foi o dono que escolheu.
+    'el_fogo_1':  { model: 'el-fogo-1',  scale: 1.17 },  // 2,11 m — Vigia de Pavio: cabeca de vela com um olho so; distancia
+    'el_fogo_2':  { model: 'el-fogo-2',  scale: 0.83 },  // 1,49 m — Mariposa de Cinza: as asas sao os bracos; rapida
+    'el_agua_1':  { model: 'el-agua-1',  scale: 1.06, retrato: 'inteiro' },  // 1,91 m — Caramujo-Comporta: a concha de bronze rebitado; tanque (sem correr)
+    'el_agua_2':  { model: 'el-agua-2',  scale: 1.11, retrato: 'inteiro' },  // 2,00 m — Garca de Galeria: arpoa de longe
+    'el_terra_1': { model: 'el-terra-1', scale: 1.22 },  // 2,20 m — Pilarete: um pedaco do pilar vivo que andou; tanque
+    'el_terra_2': { model: 'el-terra-2', scale: 0.89 },  // 1,60 m — Toupeira-Sentinela: garras de pa
+    'el_ar_1':    { model: 'el-ar-1',    scale: 1.28 },  // 2,30 m — Cata-Vento: empurra de longe
+    'el_ar_2':    { model: 'el-ar-2',    scale: 1.00, loco: 'walk' },  // 1,80 m — Arraia de Rajada: plana (walk = nado; `loco` o poe na frente da corrida)
     // --- Rebanho do Invocador (invocacoes)
     'sporeling':          { model: 'q_frog',   scale: 0.62 },
     // Seis das sete estavam erradas no CONCEITO — cao de brasa era um lobo,
@@ -492,12 +517,15 @@ var JOGO = (typeof window !== 'undefined')
      * corpo cai no provisório de M.CORPO_PROVISORIO (logo abaixo). `tintaDaFase`: o Eco troca de
      * elemento a cada fase, e a tinta vem do elemento da UNIDADE, não do dado (o renderizador
      * refaz o corpo quando ele troca). Porte: chefe é 2,95 m × escala; o Eco é ~2× um chefe
-     * (ocupa 2×2 casas) e o Menor, um monstro comum. */
+     * (ocupa 2×2 casas) e o Menor, um monstro comum.
+     * 03/10: chegaram TRÊS Menores com corpo próprio (lote `eco`, models-meshy-eco.js): Brasa,
+     * Coral e Rocha. O de Rocha é o tanque e fica um pouco maior (2,00 m contra 1,80 m). O Eco
+     * Primordial e o Menor de Vento NÃO vieram: seguem no provisório, e a linha deles lá fica. */
     'eco_primordial':  { model: 'boss-eco-primordial', scale: 2.00, tintaDaFase: true },   // 5,90 m
-    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },
-    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },
-    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.00 },
-    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }
+    'eco_menor_fogo':  { model: 'eco-menor-fogo',  scale: 1.00 },   // 1,80 m — lava que esfriou e ganhou pernas
+    'eco_menor_agua':  { model: 'eco-menor-agua',  scale: 1.00 },   // 1,80 m — galho de coral com água presa
+    'eco_menor_terra': { model: 'eco-menor-terra', scale: 1.05 },   // 2,00 m — o irmão atarracado, o tanque (sem correr); 1,05 é o que entrega 2,00 m POSADO (com 1,11 media 2,11)
+    'eco_menor_ar':    { model: 'eco-menor-ar',    scale: 1.00 }    // ainda SEM arte: veste o Arauto do Vento (provisório)
   };
 
 
@@ -515,37 +543,27 @@ var JOGO = (typeof window !== 'undefined')
   M.MONSTER_FALLBACK = { model: 'skeleton_minion', scale: 1.0 };
 
   /* O CORPO PROVISÓRIO (02/10): quem veste o quê enquanto a arte final não
-   * chega. UMA tabela só para o Eco Primordial (frente do supremo) e para os
-   * Colossos do Poço (frente do poço) — as duas frentes criaram cada uma a sua
-   * `M.CORPO_PROVISORIO` em formatos diferentes, e na junção de 03/10 a segunda
-   * apagava a primeira (o Eco ficava sem corpo, e a linha do colosso, que era
-   * só um texto, quebrava o `base.model` do monsterLook).
+   * chega. Nasceu como UMA tabela para o Eco Primordial (frente do supremo) e
+   * para os Colossos do Poço (frente do poço) — as duas frentes criaram cada
+   * uma a sua `M.CORPO_PROVISORIO` em formatos diferentes, e na junção de
+   * 03/10 a segunda apagava a primeira.
    * Cada linha é { model, scale?, tintaDaFase? }: `model` é o corpo emprestado;
-   * `scale`/`tintaDaFase`, quando vierem, trocam os da linha do MONSTER_LOOK
-   * (sem eles vale a escala da linha — a do colosso, 1,60).
+   * `scale`/`tintaDaFase`, quando vierem, trocam os da linha do MONSTER_LOOK.
    * Para a arte final entrar basta embutir o kit com a chave própria (ela passa
    * na frente: temKitDe); para aposentar o provisório de vez, apaga-se UMA
    * linha daqui.
+   * 03/10, o lote do lançamento: os quatro Colossos e os Ecos Menores de
+   * Brasa, Coral e Rocha ganharam corpo próprio, e as sete linhas deles
+   * saíram. Sobram os dois que o dono ainda NÃO gerou:
    * ECO: o Coração Partido é o maior chefe e já é feito de quatro elementos —
    * o melhor dublê de "pedaços dos seis calabouços"; com 2,44 ele mede 7,2 m,
-   * o dobro dele (1,22). Os Menores vestem os quatro Arautos do Coração, a
-   * mesma armadura com recheio de cada elemento, no porte que já têm.
-   * COLOSSOS: um monstro de arte própria do calabouço do mesmo elemento, já no
-   * porte de colosso, escolhido pela silhueta:
-   *   fogo  → Monte de Escória (Fecho de Brasa): pedra que escorre;
-   *   água  → Golem de Salmoura (Cisterna): "um colosso de sal";
-   *   terra → Boca do Túnel (Mina Trêmula): peito e boca de rocha;
-   *   ar    → Nuvem-Enxame (Andaimes do Vento): vento com forma de gente. */
+   * o dobro dele (1,22).
+   * ECO MENOR DE VENTO: veste o Arauto do Vento do Coração, no porte que já
+   * tem. Ele é do MESMO elemento do dono do corpo, mas os dois nunca dividem
+   * uma sala (o Arauto mora no Coração, o Menor na Câmara do Eco). */
   M.CORPO_PROVISORIO = {
     'boss-eco-primordial': { model: 'boss-riftheart', scale: 2.44, tintaDaFase: true },
-    'eco-menor-fogo':      { model: 'cinder-herald', scale: 1.17 },
-    'eco-menor-agua':      { model: 'tide-herald',   scale: 1.17 },
-    'eco-menor-terra':     { model: 'stone-herald',  scale: 1.28 },
-    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 },
-    'colosso-fogo':        { model: 'slag-mound' },
-    'colosso-agua':        { model: 'brine-golem' },
-    'colosso-terra':       { model: 'cave-jaw' },
-    'colosso-ar':          { model: 'mote-swarm' }
+    'eco-menor-ar':        { model: 'gale-herald',   scale: 1.11 }
   };
   // a chave própria já tem arte? (embutida, no manifesto do servido, ou no bundle)
   function temKitDe(chave) {
@@ -636,6 +654,84 @@ var JOGO = (typeof window !== 'undefined')
   var tentado = {};          // chave -> true: ja passou pelo parse (deu certo ou nao)
   var ouvintes = [];         // aoChegar(fn): quem precisa saber que modelo novo abriu
 
+  /* O CLIPE DE LOCOMOÇÃO FICA NO LUGAR (03/10). Quem leva o corpo de uma casa
+   * para a outra é o tabuleiro; o clipe só mexe as pernas. A Arraia de Rajada
+   * (Santuário) chegou com o andar no clipe de NADO do Meshy (Swim_Forward),
+   * que traz o deslocamento DENTRO do clipe: a raiz avança dois corpos por
+   * ciclo e volta num salto quando o laço recomeça — em jogo ela dispararia
+   * para a frente e seria puxada de volta a cada volta do clipe.
+   * A regra é por MEDIDA, não por nome: se a posição do osso-raiz termina
+   * longe de onde começou, tira-se a rampa (o avanço constante) eixo por eixo
+   * e fica só o balanço. Clipe que já é um laço no lugar (todos os outros)
+   * começa e termina no mesmo ponto e não é tocado. */
+  // a raiz é o quadril (Hips); arquivo sem esse nome usa a primeira trilha de posição
+  function trilhaDaRaiz(clip) {
+    var primeira = null;
+    for (var i = 0; clip && clip.tracks && i < clip.tracks.length; i++) {
+      var t = clip.tracks[i];
+      if (!/\.position$/.test(t.name) || t.values.length < 6) continue;
+      if (!primeira) primeira = t;
+      if (/Hips\.position$/i.test(t.name)) return t;
+    }
+    return primeira;
+  }
+  function prendeNoLugar(clip) {
+    if (!clip || !clip.tracks || clip.__noLugar) return false;
+    clip.__noLugar = true;
+    var tr = trilhaDaRaiz(clip);
+    if (!tr) return false;
+    var v = tr.values, tm = tr.times, n = tm.length, dur = tm[n - 1] - tm[0];
+    if (!(dur > 0)) return false;
+    // a régua: a maior coordenada da raiz (a altura do quadril, na unidade do arquivo)
+    var ref = 0;
+    for (var k = 0; k < v.length; k++) ref = Math.max(ref, Math.abs(v[k]));
+    var mexeu = false;
+    for (var e = 0; e < 3; e++) {
+      var avanco = v[(n - 1) * 3 + e] - v[e];
+      if (Math.abs(avanco) <= ref * 0.2) continue;
+      for (var q = 0; q < n; q++) v[q * 3 + e] -= avanco * (tm[q] - tm[0]) / dur;
+      mexeu = true;
+    }
+    return mexeu;
+  }
+  M.prendeNoLugar = prendeNoLugar;
+  // quem foi ajustado, para as provas: 'chave.papel' -> 'preso', 'subiu' ou 'preso+subiu'
+  var locoAjustada = {};
+  M.locoAjustada = function () { return locoAjustada; };
+
+  /* E FICA EM CIMA DO CHÃO. O mesmo clipe de nado da Arraia foi feito para um
+   * corpo na ÁGUA: a raiz dele fica abaixo da origem, e em jogo a Arraia
+   * planava um metro DENTRO do piso. Também por medida: se a raiz do clipe de
+   * locomoção fica, em média, abaixo da metade da altura que ela tem no clipe
+   * parado, o clipe inteiro sobe até a altura do parado — o corpo plana na
+   * altura do próprio quadril. Andar e correr de pé têm a raiz na mesma altura
+   * do parado e não são tocados.
+   * A conta é no espaço do PAI do osso (o Armature do Meshy vem girado e em
+   * centímetros): a linha do meio da matriz dele dá a altura no mundo, e a
+   * inversa diz que deslocamento local vale um metro para cima. */
+  function assentaLocomocao(scene, clipParado, clip) {
+    if (!scene || !clipParado || !clip || clip === clipParado || clip.__assentado) return false;
+    clip.__assentado = true;
+    var trP = trilhaDaRaiz(clipParado), trL = trilhaDaRaiz(clip);
+    if (!trP || !trL || trP.name !== trL.name) return false;
+    var osso = scene.getObjectByName(trL.name.replace(/\.position$/, ''));
+    if (!osso || !osso.parent) return false;
+    scene.updateMatrixWorld(true);
+    var m = osso.parent.matrixWorld.elements;
+    function alturaMedia(tr) {
+      var v = tr.values, n = v.length / 3, soma = 0;
+      for (var i = 0; i < n; i++) soma += m[1] * v[i * 3] + m[5] * v[i * 3 + 1] + m[9] * v[i * 3 + 2] + m[13];
+      return soma / n;
+    }
+    var hP = alturaMedia(trP), hL = alturaMedia(trL);
+    if (!(hP > 0) || hL >= hP * 0.5) return false;
+    var sobe = new THREE.Vector3(0, hP - hL, 0)
+      .applyMatrix3(new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().copy(osso.parent.matrixWorld).invert()));
+    var vl = trL.values;
+    for (var q = 0; q < vl.length; q += 3) { vl[q] += sobe.x; vl[q + 1] += sobe.y; vl[q + 2] += sobe.z; }
+    return true;
+  }
+
   function parseUm(loader, key, feito) {
     var src = JOGO.MODELS || {};
     tentado[key] = true;
@@ -653,9 +749,20 @@ var JOGO = (typeof window !== 'undefined')
             clips[gltf.animations[j].name] = gltf.animations[j];
             names.push(gltf.animations[j].name);
           }
+          var acoes = names.length ? autoActions(names) : null;
+          // 03/10: o andar e o correr ficam NO LUGAR e EM CIMA DO CHÃO (ver
+          // prendeNoLugar e assentaLocomocao)
+          if (acoes) {
+            ['walk', 'run'].forEach(function (papel) {
+              if (!acoes[papel]) return;
+              var preso = prendeNoLugar(clips[acoes[papel]]);
+              var subiu = assentaLocomocao(gltf.scene, clips[acoes.idle], clips[acoes[papel]]);
+              if (preso || subiu) locoAjustada[key + '.' + papel] = (preso ? 'preso' : '') + (preso && subiu ? '+' : '') + (subiu ? 'subiu' : '');
+            });
+          }
           raw[key] = {
             scene: gltf.scene, clips: clips,
-            actions: names.length ? autoActions(names) : null,   // null = usa o banco KayKit
+            actions: acoes,                                       // null = usa o banco KayKit
             own: names.length > 0,
             natural: naturalHeight(gltf.scene),
             yaw: measureYaw(gltf.scene)
@@ -1275,6 +1382,8 @@ var JOGO = (typeof window !== 'undefined')
     return {
       model: M.corpoDe(base.model), show: (base.show || []).slice(),   // 02/10: o corpo provisório já foi trocado acima; corpoDe é a rede de segurança
       proc: !!base.proc, procId: defId,
+      loco: base.loco || null,           // 03/10: o clipe de locomoção que passa na frente (a Arraia plana)
+      retrato: base.retrato || null,     // 03/10: 'inteiro' = o retrato da HUD sai de corpo inteiro (ver M.portrait)
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
       tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
@@ -1641,7 +1750,9 @@ var JOGO = (typeof window !== 'undefined')
     // acervo, e o mesmo caminho serve monstro, chefe, pet e herói. Nunca por id.
     //   corrida > caminhada > voo > pulo, e `idle` só como derrota declarada.
     var locoCache = null;
-    var LOCO_ORDER = ['run', 'walk', 'fly', 'jump'];
+    // 03/10: `look.loco` passa um clipe na frente da fila — a Arraia de Rajada
+    // PLANA (o `walk` dela é o nado) e não pode trocar o planar pela corrida a pé.
+    var LOCO_ORDER = look.loco ? [look.loco, 'run', 'walk', 'fly', 'jump'] : ['run', 'walk', 'fly', 'jump'];
     function locomotion() {
       if (locoCache) return locoCache;
       for (var i = 0; i < LOCO_ORDER.length; i++) {
@@ -2067,7 +2178,11 @@ var JOGO = (typeof window !== 'undefined')
 
     // ENQUADRAMENTO PELA GEOMETRIA (§ portraitFraming): sem isto, altura e
     // distância fixas decapitavam o Bárbaro e encolhiam o Xamã.
-    var f = M.portraitFraming(node, opts.corpoInteiro);
+    // 03/10: `retrato: 'inteiro'` no look pede a figura toda mesmo no retrato pequeno. A regra do
+    // busto é por medida e serve a quase todos; ela erra em corpo cuja "cabeça" não é um rosto
+    // (antenas, bico comprido, crânio liso). É dado declarado na linha do MONSTER_LOOK, não id
+    // escondido aqui dentro.
+    var f = M.portraitFraming(node, opts.corpoInteiro || look.retrato === 'inteiro');
     if (!f) { portScene.remove(node); return null; }
     var ca = Math.cos(PORT_ANG), sa = Math.sin(PORT_ANG);
     portCam.position.set(f.tx + sa * f.dist, f.cy, f.tz + ca * f.dist);

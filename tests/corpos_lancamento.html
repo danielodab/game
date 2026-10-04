@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — os 15 corpos do lote do lançamento</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:1100px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font:11px monospace;margin:10px 0}
+  th,td{border:1px solid #2b3542;padding:2px 6px;text-align:left}
+  th{background:#1a2029;color:#8895a6}
+  td.cai{color:#f88} td.ok{color:#8fc79b}
+  canvas.folha{display:block;margin:8px 0;border:1px solid #2b3542;max-width:100%}
+</style>
+</head>
+<body>
+<h1>Os 15 corpos do lote do lançamento — lado a lado, contados</h1>
+<div class="sub">03/10. O dono entregou os QUATRO Colossos do Poço, TRÊS Ecos Menores (Brasa, Coral, Rocha)
+e os OITO monstros do Santuário dos Elementos. Esta página monta cada um pelo caminho do jogo
+(<code>Models3D2.unit</code>, a mesma função que o tabuleiro usa) e CONTA o que saiu: malhas, ossos,
+triângulos, clipes e altura. A foto embaixo é para o dono olhar; quem aprova é a conta.
+<br>O que ela cobra de cada corpo: veste a chave PRÓPRIA (nada de corpo provisório); tem malha com
+esqueleto; cada papel (andar, atacar, apanhar, morrer) tem clipe próprio e esse clipe MEXE os ossos;
+o ataque é o golpe e não a reação (o Meshy entrega os dois trocados); a altura é a do briefing; os pés
+ficam no chão; a frente olha para +Z; o andar não sai do lugar; a morte derruba o corpo.
+<br>Os dois que NÃO chegaram (o Eco Primordial e o Eco Menor de Vento) têm de continuar montando no
+corpo provisório, sem erro.</div>
+<div id="summary">montando…</div>
+<ul id="lista"></ul>
+<table id="tab"></table>
+<canvas id="folha" class="folha"></canvas>
+<canvas id="golpe" class="folha"></canvas>
+<canvas id="passo" class="folha"></canvas>
+<canvas id="queda" class="folha"></canvas>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/eco.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy-colossos.js',
+    'assets/embedded/models-meshy-eco.js',
+    'assets/embedded/models-meshy-santuario.js',
+    // o Coração Partido: os dois que não chegaram vestem corpo dele (o provisório)
+    'assets/embedded/models-meshy-brokenheart.js',
+    'js/render3d/models3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (det ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    var mau = res.filter(function (x) { return !x; }).length;
+    s.className = mau ? 'fail' : 'allpass';
+    s.textContent = mau ? (mau + ' de ' + res.length + ' falharam') : ('tudo passou (' + res.length + ')');
+    window.__done = true; window.__fail = mau;
+  }
+
+  /* OS QUINZE. [id do monstro, chave do modelo, elemento, altura do briefing em m, nome].
+   * A altura sai do docs/PROMPTS_LANCAMENTO.md; a escala do MONSTER_LOOK tem de entregar esse número.
+   * O elemento vem daqui e não de DATA.monsters porque os oito do Santuário ainda não têm ficha
+   * (quem a escreve é a frente do mapa); quando tiverem, a página cobra que as duas batam. */
+  var CORPOS = [
+    ['colosso_fogo',   'colosso-fogo',   'fogo',  2.88, 'Colosso de Brasa'],
+    ['colosso_agua',   'colosso-agua',   'agua',  2.88, 'Colosso da Maré'],
+    ['colosso_terra',  'colosso-terra',  'terra', 2.88, 'Colosso de Rocha'],
+    ['colosso_ar',     'colosso-ar',     'ar',    2.88, 'Colosso da Ventania'],
+    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  1.80, 'Eco Menor de Brasa'],
+    ['eco_menor_agua', 'eco-menor-agua', 'agua',  1.80, 'Eco Menor de Coral'],
+    ['eco_menor_terra','eco-menor-terra','terra', 2.00, 'Eco Menor de Rocha'],
+    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.10, 'Vigia de Pavio'],
+    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.50, 'Mariposa de Cinza'],
+    ['el_agua_1',  'el-agua-1',  'agua',  1.90, 'Caramujo-Comporta'],
+    ['el_agua_2',  'el-agua-2',  'agua',  2.00, 'Garça de Galeria'],
+    ['el_terra_1', 'el-terra-1', 'terra', 2.20, 'Pilarete'],
+    ['el_terra_2', 'el-terra-2', 'terra', 1.60, 'Toupeira-Sentinela'],
+    ['el_ar_1',    'el-ar-1',    'ar',    2.30, 'Cata-Vento'],
+    ['el_ar_2',    'el-ar-2',    'ar',    1.80, 'Arraia de Rajada']
+  ];
+  // os dois lentos vieram SEM o clipe de correr, de propósito (são os tanques); só eles
+  var SEM_CORRER = ['eco_menor_terra', 'el_agua_1'];
+  // a Arraia PLANA: o andar dela é o nado do Meshy, com o corpo deitado — só ela pode baixar andando
+  var PLANA = ['el_ar_2'];
+  // os que o dono ainda não gerou: [id, corpo provisório que vestem]
+  var NAO_CHEGARAM = [['eco_primordial', 'boss-riftheart'], ['eco_menor_ar', 'gale-herald']];
+  var PAPEIS = ['idle', 'walk', 'attack', 'hit', 'die'];
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var D = window.JOGO && JOGO.DATA;
+    var M = window.JOGO && JOGO.Models3D2;
+    if (!D || !M) { check('os módulos carregaram', false); return fecha(); }
+    try { M.load(function () {}); } catch (e) {}
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+    var voltas = 0;
+    (function espera() {
+      var ok = false;
+      try { ok = M.isReady(); } catch (e) {}
+      if (!ok && ++voltas < 480) return setTimeout(espera, 250);
+      check('os modelos carregaram', !!ok);
+      try { mede(); } catch (e) { check('a medição rodou até o fim', false, String(e && e.stack || e)); }
+      fecha();
+    })();
+
+    function dadoDe(id) { return (D.monsters && D.monsters[id]) || (D.ecoMonstros && D.ecoMonstros[id]) || null; }
+
+    /* A caixa do corpo POSADO: a caixa da geometria é a da pose de bind, e o que o jogador vê é o
+     * corpo depois do clipe. Pele por pele, vértice sim vértice não (1 a cada 7 basta para a caixa). */
+    function caixaPosada(obj) {
+      obj.updateMatrixWorld(true);
+      var box = new THREE.Box3(), v = new THREE.Vector3(), achou = false;
+      obj.traverse(function (n) {
+        if (!n.isSkinnedMesh || !n.geometry) return;
+        var pos = n.geometry.attributes.position;
+        for (var i = 0; i < pos.count; i += 7) {
+          v.fromBufferAttribute(pos, i);
+          n.boneTransform(i, v);
+          v.applyMatrix4(n.matrixWorld);
+          box.expandByPoint(v); achou = true;
+        }
+      });
+      return achou ? box : null;
+    }
+    function ossos(obj) { var l = []; obj.traverse(function (n) { if (n.isBone) l.push(n); }); return l; }
+    function pose(obj) {
+      obj.updateMatrixWorld(true);
+      return ossos(obj).map(function (b) { return new THREE.Vector3().setFromMatrixPosition(b.matrixWorld); });
+    }
+    function maiorPasso(a, b) {
+      var m = 0;
+      for (var i = 0; i < a.length && i < b.length; i++) m = Math.max(m, a[i].distanceTo(b[i]));
+      return m;
+    }
+    function toca(obj, papel, fracao) {
+      var ud = obj.userData;
+      ud.stopAll();
+      ud.play(papel, { fade: 0, loop: papel !== 'die' });
+      ud.mixer.update(Math.max(0.001, (ud.clipDur(papel) || 1) * fracao));
+      obj.updateMatrixWorld(true);
+    }
+    function monta(id, elem) {
+      var look = M.lookFor(id);
+      // sem ficha em DATA (o Santuário), a tinta sai neutra; aqui o elemento vem da tabela
+      if (look && !dadoDe(id)) { look.tint = M.elementColor(elem); look.accent = look.tint; }
+      return { look: look, obj: M.unit(id, { look: look, element: elem }) };
+    }
+
+    function mede() {
+      var linhas = [], erros = { corpo: [], prov: [], malha: [], papel: [], troca: [], parado: [], correr: [],
+                                 porte: [], pes: [], frente: [], desliza: [], morte: [], tinta: [], elem: [] };
+      CORPOS.forEach(function (c) {
+        var id = c[0], chave = c[1], elem = c[2], alvo = c[3], nome = c[4];
+        var temKit = !!((JOGO.MODELS || {})[chave] || (JOGO.MESHY_CLIPS || {})[chave]);
+        var m = null;
+        try { m = monta(id, elem); } catch (e) { erros.corpo.push(id + ' (estourou: ' + e.message + ')'); return; }
+        var obj = m.obj, look = m.look;
+        if (!obj) { erros.corpo.push(id + ' (não montou)'); return; }
+        if (!temKit || !look || look.model !== chave) erros.corpo.push(id + ' → ' + (look && look.model));
+        if (M.CORPO_PROVISORIO[chave]) erros.prov.push(chave);
+        var md = dadoDe(id);
+        if (md && md.element !== elem) erros.elem.push(id + ' é ' + md.element + ' no dado e ' + elem + ' aqui');
+        var ud = obj.userData;
+
+        // ---- o que o renderizador CRIOU
+        var nMalha = 0, nPele = 0, tris = 0;
+        obj.traverse(function (n) {
+          if (!n.isMesh || !n.visible) return;
+          nMalha++; if (n.isSkinnedMesh) nPele++;
+          var g = n.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+        });
+        var nOsso = ossos(obj).length;
+        if (nPele < 1 || nOsso < 15 || tris < 3000 || tris > 30000)
+          erros.malha.push(id + ' (' + nPele + ' peles, ' + nOsso + ' ossos, ' + Math.round(tris) + ' tris)');
+
+        // ---- a tinta do elemento: a arte veio cinza, quem diz o elemento é o jogo
+        // (a regra: a cor de cada material fica mais perto da cor do SEU elemento que da de
+        // qualquer outro — é o que faz os quatro irmãos saírem laranja, azul, verde e lilás)
+        var pintou = (ud.tintMats || []).length > 0;
+        function longe(c, e) { var k = new THREE.Color(M.elementColor(e)); return Math.abs(c.r - k.r) + Math.abs(c.g - k.g) + Math.abs(c.b - k.b); }
+        (ud.tintMats || []).forEach(function (mt) {
+          ['fogo', 'agua', 'terra', 'ar'].forEach(function (e) {
+            if (e !== elem && longe(mt.color, e) <= longe(mt.color, elem)) pintou = false;
+          });
+        });
+        if (!pintou) erros.tinta.push(id);
+
+        // ---- de pé, parado: altura, pés, frente
+        toca(obj, 'idle', 0.3);
+        var parado = pose(obj), cx = caixaPosada(obj);
+        var h = cx.max.y - cx.min.y;
+        if (Math.abs(h - alvo) > alvo * 0.06) erros.porte.push(id + ' ' + h.toFixed(2) + ' m (pedia ' + alvo.toFixed(2) + ')');
+        if (Math.abs(cx.min.y) > 0.12) erros.pes.push(id + ' sola a ' + cx.min.y.toFixed(2) + ' m');
+        // a frente: do tornozelo para a ponta do pé. O jogo gira o nó inteiro supondo a frente em +Z.
+        var pe = null, ponta = null;
+        ossos(obj).forEach(function (b) {
+          if (/LeftFoot$/i.test(b.name)) pe = b;
+          if (/LeftToeBase$/i.test(b.name)) ponta = b;
+        });
+        var frente = null;
+        if (pe && ponta) {
+          var a = new THREE.Vector3().setFromMatrixPosition(pe.matrixWorld);
+          var b2 = new THREE.Vector3().setFromMatrixPosition(ponta.matrixWorld);
+          frente = b2.sub(a); frente.y = 0; frente.normalize();
+          if (!(frente.z > 0.7)) erros.frente.push(id + ' (pé aponta x=' + frente.x.toFixed(2) + ' z=' + frente.z.toFixed(2) + ')');
+        } else erros.frente.push(id + ' (sem ossos do pé para medir)');
+
+        // ---- cada papel tem clipe PRÓPRIO, e o clipe MEXE o esqueleto
+        var doIdle = ud.clipFor('idle'), mapa = {}, cai = [], mexe = {};
+        PAPEIS.forEach(function (p) {
+          mapa[p] = ud.clipFor(p);
+          if (p !== 'idle' && (!mapa[p] || mapa[p] === doIdle)) cai.push(p);
+        });
+        if (cai.length) erros.papel.push(id + ': ' + cai.join(','));
+        // o Meshy entrega attack.glb com a reação e hit.glb com o golpe; o raio-X destroca e o kit
+        // guarda o golpe como 'attack' e a reação como 'HitReact'
+        if (mapa.attack !== 'attack' || mapa.hit !== 'HitReact') erros.troca.push(id + ' (attack=' + mapa.attack + ', hit=' + mapa.hit + ')');
+        ['walk', 'attack', 'hit', 'die'].forEach(function (p) {
+          toca(obj, p, 0.45);
+          mexe[p] = maiorPasso(parado, pose(obj));
+          if (mexe[p] < 0.05) erros.parado.push(id + '.' + p + ' (' + (mexe[p] * 100).toFixed(0) + ' cm)');
+        });
+        // correr: todos, menos os dois lentos — e os dois lentos NÃO correm (senão a lista ficou velha)
+        var corre = ud.has('run'), devia = SEM_CORRER.indexOf(id) < 0;
+        if (corre !== devia) erros.correr.push(id + (corre ? ' corre e estava na lista dos lentos' : ' não tem o clipe de correr'));
+
+        // ---- o andar não sai do lugar (quem desloca o corpo é o tabuleiro) e não afunda
+        var quadril = null;
+        ossos(obj).forEach(function (b) { if (!quadril && /Hips$/i.test(b.name)) quadril = b; });
+        var deriva = 0, hAndando = 0;
+        // (medido no andar E no clipe que o tabuleiro toca de verdade: `locomotion()` prefere a
+        // corrida, e a Arraia declara o planar na frente dela)
+        var loco = ud.locomotion();
+        var locoDevia = PLANA.indexOf(id) >= 0 ? 'walk' : (SEM_CORRER.indexOf(id) >= 0 ? 'walk' : 'run');
+        if (loco.action !== locoDevia) erros.desliza.push(id + ' desloca-se com `' + loco.action + '` e devia ser `' + locoDevia + '`');
+        if (quadril) {
+          ['walk', loco.action].forEach(function (p) {
+            toca(obj, p, 0.02);
+            var q0 = new THREE.Vector3().setFromMatrixPosition(quadril.matrixWorld);
+            toca(obj, p, 0.9);
+            var q1 = new THREE.Vector3().setFromMatrixPosition(quadril.matrixWorld);
+            var dv = Math.sqrt((q1.x - q0.x) * (q1.x - q0.x) + (q1.z - q0.z) * (q1.z - q0.z));
+            deriva = Math.max(deriva, dv);
+            if (dv > 0.35) erros.desliza.push(id + '.' + p + ' (' + dv.toFixed(2) + ' m no ciclo)');
+          });
+        }
+        // a sola no clipe que o tabuleiro toca, em três pontos do ciclo: o corpo não afunda no chão
+        var solaLoco = 9;
+        [0.1, 0.5, 0.85].forEach(function (f) { toca(obj, loco.action, f); solaLoco = Math.min(solaLoco, caixaPosada(obj).min.y); });
+        if (solaLoco < -0.15) erros.desliza.push(id + ' afunda ' + (-solaLoco).toFixed(2) + ' m no chão ao se deslocar');
+        toca(obj, 'walk', 0.5);
+        var cw = caixaPosada(obj); hAndando = cw.max.y - cw.min.y;
+        var plana = PLANA.indexOf(id) >= 0;
+        if (plana ? !(hAndando < h * 0.75) : !(hAndando > h * 0.8))
+          erros.desliza.push(id + (plana ? ' devia PLANAR (corpo deitado) e anda de pé' : ' anda com ' + hAndando.toFixed(2) + ' m de altura'));
+
+        // ---- a morte derruba: no fim do clipe o corpo está no chão
+        toca(obj, 'die', 0.98);
+        // (o TOPO, não a caixa: o clipe de morte do Meshy afunda a raiz, e parte do corpo acaba
+        // abaixo do chão — o que o jogador vê é o que sobra acima dele)
+        var cm = caixaPosada(obj), hMorto = cm.max.y;
+        if (!(hMorto < h * 0.7)) erros.morte.push(id + ' termina com o topo a ' + hMorto.toFixed(2) + ' m de ' + h.toFixed(2));
+
+        linhas.push({ id: id, chave: chave, nome: nome, elem: elem, alvo: alvo, h: h, escala: look.scale, sola: cx.min.y,
+                      malhas: nMalha, peles: nPele, ossos: nOsso, tris: Math.round(tris), mapa: mapa, cai: cai, mexe: mexe,
+                      corre: corre, deriva: deriva, hAndando: hAndando, solaLoco: solaLoco, loco: loco.action, hMorto: hMorto,
+                      dur: { attack: ud.clipDur('attack'), walk: ud.clipDur('walk'), die: ud.clipDur('die') },
+                      frente: frente, raio: ud.radius });
+      });
+
+      check('os 15 corpos montam pelo caminho do jogo', linhas.length === CORPOS.length, linhas.length + ' de ' + CORPOS.length);
+      check('cada um veste a chave PRÓPRIA (kit embutido, nada emprestado)', erros.corpo.length === 0, erros.corpo.join(' · '));
+      check('quem ganhou corpo saiu da tabela do provisório', erros.prov.length === 0, erros.prov.join(' · '));
+      check('o elemento da ficha (quando existe) é o desta tabela', erros.elem.length === 0, erros.elem.join(' · '));
+      check('cada corpo tem pele com esqueleto e entre 3 e 30 mil triângulos', erros.malha.length === 0, erros.malha.join(' · '));
+      check('a tinta diz o elemento: cada material fica mais perto da cor do seu que da dos outros três', erros.tinta.length === 0, erros.tinta.join(' · '));
+      check('a altura posada é a do briefing (±6%)', erros.porte.length === 0, erros.porte.join(' · '));
+      check('os pés ficam no chão (sola a menos de 12 cm do zero, como os lotes que já estão no ar)', erros.pes.length === 0, erros.pes.join(' · '));
+      check('a frente do corpo olha para +Z', erros.frente.length === 0, erros.frente.join(' · '));
+      check('nenhum papel cai no idle', erros.papel.length === 0, erros.papel.join(' · '));
+      check('o ataque é o golpe e a reação é a reação (destrocados pelo raio-X)', erros.troca.length === 0, erros.troca.join(' · '));
+      check('todo clipe MEXE o esqueleto (algum osso anda mais de 5 cm)', erros.parado.length === 0, erros.parado.join(' · '));
+      check('correm todos, menos os dois lentos declarados', erros.correr.length === 0, erros.correr.join(' · '));
+      check('andar e correr não saem do lugar; a Arraia plana (deitada) e é o planar que o tabuleiro toca', erros.desliza.length === 0, erros.desliza.join(' · '));
+      check('a morte derruba o corpo (o topo acaba abaixo de 70% da altura)', erros.morte.length === 0, erros.morte.join(' · '));
+
+      // o conserto do clipe de locomoção (prendeNoLugar/assentaLocomocao) é por medida e só pode
+      // ter pegado quem precisa: o nado da Arraia. Se pegar outro corpo, a régua está frouxa.
+      var aj = M.locoAjustada ? M.locoAjustada() : null;
+      check('só o nado da Arraia foi preso no lugar e erguido do chão (nenhum outro clipe foi mexido)',
+            !!aj && Object.keys(aj).length === 1 && aj['el-ar-2.walk'] === 'preso+subiu', JSON.stringify(aj));
+      // os Colossos: irmãos de porte, 1,6× um comum, e abaixo de todo chefe (2,95 m)
+      var col = linhas.filter(function (l) { return /^colosso_/.test(l.id); });
+      check('os 4 Colossos medem ~2,88 m (1,6× um comum) e ficam abaixo de um chefe',
+            col.length === 4 && col.every(function (l) { return l.h > 2.70 && l.h < 2.95; }),
+            col.map(function (l) { return l.h.toFixed(2); }).join(' '));
+      var rocha = linhas.filter(function (l) { return l.id === 'eco_menor_terra'; })[0];
+      var brasa = linhas.filter(function (l) { return l.id === 'eco_menor_fogo'; })[0];
+      check('o Eco Menor de Rocha (o tanque) é maior que os irmãos', !!rocha && !!brasa && rocha.h > brasa.h * 1.05,
+            rocha && brasa ? rocha.h.toFixed(2) + ' vs ' + brasa.h.toFixed(2) : '');
+
+      // ---- o retrato da HUD: sai para os 15, e quem declara `retrato: 'inteiro'` no look (o busto por
+      // medida corta mal corpo sem rosto: antenas, bico comprido, crânio liso) recebe o quadro de corpo
+      // inteiro; os outros ficam no busto do motor. Lê-se o que M.portrait PEDE ao enquadramento.
+      var quadro = M.portraitFraming, pedido = null, retErr = [], inteiros = [];
+      M.portraitFraming = function (node, inteiro) { pedido = !!inteiro; return quadro(node, inteiro); };
+      try {
+        CORPOS.forEach(function (c) {
+          var lk = M.lookFor(c[0]); pedido = null;
+          var cv = null; try { cv = M.portrait(c[0], { size: 96, element: c[2] }); } catch (e) {}
+          if (!cv) { retErr.push(c[0] + ' (sem retrato)'); return; }
+          var quer = !!(lk && lk.retrato === 'inteiro');
+          if (quer) inteiros.push(c[0]);
+          if (pedido !== quer) retErr.push(c[0] + ' (pediu ' + (pedido ? 'inteiro' : 'busto') + ', o look diz ' + (quer ? 'inteiro' : 'busto') + ')');
+        });
+      } finally { M.portraitFraming = quadro; }
+      check('o retrato da HUD sai para os 15, de corpo inteiro só para quem o look declara', retErr.length === 0,
+            retErr.join(' · ') || ('inteiros: ' + inteiros.join(', ')));
+      var colRet = col.map(function (l) { var lk = M.lookFor(l.id); return lk && lk.retrato === 'inteiro'; });
+      check('os quatro Colossos saem iguais na linha do tempo: todos de corpo inteiro (três pela medida, o da Ventania pelo look)',
+            (function () {
+              var ok = true;
+              col.forEach(function (l) {
+                var o = monta(l.id, l.elem).obj; toca(o, 'idle', 0.3);
+                var lk = M.lookFor(l.id), f = M.portraitFraming(o, lk.retrato === 'inteiro');
+                if (!f || f.bottom > f.box.min.y + 0.01) ok = false;
+              });
+              return ok;
+            })(), colRet.join(' '));
+
+      // ---- os dois que não chegaram: seguem no provisório, sem erro
+      var prov = [];
+      NAO_CHEGARAM.forEach(function (par) {
+        var lk = null, o = null;
+        try { lk = M.lookFor(par[0]); o = M.unit(par[0], { boss: par[0] === 'eco_primordial', element: 'ar' }); } catch (e) { prov.push(par[0] + ' estourou: ' + e.message); return; }
+        if (!o) prov.push(par[0] + ' não montou');
+        else if (!lk || lk.model !== par[1]) prov.push(par[0] + ' → ' + (lk && lk.model) + ' (devia vestir ' + par[1] + ')');
+      });
+      check('o Eco Primordial e o Eco Menor de Vento seguem no corpo provisório, sem erro', prov.length === 0, prov.join(' · '));
+
+      tabela(linhas);
+      try { fotos(linhas); } catch (e) { check('as fotos saíram', false, String(e && e.message || e)); }
+      window.__medidas = linhas.map(function (l) {
+        return { id: l.id, chave: l.chave, h: +l.h.toFixed(3), sola: +l.sola.toFixed(3), malhas: l.malhas, ossos: l.ossos,
+                 tris: l.tris, clipes: l.mapa, corre: l.corre, deriva: +l.deriva.toFixed(3) };
+      });
+    }
+
+    function tabela(linhas) {
+      var t = document.getElementById('tab');
+      var h = '<tr><th>corpo</th><th>chave</th><th>elem</th><th>altura</th><th>pedia</th><th>escala</th><th>sola</th>' +
+              '<th>malhas</th><th>ossos</th><th>tris</th><th>corre</th>';
+      PAPEIS.forEach(function (p) { h += '<th>' + p + '</th>'; });
+      h += '<th>desloca com</th><th>sola deslocando</th><th>andando</th><th>morto</th></tr>';
+      linhas.forEach(function (l) {
+        h += '<tr><td>' + l.nome + '</td><td>' + l.chave + '</td><td>' + l.elem + '</td><td>' + l.h.toFixed(2) + ' m</td><td>' +
+             l.alvo.toFixed(2) + '</td><td>' + l.escala.toFixed(2) + '</td><td>' + l.sola.toFixed(2) + '</td><td>' + l.malhas +
+             '</td><td>' + l.ossos + '</td><td>' + l.tris + '</td><td>' + (l.corre ? 'sim' : 'não') + '</td>';
+        PAPEIS.forEach(function (p) {
+          var mex = l.mexe[p] != null ? ' ' + (l.mexe[p] * 100).toFixed(0) + 'cm' : '';
+          h += '<td class="' + (l.cai.indexOf(p) >= 0 ? 'cai' : 'ok') + '">' + (l.mapa[p] || '—') + mex + '</td>';
+        });
+        h += '<td>' + l.loco + '</td><td>' + l.solaLoco.toFixed(2) + '</td><td>' + l.hAndando.toFixed(2) + '</td><td>' + l.hMorto.toFixed(2) + '</td></tr>';
+      });
+      t.innerHTML = h;
+    }
+
+    /* AS FOTOS: os 15 na MESMA régua (câmera sem perspectiva, px por metro igual para todos), de
+     * frente; e a segunda folha com o meio do golpe. Um renderizador só, uma célula por vez. */
+    function fotos(linhas) {
+      var CW = 250, CH = 330, POR_LINHA = 8, M_ALT = 3.5;
+      var rd = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+      rd.setSize(CW, CH, false); rd.setClearColor(0x161b22, 1);
+      if (THREE.sRGBEncoding) rd.outputEncoding = THREE.sRGBEncoding;
+      var meiaL = M_ALT * CW / CH / 2;
+      var cam = new THREE.OrthographicCamera(-meiaL, meiaL, M_ALT / 2, -M_ALT / 2, 0.1, 50);
+      function folha(idCanvas, papel, fracao, titulo, girar) {
+        var cv = document.getElementById(idCanvas), linhasN = Math.ceil(linhas.length / POR_LINHA);
+        cv.width = CW * POR_LINHA; cv.height = (CH + 34) * linhasN + 26;
+        var g = cv.getContext('2d');
+        g.fillStyle = '#0b0d10'; g.fillRect(0, 0, cv.width, cv.height);
+        g.fillStyle = '#ffd98a'; g.font = 'bold 14px Segoe UI, sans-serif'; g.fillText(titulo, 8, 18);
+        linhas.forEach(function (l, k) {
+          var cena = new THREE.Scene();
+          cena.add(new THREE.HemisphereLight(0xffffff, 0x39424e, 1.05));
+          var sol = new THREE.DirectionalLight(0xffffff, 1.1); sol.position.set(2.5, 5, 6); cena.add(sol);
+          var chao = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ color: 0x232b36 }));
+          chao.rotation.x = -Math.PI / 2; cena.add(chao);          // uma casa: 2 × 2 m
+          var m = monta(l.id, l.elem), obj = m.obj;
+          toca(obj, papel, fracao);
+          obj.rotation.y = girar;
+          cena.add(obj);
+          cam.position.set(0, 2.3, 8); cam.lookAt(0, 1.45, 0); cam.updateProjectionMatrix();
+          rd.render(cena, cam);
+          var x = (k % POR_LINHA) * CW, y = 26 + Math.floor(k / POR_LINHA) * (CH + 34);
+          g.drawImage(rd.domElement, 0, 0, rd.domElement.width, rd.domElement.height, x, y, CW, CH);
+          g.fillStyle = '#e8eef6'; g.font = 'bold 12px Segoe UI, sans-serif'; g.fillText(l.nome, x + 6, y + CH + 14);
+          g.fillStyle = '#8895a6'; g.font = '11px monospace';
+          g.fillText(l.chave + ' · ' + l.h.toFixed(2) + ' m · ' + l.elem, x + 6, y + CH + 28);
+        });
+      }
+      folha('folha', 'idle', 0.3, 'Os 15 de frente, na mesma régua (a placa do chão é uma casa de 2 m)', 0.35);
+      folha('golpe', 'attack', 0.45, 'O meio do golpe de cada um', 0.35);
+      folha('passo', 'walk', 0.3, 'Andando (a Arraia plana: o andar dela é o nado)', 0.9);
+      folha('queda', 'die', 0.98, 'O fim da morte', 0.35);
+      window.__fotos = {};
+      [['folha', 'corpos-de-frente'], ['golpe', 'corpos-no-golpe'], ['passo', 'corpos-andando'], ['queda', 'corpos-na-morte']].forEach(function (par) {
+        window.__fotos[par[1]] = document.getElementById(par[0]).toDataURL('image/png');
+      });
+      try { rd.dispose(); } catch (e) {}
+    }
+  });
+})();
+</script>
+</body>
+</html>
