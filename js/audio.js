@@ -314,6 +314,12 @@ var JOGO = (typeof window !== 'undefined')
     gravaPref();
   };
   Audio.isMudo = function () { return pref.mudo; };
+  /* O aplicativo em segundo plano (o js/mobile.js chama; a web nunca): o motor de som dorme e acorda.
+   * Suspender o contexto cala o que estava tocando e não mexe no volume nem no mudo do jogador. */
+  Audio.pausa = function (on) {
+    if (!ctx) return;
+    try { if (on) ctx.suspend(); else ctx.resume(); } catch (e) {}
+  };
   Audio.isPronto = function () { return pronto; };
   Audio.papeis = function () { return Object.keys(bancos); };
 

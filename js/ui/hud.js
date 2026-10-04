@@ -9714,7 +9714,8 @@ var JOGO = (typeof window !== 'undefined')
     if (Mb && Mb.qualidade) {
       var gsec = el('section', 'cfg-sec');
       gsec.appendChild(el('h3', 'bk-tit', 'Gráficos'));
-      var escolhida = prefUi().graficos || 'alta', emUso = Mb.qualidade();
+      // sem escolha gravada, a lista mostra o padrão DESTE lugar (web: alta; aplicativo: média ou baixa)
+      var escolhida = prefUi().graficos || (Mb.padraoGrafico ? Mb.padraoGrafico() : 'alta'), emUso = Mb.qualidade();
       var selG = document.createElement('select');
       selG.className = 'cfg-select';
       selG.setAttribute('aria-label', 'Qualidade gráfica');
@@ -11831,6 +11832,15 @@ var JOGO = (typeof window !== 'undefined')
    * "Mensagem particular" do cartão do grupo não abria ficha nenhuma. */
   function naTelaAberta(n) { var s = screens[current]; return !!(n && n.isConnected && s && s.contains(n)); }
   function painelVivo() { return naTelaAberta(hubPainelEl) ? hubPainelEl : null; }
+  /* O botão VOLTAR do aplicativo (js/mobile.js, M.voltar): fecha o que está aberto por cima — a ficha,
+   * depois o painel da praça — e diz se fechou. Falso = não havia nada, e aí o aplicativo pergunta se
+   * é para sair. Na web ninguém chama. */
+  UI.voltar = function () {
+    if (sheetName) { closeSheet(); return true; }
+    var p = painelVivo();
+    if (p && !p.classList.contains('is-off')) { fechaPainel(); return true; }
+    return false;
+  };
   function abrePainel(modo) {
     var p = painelVivo();
     if (!p) return null;
