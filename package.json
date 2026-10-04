@@ -1,0 +1,21 @@
+{
+  "name": "soterra-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Casca Android do SOTERRA (Capacitor). O jogo nao depende de Node: isto so empacota a pasta www/ que o tools/empacota_www.py monta.",
+  "scripts": {
+    "www": "python tools/empacota_www.py",
+    "sync": "python tools/empacota_www.py && npx cap sync android",
+    "abre": "npx cap open android",
+    "icones": "npx @capacitor/assets generate --android"
+  },
+  "dependencies": {
+    "@capacitor-community/keep-awake": "^8.0.1",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

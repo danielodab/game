@@ -14,13 +14,14 @@ desktop.ini
 *.log
 
 # Empacotamento para celular. `www/` é GERADA por tools/empacota_www.py a partir
-# do que já está versionado — versioná-la seria guardar 25 MB de cópia. O resto
-# é o que o Capacitor e o Node criam sozinhos ao rodar `npx cap add android`.
+# do que já está versionado, e `node_modules/` volta inteira com `npm install`
+# (o package-lock.json, versionado, garante as mesmas versões).
+# `android/` VAI para o Git: é o projeto do aplicativo — a versão, o ícone, o
+# manifesto e a receita de assinatura moram nele. O `android/.gitignore` deixa
+# de fora o que é gerado (a cópia da www/, o build) e a chave de assinatura.
 www/
 node_modules/
-android/
 ios/
-package-lock.json
 
 # Arte de terceiros: nao redistribuir (licenca dos packs).
 # A regra e por LICENCA, nao por prefixo de nome: `fx-*.js` era ampla demais e
