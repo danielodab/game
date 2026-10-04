@@ -601,9 +601,13 @@ class GuildaMixin:
                 "LEFT JOIN guilda_membros m ON m.guilda_id = g.id "
                 # 04/10: a guilda da equipe (líder Mestre) só sai na lista do próprio Mestre — a lista é o
                 # ranking da ficha E a porta de entrada de quem não tem guilda (ver _g_da_equipe)
-                "WHERE (? = 1 OR NOT EXISTS (SELECT 1 FROM contas l WHERE l.id = g.lider_id AND l.gm = 1)) "
+                "WHERE (? = 1 OR NOT EXISTS (SELECT 1 FROM contas l WHERE l.id = g.lider_id AND l.gm = 1) "
+                # 04/10 (dono: "a da minha conta teste sumiu"): quem É membro de uma guilda da equipe (entrou
+                # pelo convite do Mestre) continua vendo a PRÓPRIA guilda no ranking da ficha — escondê-la
+                # dele fazia a guilda parecer ter sumido justo para quem está dentro
+                "  OR g.id = (SELECT guilda_id FROM guilda_membros WHERE conta_id = ?)) "
                 "GROUP BY g.id ORDER BY g.xp DESC, g.id LIMIT ?",
-                (1 if conta['gm'] else 0, LISTA_MAX)).fetchall()
+                (1 if conta['gm'] else 0, conta['id'], LISTA_MAX)).fetchall()
         return 200, {'ok': True, 'guildas': [
             {'id': r['id'], 'nome': r['nome'], 'emblema': r['emblema'], 'xp': r['xp'], 'nivel': nivel_de(r['xp']),
              'membros': r['membros'], 'porta': r['porta']} for r in rs]}

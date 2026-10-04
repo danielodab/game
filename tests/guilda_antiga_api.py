@@ -141,9 +141,12 @@ class ProvaDasGuildasDeAntes(unittest.TestCase):
                          sorted([oda.conta['id'], bueno.conta['id']]))
         self.assertIsNone(bueno.pede('GET', '/api/guilda/minha')[1].get('antiga'))
 
-        # o jogo lista as guildas do servidor
+        # o jogo lista as guildas do servidor — menos a da equipe (04/10: a que um Mestre lidera só o
+        # Mestre vê; esta conta esperava a lista de antes dessa regra e ficou vermelha desde então)
         nomes_jogo = sorted(g['nome'] for g in oda.pede('GET', '/api/guilda/lista')[1]['guildas'])
-        self.assertEqual(nomes_jogo, ['Guarda W', 'Tomada Z', 'Velha X'])
+        self.assertEqual(nomes_jogo, ['Tomada Z', 'Velha X'])
+        self.assertEqual(sorted(g['nome'] for g in staff.pede('GET', '/api/guilda/lista')[1]['guildas']),
+                         ['Guarda W', 'Tomada Z', 'Velha X'])
 
         # o site: as guildas do servidor; a só da equipe fica fora (regra de 10/09); nome só de save não
         s, r = Cliente(self.base).pede('GET', '/api/ranking', token=None)

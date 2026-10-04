@@ -168,6 +168,19 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertNotIn('Staff', nomes_rk, 'o ranking público não traz a guilda da equipe')
         self.assertTrue(any(x.startswith('Guilda ') for x in nomes_rk), nomes_rk)
 
+    def test_01c_o_membro_comum_da_guilda_da_equipe_ve_a_propria_guilda(self):
+        """04/10 (dono: "a da minha conta teste sumiu"): a guilda que um Mestre lidera fica fora da lista
+        de quem não é dela — mas quem ENTROU (pelo convite do Mestre) continua vendo a própria guilda na
+        ficha e no ranking da ficha. Escondê-la do membro fazia a guilda parecer ter sumido."""
+        m, k, j = self.novo('Zelador'), self.novo('Convidado'), self.novo('De Fora')
+        self.sql("UPDATE contas SET gm = 1 WHERE id = ?", m.conta['id'])
+        gid = self.g(m, 'criar', {'nome': self.nome('Equipe')})['guilda']['id']
+        self.g(m, 'convidar', {'conta': k.conta['id']})
+        self.g(k, 'entrar', {'gid': gid})
+        self.assertEqual(self.g(k, 'minha')['guilda']['id'], gid, 'a ficha do membro comum segue lá')
+        self.assertIn(gid, [x['id'] for x in self.g(k, 'lista')['guildas']], 'e ele vê a própria guilda no ranking')
+        self.assertNotIn(gid, [x['id'] for x in self.g(j, 'lista')['guildas']], 'quem é de fora continua sem ver')
+
     def test_02_o_convite_entre_contas_abre_a_porta_fechada(self):
         """O defeito do ar (11/09): "eu convidei, o usuário aceitou, mas não foi"."""
         a, b, c = self.novo('Lider'), self.novo('Convidada'), self.novo('Curioso')

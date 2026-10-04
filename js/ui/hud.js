@@ -1738,6 +1738,8 @@ var JOGO = (typeof window !== 'undefined')
           JOGO.Guilda.contaAtiva(j2.id, j2.nome || 'Sem Nome');
           return JOGO.Guilda.minha();
         }).then(function (mg) {
+          // 04/10: a leitura que FALHOU (servidor fora) não é "sem guilda": fica o que a tela já sabia
+          if (!mg && JOGO.Guilda.falhaDaFicha && JOGO.Guilda.falhaDaFicha()) return;
           resumoGuilda = mg ? { nome: mg.nome, emblema: mg.emblema } : null;
           // a plaquinha pode ter sido pendurada ANTES desta resposta — a
           // corrida de sempre. Os undefined preservam nome/título/coroa.
@@ -10527,6 +10529,21 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(el('p', 'inv-dica', 'O salão abre pela Sede das Guildas, na praça do acampamento.'));
     }
   }
+  /* 04/10: o `resumoGuilda` (o que a Sede da praça e a plaquinha usam para saber se você tem
+   * guilda) só era lido ao entrar no Acampamento e ao fundar. Quem entrava numa guilda pela lista,
+   * tinha o pedido aceito ou saía ficava com a praça dizendo o contrário da ficha: a Sede oferecia
+   * "fundar ou entrar" a quem já era membro, e "Entrar no salão" a quem já tinha saído. Toda vez
+   * que a ficha chega do servidor, a praça acompanha. */
+  function anotaGuilda(g) {
+    var era = resumoGuilda ? resumoGuilda.nome + '|' + resumoGuilda.emblema : '';
+    resumoGuilda = g ? { nome: g.nome, emblema: g.emblema } : null;
+    var eh = resumoGuilda ? resumoGuilda.nome + '|' + resumoGuilda.emblema : '';
+    if (era === eh) return;
+    if (JOGO.Hub && JOGO.Hub.nomeia) {
+      try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+    }
+    safe(function () { reanunciaPerfil(); return true; }, null);
+  }
   function sheetGuilda() {
     var dentro = sedeDentro();
     var body = sheetShell('Guilda', dentro
@@ -10546,6 +10563,16 @@ var JOGO = (typeof window !== 'undefined')
     }).then(function (r) {
       var g = r[0], ranking = r[1] || [];
       clear(caixa);
+      // 04/10 (dono: "analise a guilda, está confuso; a da minha conta teste sumiu"): o servidor não
+      // respondeu — isto NÃO é "você não tem guilda". Antes a tela caía no formulário de fundar
+      var falhaG = !g && Gd.falhaDaFicha ? Gd.falhaDaFicha() : null;
+      if (falhaG) {
+        caixa.appendChild(el('p', 'empty guilda-falha', 'Não deu para ler a sua guilda agora (' + esc(falhaG) +
+          '). Ela continua lá: é só a leitura que falhou.'));
+        caixa.appendChild(btn('Tentar de novo', 'btn-primary btn-block', sheetGuilda));
+        return;
+      }
+      anotaGuilda(g);
 
       if (!g) {
         // ---- SEM GUILDA: fundar uma, ou esperar convite na praça

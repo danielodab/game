@@ -759,9 +759,16 @@ var JOGO = (typeof window !== 'undefined')
 
   // 13/09: a guilda de antes do servidor que ESTA conta pode trazer (do /minha)
   var antigaSrv = null;
+  /* 04/10 (dono: "a da minha conta teste sumiu"): a ficha que NÃO veio (o servidor fora, a
+   * sessão vencida) não é "sem guilda". Sem a ficha guardada, a leitura falha devolvia null e a
+   * tela oferecia fundar uma guilda a quem já tem uma. `falhaDaFicha()` diz à HUD que a última
+   * leitura não respondeu — ela mostra o erro e o "tentar de novo" em vez da tela de fundar. */
+  var minhaFalha = null;
+  G.falhaDaFicha = function () { return G.noServidor() ? minhaFalha : null; };
   peloServidor('minha', function () {
     return pede('/api/guilda/minha').then(function (r) {
       if (r.ok) antigaSrv = r.guilda ? null : (r.antiga || null);
+      minhaFalha = r.ok ? null : (r.erro || 'não deu');
       return r.ok ? (r.guilda || null) : ficha;
     });
   });
