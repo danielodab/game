@@ -68,11 +68,13 @@ PRECOS = {'vintens-1000': 50, 'vintens-5000': 250, 'vintens-12000': 600, 'vinten
           'pedras-agua-50': 110, 'pedras-terra-50': 110, 'pedras-ar-50': 180, 'pedras-fogo-50': 180,
           'pedras-neutro-50': 180,
           'insignia-1': 25, 'insignias-10': 225,
-          'pergaminho-elemento': 250}
-SECOES = (['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 5 + ['bonus'] * 3 + ['pedras'] * 10
-          + ['guilda'] * 2 + ['pergaminhos'])
+          'pergaminho-elemento': 250,
+          'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 150}     # 04/10
+SECOES = (['boas-vindas'] + ['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 5 + ['bonus'] * 3 + ['pedras'] * 10
+          + ['guilda'] * 2 + ['pergaminhos'] + ['aparencia'] * 5)
 GRUPOS = {'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro',
-          'classe-minotauro'}
+          'classe-minotauro',
+          'boas-vindas', 'aura-fogo', 'aura-agua', 'aura-terra', 'aura-ar', 'aura-neutra'}    # 04/10: um por conta
 HEROI_FOGO = {'sumo': {'classId': 'sumo', 'xp': 900, 'level': 6, 'element': 'fogo', 'elements': ['fogo']}}
 
 
@@ -239,14 +241,14 @@ class ProvaDaLoja(unittest.TestCase):
         for i in itens:
             self.assertTrue(isinstance(i['preco'], int) and i['preco'] > 0, i)
             self.assertTrue(i['nome'] and i['descricao'], i)
-            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho'))
+            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho', 'aura', 'pacote'))
             if i['limite'] is not None:
                 self.assertEqual(set(i['limite']), {'grupo', 'max', 'dias'})
         # só a Reescrita tem janela; as classes, compra única; o resto, nenhum (o preço é o freio)
         self.assertEqual({i['sku']: i['limite'] for i in itens if i['limite'] is not None and i['limite']['dias']},
                          {'pergaminho-elemento': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}})
         for i in itens:
-            if i['tipo'] == 'classe':
+            if i['tipo'] in ('classe', 'aura', 'pacote'):         # 04/10: a aura e o Pacote, um por conta
                 self.assertEqual(i['limite'], {'grupo': i['sku'], 'max': 1, 'dias': None})
             elif i['tipo'] != 'pergaminho':
                 self.assertIsNone(i['limite'], i['sku'])
@@ -931,6 +933,350 @@ class ProvaDaLoja(unittest.TestCase):
         if casou is None:
             self.skipTest('JOGO.DATA.bonusXp ainda não existe em progression.js')
         self.assertEqual(float(re.search(r'fator\s*:\s*([\d.]+)', casou.group(1)).group(1)), loja_mod.BONUS_XP['fator'])
+
+
+class ProvaDasNovidades(ProvaDaLoja):
+    """04/10: o Pacote de Boas-Vindas, as auras, as ofertas da semana e o presente a um amigo.
+
+    Sobe uma API PRÓPRIA com as ofertas LIGADAS (LOJA_OFERTAS=1): a classe de cima conta barras com os preços
+    cheios, e a oferta muda conforme a semana do calendário. Daqui só se herdam os ajudantes."""
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ['LOJA_OFERTAS'] = '1'
+        try:
+            super().setUpClass()
+        finally:
+            os.environ['LOJA_OFERTAS'] = '0'
+
+    def setUp(self):
+        loja_mod.OFERTAS_LIGADAS = True              # as contas desta prova usam as mesmas funções do servidor
+        self.addCleanup(setattr, loja_mod, 'OFERTAS_LIGADAS', False)
+
+    def preco(self, sku):
+        return loja_mod.preco_de(loja_mod.POR_SKU[sku], time.time())
+
+    def fora_da_oferta(self, secao):
+        """Um item da seção que NÃO está em oferta nesta semana (custa o preço cheio)."""
+        hoje = loja_mod.ofertas_da_semana(loja_mod.semana_de(time.time()))
+        return [i['sku'] for i in loja_mod.CATALOGO if i['secao'] == secao and i['sku'] not in hoje][0]
+
+    def presenteia(self, c, sku, nome, chave=None):
+        return c.pede('POST', '/api/loja/presentear', {'sku': sku, 'nome': nome, 'idem': chave or idem()})
+
+    # herdadas da prova de cima: rodariam de novo aqui, com as ofertas mexendo nos preços que elas fixam
+    for _nome in [n for n in dir(ProvaDaLoja) if n.startswith('test_')]:
+        locals()[_nome] = None
+    del _nome
+
+    # -- o Pacote de Boas-Vindas ---------------------------------------------------------------
+    def test_boas_vindas_uma_vez_por_conta(self):
+        c = self.novo('Bia Boas Vindas')
+        self.sobe(c)
+        self.da_barras(c, 700)
+        m = self.minha(c)
+        self.assertEqual(m['boasVindas'], {'disponivel': True, 'comprado': False, 'preco': 250, 'precoCheio': 820,
+                                           'classes': ['invocador', 'bruxo']})
+        corpo = {'sku': 'boas-vindas', 'idem': idem()}
+        self.assertEqual(c.pede('POST', '/api/loja/comprar', corpo)[0], 400)                 # sem as escolhas
+        self.assertEqual(c.pede('POST', '/api/loja/comprar', dict(corpo, classe='minotauro', aura='fogo'))[0], 400)
+        self.assertEqual(c.pede('POST', '/api/loja/comprar', dict(corpo, classe='bruxo', aura='roxa'))[0], 400)
+        self.assertEqual(self.barras(c), 700)
+        corpo = dict(corpo, classe='invocador', aura='fogo')
+        status, r = c.pede('POST', '/api/loja/comprar', corpo)
+        self.assertEqual(status, 201, r)
+        pid = r['pedido']['id']
+        self.assertEqual((r['pedido']['estado'], r['pedido']['barras'], r['barras']['saldo']), ('pendente', 250, 450))
+        self.assertEqual(c.pede('POST', '/api/loja/comprar', corpo)[0], 200)                 # o mesmo clique: nada de novo
+        self.assertEqual(self.barras(c), 450)
+        # a entrega congelada: 10 pedras de cada uma das cinco, a classe escolhida e a aura
+        ent = json.loads(self.sql("SELECT entrega FROM loja_pedidos WHERE id = ?", pid)[0]['entrega'])
+        self.assertEqual((ent['tipo'], ent['aura'], len(ent['itens'])), ('pacote', 'fogo', 6))
+        self.assertEqual([(i['tipo'], i['qtd']) for i in ent['itens']], [('pedras', 10)] * 5 + [('classe', 1)])
+        self.assertEqual(ent['itens'][-1]['alvo'], 'invocador')
+        # UMA vez por conta: a segunda compra (outro clique, outra classe) é recusada e nada é cobrado
+        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'boas-vindas', 'idem': idem(), 'classe': 'bruxo',
+                                                         'aura': 'agua'})
+        self.assertEqual((status, r['erro']), (429, 'limite deste produto: 1 por conta'))
+        self.assertEqual(self.barras(c), 450)
+        m = self.minha(c)
+        self.assertEqual((m['boasVindas']['disponivel'], m['boasVindas']['comprado']), (False, True))
+        self.assertEqual(m['auras']['tem'], ['fogo'])                                        # a aura já é da conta
+        # a classe do pacote está a caminho: comprá-la avulsa é recusado
+        self.assertEqual(self.compra(c, 'classe-invocador')[0], 409)
+        # o jogo recebe o pacote pela fila de sempre e o save confirma
+        fila = c.pede('POST', '/api/loja/retirar', {})[1]['pedidos']
+        self.assertEqual([(p['id'], p['entrega']['tipo']) for p in fila], [(pid, 'pacote')])
+        self.sobe(c, classes=('sumo', 'curandeiro', 'invocador'), anotacao={'aplicadas': [pid]})
+        self.assertEqual(self.pedido(c, pid)['estado'], 'entregue')
+        # entregue: continua sendo uma vez só, para sempre
+        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'boas-vindas', 'idem': idem(), 'classe': 'bruxo',
+                                                         'aura': 'agua'})
+        self.assertEqual(status, 429, r)
+        self.assertEqual(self.barras(c), 450)
+
+    def test_boas_vindas_recusado_devolve_tudo(self):
+        """O jogo recusou o pacote (a classe liberou por cartas no meio do caminho): as barras voltam, a aura
+        sai com o pedido — e a vestida também — e o pacote volta a estar disponível."""
+        c = self.novo('Rui Recusado')
+        self.sobe(c)
+        self.da_barras(c, 250)
+        status, r = c.pede('POST', '/api/loja/comprar', {'sku': 'boas-vindas', 'idem': idem(), 'classe': 'bruxo',
+                                                         'aura': 'ar'})
+        self.assertEqual(status, 201, r)
+        pid = r['pedido']['id']
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': 'ar'})[1]['auras']['escolhida'], 'ar')
+        c.pede('POST', '/api/loja/retirar', {})
+        self.sobe(c, anotacao={'recusadas': [{'id': pid, 'motivo': 'classe-ja-liberada'}]})
+        m = self.minha(c)
+        self.assertEqual((self.pedido(c, pid)['estado'], m['barras']['saldo']), ('estornado', 250))
+        self.assertEqual((m['auras']['tem'], m['auras']['escolhida']), ([], None))
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM aura_escolhida WHERE conta_id = ?", c.conta['id'])[0][0], 0)
+        self.assertTrue(m['boasVindas']['disponivel'])
+        # quem já tem as duas classes não vê a chamada
+        self.sobe(c, classes=('sumo', 'curandeiro', 'invocador', 'bruxo'))
+        self.assertEqual(self.minha(c)['boasVindas']['disponivel'], False)
+        self.assertEqual(c.pede('GET', '/api/loja/vitrine')[1]['boasVindas']['disponivel'], False)
+
+    # -- as auras -----------------------------------------------------------------------------
+    def test_aura_comprada_escolhida_e_lida_de_volta(self):
+        import rele_ident
+        self.assertEqual(rele_ident.AURAS, loja_mod.AURAS)                                   # os gêmeos
+        self.assertEqual({i['alvo'] for i in loja_mod.CATALOGO if i['tipo'] == 'aura'}, set(loja_mod.AURAS))
+        c = self.novo('Aurora Aura')
+        self.da_barras(c, 400)                                                               # sem save: a aura não precisa do jogo
+        custo = self.preco('aura-agua')
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': 'agua'})[0], 409)         # ainda não tem
+        p = self.comprou(c, 'aura-agua')
+        self.assertEqual((p['estado'], p['barras'], p['cancelavel']), ('entregue', custo, False))
+        self.assertEqual(self.barras(c), 400 - custo)
+        self.assertEqual(c.pede('POST', '/api/loja/retirar', {})[1]['pedidos'], [])           # nada vai para o jogo
+        status, r = self.compra(c, 'aura-agua')                                              # de novo: já é dela
+        self.assertEqual((status, r['erro']), (409, 'essa aura já é sua'))
+        self.assertEqual(self.barras(c), 400 - custo)
+        # escolher, ler de volta (pela ficha do jogo e pela vitrine), trocar e desligar
+        status, r = c.pede('GET', '/api/loja/aura')
+        self.assertEqual((r['auras']['tem'], r['auras']['escolhida']), (['agua'], None))
+        self.assertEqual([a['cor'] for a in r['auras']['todas']], list(loja_mod.AURAS))
+        status, r = c.pede('POST', '/api/loja/aura', {'aura': 'agua'})
+        self.assertEqual((status, r['auras']['escolhida']), (200, 'agua'))
+        self.assertEqual(c.pede('GET', '/api/loja/aura')[1]['auras']['escolhida'], 'agua')
+        self.assertEqual(c.pede('GET', '/api/loja/vitrine')[1]['auras']['escolhida'], 'agua')
+        self.assertEqual(self.minha(c)['auras']['escolhida'], 'agua')
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': 'fogo'})[0], 409)         # a que não comprou
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': 'dourada'})[0], 400)
+        self.assertEqual(c.pede('GET', '/api/loja/aura')[1]['auras']['escolhida'], 'agua')    # a recusa não mexe
+        self.assertEqual(c.pede('GET', '/api/loja/aura', token=None)[0], 401)
+        # O RELÉ lê a escolhida do banco e a carimba no oi; o que o cliente disser de si mesmo cai
+        conta, definitivo = rele_ident.confere(self.banco_arq, c.token)
+        self.assertEqual((definitivo, conta['aura']), (True, 'agua'))
+        oi = {'t': 'oi', 'de': 'x1', 'nome': 'Aurora', 'auraCor': 'fogo'}
+        self.assertEqual(rele_ident.carimba(oi, conta, so_cache=True)['auraCor'], 'agua')
+        outro = self.novo('Zeca Sem Aura')
+        conta2, _ = rele_ident.confere(self.banco_arq, outro.token)
+        self.assertNotIn('aura', conta2)
+        oi = {'t': 'oi', 'de': 'x2', 'nome': 'Zeca', 'auraCor': 'fogo'}
+        self.assertNotIn('auraCor', rele_ident.carimba(oi, conta2, so_cache=True))
+        oi = {'t': 'oi', 'de': 'x3', 'nome': 'Anônimo', 'auraCor': 'ar'}
+        self.assertNotIn('auraCor', rele_ident.carimba(oi, None, so_cache=True))
+        # desligar
+        self.assertEqual(c.pede('POST', '/api/loja/aura', {'aura': None})[1]['auras']['escolhida'], None)
+        self.assertNotIn('aura', rele_ident.confere(self.banco_arq, c.token)[0])
+
+    # -- as ofertas da semana -----------------------------------------------------------------
+    def test_oferta_da_semana_deterministica_e_cobrada(self):
+        t = int(time.time())
+        semana = loja_mod.semana_de(t)
+        # determinística: a mesma semana dá sempre os mesmos itens; semanas diferentes giram
+        self.assertEqual(loja_mod.ofertas_da_semana(semana), loja_mod.ofertas_da_semana(semana))
+        self.assertGreater(len({loja_mod.ofertas_da_semana(semana + k) for k in range(8)}), 1)
+        for k in range(60):
+            skus = loja_mod.ofertas_da_semana(semana + k)
+            itens = [loja_mod.POR_SKU[s] for s in skus]
+            self.assertEqual(len(skus), 3)
+            self.assertEqual(len({i['secao'] for i in itens}), 3)                            # três seções diferentes
+            for i in itens:                                                                  # nunca moeda nem o Pacote
+                self.assertNotIn(i['tipo'], ('vintens', 'barras', 'pacote'), skus)
+                self.assertEqual(i['moeda'], 'barras')
+        # a semana vira na segunda, 00:00 de Brasília (03:00 UTC)
+        from datetime import datetime, timedelta, timezone
+        status, r = Cliente(self.base).pede('GET', '/api/loja/catalogo', token=None)
+        of = r['ofertas']
+        fim = datetime.fromtimestamp(of['fim'], timezone(timedelta(hours=-3)))
+        self.assertEqual((fim.weekday(), fim.hour, fim.minute, fim.second), (0, 0, 0, 0))
+        self.assertEqual(of['fim'] - of['inicio'], 7 * DIA)
+        self.assertTrue(of['inicio'] <= r['agora'] < of['fim'])
+        self.assertTrue(abs(r['agora'] - t) < 30)
+        self.assertEqual((of['desconto'], of['semana']), (25, semana))
+        self.assertEqual([i['sku'] for i in of['itens']], list(loja_mod.ofertas_da_semana(semana)))
+        self.assertEqual(loja_mod.preco_com_desconto(150), 113)                              # para cima: nunca mais de 25%
+        self.assertEqual(loja_mod.preco_com_desconto(500), 375)
+        # o preço COBRADO é o da oferta; o do catálogo segue cheio (o site risca um e mostra o outro)
+        cheios = {i['sku']: i['preco'] for i in r['itens']}
+        c = self.novo('Olga Oferta')
+        self.sobe(c)
+        self.da_barras(c, 5000)
+        saldo = 5000
+        for o in of['itens']:
+            cheio = loja_mod.POR_SKU[o['sku']]['preco']
+            self.assertEqual((o['precoCheio'], cheios[o['sku']]), (cheio, cheio))
+            self.assertEqual(o['preco'], -(-cheio * 75 // 100))
+            self.assertLess(o['preco'], cheio)
+            p = self.comprou(c, o['sku'])
+            saldo -= o['preco']
+            self.assertEqual((p['barras'], self.barras(c)), (o['preco'], saldo), o)
+            self.assertEqual(self.sql("SELECT custo FROM loja_barras WHERE pedido_id = ?", p['id'])[0]['custo'], o['preco'])
+            if p['cancelavel']:                                                              # cancelar devolve o que foi cobrado
+                self.assertEqual(c.pede('POST', '/api/loja/cancelar', {'id': p['id']})[0], 200)
+                saldo += o['preco']
+                self.assertEqual(self.barras(c), saldo)
+        # fora da oferta, o preço cheio
+        sku = self.fora_da_oferta('pedras')
+        self.comprou(c, sku)
+        self.assertEqual(self.barras(c), saldo - loja_mod.POR_SKU[sku]['preco'])
+        # LOJA_OFERTAS=0 (a chave do dono): sem oferta, tudo no preço cheio
+        loja_mod.OFERTAS_LIGADAS = False
+        self.assertEqual(loja_mod.ofertas_da_semana(semana), ())
+        self.assertEqual(loja_mod.preco_de(loja_mod.POR_SKU[of['itens'][0]['sku']], t), cheios[of['itens'][0]['sku']])
+
+    # -- o presente a um amigo ------------------------------------------------------------------
+    def test_presente_a_um_amigo(self):
+        a, b = self.novo('Dora Doadora'), self.novo('Rita Recebe')
+        na, nb = a.conta['nome'], b.conta['nome']
+        self.sobe(b, classes=('sumo', 'curandeiro', 'bruxo'))
+        self.da_barras(a, 2000)
+        # AS TRAVAS — nenhuma cobra nada nem conta no limite do dia
+        self.assertEqual(self.presenteia(a, 'pedras-agua', 'Ninguém Com Esse Nome 999')[0], 404)
+        status, r = self.presenteia(a, 'pedras-agua', na)
+        self.assertEqual((status, r['erro']), (400, 'você não pode presentear a si mesmo'))
+        for sku in ('vintens-1000', 'barras-por-vintens-10', 'boas-vindas'):                 # moeda e o Pacote: nunca
+            status, r = self.presenteia(a, sku, nb)
+            self.assertEqual((status, r['erro']), (400, 'esse produto não pode ser dado de presente'), sku)
+        self.assertEqual(self.presenteia(a, 'inventado', nb)[0], 400)
+        self.assertEqual(a.pede('POST', '/api/loja/presentear', {'sku': 'pedras-agua', 'nome': nb, 'idem': 'x'})[0], 400)
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/loja/presentear',
+                                                 {'sku': 'pedras-agua', 'nome': nb, 'idem': idem()}, token=None)[0], 401)
+        status, r = self.presenteia(a, 'classe-bruxo', nb)                                   # a classe que ela já tem
+        self.assertEqual(status, 409, r)
+        self.assertIn('essa classe já está liberada', r['erro'])
+        banido, excluido = self.novo('Beto Banido'), self.novo('Eva Excluída')
+        self.sql("UPDATE contas SET banido = 1 WHERE id = ?", banido.conta['id'])
+        self.sql("INSERT INTO contas_excluidas(conta_id, excluida_em) VALUES (?, ?)", excluido.conta['id'], int(time.time()))
+        self.assertEqual(self.presenteia(a, 'pedras-agua', banido.conta['nome'])[0], 409)
+        self.assertEqual(self.presenteia(a, 'pedras-agua', excluido.conta['nome'])[0], 404)
+        pobre = self.novo('Pedro Sem Barras')
+        status, r = self.presenteia(pobre, 'pedras-agua', nb)
+        self.assertEqual((status, r['erro']), (409, 'barras de ouro insuficientes'))
+        self.assertEqual(self.barras(a), 2000)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM loja_amigos")[0][0], 0)
+        self.assertEqual(self.minha(a)['presentes'], {'dados': 0, 'max': 3, 'liberaEm': None})
+
+        # 1º PRESENTE: pedras. Paga quem dá, uma vez só; chega pela fila de quem recebe, com a carta
+        saldo, chave = 2000, idem()
+        custo = self.preco('pedras-agua')
+        status, r = self.presenteia(a, 'pedras-agua', nb.upper(), chave)                     # o nome não liga para maiúsculas
+        self.assertEqual(status, 201, r)
+        pid = r['presente']['id']
+        saldo -= custo
+        self.assertEqual((r['presente']['para'], r['presente']['barras'], r['barras']['saldo']), (nb, custo, saldo))
+        status, r = self.presenteia(a, 'pedras-agua', nb, chave)                             # o mesmo clique de novo
+        self.assertEqual((status, r['repetido'], r['presente']['id']), (200, True, pid))
+        self.assertEqual(self.barras(a), saldo)                                              # cobrado UMA vez
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM loja_amigos")[0][0], 1)
+        self.assertEqual(self.presenteia(a, 'pedras-terra', nb, chave)[0], 409)              # o idem em outro produto
+        mb = self.minha(b)
+        p = [x for x in mb['pedidos'] if x['id'] == pid][0]
+        self.assertEqual((p['origem'], p['de'], p['estado'], p['cancelavel'], p['moeda']), ('amigo', na, 'pendente', False, None))
+        self.assertNotIn('barras', p)
+        self.assertEqual(mb['barras']['saldo'], 0)
+        self.assertEqual(b.pede('POST', '/api/loja/cancelar', {'id': pid})[0], 409)          # quem recebe não "cancela" as barras alheias
+        self.assertEqual(a.pede('POST', '/api/loja/cancelar', {'id': pid})[0], 404)          # e o pedido não é da conta de quem deu
+        cartas = b.pede('GET', '/api/correio')[1]
+        self.assertEqual(cartas['naoLidas'], 1)
+        self.assertEqual(cartas['cartas'][0]['assunto'], 'Você ganhou um presente')
+        self.assertIn(na, cartas['cartas'][0]['texto'])
+        self.assertIn(loja_mod.POR_SKU['pedras-agua']['nome'], cartas['cartas'][0]['texto'])
+        fila = b.pede('POST', '/api/loja/retirar', {})[1]['pedidos']
+        self.assertEqual([(x['id'], x['origem'], x['de'], x['preco'], x['entrega']['tipo']) for x in fila],
+                         [(pid, 'amigo', na, 0, 'pedras')])
+        self.sobe(b, classes=('sumo', 'curandeiro', 'bruxo'), anotacao={'aplicadas': [pid]})
+        self.assertEqual(self.pedido(b, pid)['estado'], 'entregue')
+        self.assertEqual((self.barras(a), self.barras(b)), (saldo, 0))
+        # o presente não gasta os tetos de quem recebe (nem o de abertos, nem o de compras por hora)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM loja_pedidos WHERE conta_id = ? AND " + loja_mod.SEM_GANHO,
+                                  b.conta['id'])[0][0], 0)
+
+        # 2º PRESENTE: uma aura — já é dela na hora; a que ela já tem não entra de novo
+        custo = self.preco('aura-ar')
+        self.assertEqual(self.presenteia(a, 'aura-ar', nb)[0], 201)
+        saldo -= custo
+        self.assertEqual(self.barras(a), saldo)
+        self.assertEqual(b.pede('POST', '/api/loja/aura', {'aura': 'ar'})[1]['auras']['escolhida'], 'ar')
+        status, r = self.presenteia(a, 'aura-ar', nb)
+        self.assertEqual(status, 409, r)
+        self.assertIn('essa aura já é sua', r['erro'])
+        self.assertEqual(self.barras(a), saldo)
+
+        # 3º PRESENTE: uma classe que o jogo recusa na entrega — as barras voltam para QUEM DEU
+        custo = self.preco('classe-invocador')
+        status, r = self.presenteia(a, 'classe-invocador', nb)
+        self.assertEqual(status, 201, r)
+        pid3 = r['presente']['id']
+        self.assertEqual(self.barras(a), saldo - custo)
+        self.assertEqual(self.compra(b, 'classe-invocador')[0], 409)                         # já vem a caminho
+        b.pede('POST', '/api/loja/retirar', {})
+        self.sobe(b, classes=('sumo', 'curandeiro', 'bruxo', 'invocador'),
+                  anotacao={'aplicadas': [pid], 'recusadas': [{'id': pid3, 'motivo': 'classe-ja-liberada'}]})
+        self.assertEqual(self.pedido(b, pid3)['estado'], 'estornado')
+        self.assertEqual((self.barras(a), self.barras(b)), (saldo, 0))
+
+        # O LIMITE DO DIA: três presentes em 24 h (o estornado conta: segura o vai e vem)
+        status, r = self.presenteia(a, 'pedras-terra', nb)
+        self.assertEqual((status, r['erro']), (429, 'presentes demais nas últimas 24 h (3)'))
+        self.assertTrue(r['liberaEm'] > time.time())
+        self.assertEqual(self.barras(a), saldo)
+        self.assertEqual(self.minha(a)['presentes']['dados'], 3)
+        # um dia depois a vaga volta
+        self.sql("UPDATE loja_amigos SET criado_em = criado_em - ? WHERE de = ?", DIA + 5, a.conta['id'])
+        self.assertEqual(self.presenteia(a, 'pedras-terra', nb)[0], 201)
+
+        # O MESTRE VÊ: o extrato de quem deu diz para quem foi, e a trilha dos dois lados fica nos eventos
+        nomes = [mv['nome'] for mv in self.minha(a)['barras']['movimentos'] if mv['motivo'] == 'loja']
+        self.assertIn('%s (presente para %s)' % (loja_mod.POR_SKU['aura-ar']['nome'], nb), nomes)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM eventos WHERE conta_id = ? AND tipo = 'loja-presenteou'",
+                                  a.conta['id'])[0][0], 4)
+        self.assertEqual(self.sql("SELECT COUNT(*) FROM eventos WHERE conta_id = ? AND tipo = 'loja-presente-amigo'",
+                                  b.conta['id'])[0][0], 4)
+        g = self.novo('Gil Guardião')
+        self.mestre(g)
+        status, ficha = g.pede('GET', '/api/mestre/conta?id=%d' % a.conta['id'])
+        self.assertEqual(status, 200, ficha)                                                 # a ficha do Mestre mostra o mesmo extrato
+        self.assertIn('%s (presente para %s)' % (loja_mod.POR_SKU['aura-ar']['nome'], nb),
+                      [mv['nome'] for mv in ficha['barras']['movimentos']])
+        self.assertNotIn('boas-vindas', [i['sku'] for i in ficha['catalogo']])               # o Mestre não presenteia o Pacote
+
+    def test_presente_respeita_o_limite_do_produto_em_quem_recebe(self):
+        """A Reescrita é uma por mês: a de presente conta na janela de quem RECEBE, e a segunda é recusada."""
+        a, b = self.novo('Lia Limite'), self.novo('Noé Recebe')
+        self.sobe(b)                                                                         # o herói do save já escolheu caminho
+        self.da_barras(a, 1000)
+        self.da_barras(b, 1000)
+        self.assertEqual(self.presenteia(a, 'pergaminho-elemento', b.conta['nome'])[0], 201)
+        status, r = self.presenteia(a, 'pergaminho-elemento', b.conta['nome'])
+        self.assertEqual(status, 409, r)
+        self.assertIn('limite', r['erro'])
+        self.assertEqual(self.compra(b, 'pergaminho-elemento')[0], 429)                      # e ele mesmo não compra outra no mês
+        self.assertEqual(self.barras(a), 1000 - self.preco('pergaminho-elemento'))
+        # quem recebe demais sem abrir o jogo: o teto de presentes esperando
+        c = self.novo('Caio Cheio')
+        for i in range(loja_mod.PRESENTES_AMIGO_ABERTOS):
+            dador = self.novo('Dador %d' % i)
+            self.da_barras(dador, 100)
+            self.assertEqual(self.presenteia(dador, 'pedras-agua', c.conta['nome'])[0], 201)
+        status, r = self.presenteia(a, 'pedras-agua', c.conta['nome'])
+        self.assertEqual(status, 429, r)
+        self.da_barras(c, 100)                                                               # e a loja dele segue livre
+        self.comprou(c, 'pedras-agua')
 
 
 if __name__ == '__main__':

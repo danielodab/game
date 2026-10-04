@@ -266,8 +266,8 @@ class ProvaDoMestre(unittest.TestCase):
         self.assertEqual(r['saldo']['aCaminho'], 0)
         cat = {i['sku']: i for i in r['catalogo']}
         # a troca de moedas (vinténs ↔ barras, 13/09) não é presente: fica fora do catálogo da ficha
-        self.assertEqual(set(cat), {k for k, v in loja_mod.POR_SKU.items() if v['tipo'] not in loja_mod.TIPOS_TROCA})
-        self.assertEqual(len(cat), 21)
+        self.assertEqual(set(cat), {k for k, v in loja_mod.POR_SKU.items() if v['tipo'] not in loja_mod.FORA_DO_PRESENTE})   # 04/10: nem o Pacote
+        self.assertEqual(len(cat), 26)             # 04/10: + as cinco auras
         self.assertEqual((cat['pergaminho-elemento']['pode'], cat['pergaminho-elemento']['motivo']),
                          (False, 'nenhum herói escolheu caminho elemental ainda'))       # sem save
         self.assertEqual((cat['classe-bruxo']['pode'], cat['classe-bruxo']['raridade']), (True, 'raro'))

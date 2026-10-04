@@ -65,6 +65,7 @@ var JOGO = (typeof window !== 'undefined')
    *     cobrisse um muro de 8 m engoliria 4 m de cada lado dele. */
   var campoAtivo = false, zonaAtual = 'praca', aparenciaCampo = null, classeAvatar = null;
   var auraDoHeroi = false;
+  var auraCorDoHeroi = null;   // 04/10: a aura comprada na loja (a cor do elemento); null = a branca do Colecionador
   var caixas = [];
   var CAMPO_RESERVA = { meioLado: 30, chao: {}, muros: [], tochas: [], saida: { x: 0, z: 24 }, nasce: { x: 0, z: 20 } };
   /* A SEDE POR DENTRO (04/10, dono: "os jogadores da mesma guild entrar nesse mapa (sem esses
@@ -3193,7 +3194,7 @@ var JOGO = (typeof window !== 'undefined')
     heroi.classId = velho.classId;
     heroi.node.position.copy(p);
     heroi.node.rotation.y = ry;
-    if (velho.aura) acendeAura(heroi, true);
+    if (velho.aura) acendeAura(heroi, true, velho.auraCor);
     if (velho.alvo) mandaAndar(heroi, velho.alvo.x, velho.alvo.z);
     sincronizaBicho();
   }
@@ -3788,9 +3789,9 @@ var JOGO = (typeof window !== 'undefined')
           if (ch.isSprite) {
             var f2 = (relogio * 0.45 + (ch.userData.fase || 0)) % 1.0;
             ch.position.y = 0.7 + f2 * 1.0;
-            ch.material.opacity = 0.34 * (1 - f2);
+            ch.material.opacity = Math.min(1, 0.34 * (ch.userData.forca || 1)) * (1 - f2);
           } else {
-            ch.material.opacity = 0.28 + Math.sin(relogio * 2.1) * 0.09;
+            ch.material.opacity = Math.min(1, (0.28 + Math.sin(relogio * 2.1) * 0.09) * (ch.userData.forca || 1));
             ch.rotation.z = relogio * 0.35;
           }
         }
@@ -4111,13 +4112,27 @@ var JOGO = (typeof window !== 'undefined')
     g2.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(cv);
   }
-  function acendeAura(corpo, liga) {
+  /* AS AURAS DA LOJA (04/10): o mesmo anel e as mesmas labaredas, TINGIDOS com a cor do elemento
+   * (a textura é branca e o material multiplica a cor — nenhuma arte nova). Quem tem a aura comprada
+   * E o Traje do Colecionador veste a comprada: foi a que ele escolheu na ficha do Personagem. Sem
+   * `cor` (ou com uma cor que esta versão não conhece) fica a branca de sempre. */
+  var AURA_COR = { fogo: 0xff6a2a, agua: 0x3aa0ff, terra: 0x6fcf4a, ar: 0xbfefff, neutra: 0xe0b860 };
+  function acendeAura(corpo, liga, cor) {
     if (!corpo || !THREE) return;
+    cor = (typeof cor === 'string' && AURA_COR.hasOwnProperty(cor)) ? cor : null;
     if (!liga) {
       if (corpo.aura) { corpo.node.remove(corpo.aura); corpo.aura = null; }
+      corpo.auraCor = null;
       return;
     }
-    if (corpo.aura) return;
+    if (corpo.aura && (corpo.auraCor || null) === cor) return;
+    if (corpo.aura) { corpo.node.remove(corpo.aura); corpo.aura = null; }   // trocou de cor: refaz
+    var tinta = cor ? AURA_COR[cor] : 0xffffff;
+    /* A cor NÃO pode ser aditiva: no chão claro da praça o aditivo colorido some (a foto de 04/10 mostrou
+     * as auras quase invisíveis). A aura comprada pinta por cima (NormalBlending), mais forte, e ganha um
+     * ARO fino da cor no chão — é ele que se lê de longe. A branca do Colecionador fica como sempre foi. */
+    var forca = cor ? 2.6 : 1;
+    var mistura = cor ? THREE.NormalBlending : THREE.AdditiveBlending;
     if (!texAuraDisco) {
       texAuraDisco = fazTexRadial([[0, 'rgba(255,255,255,0)'],
         [0.55, 'rgba(255,255,255,0.5)'], [0.75, 'rgba(255,255,255,0.16)'],
@@ -4129,26 +4144,48 @@ var JOGO = (typeof window !== 'undefined')
     var disco = new THREE.Mesh(
       new THREE.PlaneGeometry(2.2, 2.2),
       new THREE.MeshBasicMaterial({ map: texAuraDisco, transparent: true, opacity: 0.34,
-        depthWrite: false, blending: THREE.AdditiveBlending }));
+        depthWrite: false, blending: mistura, color: tinta }));
     disco.rotation.x = -Math.PI / 2;
     disco.position.y = 0.05;
+    disco.userData.forca = forca;
     g.add(disco);
+    if (cor && THREE.RingGeometry) {
+      var aro = new THREE.Mesh(new THREE.RingGeometry(0.78, 0.9, 40),
+        new THREE.MeshBasicMaterial({ color: tinta, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide,
+          // as pedras do caminho ficam a 0,05 e puxam a profundidade para a frente (polygonOffset −2):
+          // sem ir além delas, o aro de quem pisa no caminho sumia debaixo da calçada
+          polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      aro.rotation.x = -Math.PI / 2;
+      aro.position.y = 0.09;
+      disco.position.y = 0.08;
+      disco.material.polygonOffset = true;
+      disco.material.polygonOffsetFactor = -3;
+      disco.material.polygonOffsetUnits = -3;
+      aro.userData.forca = 3.2;
+      g.add(aro);
+    }
     for (var f = 0; f < 3; f++) {
       var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texAuraChama,
         transparent: true, opacity: 0.32, depthWrite: false,
-        blending: THREE.AdditiveBlending, color: 0xffffff }));
+        blending: mistura, color: tinta }));
       sp.scale.set(0.5, 1.05, 1);
       sp.position.set(Math.cos(f * 2.1) * 0.35, 0.9, Math.sin(f * 2.1) * 0.35);
       sp.userData.fase = f * 0.33;
+      sp.userData.forca = forca;
       g.add(sp);
     }
     corpo.node.add(g);
     corpo.aura = g;
+    corpo.auraCor = cor;
   }
-  Hub.aura = function (liga) {
+  Hub.aura = function (liga, cor) {
     auraDoHeroi = !!liga;              // 14/09: a troca de cena (Campo) remonta o herói e religa
-    acendeAura(heroi, !!liga);
+    auraCorDoHeroi = liga ? (cor || null) : null;
+    acendeAura(heroi, !!liga, auraCorDoHeroi);
     return !!heroi;
+  };
+  Hub._auraDoHeroi = function () {     // só as provas: a aura acesa no herói e a cor dela
+    return { acesa: !!(heroi && heroi.aura), cor: (heroi && heroi.auraCor) || null };
   };
 
   /* OS FANTASMAS — os outros jogadores da Rede. Desde o TETO (pedido 25/08,
@@ -4274,7 +4311,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!heroi) return;
     heroi.classId = classId || 'sumo';
     if (x != null && z != null) heroi.node.position.set(x, 0, z);
-    if (auraDoHeroi) acendeAura(heroi, true);
+    if (auraDoHeroi) acendeAura(heroi, true, auraCorDoHeroi);
     sincronizaBicho();
   }
   Hub.entraCampo = function (opts) {
@@ -4515,7 +4552,8 @@ var JOGO = (typeof window !== 'undefined')
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
               marcasGrupo[reg.id] || null,
               brilhoDoNome(perfil && perfil.nome, perfil && perfil.mestre === true));
-    if (perfil && perfil.aura) acendeAura(corpo, true);   // a vaidade é pública
+    // a vaidade é pública: a branca do Colecionador (perfil.aura) ou a comprada (perfil.auraCor, 04/10)
+    if (perfil && (perfil.aura || perfil.auraCor)) acendeAura(corpo, true, perfil.auraCor);
     anelDoGrupo(corpo, !!marcasGrupo[reg.id]);           // 12/09: quem é do meu grupo, no chão
     esperaCorpo(corpo, classe);           // fusão: o corpo próprio vem vindo
     poeAlvoToque(corpo);                  // 11/09: o corpo inteiro recebe o toque, não só o nome
@@ -4653,6 +4691,10 @@ var JOGO = (typeof window !== 'undefined')
     return n;
   };
   /* o modelo que o corpo de um fantasma veste (provas) */
+  Hub._auraFantasma = function (id) {   // só as provas (tests/aura_praca.html): a aura acesa num vizinho e a cor
+    var r = fantasmas[id];
+    return (r && r.corpo) ? { acesa: !!r.corpo.aura, cor: r.corpo.auraCor || null } : null;
+  };
   Hub._corpoFantasma = function (id) {
     var r = fantasmas[id], u = r && r.corpo && r.corpo.node.userData;
     return (u && u.look && u.look.model) || null;

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a aura comprada, na praça</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:1280px;height:720px;border:0;background:#000}
+  #saida{position:fixed;left:1280px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- A AURA DA LOJA NA PRAÇA (04/10). O index.html de verdade num quadro, com o save na memória e a
+     Rede calada (como a tests/balao_praca.html). O meu herói acende a aura de BRASA pelo mesmo caminho
+     do jogo (Hub.aura(true, 'fogo')) e três vizinhos chegam com as deles no perfil (auraCor), mais um
+     com a branca do Colecionador e um sem nada. Cobra que cada corpo acende a cor certa, que trocar de
+     cor refaz a aura e que desligar apaga. No fim deixa todos acesos, para a foto. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0;
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__fail = falhas;
+    window.__pronto = true;
+    window.__done = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&aura-praca';
+  var J, U, H, R;
+  var VIZINHOS = [
+    { id: 'mare', nome: 'Maré', classe: 'arqueiro', auraCor: 'agua', dx: -2.6, dz: -2.4 },
+    { id: 'raiz', nome: 'Raiz', classe: 'curandeiro', auraCor: 'terra', dx: -0.9, dz: -3.6 },
+    { id: 'vento', nome: 'Vento', classe: 'sumo', auraCor: 'ar', dx: 0.9, dz: -3.6 },
+    { id: 'lousa', nome: 'Lousa', classe: 'arqueiro', auraCor: 'neutra', dx: 2.6, dz: -2.4 },
+    { id: 'colecao', nome: 'Colecionador', classe: 'sumo', aura: true, dx: 4.0, dz: -0.8 },
+    { id: 'nada', nome: 'Sem aura', classe: 'curandeiro', auraCor: 'roxa', dx: -4.0, dz: -0.8 }
+  ];
+  function auraDe(id) {
+    return H._auraFantasma(id);
+  }
+  var t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() &&
+                  J.UI && J.Hub && J.Hub._auraDoHeroi && J.Rede && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s');
+      return setTimeout(espera, 250);
+    }
+    U = J.UI; H = J.Hub; R = J.Rede;
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      quadro.contentWindow.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    if (!ids.length) { P.createHero('sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    U.selection(ids.slice(0, 1));
+    R.entrar = function () { return true; };          // a Rede calada: os vizinhos entram à mão
+    R.pares = function () { return []; };
+    R.mover = function () {};
+    J.DB.batizar('Brasa').then(praca).then(function () { fim(); })
+      .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+  })();
+
+  function praca() {
+    U.showScreen('hub');
+    return ate(function () { var e = H._estado(); return !!(e && e.pos); }, 30000).then(function (ok) {
+      check('(o Acampamento abriu)', ok);
+      if (!ok) throw new Error('sem a praça');
+      var hp = H._estado().pos;
+      VIZINHOS.forEach(function (v) {
+        H.fantasmaSai(v.id);
+        H.fantasmaEntra(v.id, { id: v.id, nome: v.nome, titulo: '', classe: v.classe, sala: null,
+                                aura: v.aura === true, auraCor: R._corAura(v.auraCor), x: hp.x + v.dx, z: hp.z + v.dz });
+      });
+      return ate(function () { return VIZINHOS.every(function (v) { return !!H._corpoFantasma(v.id); }); }, 30000);
+    }).then(function (ok) {
+      check('(os seis vizinhos têm corpo)', ok);
+      ['mare', 'raiz', 'vento', 'lousa'].forEach(function (id, i) {
+        var a = auraDe(id), cor = ['agua', 'terra', 'ar', 'neutra'][i];
+        check('o vizinho com a aura "' + cor + '" no perfil acende essa cor', !!a && a.acesa && a.cor === cor, JSON.stringify(a));
+      });
+      var c = auraDe('colecao'), n = auraDe('nada');
+      check('o Traje do Colecionador segue com a aura branca (sem cor)', !!c && c.acesa && c.cor === null, JSON.stringify(c));
+      check('cor que não existe não acende nada', !!n && !n.acesa, JSON.stringify(n));
+      H.aura(true, 'agua');
+      var a1 = H._auraDoHeroi();
+      H.aura(true, 'fogo');
+      var a2 = H._auraDoHeroi();
+      check('o meu herói acende a aura comprada, e trocar de cor refaz a aura', a1.acesa && a1.cor === 'agua' && a2.acesa && a2.cor === 'fogo',
+            JSON.stringify([a1, a2]));
+      H.aura(false);
+      var a3 = H._auraDoHeroi();
+      H.aura(true);
+      var a4 = H._auraDoHeroi();
+      check('desligar apaga; ligar sem cor é a branca de sempre', !a3.acesa && a3.cor === null && a4.acesa && a4.cor === null,
+            JSON.stringify([a3, a4]));
+      /* e agora pelo caminho de VERDADE: a vitrine do servidor (de mentira) diz que a conta veste a de
+       * Brasa — a HUD ouve 'soterra:vitrine', acende a cor no herói e pinta a chamada da loja na praça */
+      var agora = Math.floor(Date.now() / 1000);
+      J.Loja._semRede = function (rota) {
+        if (rota !== '/api/loja/vitrine') return { ok: false, status: 404, erro: 'rota?' };
+        return { ok: true, status: 200, agora: agora,
+                 auras: { tem: ['fogo', 'agua'], escolhida: 'fogo', todas: [{ cor: 'fogo', nome: 'Aura de Brasa' }, { cor: 'agua', nome: 'Aura de Maré' }] },
+                 ofertas: { desconto: 25, fim: agora + 2 * 86400 + 7 * 3600 + 90, itens: [{ nome: 'Bruxo', preco: 375, precoCheio: 500 }] },
+                 boasVindas: { disponivel: true, preco: 250, precoCheio: 820 } };
+      };
+      H.aura(false);
+      return J.Loja.vitrine(true).then(function () {
+        return ate(function () { return H._auraDoHeroi().cor === 'fogo'; }, 5000);
+      });
+    }).then(function (ok) {
+      check('a aura escolhida na loja acende sozinha no herói (a HUD ouve a vitrine)', ok, JSON.stringify(H._auraDoHeroi()));
+      var pil = quadro.contentDocument.querySelector('.hub-loja');
+      check('a chamada da loja aparece na praça: o Pacote de Boas-Vindas, com o desconto, e leva à loja do site',
+            !!pil && !pil.classList.contains('is-off') && /Boas-vindas/.test(pil.textContent) && /−70%/.test(pil.textContent) &&
+            /site\/loja\.html$/.test(pil.getAttribute('href') || ''), pil ? pil.textContent + ' → ' + pil.getAttribute('href') : 'sem pílula');
+    });
+  }
+})();
+</script>
+</body>
+</html>

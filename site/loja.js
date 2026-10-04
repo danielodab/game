@@ -424,7 +424,76 @@
     var C = (window.JOGO && JOGO.DATA && JOGO.DATA.classes) || {};
     return (proprio(C, id) && C[id].palette && C[id].palette.primary) || '';
   }
+  /* 04/10: o Pacote de Boas-Vindas, no topo. Aparece para quem está de fora (é a chamada) e para a
+   * conta que ainda pode comprá-lo; quem já comprou — ou já tem os dois personagens — não o vê. */
+  function destaqueBoasVindas(itens) {
+    var it = null;
+    itens.forEach(function (x) { if (x.tipo === 'pacote' && secaoDe(x) === 'boas-vindas') it = x; });
+    if (!it) return '';
+    var logado = estadoMinha === 'ok';
+    var bv = logado ? (minha.boasVindas || {}) : null;
+    var mestre = logado && !!(minha.saldo || {}).semFundo;
+    if (logado && !mestre && bv.disponivel !== true) return '';
+    var esc = it.escolhas || {};
+    var classes = (Array.isArray(esc.classe) ? esc.classe : []).filter(function (c) {
+      return !logado || !Array.isArray(bv.classes) || bv.classes.indexOf(c) >= 0;
+    });
+    var minhas = logado && minha.auras && Array.isArray(minha.auras.tem) ? minha.auras.tem : [];
+    var auras = (Array.isArray(esc.aura) ? esc.aura : []).filter(function (a) { return minhas.indexOf(a) < 0; });
+    if (classes.indexOf(bvClasse) < 0) bvClasse = classes[0] || '';
+    if (auras.indexOf(bvAura) < 0) bvAura = auras[0] || '';
+    function nomeDe(sku, reserva) { var x = acha(sku); return x ? x.nome : reserva; }
+    function opcoes(lista, atual, prefixo) {
+      return lista.map(function (v) {
+        return '<option value="' + E(v) + '"' + (v === atual ? ' selected' : '') + '>' + E(nomeDe(prefixo + v, v)) + '</option>';
+      }).join('');
+    }
+    var motivo = null;
+    if (logado && !mestre) {
+      var faltaB = precoDe(it) - barrasNoSaldo();
+      if (!bvClasse || !bvAura) motivo = { chave: 'sem-escolha', texto: 'Não há o que escolher neste pacote para a sua conta.' };
+      else if (faltaB > 0) motivo = { chave: 'saldo-barras', texto: 'Faltam ' + nBarras(faltaB) + ' na sua conta.' };
+    }
+    var bt = estadoMinha === 'fora' ? '<a class="btn btn-ouro" href="conta.html#entrar">Entre para comprar</a>'
+      : '<button type="button" class="btn btn-ouro' + (motivo ? ' trancado' : '') + '" data-comprar="' + E(it.sku) + '"' +
+        (!logado || motivo || ocupado ? ' disabled' : '') + '>Comprar com barras</button>';
+    var menos = menosPorCento(it);
+    return '<section class="loja-secao s-boas-vindas destaque-bv" data-secao="boas-vindas" data-sku="' + E(it.sku) + '">' +
+      '<span class="bv-selo">Uma vez por conta' + (menos ? ' · −' + menos + '%' : '') + '</span>' +
+      '<h3>' + E(it.nome) + '</h3>' + (it.descricao ? '<p class="sub">' + E(it.descricao) + '</p>' : '') +
+      '<div class="bv-escolhas">' +
+      '<label>O personagem <select data-bv="classe">' + opcoes(classes, bvClasse, 'classe-') + '</select></label>' +
+      '<label>A aura <select data-bv="aura">' + opcoes(auras, bvAura, 'aura-') + '</select></label></div>' +
+      '<div class="produto-pe">' + precoHtml(it) + bt + '</div>' +
+      (motivo ? '<p class="motivo" data-motivo="' + E(motivo.chave) + '">' + E(motivo.texto) + '</p>' : '') +
+      '</section>';
+  }
+  /* 04/10: as ofertas da semana — os mesmos cartões, numa seção no topo, com o tempo que falta */
+  function secaoOfertas(itens) {
+    var o = catalogo.ofertas;
+    var dela = itens.filter(function (it) { return !!oferta(it); });
+    if (!o || !dela.length) return '';
+    return '<section class="loja-secao s-ofertas" data-secao="ofertas"><h3>Ofertas da semana' +
+      (Number(o.desconto) > 0 ? ' <span class="oferta-selo">−' + N(o.desconto) + '%</span>' : '') + '</h3>' +
+      '<p class="sub">Produtos com desconto que mudam toda segunda-feira, iguais para todo mundo. ' +
+      '<b class="oferta-falta" data-fim="' + E(o.fim) + '">Terminam em ' + E(faltaTexto(Number(o.fim) - SITE.agora())) + '.</b></p>' +
+      '<div class="catalogo">' + dela.map(function (it) { return cartao(it, itens, true); }).join('') + '</div></section>';
+  }
+  // a contagem regressiva anda sozinha; passou do fim, o catálogo é lido de novo (a semana virou)
+  function andaOfertas() {
+    var o = catalogo && catalogo.ofertas;
+    if (!o || !(Number(o.fim) > 0)) return;
+    var falta = Number(o.fim) - SITE.agora();
+    if (falta <= 0) { carregaCatalogo(); return; }
+    var els = document.querySelectorAll('.oferta-falta');
+    for (var i = 0; i < els.length; i++) els[i].textContent = 'Terminam em ' + faltaTexto(falta) + '.';
+  }
+
   function arte(it) {
+    if (it.tipo === 'aura') {            // 04/10: o anel de luz, na cor do elemento
+      var cor = it.alvo === 'neutra' ? 'neutro' : (ELEMENTOS.indexOf(it.alvo) >= 0 ? it.alvo : 'neutro');
+      return '<div class="arte-produto arte-aura el-' + cor + '"><span class="anel"></span></div>';
+    }
     if (it.tipo === 'classe') {
       var src = SITE.img('classe', it.alvo);
       var rar = proprio(RARIDADE, it.raridade) ? it.raridade : '';
@@ -512,6 +581,9 @@
         return { chave: 'classe-a-caminho', texto: ped.origem === 'presente' ? 'Essa classe está chegando como presente do Mestre.'
                                                                               : 'Já há um pedido dessa classe a caminho.' };
       }
+    }
+    if (it.tipo === 'aura' && minha.auras && Array.isArray(minha.auras.tem) && minha.auras.tem.indexOf(it.alvo) >= 0) {
+      return { chave: 'aura-ja', texto: 'Essa aura já é sua: ligue na ficha do Personagem, no jogo.' };
     }
     if (s.semFundo) return null;          // o Mestre pula o saldo e os limites, como no servidor
     var lim = it.limite && proprio(minha.limites, it.limite.grupo) ? minha.limites[it.limite.grupo] : null;
@@ -719,7 +791,8 @@
       var idem = chave('sku', it.sku);
       ocupa(true);
       aviso('Fazendo o pedido…', 'neutro');
-      return SITE.api('/api/loja/comprar', { method: 'POST', body: { sku: it.sku, idem: idem } }).then(function (r) {
+      corpo.idem = idem;
+      return SITE.api('/api/loja/comprar', { method: 'POST', body: corpo }).then(function (r) {
         ocupado = false;
         if (r.status === 401) { sessaoVencida(); return; }
         if (r.status === 0) {
@@ -730,7 +803,9 @@
         }
         if (!r.ok) { aviso(SITE.erro(r, 'não deu para fazer o pedido')); desenha(); return carregaMinha(); }
         avisaJogo();
-        aviso('Pedido feito: ' + it.nome + '. ' + (it.tipo === 'barras'
+        aviso('Pedido feito: ' + it.nome + '. ' + (it.tipo === 'aura'
+          ? 'A aura já é sua: ligue na ficha do Personagem, no jogo.'
+          : it.tipo === 'barras'
           ? 'As barras entram quando o jogo abrir logado na conta Principal e pagar os vinténs.'
           : 'Ele chega quando o jogo abrir logado na conta Principal.'), 'certo');
         if (r.pedido && minha) {

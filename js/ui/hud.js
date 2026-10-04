@@ -1440,7 +1440,8 @@ var JOGO = (typeof window !== 'undefined')
         }
 
         // A AURA do Traje do Colecionador fechado (25/08)
-        if (JOGO.Hub && JOGO.Hub.aura) JOGO.Hub.aura(safe(temAuraSelos, false));
+        // 04/10: e a aura COMPRADA na loja, que tem a cor do elemento e vale mais que a branca
+        aplicaAuraPraca();
       });
       JOGO.DB.moedas().then(function (m) {
         // a moeda desenhada antes do número (arte do dono, 03/09)
@@ -1757,6 +1758,7 @@ var JOGO = (typeof window !== 'undefined')
                  classe: aparenciaDaRede(),
                  resumo: safe(resumoDaConta, null),
                  aura: safe(temAuraSelos, false),
+                 auraCor: auraDaLoja(),    // 04/10: a aura comprada (o relé confere no banco e carimba)
                  sala: chaveSala,          // 03/09: a antessala (null = praça)
                  x: pos.x, z: pos.z };
       }
@@ -2104,6 +2106,147 @@ var JOGO = (typeof window !== 'undefined')
     pintaConta();
     avisaDevolvidasPorNivel();             // [D19] o que voltou ao saco na carga
   }
+
+  /* ------------------------------------------------ A LOJA NO JOGO (04/10)
+   * O jogo não vende nada (a compra é no site, em barras de ouro) e não repete preço nenhum: mostra
+   * o que o SERVIDOR diz em GET /api/loja/vitrine (js/core/loja.js). Duas coisas moram aqui:
+   *   - a CHAMADA na praça: uma pílula que leva à loja do site — o Pacote de Boas-Vindas enquanto a
+   *     conta não o comprou; depois, as ofertas da semana com a contagem regressiva;
+   *   - a AURA: a comprada acende no herói (Hub.aura com a cor) e viaja no perfil da Rede; a ficha do
+   *     Personagem liga, desliga e troca (secaoAura). */
+  var AURA_PT = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa' };
+  function paginaLoja() {
+    var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
+    return raiz + 'site/loja.html';
+  }
+  function auraDaLoja() {
+    return safe(function () { return (JOGO.Loja && JOGO.Loja.auraEscolhida) ? JOGO.Loja.auraEscolhida() : null; }, null);
+  }
+  /* a aura do herói na praça: a comprada (com a cor) se a conta escolheu uma; senão a branca do
+   * Traje do Colecionador fechado; senão nenhuma */
+  function aplicaAuraPraca() {
+    if (!JOGO.Hub || !JOGO.Hub.aura) return;
+    var cor = auraDaLoja();
+    safe(function () { JOGO.Hub.aura(!!cor || !!safe(temAuraSelos, false), cor); return true; }, false);
+  }
+  // 200000 s → "2 d 7 h"; 5000 s → "1 h 23 min"; 50 s → "menos de 1 min"
+  function faltaCurta(seg) {
+    seg = Math.max(0, Math.floor(Number(seg) || 0));
+    var d = Math.floor(seg / 86400), h = Math.floor((seg % 86400) / 3600), m = Math.floor((seg % 3600) / 60);
+    if (d > 0) return d + ' d' + (h ? ' ' + h + ' h' : '');
+    if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
+    return m > 0 ? m + ' min' : 'menos de 1 min';
+  }
+  /* O texto da chamada, função PURA (as provas a chamam sem a tela): {html, dica} ou null quando não
+   * há o que chamar. `v` é a vitrine (Loja.vitrineAtual) e `agoraS` os segundos do servidor. */
+  UI.chamadaLojaTexto = function (v, agoraS) {
+    if (!v || typeof v !== 'object') return null;
+    var bv = v.boasVindas || {};
+    if (bv.disponivel && bv.preco > 0 && bv.precoCheio > bv.preco) {
+      var menos = Math.round((1 - bv.preco / bv.precoCheio) * 100);
+      return { html: '🎁 <b>Boas-vindas</b> −' + menos + '%',
+               dica: 'Pacote de Boas-Vindas na loja do site: um personagem raro, pedras de forja e uma aura, uma vez por conta' };
+    }
+    var of = v.ofertas || {}, itens = of.itens || [];
+    var falta = (of.fim || 0) - (agoraS || 0);
+    if (!itens.length || !(falta > 0)) return null;
+    return { html: '🏷 <b>Ofertas</b> −' + (of.desconto || 0) + '% · ' + faltaCurta(falta),
+             dica: 'Ofertas da semana na loja do site: ' + itens.map(function (i) { return i.nome; }).join(', ') +
+                   ' — terminam em ' + faltaCurta(falta) };
+  };
+  var chamadaLojaEl = null, chamadaLojaTimer = null;
+  function pintaChamadaLoja() {
+    var a = chamadaLojaEl, Lj = JOGO.Loja;
+    if (!a || !a.isConnected) {
+      if (chamadaLojaTimer) { clearInterval(chamadaLojaTimer); chamadaLojaTimer = null; }
+      chamadaLojaEl = null;
+      return;
+    }
+    var t = (Lj && Lj.vitrineAtual) ? UI.chamadaLojaTexto(Lj.vitrineAtual(), Lj.agoraServidor()) : null;
+    if (!t) { a.classList.add('is-off'); return; }
+    a.classList.remove('is-off');
+    a.innerHTML = t.html;
+    a.title = t.dica;
+    a.setAttribute('aria-label', t.dica);
+  }
+  function ligaChamadaLoja(a) {
+    var Lj = JOGO.Loja;
+    if (!a || !Lj || !Lj.vitrine) return;
+    a.href = paginaLoja();
+    a.target = '_blank';
+    a.rel = 'noopener';
+    chamadaLojaEl = a;
+    pintaChamadaLoja();
+    // a contagem regressiva anda de minuto em minuto; o relógio morre com a tela (pintaChamadaLoja)
+    if (!chamadaLojaTimer) chamadaLojaTimer = setInterval(pintaChamadaLoja, 60000);
+    Lj.vitrine();                       // a resposta chega pelo 'soterra:vitrine' (ouvinte abaixo)
+  }
+  var reanuncioAura = null, auraAnunciada = null;
+  try {
+    window.addEventListener('soterra:vitrine', function () {
+      aplicaAuraPraca();
+      // o perfil só volta à Rede quando a aura MUDOU (a vitrine é relida a cada entrada na praça)
+      var corV = auraDaLoja();
+      if (corV !== auraAnunciada) { auraAnunciada = corV; safe(function () { reanunciaPerfil(); return true; }, false); }
+      pintaChamadaLoja();
+    });
+  } catch (eVit) {}
+  /* a seção da ficha do Personagem: "Sem aura" e uma pastilha por aura. A que a conta não tem fica
+   * apagada e leva à loja; a posse e a escolha são do servidor (Loja.escolheAura). */
+  function secaoAura(caixa) {
+    var Lj = JOGO.Loja;
+    if (!Lj || !Lj.vitrine) return;
+    caixa.appendChild(el('h3', 'bk-tit', 'Aura na praça'));
+    var cx = el('div', 'char-aura');
+    caixa.appendChild(cx);
+    function escolhe(cor, nome) {
+      Lj.escolheAura(cor).then(function (r) {
+        if (!r || !r.ok) { toast(esc((r && r.erro) || 'Não deu para trocar a aura agora.')); return; }
+        toast(cor ? 'Aura de ' + nome + ' acesa — os outros passam a ver em até uns 2 minutos.' : 'Aura desligada.', 'good');
+        // o relé relê a conta a cada minuto e pouco: um segundo anúncio depois disso leva a aura nova
+        if (reanuncioAura) clearTimeout(reanuncioAura);
+        reanuncioAura = setTimeout(function () { safe(function () { reanunciaPerfil(); return true; }, false); }, 130000);
+        if (cx.isConnected) pinta();
+      });
+    }
+    function pinta() {
+      clear(cx);
+      var v = Lj.vitrineAtual();
+      if (!v) {
+        var comConta = safe(function () { return JOGO.Sessao.ativa(); }, false);
+        cx.appendChild(el('p', 'inv-dica', comConta ? 'Buscando as suas auras…'
+          : 'Entre na sua conta (ficha Contas) para usar as auras da loja.'));
+        return;
+      }
+      var tem = v.auras.tem, atual = v.auras.escolhida;
+      var fila = el('div', 'char-aura-fila');
+      var b0 = btn('Sem aura', 'btn-mini char-aura-b' + (atual ? '' : ' is-on'), function () { if (atual) escolhe(null, ''); });
+      b0.setAttribute('aria-pressed', atual ? 'false' : 'true');
+      fila.appendChild(b0);
+      v.auras.todas.forEach(function (a) {
+        var minha = tem.indexOf(a.cor) >= 0, nome = AURA_PT[a.cor] || a.cor;
+        var b = btn('<span class="char-aura-cor is-' + a.cor + '"></span>' + esc(nome),
+          'btn-mini char-aura-b' + (atual === a.cor ? ' is-on' : '') + (minha ? '' : ' is-falta'), function () {
+            if (!minha) { toast('A ' + esc(a.nome) + ' está na loja do site, na seção Aparência.'); return; }
+            if (atual !== a.cor) escolhe(a.cor, nome);
+          });
+        b.setAttribute('data-aura', a.cor);
+        b.setAttribute('aria-pressed', atual === a.cor ? 'true' : 'false');
+        b.title = minha ? a.nome : a.nome + ' — na loja do site';
+        fila.appendChild(b);
+      });
+      cx.appendChild(fila);
+      var dica = el('p', 'inv-dica', tem.length
+        ? 'Um anel de luz aos pés do herói, que todo mundo na praça vê. Só aparência: não muda nada em batalha.'
+        : 'Você ainda não tem aura. Elas ficam na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência — só aparência, nada de poder.');
+      var lk = dica.querySelector('a');
+      if (lk) lk.href = paginaLoja();
+      cx.appendChild(dica);
+    }
+    pinta();
+    Lj.vitrine(true).then(function () { if (cx.isConnected) pinta(); });
+  }
+  UI._secaoAura = secaoAura;            // só as provas (tests/loja_novidades.html)
 
   /* ------------------------------------------------ OS EVENTOS DO MUNDO (10/09)
    * A faixa do Acampamento, as linhas do painel do portal e os chips da tela
@@ -5426,6 +5569,8 @@ var JOGO = (typeof window !== 'undefined')
        * apagado no próprio menu; o "como ganhar" fica recolhido embaixo. Os de
        * ranking são emprestados: some o título no dia em que a posição some,
        * sem apagar a escolha. */
+      secaoAura(caixa);                 // 04/10: a aura comprada na loja (liga, desliga, troca)
+
       caixa.appendChild(el('h3', 'bk-tit', 'Título na plaquinha'));
       var Tt = JOGO.Titulos;
       if (!Tt) {
@@ -7725,7 +7870,7 @@ var JOGO = (typeof window !== 'undefined')
           // o Traje do Colecionador FECHOU nesta peça? A aura acende agora
           if (it && D().selos && it.setId === D().selos.setId && safe(temAuraSelos, false)) {
             toast('O Traje do Colecionador FECHOU — a aura acende na praça e o Selinho se junta a você!', 'good');
-            if (JOGO.Hub && JOGO.Hub.aura) safe(function () { JOGO.Hub.aura(true); }, null);
+            aplicaAuraPraca();
           }
           if (pilha.count <= 1) invSel = null;
         }

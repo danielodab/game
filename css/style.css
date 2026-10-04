@@ -1974,6 +1974,30 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .hub-evento.is-mini .hub-evento-item, .hub-evento.is-mini .hub-evento-link { display: none; }
 .hub-evento:not(.is-mini) { flex-direction: column; align-items: flex-end; text-align: right; }
 @media (pointer: coarse) { .hub-evento-pilula { min-height: 44px; padding: 8px 14px; } }
+/* 04/10: a chamada da loja — a pílula gêmea da dos eventos, no mesmo canto DIREITO, uma linha abaixo dela (o
+   canto esquerdo é do cartão do herói). O Pacote de Boas-Vindas ou as ofertas da semana com o tempo que falta:
+   é um link para a loja do site e some quando não há o que chamar. Fica ATRÁS da faixa de eventos (z-index
+   menor): aberta, a faixa passa por cima dela. */
+.hub-loja { position: absolute; right: calc(var(--sa-r, 0px) + 12px); top: calc(var(--sa-t, 0px) + 90px); z-index: 3;
+  display: inline-flex; align-items: center; min-height: 30px; padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; line-height: 1.35; white-space: nowrap; text-decoration: none; pointer-events: auto;
+  color: #ffe9a8; background: rgba(40,30,12,.9); border: 1px solid rgba(240,200,110,.6); }
+.hub-loja b { color: #ffd36a; margin: 0 4px; }
+.hub-loja.is-off { display: none; }
+@media (pointer: coarse) { .hub-loja { min-height: 44px; padding: 8px 14px; top: calc(var(--sa-t, 0px) + 104px); } }
+/* 04/10: a aura na ficha do Personagem — uma pastilha por aura, com a cor do elemento */
+.char-aura-fila { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.char-aura-b { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+.char-aura-b.is-on { border-color: #ffd36a; box-shadow: 0 0 0 2px rgba(255,211,106,.35); color: #ffe9a8; }
+.char-aura-b.is-falta { opacity: .5; }
+.char-aura-cor { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+.char-aura-cor.is-fogo { background: #ff6a2a; color: #ff6a2a; }
+.char-aura-cor.is-agua { background: #3aa0ff; color: #3aa0ff; }
+.char-aura-cor.is-terra { background: #6fcf4a; color: #6fcf4a; }
+.char-aura-cor.is-ar { background: #bfefff; color: #bfefff; }
+.char-aura-cor.is-neutra { background: #e0b860; color: #e0b860; }
+.char-aura-link { color: #ffe9a8; text-decoration: underline; }
+@media (pointer: coarse) { .char-aura-b { min-height: 44px; } }
 .hub-evento b { color: #9fd3ff; }
 .hub-evento-link { color: #ffe9a8; text-decoration: underline; white-space: nowrap; }
 .hub-evento-linha {

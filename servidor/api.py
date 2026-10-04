@@ -283,6 +283,11 @@ ROTAS = {
     ('POST', '/api/loja/comprar'):           ('loja_comprar', True),
     ('POST', '/api/loja/cancelar'):          ('loja_cancelar', True),
     ('POST', '/api/loja/retirar'):           ('loja_retirar', True),
+    # 04/10: a vitrine do jogo (ofertas, Pacote de Boas-Vindas, auras), a aura vestida e o presente a um amigo
+    ('GET',  '/api/loja/vitrine'):           ('loja_vitrine', True),
+    ('GET',  '/api/loja/aura'):              ('loja_aura_ver', True),
+    ('POST', '/api/loja/aura'):              ('loja_aura_escolher', True),
+    ('POST', '/api/loja/presentear'):        ('loja_presentear', True),
     # o retrato no ranking (Loja 2, 10/09, conta.py): o jogador escolhe no site
     ('GET',  '/api/avatar'):                 ('avatar_ler', True),
     ('POST', '/api/avatar'):                 ('avatar_escolher', True),

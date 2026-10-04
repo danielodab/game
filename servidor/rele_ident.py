@@ -151,6 +151,12 @@ JULGADOS = ('oi', 'eco', 'chat', 'guilda', 'sussurro', 'gchat')   # os que levam
 
 SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
        "JOIN contas c ON c.id = s.conta_id WHERE s.token = ?")
+# 04/10: A AURA DA PRAÇA (servidor/loja.py). É coisa comprada: quem diz qual aura a conta veste é o banco
+# (`aura_escolhida`, que a API só grava para a aura que a conta TEM), nunca o cliente. Consulta À PARTE da
+# de cima, e com erro engolido: no rolling update o relé novo pode abrir um banco que ainda não tem a
+# tabela, e isso não pode virar "banco estranho" e deixar a praça inteira sem conferência
+SQL_AURA = "SELECT aura FROM aura_escolhida WHERE conta_id = ?"
+AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
 
 # UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em um
 # dispositivo.. se outro tentar logar, no que estava logado cai o jogo"). O
@@ -240,6 +246,13 @@ def confere(caminho, token, agora=None):
         # e até lá o relé recusaria quem já cumpriu o prazo
         if linha is not None and linha[3] and not moderacao.banida_de_fato(con, linha[0], t):
             linha = linha[:3] + (0,) + linha[4:]
+        aura = None
+        if linha is not None:
+            try:
+                achada = con.execute(SQL_AURA, (linha[0],)).fetchone()
+                aura = achada[0] if achada is not None and achada[0] in AURAS else None
+            except sqlite3.Error:                    # o banco de antes de 04/10: ninguém tem aura ainda
+                aura = None
     except sqlite3.Error:
         return None, False
     finally:
@@ -249,7 +262,10 @@ def confere(caminho, token, agora=None):
     cid, nome, gm, banido, uso = linha
     if banido or isinstance(uso, bool) or not isinstance(uso, (int, float)) or uso < t - SESSAO_DIAS * 86400:
         return None, True
-    return {'id': int(cid), 'nome': nome, 'gm': bool(gm)}, True
+    conta = {'id': int(cid), 'nome': nome, 'gm': bool(gm)}
+    if aura is not None:                             # só quando há: quem compara a conta inteira não muda
+        conta['aura'] = aura
+    return conta, True
 
 
 def derrubadas(caminho, tokens):
@@ -649,6 +665,17 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
                 mudou = True
         elif type(m.get('nuvem')) is not int or m['nuvem'] != nuvem:
             m['nuvem'] = nuvem
+            mudou = True
+        # 04/10: a aura comprada. O `auraCor` que sai é o do banco (o Mestre inclusive); o que o cliente
+        # mandou cai — um cliente mexido não veste na frente dos outros a aura que não comprou. A releitura
+        # da conta a cada CACHE_S (rele.py, _revista) é o que faz a troca de aura chegar à praça
+        aura = conta.get('aura') if conta else None
+        if aura is None:
+            if 'auraCor' in m:
+                del m['auraCor']
+                mudou = True
+        elif m.get('auraCor') != aura:
+            m['auraCor'] = aura
             mudou = True
     if conta and conta.get('gm'):
         if t in COM_NOME:

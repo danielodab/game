@@ -219,7 +219,74 @@
     try {
       window.dispatchEvent(new CustomEvent('soterra:loja', { detail: det }));
     } catch (e) {}
+    // 04/10: chegou uma aura (ou o Pacote que traz uma): a ficha do Personagem e a chamada leem de novo
+    var te = (p && p.entrega && typeof p.entrega === 'object') ? p.entrega.tipo : null;
+    if (tipo === 'entregue' && (te === 'aura' || te === 'pacote')) { try { L.vitrine(true); } catch (e2) {} }
   }
+
+  /* ------------------------------------------------ A VITRINE E A AURA (04/10)
+   * GET /api/loja/vitrine traz, num pedido só, o que o jogo mostra da loja sem repetir número
+   * nenhum: as ofertas da semana com o `fim` (a contagem regressiva, no relógio do SERVIDOR), se o
+   * Pacote de Boas-Vindas ainda está disponível para esta conta, e as auras — as que a conta TEM e
+   * a que ela veste. Só precisa de sessão (não da Nuvem: nada aqui mexe no save). A resposta fica
+   * guardada por VITRINE_MS; quem muda alguma coisa (a aura escolhida, uma entrega) pede de novo.
+   * Cada leitura nova dispara window 'soterra:vitrine' — a HUD acende a aura na praça, reanuncia o
+   * perfil na Rede e repinta a chamada. */
+  L.VITRINE_MS = 5 * 60 * 1000;
+  var vit = null, vitEm = 0, vitBusca = null;
+  function lista(v) { return Object.prototype.toString.call(v) === '[object Array]' ? v : []; }
+  function comSessao() {
+    if (typeof L._semRede === 'function') return true;
+    var s = S();
+    return !!(s && s.ativa && s.ativa() && s.api);
+  }
+  function guardaVitrine(r) {
+    var a = (r.auras && typeof r.auras === 'object') ? r.auras : {};
+    var tem = lista(a.tem).filter(function (c) { return AURAS.indexOf(c) >= 0; });
+    var todas = lista(a.todas).filter(function (x) { return x && AURAS.indexOf(x.cor) >= 0; })
+      .map(function (x) { return { cor: x.cor, nome: String(x.nome || x.cor) }; });
+    var of = (r.ofertas && typeof r.ofertas === 'object') ? r.ofertas : {};
+    var bv = (r.boasVindas && typeof r.boasVindas === 'object') ? r.boasVindas : {};
+    vit = { agora: Number(r.agora) || 0,
+            auras: { tem: tem, escolhida: tem.indexOf(a.escolhida) >= 0 ? a.escolhida : null, todas: todas },
+            ofertas: { desconto: Number(of.desconto) || 0, fim: Number(of.fim) || 0,
+                       itens: lista(of.itens).map(function (i) {
+                         return { nome: String((i && i.nome) || ''), preco: Number(i && i.preco) || 0,
+                                  precoCheio: Number(i && i.precoCheio) || 0 };
+                       }) },
+            boasVindas: { disponivel: bv.disponivel === true, preco: Number(bv.preco) || 0,
+                          precoCheio: Number(bv.precoCheio) || 0 } };
+    vitEm = Date.now();
+    try { window.dispatchEvent(new CustomEvent('soterra:vitrine', { detail: copia(vit) })); } catch (e) {}
+    return vit;
+  }
+  L.vitrine = function (forca) {
+    if (!comSessao()) return Promise.resolve(null);
+    if (vitBusca) return vitBusca;
+    if (!forca && vit && Date.now() - vitEm < L.VITRINE_MS) return Promise.resolve(vit);
+    vitBusca = Promise.resolve(pede('/api/loja/vitrine', { method: 'GET' })).then(function (r) {
+      vitBusca = null;
+      return (r && r.ok) ? guardaVitrine(r) : vit;
+    }, function () { vitBusca = null; return vit; });
+    return vitBusca;
+  };
+  L.vitrineAtual = function () { return vit; };
+  /* os segundos do SERVIDOR agora (o da última leitura mais o que passou aqui): a contagem
+   * regressiva das ofertas não depende do relógio do aparelho estar certo */
+  L.agoraServidor = function () { return vit ? vit.agora + Math.floor((Date.now() - vitEm) / 1000) : 0; };
+  L.auraEscolhida = function () { return (vit && vit.auras.escolhida) || null; };
+  /* liga, troca ou desliga (null) a aura da praça: o SERVIDOR confere a posse e guarda a escolha */
+  L.escolheAura = function (cor) {
+    if (cor !== null && AURAS.indexOf(cor) < 0) return Promise.resolve({ ok: false, erro: 'aura desconhecida' });
+    if (!comSessao()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    return Promise.resolve(pede('/api/loja/aura', { method: 'POST', body: { aura: cor } })).then(function (r) {
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'não deu para trocar a aura agora' };
+      if (vit && r.auras) {
+        guardaVitrine({ agora: L.agoraServidor(), auras: r.auras, ofertas: vit.ofertas, boasVindas: vit.boasVindas });
+      }
+      return { ok: true, escolhida: L.auraEscolhida() };
+    }, function (e) { return { ok: false, erro: String(e && e.message || e) }; });
+  };
 
   function ancora() {
     var up = D().upgrade || {};
@@ -452,5 +519,6 @@
     if (timer) { clearInterval(timer); timer = null; }
     liberada = false; congelada = false; buscando = null; ultima = 0; erro = null;
     compraPendente = false; historico = [];
+    vit = null; vitEm = 0; vitBusca = null;
   };
 })();

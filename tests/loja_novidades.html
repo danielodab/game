@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — as novidades da loja no jogo (04/10)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- AS NOVIDADES DA LOJA (04/10), do lado do JOGO: o Pacote de Boas-Vindas e a aura na fila de
+     entregas (js/core/loja.js), o presente de um amigo no aviso, a vitrine (GET /api/loja/vitrine),
+     a CHAMADA da praça (UI.chamadaLojaTexto) e a ficha da AURA (a seção da ficha do Personagem).
+     O servidor é de mentira (Loja._semRede); o de verdade é provado por tests/loja_api.py.
+     A HUD entra por último e sem UI.init, como em tests/loja.html. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<div id="palco"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/data/items_selos.js',
+    'js/core/contas.js','js/core/sessao.js','js/core/db.js','js/core/mercado.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/progress.js','js/core/nuvem.js','js/core/loja.js',
+    'js/core/rede.js', 'js/ui/icones_ui.js', 'js/ui/hud.js'];
+  for (var i=0;i<arqs.length;i++) document.write('<scr'+'ipt src="../'+arqs[i]+window.__V+'"></scr'+'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), palco = document.getElementById('palco');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function secao(t) { var h = document.createElement('h2'); h.textContent = t; log.appendChild(h); }
+  function fecha() {
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function ate(cond, ms) {
+    ms = ms || 1500;
+    return new Promise(function (r) {
+      var t0 = 0;
+      (function volta() {
+        if (cond()) return r(true);
+        if ((t0 += 10) > ms) return r(false);
+        setTimeout(volta, 10);
+      })();
+    });
+  }
+  var D = JOGO.DATA, P = JOGO.Progress, L = JOGO.Loja, UI = JOGO.UI, R = JOGO.Rede;
+  var PEDRAS = ['agua', 'terra', 'ar', 'fogo', 'neutro'].map(function (el) {
+    for (var k in D.stones) if (D.stones.hasOwnProperty(k) && D.stones[k].element === el && D.stones[k].element !== 'forja') return k;
+    return null;
+  });
+  function pacote(id, classe, aura) {
+    return { id: id, sku: 'boas-vindas', nome: 'Pacote de Boas-Vindas', preco: 0,
+             entrega: { tipo: 'pacote', alvo: 'boas-vindas', qtd: 1, aura: aura,
+                        itens: PEDRAS.map(function (p) { return { tipo: 'pedras', alvo: p, qtd: 10 }; })
+                          .concat([{ tipo: 'classe', alvo: classe, qtd: 1 }]) } };
+  }
+  function contagem() { return PEDRAS.map(function (p) { return P.stoneCount(p); }).join(','); }
+
+  // ---------------------------------------------------------- o servidor de mentira (a vitrine e a aura)
+  var T0 = 1790600000;
+  var srv = { tem: ['agua'], escolhida: null, disponivel: true, itens: [{ sku: 'classe-bruxo', nome: 'Bruxo', preco: 375, precoCheio: 500 },
+              { sku: 'aura-fogo', nome: 'Aura de Brasa', preco: 113, precoCheio: 150 }], chamadas: [] };
+  var NOMES = { fogo: 'Aura de Brasa', agua: 'Aura de Maré', terra: 'Aura de Raiz', ar: 'Aura de Vento', neutra: 'Aura da Lousa' };
+  function auras() {
+    return { tem: srv.tem.slice(), escolhida: srv.escolhida,
+             todas: Object.keys(NOMES).map(function (c) { return { cor: c, sku: 'aura-' + c, nome: NOMES[c] }; }) };
+  }
+  function cartorio(rota, op) {
+    srv.chamadas.push({ rota: rota, op: op });
+    if (rota === '/api/loja/vitrine') {
+      return { ok: true, status: 200, agora: T0, auras: auras(),
+               ofertas: { semana: 2960, desconto: 25, inicio: T0 - 1000, fim: T0 + 2 * 86400 + 7 * 3600 + 120, itens: srv.itens },
+               boasVindas: { disponivel: srv.disponivel, comprado: !srv.disponivel, preco: 250, precoCheio: 820 } };
+    }
+    if (rota === '/api/loja/aura') {
+      var cor = op.body.aura;
+      if (cor !== null && srv.tem.indexOf(cor) < 0) return { ok: false, status: 409, erro: 'você ainda não tem essa aura' };
+      srv.escolhida = cor;
+      return { ok: true, status: 200, auras: auras() };
+    }
+    return { ok: false, status: 404, erro: 'rota?' };
+  }
+  var hub = [];                       // o que a HUD manda a praça acender: [liga, cor]
+  JOGO.Hub = { aura: function (liga, cor) { hub.push([!!liga, cor || null]); return true; } };
+  var vitrines = 0;
+  window.addEventListener('soterra:vitrine', function () { vitrines++; });
+  function pastilha(cor) { return palco.querySelector('button[data-aura="' + cor + '"]'); }
+  function semAura() { return palco.querySelector('.char-aura-fila button:not([data-aura])'); }
+
+  secao('1. a entrega: o Pacote de Boas-Vindas, a aura e o presente de um amigo');
+  var antes = contagem();
+  L.aplicar(pacote(901, 'invocador', 'fogo')).then(function (r) {
+    var depois = PEDRAS.map(function (p, i) { return P.stoneCount(p) - Number(antes.split(',')[i]); }).join(',');
+    check('o pacote entra inteiro: 10 pedras de cada uma das cinco e o Xamã liberado',
+          r.ok === true && depois === '10,10,10,10,10' && P.isClassUnlocked('invocador'), JSON.stringify(r) + ' · ' + depois);
+    antes = contagem();
+    return L.aplicar(pacote(902, 'invocador', 'agua'));
+  }).then(function (r) {
+    check('pacote com a classe JÁ liberada: recusado inteiro (classe-ja-liberada), nenhuma pedra entra',
+          r.ok === false && r.motivo === 'classe-ja-liberada' && contagem() === antes, JSON.stringify(r));
+    return L.aplicar(pacote(903, 'bruxo', 'roxa'));
+  }).then(function (r) {
+    check('pacote com aura desconhecida: item-invalido, e o Bruxo não libera',
+          r.ok === false && r.motivo === 'item-invalido' && !P.isClassUnlocked('bruxo') && contagem() === antes, JSON.stringify(r));
+    var torto = pacote(904, 'bruxo', 'ar');
+    torto.entrega.itens.push({ tipo: 'vintens', alvo: 'carteira', qtd: 5000 });
+    return L.aplicar(torto);
+  }).then(function (r) {
+    check('pacote não carrega moeda dentro: item-invalido', r.ok === false && r.motivo === 'item-invalido' && !P.isClassUnlocked('bruxo'),
+          JSON.stringify(r));
+    return L.aplicar({ id: 905, sku: 'aura-ar', nome: 'Aura de Vento', preco: 0, origem: 'presente',
+                       entrega: { tipo: 'aura', alvo: 'ar', qtd: 1 } });
+  }).then(function (r) {
+    check('a aura dada pelo Mestre passa pela fila sem pôr nada no save', r.ok === true && contagem() === antes, JSON.stringify(r));
+    return L.aplicar({ id: 906, sku: 'pedras-agua', nome: '10 Lágrimas de Cisterna', preco: 0, origem: 'amigo', de: 'Dora',
+                       entrega: { tipo: 'pedras', alvo: PEDRAS[0], qtd: 10 } });
+  }).then(function (r) {
+    check('o presente de um amigo entra e leva a origem "amigo"', r.ok === true && r.origem === 'amigo', JSON.stringify(r));
+    var t = UI.avisoLojaTexto({ tipo: 'entregue', origem: 'amigo', pedido: { nome: '10 Lágrimas de Cisterna', origem: 'amigo', de: 'Dora',
+                                entrega: { tipo: 'pedras' } } });
+    check('o aviso diz quem mandou', !!t && t.texto === 'Presente de Dora: 10 Lágrimas de Cisterna' && t.tipo === 'good', t && t.texto);
+    t = UI.avisoLojaTexto({ tipo: 'recusado', origem: 'amigo', motivo: 'classe-ja-liberada',
+                            pedido: { nome: 'Xamã', origem: 'amigo', de: 'Dora', entrega: { tipo: 'classe' } } });
+    check('o presente recusado não fala em vinténs voltando', !!t && /^O presente de Dora não entrou: a classe já estava liberada/.test(t.texto),
+          t && t.texto);
+    t = UI.avisoLojaTexto({ tipo: 'entregue', origem: 'loja', pedido: { nome: 'Pacote de Boas-Vindas', entrega: { tipo: 'pacote' } } });
+    check('o aviso do pacote diz onde a aura se liga', !!t && /Chegou da loja: Pacote de Boas-Vindas — a aura se liga na ficha do Personagem/.test(t.texto),
+          t && t.texto);
+
+    secao('2. a vitrine e a chamada da praça');
+    check('a Rede só aceita as cores conhecidas', R && R._corAura('fogo') === 'fogo' && R._corAura('neutra') === 'neutra' &&
+          R._corAura('roxa') === null && R._corAura(true) === null);
+    L._reinicia();
+    return L.vitrine();
+  }).then(function (v) {
+    check('sem sessão não há vitrine (e nenhum pedido sai)', v === null && L.vitrineAtual() === null && srv.chamadas.length === 0);
+    L._semRede = cartorio;
+    return L.vitrine();
+  }).then(function (v) {
+    check('a vitrine chega e avisa (soterra:vitrine)', !!v && vitrines === 1 && v.auras.tem.join() === 'agua' && v.auras.escolhida === null &&
+          v.auras.todas.length === 5 && v.ofertas.itens.length === 2, JSON.stringify(v && v.auras));
+    check('o relógio é o do servidor', Math.abs(L.agoraServidor() - T0) <= 2, String(L.agoraServidor()));
+    var t = UI.chamadaLojaTexto(v, T0);
+    check('quem nunca comprou vê o Pacote de Boas-Vindas com o desconto que o servidor deu (250 de 820 = −70%)',
+          !!t && /Boas-vindas/.test(t.html) && /−70%/.test(t.html), t && t.html);
+    var v2 = JSON.parse(JSON.stringify(v));
+    v2.boasVindas.disponivel = false;
+    t = UI.chamadaLojaTexto(v2, T0);
+    check('quem já comprou vê as ofertas da semana com a contagem regressiva', !!t && /Ofertas/.test(t.html) && /−25%/.test(t.html) &&
+          /2 d 7 h/.test(t.html) && /Bruxo, Aura de Brasa/.test(t.dica), t && (t.html + ' | ' + t.dica));
+    t = UI.chamadaLojaTexto(v2, T0 + 2 * 86400 + 7 * 3600);
+    check('no fim da semana a contagem chega aos minutos', !!t && /· 2 min/.test(t.html), t && t.html);
+    check('semana vencida ou sem oferta: não há chamada', UI.chamadaLojaTexto(v2, v2.ofertas.fim + 1) === null &&
+          UI.chamadaLojaTexto({ boasVindas: { disponivel: false }, ofertas: { fim: T0 + 99, itens: [] } }, T0) === null &&
+          UI.chamadaLojaTexto(null, T0) === null);
+    var n = srv.chamadas.length;
+    return L.vitrine().then(function () {
+      check('a vitrine fica guardada: pedir de novo logo em seguida não vai ao servidor', srv.chamadas.length === n);
+    });
+  }).then(function () {
+    secao('3. a ficha da aura (Personagem)');
+    hub.length = 0;
+    UI._secaoAura(palco);
+    return ate(function () { return !!pastilha('agua'); });
+  }).then(function (ok) {
+    check('a ficha mostra "Sem aura" e as cinco pastilhas', ok && palco.querySelectorAll('button[data-aura]').length === 5 && !!semAura());
+    check('nenhuma acesa: "Sem aura" marcada', semAura().classList.contains('is-on') && !palco.querySelector('button[data-aura].is-on'));
+    check('só a que a conta tem está viva; as outras, apagadas', !pastilha('agua').classList.contains('is-falta') &&
+          ['fogo', 'terra', 'ar', 'neutra'].every(function (c) { return pastilha(c).classList.contains('is-falta'); }));
+    var n = srv.chamadas.filter(function (c) { return c.rota === '/api/loja/aura'; }).length;
+    pastilha('fogo').click();           // a que ele NÃO tem: nada vai ao servidor
+    check('tocar na aura que não é da conta não pede nada ao servidor',
+          srv.chamadas.filter(function (c) { return c.rota === '/api/loja/aura'; }).length === n && srv.escolhida === null);
+    pastilha('agua').click();
+    return ate(function () { return L.auraEscolhida() === 'agua' && !!pastilha('agua') && pastilha('agua').classList.contains('is-on'); });
+  }).then(function (ok) {
+    check('ligar: o servidor guarda, a pastilha acende e "Sem aura" apaga', ok && srv.escolhida === 'agua' && !semAura().classList.contains('is-on'));
+    var ultimo = hub[hub.length - 1] || [];
+    check('a praça acende a aura com a COR (Hub.aura(true, "agua"))', ultimo[0] === true && ultimo[1] === 'agua', JSON.stringify(hub));
+    srv.tem.push('fogo');               // comprou outra no site
+    return L.vitrine(true);
+  }).then(function () {
+    UI._secaoAura((palco.innerHTML = '', palco));
+    return ate(function () { return !!pastilha('fogo') && !pastilha('fogo').classList.contains('is-falta'); });
+  }).then(function (ok) {
+    check('a aura comprada depois aparece viva na ficha', ok);
+    pastilha('fogo').click();
+    return ate(function () { return L.auraEscolhida() === 'fogo'; });
+  }).then(function (ok) {
+    var ultimo = hub[hub.length - 1] || [];
+    check('trocar: a praça passa a acender a nova cor', ok && srv.escolhida === 'fogo' && ultimo[0] === true && ultimo[1] === 'fogo', JSON.stringify(ultimo));
+    semAura().click();
+    return ate(function () { return L.auraEscolhida() === null && srv.escolhida === null; });
+  }).then(function (ok) {
+    var ultimo = hub[hub.length - 1] || [];
+    check('desligar: o servidor apaga a escolha e a praça apaga a aura', ok && ultimo[0] === false && ultimo[1] === null, JSON.stringify(ultimo));
+    return L.escolheAura('roxa');
+  }).then(function (r) {
+    check('cor desconhecida nem sai daqui', r.ok === false && srv.escolhida === null);
+    srv.tem = ['agua'];
+    return L.escolheAura('fogo');
+  }).then(function (r) {
+    check('a recusa do servidor (aura que a conta não tem) não muda nada', r.ok === false && /não tem essa aura/.test(r.erro) &&
+          L.auraEscolhida() === null, JSON.stringify(r));
+  }).then(fecha, function (e) { check('a prova rodou até o fim', false, String(e && e.stack || e)); fecha(); });
+})();
+</script>
+</body>
+</html>

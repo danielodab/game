@@ -268,6 +268,14 @@ def _barras_por_vintens(barras):
             'preco': vintens, 'moeda': 'vintens', 'limite': None}
 
 
+def _aura(cor, nome, do):
+    """04/10: a aura da praça. Só aparência: nada muda em batalha, e por isso pode se vender."""
+    return {'sku': 'aura-' + cor, 'secao': 'aparencia', 'tipo': 'aura', 'alvo': cor, 'qtd': 1, 'nome': nome,
+            'descricao': ('Um anel de luz %s aos pés do seu herói na praça: todo mundo vê. Só aparência — não muda '
+                          'nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.' % do),
+            'preco': AURA_PRECO, 'moeda': 'barras', 'limite': {'grupo': 'aura-' + cor, 'max': 1, 'dias': None}}
+
+
 # (elemento, pedra, nome, (da/de), preço de 10, preço de 50), em barras de ouro (13/09). Água e terra caem na
 # Cisterna; ar, fogo e a neutra valem mais (fogo e neutra não caem em portal aberto: só a loja as dá)
 _PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de água'), 25, 110),
@@ -678,20 +686,41 @@ class LojaMixin:
                                        % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, PEDIDOS_LISTA)).fetchall()
             pedidos = [self._loja_pedido(r, t) for r in pedidos]
             barras = self._barras_publico(cid)          # 13/09: o saldo de barras da conta e o extrato
+            auras = self._auras_publico(cid)            # 04/10
+            boas = self._boas_vindas_publico(cid, save['progress'] if save else None, t)
+            dados = self._presentes_dados(cid, t)
         return 200, {'ok': True, 'saldo': saldo, 'barras': barras, 'limites': limites,
+                     'auras': auras, 'boasVindas': boas, 'presentes': dados,
                      'classes': self._loja_classes(save['progress'] if save else None),
                      'pedidos': pedidos}
 
     # -- POST /api/loja/comprar ------------------------------------------------------------------
-    def _loja_confere_item(self, cid, item, progress):
+    def _loja_confere_item(self, cid, item, progress, entrega=None):
         """O que torna o produto inútil ou repetido — vale também para o Mestre
-        (e para o presente dele: a classe a caminho, comprada OU presenteada, barra as duas)."""
-        if item['tipo'] == 'classe':
+        (e para o presente dele: a classe a caminho, comprada OU presenteada, barra as duas).
+        `entrega` só no Pacote de Boas-Vindas (as escolhas de quem compra)."""
+        if item['tipo'] == 'aura':                      # 04/10: comprada, presenteada ou vinda no Pacote
+            if item['alvo'] in self._auras(cid):
+                raise Recusa(409, 'essa aura já é sua')
+        elif item['tipo'] == 'pacote':
+            if entrega is not None:
+                for sub in entrega['itens']:
+                    if sub['tipo'] == 'classe':
+                        self._loja_confere_item(cid, POR_SKU['classe-' + sub['alvo']], progress)
+                if entrega['aura'] in self._auras(cid):
+                    raise Recusa(409, 'essa aura já é sua: escolha outra para o pacote')
+        elif item['tipo'] == 'classe':
             if item['alvo'] in liberadas(progress):
                 raise Recusa(409, 'essa classe já está liberada')
             estados = {r[0] for r in self.con.execute(
                 "SELECT estado FROM loja_pedidos WHERE conta_id = ? AND sku = ? AND estado IN ('pendente', 'retirado', 'entregue')",
                 (cid, item['sku']))}
+            # 04/10: a classe que está vindo dentro de um Pacote de Boas-Vindas também está a caminho
+            for r in self.con.execute("SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND sku = ? "
+                                      "AND estado IN ('pendente', 'retirado')", (cid, BOAS_VINDAS_SKU)):
+                if any(isinstance(x, dict) and x.get('tipo') == 'classe' and x.get('alvo') == item['alvo']
+                       for x in ((_json(r['entrega']) or {}).get('itens') or [])):
+                    estados.add('pendente')
             if estados & {'pendente', 'retirado'}:
                 raise Recusa(409, 'já há um pedido dessa classe a caminho')
             if 'entregue' in estados:
@@ -808,6 +837,210 @@ class LojaMixin:
         log.info("loja: #%d comprou %s por %s (pedido %d)", cid, sku,
                  '%d barras' % custo if custo else '%d vinténs' % preco, pid)
         return 201, {'ok': True, 'pedido': self._loja_pedido(r, t), 'saldo': saldo, 'barras': barras}
+
+    def _loja_cria_pedido(self, cid, sku, entrega, preco, idem, t):
+        """Dentro da _escrita: a linha do pedido. A AURA nasce 'entregue' (04/10): ela não põe nada no save
+        do jogo — a posse é o próprio pedido (_auras) —, então não há por que esperar o jogo abrir nem
+        ocupar uma das vagas de pedido aberto. Tudo o mais nasce 'pendente', como sempre."""
+        pronto = entrega.get('tipo') == 'aura'
+        cur = self.con.execute(
+            "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em, fechado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (cid, sku, json.dumps(entrega, ensure_ascii=False), preco, 'entregue' if pronto else 'pendente', idem, t,
+             t if pronto else None))
+        return cur.lastrowid
+
+    # -- as auras (04/10) -----------------------------------------------------------------------------
+    def _auras(self, cid):
+        """As auras da conta: as dos pedidos VIVOS (pendente, retirado, entregue) de aura — comprados,
+        presenteados pelo Mestre ou por um amigo — e a que veio num Pacote de Boas-Vindas. Sem tabela de
+        posse: pedido cancelado ou estornado deixa de contar sozinho."""
+        tem = set()
+        for r in self.con.execute(
+                "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado', 'entregue') "
+                "AND (sku LIKE 'aura-%' OR sku = ?)", (cid, BOAS_VINDAS_SKU)):
+            ent = _json(r['entrega']) or {}
+            cor = ent.get('alvo') if ent.get('tipo') == 'aura' else ent.get('aura')
+            if cor in AURAS:
+                tem.add(cor)
+        return tem
+
+    def _aura_poda(self, cid):
+        """Dentro da _escrita: a aura escolhida que a conta não tem mais (o pedido dela foi cancelado ou
+        estornado) sai — o Relé lê a tabela sem refazer a conta da posse."""
+        r = self.con.execute("SELECT aura FROM aura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
+        if r is not None and r['aura'] not in self._auras(cid):
+            self.con.execute("DELETE FROM aura_escolhida WHERE conta_id = ?", (cid,))
+
+    def _auras_publico(self, cid):
+        tem = self._auras(cid)
+        r = self.con.execute("SELECT aura FROM aura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
+        return {'tem': [a for a in AURAS if a in tem],
+                'escolhida': r['aura'] if r is not None and r['aura'] in tem else None,
+                'todas': [{'cor': a, 'sku': 'aura-' + a, 'nome': POR_SKU['aura-' + a]['nome']} for a in AURAS]}
+
+    # -- GET /api/loja/aura · POST /api/loja/aura {aura: cor | null} ----------------------------------------
+    def loja_aura_ver(self, conta, corpo):
+        with self.tranca:
+            return 200, {'ok': True, 'auras': self._auras_publico(conta['id'])}
+
+    def loja_aura_escolher(self, conta, corpo):
+        """A aura que a conta veste na praça: uma das que ela TEM, ou null (desligada). Os outros jogadores
+        passam a ver na próxima conferência do Relé (até ~2 min) ou quando ela entrar de novo na praça."""
+        aura, cid, t = corpo.get('aura'), conta['id'], agora()
+        if aura is not None and aura not in AURAS:
+            raise Recusa(400, 'aura desconhecida')
+        with self._escrita():
+            if aura is None:
+                self.con.execute("DELETE FROM aura_escolhida WHERE conta_id = ?", (cid,))
+            else:
+                if aura not in self._auras(cid):
+                    raise Recusa(409, 'você ainda não tem essa aura')
+                self.con.execute("INSERT INTO aura_escolhida(conta_id, aura, atualizado_em) VALUES (?, ?, ?) "
+                                 "ON CONFLICT(conta_id) DO UPDATE SET aura = excluded.aura, "
+                                 "atualizado_em = excluded.atualizado_em", (cid, aura, t))
+            auras = self._auras_publico(cid)
+        return 200, {'ok': True, 'auras': auras}
+
+    # -- o Pacote de Boas-Vindas e a vitrine do jogo (04/10) ---------------------------------------------
+    def _boas_vindas_publico(self, cid, progress, t):
+        """{disponivel, comprado, preco, precoCheio, classes:[as que ainda dá para escolher]} — `disponivel`
+        é o que acende o destaque no site e a chamada no jogo: a conta nunca comprou o pacote e ainda lhe
+        falta pelo menos uma das duas classes."""
+        usado = self._loja_limites(cid, t)[BOAS_VINDAS_SKU]['usados'] > 0
+        classes = []
+        for c in BOAS_VINDAS_CLASSES:
+            try:
+                self._loja_confere_item(cid, POR_SKU['classe-' + c], progress)
+                classes.append(c)
+            except Recusa:
+                pass
+        return {'disponivel': bool(not usado and classes), 'comprado': usado, 'preco': BOAS_VINDAS_PRECO,
+                'precoCheio': BOAS_VINDAS_CHEIO, 'classes': classes}
+
+    def loja_vitrine(self, conta, corpo):
+        """GET /api/loja/vitrine — o que o JOGO precisa para a chamada da loja e a ficha da aura, num pedido
+        só: as ofertas da semana com o fim (a contagem regressiva), o Pacote de Boas-Vindas e as auras."""
+        cid, t = conta['id'], agora()
+        with self.tranca:
+            save = self._loja_save(cid)
+            boas = self._boas_vindas_publico(cid, save['progress'] if save else None, t)
+            auras = self._auras_publico(cid)
+            barras = self._barras_saldo(cid)
+        return 200, {'ok': True, 'agora': t, 'ofertas': ofertas_publico(t), 'boasVindas': boas, 'auras': auras,
+                     'barras': {'saldo': barras}}
+
+    # -- o presente a um amigo (04/10) -----------------------------------------------------------------
+    def _nome_publico(self, cid):
+        """O nome que a praça conhece (o do placar; sem ele, o da conta)."""
+        r = self.con.execute("SELECT COALESCE(NULLIF(r.nome, ''), c.nome) FROM contas c "
+                             "LEFT JOIN resumos r ON r.conta_id = c.id WHERE c.id = ?", (cid,)).fetchone()
+        return r[0] if r is not None else '#%d' % cid
+
+    def _presentes_dados(self, cid, t):
+        """Os presentes que a conta deu nas últimas 24 h e quando a próxima vaga abre."""
+        em = [r[0] for r in self.con.execute(
+            "SELECT criado_em FROM loja_amigos WHERE de = ? AND criado_em > ? ORDER BY criado_em", (cid, t - 86400))]
+        cheio = len(em) >= PRESENTES_AMIGO_DIA
+        return {'dados': len(em), 'max': PRESENTES_AMIGO_DIA,
+                'liberaEm': em[len(em) - PRESENTES_AMIGO_DIA] + 86400 if cheio else None}
+
+    def _presente_destino(self, cid, nome):
+        """A conta de quem recebe, pelo nome (o do placar ou o da conta, como na lista de amigos): tem de
+        existir, não estar banida nem ser a lápide de uma conta excluída, e não ser quem dá."""
+        if not isinstance(nome, str) or not nome.strip():
+            raise Recusa(400, 'diga o nome de quem vai receber')
+        nome = nome.strip()[:60]
+        achados = self.con.execute(
+            "SELECT c.id, c.banido FROM contas c LEFT JOIN resumos r ON r.conta_id = c.id WHERE "
+            "(r.nome = ? COLLATE NOCASE OR ((r.nome IS NULL OR r.nome = '') AND c.nome = ? COLLATE NOCASE)) "
+            "AND c.id NOT IN (SELECT conta_id FROM contas_excluidas) LIMIT 3", (nome, nome)).fetchall()
+        if not achados:
+            raise Recusa(404, 'ninguém com esse nome')
+        outros = [a for a in achados if a['id'] != cid]
+        if not outros:
+            raise Recusa(400, 'você não pode presentear a si mesmo')
+        if len(outros) > 1:
+            raise Recusa(409, 'há mais de uma pessoa com esse nome — peça o nome da conta dela')
+        if outros[0]['banido']:
+            raise Recusa(409, 'essa conta não pode receber presentes')
+        return outros[0]['id']
+
+    def loja_presentear(self, conta, corpo):
+        """POST /api/loja/presentear {sku, nome, idem}: quem dá paga as barras (o preço de hoje, com a
+        oferta da semana); o pedido nasce na conta de quem recebe e anda pela fila de sempre, com uma carta
+        no correio dizendo quem mandou. AS TRAVAS: moeda e o Pacote de Boas-Vindas não se presenteiam; a
+        conta de quem recebe existe, não está banida nem excluída e não é a de quem dá; a regra do produto e
+        o limite dele valem NO DESTINATÁRIO (a classe que ele já tem, a aura que já é dele, a Reescrita do
+        mês); PRESENTES_AMIGO_DIA por dia por quem dá; PRESENTES_AMIGO_ABERTOS esperando em quem recebe.
+        O `idem` é de quem dá: o mesmo clique de novo devolve o mesmo presente, cobrado uma vez só."""
+        sku, idem = corpo.get('sku'), corpo.get('idem')
+        item = POR_SKU.get(sku) if isinstance(sku, str) else None
+        if item is None:
+            raise Recusa(400, 'produto desconhecido')
+        if item['tipo'] in FORA_DO_PRESENTE or item['moeda'] != 'barras':
+            raise Recusa(400, 'esse produto não pode ser dado de presente')
+        if not isinstance(idem, str) or not RE_IDEM.match(idem):
+            raise Recusa(400, 'idem inválido (8 a 64 letras, dígitos, _ ou -)')
+        cid, t = conta['id'], agora()
+        preco_hoje = preco_de(item, t)
+        with self._escrita():
+            ja = self.con.execute(
+                "SELECT %s FROM %s WHERE am.de = ? AND am.idem = ?" % (COLUNAS_PEDIDO, DE_PEDIDOS), (cid, idem)).fetchone()
+            if ja is not None:                          # o mesmo clique chegando de novo: nada é cobrado outra vez
+                if ja['sku'] != sku:
+                    raise Recusa(409, 'idem já usado em outro presente')
+                return 200, {'ok': True, 'presente': self._presente_amigo_json(ja), 'repetido': True,
+                             'barras': self._barras_publico(cid, False), 'presentes': self._presentes_dados(cid, t)}
+            alvo = self._presente_destino(cid, corpo.get('nome'))
+            dados = self._presentes_dados(cid, t)
+            if dados['dados'] >= PRESENTES_AMIGO_DIA:
+                raise Recusa(429, 'presentes demais nas últimas 24 h (%d)' % PRESENTES_AMIGO_DIA,
+                             liberaEm=dados['liberaEm'])
+            esperando = self.con.execute(
+                "SELECT COUNT(*) FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado') "
+                "AND id IN (SELECT pedido_id FROM loja_amigos)", (alvo,)).fetchone()[0]
+            if esperando >= PRESENTES_AMIGO_ABERTOS:
+                raise Recusa(429, 'essa pessoa já tem presentes demais esperando o jogo dela abrir')
+            save = self._loja_save(alvo)
+            try:                                        # a regra do produto e o limite dele, em QUEM RECEBE
+                self._loja_confere_item(alvo, item, save['progress'] if save else None)
+                if item['limite'] is not None:
+                    lim = self._loja_limites(alvo, t)[item['limite']['grupo']]
+                    if lim['usados'] >= lim['max']:
+                        raise Recusa(409, 'o limite deste produto já foi usado')
+            except Recusa as e:
+                raise Recusa(409, 'essa pessoa não pode receber este presente: %s' % e.erro)
+            if self._barras_saldo(cid) < preco_hoje:
+                raise Recusa(409, 'barras de ouro insuficientes', barras=self._barras_publico(cid, False))
+            de_nome = self._nome_publico(cid)
+            pid = self._loja_cria_pedido(alvo, sku, entrega_de(item), 0, None, t)
+            self.con.execute("INSERT INTO loja_barras(pedido_id, custo, ganho, criado_em) VALUES (?, ?, 0, ?)",
+                             (pid, preco_hoje, t))
+            self.con.execute("INSERT INTO loja_amigos(pedido_id, de, de_nome, idem, criado_em) VALUES (?, ?, ?, ?, ?)",
+                             (pid, cid, de_nome, idem, t))
+            self.barras_move(cid, -preco_hoje, 'loja', 'pedido:%d' % pid, 'pedido:%d:custo' % pid, t)
+            # a carta no correio do jogo (a mesma caixa das cartas da Equipe): diz quem mandou e o quê
+            chega = ('Já é sua: escolha na ficha do Personagem.' if item['tipo'] == 'aura'
+                     else 'Chega sozinho ao jogo, logado nesta conta.')
+            self.con.execute("INSERT INTO moderacao_cartas(conta_id, assunto, texto, criado_em) VALUES (?, ?, ?, ?)",
+                             (alvo, 'Você ganhou um presente', '%s te mandou um presente da loja: %s. %s'
+                              % (de_nome, item['nome'], chega), t))
+            # a trilha dos dois lados (a ficha do Mestre lê o extrato das barras, e os eventos ficam no banco)
+            self._evento(cid, 'loja-presenteou', {'id': pid, 'sku': sku, 'barras': preco_hoje, 'para': alvo})
+            self._evento(alvo, 'loja-presente-amigo', {'id': pid, 'sku': sku, 'de': cid})
+            r = self._loja_pedido_por_id(pid)
+            presente = self._presente_amigo_json(r)
+            barras = self._barras_publico(cid, False)
+            dados = self._presentes_dados(cid, t)
+        log.info("loja: #%d presenteou #%d com %s por %d barras (pedido %d)", cid, alvo, sku, preco_hoje, pid)
+        return 201, {'ok': True, 'presente': presente, 'barras': barras, 'presentes': dados}
+
+    def _presente_amigo_json(self, r):
+        """O presente como QUEM DEU o vê: de quem recebeu, só o nome que a praça já mostra."""
+        return {'id': r['id'], 'sku': r['sku'], 'nome': nome_do_pedido(r['sku'], _json(r['entrega'])),
+                'para': self._nome_publico(r['conta_id']), 'barras': r['barras_custo'] or 0,
+                'estado': r['estado'], 'criadoEm': r['criado_em']}
 
     # -- POST /api/loja/cancelar ------------------------------------------------------------------
     def loja_cancelar(self, conta, corpo):

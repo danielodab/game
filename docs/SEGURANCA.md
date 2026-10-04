@@ -164,6 +164,34 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
   tirar os vinténs do estado (idem `pedido:ID:ganho`). No caminho antigo (sem juiz) o
   PUT que confirma a entrega credita: ali o save ainda é do cliente, o mesmo risco já
   aceito para os vinténs.
+- 04/10, as **quatro novidades da loja** (`servidor/loja.py`; nenhuma vende poder, sorteio,
+  equipamento, estrela, selo ou bicho, e todas se pagam em barras):
+  - **Auras** (cosmético da praça). A posse NÃO é tabela nem campo do save: é o pedido vivo
+    da conta (`aura-<cor>` ou o Pacote que a trouxe; `_auras`) — cancelado ou estornado, a
+    aura some sozinha. A compra nasce `entregue`. A escolhida mora em `aura_escolhida`
+    (`POST /api/loja/aura` só grava a aura que a conta TEM), e quem diz aos outros é o
+    **Relé**: `rele_ident.confere` lê a tabela junto com a conta e o `carimba` põe `auraCor`
+    no oi/eco — o `auraCor` que vier do cliente cai. A releitura da conta a cada `CACHE_S` é
+    o que leva a troca à praça (até ~2 min). A consulta da aura no Relé tem erro engolido: o
+    banco sem a tabela (rolling update) não vira "banco estranho".
+  - **Pacote de Boas-Vindas** (`boas-vindas`, tipo `pacote`): um pedido só, entrega congelada
+    `{itens:[pedras…, classe], aura}`; limite 1 por conta para sempre (o grupo de limite conta
+    pendente, retirado e entregue). O jogo confere TODOS os itens antes de entregar qualquer
+    um (`js/core/loja.js`): a classe já liberada recusa o pacote inteiro e as barras voltam.
+  - **Ofertas da semana**: `ofertas_da_semana(semana)` é uma conta (sha256 do número da
+    semana de Brasília com o sku) — sem sorteio pago, sem estado, igual em todo contêiner. O
+    preço COBRADO é `preco_de(item, agora)`, e é ele que fica em `loja_barras.custo` (o
+    estorno devolve o que foi pago, não o preço cheio). `LOJA_OFERTAS=0` desliga.
+  - **Presente a um amigo** (`POST /api/loja/presentear {sku, nome, idem}`): o pedido nasce
+    na conta de quem recebe, marcado em `loja_amigos (pedido_id, de, de_nome, idem)`; as
+    barras saem de quem dá na mesma transação e o estorno volta para ELE
+    (`_barras_do_pedido`). Travas: moeda (vinténs, barras) e o Pacote não se presenteiam;
+    destinatário existente, não banido, não excluído e diferente de quem dá; a regra e o
+    limite do produto valem no destinatário; 3 presentes por dia por quem dá (em qualquer
+    estado); 5 presentes abertos por quem recebe; `idem` único por quem dá (o mesmo clique
+    cobra uma vez). Quem recebe não cancela; a carta vai para `moderacao_cartas`; a trilha
+    fica em `eventos` (`loja-presenteou`, `loja-presente-amigo`) e no extrato de barras de
+    quem pagou ("… (presente para Fulano)"), que a ficha do Mestre mostra.
 
 ### 4.6 A troca
 `POST /api/troca` move itens (por iid), bichos e vinténs entre os DOIS estados do
