@@ -126,7 +126,9 @@ CASCA = {
 #   fusao:<a>+<b>     — o corpo da fusao do par (e o escudo, no Minotauro);
 #   fusao:invocacoes  — as invocacoes das fusoes;
 #   coroas            — as coroas 3D do ranking (o PNG segura o lugar);
-#   fechados          — os bichos emprestados dos portais FECHADOS.
+#   fechados          — os bichos emprestados dos portais FECHADOS;
+#   mapa:<id>         — o cenario de um mapa de luta que nao e calabouco (o Salao
+#                       da Sede, a Camara do Eco): desce quando a luta de la comeca.
 # O grupo e so o PRIMEIRO passo: o que uma descida baixa, o jogo decide lendo
 # os dados de verdade (js/assets_bundle.js, B.plano). Embutido novo que nao
 # esteja aqui cai na BASE — mais pesado, nunca invisivel.
@@ -145,6 +147,11 @@ GRUPO_DA_PASTA = {
     # na BASE e todo jogador baixaria 15 MB a mais antes do menu.
     'models-meshy-colossos': 'poco:colossos', 'models-meshy-eco': 'evento:eco',
     'models-meshy-santuario': 'calabouco:elementsanctum',
+    # 03/10, o lote do lancamento. Nenhum dos tres e da praca nem do menu: o salao so
+    # aparece na guerra de guilda, a camara na tentativa do Eco e o santuario na descida
+    # dele. Sem estas linhas os 16,5 MB cairiam no `base`, que todo jogador baixa ao abrir.
+    'cenario-sede': 'mapa:sede', 'cenario-eco': 'mapa:camara_eco',
+    'cenario-santuario': 'calabouco:elementsanctum',
     'coroas-pvp-3d': 'coroas', 'models-meshy-sum': 'classe:invocador',
     'models-monsters': 'fechados', 'models-bosses': 'fechados', 'models-summons': 'fechados',
 }

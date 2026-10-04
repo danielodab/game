@@ -99,9 +99,21 @@ var JOGO = (typeof window !== 'undefined')
      * 15/09 (foto): com sol 1,0 e hemisfério 0,8 cor de chama o salão saía de DIA e laranja,
      * a lareira não fazia poça de luz e o herói sumia no chão. Luz geral mais baixa e menos
      * saturada; quem esquenta a cena é a lareira. */
-    sede:     { fog: '#1a120c', sky: '#cfb08e', gnd: '#2a1a10', sun: '#ffe4c4', sunI: 0.74, hemiI: 0.62, rim: '#ffc070' }
+    sede:     { fog: '#1a120c', sky: '#cfb08e', gnd: '#2a1a10', sun: '#ffe4c4', sunI: 0.74, hemiI: 0.62, rim: '#ffc070' },
+    /* 03/10: a CÂMARA DO ECO ganhou kit próprio (`JOGO.CENARIO['eco']`) e por isso tema
+     * próprio. A luz é a MESMA do Coração Partido, que era o tema emprestado até aqui: o
+     * que mudou foi a pedra em cima do tabuleiro, não o clima da sala. */
+    eco:      { fog: '#332a52', sky: '#b49ce8', gnd: '#2a2044', sun: '#ffe6b8', sunI: 1.08, hemiI: 0.84, rim: '#ffd166' },
+    /* 03/10: o SANTUÁRIO DOS ELEMENTOS. Luz NEUTRA de templo: são quatro quadrantes de
+     * quatro pedras (basalto, pedra azul, arenito, mármore) e o cenário não é tingido pelo
+     * jogo, então uma luz com cor própria puxaria os quatro para ela. Céu cinza-claro,
+     * chão escuro frio e sol quase branco deixam cada pedra com a cor que o dono pintou.
+     * (A escuridão da Câmara Apagada é REGRA do quadrante, e vem do código do Santuário.) */
+    santuario: { fog: '#2b2d38', sky: '#c6ccdc', gnd: '#2a2a36', sun: '#fff3dc', sunI: 1.06, hemiI: 0.84, rim: '#e6e0ff' }
   };
   function envOf(theme) { return THEME_ENV[theme] || THEME_ENV.garden; }
+  // para a prova: o tema TEM ambiente próprio? (sem isto, tema novo cai calado na luz do jardim)
+  R.ambienteDoTema = function (theme) { return THEME_ENV[theme] || null; };
 
   // ------------------------------------------------------------------ estado
   var canvas = null, host = null, renderer = null, scene = null, camera = null;
@@ -539,8 +551,21 @@ var JOGO = (typeof window !== 'undefined')
     mine:     ['crates', 'barrel', 'rubble'],
     heart:    ['chest', 'crates', 'barrel'],
     praca:    ['crates', 'barrel', 'chest'],     // 14/09: só vale para casa baixa SEM peça
-    sede:     ['chest', 'crates', 'barrel']      // 15/09: idem, no salão
+    sede:     ['chest', 'crates', 'barrel'],     // 15/09: idem, no salão
+    eco:      ['chest', 'crates', 'barrel'],     // 03/10: só vale se o kit `eco` não abriu
+    santuario: ['chest', 'crates', 'barrel']     // 03/10: idem, no Santuário
   };
+  /* O KIT BÁSICO DE UM TEMA QUE NÃO É DOS SEIS (03/10). O chão, o buraco, o rodapé e a
+   * peça de reserva vêm do kit da v1 (`models3d.js`), que só conhece os temas dos
+   * calabouços e acha a PALETA procurando um calabouço com aquele `theme`. A Câmara do Eco
+   * é arena, não calabouço: com o nome 'eco' o kit não acharia ninguém e pintaria o piso
+   * com o verde de reserva do jardim. Então tema novo que quer o chão de um tema velho o
+   * declara aqui, e só as peças de cima (o catálogo `JOGO.CENARIO[tema]`) e a luz
+   * (`THEME_ENV`) usam o nome novo. O Santuário NÃO entra: ele é calabouço e traz a
+   * paleta dele, que o kit acha pelo `theme`. */
+  var TEMA_DO_KIT = { eco: 'heart' };
+  function temaDoKit(theme) { return TEMA_DO_KIT[theme] || theme; }
+  R.temaDoKit = temaDoKit;
   function hashXY(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
   function lighten(hex, k) {
     var c = new THREE.Color(hexInt(hex));
@@ -614,9 +639,44 @@ var JOGO = (typeof window !== 'undefined')
   // A escolha é por SEMENTE DA CASA, nunca aleatória: a mesma sala tem de nascer
   // igual toda vez que for redesenhada, senão o barril troca de lugar quando um
   // muro sobe e o jogador vê o cenário piscar.
-  function pecaUsuario(theme, papel, seed, alvoAlt, teto) {
+  //
+  // A LISTA DE UM PAPEL, POR REGIÃO (03/10, o Santuário dos Elementos). O Santuário
+  // tem quatro quadrantes, cada um com a pedra dele, e o muro de basalto do Fogo no
+  // meio da Galeria Alagada desmancharia a leitura do mapa. O catálogo pode trazer
+  // `regioes: { fogo: { alto: [...], sotaque: [...] }, agua: {...} }`; a sala diz qual
+  // casa é de qual região (`regioes: [{x, y, w, h, elemento}]`, ver `regiaoDaCasa`) e a
+  // lista da região VENCE a geral. Papel declarado com lista VAZIA numa região quer
+  // dizer "este quadrante não tem isto": devolve vazio de propósito, e quem chamou cai
+  // no passo seguinte da gramática (sem pilar, a fileira segue de muro). Papel que a
+  // região não declara, e casa fora de toda região, usam a lista geral. Catálogo sem
+  // `regioes` (os seis calabouços, o PvP, a Câmara) não muda em nada.
+  function listaDoPapel(cat, papel, regiao) {
+    if (!cat) return null;
+    var reg = regiao && cat.regioes && cat.regioes[regiao];
+    if (reg && Array.isArray(reg[papel])) return reg[papel];
+    return cat[papel];
+  }
+  /* A REGIÃO DE UMA CASA: o `elemento` do primeiro retângulo de `regioes` que a contém.
+   * A lista mora na SALA do calabouço (é dado de aparência: o motor e o juiz não leem)
+   * ou, em sala montada à mão (uma página de prova), em `st.regioesCenario`. */
+  function regioesDaSala(st) {
+    if (st && Array.isArray(st.regioesCenario)) return st.regioesCenario;
+    var dg = dungeonOf(st);
+    var room = dg && dg.rooms && dg.rooms[st.roomIndex];
+    return (room && Array.isArray(room.regioes)) ? room.regioes : null;
+  }
+  function regiaoDaCasa(regs, x, y) {
+    if (!regs) return null;
+    for (var i = 0; i < regs.length; i++) {
+      var r = regs[i];
+      if (r && x >= r.x && y >= r.y && x < r.x + (r.w || 1) && y < r.y + (r.h || 1)) return r.elemento || null;
+    }
+    return null;
+  }
+  R.regiaoDaCasa = function (st, x, y) { return regiaoDaCasa(regioesDaSala(st), x, y); };
+  function pecaUsuario(theme, papel, seed, alvoAlt, teto, regiao) {
     var cat = JOGO.CENARIO && JOGO.CENARIO[theme];
-    var lista = cat && cat[papel];
+    var lista = listaDoPapel(cat, papel, regiao);
     if (!lista || !lista.length || !M || !M.rawScene) return null;
     var chave = lista[seed % lista.length];
     var cena = null;
@@ -695,9 +755,9 @@ var JOGO = (typeof window !== 'undefined')
   // Para muro de peca unica SEM esticao o modulo precisa nascer com razao perto
   // de 0,65 — 2 m de largo por 3 m de alto. O pilar do Daniel ja e assim (0,69),
   // e por isso o pilar nunca precisou de nada disto.
-  function muroDaCasa(theme, papel, seed, alturaAlvo, largura) {
+  function muroDaCasa(theme, papel, seed, alturaAlvo, largura, regiao) {
     var cat = JOGO.CENARIO && JOGO.CENARIO[theme];
-    var lista = cat && cat[papel];
+    var lista = listaDoPapel(cat, papel, regiao);
     // `M` so e preenchido em `R.init`, e esta funcao nao precisa do renderizador
     // de pe — so do registro de modelos. Resolver aqui a deixa utilizavel por
     // quem mede sem montar uma cena inteira.
@@ -803,6 +863,11 @@ var JOGO = (typeof window !== 'undefined')
   // A regra que interessa — "todos da mesma altura e altos" — so se verifica
   // com regua, entao a regua precisa alcancar a peca.
   R.muroDaCasa = muroDaCasa;
+  /* 03/10: a peça solta (sotaque, chão, borda, marco) pela MESMA função da montagem, para a
+   * prova medir a altura que o jogo dá a cada uma (tests/cenario_santuario.html) e para o
+   * código do Santuário pôr as peças de mecânica (braseiro, bica, respiro) sem repetir a
+   * conta de assentar e centrar. (tema, papel, semente, altura, teto de largura, região) */
+  R.pecaUsuario = pecaUsuario;
   /* Exposto para o teste conferir o DESPACHO, e nao so que os seis modelos
    * existem. Sao perguntas diferentes: um escudo pode estar carregado e mesmo
    * assim nunca ser escolhido — a tabela erra, o `defId` nao chega, ou o
@@ -1264,9 +1329,22 @@ var JOGO = (typeof window !== 'undefined')
   // A mesma lei da praça manda: '#' tem de PARECER alto (acima dos 2,05 m de um herói) e
   // '=' tem de parecer baixo (até ~1,2 m, dá para ver por cima). A prova mede as duas.
   //
-  // Tudo aqui é primitiva — não há arte do dono para o salão ainda. As peças são funções
-  // pequenas e separadas justamente para trocar uma a uma quando o modelo chegar
-  // (`rel.provisorias` lista quem ainda é primitiva).
+  // 03/10: A ARTE DO DONO CHEGOU (a Sala de Guerra, `assets/embedded/cenario-sede.js`,
+  // catálogo `JOGO.CENARIO['sede']`, 16 peças `sd_`). Cada papel das `pecas` do mapa
+  // procura no catálogo a peça do MESMO nome e a veste na medida que a primitiva tinha
+  // (`ARTE_SEDE`); a variante é papel + '_' + o campo `arte` da peça no mapa (o cavalete
+  // de armas no lugar de um pilar, o troféu no lugar de um baú).
+  //
+  // AS PRIMITIVAS FICAM, como reserva: as funções `tronoDaSede`, `pilarDaSede` etc. são as
+  // de 15/09 e continuam sendo o que se vê enquanto o modelo não abriu (o kit do salão
+  // não está no grupo `base`: desce na hora da guerra) e em `file://` sem o embutido.
+  // `rel.provisorias` lista quem saiu primitiva nesta montagem, `rel.arte` quem saiu com
+  // a peça do dono, e `rel.pendentes` as chaves que o catálogo promete e ainda não
+  // abriram: a montagem as pede e remonta quando chegam (`esperaObrasDaPraca`).
+  //
+  // O QUE CONTINUA DO CÓDIGO mesmo com a arte: o chão de tábuas e o tapete, a soleira, o
+  // peito da chaminé (segue o recorte da parede), o fogo e a luz da lareira, a chama e o
+  // halo da tocha, e o PANO do estandarte (pintado com a cor e o emblema da guilda).
   var PAPEIS_SEDE = { parede_salao: 1, trono: 1, estandarte: 1, pilar: 1, armadura: 1, mesa: 1,
                       banco_salao: 1, estatua: 1, bau: 1, lareira: 1 };
   var PAPEIS_POR_TEMA = { praca: PAPEIS_PRACA, sede: PAPEIS_SEDE };
@@ -1551,6 +1629,87 @@ var JOGO = (typeof window !== 'undefined')
     return g;
   }
 
+  // ------------------------------------------------ a arte do dono no salão (03/10)
+  /* A CHAVE DA PEÇA de um papel (e da variante dele), ou null se o catálogo não a tem. */
+  function chaveDaSede(papel, arte) {
+    var cat = JOGO.CENARIO && JOGO.CENARIO.sede;
+    if (!cat) return null;
+    var lista = (arte && cat[papel + '_' + arte]) || cat[papel];
+    return (lista && lista.length) ? lista[0] : null;
+  }
+  /* O MODELO PRONTO de uma chave, ou null. Chave que o catálogo promete e que ainda não
+   * abriu entra em `rel.pendentes`: quem monta cai na primitiva e a sala remonta depois. */
+  function cenaDaSede(chave, rel) {
+    if (!chave) return null;
+    var cena = null;
+    try { cena = (M && M.rawScene) ? M.rawScene(chave) : null; } catch (e) { cena = null; }
+    if (!cena && rel && rel.pendentes.indexOf(chave) < 0) rel.pendentes.push(chave);
+    return cena;
+  }
+  /* UMA PEÇA NA CAIXA QUE A REGRA PEDE. As peças do salão não passam pelo `pecaUsuario`:
+   * ele escala pela altura com um teto de largura, e aqui cada peça tem a medida que a
+   * primitiva dela tinha, conferida contra a câmera e contra a visão dos nascimentos.
+   * `alvo` diz o que é fixo: {alt}, {larg}, ou os três. Eixo sem alvo acompanha a escala
+   * do primeiro que foi dado (a proporção da arte); eixo com alvo é esticado até ele. O
+   * esticão fica anotado para a prova (`userData.estica`). Assenta e centra como o
+   * `pecaUsuario`, pela mesma razão: o exportador não garante nem um nem outro. */
+  function pecaNaCaixa(cena, alvo) {
+    var no = cena.clone(true);
+    no.updateMatrixWorld(true);
+    var b = new THREE.Box3().setFromObject(no);
+    var w0 = b.max.x - b.min.x, h0 = b.max.y - b.min.y, d0 = b.max.z - b.min.z;
+    if (!(w0 > 0.001 && h0 > 0.001 && d0 > 0.001)) return null;
+    var k0 = alvo.alt ? alvo.alt / h0 : alvo.larg ? alvo.larg / w0 : alvo.prof / d0;
+    var kx = alvo.larg ? alvo.larg / w0 : k0, ky = alvo.alt ? alvo.alt / h0 : k0, kz = alvo.prof ? alvo.prof / d0 : k0;
+    no.scale.set(no.scale.x * kx, no.scale.y * ky, no.scale.z * kz);
+    no.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    var berco = new THREE.Group();
+    berco.add(no);
+    no.updateMatrixWorld(true);
+    var c = new THREE.Box3().setFromObject(no);
+    no.position.y -= c.min.y;
+    no.position.x -= (c.min.x + c.max.x) / 2;
+    no.position.z -= (c.min.z + c.max.z) / 2;
+    berco.userData.larg = w0 * kx; berco.userData.alt = h0 * ky; berco.userData.prof = d0 * kz;
+    berco.userData.estica = Math.max(kx, ky, kz) / Math.min(kx, ky, kz);
+    return berco;
+  }
+  /* VÁRIAS CÓPIAS DE UM MÓDULO NUMA CHAMADA SÓ. O módulo de parede do Meshy tem 16 mil
+   * triângulos e o contorno do salão são 84 casas em duas versões: fundido (o caminho
+   * das outras peças) seriam 2,7 milhões de triângulos copiados na memória a cada
+   * montagem. Por instância a geometria fica uma só na placa. `caixas` é a lista de
+   * {x, z, rot, larg, alt, prof}: o centro do pé, o giro e a caixa final de cada cópia. */
+  function instanciasDaSede(cena, caixas) {
+    var g = new THREE.Group();
+    if (!caixas.length) return g;
+    cena.updateMatrixWorld(true);
+    var b = new THREE.Box3().setFromObject(cena);
+    var w0 = b.max.x - b.min.x, h0 = b.max.y - b.min.y, d0 = b.max.z - b.min.z;
+    if (!(w0 > 0.001 && h0 > 0.001 && d0 > 0.001)) return g;
+    var centra = new THREE.Matrix4().makeTranslation(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+    var mats = caixas.map(function (c) {
+      var m4 = new THREE.Matrix4().makeTranslation(c.x, 0, c.z);
+      m4.multiply(new THREE.Matrix4().makeRotationY(c.rot));
+      m4.multiply(new THREE.Matrix4().makeScale(c.larg / w0, c.alt / h0, c.prof / d0));
+      return m4.multiply(centra);
+    });
+    cena.traverse(function (o) {
+      if (!o.isMesh || !o.geometry) return;
+      var im = new THREE.InstancedMesh(o.geometry, o.material, mats.length);
+      for (var i = 0; i < mats.length; i++) im.setMatrixAt(i, new THREE.Matrix4().multiplyMatrices(mats[i], o.matrixWorld));
+      im.instanceMatrix.needsUpdate = true;
+      // a sombra quem faz é o miolo de pedra atrás da face; a face só a recebe
+      im.castShadow = false; im.receiveShadow = true;
+      im.frustumCulled = false;         // as cópias dão a volta no salão: a esfera de uma não vale
+      g.add(im);
+    });
+    return g;
+  }
+  /* A espessura da FACE de parede: a peça do dono é uma laje (a lisa tem 21% da largura
+   * de fundo), não um bloco de 2 m. Ela veste a face que a câmera vê e o miolo da casa
+   * continua sendo a caixa de pedra de sempre, que é quem tapa, faz sombra e é medida. */
+  var SEDE_FACE = 0.42, SEDE_FACE_CORTE = 0.30;
+
   /* AS PAREDES DO SALÃO: a pegada de `parede_salao` é o retângulo inteiro, mas só o
    * CONTORNO dela é parede (o miolo é o salão, e as casas altas de lá têm peça própria).
    *
@@ -1559,15 +1718,38 @@ var JOGO = (typeof window !== 'undefined')
    * render mostra a cortada nos lados que ficam ENTRE a câmera e o salão (`animaSede`).
    * O canto só corta quando os dois lados dele cortam: com a câmera de quina, a parede do
    * fundo segue inteira até o canto. Nenhuma das duas mente para a regra: a borda é '#',
-   * ninguém anda nem vê através dela, e do lado da câmera não há casa atrás. */
+   * ninguém anda nem vê através dela, e do lado da câmera não há casa atrás.
+   *
+   * 03/10, COM A ARTE: a parede inteira ganha a FACE do dono virada para DENTRO (a lisa em
+   * todo o contorno, a com esteio a cada 6 casas e a com tocha no meio do caminho entre
+   * dois esteios) e a cortada ganha a face do dono virada para FORA,
+   * porque a parede cortada é justamente a que está entre a câmera e o salão: o que se vê
+   * dela é o lado de fora e o topo. O módulo é esticado para a caixa da casa (2 m de
+   * largura por 4,03 de altura, ou 1,05 na cortada), como o muro dos calabouços. O miolo
+   * de cada casa, as quinas e o batente da porta cortada seguem em primitiva. A chama e
+   * o halo da tocha continuam do código (a tocha do dono vem apagada). */
   function paredesDoSalao(st, pc, ctx) {
     var m = matsSede(ctx.cache), rel = ctx.rel, K = kit();
+    // a face inteira e a cortada entram JUNTAS ou não entram: meia parede de arte e meia
+    // de primitiva, trocando conforme a câmera gira, leria como defeito
+    var cLisa = cenaDaSede(chaveDaSede('parede_salao'), rel), cCorte = cenaDaSede(chaveDaSede('parede_cortada'), rel);
+    var arteP = (cLisa && cCorte) ? {
+      lisa: cLisa, cortada: cCorte,
+      esteio: cenaDaSede(chaveDaSede('parede_esteio'), rel) || cLisa,
+      tocha: cenaDaSede(chaveDaSede('parede_tocha'), rel),
+      porta: cenaDaSede(chaveDaSede('porta'), rel)
+    } : null;
+    rel.paredesArte = 0;
     var xa = pc.x, ya = pc.y, xb = pc.x + (pc.w || 1) - 1, yb = pc.y + (pc.h || 1) - 1;
     var H = SEDE_PAREDE_H, HC = SEDE_CORTE_H;
     var grupos = {}, ordem = [];
     function grupo(lados) {
       var k = lados.join('|');
-      if (!grupos[k]) { grupos[k] = { lados: lados, alta: new THREE.Group(), baixa: new THREE.Group() }; ordem.push(k); }
+      if (!grupos[k]) {
+        grupos[k] = { lados: lados, alta: new THREE.Group(), baixa: new THREE.Group(),
+                      faces: { lisa: [], esteio: [], tocha: [], cortada: [] } };
+        ordem.push(k);
+      }
       return grupos[k];
     }
     function eAlto(x, y) { return tileKind(gridTile(st, x, y)) === 'high'; }
@@ -1599,12 +1781,53 @@ var JOGO = (typeof window !== 'undefined')
       }
       rel.tochas++;
     }
+    // o miolo de uma casa de parede MENOS a faixa da face: `dentro` tira a faixa do lado
+    // do salão (a parede inteira), senão do lado de fora (a cortada)
+    function miolo(g, lado, px, pz, hgt, esp, dentro) {
+      var n = NORMAL[lado], s = dentro ? -1 : 1, fundo = CELL - esp;
+      var ox = n[0] * s * esp / 2, oz = n[1] * s * esp / 2;
+      peca(g, n[1] ? caixaSede(CELL, hgt, fundo, px + ox, hgt / 2, pz + oz)
+                   : caixaSede(fundo, hgt, CELL, px + ox, hgt / 2, pz + oz), m.pedra);
+    }
+    // a caixa de uma face: encostada na borda de dentro (virada para o salão) ou na de fora
+    function face(lado, px, pz, hgt, esp, dentro) {
+      var n = NORMAL[lado], s = dentro ? 1 : -1, off = CELL / 2 - esp / 2;
+      return { x: px + n[0] * s * off, z: pz + n[1] * s * off, rot: Math.atan2(n[0] * s, n[1] * s),
+               larg: CELL, alt: hgt, prof: esp };
+    }
+    // a chama e o halo sobre a tocha APAGADA do dono (a cabeça dela fica a 64% da altura)
+    function fogoDaTocha(g, lado, px, pz) {
+      var n = NORMAL[lado], cx2 = px + n[0] * (CELL / 2 + 0.1), cz2 = pz + n[1] * (CELL / 2 + 0.1), yT = H * 0.64;
+      var fl = peca(g, new THREE.ConeGeometry(0.1, 0.32, 7), m.chama, cx2, yT + 0.16, cz2);
+      fl.castShadow = false;
+      if (K && K.makeHalo) {
+        try { var hl = K.makeHalo('#ff9a4a', 1.7, 0.5); hl.position.set(cx2, yT + 0.22, cz2); g.add(hl); } catch (eH) {}
+      }
+      rel.tochas++;
+    }
     for (var y = ya; y <= yb; y++) for (var x = xa; x <= xb; x++) {
       if (!(x === xa || x === xb || y === ya || y === yb)) continue;
       if (!eAlto(x, y)) continue;
       var lados = ladosDe(x, y), G = grupo(lados);
       var px = x * CELL, pz = y * CELL;
       rel.paredes++;
+      if (arteP && lados.length === 1) {
+        var ld = lados[0], nA = NORMAL[ld], aoA = nA[1] ? x : y;
+        var encA = eAlto(x + nA[0], y + nA[1]);
+        // O COMPASSO: esteio a cada 6 casas e a tocha no meio do caminho entre dois esteios
+        // (casas 0, 6, 12… e 3, 9, 15…), o resto parede lisa. A primitiva escreve "esteio
+        // se a casa é múltipla de 3, senão tocha se ela é 3 mais múltiplo de 6": o segundo
+        // caso nunca acontece (3, 9, 15 já são múltiplos de 3), e por isso o salão de 15/09
+        // nunca teve tocha acesa. Aqui a conta é a que a frase queria.
+        var qual = encA ? 'lisa' : (aoA % 6 === 0) ? 'esteio' : (aoA % 6 === 3 && arteP.tocha) ? 'tocha' : 'lisa';
+        miolo(G.alta, ld, px, pz, H - 0.06, SEDE_FACE, true);
+        G.faces[qual].push(face(ld, px, pz, H, SEDE_FACE, true));
+        if (qual === 'tocha') fogoDaTocha(G.alta, ld, px, pz);
+        miolo(G.baixa, ld, px, pz, HC - 0.02, SEDE_FACE_CORTE, false);
+        G.faces.cortada.push(face(ld, px, pz, HC, SEDE_FACE_CORTE, false));
+        rel.paredesArte++;
+        continue;
+      }
       peca(G.alta, caixaSede(CELL, H, CELL, px, H / 2, pz), m.pedra);
       peca(G.alta, caixaSede(CELL + 0.12, 0.22, CELL + 0.12, px, H + 0.11, pz), m.pedraEsc);   // a cornija
       peca(G.baixa, caixaSede(CELL, HC, CELL, px, HC / 2, pz), m.pedra);
@@ -1640,10 +1863,20 @@ var JOGO = (typeof window !== 'undefined')
           var x1 = xx - 1, G2 = grupo([lado]);
           var larg = (x1 - x0 + 1) * CELL, cxp = (x0 + x1) / 2 * CELL, pz2 = yy * CELL;
           var hV = 2.9;
-          peca(G2.alta, caixaSede(larg, H - hV, CELL, cxp, hV + (H - hV) / 2, pz2), m.pedra);
-          peca(G2.alta, caixaSede(larg + 0.7, 0.34, CELL * 1.08, cxp, hV - 0.17, pz2), m.madeiraEsc);
+          // 03/10: a porta do dono é o vão inteiro numa peça (ombreiras, verga e a pedra por
+          // cima), esticada para a largura do vão e a altura da parede; fundo na proporção
+          var porta = arteP && arteP.porta ? pecaNaCaixa(arteP.porta, { larg: larg, alt: H }) : null;
+          if (porta) {
+            porta.position.set(cxp, 0, pz2);
+            porta.rotation.y = lado === 'sul' ? Math.PI : 0;       // a frente para dentro do salão
+            G2.portaArte = (G2.portaArte || []).concat([porta]);
+            rel.portaArte = (rel.portaArte || 0) + 1;
+          } else {
+            peca(G2.alta, caixaSede(larg, H - hV, CELL, cxp, hV + (H - hV) / 2, pz2), m.pedra);
+            peca(G2.alta, caixaSede(larg + 0.7, 0.34, CELL * 1.08, cxp, hV - 0.17, pz2), m.madeiraEsc);
+          }
           [x0 - 0.5, x1 + 0.5].forEach(function (bx) {
-            peca(G2.alta, caixaSede(0.34, hV - 0.34, CELL * 1.08, bx * CELL, (hV - 0.34) / 2, pz2), m.madeiraEsc);
+            if (!porta) peca(G2.alta, caixaSede(0.34, hV - 0.34, CELL * 1.08, bx * CELL, (hV - 0.34) / 2, pz2), m.madeiraEsc);
             peca(G2.baixa, caixaSede(0.34, HC + 0.06, CELL * 1.08, bx * CELL, (HC + 0.06) / 2, pz2), m.madeiraEsc);
           });
           rel.portas++;
@@ -1656,6 +1889,18 @@ var JOGO = (typeof window !== 'undefined')
       var G = grupos[k];
       var alta = funde ? K.mergeStatic(G.alta) : G.alta;
       var baixa = funde ? K.mergeStatic(G.baixa) : G.baixa;
+      if (arteP) {
+        // as faces do dono entram DEPOIS de fundir o miolo (a fusão não sabe copiar
+        // instância), num grupo que troca de visibilidade junto com ele
+        var altaG = new THREE.Group(), baixaG = new THREE.Group();
+        altaG.add(alta); baixaG.add(baixa);
+        ['lisa', 'esteio', 'tocha'].forEach(function (q) {
+          if (G.faces[q].length && arteP[q]) altaG.add(instanciasDaSede(arteP[q], G.faces[q]));
+        });
+        if (G.faces.cortada.length) baixaG.add(instanciasDaSede(arteP.cortada, G.faces.cortada));
+        (G.portaArte || []).forEach(function (pt) { altaG.add(pt); });
+        alta = altaG; baixa = baixaG;
+      }
       baixa.visible = false;
       ctx.vivos.push(alta, baixa);
       ctx.cortes.push({ lados: G.lados, alta: alta, baixa: baixa });
@@ -1837,8 +2082,7 @@ var JOGO = (typeof window !== 'undefined')
    *     luzes não muda no meio da luta, então o shader não recompila). */
   var SEDE_LUZ = { cor: '#ff9448', intensidade: 3.2, alcance: 20 };
   function lareiraDaSede(L, m, ctx) {
-    var g = new THREE.Group(), cham = new THREE.Group(), vivo = new THREE.Group();
-    var H = SEDE_PAREDE_H;
+    var g = new THREE.Group();
     var boca = 2.4, lado = (L - 0.2 - boca) / 2;
     peca(g, caixaSede(L - 0.1, 0.22, 1.9, 0, 0.11, -0.05), m.pedraClara);
     [-1, 1].forEach(function (s) {
@@ -1851,9 +2095,19 @@ var JOGO = (typeof window !== 'undefined')
       var lenha = peca(g, cilSede(0.13, 0.13, 1.5, 8), m.madeiraEsc, px * 0.4, 0.34, -0.35 + px * 0.2);
       lenha.rotation.z = Math.PI / 2; lenha.rotation.y = px;
     });
+    var partes = fogoEChamine(L, m, ctx, 2.19, -0.4, 0.4, 0);
+    return { no: g, chamine: partes.chamine, vivo: partes.vivo };
+  }
+  /* O QUE O CÓDIGO PÕE NA LAREIRA, seja ela primitiva ou a do dono: o peito da chaminé do
+   * consolo (`topo`) até o alto da parede, o fogo que treme e a luz pontual. `zFogo` e
+   * `yFogo` dizem onde a boca está; `xFogo` desloca o conjunto (a boca da peça do dono não
+   * fica bem no meio). */
+  function fogoEChamine(L, m, ctx, topo, zFogo, yFogo, xFogo) {
+    var cham = new THREE.Group(), vivo = new THREE.Group();
+    var H = SEDE_PAREDE_H;
     // a chaminé
-    peca(cham, caixaSede(L * 0.72, H - 2.19, 1.3, 0, 2.19 + (H - 2.19) / 2, -0.35), m.pedra);
-    peca(cham, caixaSede(L * 0.74, 0.14, 1.36, 0, 3.1, -0.33), m.pedraEsc);
+    peca(cham, caixaSede(L * 0.72, H - topo, 1.3, 0, topo + (H - topo) / 2, -0.35), m.pedra);
+    peca(cham, caixaSede(L * 0.74, 0.14, 1.36, 0, Math.max(3.1, topo + 0.4), -0.33), m.pedraEsc);
     // o fogo: cones laranja por fora e amarelos por dentro, aditivos (a luz vem do brilho)
     var cache = ctx.cache;
     if (!cache['sede-fogo-f']) {
@@ -1867,25 +2121,108 @@ var JOGO = (typeof window !== 'undefined')
     chamas.forEach(function (c2, i) {
       var cone = new THREE.Mesh(new THREE.ConeGeometry(c2[2], c2[1], 8), cache['sede-fogo-' + c2[3]]);
       cone.geometry.translate(0, c2[1] / 2, 0);             // cresce do pé: a escala sobe a chama
-      cone.position.set(c2[0], 0.4, -0.4);
+      cone.position.set(c2[0] + xFogo, yFogo, zFogo);
       cone.renderOrder = 4;
       vivo.add(cone);
       ctx.fogos.push({ no: cone, ph: i * 1.7 + ctx.fogos.length * 0.9 });
     });
     var K = kit();
     if (K && K.makeHalo) {
-      try { var hl = K.makeHalo('#ff8a3c', 3.4, 0.55); hl.position.set(0, 1.0, -0.2); vivo.add(hl); } catch (eH) {}
+      try { var hl = K.makeHalo('#ff8a3c', 3.4, 0.55); hl.position.set(xFogo, yFogo + 0.6, zFogo + 0.2); vivo.add(hl); } catch (eH) {}
     }
     var luz = new THREE.PointLight(col3(SEDE_LUZ.cor), SEDE_LUZ.intensidade, SEDE_LUZ.alcance, 2);
     luz.position.set(0, 1.35, 1.1);
     vivo.add(luz);
     ctx.luzes.push({ l: luz, base: SEDE_LUZ.intensidade, ph: ctx.luzes.length * 2.3 });
-    return { no: g, chamine: cham, vivo: vivo };
+    return { chamine: cham, vivo: vivo };
+  }
+
+  /* A MEDIDA DE CADA PEÇA DO DONO NO SALÃO (03/10): a que a primitiva tinha, porque foi
+   * ela que passou pela câmera e pela régua da visão. `alt` sozinho = escala uniforme até
+   * essa altura; com `larg`/`prof` a peça é esticada para a caixa (e o esticão é pouco:
+   * o maior é o da mesa). `L`/`P` são o maior e o menor lado da pegada.
+   *   · pilar e cavalete: 2,64 m é TETO, não gosto. Mais alto que isso o ábaco tapa da
+   *     câmera padrão o herói que nasce em (21,8) (medido em 15/09). O cavalete fica em
+   *     2,5 m porque é mais largo que o pilar (1,8 m contra 1,0) e a mesma altura taparia
+   *     mais chão;
+   *   · armadura 3,9 m (era 3,98): o que sobe é a alabarda, o corpo fica em ~3,3 m;
+   *   · estandarte 4,74 m, o mesmo mastro: a travessa cai a 4,10 m, onde o pano já pendia;
+   *   · mesa: a do dono tem o tampo a 78% da altura e as torrezinhas do mapa de guerra
+   *     por cima. Na proporção da arte, com os 5 m de comprimento, o topo iria a 1,68 m e
+   *     a mesa deixaria de ser cobertura BAIXA. Achatada a 1,2 m o tampo fica a 0,94 m
+   *     (era 0,85) e o herói segue vendo por cima;
+   *   · trono e lareira: largos para as três casas da pegada parecerem altas, com o fundo
+   *     preso a uma casa para não atravessar a parede atrás. */
+  function alvoDaSede(papel, arte, L, P) {
+    if (papel === 'pilar') return arte === 'rack_armas' ? { alt: 2.5 } : { alt: 2.64 };
+    if (papel === 'armadura') return { alt: 3.9 };
+    if (papel === 'estandarte') return { alt: 4.74 };
+    if (papel === 'estatua') return { alt: 1.2 };
+    if (papel === 'bau') return arte === 'trofeu' ? { alt: 1.15 } : { alt: 0.9 };
+    if (papel === 'banco_salao') return { larg: 1.75 };
+    if (papel === 'mesa') return { larg: L - 1.0, alt: 1.2, prof: Math.min(3.3, P - 2.6) };
+    if (papel === 'trono') return { larg: L * 0.87, alt: 3.96, prof: CELL * 0.98 };
+    if (papel === 'lareira') return { larg: L * 0.88, alt: 2.5, prof: 1.9 };
+    return null;
+  }
+  /* A PEÇA DO DONO para um papel, ou null (e então a primitiva monta). Devolve o nó e,
+   * na lareira, as partes que o código acrescenta. Frente = +z local, como as primitivas:
+   * as folhas do Meshy vieram todas com a frente para +z (conferido nos retratos). */
+  function arteDaSede(papel, pc, L, P, m, ctx, ladoGuilda) {
+    var rel = ctx.rel, chave = chaveDaSede(papel, pc.arte);
+    var cena = cenaDaSede(chave, rel);
+    var alvo = alvoDaSede(papel, pc.arte, L, P);
+    if (!cena || !alvo) return null;
+    var art = pecaNaCaixa(cena, alvo);
+    if (!art) return null;
+    var g = new THREE.Group();
+    g.add(art);
+    g.userData.chave = chave;
+    g.userData.estica = art.userData.estica;
+    if (papel === 'estandarte') {
+      // O PANO É DO CÓDIGO: a cor e o emblema são da guilda (R.setGuildasSede). Ele pende
+      // da travessa do mastro do dono, que fica a 86,6% da altura e toma a largura toda.
+      var gd = guildasSede[ladoGuilda] || {};
+      var cor = gd.cor || CORES_SEDE_NEUTRAS.cor;
+      var tex = texturaBandeira(cor, gd.emblema || '');
+      var chB = 'sede-bandeira|' + cor + '|' + (gd.emblema || '');
+      var matB = tex ? pracaMat(ctx.cache, chB, '#ffffff', { map: tex, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.95 })
+                     : pracaMat(ctx.cache, chB, cor, { side: THREE.DoubleSide });
+      var yTrav = art.userData.alt * 0.866, lPano = Math.min(1.45, art.userData.larg * 0.9), hPano = lPano * (2.26 / 1.45);
+      var band = peca(g, new THREE.PlaneGeometry(lPano, hPano), matB, 0, yTrav - 0.04 - hPano / 2, 0.09);
+      band.userData.bandeira = ladoGuilda;
+    } else if (papel === 'mesa') {
+      // a mesa do dono vem SEM bancos (são peça própria): dois bancos corridos em cada
+      // lado comprido, como a mesa de antes trazia dentro da pegada
+      var cBanco = cenaDaSede(chaveDaSede('banco_salao'), rel);
+      var tl = art.userData.larg, tp = art.userData.prof;
+      [-1, 1].forEach(function (sz) {
+        [-1, 1].forEach(function (sx) {
+          var bz = sz * (tp / 2 + 0.5), bx = sx * tl * 0.24;
+          var bn = cBanco ? pecaNaCaixa(cBanco, { larg: tl * 0.44 }) : null;
+          if (bn) { bn.position.set(bx, 0, bz); g.add(bn); }
+          else {
+            peca(g, caixaSede(tl * 0.44, 0.1, 0.5, bx, 0.46, bz), m.madeira);
+            [-1, 1].forEach(function (i) { peca(g, caixaSede(0.14, 0.41, 0.42, bx + i * tl * 0.18, 0.205, bz), m.madeiraEsc); });
+          }
+        });
+      });
+    } else if (papel === 'lareira') {
+      // a lareira do dono vai até o consolo, sem fogo e sem chaminé: o peito da chaminé
+      // (que segue o recorte da parede), o fogo e a luz são os de sempre, do código. A
+      // boca fica na metade de TRÁS da peça (o lastro avança para a frente).
+      art.position.z = -0.05;
+      var topo = art.userData.alt;
+      var partes = fogoEChamine(L, m, ctx, topo, -art.userData.prof * 0.22, 0.48, 0.1);
+      return { no: g, chamine: partes.chamine, vivo: partes.vivo };
+    }
+    return { no: g };
   }
 
   /* Monta UMA peça do salão no centro da pegada, girada de 90 em 90° para o meio da sala (o
    * comprimento sempre no maior lado da pegada) e anota no relatório: o papel, a ALTURA
-   * medida depois de montada (a prova confere a regra alto/baixo com ela) e que é primitiva. */
+   * medida depois de montada (a prova confere a regra alto/baixo com ela) e se saiu com a
+   * arte do dono (`rel.arte`) ou em primitiva (`rel.provisorias`). */
   function montaPecaDaSede(st, pc, ctx) {
     var rel = ctx.rel, m = matsSede(ctx.cache), papel = pc.papel;
     if (papel === 'parede_salao') {
@@ -1902,8 +2239,17 @@ var JOGO = (typeof window !== 'undefined')
     if (wC > hC && deLado) rot = (cyC <= my) ? 0 : Math.PI;
     var L = Math.max(wC, hC) * CELL, P = Math.min(wC, hC) * CELL;
     var no = null, extra = null;
-    if (papel === 'trono') no = tronoDaSede(L, m);
-    else if (papel === 'estandarte') no = estandarteDaSede(cxC < mx ? 'oeste' : 'leste', m, ctx.cache);
+    var ladoG = cxC < mx ? 'oeste' : 'leste';
+    var art = arteDaSede(papel, pc, L, P, m, ctx, ladoG);
+    if (art) {
+      no = art.no;
+      if (art.chamine) extra = art;
+      rel.arte[papel] = (rel.arte[papel] || 0) + 1;
+      rel.estica[papel] = Math.max(rel.estica[papel] || 0, +no.userData.estica.toFixed(2));
+      if (pc.arte) rel.variantes[pc.arte] = (rel.variantes[pc.arte] || 0) + 1;
+    }
+    else if (papel === 'trono') no = tronoDaSede(L, m);
+    else if (papel === 'estandarte') no = estandarteDaSede(ladoG, m, ctx.cache);
     else if (papel === 'pilar') no = pilarDaSede(m);
     else if (papel === 'armadura') no = armaduraDaSede(m);
     else if (papel === 'mesa') no = mesaDaSede(L, P, m);
@@ -1916,7 +2262,14 @@ var JOGO = (typeof window !== 'undefined')
     no.rotation.y = rot;
     no.position.set(px, 0, pz);
     no.updateMatrixWorld(true);
-    var alt = new THREE.Box3().setFromObject(no).max.y;
+    var cxNo = new THREE.Box3().setFromObject(no);
+    var alt = cxNo.max.y;
+    if (art) {
+      // quanto a peça do dono passa da pegada que o mapa lhe deu (negativo = cabe com folga)
+      var sob = Math.max((pc.x - 0.5) * CELL - cxNo.min.x, cxNo.max.x - (pc.x + wC - 0.5) * CELL,
+                         (pc.y - 0.5) * CELL - cxNo.min.z, cxNo.max.z - (pc.y + hC - 0.5) * CELL);
+      rel.sobra[papel] = Math.max(rel.sobra[papel] == null ? -99 : rel.sobra[papel], +sob.toFixed(3));
+    }
     if (extra) {
       [extra.chamine, extra.vivo].forEach(function (parte) { parte.rotation.y = rot; parte.position.set(px, 0, pz); });
       extra.chamine.updateMatrixWorld(true);
@@ -1929,7 +2282,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     rel.papeis[papel] = (rel.papeis[papel] || 0) + 1;
     rel.alturas[papel] = Math.max(rel.alturas[papel] || 0, +alt.toFixed(2));
-    if (rel.provisorias.indexOf(papel) < 0) rel.provisorias.push(papel);
+    if (pc.arte && art) rel.alturas[papel + '_' + pc.arte] = Math.max(rel.alturas[papel + '_' + pc.arte] || 0, +alt.toFixed(2));
+    if (!art && rel.provisorias.indexOf(papel) < 0) rel.provisorias.push(papel);
     return no;
   }
 
@@ -1982,6 +2336,12 @@ var JOGO = (typeof window !== 'undefined')
     // 15/09: o Salão da Sede — mesmo caminho da praça, com as peças e o chão do salão
     var sede = theme === 'sede' && !!pecasSala;
     var temaProprio = praca || sede;
+    // 03/10: o chão e as peças de reserva vêm do kit do tema-base (a Câmara do Eco pisa
+    // o chão do Coração); o catálogo, a luz e a região são do tema de verdade
+    var temaK = temaDoKit(theme);
+    var regs = regioesDaSala(st);
+    function regiao(x2, y2) { return regiaoDaCasa(regs, x2, y2); }
+    var catTema = JOGO.CENARIO && JOGO.CENARIO[theme];
     var casaDaPeca = {};
     if (pecasSala) {
       pecasSala.forEach(function (pc) {
@@ -2002,6 +2362,9 @@ var JOGO = (typeof window !== 'undefined')
     if (sede) {
       relPraca.alturas = {}; relPraca.provisorias = []; relPraca.paredes = 0; relPraca.tochas = 0;
       relPraca.portas = 0; relPraca.tapete = null; relPraca.erros = [];
+      // 03/10: a arte do dono — quantas peças de cada papel saíram com ela, o maior
+      // esticão de cada papel, as variantes postas e as chaves que ainda não abriram
+      relPraca.arte = {}; relPraca.estica = {}; relPraca.variantes = {}; relPraca.sobra = {};
       ctxSede = { cache: matsPraca, rel: relPraca, vivos: [], cortes: [], fogos: [], luzes: [] };
     }
     pracaEspera++;                        // montagem nova: a espera da anterior para
@@ -2024,7 +2387,7 @@ var JOGO = (typeof window !== 'undefined')
       // O rodapé recebe a SILHUETA da sala: sem isso ele desenhava um retângulo
       // em volta da grade e re-quadrava o mapa inteiro, justamente depois de as
       // salas ganharem contorno próprio. Vazio ('hole') e fora da grade não são sala.
-      var ground = K.buildGround(theme, w, h, function (cx, cy) {
+      var ground = K.buildGround(temaK, w, h, function (cx, cy) {
         if (cx < 0 || cy < 0 || cx >= w || cy >= h) return false;
         return tileKind(gridTile(st, cx, cy)) !== 'hole';
       });
@@ -2047,7 +2410,7 @@ var JOGO = (typeof window !== 'undefined')
       if (x2 < 0 || y2 < 0 || x2 >= w || y2 >= h) return false;
       return tileKind(gridTile(st, x2, y2)) === 'low';
     }
-    var lowKinds = LOW_PROPS[theme] || LOW_PROPS.garden;
+    var lowKinds = LOW_PROPS[theme] || LOW_PROPS[temaK] || LOW_PROPS.garden;
     var lowNodes = [];
     var wallCache = {};
 
@@ -2061,15 +2424,36 @@ var JOGO = (typeof window !== 'undefined')
     // da fileira — mesma sala, mesmo lugar, toda vez. Tema sem `marco` no
     // catálogo (o jardim) cai no sotaque comum e nada muda.
     var marcoPosto = false;
+    /* O MARCO QUE É BAIXO VAI PARA O CHÃO (03/10, o Altar dos Quatro do Santuário). Na
+     * gramática acima o marco SUBSTITUI um módulo de parede, e isso só é honesto com
+     * marco ALTO (o aquário, o forno, a estátua). O altar é um tablado: 8 de altura para
+     * 42 de largura. No lugar de um muro de 3,10 m ele sairia com 70 cm, numa casa que a
+     * regra diz que bloqueia a visão. Com `marco_no_chao` no catálogo, o marco sai da
+     * parede e pousa numa casa de ENFEITE DE CHÃO (a que não tem colisão): a mais perto
+     * do centro da sala, uma vez só. Sala sem casa de enfeite fica sem marco, e a parede
+     * segue inteira. `marco_casas` (padrão 1) é a largura que ele pode tomar. */
+    var marcoNoChao = !!(catTema && catTema.marco_no_chao), casaDoMarco = null;
+    if (marcoNoChao) {
+      var melhorD = Infinity;
+      for (var my0 = 0; my0 < h; my0++) for (var mx0 = 0; mx0 < w; mx0++) {
+        if (tileKind(gridTile(st, mx0, my0)) !== 'deco') continue;
+        var dM = Math.pow(mx0 - (w - 1) / 2, 2) + Math.pow(my0 - (h - 1) / 2, 2);
+        if (dM < melhorD) { melhorD = dM; casaDoMarco = mx0 + ',' + my0; }
+      }
+    }
 
     // O RELATÓRIO DA MONTAGEM, para o teste. Varrer a cena depois não serve:
     // as malhas estáticas são FUNDIDAS por material e os berços somem no
     // merge. Quem sabe quantas vezes cada peça entrou é quem as pôs — então o
     // montador anota e expõe, e a prova da regra do marco lê daqui.
     var usoPecas = {};
-    function anota(no) {
+    // 03/10: e EM QUE CASA cada peça entrou. A contagem sozinha não prova "o muro de Fogo
+    // está no quadrante de Fogo": para isso a prova precisa do lugar (R.ultimaMontagemCasas)
+    var usoCasas = {};
+    function anota(no, cx0, cy0) {
       var ch = no && no.userData && no.userData.chave;
       if (ch) usoPecas[ch] = (usoPecas[ch] || 0) + 1;
+      if (ch && cx0 != null) usoCasas[cx0 + ',' + cy0] = ch;
     }
 
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
@@ -2106,15 +2490,15 @@ var JOGO = (typeof window !== 'undefined')
         var col = null;
         var ehMarco = false;
         if (ehSotaque(filaA)) {
-          if (!marcoPosto) {
+          if (!marcoPosto && !marcoNoChao) {
             // O TETO LARGO E DELIBERADO: o aquário é um tanque mais largo que
             // alto (razão ~1,6). Com o teto padrão de 0,95 casa ele encolhia a
             // 1,2 m — porte de móvel. A 1,7 casas ele sai com ~2,1 m de altura
             // e lê como a vitrine monumental que o marco pede.
-            col = pecaUsuario(theme, 'marco', filaA.semente + filaA.i * 7, WALL_H, CELL * 1.7);
+            col = pecaUsuario(theme, 'marco', filaA.semente + filaA.i * 7, WALL_H, CELL * 1.7, regiao(x, y));
             if (col) { marcoPosto = true; ehMarco = true; }
           }
-          if (!col) col = pecaUsuario(theme, 'sotaque_alto', filaA.semente + filaA.i * 7, WALL_H);
+          if (!col) col = pecaUsuario(theme, 'sotaque_alto', filaA.semente + filaA.i * 7, WALL_H, null, regiao(x, y));
         }
         if (!col && filaA.comp >= 3 && (filaA.i % 4) === 2) {
           // O PILAR PELO MESMO CAMINHO, senao fica 34 cm abaixo dos muros.
@@ -2126,7 +2510,7 @@ var JOGO = (typeof window !== 'undefined')
           // 0,69 — proporção de coisa alta — e a uma casa já sai com 1,07× de
           // esticão, praticamente sem distorção. Alargá-lo o viraria um bloco,
           // e pilar existe para NÃO ser bloco: ele pontua a parede.
-          col = muroDaCasa(theme, 'pilar', filaA.semente, WALL_H, CELL);
+          col = muroDaCasa(theme, 'pilar', filaA.semente, WALL_H, CELL, regiao(x, y));
         }
         // TODO MURO COM A MESMA ALTURA, E ALTO — em fiadas.
         //
@@ -2138,10 +2522,20 @@ var JOGO = (typeof window !== 'undefined')
         // Agora a largura vale sempre uma casa e a ALTURA é fixa, obtida
         // aumentando a peça (ver `muroDaCasa`). Não há mais caso de ponta:
         // ponta e miolo têm exatamente a mesma medida, que é o pedido.
-        if (!col) col = muroDaCasa(theme, 'alto', filaA.semente, WALL_H, LARG_MURO);
+        if (!col) col = muroDaCasa(theme, 'alto', filaA.semente, WALL_H, LARG_MURO, regiao(x, y));
         if (col) {
           node = col;
-          anota(col);
+          anota(col, x, y);
+          /* O PISO DEBAIXO DO MURO (03/10, `piso_sob_muro` no catálogo). A casa alta nunca
+           * teve ladrilho: o muro dos seis calabouços é um bloco que a tapa. Os muros deste
+           * lote vieram de imagem de frente e são LAJES (o de Água tem 15 cm de fundo numa
+           * casa de 2 m), e a colunata da Câmara do Eco é vazada: sem piso, cada casa de
+           * parede virava um retângulo preto que lê como poço. Só o tema que declara ganha. */
+          if (catTema && catTema.piso_sob_muro) {
+            var pisoM = K.buildTile(temaK, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+            pisoM.position.set(x * CELL, 0, y * CELL);
+            staticG.add(pisoM);
+          }
           // só o MURO gira para o eixo do trecho; pilar é simétrico e sotaque é
           // objeto largado ali — girar o faria parecer parte da alvenaria.
           // O MARCO gira JUNTO com a parede: o aquário é vitrine embutida no
@@ -2150,7 +2544,7 @@ var JOGO = (typeof window !== 'undefined')
             col.rotation.y = Math.PI / 2;
           }
         } else {
-          node = K.buildWall(theme, seed, {
+          node = K.buildWall(temaK, seed, {
             mask: { n: isWall(x, y - 1), e: isWall(x + 1, y), s: isWall(x, y + 1), w: isWall(x - 1, y) },
             border: naBorda
           });
@@ -2159,11 +2553,11 @@ var JOGO = (typeof window !== 'undefined')
           retint(node, pal.wall, 0.22, wallCache);
         }
       } else if (k === 'hole') {
-        node = K.buildHole(theme, seed);
+        node = K.buildHole(temaK, seed);
       } else if (k === 'low') {
         // obstáculo BAIXO: chão normal + a peça da DIVISÓRIA. Bloqueia passagem,
         // NÃO bloqueia a visão — por isso é visivelmente mais baixo que a parede.
-        node = temaProprio ? null : K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        node = temaProprio ? null : K.buildTile(temaK, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
         // A peça sai da FILEIRA, não da casa: cinco casas seguidas usam a mesma
         // e leem como uma barreira só. Sorteando por casa, uma corrida de cinco
         // virava cinco objetos diferentes — entulho, não divisória.
@@ -2174,7 +2568,7 @@ var JOGO = (typeof window !== 'undefined')
         if (ehSotaque(fila)) {
           // a semente do SOTAQUE muda com a posição, senão toda fileira da sala
           // escolheria o mesmo enfeite e o charme viraria padrão
-          prop = pecaUsuario(theme, 'sotaque', fila.semente + fila.i * 7, 0.95);
+          prop = pecaUsuario(theme, 'sotaque', fila.semente + fila.i * 7, 0.95, null, regiao(x, y));
         }
         // A MURETA pelo mesmo caminho do muro, mirando LOW_H.
         //
@@ -2185,12 +2579,12 @@ var JOGO = (typeof window !== 'undefined')
         // «muro tomado pelo mato» deixava numa corrida. Como estes módulos já
         // são baixos por natureza, aqui quase não há esticão: é o muro ALTO que
         // paga esse preço.
-        if (!prop) prop = muroDaCasa(theme, 'baixo', fila.semente, LOW_H, LARG_MURO);
+        if (!prop) prop = muroDaCasa(theme, 'baixo', fila.semente, LOW_H, LARG_MURO, regiao(x, y));
         if (!prop) {
-          prop = K.buildProp(theme, lowKinds[fila.semente % lowKinds.length], fila.semente);
+          prop = K.buildProp(temaK, lowKinds[fila.semente % lowKinds.length], fila.semente);
           fitHeight(prop, 0.95);
         }
-        anota(prop);
+        anota(prop, x, y);
         prop.position.set(x * CELL, 0, y * CELL);
         // GIRA PARA O EIXO DA FILEIRA. Uma peça mais larga que funda, posta numa
         // corrida vertical sem girar, deixa vão entre uma casa e a seguinte — a
@@ -2202,16 +2596,29 @@ var JOGO = (typeof window !== 'undefined')
         }
         lowNodes.push({ node: prop, x: x, y: y });
       } else if (k === 'deco') {
-        node = K.buildTile(theme, 'deco', seed % 4);
+        /* O LADRILHO DA CASA DE ENFEITE. O do kit, fora do jardim e da cisterna, é a grelha
+         * com brasa por baixo (nasceu na forja). No Santuário a casa de enfeite recebe a
+         * poça, a ponte, o soquete e o altar: brasa debaixo d'água desmente a peça. Com
+         * `enfeite_sobre_piso` no catálogo a casa fica com o ladrilho comum e o enfeite é
+         * só a peça do dono. */
+        node = (catTema && catTema.enfeite_sobre_piso)
+          ? K.buildTile(temaK, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97)
+          : K.buildTile(temaK, 'deco', seed % 4);
         // o enfeite de piso do usuário vai POR CIMA do ladrilho, sem colisão.
         // A ALTURA vem do catálogo (`chao_alt`) quando o tema declara: os 25 cm
         // do jardim servem para flor e cristal, mas o lustre caído e o barril
         // tombado da Cisterna a 25 cm viravam miniatura de brinquedo.
-        var catChao = JOGO.CENARIO && JOGO.CENARIO[theme];
-        var enf = pecaUsuario(theme, 'chao', seed, (catChao && catChao.chao_alt) || 0.25);
-        if (enf) { anota(enf); enf.position.set(x * CELL, 0.02, y * CELL); lowNodes.push({ node: enf, x: x, y: y }); }
+        var catChao = catTema;
+        var enf = null;
+        if (casaDoMarco === x + ',' + y && !marcoPosto) {
+          // o marco baixo: enche a largura que o catálogo lhe dá e fica na altura que sair
+          enf = pecaUsuario(theme, 'marco', seed, WALL_H, CELL * ((catChao.marco_casas || 1) - 0.05));
+          if (enf) marcoPosto = true;
+        }
+        if (!enf) enf = pecaUsuario(theme, 'chao', seed, (catChao && catChao.chao_alt) || 0.25, null, regiao(x, y));
+        if (enf) { anota(enf, x, y); enf.position.set(x * CELL, 0.02, y * CELL); lowNodes.push({ node: enf, x: x, y: y }); }
       } else {
-        node = K.buildTile(theme, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
+        node = K.buildTile(temaK, ((x + y) % 2) ? 'floor2' : 'floor1', seed % 97);
       }
       if (node) { node.position.set(x * CELL, 0, y * CELL); staticG.add(node); }
     }
@@ -2246,7 +2653,7 @@ var JOGO = (typeof window !== 'undefined')
     // 15/09: no salão também não — fora da parede é breu
     var padPos = [];
     if (!temaProprio) try {
-      var kinds = K.propKinds(theme);
+      var kinds = K.propKinds(temaK);
       var rr = 0;
       var cxp = (w - 1) / 2 * CELL, czp = (h - 1) / 2 * CELL;
       var halfW = (w / 2) * CELL, halfH = (h / 2) * CELL;
@@ -2269,9 +2676,13 @@ var JOGO = (typeof window !== 'undefined')
         // fora da arena não há casa para respeitar, então o teto de largura sobe
         // junto — senão uma árvore larga voltaria a ser estrangulada em altura.
         var tetoBorda = altBorda * 1.6;
-        var prop2 = pecaUsuario(theme, 'borda', p * 131 + 17, altBorda, tetoBorda);
+        // a região de quem está FORA da grade é a da casa da borda mais próxima: o menir
+        // fica do lado da Terra, a coluna da maré do lado da Água
+        var regBorda = regs ? regiao(Math.max(0, Math.min(w - 1, Math.round(px / CELL))),
+                                     Math.max(0, Math.min(h - 1, Math.round(pz / CELL)))) : null;
+        var prop2 = pecaUsuario(theme, 'borda', p * 131 + 17, altBorda, tetoBorda, regBorda);
         if (!prop2) {
-          prop2 = K.buildProp(theme, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
+          prop2 = K.buildProp(temaK, kinds[(p * 7 + rr++) % kinds.length], p * 131 + 17);
           fitHeight(prop2, altBorda, tetoBorda);
         }
         anota(prop2);
@@ -2313,11 +2724,11 @@ var JOGO = (typeof window !== 'undefined')
       animaSede(nowT);                    // o primeiro quadro já sai com o recorte certo
     }
     try {
-      if (K.buildGridLines) envG.add(K.buildGridLines(theme, w, h));
+      if (K.buildGridLines) envG.add(K.buildGridLines(temaK, w, h));
       if (K.buildBrazier && !temaProprio) {  // 14/09: a praça é de dia; 15/09: o salão tem lareira
         var corners = [[-1.1, -1.1], [w + 0.1, -1.1], [-1.1, h + 0.1], [w + 0.1, h + 0.1]];
         for (var b2 = 0; b2 < 4; b2++) {
-          var brz = K.buildBrazier(theme, b2);
+          var brz = K.buildBrazier(temaK, b2);
           brz.position.set(corners[b2][0] * CELL, 0, corners[b2][1] * CELL);
           envG.add(brz);
         }
@@ -2345,13 +2756,16 @@ var JOGO = (typeof window !== 'undefined')
     // o relatório fica exposto DEPOIS de a sala inteira montar, nunca no meio:
     // teste que lesse um parcial acharia um aquário "faltando" que ainda vinha.
     R.ultimaMontagem = usoPecas;
+    R.ultimaMontagemCasas = usoCasas;
     // 14/09: o relatório da praça tática (null sem `pecas`) — e a arte que faltou, pedida
     // 15/09: UM RELATÓRIO POR TEMA — o da praça só na praça, o do salão só no salão, e
     // `ultimaMontagemTema` o da sala atual (com `tema`), para quem não sabe qual pedir
     R.ultimaMontagemPraca = (relPraca && !sede) ? relPraca : null;
     R.ultimaMontagemSede = sede ? relPraca : null;
     R.ultimaMontagemTema = relPraca;
-    if (relPraca && !sede && relPraca.pendentes.length) esperaObrasDaPraca(relPraca.pendentes);
+    // 03/10: no salão também — o kit dele desce na hora da guerra, e a montagem que saiu
+    // em primitiva remonta com a arte quando as chaves pendentes abrem
+    if (relPraca && relPraca.pendentes.length) esperaObrasDaPraca(relPraca.pendentes);
     return true;
   }
 

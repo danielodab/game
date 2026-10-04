@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o kit do Santuário dos Elementos</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:left;color:#cdd6e2}
+  #app{position:absolute;left:-4000px;top:0;width:1280px;height:720px}
+  canvas#game-canvas{width:1280px;height:720px;display:block}
+  body.foto{padding:0;overflow:hidden}
+  body.foto h1, body.foto .sub, body.foto #summary, body.foto #lista, body.foto #tabela{display:none}
+  body.foto #app{left:0;width:100vw;height:100vh}
+  body.foto canvas#game-canvas{width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<h1>O kit do Santuário dos Elementos — 17 peças, um muro por quadrante</h1>
+<div class="sub">03/10: a arte do Santuário chegou antes do mapa (<code>assets/embedded/cenario-santuario.js</code>,
+catálogo <code>JOGO.CENARIO['santuario']</code>, tema de renderização <code>'santuario'</code>). O mapa e as regras
+são de outra frente; esta página prova o KIT. Ela mede as 17 peças com as funções do jogo e monta uma SALA DE TESTE
+(que só existe aqui: quatro quadrantes e um centro, cada quadrante com um trecho de parede, uma mureta e casas de
+enfeite) e CONTA o que o renderizador pôs em cada casa: o muro de cada quadrante é o da pedra dele, nenhuma peça de
+um elemento aparece no quadrante de outro, o Altar dos Quatro entra uma vez só e no chão, e as peças que o código do
+Santuário vai mexer (o pilar vivo, o braseiro, a bica…) estão no catálogo e têm modelo.
+<br><code>?foto=1</code> mostra a sala em tela cheia; <code>window.__vista('padrao'|'cima'|'fogo'|'agua'|'terra'|'ar'|'centro')</code> enquadra.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/arenas.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/ai.js',
+    'js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/cenario-santuario.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js',
+    'js/render3d/renderer3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var FOTO = /[?&]foto=1/.test(location.search);
+  if (FOTO) document.body.className = 'foto';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det != null && det !== '' ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; }
+    else {
+      var mau = res.filter(function (x) { return !x; }).length;
+      s.className = mau ? 'fail' : 'allpass';
+      s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) + ' de ' + res.length + ' checagens ok';
+      window.__fail = mau;
+    }
+    window.__done = true; window.__pronto = true;
+  }
+
+  var CELL = 2.0, WALL_H = CELL * 1.55, LOW_H = CELL * 0.46;
+  var ELEMS = ['fogo', 'agua', 'terra', 'ar'];
+  // as 17 peças do lote (docs/PROMPTS_LANCAMENTO.md, seção 4) e os papéis que cada uma veste
+  var PECAS = {
+    el_muro_fogo: ['alto', 'baixo'], el_muro_agua: ['alto', 'baixo'], el_muro_terra: ['alto', 'baixo'], el_muro_ar: ['alto', 'baixo'],
+    el_pilar_vivo: ['pilar_vivo'], el_marco_altar: ['marco'],
+    el_estatua_cega: ['sotaque_alto', 'borda'], el_agua_pilar: ['pilar', 'sotaque_alto', 'borda'],
+    el_menir: ['sotaque_alto', 'borda'], el_ar_pilar: ['pilar', 'sotaque_alto', 'borda'],
+    el_bica: ['sotaque_alto'], el_cata_vento: ['sotaque_alto'],
+    el_braseiro: ['sotaque'], el_respiro: ['sotaque'],
+    el_soquete: ['chao'], el_poca: ['chao'], el_ponte: ['chao']
+  };
+  var MECANICA = ['el_braseiro', 'el_pilar_vivo', 'el_soquete', 'el_respiro', 'el_cata_vento', 'el_bica', 'el_poca', 'el_ponte'];
+  // de que elemento é cada peça (o altar é dos quatro; o pilar vivo é da Terra)
+  var DONO = {
+    el_muro_fogo: 'fogo', el_estatua_cega: 'fogo', el_braseiro: 'fogo',
+    el_muro_agua: 'agua', el_agua_pilar: 'agua', el_bica: 'agua', el_poca: 'agua', el_ponte: 'agua',
+    el_muro_terra: 'terra', el_menir: 'terra', el_soquete: 'terra', el_pilar_vivo: 'terra',
+    el_muro_ar: 'ar', el_ar_pilar: 'ar', el_cata_vento: 'ar', el_respiro: 'ar'
+  };
+
+  /* A SALA DE TESTE. Não é o mapa do Santuário (esse é de outra frente): é o menor desenho
+   * que faz o renderizador usar TODOS os papéis em TODOS os quadrantes. Cada quadrante tem
+   * um trecho de parede de 5 (dá um enfeite alto e, onde o quadrante tem, um pilar), uma
+   * mureta de 5 (dá o enfeite baixo), duas casas de enfeite de chão e a borda de fora. A
+   * coluna 10 e a linha 8 são o CENTRO, sem região: lá vale a lista geral, e a casa de
+   * enfeite do meio (10,8) é onde o Altar dos Quatro tem de pousar. */
+  var SALA = [
+    '#####################',
+    '#PP...,...#...,.....#',
+    '#PP.......#.........#',
+    '#..=====.....=====..#',
+    '#...................#',
+    '#..#####.....#####..#',
+    '#......,.....,......#',
+    '#...................#',
+    '###.......,.......###',
+    '#...................#',
+    '#......,.....,......#',
+    '#..#####.....#####..#',
+    '#...................#',
+    '#..=====.....=====..#',
+    '#.........#......a..#',
+    '#.....,...#...,.....#',
+    '#####################'];
+  var REGIOES = [
+    { x: 0,  y: 0, w: 10, h: 8, elemento: 'fogo' },  { x: 11, y: 0, w: 10, h: 8, elemento: 'agua' },
+    { x: 0,  y: 9, w: 10, h: 8, elemento: 'terra' }, { x: 11, y: 9, w: 10, h: 8, elemento: 'ar' }];
+  var ID_PROVA = 'prova_santuario';
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, R = JOGO.Renderer, E = JOGO.Engine, G = JOGO.Game;
+    var canvas = document.getElementById('game-canvas');
+    try { R.init(canvas, { preserveDrawingBuffer: true }); }
+    catch (e) { check('Renderer.init', false, e.message); return fecha(); }
+    try { if (G.init) G.init(); } catch (e) {}
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var voltas = 0;
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && ++voltas < 2400) return setTimeout(espera, 100);
+      check('os modelos carregaram', !!ok, erro || '');
+      try { roda(); } catch (e2) { check('a prova rodou até o fim', false, e2 && (e2.stack || e2.message)); }
+      fecha();
+      if (FOTO) { window.__vista('padrao'); (function anda() { try { R.render(0.016); } catch (e) {} requestAnimationFrame(anda); })(); }
+    })();
+
+    function quadros(n) {
+      for (var f = 0; f < n; f++) {
+        try { if (G.update) G.update(0.05); } catch (e) {}
+        try { R.render(0.05); } catch (e) { check('o quadro desenha', false, e.message); }
+      }
+    }
+    function caixa(no) {
+      no.updateMatrixWorld(true);
+      var b = new THREE.Box3().setFromObject(no);
+      return { alt: b.max.y - b.min.y, lx: b.max.x - b.min.x, lz: b.max.z - b.min.z,
+               larg: Math.max(b.max.x - b.min.x, b.max.z - b.min.z), base: b.min.y,
+               desvio: Math.max(Math.abs(b.min.x + b.max.x) / 2, Math.abs(b.min.z + b.max.z) / 2) };
+    }
+    function unica(l) { var v = {}; (l || []).forEach(function (k) { v[k] = 1; }); return Object.keys(v); }
+
+    function roda() {
+      var cat = JOGO.CENARIO && JOGO.CENARIO.santuario;
+      check('o catálogo `santuario` existe (cenario-santuario.js)', !!cat);
+      if (!cat) return;
+
+      // ---- o catálogo: as 17 peças, cada uma nos papéis dela, com modelo e nome
+      var chaves = Object.keys(PECAS);
+      var foraDoPapel = [];
+      chaves.forEach(function (c) {
+        PECAS[c].forEach(function (p) { if ((cat[p] || []).indexOf(c) < 0) foraDoPapel.push(c + '∉' + p); });
+      });
+      check('as 17 peças `el_` estão nos papéis do documento do lote', foraDoPapel.length === 0, foraDoPapel.join(', '));
+      var papeis = ['alto', 'baixo', 'pilar', 'marco', 'sotaque_alto', 'sotaque', 'chao', 'borda', 'pilar_vivo'];
+      var estranhas = [];
+      papeis.forEach(function (p) {
+        (cat[p] || []).forEach(function (c) { if (!PECAS[c] || PECAS[c].indexOf(p) < 0) estranhas.push(p + ':' + c); });
+      });
+      check('nenhum papel aponta para peça que não é dele', estranhas.length === 0, estranhas.join(', '));
+      var semModelo = chaves.filter(function (c) { var s = null; try { s = M.rawScene(c); } catch (e) {} return !s; });
+      check('as 17 peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
+      var semNome = chaves.filter(function (c) { return !(JOGO.CENARIO_NOME || {})[c]; });
+      check('toda peça tem nome em português', semNome.length === 0, semNome.join(', '));
+      if (semModelo.length) return;
+      check('o MARCO (o Altar dos Quatro) nunca entra na borda nem em enfeite que se repete',
+            ['borda', 'sotaque', 'sotaque_alto', 'chao'].every(function (p) { return (cat[p] || []).indexOf('el_marco_altar') < 0; }) &&
+            ELEMS.every(function (el) { return JSON.stringify(cat.regioes[el]).indexOf('el_marco_altar') < 0; }));
+      check('as 8 peças de MECÂNICA estão declaradas para o código do Santuário',
+            (cat.mecanica || []).slice().sort().join(',') === MECANICA.slice().sort().join(','), (cat.mecanica || []).join(','));
+      check('o pilar vivo só mora em `pilar_vivo` e em `mecanica` (é muro que sobe e desce, não enfeite)',
+            papeis.every(function (p) { return p === 'pilar_vivo' || (cat[p] || []).indexOf('el_pilar_vivo') < 0; }) &&
+            ELEMS.every(function (el) { return JSON.stringify(cat.regioes[el]).indexOf('el_pilar_vivo') < 0; }));
+
+      // ---- o muro POR QUADRANTE: o catálogo deixa escolher pelo elemento da região
+      ELEMS.forEach(function (el) {
+        var reg = cat.regioes && cat.regioes[el];
+        check('região `' + el + '`: o muro alto e o baixo são o `el_muro_' + el + '`, e só ele',
+              !!reg && (reg.alto || []).join(',') === 'el_muro_' + el && (reg.baixo || []).join(',') === 'el_muro_' + el,
+              reg && (reg.alto || []).join(',') + ' / ' + (reg.baixo || []).join(','));
+        var alheias = [];
+        if (reg) Object.keys(reg).forEach(function (p) {
+          (reg[p] || []).forEach(function (c) { if (DONO[c] !== el) alheias.push(p + ':' + c); });
+        });
+        check('região `' + el + '`: toda peça listada é do elemento dela', !!reg && alheias.length === 0, alheias.join(', '));
+        var a = R.muroDaCasa('santuario', 'alto', 7, WALL_H, R.LARG_MURO, el);
+        var b = R.muroDaCasa('santuario', 'baixo', 7, LOW_H, R.LARG_MURO, el);
+        var ca = a && caixa(a), cb = b && caixa(b);
+        check('muro de ' + el + ': fecha a parede a ' + WALL_H.toFixed(2) + ' m e a mureta a ' + LOW_H.toFixed(2) + ' m, na largura do módulo',
+              !!ca && !!cb && a.userData.chave === 'el_muro_' + el && b.userData.chave === 'el_muro_' + el &&
+              Math.abs(ca.alt - WALL_H) <= 0.02 && Math.abs(cb.alt - LOW_H) <= 0.02 &&
+              Math.abs(ca.larg - R.LARG_MURO) <= 0.02 && Math.abs(cb.larg - R.LARG_MURO) <= 0.02,
+              ca && cb && ca.alt.toFixed(2) + ' × ' + ca.larg.toFixed(2) + ' / ' + cb.alt.toFixed(2) + ' × ' + cb.larg.toFixed(2));
+        check('muro de ' + el + ': assenta no chão, fica centrado e o esticão cabe no teto dos calabouços (≤ 4,2×)',
+              !!ca && !!cb && [ca, cb].every(function (c) { return Math.abs(c.base) <= 0.02 && c.desvio <= 0.05; }) &&
+              a.userData.estica <= 4.2 && b.userData.estica <= 4.2,
+              a && b && a.userData.estica.toFixed(2) + '× / ' + b.userData.estica.toFixed(2) + '×');
+      });
+
+      // ---- o PESO: parede é a peça que mais se repete, então o módulo dela tem de ser enxuto
+      function trisDe(chave) {
+        var n = 0, c = M.rawScene(chave);
+        c.traverse(function (o) {
+          if (!o.isMesh || !o.geometry) return;
+          n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+        });
+        return Math.round(n);
+      }
+      var pesados = ELEMS.map(function (el) { return 'el_muro_' + el; }).concat(['el_pilar_vivo'])
+        .map(function (c) { return { c: c, t: trisDe(c) }; });
+      check('os quatro muros e o pilar vivo são enxutos: até 2 500 triângulos cada (o cru do Meshy tem 16 mil, e a sala usa mais de cem)',
+            pesados.every(function (p) { return p.t > 0 && p.t <= 2500; }),
+            pesados.map(function (p) { return p.c.slice(3) + ' ' + p.t; }).join(' · '));
+
+      // ---- o PILAR VIVO: muro de uma peça, na caixa do muro alto, topo e base retos
+      var pv = R.muroDaCasa('santuario', 'pilar_vivo', 0, WALL_H, R.LARG_MURO), cpv = pv && caixa(pv);
+      check('o pilar vivo sobe até a altura da parede na caixa do muro (o código do Santuário o desce no soquete)',
+            !!cpv && pv.userData.chave === 'el_pilar_vivo' && Math.abs(cpv.alt - WALL_H) <= 0.02 && Math.abs(cpv.larg - R.LARG_MURO) <= 0.02 &&
+            Math.abs(cpv.base) <= 0.02, cpv && cpv.alt.toFixed(2) + ' × ' + cpv.larg.toFixed(2));
+      check('... quase sem esticão: veio na proporção pedida (um pouco mais alto que largo)',
+            !!pv && pv.userData.estica >= 0.6 && pv.userData.estica <= 1.6, pv && pv.userData.estica.toFixed(2) + '×');
+
+      // ---- as peças soltas, na altura que o jogo dá a cada papel
+      var linhas = [];
+      function mede(chave, papel, alvo, teto) {
+        // a lista de um papel só com a peça pedida: a função do jogo escolhe por semente
+        var guard = cat[papel]; cat[papel] = [chave];
+        var no = null;
+        try { no = R.pecaUsuario('santuario', papel, 0, alvo, teto); } finally { cat[papel] = guard; }
+        var c = no && caixa(no);
+        if (c) linhas.push([chave, papel, c.alt, c.lx, c.lz]);
+        return c;
+      }
+      var altos = cat.sotaque_alto.map(function (c) { return { c: c, m: mede(c, 'sotaque_alto', WALL_H) }; });
+      check('os seis enfeites ALTOS chegam à altura da parede (≥ 2,6 m: tapam a visão como a regra diz) sem passar da casa',
+            altos.every(function (a) { return a.m && a.m.alt >= 2.6 && a.m.alt <= WALL_H + 0.02 && a.m.larg <= CELL * 0.96; }),
+            altos.map(function (a) { return a.c.slice(3) + ' ' + (a.m ? a.m.alt.toFixed(2) + '×' + a.m.larg.toFixed(2) : 'sem peça'); }).join(' · '));
+      var baixos = cat.sotaque.map(function (c) { return { c: c, m: mede(c, 'sotaque', 0.95) }; });
+      check('o braseiro e o respiro ficam BAIXOS (≤ 1,2 m: dá para ver por cima) e dentro da casa',
+            baixos.every(function (a) { return a.m && a.m.alt > 0.4 && a.m.alt <= 1.2 && a.m.larg <= CELL * 0.96; }),
+            baixos.map(function (a) { return a.c.slice(3) + ' ' + (a.m ? a.m.alt.toFixed(2) + '×' + a.m.larg.toFixed(2) : 'sem peça'); }).join(' · '));
+      var chaos = cat.chao.map(function (c) { return { c: c, m: mede(c, 'chao', cat.chao_alt || 0.25) }; });
+      check('as três peças de CHÃO são rasteiras (≤ ' + (cat.chao_alt || 0.25) + ' m) e cabem na casa',
+            chaos.every(function (a) { return a.m && a.m.alt > 0.02 && a.m.alt <= (cat.chao_alt || 0.25) + 0.02 && a.m.larg <= CELL * 0.96; }),
+            chaos.map(function (a) { return a.c.slice(3) + ' ' + (a.m ? a.m.alt.toFixed(2) + '×' + a.m.larg.toFixed(2) : 'sem peça'); }).join(' · '));
+      var soltas = altos.concat(baixos, chaos);
+      check('todas assentam no chão e ficam centradas na casa',
+            soltas.every(function (a) { return a.m && Math.abs(a.m.base) <= 0.02 && a.m.desvio <= 0.05; }));
+      check('o tema `santuario` tem ambiente próprio (não cai na luz do jardim)', !!R.ambienteDoTema('santuario'));
+
+      // ---- A SALA DE TESTE: um calabouço que só existe nesta página
+      JOGO.DATA.dungeons.push({
+        id: ID_PROVA, name: 'Sala de prova do Santuário', theme: 'santuario', difficulty: 1, order: 99, recommendedLevel: 1,
+        palette: { primary: '#c9c2e8', secondary: '#2a2a36', accent: '#ffd98a',
+                   floor1: '#3a3b47', floor2: '#44455a', wall: '#22232c', lowWall: '#5a5a6e', voidColor: '#0b0b12' },
+        defaultWeather: 'calmo', tileEventRate: 0,
+        rooms: [{ name: 'Sala de prova', weather: 'calmo', sceneryTheme: 'santuario', layout: SALA, regioes: REGIOES,
+                  monsters: { a: 'pollen-puff' } }]
+      });
+      try { JOGO.Progress.reset(); } catch (e) {}
+      var ids = [];
+      try { ids = JOGO.Progress.heroIds().slice(0, 2); } catch (e) {}
+      var st = E.createBattle(ID_PROVA, 0, JOGO.Progress.battleParty(ids), { seed: 5, dificuldade: 'normal' });
+      G.state = st;
+      quadros(16);
+      var uso = R.ultimaMontagem || {}, casas = R.ultimaMontagemCasas || {};
+      check('a sala montou com o tema `santuario`', Object.keys(uso).length > 0, Object.keys(uso).length + ' peças diferentes');
+
+      function reg(x, y) { return R.regiaoDaCasa(st, x, y); }
+      check('a região de cada casa sai da sala: os quatro cantos são os quatro elementos e o centro não é de nenhum',
+            reg(1, 1) === 'fogo' && reg(19, 1) === 'agua' && reg(1, 15) === 'terra' && reg(19, 15) === 'ar' &&
+            reg(10, 8) === null && reg(10, 1) === null && reg(5, 8) === null,
+            [reg(1, 1), reg(19, 1), reg(1, 15), reg(19, 15), reg(10, 8)].join(','));
+
+      // o que cada tipo de casa PODE vestir, por região (lista da região se ela declara o papel, senão a geral)
+      function pode(tipo, el) {
+        var r = el ? cat.regioes[el] : null;
+        function l(p) { return (r && Array.isArray(r[p])) ? r[p] : (cat[p] || []); }
+        if (tipo === 'wall') return l('alto').concat(l('pilar'), l('sotaque_alto'));
+        if (tipo === 'cover') return l('baixo').concat(l('sotaque'));
+        return l('chao').concat(cat.marco);
+      }
+      var porEl = { fogo: {}, agua: {}, terra: {}, ar: {}, centro: {} }, erradas = [], nuas = [];
+      var nAlto = 0, nBaixo = 0;
+      st.grid.tiles.forEach(function (row, y) {
+        row.forEach(function (t, x) {
+          var k = casas[x + ',' + y], el = reg(x, y);
+          var tipo = t.type === 'wall' ? 'wall' : t.type === 'cover' ? 'cover' : SALA[y].charAt(x) === ',' ? 'deco' : null;
+          if (t.type === 'wall') nAlto++;
+          if (t.type === 'cover') nBaixo++;
+          if (!tipo) { if (k) erradas.push(x + ',' + y + ' chão liso com ' + k); return; }
+          if (!k) { if (tipo !== 'deco') nuas.push(x + ',' + y); return; }
+          var cont = porEl[el || 'centro']; cont[k] = (cont[k] || 0) + 1;
+          if (pode(tipo, el).indexOf(k) < 0) erradas.push(x + ',' + y + ' (' + (el || 'centro') + ', ' + tipo + ') ' + k);
+          if (el && DONO[k] && DONO[k] !== el) erradas.push(x + ',' + y + ' é ' + el + ' e vestiu ' + k);
+        });
+      });
+      check('toda casa ALTA (' + nAlto + ') e toda casa BAIXA (' + nBaixo + ') saiu com peça do kit (nenhuma no muro de reserva)',
+            nAlto > 0 && nBaixo > 0 && nuas.length === 0, nuas.join(' '));
+      check('NENHUMA peça de um elemento aparece no quadrante de outro, e cada casa veste um papel que lhe cabe',
+            erradas.length === 0, erradas.slice(0, 12).join(' · '));
+      ELEMS.forEach(function (el) {
+        var c = porEl[el], muro = 'el_muro_' + el;
+        var outros = Object.keys(c).filter(function (k) { return /^el_muro_/.test(k) && k !== muro; });
+        check('quadrante de ' + el + ': a parede e a mureta são de `' + muro + '` (' + (c[muro] || 0) + ' casas) e de nenhum outro muro',
+              c[muro] >= 20 && outros.length === 0, JSON.stringify(c));
+      });
+      check('Fogo: o enfeite alto do trecho é a estátua vendada e o baixo é o braseiro; sem pilar (o quadrante não tem)',
+            porEl.fogo.el_estatua_cega >= 1 && porEl.fogo.el_braseiro === 1 && !porEl.fogo.el_agua_pilar && !porEl.fogo.el_ar_pilar);
+      check('Água: a coluna da maré pontua a parede e as casas de enfeite ganham poça ou ponte',
+            porEl.agua.el_agua_pilar >= 1 && (porEl.agua.el_poca || 0) + (porEl.agua.el_ponte || 0) === 2, JSON.stringify(porEl.agua));
+      check('Terra: o menir no trecho e o soquete do pilar vivo nas casas de enfeite',
+            porEl.terra.el_menir >= 1 && porEl.terra.el_soquete === 2, JSON.stringify(porEl.terra));
+      check('Ar: a coluna de mármore ou o cata-vento no trecho e o respiro na mureta',
+            (porEl.ar.el_ar_pilar || 0) + (porEl.ar.el_cata_vento || 0) >= 1 && porEl.ar.el_respiro === 1, JSON.stringify(porEl.ar));
+      check('Fogo e Ar não têm peça de chão: as casas de enfeite de lá ficam só com o ladrilho',
+            !casas['6,1'] && !casas['7,6'] && !casas['13,10'] && !casas['14,15'],
+            [casas['6,1'], casas['7,6'], casas['13,10'], casas['14,15']].join(','));
+
+      // ---- o MARCO: uma vez só, no chão, no meio
+      check('o Altar dos Quatro entra UMA vez, na casa de enfeite do centro (10,8), e não no lugar de um muro',
+            uso.el_marco_altar === 1 && casas['10,8'] === 'el_marco_altar' && st.grid.tiles[8][10].type !== 'wall',
+            'usos ' + uso.el_marco_altar + ' · (10,8) = ' + casas['10,8']);
+      var guardM = cat.marco; cat.marco = ['el_marco_altar'];
+      var altar = R.pecaUsuario('santuario', 'marco', 0, WALL_H, CELL * ((cat.marco_casas || 1) - 0.05)), cal = altar && caixa(altar);
+      cat.marco = guardM;
+      check('... e é BAIXO (≤ 1,2 m) e cabe na casa: tablado no chão não finge ser parede',
+            !!cal && cal.alt <= 1.2 && cal.larg <= CELL, cal && cal.alt.toFixed(2) + ' × ' + cal.larg.toFixed(2));
+      if (cal) linhas.push(['el_marco_altar', 'marco (no chão)', cal.alt, cal.lx, cal.lz]);
+
+      // ---- a borda: as quatro peças de identidade, nunca o marco nem peça de mecânica rasteira
+      var bordaOk = unica(cat.borda), nBorda = 0;
+      bordaOk.forEach(function (k) {
+        var dentro = 0; Object.keys(casas).forEach(function (c) { if (casas[c] === k) dentro++; });
+        nBorda += (uso[k] || 0) - dentro;
+      });
+      check('fora da arena há peça do kit em volta da sala (as de identidade, vindas da lista `borda`)', nBorda >= 8, nBorda + ' peças');
+      var alheias = Object.keys(uso).filter(function (k) { return !PECAS[k]; });
+      check('nenhuma peça de outro tema (nem do kit de reserva) entrou na sala', alheias.length === 0, alheias.join(', '));
+      var total = 0; Object.keys(uso).forEach(function (k) { total += uso[k]; });
+      check('a conta fecha: ' + total + ' peças postas, ' + Object.keys(casas).length + ' em casas da grade e ' + nBorda + ' na borda',
+            total === Object.keys(casas).length + nBorda);
+
+      // ---- sem `regioes` na sala o catálogo continua valendo (as listas gerais), e catálogo sem regiões não muda
+      var dg = JOGO.DATA.dungeons[JOGO.DATA.dungeons.length - 1];
+      var regGuard = dg.rooms[0].regioes; delete dg.rooms[0].regioes;
+      check('sala SEM `regioes`: nenhuma casa tem região e a parede sai da lista geral',
+            R.regiaoDaCasa(st, 1, 1) === null && !!R.muroDaCasa('santuario', 'alto', 3, WALL_H, R.LARG_MURO, R.regiaoDaCasa(st, 1, 1)));
+      dg.rooms[0].regioes = regGuard;
+      check('região que o catálogo não conhece cai na lista geral (não quebra nem fica sem muro)',
+            !!R.muroDaCasa('santuario', 'alto', 3, WALL_H, R.LARG_MURO, 'neutro'));
+
+      // a tabela das medidas, para quem for desenhar o mapa
+      var h = '<table><tr><th class="n">peça</th><th class="n">papel</th><th>altura (m)</th><th>largura (m)</th><th>fundo (m)</th></tr>';
+      ELEMS.forEach(function (el) {
+        var a = caixa(R.muroDaCasa('santuario', 'alto', 0, WALL_H, R.LARG_MURO, el));
+        linhas.unshift(['el_muro_' + el, 'alto (e baixo a ' + LOW_H.toFixed(2) + ')', a.alt, a.lx, a.lz]);
+      });
+      if (cpv) linhas.push(['el_pilar_vivo', 'pilar_vivo', cpv.alt, cpv.lx, cpv.lz]);
+      linhas.forEach(function (l) {
+        h += '<tr><td class="n">' + l[0] + '</td><td class="n">' + l[1] + '</td><td>' + l[2].toFixed(2) + '</td><td>' +
+             l[3].toFixed(2) + '</td><td>' + l[4].toFixed(2) + '</td></tr>';
+      });
+      document.getElementById('tabela').innerHTML = h + '</table>';
+    }
+
+    window.__vista = function (qual) {
+      var q = { fogo: [5, 4], agua: [15, 4], terra: [5, 12], ar: [15, 12], centro: [10, 8] }[qual];
+      if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 56, ang: 0.0001, panX: 0, panZ: 0 });
+      else if (q) R.setCamera({ tilt: 1.08, dist: qual === 'centro' ? 12 : 17, ang: 0.0001, centerX: q[0], centerY: q[1] });
+      else { R.setCamera({ rot: 0, animate: false, tilt: 0.98 }); R.recentrar(); }   // 0,98 = a inclinação padrão do jogo; sem ela a foto depois da 'cima' saía de cima
+      for (var i = 0; i < 4; i++) { try { R.render(0.016); } catch (e) {} }
+      return R.getCamera();
+    };
+  });
+})();
+</script>
+</body>
+</html>

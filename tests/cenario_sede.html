@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a Sala de Guerra, peça por peça</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px system-ui,Segoe UI,sans-serif;padding:12px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8895a6;font-size:12px;margin:0 0 10px;max-width:960px}
+  #summary{font:12px monospace;margin:6px 0 10px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 0;padding-left:18px;font-size:12px}
+  li.pass{color:#8fc79b} li.fail{color:#f88}
+  table{border-collapse:collapse;font-size:12px;margin-top:10px}
+  th,td{border:1px solid #2b3542;padding:3px 8px;text-align:right}
+  th{background:#1b222c;color:#8895a6} td.n{text-align:left;color:#cdd6e2}
+  #app{position:absolute;left:-4000px;top:0;width:1280px;height:720px}
+  canvas#game-canvas{width:1280px;height:720px;display:block}
+  body.foto{padding:0;overflow:hidden}
+  body.foto h1, body.foto .sub, body.foto #summary, body.foto #lista, body.foto #tabela{display:none}
+  body.foto #app{left:0;width:100vw;height:100vh}
+  body.foto canvas#game-canvas{width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<h1>A Sala de Guerra (o Salão da Sede) — a arte do dono, peça por peça</h1>
+<div class="sub">03/10: o salão da guerra de guilda deixou de ser caixas e cilindros desenhados no código e
+veste as 16 peças do dono (<code>assets/embedded/cenario-sede.js</code>, catálogo <code>JOGO.CENARIO['sede']</code>).
+Esta página monta o salão de verdade (motor + renderizador, sem o jogo inteiro em volta) e CONTA o que o
+renderizador criou: cada papel do mapa saiu com a peça do dono, nenhuma ficou em primitiva, as alturas e as
+pegadas da régua tática continuam valendo (pilar e cavalete até 2,64 m, mesa, busto, baú e troféu até 1,2 m,
+nada passa da pegada), a parede tem a face do dono nas duas versões, o pano do estandarte é pintado com a cor
+da guilda, e as primitivas de antes seguem como reserva: sem o catálogo, e enquanto um modelo não abriu.
+<br><code>?foto=1</code> mostra o salão em tela cheia; <code>window.__vista('padrao'|'lado'|'cima'|'trono'|'mesa')</code>
+enquadra e <code>window.__primitivas(true|false)</code> troca a arte pela reserva (o antes | depois).
+A régua da CÂMERA e da visão entre nascimentos é a de <code>tests/prova_sede_tatica.html</code>, que abre o jogo inteiro.</div>
+<div id="summary">medindo…</div>
+<ul id="lista"></ul>
+<div id="tabela"></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/arenas.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js','js/core/engine.js','js/core/fusion.js','js/core/ai.js',
+    'js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/models-anims.js','assets/embedded/models-heroes.js',
+    'assets/embedded/models-meshy.js',
+    'assets/embedded/cenario-sede.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js',
+    'js/render3d/renderer3d_v2.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var FOTO = /[?&]foto=1/.test(location.search);
+  if (FOTO) document.body.className = 'foto';
+  var res = [], out = document.getElementById('lista');
+  function check(nome, ok, det) {
+    res.push(!!ok);
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? '✓ ' : '✗ ') + nome + (det != null && det !== '' ? ' — ' + det : '');
+    out.appendChild(li);
+  }
+  function fecha() {
+    var s = document.getElementById('summary');
+    if (!res.length) { s.className = 'fail'; s.textContent = 'FALHOU — nenhuma checagem rodou'; }
+    else {
+      var mau = res.filter(function (x) { return !x; }).length;
+      s.className = mau ? 'fail' : 'allpass';
+      s.textContent = (mau ? 'FALHOU' : 'TUDO PASSOU') + ' — ' + (res.length - mau) + ' de ' + res.length + ' checagens ok';
+      window.__fail = mau;
+    }
+    window.__done = true; window.__pronto = true;
+  }
+
+  // as 16 peças e o papel de cada uma no catálogo (o papel é o das `pecas` do mapa)
+  var PECAS = {
+    parede_salao: 'sd_parede_lisa', parede_esteio: 'sd_parede_esteio', parede_tocha: 'sd_parede_tocha',
+    parede_cortada: 'sd_parede_cortada', porta: 'sd_porta', trono: 'sd_trono', lareira: 'sd_lareira',
+    estandarte: 'sd_estandarte', pilar: 'sd_pilar', pilar_rack_armas: 'sd_rack_armas', armadura: 'sd_armadura',
+    mesa: 'sd_mesa', banco_salao: 'sd_banco', estatua: 'sd_estatua', bau: 'sd_bau', bau_trofeu: 'sd_trofeu'
+  };
+  var ALTOS = ['trono', 'estandarte', 'pilar', 'armadura', 'lareira'];
+  var BAIXOS = ['mesa', 'banco_salao', 'estatua', 'bau'];
+  var CELL = 2.0;
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var M = JOGO.Models3D2, R = JOGO.Renderer, E = JOGO.Engine, G = JOGO.Game;
+    var canvas = document.getElementById('game-canvas');
+    try { R.init(canvas, { preserveDrawingBuffer: true }); }
+    catch (e) { check('Renderer.init', false, e.message); return fecha(); }
+    try { if (G.init) G.init(); } catch (e) {}
+    var erro = null;
+    try { M.load(function (e) { if (e) erro = e.message || String(e); }); } catch (e) { erro = e.message; }
+    try { JOGO.Models3D.load(function () {}); } catch (e) {}
+
+    var voltas = 0;
+    (function espera() {
+      var ok = false; try { ok = M.isReady(); } catch (e) {}
+      if (!ok && !erro && ++voltas < 2400) return setTimeout(espera, 100);
+      check('os modelos carregaram', !!ok, erro || '');
+      try { roda(); } catch (e2) { check('a prova rodou até o fim', false, e2 && e2.message); fecha(); }
+    })();
+
+    function quadros(n) {
+      for (var f = 0; f < n; f++) {
+        try { if (G.update) G.update(0.05); } catch (e) {}
+        try { R.render(0.05); } catch (e) { check('o quadro desenha', false, e.message); }
+      }
+    }
+    // remonta o salão: o gancho das guildas derruba a chave do tabuleiro
+    function remonta(guildas) { R.setGuildasSede(guildas || null); quadros(3); return R.ultimaMontagemSede; }
+
+    function roda() {
+      var cat = JOGO.CENARIO && JOGO.CENARIO.sede;
+      check('o catálogo `sede` existe (cenario-sede.js)', !!cat);
+      if (!cat) return fecha();
+      var faltam = Object.keys(PECAS).filter(function (p) { return !(cat[p] && cat[p][0] === PECAS[p]); });
+      check('os 16 papéis do catálogo apontam para as 16 peças `sd_`', faltam.length === 0, faltam.join(', '));
+      var semModelo = Object.keys(PECAS).filter(function (p) { var c = null; try { c = M.rawScene(PECAS[p]); } catch (e) {} return !c; });
+      check('as 16 peças têm modelo carregado', semModelo.length === 0, semModelo.join(', '));
+      var semNome = Object.keys(PECAS).filter(function (p) { return !(JOGO.CENARIO_NOME || {})[PECAS[p]]; });
+      check('toda peça tem nome em português', semNome.length === 0, semNome.join(', '));
+
+      // ---- o salão de verdade: duas guildas, dois jogadores cada, cada um com a dupla
+      function lado(classes, guilda) {
+        return classes.map(function (id, i) {
+          return { classId: id, heroId: id + '-' + guilda, level: 5, dono: guilda + '-jogador' + (i < 2 ? 1 : 2) };
+        });
+      }
+      var st = E.createDuelSala('sede', 0, lado(['sumo', 'curandeiro', 'bruxo', 'arqueiro'], 'guildaA'),
+                                lado(['minotauro', 'espadachim', 'invocador', 'arqueiro'], 'guildaB'), { seed: 11 });
+      G.state = st;
+      quadros(12);
+      var rel = R.ultimaMontagemSede;
+      check('o tabuleiro montou o salão', !!rel && rel.tema === 'sede');
+      if (!rel) return fecha();
+      check('nenhuma peça quebrou ao montar', !rel.erros.length, rel.erros.join(' | '));
+
+      var pecas = JOGO.DATA.arena('sede').rooms[0].pecas, pede = {}, pedeArte = {};
+      pecas.forEach(function (pc) {
+        pede[pc.papel] = (pede[pc.papel] || 0) + 1;
+        if (pc.arte) pedeArte[pc.arte] = (pedeArte[pc.arte] || 0) + 1;
+      });
+      // A REGRA DESTE LOTE: com o kit carregado, NADA fica em primitiva
+      check('nenhum papel ficou em primitiva', rel.provisorias.length === 0, rel.provisorias.join(', '));
+      check('nenhuma chave ficou pendente', rel.pendentes.length === 0, rel.pendentes.join(', '));
+      Object.keys(pede).forEach(function (papel) {
+        if (papel === 'parede_salao') return;
+        check('"' + papel + '": as ' + pede[papel] + ' do mapa saíram com a peça do dono',
+              rel.arte[papel] === pede[papel] && rel.papeis[papel] === pede[papel], rel.arte[papel] + ' de ' + pede[papel]);
+      });
+      check('as variantes do mapa entraram: ' + Object.keys(pedeArte).map(function (a) { return pedeArte[a] + '× ' + a; }).join(', '),
+            Object.keys(pedeArte).length === 2 &&
+            Object.keys(pedeArte).every(function (a) { return rel.variantes[a] === pedeArte[a]; }), JSON.stringify(rel.variantes));
+
+      // ---- a régua tática na ALTURA: a que a primitiva tinha
+      var al = rel.alturas;
+      ALTOS.forEach(function (p) { check('"' + p + '" é ALTO (≥ 2,6 m)', al[p] >= 2.6, al[p]); });
+      BAIXOS.forEach(function (p) { check('"' + p + '" é BAIXO (≤ 1,2 m, dá para ver por cima)', al[p] > 0.3 && al[p] <= 1.21, al[p]); });
+      check('o PILAR não passa de 2,64 m (acima disso tapa da câmera a casa de nascimento)', al.pilar <= 2.645, al.pilar);
+      check('o CAVALETE DE ARMAS entra na altura de pilar (alto, e ≤ 2,64 m)',
+            al.pilar_rack_armas >= 2.3 && al.pilar_rack_armas <= 2.645, al.pilar_rack_armas);
+      check('o TROFÉU entra na altura de baú (≤ 1,2 m)', al.bau_trofeu > 0.3 && al.bau_trofeu <= 1.21, al.bau_trofeu);
+      // ---- a pegada: nada passa da casa (ou das casas) que o mapa lhe deu
+      var fora = Object.keys(rel.sobra).filter(function (p) { return rel.sobra[p] > 0.02; });
+      check('nenhuma peça passa da pegada dela no mapa', fora.length === 0,
+            fora.map(function (p) { return p + ' +' + rel.sobra[p].toFixed(2) + ' m'; }).join(' · '));
+      var esticadas = Object.keys(rel.estica).filter(function (p) { return rel.estica[p] > 1.6; });
+      check('nenhuma peça é esticada além de 1,6× (o teto é o da mesa, que é achatada para ficar baixa)',
+            esticadas.length === 0, Object.keys(rel.estica).map(function (p) { return p + ' ' + rel.estica[p] + '×'; }).join(' · '));
+
+      // ---- a parede: a face do dono nas DUAS versões, contada na cena
+      var nBorda = 0, nUmLado = 0, w = st.grid.w, h = st.grid.h;
+      st.grid.tiles.forEach(function (row, y) {
+        row.forEach(function (t, x) {
+          if (t.type !== 'wall') return;
+          var lados = (x === 0 ? 1 : 0) + (y === 0 ? 1 : 0) + (x === w - 1 ? 1 : 0) + (y === h - 1 ? 1 : 0);
+          if (lados) nBorda++;
+          if (lados === 1) nUmLado++;
+        });
+      });
+      check('o contorno inteiro virou parede do salão', rel.paredes === nBorda, rel.paredes + ' de ' + nBorda);
+      check('toda casa de parede de UM lado tem a face do dono (as quinas seguem em pedra lisa)',
+            rel.paredesArte === nUmLado, rel.paredesArte + ' de ' + nUmLado);
+      var inst = { total: 0 }, porGeo = {};
+      R.scene().traverse(function (o) {
+        if (!o.isInstancedMesh || !o.geometry) return;
+        var p = o.parent, noSalao = false;
+        while (p) { if (p.name === 'envkit') noSalao = true; p = p.parent; }
+        if (!noSalao) return;
+        porGeo[o.geometry.uuid] = (porGeo[o.geometry.uuid] || 0) + o.count;
+        inst.total += o.count;
+      });
+      check('as faces são desenhadas por instância: ' + nUmLado + ' inteiras + ' + nUmLado + ' cortadas',
+            inst.total === nUmLado * 2, inst.total + ' cópias em ' + Object.keys(porGeo).length + ' geometrias');
+      check('quatro módulos diferentes na parede (lisa, esteio, tocha e cortada)', Object.keys(porGeo).length === 4,
+            Object.keys(porGeo).map(function (k) { return porGeo[k]; }).join(' + '));
+      // ---- o PESO: parede é a peça que mais se repete, então o módulo dela tem de ser enxuto
+      function trisDe(chave) {
+        var n = 0, c = M.rawScene(chave);
+        c.traverse(function (o) {
+          if (!o.isMesh || !o.geometry) return;
+          n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+        });
+        return Math.round(n);
+      }
+      var tLisa = trisDe('sd_parede_lisa'), tCorte = trisDe('sd_parede_cortada');
+      check('os dois módulos que dão a volta no salão (a lisa e a cortada) são enxutos: até 500 triângulos cada (o cru do Meshy tem 16 mil)',
+            tLisa <= 500 && tCorte <= 500, tLisa + ' / ' + tCorte);
+      var pesoQ = R.stats ? R.stats().tris : -1;
+      check('o salão inteiro, com os oito heróis, desenha menos de 900 mil triângulos por quadro (com a parede crua eram 1,74 milhão)',
+            pesoQ > 0 && pesoQ < 900000, pesoQ);
+      check('a porta do dono fecha o vão da saída', rel.portaArte === 1 && rel.portas === 1, rel.portaArte + ' / ' + rel.portas);
+      check('as tochas da parede têm chama do código', rel.tochas >= 4, rel.tochas);
+      check('uma luz pontual e fogo em cada lareira', rel.luzes === pede.lareira && rel.fogos >= pede.lareira * 3, rel.luzes + ' / ' + rel.fogos);
+      var vivo = R._sedeVivo();
+      check('a parede do lado da câmera corta (o recorte segue vivo)',
+            vivo.cortes.filter(function (c) { return c.cortado; }).length >= 2 &&
+            vivo.cortes.filter(function (c) { return !c.cortado; }).length >= 2,
+            vivo.cortes.map(function (c) { return c.lados.join('+') + (c.cortado ? ':corta' : ':inteira'); }).join(' '));
+
+      // ---- o PANO do estandarte é do código: pintado com a cor e o emblema de cada guilda
+      function panos() {
+        var mats = {};
+        R.scene().traverse(function (o) {
+          var m = o.material;
+          if (o.isMesh && m && m.map && m.map.isCanvasTexture && m.alphaTest === 0.5 && m.side === THREE.DoubleSide) mats[m.uuid] = m;
+        });
+        return Object.keys(mats).map(function (k) { return mats[k]; });
+      }
+      function corDoPano(m) {
+        try { var d = m.map.image.getContext('2d').getImageData(64, 30, 1, 1).data; return '#' + [d[0], d[1], d[2]].map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join(''); }
+        catch (e) { return '?'; }
+      }
+      var neutros = panos();
+      check('sem guilda, os quatro estandartes têm o pano neutro do salão (um material só)', neutros.length === 1, neutros.map(corDoPano).join(','));
+      var rel2 = remonta({ oeste: { cor: '#1f4f8c', emblema: 'A' }, leste: { cor: '#2f6b2a', emblema: 'B' } });
+      var cores = panos().map(corDoPano).sort();
+      check('com as guildas, o pano de cada lado sai na cor da guilda dele',
+            cores.length === 2 && cores[0] === '#1f4f8c' && cores[1] === '#2f6b2a', cores.join(','));
+      check('... e o mastro continua sendo a peça do dono', !!rel2 && rel2.arte.estandarte === pede.estandarte, rel2 && rel2.arte.estandarte);
+      remonta(null);
+
+      // ---- A RESERVA: sem o catálogo o salão monta inteiro em primitiva, com a mesma régua
+      var guardado = JOGO.CENARIO.sede;
+      delete JOGO.CENARIO.sede;
+      var relP = remonta(null);
+      check('SEM o catálogo o salão monta em primitiva, sem erro', !!relP && !relP.erros.length && Object.keys(relP.arte).length === 0 && relP.paredesArte === 0,
+            relP ? relP.provisorias.join(',') : '');
+      check('... com as mesmas peças do mapa', !!relP && Object.keys(pede).every(function (p) { return relP.papeis[p] === pede[p]; }));
+      check('... e a mesma régua de altura',
+            !!relP && ALTOS.every(function (p) { return relP.alturas[p] >= 2.6; }) &&
+            BAIXOS.every(function (p) { return relP.alturas[p] > 0.3 && relP.alturas[p] <= 1.3; }) && relP.alturas.pilar <= 2.645,
+            relP ? JSON.stringify(relP.alturas) : '');
+      JOGO.CENARIO.sede = guardado;
+
+      // ---- o modelo que AINDA NÃO ABRIU: a peça sai em primitiva, fica pendente e a sala remonta sozinha
+      var rawDeVerdade = M.rawScene, some = { sd_pilar: 1 };
+      M.rawScene = function (k) { return some[k] ? null : rawDeVerdade.call(M, k); };
+      var relQ = remonta(null);
+      check('modelo que não abriu: só aquele papel cai na primitiva e a chave fica pendente',
+            !!relQ && relQ.provisorias.join(',') === 'pilar' && relQ.pendentes.join(',') === 'sd_pilar' && relQ.arte.trono === 1,
+            relQ ? relQ.provisorias.join(',') + ' / ' + relQ.pendentes.join(',') : '');
+      M.rawScene = rawDeVerdade;
+      var volta = 0;
+      (function esperaRemontar() {
+        quadros(1);
+        var r3 = R.ultimaMontagemSede;
+        if (r3 !== relQ && r3 && r3.provisorias.length === 0) {
+          check('quando o modelo abre, o salão remonta sozinho com a arte', r3.arte.pilar === pede.pilar, r3.arte.pilar);
+          return termina(rel);
+        }
+        if (++volta > 60) { check('quando o modelo abre, o salão remonta sozinho com a arte', false, 'esperou 60 voltas'); return termina(rel); }
+        setTimeout(esperaRemontar, 250);
+      })();
+    }
+
+    function termina(rel) {
+      var r = R.ultimaMontagemSede || rel;
+      var h = '<table><tr><th class="n">papel</th><th>peças</th><th>altura (m)</th><th>esticão</th><th>sobra da pegada (m)</th></tr>';
+      Object.keys(r.arte).forEach(function (p) {
+        h += '<tr><td class="n">' + p + '</td><td>' + r.arte[p] + '</td><td>' + r.alturas[p] + '</td><td>' +
+             (r.estica[p] || 1) + '×</td><td>' + (r.sobra[p] != null ? r.sobra[p].toFixed(2) : '') + '</td></tr>';
+      });
+      document.getElementById('tabela').innerHTML = h + '</table>';
+      fecha();
+      if (FOTO) { window.__vista('padrao'); (function anda() { try { R.render(0.016); } catch (e) {} requestAnimationFrame(anda); })(); }
+    }
+
+    // o enquadramento das fotos
+    window.__vista = function (qual) {
+      if (qual === 'cima') R.setCamera({ tilt: 0.3, dist: 62, ang: 0.0001, panX: 0, panZ: 0 });
+      else if (qual === 'lado') R.setCamera({ tilt: 1.15, dist: 26, ang: Math.PI * 0.75 });
+      else if (qual === 'trono') R.setCamera({ tilt: 1.12, dist: 17, ang: 0.0001, centerX: 12, centerY: 3 });
+      else if (qual === 'mesa') R.setCamera({ tilt: 1.0, dist: 15, ang: -0.6, centerX: 12, centerY: 9 });
+      else if (qual === 'ala') R.setCamera({ tilt: 1.1, dist: 16, ang: -1.1, centerX: 4, centerY: 8 });
+      else if (qual === 'porta') R.setCamera({ tilt: 1.1, dist: 18, ang: Math.PI - 0.5, centerX: 12, centerY: 15 });
+      else { R.setCamera({ rot: 0, animate: false, tilt: 0.98 }); R.recentrar(); }   // 0,98 = a inclinação padrão do jogo; sem ela a foto depois da 'cima' saía de cima
+      for (var i = 0; i < 4; i++) { try { R.render(0.016); } catch (e) {} }
+      return R.getCamera();
+    };
+    // a reserva em primitiva, para a foto do antes | depois
+    var catGuardado = null;
+    window.__primitivas = function (liga) {
+      if (liga && JOGO.CENARIO.sede) { catGuardado = JOGO.CENARIO.sede; delete JOGO.CENARIO.sede; }
+      if (!liga && catGuardado) { JOGO.CENARIO.sede = catGuardado; catGuardado = null; }
+      R.setGuildasSede(null);
+      for (var i = 0; i < 4; i++) { try { R.render(0.016); } catch (e) {} }
+      return !!JOGO.CENARIO.sede;
+    };
+  });
+})();
+</script>
+</body>
+</html>

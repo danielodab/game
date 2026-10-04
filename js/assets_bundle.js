@@ -467,6 +467,22 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < ar.length; i++) if (ar[i] && ar[i].id === id && ar[i].modo === 'eco') return ar[i];
     return null;
   }
+  /* 03/10: o mapa de DUELO que tem cenario proprio. O Salao da Sede ganhou o kit do dono
+   * (`JOGO.CENARIO['sede']`, grupo `mapa:sede`), e a guerra de guilda pede
+   * { dungeonId: 'sede', duelo: true }: sem isto o plano caia no cenario da Estufa (o do
+   * duelo de treino), baixava um jardim que o salao nao usa e deixava o salao em primitiva.
+   * So vale para mapa cujo tema TEM catalogo: a Praca nao tem (veste a arte da propria
+   * praca, que e do grupo `base`) e segue como sempre. Devolve o tema, ou null. */
+  function temaDoMapaDeDuelo(id, sala) {
+    var ar = lista(D().arenas);
+    for (var i = 0; i < ar.length; i++) {
+      if (!ar[i] || ar[i].id !== id || ar[i].modo === 'eco') continue;
+      var r = (ar[i].rooms || [])[sala || 0];
+      var tema = (r && r.sceneryTheme) || ar[i].theme;
+      return (tema && JOGO.CENARIO && JOGO.CENARIO[tema]) ? tema : null;
+    }
+    return null;
+  }
   /* Tudo o que um objeto de dados manda INVOCAR (efeito summon), a qualquer
    * profundidade — formas de fusao guardam o efeito dentro de `mechanic`. */
   function invocacoes(obj, fora, fundo) {
@@ -561,7 +577,9 @@ var JOGO = (typeof window !== 'undefined')
     pedido = pedido || {};
     var fora = [];
     var dg = pedido.dungeonId ? (calabouco(pedido.dungeonId) || (pedido.duelo ? null : mapaPve(pedido.dungeonId))) : null;
-    if (pedido.duelo && !dg) dg = calabouco(pedido.cenario || 'greenhouse');
+    var temaDuelo = (pedido.duelo && !dg && pedido.dungeonId) ? temaDoMapaDeDuelo(pedido.dungeonId, pedido.sala) : null;
+    if (temaDuelo) doTema(temaDuelo, fora);
+    else if (pedido.duelo && !dg) dg = calabouco(pedido.cenario || 'greenhouse');
     var salas = [];
     if (dg && !pedido.duelo) {
       var rs = dg.rooms || [];
