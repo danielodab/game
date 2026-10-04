@@ -21,6 +21,17 @@ from urllib.parse import parse_qs
 
 import nomes                     # a lei dos nomes (servidor/nomes.py), gêmea de js/core/nomes.js
 
+# 04/10, o dono: "mude o nome do Super Admin para GM". A conta marcada como Mestre (contas.gm = 1)
+# aparece para TODO MUNDO como "GM", seja qual for o nome que está no save dela: o Relé carimba o nome
+# na praça e no chat (rele_ident.carimba) e a API responde "GM" onde o nome público de uma conta é lido
+# (a guilda, os amigos, o mercado, o presente da loja e a equipe do ranking). É decidido NA LEITURA, pela
+# marca da conta — nada é gravado: quem ganha a marca vira "GM" na hora, e quem a perde volta ao nome
+# dele sem ficar com "GM" grudado numa vitrine. "GM" segue reservado para os outros (nomes.reservado):
+# só a conta conferida no banco o veste. O gêmeo no jogo é JOGO.GM.NOME_PUBLICO (js/core/gm.js).
+NOME_DO_MESTRE = 'GM'
+# o nome público de uma conta, em SQL: pede `c` = contas e `r` = resumos (LEFT JOIN) na consulta
+NOME_PUBLICO_SQL = "CASE WHEN c.gm = 1 THEN '%s' ELSE COALESCE(NULLIF(r.nome, ''), c.nome) END" % NOME_DO_MESTRE
+
 # ---- as réguas da conta ----------------------------------------------------------
 PBKDF2_VOLTAS = 200_000
 SESSAO_DIAS = 30                 # token sem uso por 30 dias morre

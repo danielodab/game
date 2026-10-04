@@ -59,7 +59,7 @@ import re
 import sqlite3
 
 import nomes
-from comum import EstadoMudou, Recusa, agora, iid_valido, limita
+from comum import NOME_PUBLICO_SQL, EstadoMudou, Recusa, agora, iid_valido, limita
 
 log = logging.getLogger('api')
 
@@ -253,7 +253,7 @@ class GuildaMixin:
         ids = sorted({i for i in ids if isinstance(i, int)})
         if not ids:
             return {}
-        q = ("SELECT c.id, COALESCE(NULLIF(r.nome, ''), c.nome) AS nome FROM contas c "
+        q = ("SELECT c.id, " + NOME_PUBLICO_SQL + " AS nome FROM contas c "
              "LEFT JOIN resumos r ON r.conta_id = c.id WHERE c.id IN (%s)" % ','.join('?' * len(ids)))
         return {r['id']: r['nome'] for r in self.con.execute(q, ids)}
 

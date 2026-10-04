@@ -17,7 +17,10 @@
  *      anterior sai do disco e NÃO volta por uma gravação feita antes da recarga;
  *   D. o save que o servidor guarda já traz o código de outra (GET com trocarId): entra aqui
  *      com código novo e fica marcado para subir;
- *   E. o PUT que avisa trocarId (a pergunta do boot não chegou): troca e sobe de novo. */
+ *   E. o PUT que avisa trocarId (a pergunta do boot não chegou): troca e sobe de novo;
+ *   F. o NOME DO MESTRE (04/10, "mude o nome do Super Admin para GM"): com a sessão da conta
+ *      marcada, o DB.jogador() responde "GM" (é o que a plaquinha, a ficha e o chat usam) sem
+ *      tocar no nome do save; a conta comum segue com o nome dela. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -124,7 +127,7 @@ function aba(local, sessao, sv, op) {
               save() { local.set('soterra-save-v2', JSON.stringify(P.state)); } };
   P.load();
   g.JOGO.Progress = P;
-  for (const arq of ['js/core/db.js', 'js/core/sessao.js', 'js/core/nuvem.js']) {
+  for (const arq of ['js/core/db.js', 'js/core/sessao.js', 'js/core/gm.js', 'js/core/nuvem.js']) {
     vm.runInContext(fs.readFileSync(path.join(raiz, arq), 'utf8'), g, { filename: arq });
   }
   g.JOGO.Nuvem.ESPERA_MS = 5;
@@ -241,7 +244,23 @@ async function cenaE() {
         JSON.stringify(sv.puts.map((p) => p.db.jogador.id)));
 }
 
+async function cenaF() {
+  const sv = servidor();
+  let local = new Map();
+  local.set('soterra-conta-v1', JSON.stringify(saveCopiado()));
+  let a = aba(local, { token: 'd'.repeat(64), conta: { id: 7, nome: 'Oda', gm: true } }, sv);
+  let j = await a.J.DB.jogador();
+  check('F: na conta do Mestre (sessão com a marca do servidor) o jogo responde o nome "GM"', j.nome === 'GM' && j.id === ID_VELHO, j.nome);
+  check('F: o nome do save não é tocado (se a marca sair, ele volta)', a.J.DB.exportar().jogador.nome === 'Oda' && noDisco(local).jogador.nome === 'Oda');
+  local = new Map();
+  local.set('soterra-conta-v1', JSON.stringify(saveCopiado()));
+  a = aba(local, MESTRE, sv);                                // a mesma conta SEM a marca
+  j = await a.J.DB.jogador();
+  check('F: a conta comum segue com o nome dela', j.nome === 'Oda', j.nome);
+}
+
 (async function () {
+  await cenaF();
   await cenaA();
   await cenaB();
   await cenaC();

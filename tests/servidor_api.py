@@ -1016,7 +1016,7 @@ class ProvaDaApi(unittest.TestCase):
             self.assertIn('Zeca Comum', jogadores)                 # o nome da conta no lugar
             # o Mestre veste o que quiser, mas fica fora das listas: sai só na equipe
             self.assertNotIn('Mestre do Fundo', jogadores)
-            self.assertIn({'nome': 'Mestre do Fundo', 'avatar': 'gm'}, r['equipe'])
+            self.assertEqual(r['equipe'], [{'nome': 'GM', 'avatar': 'gm'}])   # 04/10: o Mestre é "GM" para todos
             self.assertIn('Lia, a Clara', jogadores)               # nome de gente fica
             guildas = {g['nome']: g['emblema'] for g in r['guildas']}
             self.assertNotIn('Staff', guildas)
@@ -1099,13 +1099,22 @@ class ProvaDaApi(unittest.TestCase):
             self.assertEqual(m['avatar'], 'gm', m)
             self.assertNotIn('@', m['nome'], m)
         nomes_eq = [m['nome'] for m in r['equipe']]
-        self.assertIn('Oda, o Vigia', nomes_eq)              # o nome do jogo, que o ranking usaria
-        self.assertIn(rui.conta['nome'], nomes_eq)           # sem save: o da conta
+        # 04/10 (o dono: "mude o nome do Super Admin para GM"): a equipe é uma linha só, "GM" — nem o
+        # nome do jogo ("Oda, o Vigia") nem o da conta de nenhum Mestre aparece
+        self.assertEqual(nomes_eq, ['GM'])
+        self.assertNotIn(rui.conta['nome'], nomes_eq)
         self.assertNotIn(oda.conta['nome'], nomes_eq)        # o nome da conta do Mestre não vaza
         self.assertNotIn('Lia, a Firme', nomes_eq)
-        # conta banida não aparece nem na equipe
+        # e onde o nome público de uma conta é lido (guilda, amigos, mercado, presente): o Mestre é "GM"
+        b = self.banco()
+        q = ("SELECT " + cartorio.NOME_PUBLICO_SQL + " FROM contas c LEFT JOIN resumos r ON r.conta_id = c.id "
+             "WHERE c.id = ?")
+        lidos = [b.execute(q, (c.conta['id'],)).fetchone()[0] for c in (oda, rui, lia)]
+        b.close()
+        self.assertEqual(lidos, ['GM', 'GM', 'Lia, a Firme'])
+        # conta banida não conta para a equipe (a outra segue lá)
         self.marca(rui, 'banido')
-        self.assertNotIn(rui.conta['nome'], [m['nome'] for m in self.ranking()['equipe']])
+        self.assertEqual([m['nome'] for m in self.ranking()['equipe']], ['GM'])
 
         # o `admin tirar-mestre` (outra conexão) devolve a conta a todas as listas
         b = self.banco()

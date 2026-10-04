@@ -58,7 +58,7 @@ from urllib.parse import urlsplit
 # As primitivas moram em comum.py (a armadilha do __main__: ver o topo de lá).
 # Importadas aqui, continuam valendo como api.Recusa, api.email_valido, api.XP_MAX…
 from comum import (CLASSE_RENOMEADA, CLASSES_RANK, ELEMENTOS, LOGIN_JANELA, LOGIN_TENTATIVAS,  # noqa: F401
-                   NIVEL_MAX, ORIGENS, PBKDF2_VOLTAS, RE_IID, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
+                   NIVEL_MAX, NOME_DO_MESTRE, NOME_PUBLICO_SQL, ORIGENS, PBKDF2_VOLTAS, RE_IID, SESSAO_DIAS, XP_MAX, Recusa, agora, classe_do_heroi,
                    email_novo_valido, email_valido, iid_valido, inteiro, ip_do_pedido, limita, nome_valido,
                    pica_senha, senha_valida)
 from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, FRASE_OUTRO_APARELHO,
@@ -1623,7 +1623,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
                 'porClasse': {classe: [{'nome': r['nome'], 'nivel': r['nivel'], 'xp': r['xp'],
                                         'elemento': r['elemento'] if r['elemento'] in ELEMENTOS else 'neutro'}
                                        for r in linhas] for classe, linhas in por_classe.items()},
-                'equipe': [{'nome': r['nome'], 'avatar': 'gm'} for r in equipe],
+                # 04/10 (o dono: "mude o nome do Super Admin para GM"): a equipe aparece como "GM", o nome
+                # público do Mestre — uma linha só, haja uma conta marcada ou várias (todas se chamam "GM")
+                'equipe': [{'nome': NOME_DO_MESTRE, 'avatar': 'gm'}] if equipe else [],
             }
             # guardada ainda dentro da tranca: um save que chegue agora a derruba depois, nunca antes
             self._ranking_guardado = (time.monotonic() + RANKING_CACHE, versao_banco, resposta)

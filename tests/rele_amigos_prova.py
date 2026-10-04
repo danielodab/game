@@ -173,7 +173,7 @@ def prova():
         o = ouve(ws)
         g = do_tipo(o['bia2'], 'gchat')
         check(R + 'gchat: o Mestre conferido sai com o nome dele e mestre:true',
-              len(g) == 1 and g[0].get('nome') == 'GM Vigia' and g[0].get('mestre') is True
+              len(g) == 1 and g[0].get('nome') == 'GM' and g[0].get('mestre') is True
               and g[0].get('guilda') == 'Os da Prova', repr(g))
 
         manda(ws['anon'], t='gchat', de='hanon01', nome='Anon', texto='alguém?')

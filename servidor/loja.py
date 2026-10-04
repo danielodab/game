@@ -103,7 +103,7 @@ import os
 import re
 import sqlite3
 
-from comum import (CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_do_heroi, inteiro,  # noqa: F401
+from comum import (NOME_PUBLICO_SQL, CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_do_heroi, inteiro,  # noqa: F401
                    liberadas, limita)
 
 log = logging.getLogger('api')
@@ -724,7 +724,7 @@ class LojaMixin:
             # 04/10: o presente a um amigo aparece no extrato de quem pagou com o nome de quem recebeu
             # (é por aqui que o Mestre vê, na ficha da conta, para quem as barras foram)
             for a in self.con.execute(
-                    "SELECT am.pedido_id, COALESCE(NULLIF(r.nome, ''), c.nome) AS para FROM loja_amigos am "
+                    "SELECT am.pedido_id, " + NOME_PUBLICO_SQL + " AS para FROM loja_amigos am "
                     "JOIN loja_pedidos p ON p.id = am.pedido_id JOIN contas c ON c.id = p.conta_id "
                     "LEFT JOIN resumos r ON r.conta_id = c.id WHERE am.pedido_id IN (%s)"
                     % ','.join('?' * len(pedidos)), pedidos):
@@ -1134,7 +1134,7 @@ class LojaMixin:
     # -- o presente a um amigo (04/10) -----------------------------------------------------------------
     def _nome_publico(self, cid):
         """O nome que a praça conhece (o do placar; sem ele, o da conta)."""
-        r = self.con.execute("SELECT COALESCE(NULLIF(r.nome, ''), c.nome) FROM contas c "
+        r = self.con.execute("SELECT " + NOME_PUBLICO_SQL + " FROM contas c "
                              "LEFT JOIN resumos r ON r.conta_id = c.id WHERE c.id = ?", (cid,)).fetchone()
         return r[0] if r is not None else '#%d' % cid
 

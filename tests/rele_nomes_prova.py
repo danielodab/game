@@ -324,8 +324,8 @@ def prova_do_modulo():
           and type(m['nuvem']) is int)
     m = rele_ident.carimba(oi(nome='GM Vigia', titulo='Mestre do Fundo',
                               resumo={'guilda': {'nome': 'Staff', 'emblema': 'x'}}), mestre)
-    check(R + 'o Mestre conferido passa com o nome, o título e a guilda que escolheu, carimbado mestre:true e com o nuvem dele',
-          m is not None and m['nome'] == 'GM Vigia' and m['titulo'] == 'Mestre do Fundo'
+    check(R + 'o Mestre conferido sai como "GM" (04/10), com o título e a guilda que escolheu, carimbado mestre:true e com o nuvem dele',
+          m is not None and m['nome'] == 'GM' and m['titulo'] == 'Mestre do Fundo'
           and m['resumo']['guilda']['nome'] == 'Staff' and m['mestre'] is True and m['nuvem'] == 1, repr(m))
     m = rele_ident.carimba(oi(titulo='Administrador', resumo={'guilda': {'nome': 'Os Admins', 'emblema': '⚑'},
                                                               'total': 9}), None)
@@ -339,7 +339,22 @@ def prova_do_modulo():
     check(R + 'o chat também: o nome reservado é trocado e o texto segue intacto (é conversa, não nome)',
           m is not None and m['nome'] == 'Aventureiro-z999' and m['texto'] == 'oi, sou o GM', repr(m))
     m = rele_ident.carimba({'t': 'chat', 'de': 'jxyz999', 'nome': 'Vigia', 'texto': 'oi'}, mestre)
-    check(R + 'o chat do Mestre sai carimbado', m is not None and m.get('mestre') is True and m['nome'] == 'Vigia')
+    check(R + 'o chat do Mestre sai carimbado, e com o nome "GM" no lugar do que ele mandou',
+          m is not None and m.get('mestre') is True and m['nome'] == 'GM' and m['texto'] == 'oi', repr(m))
+    # 04/10, o dono: "mude o nome do Super Admin para GM" — a conta dele aparecia como "Oda"
+    for tipo in ('oi', 'eco', 'chat', 'sussurro', 'gchat'):
+        m = rele_ident.carimba({'t': tipo, 'de': 'jxyz999', 'para': 'b', 'nome': 'Oda', 'texto': 'oi'}, mestre)
+        check(R + 'o Mestre que se chama "Oda" no save sai como "GM" no %s' % tipo,
+              m is not None and m['nome'] == 'GM' and m['mestre'] is True, repr(m))
+    m = rele_ident.carimba({'t': 'oi', 'de': 'jxyz999', 'nome': 'Oda'}, comum_)
+    check(R + 'a conta comum que se chama "Oda" segue "Oda" (o nome só muda no Mestre)', m is None or m['nome'] == 'Oda', repr(m))
+    m = rele_ident.carimba({'t': 'chat', 'de': 'jxyz999', 'nome': 'GM', 'texto': 'oi'}, comum_)
+    check(R + 'e "GM" segue reservado para os outros: na conta comum vira o nome de troca, sem a marca',
+          m is not None and m['nome'] == 'Aventureiro-z999' and 'mestre' not in m, repr(m))
+    outro_mestre = {'id': 2, 'nome': 'Outra', 'gm': True}
+    m = rele_ident.carimba({'t': 'oi', 'de': 'jqqq111', 'nome': 'Bia'}, outro_mestre)
+    check(R + 'uma segunda conta Mestre também sai como "GM" (o nuvem diz qual é qual)',
+          m is not None and m['nome'] == 'GM' and m['mestre'] is True and m['nuvem'] == 2, repr(m))
     m = rele_ident.carimba({'t': 'guilda', 'de': 'jxyz999', 'para': 'b', 'acao': 'convite',
                             'dados': {'gid': 'g1', 'nome': 'Suporte Oficial', 'emblema': 'x'}}, comum_)
     check(R + 'o convite de guilda com nome reservado chega como "Guilda"',
@@ -693,13 +708,13 @@ def _prova_com_banco(R, banco, contas):
         manda(vw, t='oi', de='jvigia01', nome='GM Vigia', titulo='Mestre do Fundo', classe='sumo', x=2, z=2,
               sala=None, v=2, resumo={'guilda': {'nome': 'Staff', 'emblema': 'E'}})
         oi = primeiro(junta(obs, 0.5), 'oi', 'jvigia01')
-        check(R + 'o Mestre conferido passa com o nome, o título e a guilda que escolheu, mestre:true e o nuvem dele',
-              oi.get('nome') == 'GM Vigia' and oi.get('titulo') == 'Mestre do Fundo' and oi.get('mestre') is True
+        check(R + 'o Mestre conferido sai como "GM" (04/10), com o título e a guilda que escolheu, mestre:true e o nuvem dele',
+              oi.get('nome') == 'GM' and oi.get('titulo') == 'Mestre do Fundo' and oi.get('mestre') is True
               and oi.get('nuvem') == dono_id and (oi.get('resumo') or {}).get('guilda', {}).get('nome') == 'Staff',
               repr(oi))
         manda(vw, t='chat', de='jvigia01', nome='GM Vigia', texto='bem-vindos')
         ch = primeiro(junta(obs, 0.5), 'chat', 'jvigia01')
-        check(R + 'e o chat do Mestre sai com mestre:true', ch.get('mestre') is True and ch.get('nome') == 'GM Vigia',
+        check(R + 'e o chat do Mestre sai com mestre:true e o nome "GM"', ch.get('mestre') is True and ch.get('nome') == 'GM',
               repr(ch))
 
         # ---------------------------------- o cliente antigo, sem ident
@@ -1031,7 +1046,7 @@ def prova_da_revogacao():
         manda(gm, t='eco', de='jmestre1', para='jvitima1', nome='Administrator', classe='gm', x=1, z=1, sala=None, v=2)
         e0 = primeiro(junta(vi, 0.5), 'eco', 'jmestre1')
         check(R + 'o ponto de partida: o Mestre se identifica e a vítima o vê como Mestre',
-              r0 == '{"t":"ident-ok","mestre":true}' and e0.get('mestre') is True and e0.get('nome') == 'Administrator',
+              r0 == '{"t":"ident-ok","mestre":true}' and e0.get('mestre') is True and e0.get('nome') == 'GM',
               '%r %r' % (r0, e0))
 
         # 1) tiram o Mestre (admin tirar-mestre): a sessão segue válida, o selo não

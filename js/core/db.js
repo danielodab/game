@@ -212,7 +212,11 @@ var JOGO = (typeof window !== 'undefined')
     var d = carrega();
     // cópia campo a campo: TODO campo novo do jogador precisa entrar aqui —
     // o `titulo` ficou de fora um dia e sumiu sem erro nenhum (o teste pegou)
-    return responde({ id: d.jogador.id, nome: d.jogador.nome,
+    // 04/10: a conta do Mestre (conferida pelo servidor) se chama "GM" para todo mundo, e para ela
+    // mesma — o Relé carimba esse nome no que sai; aqui é o espelho (js/core/gm.js). O save não muda
+    var nome = d.jogador.nome;
+    try { if (JOGO.GM && JOGO.GM.nomePublico) nome = JOGO.GM.nomePublico(nome); } catch (e) {}
+    return responde({ id: d.jogador.id, nome: nome,
                       titulo: d.jogador.titulo || null,
                       avatar: d.jogador.avatar || null,
                       dupla: (d.jogador.dupla || []).slice(),   // 12/09: entra direto na praça

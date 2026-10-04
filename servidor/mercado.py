@@ -62,7 +62,7 @@ import json
 import logging
 import re
 
-from comum import EstadoMudou, Recusa, agora, iid_valido, inteiro, limita
+from comum import NOME_PUBLICO_SQL, EstadoMudou, Recusa, agora, iid_valido, inteiro, limita
 
 log = logging.getLogger('api')
 
@@ -229,7 +229,7 @@ class MercadoMixin:
         for i in range(0, len(ids), 400):
             parte = ids[i:i + 400]
             for r in self.con.execute(
-                    "SELECT c.id, COALESCE(NULLIF(r.nome, ''), c.nome) AS nome FROM contas c "
+                    "SELECT c.id, " + NOME_PUBLICO_SQL + " AS nome FROM contas c "
                     "LEFT JOIN resumos r ON r.conta_id = c.id WHERE c.id IN (%s)" % ','.join('?' * len(parte)), parte):
                 saida[r['id']] = r['nome']
         return saida

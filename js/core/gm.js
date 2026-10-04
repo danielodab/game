@@ -87,6 +87,17 @@ var JOGO = (typeof window !== 'undefined')
   }
   GM.contaMestre = contaMestre;
   GM.mestreDoServidor = mestreDoServidor;
+  /* O NOME DO MESTRE É "GM" (04/10, o dono: "mude o nome do Super Admin para GM").
+   * Quem vale é o servidor: o Relé carimba "GM" em tudo o que a conta do Mestre
+   * diz na praça e no chat, e a API o põe na foto pública (servidor/comum.py,
+   * NOME_DO_MESTRE — o gêmeo deste). Aqui é só o espelho, para o próprio Mestre
+   * ver na plaquinha, na ficha e no chat dele o mesmo nome que os outros veem:
+   * o DB.jogador() responde "GM" enquanto a sessão for a da conta marcada. O nome
+   * do save não é tocado (se a marca sair, ele volta). Em casa, sem sessão, a
+   * conta local do Mestre segue com o nome que escolheu: não há servidor para
+   * conferir quem é. */
+  GM.NOME_PUBLICO = 'GM';
+  GM.nomePublico = function (nome) { return mestreDoServidor() ? GM.NOME_PUBLICO : nome; };
   /* NO AR (10/09): a chave mora neste arquivo, que o servidor entrega a todo
    * mundo — então, com sessão do site, o modo Mestre só vale na conta que o
    * servidor marcou (contas.gm = 1, que o login traz na sessão). Quem achar a

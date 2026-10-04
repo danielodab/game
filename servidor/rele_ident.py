@@ -57,8 +57,9 @@ recusadas assim, e o cliente não pergunta de novo).
 O CARIMBO (carimba), no envelope que sai do relé:
   - qualquer `mestre` que veio do cliente cai, em todo tipo de envelope;
   - conexão do Mestre conferido: oi, eco, chat, sussurro e gchat (o chat da
-    guilda, 13/09) saem com mestre:true e o nome que ele escolheu (e o corpo
-    dele, a classe 'gm');
+    guilda, 13/09) saem com mestre:true e (04/10) com o nome "GM" — o
+    NOME_DO_MESTRE, seja qual for o nome que o cliente mandou —, mais o título e
+    o corpo que ele escolheu (a classe 'gm');
   - dos outros: nome reservado (oi, eco, chat, sussurro, gchat) vira 'Aventureiro-xxxx' (as
     quatro últimas letras/dígitos do id da conexão, em minúsculas — e, se por
     azar isso também cair na regra, como 'xxgm', só 'Aventureiro');
@@ -110,7 +111,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import moderacao                 # 02/10: o banimento com prazo (a linha vencida não é mais banimento)
 import nomes
-from comum import SESSAO_DIAS
+from comum import NOME_DO_MESTRE, SESSAO_DIAS
 
 log = logging.getLogger("rele.ident")
 
@@ -680,6 +681,9 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
     if conta and conta.get('gm'):
         if t in COM_NOME:
             m['mestre'] = True
+            # 04/10 (o dono: "mude o nome do Super Admin para GM"): o Mestre conferido sai como "GM"
+            # para todo mundo, na praça e no chat — o nome do save dele (era "Oda") não aparece mais
+            m['nome'] = NOME_DO_MESTRE
             mudou = True
         return m if mudou else None
 

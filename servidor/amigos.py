@@ -25,7 +25,7 @@ jogo (o do resumo) ou, sem ele, o da conta, sem caixa; nome repetido é recusado
 """
 import logging
 
-from comum import Recusa, agora
+from comum import NOME_PUBLICO_SQL, Recusa, agora
 
 log = logging.getLogger('api')
 
@@ -49,7 +49,7 @@ class AmigosMixin:
 
     def _am_lista(self, cid):
         rs = self.con.execute(
-            "SELECT x.alvo_id, x.tipo, COALESCE(NULLIF(r.nome, ''), c.nome) AS nome, "
+            "SELECT x.alvo_id, x.tipo, " + NOME_PUBLICO_SQL + " AS nome, "
             "COALESCE(r.nivel_max, 0) AS nivel FROM relacoes x JOIN contas c ON c.id = x.alvo_id "
             "LEFT JOIN resumos r ON r.conta_id = x.alvo_id "
             "WHERE x.conta_id = ? AND c.banido = 0 ORDER BY nome COLLATE NOCASE, x.alvo_id", (cid,)).fetchall()
