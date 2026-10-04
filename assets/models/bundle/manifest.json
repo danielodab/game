@@ -1,5 +1,5 @@
 {
- "gerado": "2026-10-02T23:36:39",
+ "gerado": "2026-10-03T21:43:17",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -378,6 +378,46 @@
    "bytes": 308064,
    "hash": "b485284c14bd",
    "grupo": "calabouco:brokenheart"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ce_pilar_quebrado",
+   "arquivo": "cenario-eco/ce_pilar_quebrado.glb",
+   "bytes": 359604,
+   "hash": "d4df639e2072",
+   "grupo": "mapa:camara_eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ce_entulho",
+   "arquivo": "cenario-eco/ce_entulho.glb",
+   "bytes": 462732,
+   "hash": "528a38e5d6bc",
+   "grupo": "mapa:camara_eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ce_borda_abismo",
+   "arquivo": "cenario-eco/ce_borda_abismo.glb",
+   "bytes": 534424,
+   "hash": "3b3dce1a7773",
+   "grupo": "mapa:camara_eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ce_cristal_eco",
+   "arquivo": "cenario-eco/ce_cristal_eco.glb",
+   "bytes": 350852,
+   "hash": "1a85879da0f3",
+   "grupo": "mapa:camara_eco"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "ce_obelisco",
+   "arquivo": "cenario-eco/ce_obelisco.glb",
+   "bytes": 525920,
+   "hash": "a8cae3b64668",
+   "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
@@ -930,6 +970,270 @@
    "bytes": 476316,
    "hash": "1a04517747b2",
    "grupo": "campo:pvp"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_muro_fogo",
+   "arquivo": "cenario-santuario/el_muro_fogo.glb",
+   "bytes": 195668,
+   "hash": "d6936b2bfa7f",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_muro_agua",
+   "arquivo": "cenario-santuario/el_muro_agua.glb",
+   "bytes": 248160,
+   "hash": "0e56706523f4",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_muro_terra",
+   "arquivo": "cenario-santuario/el_muro_terra.glb",
+   "bytes": 400548,
+   "hash": "cf122e6bc555",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_muro_ar",
+   "arquivo": "cenario-santuario/el_muro_ar.glb",
+   "bytes": 262924,
+   "hash": "1b45e2dc1fac",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_pilar_vivo",
+   "arquivo": "cenario-santuario/el_pilar_vivo.glb",
+   "bytes": 197256,
+   "hash": "b58719553668",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_marco_altar",
+   "arquivo": "cenario-santuario/el_marco_altar.glb",
+   "bytes": 506904,
+   "hash": "341ab03260c9",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_estatua_cega",
+   "arquivo": "cenario-santuario/el_estatua_cega.glb",
+   "bytes": 333120,
+   "hash": "28d1e7e7a19e",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_agua_pilar",
+   "arquivo": "cenario-santuario/el_agua_pilar.glb",
+   "bytes": 374072,
+   "hash": "77c0e1c63a6d",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_menir",
+   "arquivo": "cenario-santuario/el_menir.glb",
+   "bytes": 389712,
+   "hash": "fe4262d69189",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_ar_pilar",
+   "arquivo": "cenario-santuario/el_ar_pilar.glb",
+   "bytes": 375244,
+   "hash": "9ed27b33e88c",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_bica",
+   "arquivo": "cenario-santuario/el_bica.glb",
+   "bytes": 344564,
+   "hash": "80eabcf113e1",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_cata_vento",
+   "arquivo": "cenario-santuario/el_cata_vento.glb",
+   "bytes": 333728,
+   "hash": "bee2567407f6",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_braseiro",
+   "arquivo": "cenario-santuario/el_braseiro.glb",
+   "bytes": 302796,
+   "hash": "6540cf439a59",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_respiro",
+   "arquivo": "cenario-santuario/el_respiro.glb",
+   "bytes": 424276,
+   "hash": "d52efaa99369",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_soquete",
+   "arquivo": "cenario-santuario/el_soquete.glb",
+   "bytes": 340212,
+   "hash": "5190d0774a88",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_poca",
+   "arquivo": "cenario-santuario/el_poca.glb",
+   "bytes": 405060,
+   "hash": "0837adc6c273",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "el_ponte",
+   "arquivo": "cenario-santuario/el_ponte.glb",
+   "bytes": 321252,
+   "hash": "daf2815f69e6",
+   "grupo": "calabouco:elementsanctum"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_parede_lisa",
+   "arquivo": "cenario-sede/sd_parede_lisa.glb",
+   "bytes": 125264,
+   "hash": "a247ad9bb1b3",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_parede_esteio",
+   "arquivo": "cenario-sede/sd_parede_esteio.glb",
+   "bytes": 507604,
+   "hash": "98967113c722",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_parede_tocha",
+   "arquivo": "cenario-sede/sd_parede_tocha.glb",
+   "bytes": 518492,
+   "hash": "0033d3dba4f2",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_parede_cortada",
+   "arquivo": "cenario-sede/sd_parede_cortada.glb",
+   "bytes": 178096,
+   "hash": "9096306301bb",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_porta",
+   "arquivo": "cenario-sede/sd_porta.glb",
+   "bytes": 632000,
+   "hash": "30fa92c63b58",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_trono",
+   "arquivo": "cenario-sede/sd_trono.glb",
+   "bytes": 501924,
+   "hash": "eca84a7ba379",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_lareira",
+   "arquivo": "cenario-sede/sd_lareira.glb",
+   "bytes": 376876,
+   "hash": "f9b1f6461bba",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_estandarte",
+   "arquivo": "cenario-sede/sd_estandarte.glb",
+   "bytes": 274640,
+   "hash": "0a1dbf03447c",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_pilar",
+   "arquivo": "cenario-sede/sd_pilar.glb",
+   "bytes": 297240,
+   "hash": "8f1b44d7fec0",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_rack_armas",
+   "arquivo": "cenario-sede/sd_rack_armas.glb",
+   "bytes": 409404,
+   "hash": "2ea7cbbc5dd2",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_armadura",
+   "arquivo": "cenario-sede/sd_armadura.glb",
+   "bytes": 526968,
+   "hash": "a2d2a1b94e38",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_mesa",
+   "arquivo": "cenario-sede/sd_mesa.glb",
+   "bytes": 476980,
+   "hash": "a523bc3110f2",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_banco",
+   "arquivo": "cenario-sede/sd_banco.glb",
+   "bytes": 297516,
+   "hash": "030c669037fc",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_estatua",
+   "arquivo": "cenario-sede/sd_estatua.glb",
+   "bytes": 329700,
+   "hash": "5c1df7293371",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_bau",
+   "arquivo": "cenario-sede/sd_bau.glb",
+   "bytes": 334392,
+   "hash": "070311994010",
+   "grupo": "mapa:sede"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "sd_trofeu",
+   "arquivo": "cenario-sede/sd_trofeu.glb",
+   "bytes": 380620,
+   "hash": "2f4e7c08524c",
+   "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
@@ -3243,13 +3547,16 @@
   "cenario-andaimes.js": "tabelas/cenario-andaimes.js",
   "cenario-cisterna.js": "tabelas/cenario-cisterna.js",
   "cenario-coracao.js": "tabelas/cenario-coracao.js",
+  "cenario-eco.js": "tabelas/cenario-eco.js",
   "cenario-fecho.js": "tabelas/cenario-fecho.js",
   "cenario-jardim.js": "tabelas/cenario-jardim.js",
   "cenario-mina.js": "tabelas/cenario-mina.js",
-  "cenario-pvp.js": "tabelas/cenario-pvp.js"
+  "cenario-pvp.js": "tabelas/cenario-pvp.js",
+  "cenario-santuario.js": "tabelas/cenario-santuario.js",
+  "cenario-sede.js": "tabelas/cenario-sede.js"
  },
- "totalBytes": 221663480,
- "totalBase64": 295551764,
+ "totalBytes": 235820224,
+ "totalBase64": 314427460,
  "grupos": {
   "base": {
    "itens": 92,
@@ -3262,6 +3569,10 @@
   "calabouco:cistern": {
    "itens": 23,
    "bytes": 18606528
+  },
+  "calabouco:elementsanctum": {
+   "itens": 17,
+   "bytes": 5755496
   },
   "calabouco:emberlock": {
    "itens": 29,
@@ -3382,6 +3693,14 @@
   "fusao:minotauro+sumo": {
    "itens": 2,
    "bytes": 1888288
+  },
+  "mapa:camara_eco": {
+   "itens": 5,
+   "bytes": 2233532
+  },
+  "mapa:sede": {
+   "itens": 16,
+   "bytes": 6167716
   }
  }
 }
