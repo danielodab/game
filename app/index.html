@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOTERRA</title>
+<!--
+  A TELA "SEM CONEXÃO" DO APLICATIVO DE ANDROID — a única página que vai dentro dele.
+
+  O aplicativo abre o jogo direto do servidor (o `server.url` do capacitor.config.json),
+  para o celular atualizar junto com a web. Quando o servidor não responde — sem
+  internet, ou o jogo em manutenção —, o Capacitor mostra ESTA página no lugar da
+  tela branca (o `server.errorPath`). Ela oferece tentar de novo e tenta sozinha
+  quando a rede volta.
+
+  TEM DE SER UM ARQUIVO SÓ: com o `server.url` ligado, o Capacitor só entrega do
+  pacote o endereço exato desta página. Folha de estilo, imagem ou script à parte
+  seriam pedidos à rede — que é justamente o que não há.
+
+  O endereço do servidor (__SERVIDOR__) é trocado pelo tools/empacota_www.py.
+-->
+<style>
+  html, body { height: 100%; margin: 0; background: #0b0d10; color: #e8e0d0;
+               font: 16px/1.5 "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+  main { max-width: 340px; text-align: center; }
+  h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: 4px; color: #e9c46a; }
+  h2 { margin: 18px 0 8px; font-size: 20px; }
+  p { margin: 0 0 20px; color: #c9c2b4; }
+  button { min-width: 200px; min-height: 52px; border-radius: 10px; border: 1px solid #5a4a2a;
+           background: #3a2f16; color: #e8e0d0; font: inherit; font-weight: 600; }
+  button:disabled { opacity: .6; }
+  #estado { min-height: 24px; margin-top: 14px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SOTERRA</h1>
+  <h2 id="titulo">Sem conexão</h2>
+  <p id="texto">O jogo precisa de internet para abrir. Confira o Wi-Fi ou os dados móveis e tente de novo.</p>
+  <button type="button" id="tentar">Tentar de novo</button>
+  <p id="estado"></p>
+</main>
+<script>
+(function () {
+  'use strict';
+  var SERVIDOR = '__SERVIDOR__';
+  var botao = document.getElementById('tentar');
+  var estado = document.getElementById('estado');
+  // `window.__vai` só existe na prova (tests/app_modelos.html): no aparelho é a troca de página de verdade
+  function abre() { (window.__vai || function (u) { location.replace(u); })(SERVIDOR + '/'); }
+  function tenta() {
+    // sem rede o aparelho já sabe: não adianta trocar de página para cair aqui de novo
+    if (navigator.onLine === false) { estado.textContent = 'Ainda sem conexão.'; return; }
+    botao.disabled = true;
+    estado.textContent = 'Abrindo…';
+    abre();
+    // se a troca não acontecer (o servidor demora), o botão volta
+    setTimeout(function () { botao.disabled = false; estado.textContent = ''; }, 12000);
+  }
+  botao.addEventListener('click', tenta);
+  window.addEventListener('online', tenta);     // a rede voltou: abre sem esperar o toque
+  // com rede e mesmo assim nesta página: o problema é do lado do servidor
+  if (navigator.onLine !== false) {
+    document.getElementById('titulo').textContent = 'Não consegui abrir o jogo';
+    document.getElementById('texto').textContent =
+      'A conexão pode estar fraca, ou o jogo está em manutenção. Tente de novo em instantes.';
+  }
+})();
+</script>
+</body>
+</html>

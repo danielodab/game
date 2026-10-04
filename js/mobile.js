@@ -255,10 +255,13 @@ var JOGO = (typeof window !== 'undefined')
     document.addEventListener('visibilitychange', function () { M.segundoPlano(!!document.hidden); });
     setInterval(vigia, 3000);
     if (!M.nativo()) return;            // `?app=1` no navegador: não há casca para ligar
-    // Os plugins vêm de vendor/capacitor/, que SÓ existe na www/ do aplicativo (o empacota_www.py copia
-    // do node_modules). Por isso entram por aqui e não pela lista do index.html, que é a da web.
+    // Os plugins vêm de vendor/capacitor/, cópia do node_modules que o empacota_www.py confere. O aplicativo abre o
+    // jogo do SERVIDOR (04/10), então é ele que os entrega — mas só a quem está na casca. O `__url` põe o
+    // hash do build no endereço, como em todo arquivo do jogo: o WebView não fica preso a versão velha.
+    var url = (typeof window.__url === 'function') ? window.__url : function (f) { return f; };
+    // Entram por aqui e não pela lista do index.html, que é a da web: lá ninguém os pede.
     var arquivos = window.capacitorApp ? []     // já na página (as provas põem um de mentira): nada a buscar
-      : ['vendor/capacitor/capacitor.js', 'vendor/capacitor/app.js', 'vendor/capacitor/keep-awake.js'];
+      : [url('vendor/capacitor/capacitor.js'), url('vendor/capacitor/app.js'), url('vendor/capacitor/keep-awake.js')];
     carrega(arquivos, function () {
       try { App = window.capacitorApp && window.capacitorApp.App; } catch (e) {}
       try { Vigilia = window.capacitorKeepAwake && window.capacitorKeepAwake.KeepAwake; } catch (e2) {}

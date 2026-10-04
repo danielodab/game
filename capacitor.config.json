@@ -3,7 +3,9 @@
   "appName": "SOTERRA",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://soterra.viidoo.io",
+    "errorPath": "index.html"
   },
   "android": {
     "backgroundColor": "#0b0d10",

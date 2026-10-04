@@ -150,8 +150,9 @@ check('aplicativo: um ?api= de fora NÃO desvia a senha nem fica gravado',
 
 // ------------------------------------- A CASCA: o que vai para a loja
 const cfg = JSON.parse(fs.readFileSync(path.join(raiz, 'capacitor.config.json'), 'utf8'));
-check('capacitor.config.json: a www/ é o pacote e o endereço de dentro é https',
-      cfg.webDir === 'www' && cfg.server && cfg.server.androidScheme === 'https' && !cfg.server.url);
+// 04/10: o aplicativo abre o jogo do SERVIDOR (server.url) — o que isso exige está em tests/app_modelos.js
+check('capacitor.config.json: a www/ é o pacote, o endereço de dentro é https e o jogo vem por https',
+      cfg.webDir === 'www' && cfg.server && cfg.server.androidScheme === 'https' && /^https:\/\//.test(cfg.server.url || ''));
 // sem a chave, o Capacitor liga a depuração do WebView só no APK de teste (debug) e
 // desliga no AAB de publicação; `true` escrito aqui abriria o jogo publicado ao chrome://inspect
 check('capacitor.config.json: a depuração do WebView não vai ligada para a loja',

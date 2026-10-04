@@ -9,6 +9,7 @@ unity
 www
 node_modules
 android
+app
 ios
 package.json
 package-lock.json
