@@ -2110,6 +2110,7 @@ var JOGO = (typeof window !== 'undefined')
    * de recompensa leem a agenda (js/core/agenda.js). Tudo defensivo: sem o
    * módulo, nada disto aparece e nada quebra. */
   var soltaFaixaEventos = null;
+  var faixaEvAberta = false;          // a faixa de eventos nasce minimizada no canto (04/10)
   function paginaEventos() {
     // a página do site, relativa ao jogo (raiz/site/eventos.html), como Sessao.paginaConta
     var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
@@ -2140,6 +2141,18 @@ var JOGO = (typeof window !== 'undefined')
     if (!ativos.length) { faixa.classList.add('is-off'); return; }
     faixa.classList.remove('is-off');
     var agoraMs = safe(function () { return Ag.agora(); }, Date.now());
+    /* 04/10, o dono: "essa mensagem tem que ficar minimizada em um canto... em mobile atrapalha demais, ocupa
+     * metade da tela". A faixa nasce FECHADA numa pílula no canto ("📣 2 eventos") e abre no toque; as linhas
+     * continuam no DOM (só escondidas), então quem lê o texto dela — as provas da agenda — lê o mesmo de antes. */
+    if (faixaEvAberta) faixa.classList.remove('is-mini'); else faixa.classList.add('is-mini');
+    var temBonus = ativos.some(function (e) { return e.tipo !== 'aviso'; });
+    var pil = el('button', 'hub-evento-pilula', (temBonus ? '✦ ' : '📣 ') + '<b>' + ativos.length + '</b> ' + (ativos.length === 1 ? 'evento' : 'eventos') +
+      '<span class="hub-evento-seta">' + (faixaEvAberta ? ' ▴' : ' ▾') + '</span>');
+    pil.type = 'button';
+    pil.setAttribute('aria-expanded', faixaEvAberta ? 'true' : 'false');
+    pil.setAttribute('aria-label', (faixaEvAberta ? 'Fechar' : 'Ver') + ' os eventos do mundo');
+    pil.addEventListener('click', function (ev) { ev.stopPropagation(); faixaEvAberta = !faixaEvAberta; pintaFaixaEventos(faixa); });
+    faixa.appendChild(pil);
     ativos.slice(0, 3).forEach(function (e) {
       faixa.appendChild(el('span', 'hub-evento-item', linhaEvento(e, agoraMs, true)));
     });
