@@ -101,6 +101,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 
 from comum import (CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recusa, agora, classe_do_heroi, inteiro,  # noqa: F401
                    liberadas, limita)
@@ -735,6 +736,16 @@ class LojaMixin:
             for g in self.con.execute("SELECT id, pacote FROM pagamentos WHERE id IN (%s)" % ','.join('?' * len(pags)),
                                       pags):
                 nomes['pagamento:%d' % g['id']] = nome_do_pedido(g['pacote'])
+        # 04/10: o pacote comprado pela Google Play no aplicativo (pagamento_play.py). A tabela é de lá e
+        # pode ainda não existir num banco aberto só pela loja: sem ela, o movimento sai sem nome
+        plays = [int(r['ref'][5:]) for r in linhas if (r['ref'] or '').startswith('play:') and r['ref'][5:].isdigit()]
+        if plays:
+            try:
+                for g in self.con.execute("SELECT id, pacote FROM pagamentos_play WHERE id IN (%s)"
+                                          % ','.join('?' * len(plays)), plays):
+                    nomes['play:%d' % g['id']] = '%s (Google Play)' % nome_do_pedido(g['pacote'])
+            except sqlite3.OperationalError:
+                pass
         saida = []
         for r in linhas:
             m = {'id': r['id'], 'delta': r['delta'], 'motivo': r['motivo'], 'saldo': r['saldo_depois'],

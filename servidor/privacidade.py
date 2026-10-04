@@ -474,6 +474,10 @@ class PrivacidadeMixin:
                 "SELECT p.pacote, p.centavos, p.estado, p.criado_em, "
                 "(SELECT GROUP_CONCAT(m.status) FROM pagamentos_mp m WHERE m.pagamento_id = p.id) AS mercado_pago "
                 "FROM pagamentos p WHERE p.conta_id = ? ORDER BY p.id DESC", (cid,))],
+            # 04/10: as compras pela Google Play no aplicativo (sem o purchaseToken: é um segredo da compra)
+            'compras_google_play': self._lista("SELECT pacote, barras, centavos, estado, teste, criado_em, creditado_em, "
+                                               "estornado_em FROM pagamentos_play WHERE conta_id = ? ORDER BY id DESC",
+                                               (cid,)),
             'mercadinho': {
                 'anuncios': self._lista("SELECT item_id, level, stars, preco, estado, criado_em, valor_final, fechado_em "
                                         "FROM mercado_anuncios WHERE vendedor_id = ? ORDER BY id DESC", (cid,)),

@@ -67,6 +67,7 @@ from correio import Correio
 from loja import ESQUEMA_LOJA, LojaMixin
 from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
+from pagamento_play import ESQUEMA_PLAY, GooglePlay, PagamentoPlayMixin, liga_varredura
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
 from amigos import ESQUEMA_AMIGOS, AmigosMixin   # 13/09: amigos e inimigos da conta
@@ -297,6 +298,10 @@ ROTAS = {
     ('POST', '/api/pagamento/aviso'):        ('pagamento_aviso', False),
     ('POST', '/api/pagamento/conferir'):     ('pagamento_conferir', True),
     ('GET',  '/api/pagamento/meus'):         ('pagamento_meus', True),
+    # 04/10: as barras compradas pela Google Play DENTRO do aplicativo (pagamento_play.py); a web segue no Mercado Pago
+    ('GET',  '/api/pagamento/play'):         ('play_ver', True),
+    ('POST', '/api/pagamento/play'):         ('play_compra', True),
+    ('POST', '/api/mestre/pagamento/play/estornos'): ('mestre_play_estornos', True, True, FRASE_SO_MESTRE),
     # o painel do Mestre (10/09, mestre.py): buscar contas, dar presentes e ver os
     # alertas de pagamento. A busca é POST: o e-mail não vai para a URL (nem para o
     # log do proxy). A marca é contas.gm, lida do banco a cada pedido.
@@ -760,7 +765,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
           AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
@@ -771,7 +776,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
     e os pacotes pagos (pagamento.py) entram como mixins: as rotas deles são
     métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
 
-    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None):
+    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
@@ -781,6 +786,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         self.con.executescript(ESQUEMA)
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
+        self.con.executescript(ESQUEMA_PLAY)     # 04/10: a compra pela Google Play (pagamento_play.py) — só tabela nova
         self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
         self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
@@ -804,6 +810,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, GuildaMixin, Salas
         # o Mercado Pago (pagamento.py). Sem nada, desligado: os pacotes aparecem
         # "em breve", as rotas de pagamento respondem 503, e o resto funciona igual
         self.mp = mp if mp is not None else MercadoPago()
+        # a Google Play (pagamento_play.py): a compra de barras DENTRO do aplicativo. Sem a conta de serviço,
+        # desligada: as rotas dela respondem 503 e o resto funciona igual
+        self.play = play if play is not None else GooglePlay()
         # o JUIZ (12/09, juiz_ponte.py): as regras do jogo em Node. Sem ele, as rotas
         # que precisam conferir respondem 503 — nada é pago sem conferir
         self.juiz = juiz if juiz is not None else Juiz(None)
@@ -1775,6 +1784,9 @@ if __name__ == '__main__':
     ap.add_argument("--mp-api", metavar="URL", default=None,
                     help="SÓ PARA AS PROVAS: a API do Mercado Pago de mentira (tests/mp_falso.py), "
                          "http://127.0.0.1:PORTA; o token e a assinatura continuam vindo do ambiente")
+    ap.add_argument("--play-api", metavar="URL", default=None,
+                    help="SÓ PARA AS PROVAS: a Google Play de mentira (tests/play_falso.py), "
+                         "http://127.0.0.1:PORTA; a credencial continua vindo do ambiente")
     ap.add_argument("--juiz", metavar="URL", default=None,
                     help="o juiz (servidor/juiz/juiz.js), http://127.0.0.1:PORTA — as regras do jogo que "
                          "conferem salas e economia; sem ele, essas rotas respondem 503")
@@ -1784,17 +1796,21 @@ if __name__ == '__main__':
     log.info("correio: %s", correio.descricao())      # nunca a senha
     try:
         base_mp = base_de_prova(args.mp_api) if args.mp_api else None
+        base_play = base_de_prova(args.play_api) if args.play_api else None
     except ValueError as e:
         ap.error(str(e))
     mp = MercadoPago.do_ambiente(base=base_mp)
     log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
+    play = GooglePlay.do_ambiente(base=base_play)
+    log.info("pagamento: %s", play.descricao())       # nunca a chave da conta de serviço
     juiz = Juiz(args.juiz)
     if args.juiz:
         log.info("juiz: %s — autoridade LIGADA (o servidor manda na economia; docs/SEGURANCA.md)", args.juiz)
     else:
         log.warning("juiz: desligado — autoridade DESLIGADA: o save do cliente vale inteiro e as rotas "
                     "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
-    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz)
+    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play)
+    liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))
     try:
