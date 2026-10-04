@@ -32,6 +32,9 @@ var JOGO = (typeof window !== 'undefined')
 // Poco.regras, e só vale com ele carregado — o colosso só nasce no Poço):
 //   rastroBrasa{spellId,duration} · mare{cura,duration} ·
 //   couraca{pontos,reducao} · ventania{tiles}
+// 03/10, o do SANTUÁRIO DOS ELEMENTOS (a regra mora em js/core/santuario.js,
+// Santuario.regras): veNoEscuro{} — enxerga e mira nas casas escuras da Câmara
+// Apagada como se houvesse luz.
 //
 // >>> PEDRAS DE FORJA (adendo v2.1). Todo monstro que NÃO é invocação derruba
 // >>> pedras do PRÓPRIO elemento: o id da pedra sai de `monster.element` cruzado
@@ -131,7 +134,12 @@ JOGO.DATA = JOGO.DATA || {};
     emberlock:    { hp: 1.15, power:  28, xp: 0.1525 },
     windscaffold: { hp: 1.55, power:  48, xp: 0.2553 },
     quakemine:    { hp: 1.80, power:  75, xp: 0.3354 },
-    brokenheart:  { hp: 2.00, power: 105, xp: 0.4160 }
+    brokenheart:  { hp: 2.00, power: 105, xp: 0.4160 },
+    // 03/10: o Santuário dos Elementos (calabouço especial, js/core/data/santuario.js),
+    // um degrau acima do Coração — é o outro fim de jogo, para o herói no teto (30).
+    // Não entra na escada dos seis (a régua dele é a seção 10 de tests/validate_world.html):
+    // a descida inteira (5 salas, sem chefe) rende mais XP que a do Coração.
+    elementsanctum: { hp: 2.20, power: 120, xp: 0.5000 }
   };
   var NO_TIER = { hp: 1, power: 0, xp: 1 };   // invocações do jogador: intocadas
   function tierOf(o) { return TIER[o.dungeonId] || NO_TIER; }
@@ -147,7 +155,10 @@ JOGO.DATA = JOGO.DATA || {};
     emberlock:    { chance: 0.40, min: 1, max: 3 },
     windscaffold: { chance: 0.45, min: 1, max: 3 },
     quakemine:    { chance: 0.50, min: 2, max: 4 },
-    brokenheart:  { chance: 0.55, min: 2, max: 5 }
+    brokenheart:  { chance: 0.55, min: 2, max: 5 },
+    // 03/10: o Santuário não tem chefe (nem selo, nem âncora, nem insígnia): o que ele
+    // paga a mais é PEDRA, e cada quadrante paga a do seu elemento
+    elementsanctum: { chance: 0.75, min: 2, max: 5 }
   };
   // Chefe: cai SEMPRE e cai grosso — é o motivo de refazer o calabouço.
   var STONE_BOSS = {
@@ -1920,6 +1931,208 @@ JOGO.DATA = JOGO.DATA || {};
       spells: ['m-colosso-rajada', 'm-colosso-ciclone'], ai: 'melee',
       traits: [{ type: 'pushImmune' }, { type: 'ventania', tiles: 2 }],
       xp: 45, stone: [1, 4, 6]
+    }
+  });
+
+  // ==========================================================================
+  // 8) O SANTUÁRIO DOS ELEMENTOS (03/10) — os oito guardiões, dois por quadrante.
+  //
+  //    O calabouço especial 'elementsanctum' (js/core/data/santuario.js) tem
+  //    quatro salas de quadrante e a sala do Altar, onde os oito se misturam.
+  //    Cada par é um de DISTÂNCIA e um de CORPO A CORPO ou TANQUE, e um dos dois
+  //    carrega a regra do quadrante no corpo:
+  //      Fogo   Vigia de Pavio (enxerga no escuro) · Mariposa de Cinza (rápida)
+  //      Água   Caramujo-Comporta (tanque, empurra da ponte) · Garça de Galeria (arpoa e puxa)
+  //      Terra  Pilarete (tanque, imune a empurrão) · Toupeira-Sentinela (investe pelo vão)
+  //      Ar     Cata-Vento (empurra de longe; o +1 de alcance do terraço é dele também) ·
+  //             Arraia de Rajada (rápida, plana até o alvo)
+  //    Os ids usam '_' porque são os MESMOS da arte (docs/PROMPTS_LANCAMENTO.md);
+  //    a chave do modelo troca por '-' ('el-fogo-1'), como nos Colossos.
+  //
+  //    Nenhum é chefe: selo, insígnia, âncora e carta seguem só de chefe. Pagam
+  //    em XP e em PEDRA do próprio elemento (a tabela STONE_COMMON lá em cima).
+  //    Ficam FORA do sorteio do Poço (js/core/poco.js olha DATA.especial): lá o
+  //    Vigia enxergaria um escuro que não existe.
+  //
+  //    O traço NOVO (veNoEscuro) é regra do Santuário e mora em
+  //    js/core/santuario.js (Santuario.regras) — o motor só a chama.
+  // ==========================================================================
+  addSpells({
+    'm-vigia-olhar': {
+      name: 'Olhar de Brasa', element: 'fogo', paCost: 3, castsPerTurn: 2, range: [3, 7],
+      effects: [{ type: 'damage', element: 'fogo', min: 15, max: 20 }],
+      description: 'O olho único na cera acende e risca uma linha de brasa até o alvo — de longe, e no escuro, onde só ele enxerga.',
+      flavor: 'Você não o vê. Ele não precisa que você veja.', fxKey: 'bolt'
+    },
+    'm-vigia-pavio': {
+      name: 'Pavio Aceso', element: 'fogo', paCost: 3, cooldown: 2, range: [2, 6],
+      effects: [{ type: 'damage', element: 'fogo', min: 9, max: 13 },
+                { type: 'poison', element: 'fogo', min: 6, max: 9, duration: 2 }],
+      description: 'Um fio de cera fervendo gruda no alvo e continua queimando por 2 turnos.',
+      flavor: 'A vela apagou há mil anos. A cera, não.', fxKey: 'bolt'
+    },
+    'm-mariposa-roce': {
+      name: 'Roçar de Cinza', element: 'fogo', paCost: 3, castsPerTurn: 2,
+      effects: [{ type: 'damage', element: 'fogo', min: 13, max: 17 }],
+      description: 'As asas roçam o alvo e deixam um risco de cinza quente.',
+      flavor: 'Ela não ataca a luz. Ataca quem está nela.'
+    },
+    'm-mariposa-po': {
+      name: 'Pó de Asa', element: 'fogo', paCost: 2, cooldown: 3, range: [1, 2],
+      effects: [{ type: 'damage', element: 'fogo', min: 6, max: 9 },
+                { type: 'buff', stat: 'dodge', value: -14, duration: 2 }],
+      description: 'Uma nuvem de pó de asa cega e pesa: fere e tira 14 de esquiva por 2 turnos.',
+      flavor: 'Quem espirra não se esquiva.', fxKey: 'debuff'
+    },
+    'm-caramujo-bater': {
+      name: 'Batida de Comporta', element: 'agua', paCost: 4,
+      effects: [{ type: 'damage', element: 'agua', min: 20, max: 26 }, { type: 'push', tiles: 1 }],
+      description: 'A concha de bronze fecha em cima do alvo como uma comporta e o empurra 1 casa.',
+      flavor: 'Da ponte para a água é um passo. Ele dá o passo por você.', fxKey: 'slam'
+    },
+    'm-caramujo-fechar': {
+      name: 'Fechar a Comporta', element: 'agua', paCost: 2, cooldown: 3, range: [0, 0], los: false,
+      targetSide: 'self',
+      effects: [{ type: 'shield', value: 40, duration: 2 }],
+      description: 'O caramujo se recolhe atrás da comporta rebitada: 40 de escudo por 2 turnos.',
+      flavor: 'Fechada, ela segurou a galeria inteira por mil anos.', fxKey: 'shieldFx'
+    },
+    'm-garca-arpao': {
+      name: 'Bico-Arpão', element: 'agua', paCost: 3, castsPerTurn: 2, range: [2, 6],
+      effects: [{ type: 'damage', element: 'agua', min: 14, max: 19 }],
+      description: 'O pescoço estica de uma vez e o bico farpado acerta o alvo de longe.',
+      flavor: 'Ela pesca parada. Você é o que se mexe.', fxKey: 'bolt'
+    },
+    'm-garca-fisga': {
+      name: 'Fisgada', element: 'agua', paCost: 3, cooldown: 2, range: [2, 5],
+      effects: [{ type: 'damage', element: 'agua', min: 9, max: 12 }, { type: 'pull', tiles: 2 }],
+      description: 'O arpão crava e volta: fere e puxa o alvo 2 casas para perto dela — para dentro da água.',
+      flavor: 'O que ela fisga, a correnteza termina.', fxKey: 'hook'
+    },
+    'm-pilarete-soco': {
+      name: 'Soco de Tambor', element: 'terra', paCost: 4,
+      effects: [{ type: 'damage', element: 'terra', min: 22, max: 28 }],
+      description: 'Um braço de tambores de pedra empilhados desce inteiro sobre o alvo.',
+      flavor: 'Coluna não tem pressa. Coluna tem peso.', fxKey: 'slam'
+    },
+    'm-pilarete-tambor': {
+      name: 'Tambor Rolado', element: 'terra', paCost: 3, range: [2, 4], line: true,
+      effects: [{ type: 'damage', element: 'terra', min: 13, max: 17 }],
+      description: 'O Pilarete solta um tambor do próprio braço e o rola em linha reta: acerta quem estiver na frente, a até 4 casas. Pilar de pé no caminho o para.',
+      flavor: 'Ele não vai até você. Manda um pedaço.', fxKey: 'bolt'
+    },
+    'm-pilarete-assentar': {
+      name: 'Assentar', element: 'terra', paCost: 3, cooldown: 3, range: [0, 0], los: false,
+      shape: 'circle', size: 1, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'terra', min: 12, max: 16 }, { type: 'root', duration: 1 }],
+      description: 'O Pilarete se assenta no chão como um pilar que desce: fere e prende por 1 turno quem está colado a ele.',
+      flavor: 'O salão inteiro faz isso. Ele aprendeu olhando.', fxKey: 'nova'
+    },
+    'm-toupeira-garra': {
+      name: 'Garra de Pá', element: 'terra', paCost: 3, castsPerTurn: 2,
+      effects: [{ type: 'damage', element: 'terra', min: 14, max: 18 }],
+      description: 'As garras de cavar abrem o que estiver na frente.',
+      flavor: 'Ela cavou o santuário. Você é mais mole que pedra.'
+    },
+    'm-toupeira-tunel': {
+      name: 'Sair do Chão', element: 'terra', paCost: 3, cooldown: 2, range: [2, 5],
+      effects: [{ type: 'moveTo', maxTiles: 5 }, { type: 'damage', element: 'terra', min: 10, max: 14 }],
+      description: 'A toupeira some no piso, atravessa até 5 casas em linha e sai aos pés do alvo com as garras abertas.',
+      flavor: 'Pilar de pé a faz dar a volta. Pilar baixo é porta.', fxKey: 'gust'
+    },
+    'm-catavento-sopro': {
+      name: 'Sopro de Hélice', element: 'ar', paCost: 3, castsPerTurn: 2, range: [2, 5],
+      effects: [{ type: 'damage', element: 'ar', min: 12, max: 16 }, { type: 'push', tiles: 1 }],
+      description: 'O elmo de palhetas gira e o sopro acerta de longe: fere e empurra 1 casa.',
+      flavor: 'No terraço o vento dele vai uma casa mais longe. O seu de Ar também.', fxKey: 'gust'
+    },
+    'm-catavento-leque': {
+      name: 'Rajada em Leque', element: 'ar', paCost: 4, cooldown: 3, range: [1, 3],
+      shape: 'cone', size: 2, targetSide: 'any',
+      effects: [{ type: 'damage', element: 'ar', min: 10, max: 14 }, { type: 'push', tiles: 2 }],
+      description: 'As mãos de pá abrem e a rajada sai em leque: fere e empurra 2 casas quem estiver nele.',
+      flavor: 'Parede atrás de você é parte do golpe.', fxKey: 'gust'
+    },
+    'm-arraia-rasante': {
+      name: 'Rasante', element: 'ar', paCost: 3, castsPerTurn: 2,
+      effects: [{ type: 'damage', element: 'ar', min: 13, max: 17 }],
+      description: 'A asa larga passa rente e corta.',
+      flavor: 'Ela não pousa. Passa.'
+    },
+    'm-arraia-planar': {
+      name: 'Planar na Rajada', element: 'ar', paCost: 2, cooldown: 2, range: [2, 4],
+      effects: [{ type: 'moveTo', maxTiles: 4 }, { type: 'damage', element: 'ar', min: 8, max: 11 }],
+      description: 'A arraia se deita no vento, plana até 4 casas e chega batendo.',
+      flavor: 'O terraço leva quem sabe se deitar nele.', fxKey: 'gust'
+    }
+  });
+
+  addMonsters({
+    'el_fogo_1': {
+      name: 'Vigia de Pavio', family: 'Guardiões do Santuário', element: 'fogo', dungeonId: 'elementsanctum',
+      description: 'Um vulto alto e magro de túnica esfarrapada. A cabeça é um toco de vela derretida com um olho só na cera, e o pavio está apagado há mil anos. Enxerga no escuro da Câmara Apagada e atira de longe em quem não o vê.',
+      flavor: 'GIMMICK: ele vê você no escuro; você só o vê a 2 casas, ou na luz de um braseiro.',
+      hp: 80, pa: 6, pp: 3, initiative: 60, dodge: 18, lock: 10,
+      resists: { ar: 40, agua: -25, neutro: 10 },
+      spells: ['m-vigia-olhar', 'm-vigia-pavio'], ai: 'ranged',
+      traits: [{ type: 'veNoEscuro' }], xp: 78
+    },
+    'el_fogo_2': {
+      name: 'Mariposa de Cinza', family: 'Guardiões do Santuário', element: 'fogo', dungeonId: 'elementsanctum',
+      description: 'Uma mariposa do tamanho de uma criança, de corpo peludo cor de cinza e asas no lugar dos braços. Gira em volta dos braseiros e se joga em quem a luz mostra. Rápida, frágil e difícil de segurar.',
+      flavor: 'No escuro ela enxerga tanto quanto você: 2 casas.',
+      hp: 68, pa: 6, pp: 5, initiative: 86, dodge: 34, lock: 8,
+      resists: { ar: 35, agua: -25 },
+      spells: ['m-mariposa-roce', 'm-mariposa-po'], ai: 'melee', traits: [], xp: 70
+    },
+    'el_agua_1': {
+      name: 'Caramujo-Comporta', family: 'Guardiões do Santuário', element: 'agua', dungeonId: 'elementsanctum',
+      description: 'Um caramujo de pé, pesado, com a concha feita de comporta de bronze rebitada. Planta-se na ponte e bate quem tenta passar para dentro da água. A água não o atrasa.',
+      flavor: 'A ponte é seca. Com ele em cima, é dele.',
+      hp: 150, pa: 5, pp: 2, initiative: 20, dodge: 0, lock: 44,
+      resists: { fogo: 40, terra: -25, neutro: 10 },
+      spells: ['m-caramujo-bater', 'm-caramujo-fechar'], ai: 'melee', traits: [], xp: 96
+    },
+    'el_agua_2': {
+      name: 'Garça de Galeria', family: 'Guardiões do Santuário', element: 'agua', dungeonId: 'elementsanctum',
+      description: 'Uma garça pescadora de pé como gente, de pernas longas e bico de arpão. Anda na água rasa como em chão seco e arpoa de longe quem a água deixou lento — ou o puxa para dentro dela.',
+      flavor: 'A casa alagada custa 2 PP para você e 1 para a dona da casa.',
+      hp: 75, pa: 6, pp: 4, initiative: 62, dodge: 22, lock: 10,
+      resists: { fogo: 40, terra: -25 },
+      spells: ['m-garca-arpao', 'm-garca-fisga'], ai: 'ranged', traits: [], xp: 78
+    },
+    'el_terra_1': {
+      name: 'Pilarete', family: 'Guardiões do Santuário', element: 'terra', dungeonId: 'elementsanctum',
+      description: 'Um pedaço de pilar vivo que levantou e saiu andando: tronco de coluna canelada, cabeça de capitel com um rosto antigo, braços de tambores empilhados. Pesado e plantado — nada o empurra.',
+      flavor: 'Ele é o salão em miniatura: sobe, desce e não sai do lugar.',
+      hp: 160, pa: 5, pp: 2, initiative: 18, dodge: 0, lock: 50,
+      resists: { agua: 40, ar: -25, fogo: 10 },
+      spells: ['m-pilarete-soco', 'm-pilarete-tambor', 'm-pilarete-assentar'], ai: 'melee',
+      traits: [{ type: 'pushImmune' }], xp: 100
+    },
+    'el_terra_2': {
+      name: 'Toupeira-Sentinela', family: 'Guardiões do Santuário', element: 'terra', dungeonId: 'elementsanctum',
+      description: 'Uma toupeira atarracada de capacete de pedra, com garras de pá maiores que a cabeça. Some no piso e sai do chão aos pés de quem achava que estava longe.',
+      flavor: 'Ela investe em linha reta: o pilar que sobe no caminho é o seu escudo.',
+      hp: 85, pa: 6, pp: 4, initiative: 58, dodge: 16, lock: 20,
+      resists: { agua: 35, ar: -25 },
+      spells: ['m-toupeira-garra', 'm-toupeira-tunel'], ai: 'melee', traits: [], xp: 80
+    },
+    'el_ar_1': {
+      name: 'Cata-Vento', family: 'Guardiões do Santuário', element: 'ar', dungeonId: 'elementsanctum',
+      description: 'Um autômato alto e fino de chapas de bronze rebitadas, com um elmo de palhetas no lugar da cabeça e mãos de pá. Sopra de longe e empurra como a rajada do terraço empurra.',
+      flavor: 'No Terraço da Ventania o sopro dele alcança uma casa a mais. O seu feitiço de Ar também.',
+      hp: 78, pa: 6, pp: 3, initiative: 66, dodge: 20, lock: 8,
+      resists: { terra: 40, fogo: -25, neutro: 10 },
+      spells: ['m-catavento-sopro', 'm-catavento-leque'], ai: 'ranged', traits: [], xp: 78
+    },
+    'el_ar_2': {
+      name: 'Arraia de Rajada', family: 'Guardiões do Santuário', element: 'ar', dungeonId: 'elementsanctum',
+      description: 'Uma arraia de pé: o corpo chato em losango, as asas largas no lugar dos braços, a cauda caída nas costas como capa. Plana no vento do terraço e chega antes do aviso.',
+      flavor: 'A rajada a empurra como empurra você. Ela só gosta mais.',
+      hp: 70, pa: 6, pp: 5, initiative: 80, dodge: 30, lock: 10,
+      resists: { terra: 35, fogo: -25 },
+      spells: ['m-arraia-rasante', 'm-arraia-planar'], ai: 'melee', traits: [], xp: 72
     }
   });
 

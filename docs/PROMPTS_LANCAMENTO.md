@@ -1099,14 +1099,19 @@ O texto abaixo é o plano de ANTES da arte chegar, guardado para os lotes que fa
   bancos, e a de hoje tem os dois bancos corridos dentro da pegada 3×3. O ramo
   novo tem de pôr `sd_banco` dos dois lados compridos da mesa, senão a mesa do
   conselho fica sem bancos.
-- **Santuário dos Elementos**: tudo: o mapa, as quatro regras de terreno e os
-  monstros nos dados. O pilar vivo é muro (sobe e desce o bloco inteiro sobre o
-  `el_soquete`). Nesta leva há um monstro por quadrante; o segundo de cada um
-  (`el_fogo_2`, `el_agua_1`, `el_terra_2`, `el_ar_2`) veste, até a arte dele
-  chegar, um monstro que já existe, do mesmo elemento (o empréstimo de
-  `MONSTER_LOOK`, como a Mina fez). Lembre a regra da tinta da Mina: doador do
-  MESMO elemento sai idêntico na tela ao dono do corpo, então escolha um doador
-  que não apareça no mesmo quadrante.
+- **Santuário dos Elementos** (03/10: o jogo está pronto, ver
+  `docs/SANTUARIO.md`): o mapa, as quatro regras de terreno, os oito monstros,
+  a porta no cais e o juiz já existem. O que a arte pede é só embutir: os
+  modelos com as chaves `el-fogo-1` … `el-ar-2` e o kit do tema `santuario`
+  (`cenario-santuario.js`, catálogo `JOGO.CENARIO['santuario']`). O pilar vivo
+  é muro (sobe e desce o bloco inteiro sobre o `el_soquete`), e as peças de
+  mecânica (`el_braseiro`, `el_bica`, `el_ponte`, `el_soquete`,
+  `el_pilar_vivo`, `el_respiro`, `el_cata_vento`, `el_marco_altar`) são postas
+  pelo `js/render3d/santuario3d.js`, não pelo catálogo de enfeites. Enquanto
+  um modelo não chega, o guardião veste um corpo provisório do mesmo elemento
+  (`M.CORPO_PROVISORIO` — oito doadores diferentes, nenhum repetido no mesmo
+  quadrante, pela regra da tinta da Mina); a chave própria vence sozinha e a
+  linha do provisório pode ser apagada depois.
 
 ---
 

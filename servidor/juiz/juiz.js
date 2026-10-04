@@ -48,6 +48,11 @@ registra('GET', '/regras', () => {
     if (J.DATA.portalFechado && J.DATA.portalFechado(d.id)) return;
     calaboucos[d.id] = d.rooms.length;
   });
+  // 03/10: os calabouços ESPECIAIS (js/core/data/santuario.js — o Santuário dos Elementos) abrem bilhete
+  // como os seis: a sala, o grupo e a recompensa passam pelo mesmo caminho
+  (J.DATA.especiais || []).forEach((d) => {
+    if (d && d.id && d.rooms && d.rooms.length) calaboucos[d.id] = d.rooms.length;
+  });
   // o Poço não tem fim: cada andar nasce da semente do bilhete
   if (J.Poco && J.Poco.salaSemeada) calaboucos.poco = 9999;
   regrasCache = { ok: true, versao: versaoDosDados(), regras: versaoDasRegras(),

@@ -40,6 +40,7 @@
     '../js/core/data/dungeons.js',
     '../js/core/data/arenas.js',     // 02/10: a Câmara do Eco mora lá (seção 9)
     '../js/core/data/eco.js',        // 02/10: o Eco Primordial (seção 9)
+    '../js/core/data/santuario.js',  // 03/10: o Santuário dos Elementos (seção 10)
     '../js/core/data/items.js',      // dono: Criativo Fusão (só leitura, p/ cruzar lootTable)
     '../js/core/data/items_extra.js', // dono: Criativo Itens (aditivo; idem)
     '../js/core/data/spells.js',     // dono: Criativo Classes (só leitura, p/ cruzar summons)
@@ -72,6 +73,9 @@
   var EVENT_KINDS = ['buff', 'mystery', 'portal', 'drain', 'fountain'];
   var CLASS_IDS = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador'];
   var DUNGEON_IDS = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart'];
+  // 03/10: os calabouços ESPECIAIS (o Santuário dos Elementos) moram em DATA.especiais, fora dos seis portais:
+  // os monstros deles apontam para lá, e as salas passam pela seção 10
+  var ESPECIAIS_IDS = ['elementsanctum'];
   var ITEM_PREFIX = {
     greenhouse: 'gh-', cistern: 'ci-', emberlock: 'em-',
     windscaffold: 'av-', quakemine: 'mt-', brokenheart: 'cp-'
@@ -116,7 +120,9 @@
     rastroBrasa: ['spellId', 'duration'],
     mare: ['cura', 'duration'],
     couraca: ['pontos', 'reducao'],
-    ventania: ['tiles']
+    ventania: ['tiles'],
+    // 03/10: o guardião do Fogo do Santuário enxerga (e mira) no escuro como quem é do Fogo (js/core/santuario.js)
+    veNoEscuro: []
   };
 
   function has(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined && o[k] !== null; }
@@ -355,7 +361,7 @@
       check(L + ' (chefe): pa entre 7 e 10', st && st.pa >= 7 && st.pa <= 10, st && String(st.pa));
     }
     if (m.dungeonId !== null && m.dungeonId !== undefined) {
-      check(L + ': dungeonId conhecido', inList(m.dungeonId, DUNGEON_IDS), String(m.dungeonId));
+      check(L + ': dungeonId conhecido', inList(m.dungeonId, DUNGEON_IDS) || inList(m.dungeonId, ESPECIAIS_IDS), String(m.dungeonId));
     }
 
     // ---- PEDRAS DE FORJA (adendo v2.1) ------------------------------------
@@ -1224,6 +1230,233 @@
       lay.forEach(function (row) { for (var i = 0; i < row.length; i++) { if (row.charAt(i) === '#') { altos++; } } });
       check('Câmara: tem pilares altos para abrigar do golpe (≥ 8)', altos >= 8, String(altos));
     }
+  })();
+
+  // =========================================================================
+  // 10. O SANTUÁRIO DOS ELEMENTOS (03/10) — o calabouço especial
+  // =========================================================================
+  // Mora em DATA.especiais (js/core/data/santuario.js diz por quê), então a seção 5 não o vê. Aqui as
+  // cinco salas passam pelas MESMAS réguas de mapa das salas dos seis portais (tamanho, nascimentos,
+  // obstáculo alto e baixo, densidade, ritmo) e pelas que só ele tem: sem chefe, sem armadilha, uma regra
+  // por sala, a máscara do tamanho do layout com cada marca na casa certa, e o elenco de cada quadrante.
+  (function () {
+    var S = D.santuario, esp = null;
+    (D.especiais || []).forEach(function (d) { if (d && d.id === 'elementsanctum') { esp = d; } });
+    if (!check('Santuário: DATA.santuario e o calabouço especial elementsanctum existem', !!S && !!esp)) { return; }
+    check('Santuário: ids de DATA.especiais são os desta régua',
+      (D.especiais || []).map(function (d) { return d.id; }).join(',') === ESPECIAIS_IDS.join(','));
+    check('Santuário: NÃO é um dos seis portais (não entra em DATA.dungeons nem em DATA.arenas)',
+      !DG.some(function (d) { return d.id === esp.id; }) && !(D.arenas || []).some(function (a) { return a.id === esp.id; }));
+    check('Santuário: DATA.calabouco acha os seis e o especial pelo id',
+      typeof D.calabouco === 'function' && D.calabouco('elementsanctum') === esp && D.calabouco('cistern') === DG[1] &&
+      D.calabouco('nao-existe') === null);
+    check('Santuário: name e description saborosa', typeof esp.name === 'string' && esp.name.length > 0 &&
+      typeof esp.description === 'string' && esp.description.length >= 60);
+    check('Santuário: é fim de jogo — recommendedLevel 30 e mais difícil que os seis',
+      esp.recommendedLevel === 30 && esp.difficulty > DG.length, esp.recommendedLevel + ' / ' + esp.difficulty);
+    check('Santuário: palette em hex', !!esp.palette &&
+      ['primary', 'secondary', 'accent', 'floor1', 'floor2', 'wall'].every(function (k) { return HEX.test(esp.palette[k]); }));
+    check('Santuário: clima calmo e parado (a regra da sala é o clima dele)',
+      esp.defaultWeather === 'calmo' && has(W, 'calmo') && esp.weatherShiftEveryRounds === 0);
+    check('Santuário: SEM evento de chão ao acaso e sem armadilha (tileEventRate 0)', esp.tileEventRate === 0);
+    check('Santuário: sem chefe não há carta (cardDrops é a lista vazia, de propósito)',
+      Array.isArray(esp.cardDrops) && esp.cardDrops.length === 0);
+    check('Santuário: o saque emprestado vem de um dos seis (saqueDe)', inList(esp.saqueDe, DUNGEON_IDS), String(esp.saqueDe));
+    check('Santuário: theme tem nomes em DATA.scenery', has(D.scenery || {}, esp.theme), String(esp.theme));
+    check('Santuário: o tema de reserva (enquanto o kit não chega) é o de um dos seis',
+      DG.some(function (d) { return d.theme === esp.temaReserva; }), String(esp.temaReserva));
+
+    // os números das quatro regras
+    check('Santuário/Fogo: quem não é do Fogo vê 2 casas no escuro; o braseiro clareia um raio ≥ 1',
+      !!S.escuro && S.escuro.visao === 2 && S.escuro.raio >= 1, JSON.stringify(S.escuro));
+    check('Santuário/Água: casa alagada custa 2 PP (1 para a Água); a correnteza troca de bica num ritmo',
+      !!S.agua && S.agua.custo === 2 && S.agua.custoAgua === 1 && S.agua.trocaACada >= 1, JSON.stringify(S.agua));
+    check('Santuário/Terra: os pilares trocam a cada 2 rodadas', !!S.pilares && S.pilares.periodo === 2, JSON.stringify(S.pilares));
+    check('Santuário/Ar: a rajada gira a cada 2 rodadas pelas quatro direções e o Ar alcança +1',
+      !!S.vento && S.vento.giraACada === 2 && S.vento.alcance === 1 &&
+      (S.vento.ordem || []).slice().sort().join('') === 'lnos', JSON.stringify(S.vento));
+
+    // o elenco: dois por quadrante, nenhum chefe
+    var ELENCO = { fogo: ['el_fogo_1', 'el_fogo_2'], agua: ['el_agua_1', 'el_agua_2'],
+                   terra: ['el_terra_1', 'el_terra_2'], ar: ['el_ar_1', 'el_ar_2'] };
+    var todos = [];
+    keys(ELENCO).forEach(function (el) {
+      ELENCO[el].forEach(function (id) {
+        todos.push(id);
+        var m = MON[id];
+        if (!check('Santuário: o guardião ' + id + ' existe no bestiário', !!m)) { return; }
+        check('Santuário: ' + id + ' é do elemento do quadrante (' + el + '), do Santuário e não é chefe',
+          m.element === el && m.dungeonId === 'elementsanctum' && !m.boss && m.summonOnly === false,
+          m.element + ' / ' + m.dungeonId);
+        check('Santuário: ' + id + ' derruba pedra (a paga a mais do Santuário é pedra do quadrante)',
+          !!m.stoneDrop && m.stoneDrop.chance > 0 && m.stoneDrop.min >= 1, JSON.stringify(m.stoneDrop));
+      });
+    });
+    check('Santuário: o bestiário não tem outro monstro com dungeonId elementsanctum',
+      monIds.filter(function (id) { return MON[id].dungeonId === 'elementsanctum'; }).sort().join(',') === todos.slice().sort().join(','));
+    check('Santuário: o Vigia de Pavio enxerga no escuro (traço veNoEscuro)',
+      !!MON.el_fogo_1 && (MON.el_fogo_1.traits || []).some(function (t) { return t.type === 'veNoEscuro'; }));
+    check('Santuário: o Pilarete não é empurrado (traço pushImmune)',
+      !!MON.el_terra_1 && (MON.el_terra_1.traits || []).some(function (t) { return t.type === 'pushImmune'; }));
+
+    // as salas
+    var REGRAS = ['fogo', 'agua', 'terra', 'ar', 'altar'];
+    if (!check('Santuário: 5 salas (uma por quadrante + o Altar dos Quatro)', Array.isArray(esp.rooms) && esp.rooms.length === 5)) { return; }
+    check('Santuário: as regras das salas, na ordem, são Fogo, Água, Terra, Ar e o Altar',
+      esp.rooms.map(function (r) { return r.santuario && r.santuario.regra; }).join(',') === REGRAS.join(','));
+    // o que a máscara marca e sobre que casa do layout cada marca tem de estar
+    var MARCA = { B: '=', b: '=', r: '=', N: '#', S: '#', L: '#', O: '#', V: '#', C: '#', M: '#' };
+    var DA_REGRA = { fogo: 'Bb', agua: 'apNSLO', terra: 'Vv', ar: 'rC', altar: 'BbapNSLOVvrCM' };
+    function dentro(z, x, y) { return x >= z[0] && y >= z[1] && x <= z[2] && y <= z[3]; }
+    esp.rooms.forEach(function (r, ri) {
+      var RL = 'Santuário sala ' + ri + ' (' + r.name + ')', sa = r.santuario || {}, regra = sa.regra;
+      check(RL + ': name, weather e sceneryTheme', typeof r.name === 'string' && r.name.length > 0 && has(W, r.weather) &&
+        has(D.scenery || {}, r.sceneryTheme), r.weather + ' / ' + r.sceneryTheme);
+      var lay = r.layout;
+      if (!check(RL + ': layout é array de strings', Array.isArray(lay) && lay.length > 0)) { return; }
+      var wdt = lay[0].length, hgt = lay.length;
+      check(RL + ': todas as linhas do mesmo comprimento', lay.every(function (row) { return typeof row === 'string' && row.length === wdt; }));
+      check(RL + ': largura entre 21 e 27 (é ' + wdt + ')', wdt >= 21 && wdt <= 27);
+      check(RL + ': altura entre 17 e 23 (é ' + hgt + ')', hgt >= 17 && hgt <= 23);
+      var counts = {}, Ps = [], Ms = [];
+      lay.forEach(function (row, y) {
+        for (var x = 0; x < row.length; x++) {
+          var ch = row.charAt(x);
+          counts[ch] = (counts[ch] || 0) + 1;
+          if (ch === 'P') { Ps.push([y, x]); } else if (/^[a-z]$/.test(ch)) { Ms.push([y, x]); }
+        }
+      });
+      check(RL + ': ≥ 2 spawns de herói (P)', (counts.P || 0) >= 2, 'P=' + (counts.P || 0));
+      check(RL + ': usa obstáculo BAIXO "="', (counts['='] || 0) >= 6, '= ' + (counts['='] || 0));
+      check(RL + ': só caracteres válidos',
+        keys(counts).every(function (c) { return '.,#=~P'.indexOf(c) !== -1 || /^[a-z]$/.test(c); }), keys(counts).join(''));
+      var letters = keys(counts).filter(function (c) { return /^[a-z]$/.test(c); }).sort();
+      var mapped = keys(r.monsters || {}).sort();
+      check(RL + ': letras do layout e de monsters são as mesmas', letters.join('') === mapped.join(''),
+        'layout=[' + letters + '] mapeadas=[' + mapped + ']');
+      var daSala = mapped.map(function (c) { return r.monsters[c]; }).sort();
+      var esperado = (regra === 'altar' ? todos : (ELENCO[regra] || [])).slice().sort();
+      check(RL + ': o elenco é ' + (regra === 'altar' ? 'os oito guardiões misturados' : 'os dois guardiões do quadrante'),
+        daSala.join(',') === esperado.join(','), daSala.join(','));
+      check(RL + ': sem chefe', daSala.every(function (id) { return has(MON, id) && !MON[id].boss; }));
+      check(RL + ': monstros distribuídos (≥ 4 nascimentos)', Ms.length >= 4, Ms.length + ' spawns');
+      (function () {
+        var inner = 0, obst = 0;
+        for (var y = 1; y < hgt - 1; y++) { for (var x = 1; x < wdt - 1; x++) { inner++; if (lay[y][x] === '#' || lay[y][x] === '=') { obst++; } } }
+        var dens = obst / inner;
+        check(RL + ': densidade de obstáculo entre 12% e 30% do interior', dens >= 0.12 && dens <= 0.30,
+          (Math.round(dens * 1000) / 10) + '% (' + obst + '/' + inner + ')');
+        check(RL + ': mistura obstáculo ALTO e BAIXO', (counts['#'] || 0) - (2 * wdt + 2 * hgt - 4) > 0 && (counts['='] || 0) > 0);
+        var sum = 0, worst = 0;
+        Ps.forEach(function (p) {
+          var best = Infinity;
+          Ms.forEach(function (mm) { var d = Math.abs(p[0] - mm[0]) + Math.abs(p[1] - mm[1]); if (d < best) { best = d; } });
+          sum += best; if (best > worst) { worst = best; }
+        });
+        var avg = Ps.length ? sum / Ps.length : 0;
+        check(RL + ': distância média herói→monstro mais próximo entre 4 e 7', avg >= 4 && avg <= 7,
+          'média ' + (Math.round(avg * 100) / 100) + ' · pior ' + worst);
+        check(RL + ': nenhum herói começa a mais de 10 células do primeiro monstro', worst <= 10, 'pior ' + worst);
+      })();
+
+      // ---- a máscara da regra -------------------------------------------------
+      var mapa = sa.mapa;
+      if (!check(RL + ': a máscara (santuario.mapa) tem o tamanho do layout',
+        Array.isArray(mapa) && mapa.length === hgt && mapa.every(function (row) { return typeof row === 'string' && row.length === wdt; }))) { return; }
+      var marcas = {}, fora = [], casaErrada = [];
+      mapa.forEach(function (row, y) {
+        for (var x = 0; x < wdt; x++) {
+          var m = row.charAt(x), c = lay[y].charAt(x);
+          if (m === '.') { continue; }
+          marcas[m] = (marcas[m] || 0) + 1;
+          if ((DA_REGRA[regra] || '').indexOf(m) < 0) { fora.push(m + '@' + x + ',' + y); continue; }
+          // a casa do layout por baixo de cada marca: toda ferramenta que só lê o layout tem de ver muro onde
+          // há bica, pilar de pé, cata-vento e altar; mureta onde há braseiro e respiro; e CHÃO onde há água,
+          // ponte e soquete. Guardião pode nascer na água ou na ponte (é chão); no soquete não — o pilar
+          // esperaria por ele já na primeira troca — e herói não nasce em marca nenhuma
+          var quer = MARCA[m];
+          var chao = c === '.' || c === ',' || (m !== 'v' && /^[a-z]$/.test(c));
+          if (quer ? c !== quer : !chao) { casaErrada.push(m + ' sobre "' + c + '" @' + x + ',' + y); }
+        }
+      });
+      check(RL + ': a máscara só usa as marcas da regra da sala', fora.length === 0, fora.slice(0, 6).join(' '));
+      check(RL + ': cada marca está sobre a casa certa do layout', casaErrada.length === 0, casaErrada.slice(0, 6).join(' · '));
+      var zonaE = sa.escuro || [], zonaV = sa.vento || [];
+      [['escuro', zonaE], ['vento', zonaV]].forEach(function (par) {
+        check(RL + ': as zonas de ' + par[0] + ' são retângulos dentro da sala',
+          par[1].every(function (z) { return z.length === 4 && z[0] >= 0 && z[1] >= 0 && z[2] < wdt && z[3] < hgt && z[0] <= z[2] && z[1] <= z[3]; }),
+          JSON.stringify(par[1]));
+      });
+      var temFogo = regra === 'fogo' || regra === 'altar', temAgua = regra === 'agua' || regra === 'altar';
+      var temTerra = regra === 'terra' || regra === 'altar', temAr = regra === 'ar' || regra === 'altar';
+      if (temFogo) {
+        check(RL + ': há zona de escuro, com braseiro aceso E apagado para o jogador mexer',
+          zonaE.length >= 1 && (marcas.B || 0) >= 1 && (marcas.b || 0) >= 1, JSON.stringify(marcas));
+        check(RL + ': os heróis NÃO nascem no escuro (a regra é avisada antes de valer)',
+          Ps.every(function (p) { return !zonaE.some(function (z) { return dentro(z, p[1], p[0]); }); }));
+      } else { check(RL + ': sem escuro fora do Fogo', zonaE.length === 0); }
+      if (temAgua) {
+        var bicas = (marcas.N || 0) + (marcas.S || 0) + (marcas.L || 0) + (marcas.O || 0);
+        check(RL + ': há água, ponte seca e ≥ 2 bicas (a correnteza troca de direção)',
+          (marcas.a || 0) >= 8 && (marcas.p || 0) >= 1 && bicas >= 2, JSON.stringify(marcas));
+        check(RL + ': os heróis NÃO nascem na água', Ps.every(function (p) { return mapa[p[0]].charAt(p[1]) === '.'; }));
+      }
+      if (temTerra) {
+        check(RL + ': há pilares de pé E baixos (a troca muda o mapa nas duas direções)',
+          (marcas.V || 0) >= 2 && (marcas.v || 0) >= 2, JSON.stringify(marcas));
+      }
+      if (temAr) {
+        check(RL + ': há zona de vento, cata-vento à vista e respiros de calmaria',
+          zonaV.length >= 1 && (marcas.C || 0) >= 1 && (marcas.r || 0) >= 2, JSON.stringify(marcas));
+        check(RL + ': os heróis NÃO nascem no vento',
+          Ps.every(function (p) { return !zonaV.some(function (z) { return dentro(z, p[1], p[0]); }); }));
+      } else { check(RL + ': sem vento fora do Ar', zonaV.length === 0); }
+      if (regra === 'altar') {
+        var Q = sa.quadrantes || {};
+        check(RL + ': os quatro quadrantes existem e não se sobrepõem', ['fogo', 'agua', 'terra', 'ar'].every(function (el) {
+          return Array.isArray(Q[el]) && Q[el].length === 4;
+        }) && ['fogo', 'agua', 'terra', 'ar'].every(function (a, i, l) {
+          return l.every(function (b) {
+            return a === b || Q[a][2] < Q[b][0] || Q[b][2] < Q[a][0] || Q[a][3] < Q[b][1] || Q[b][3] < Q[a][1];
+          });
+        }), JSON.stringify(Q));
+        check(RL + ': o escuro é o quadrante do Fogo e o vento é o do Ar',
+          JSON.stringify(zonaE) === JSON.stringify([Q.fogo]) && JSON.stringify(zonaV) === JSON.stringify([Q.ar]));
+        check(RL + ': o altar está no meio (marca M)', (marcas.M || 0) >= 1, JSON.stringify(marcas));
+        check(RL + ': cada marca mora no quadrante da regra dela', (function () {
+          var DE = { B: 'fogo', b: 'fogo', a: 'agua', p: 'agua', N: 'agua', S: 'agua', L: 'agua', O: 'agua',
+                     V: 'terra', v: 'terra', r: 'ar', C: 'ar' }, ok = true;
+          mapa.forEach(function (row, y) {
+            for (var x = 0; x < wdt; x++) {
+              var m = row.charAt(x), el = DE[m];
+              // a bica e o cata-vento são do muro: podem estar na parede que fecha o quadrante (1 casa para fora)
+              if (el && !dentro([Q[el][0] - 1, Q[el][1] - 1, Q[el][2] + 1, Q[el][3] + 1], x, y)) { ok = false; }
+            }
+          });
+          return ok;
+        })());
+      }
+      // ---- as regiões (aparência): cobrem a sala e dizem um elemento válido ----
+      var reg = r.regioes;
+      check(RL + ': regioes é uma lista de { x, y, w, h, elemento } dentro da sala', Array.isArray(reg) && reg.length >= 1 &&
+        reg.every(function (g) {
+          return g.x >= 0 && g.y >= 0 && g.w > 0 && g.h > 0 && g.x + g.w <= wdt && g.y + g.h <= hgt &&
+                 inList(g.elemento, ['fogo', 'agua', 'terra', 'ar']);
+        }), JSON.stringify(reg));
+      if (regra !== 'altar') {
+        check(RL + ': a região é a sala inteira, do elemento da regra',
+          Array.isArray(reg) && reg.length === 1 && reg[0].elemento === regra && reg[0].w === wdt && reg[0].h === hgt);
+      } else {
+        check(RL + ': uma região por elemento, cada uma por cima do quadrante dele', Array.isArray(reg) && reg.length === 4 &&
+          reg.every(function (g) {
+            var q = (sa.quadrantes || {})[g.elemento];
+            return q && g.x <= q[0] && g.y <= q[1] && g.x + g.w - 1 >= q[2] && g.y + g.h - 1 >= q[3];
+          }));
+      }
+    });
+    // o Altar é a maior sala (o fim da descida é arena, não corredor)
+    var areasS = esp.rooms.map(function (r) { return r.layout[0].length * r.layout.length; });
+    check('Santuário: o Altar dos Quatro é a maior sala', areasS[4] >= Math.max.apply(null, areasS.slice(0, 4)), areasS.join(' · '));
   })();
 
   // =========================================================================

@@ -56,6 +56,21 @@ var JOGO = (typeof window !== 'undefined')
  *  - FÚRIA DA SALA (v2.3): dano usa `Engine.furyPower` e cura é escalada por
  *    `Engine.healScale`. Assim, quando a sala esquenta, a IA para sozinha de
  *    gastar turno numa cura que já não cura — de novo, sem regra ad hoc.
+ *  - O SANTUÁRIO DOS ELEMENTOS (03/10, js/core/santuario.js): a IA dos dois
+ *    lados joga com as regras do mapa, pela MESMA régua do motor —
+ *      · o passo na água já vem com o custo certo de Engine.reachable;
+ *      · ela só planeja o golpe que o motor aceita: a casa escura só se mira
+ *        de perto (podeMirar) e o feitiço de Ar lançado do vento alcança mais
+ *        (Engine.alcance), contados da casa em que ela ESTARIA;
+ *      · quem atira de longe e não enxerga no escuro chega a 2 casas do alvo
+ *        que está no breu (alcanceIdeal) em vez de esperar no alcance de
+ *        sempre um tiro que nunca sai;
+ *      · o caminho até o alvo é medido como se todo pilar vivo estivesse de pé
+ *        (casasInstaveis): a rota que abre e fecha a cada 2 rodadas fazia o
+ *        monstro lento ir e voltar sem nunca chegar. O pilar baixo continua
+ *        valendo como atalho no passo desta vez (Engine.reachable o atravessa);
+ *      · terminar a vez na água pesa um pouco contra quem não é de Água, e a
+ *        casa calma do respiro um pouco a favor (pesoCasas).
  * ==========================================================================*/
 
 (function () {
@@ -91,9 +106,20 @@ var JOGO = (typeof window !== 'undefined')
   function sRange(sp) { return sp.range || (JOGO.Engine && JOGO.Engine.RANGE_PADRAO) || { min: 0, max: 1, line: false, los: true }; }
   function sAoe(sp) { return sp.aoe || { shape: 'single', size: 0 }; }
 
+  // a regra do Santuário, só nas salas dele (null em toda outra sala)
+  function SR(state) {
+    return (state && state.santuario && JOGO.Santuario && JOGO.Santuario.regras) ? JOGO.Santuario.regras : null;
+  }
+  // o alcance do feitiço para a unidade conjurando de (cx, cy): o do motor (o Ar no vento do Santuário alcança mais)
+  function alcanceEm(state, unit, spell, cx, cy) {
+    var En = E();
+    return (state && state.santuario && En.alcance) ? (En.alcance(state, unit, spell, cx, cy) || sRange(spell)) : sRange(spell);
+  }
+
   // campo de distâncias BFS a partir de (tx,ty), atravessando chão
   // (unidades contam como passáveis — evita impasses de pathing)
-  function distField(state, tx, ty) {
+  // `fora` (03/10): casas que NÃO contam como caminho — os pilares vivos do Santuário
+  function distField(state, tx, ty, fora) {
     var field = {};
     var queue = [{ x: tx, y: ty }];
     field[tx + ',' + ty] = 0;
@@ -108,6 +134,7 @@ var JOGO = (typeof window !== 'undefined')
         if (field[key] !== undefined) continue;
         if (nx < 0 || ny < 0 || nx >= state.grid.w || ny >= state.grid.h) continue;
         if (state.grid.tiles[ny][nx].type !== 'floor') continue;
+        if (fora && fora[key]) continue;
         field[key] = d + 1;
         queue.push({ x: nx, y: ny });
       }
@@ -152,13 +179,16 @@ var JOGO = (typeof window !== 'undefined')
   // valida se `unit`, hipoteticamente em (cx,cy), pode conjurar spell em (tx,ty)
   function validFrom(state, unit, spell, cx, cy, tx, ty, ctx) {
     if (!isFloor(state, tx, ty)) return false;
-    var rg = sRange(spell);
     var o0 = origem(state, unit, spell, cx, cy, tx, ty);
     cx = o0.x; cy = o0.y;
+    var rg = alcanceEm(state, unit, spell, cx, cy);        // 03/10: o Ar lançado do vento alcança mais
     var d = manhattan(cx, cy, tx, ty);
     if (d < (rg.min || 0) || d > (rg.max != null ? rg.max : 1)) return false;
     if (rg.line && !(tx === cx || ty === cy)) return false;
     if (rg.los && !E().los(state, cx, cy, tx, ty)) return false;
+    // 03/10: a casa escura do Santuário só se mira de perto — a IA não planeja o que o motor recusa
+    var sr = SR(state);
+    if (sr && !sr.podeMirar(state, unit, cx, cy, tx, ty)) return false;
     var occ = ctx.uAt(tx, ty);
     if (occ === unit) occ = null; // a própria unidade estará em (cx,cy)
     var self = (tx === cx && ty === cy);
@@ -779,7 +809,9 @@ var JOGO = (typeof window !== 'undefined')
       var key = (E().distEntre ? E().distEntre(unit, u) : manhattan(unit.x, unit.y, u.x, u.y)) * 2 + (u.hp / u.hpMax) * 10;
       if (key < bestKey) { bestKey = key; primary = u; }
     }
-    var field = distField(state, primary.x, primary.y);
+    // 03/10: no Santuário o caminho é medido com os pilares vivos de pé (ver o cabeçalho)
+    var srp = SR(state);
+    var field = distField(state, primary.x, primary.y, (srp && srp.casasInstaveis) ? srp.casasInstaveis(state) : null);
 
     // aliado mais ferido (âncora do support)
     var wounded = null, woundedPct = 1;
@@ -799,6 +831,9 @@ var JOGO = (typeof window !== 'undefined')
             sRange(sp).max > idealRange) idealRange = sRange(sp).max;
       }
     }
+
+    // 03/10: quem não enxerga no escuro e tem o alvo no breu precisa chegar perto para atirar
+    if (srp && srp.alcanceIdeal) idealRange = srp.alcanceIdeal(state, unit, idealRange, primary);
 
     // v2: risco de esquiva ao deixar a célula atual (pior fixador)
     var worstDodge = 1;
@@ -846,6 +881,10 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < (state.walls || []).length; i++) {
       if (state.walls[i].fere > 0 && state.walls[i].side !== unit.side) { temEspinhos = true; break; }
     }
+    /* 03/10: o chão do Santuário (Santuario.regras.pesoCasas) — a água atrasa e
+     * arrasta quem não é dela, a casa calma segura no lugar. Sem `state.santuario`
+     * nada muda. */
+    var pesoSant = srp ? srp.pesoCasas(state, unit) : null;
 
     // candidatos de posição: célula atual + alcançáveis com o PP atual
     var candidates = [{ x: unit.x, y: unit.y, cost: 0, risky: false }]
@@ -854,6 +893,13 @@ var JOGO = (typeof window !== 'undefined')
 
     for (i = 0; i < candidates.length; i++) {
       var cell = candidates[i];
+      /* 03/10: no escuro do Santuário o passo do lado do grupo atravessa a casa
+       * do monstro que o grupo não vê (o motor o faz esbarrar). A IA sabe onde
+       * ele está — não escolhe parar em cima de quem ela conhece. */
+      if (srp) {
+        var dono = ctx.uAt(cell.x, cell.y);
+        if (dono && dono !== unit && !isInvisible(dono)) continue;
+      }
       var cast = bestCastFrom(state, unit, cell.x, cell.y, unit.pa, unit.castsThisTurn, ctx, null);
       var score = cast ? cast.value : 0;
       var dNear = ctx.nearestEnemyDistTo(cell.x, cell.y);
@@ -882,6 +928,7 @@ var JOGO = (typeof window !== 'undefined')
       var ev = eventCells[cell.x + ',' + cell.y];
       if (ev) score += ev;
       if (pesoChao && pesoChao[cell.x + ',' + cell.y]) score += pesoChao[cell.x + ',' + cell.y];
+      if (pesoSant && pesoSant[cell.x + ',' + cell.y]) score += pesoSant[cell.x + ',' + cell.y];
       if (temEspinhos) {
         var ferida = E().muroFerePrevisto(state, unit, cell.x, cell.y);
         if (ferida > 0) score -= ferida * 1.2 + (ferida >= unit.hp + (unit.shield || 0) ? 60 : 0);

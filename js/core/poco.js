@@ -99,6 +99,9 @@ var JOGO = (typeof window !== 'undefined')
       if (m.summonOnly || m.colosso) return;
       // 08/09: monstro de calabouço fechado (sem arte) fica fora do elenco
       if (m.dungeonId && D().portalFechado && D().portalFechado(m.dungeonId)) return;
+      // 03/10: monstro de calabouço ESPECIAL (o Santuário dos Elementos) também fica fora — a
+      // regra dele é do mapa de lá (o Vigia de Pavio enxerga um escuro que o Poço não tem)
+      if (m.dungeonId && D().especial && D().especial(m.dungeonId)) return;
       if (soChefes ? !m.boss : !!m.boss) return;
       fora.push(id);
     });

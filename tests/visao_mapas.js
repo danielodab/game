@@ -7,8 +7,10 @@
  *   node tests/visao_mapas.js
  *
  * Roda sobre o motor do juiz (servidor/juiz/motor.js): o jogo inteiro em Node,
- * sem navegador. Para CADA sala de DATA.dungeons e DATA.arenas (e os andares
- * semeados do Poço) cobra a REGRA, não o número:
+ * sem navegador. Para CADA sala de DATA.dungeons, DATA.especiais e DATA.arenas (e
+ * os andares semeados do Poço) cobra a REGRA, não o número. As salas do Santuário
+ * que têm pilar vivo entram DUAS vezes: com os pilares como nascem e trocados —
+ * o muro que sobe e desce não pode abrir fresta em nenhuma das duas posições:
  *   · 0 vazamentos por muro reto — duas casas de chão em lados opostos de um '#'
  *     (reto, na vertical ou na diagonal exata) nunca se veem;
  *   · 0 pares assimétricos — Engine.los(A,B) === Engine.los(B,A) sempre;
@@ -78,12 +80,28 @@ function espremePorCanto(st, x0, y0, x1, y1) {
 // ------------------------------------------------------------------ as salas
 const salas = [];
 (D.dungeons || []).forEach((dg) => (dg.rooms || []).forEach((r, i) => salas.push({ dg: dg.id, i, room: r, tipo: 'calabouço' })));
+// 03/10: os calabouços especiais (o Santuário dos Elementos) moram fora de DATA.dungeons, mas são salas de
+// calabouço como as outras: as mesmas réguas, e a da IA mais abaixo. Sala com pilar vivo entra de novo com os
+// pilares TROCADOS (a outra metade do relógio): a régua vale nas duas posições do muro.
+(D.especiais || []).forEach((dg) => (dg.rooms || []).forEach((r, i) => {
+  salas.push({ dg: dg.id, i, room: r, tipo: 'calabouço' });
+  const pos = J.Santuario && J.Santuario.posicoesDosPilares(r);
+  if (pos && Object.keys(pos[0]).length) salas.push({ dg: dg.id, i, room: r, tipo: 'calabouço', pilares: pos[1] });
+}));
 (D.arenas || []).forEach((dg) => (dg.rooms || []).forEach((r, i) => salas.push({ dg: dg.id, i, room: r, tipo: 'arena' })));
 check('há salas de calabouço e de arena para conferir', salas.length >= 18 && salas.some((s) => s.tipo === 'arena'),
       salas.length + ' salas');
+function comPilares(s, st) {
+  // os pilares na outra posição: a casa do pilar é muro de pé e chão baixo (js/core/santuario.js)
+  if (s.pilares) Object.keys(s.pilares).forEach((k) => {
+    const [x, y] = k.split(',').map(Number);
+    st.grid.tiles[y][x].type = s.pilares[k] ? 'wall' : 'floor';
+  });
+  return st;
+}
 function montar(s) {
   const party = [{ classId: classes[0], heroId: 'h1' }];
-  try { return E.createBattle(s.dg, s.i, party, {}); } catch (e) {
+  try { return comPilares(s, E.createBattle(s.dg, s.i, party, {})); } catch (e) {
     return E.createDuelSala(s.dg, s.i, [{ classId: classes[0], heroId: 'a1' }], [{ classId: classes[0], heroId: 'b1' }], {});
   }
 }
@@ -92,7 +110,7 @@ const efeito = { pares: 0, viamAntes: 0, veemAgora: 0, deixaramDeSeVer: 0, canto
                  area: {} };
 const AREAS = [['circle', 3], ['cross', 2], ['ring', 2]];
 for (const s of salas) {
-  const nome = s.dg + '#' + s.i;
+  const nome = s.dg + '#' + s.i + (s.pilares ? ' (pilares trocados)' : '');
   let st = null;
   try { st = montar(s); } catch (e) { st = null; }
   check(nome + ': a sala monta', !!(st && st.grid && st.units), st ? '' : 'não montou');
@@ -519,7 +537,7 @@ D.dungeons.find((d) => d.id === 'prova-visao').rooms.push(
 (function () {
   let planos = 0, casts = 0, invalidos = 0, semVisao = 0; const ex = [];
   for (const s of salas) {
-    if (s.tipo !== 'calabouço') continue;
+    if (s.tipo !== 'calabouço' || s.pilares) continue;
     let st;
     try { st = E.createBattle(s.dg, s.i, classes.slice(0, 4).map((c, i) => ({ classId: c, heroId: 'h' + i, level: 20 })), { seed: 1 }); }
     catch (e) { continue; }

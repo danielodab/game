@@ -527,7 +527,10 @@ var JOGO = (typeof window !== 'undefined')
   function dungeonDef(dungeonId) {
     var ds = dungeonList();
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return ds[i];
-    return null;
+    // 03/10: o calabouço ESPECIAL (o Santuário dos Elementos, js/core/data/santuario.js) não mora
+    // em DATA.dungeons. Sem isto a sala do "chefe" dele seria a terceira (o padrão de quem não acha
+    // o calabouço), o corte de XP por nível não valeria e o saque dele não teria de onde sair.
+    return (typeof D().especial === 'function') ? (D().especial(dungeonId) || null) : null;
   }
   /* Profundidade do calabouço como ÍNDICE 0-BASED (0 = o mais raso).
    * ATENÇÃO: `DATA.cards[*].minDungeon` é 0-based ("0 = o primeiro"), enquanto
@@ -2922,8 +2925,23 @@ var JOGO = (typeof window !== 'undefined')
    * proporção — só o que sai fica mais variado. Abriu o portal, o vazamento
    * dele para sozinho. */
   var VAZAMENTO = 0.5;
+  /* O SAQUE EMPRESTADO (03/10, o Santuário dos Elementos). O calabouço especial não tem peça
+   * própria: `saqueDe` diz de qual dos seis ele sorteia (o Coração Partido — é o outro fim de jogo),
+   * com o MESMO peso de "nada" de lá. As salas comuns dele sorteiam como a última sala comum da
+   * fonte (comum e raro) e a sala que fecha a descida — o Altar — como a do chefe: épico e lendário
+   * e dois sorteios. Sem `saqueDe`, a fonte é o próprio calabouço e nada muda. */
+  function fonteDoSaque(dungeonId, roomIndex) {
+    var d = dungeonDef(dungeonId);
+    var de = (d && typeof d.saqueDe === 'string') ? d.saqueDe : null;
+    if (!de) return { id: dungeonId, room: num(roomIndex, 0) };
+    var fonte = dungeonDef(de);
+    var ult = (fonte && isArray(fonte.rooms) && fonte.rooms.length) ? fonte.rooms.length - 1 : 2;
+    return { id: de, room: isBossRoom(dungeonId, roomIndex) ? ult : Math.max(0, ult - 1) };
+  }
   function lootPool(dungeonId, roomIndex, luck) {
-    var room = num(roomIndex, 0);
+    var fonte = fonteDoSaque(dungeonId, roomIndex);
+    dungeonId = fonte.id;
+    var room = fonte.room;
     var items = D().items || {};
     var pool = [], usouItens = false, id, it, w;
     var proprio = 0, vazado = 0;
@@ -2980,7 +2998,8 @@ var JOGO = (typeof window !== 'undefined')
     // justamente por isso que grupo menor tira mais e melhor. [D12]
     if (built.itemBased) {
       var LW = D().lootWeights;
-      var nd = (isObj(LW) && isObj(LW.noDrop)) ? num(LW.noDrop[dungeonId], 0) : 0;
+      // 03/10: o "nada" é o do calabouço de onde as peças saem (fonteDoSaque)
+      var nd = (isObj(LW) && isObj(LW.noDrop)) ? num(LW.noDrop[fonteDoSaque(dungeonId, roomIndex).id], 0) : 0;
       /* A DIFICULDADE MEXE NO PESO DE "NADA", e nao no numero de sorteios.
        *
        * Este peso E a taxa de drop: ele e o que faz ~metade dos sorteios sairem

@@ -31,10 +31,14 @@ const DADOS = [
   // 13/09: as poções de vida — o motor cura com o número daqui e a banca cobra o preço daqui
   'js/core/data/consumiveis.js',
   // 02/10: o Eco Primordial (o elenco, os feitiços e as fases): o juiz refaz a tentativa com eles
-  'js/core/data/eco.js'
+  'js/core/data/eco.js',
+  // 03/10: o Santuário dos Elementos (o calabouço especial: as cinco salas e os números das quatro regras)
+  'js/core/data/santuario.js'
 ];
 // o poco.js entra com o combate: o andar do Poço é montado da semente antes da batalha
-const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js', 'js/core/poco.js'];
+// 03/10: o santuario.js também — é a regra dos quadrantes (escuro, água, pilares, vento) que o motor chama;
+// sem ele o juiz refaria a sala do Santuário sem regra nenhuma e acusaria o jogador honesto
+const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js', 'js/core/poco.js', 'js/core/santuario.js'];
 
 const cache = new Map();
 /* O texto de cada arquivo é lido UMA vez por processo e compilado uma vez: o

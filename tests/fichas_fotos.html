@@ -245,6 +245,8 @@
     config: function () { UI.openSheet('config'); },
     // 03/10 (a junção com o Eco Primordial): a ficha do Eco nasce do sheetShell e entra na régua
     eco: function () { UI.openSheet('eco'); },
+    // 03/10: a ficha do Santuário dos Elementos (a porta do calabouço especial) também nasce do sheetShell
+    santuario: function () { UI.openSheet('santuario'); },
     praca: function () { ligaPraca(); UI.showScreen('hub'); },
     'praca-poco': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'poco', nome: 'Poço sem Fundo' }); },
     'praca-sede': function () { ligaPraca(); UI.showScreen('hub'); return lugar({ tipo: 'sede', nome: 'Sede das Guildas' }); },
@@ -353,7 +355,7 @@
   // as fichas que a régua cobra (as da praça são o cais e os painéis, à parte)
   var NA_REGUA = ['personagem', 'heroi', 'inventario', 'forja', 'feiticos', 'colecao', 'banco', 'guilda',
                   'mercado', 'loteria', 'missoes', 'placar', 'amigos', 'perfil', 'troca', 'contas', 'duelo',
-                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'eco'];
+                  'dupla', 'quadro', 'sussurro', 'pausa', 'confirma', 'config', 'eco', 'santuario'];
 
   function prova() {
     // a régua é de CELULAR: numa janela larga as regras de @media acham que é
@@ -597,10 +599,11 @@
     }).then(function () {
       var bs = qa('.screen-hub.is-on .hub-dock-b');
       var rots = bs.map(function (b) { return (q1('.hd-rot', b) || {}).textContent; });
-      // 03/10 (a junção com o Eco Primordial): a 7ª porta, o Eco, também vem desenhada (fc-eco)
-      check('Cais: sete portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
-            bs.length === 7 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
-            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos,Eco$/.test(rots.join(',')), rots.join(','));
+      // 03/10 (a junção com o Eco Primordial): a 7ª porta, o Eco, também vem desenhada (fc-eco) — e, com o
+      // Santuário dos Elementos, a 8ª (fc-santuario)
+      check('Cais: oito portas, cada uma com o ícone desenhado (svg) e o nome de sempre',
+            bs.length === 8 && bs.every(function (b) { return !!q1('.hd-ic.is-svg svg.ico-svg', b); }) &&
+            /^Personagem,Inventário I,Feitiços,Missões,Guilda,Amigos,Eco,Santuário$/.test(rots.join(',')), rots.join(','));
       check('Cais: nenhum emoji sobrou no texto das portas',
             bs.every(function (b) { return !/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(b.textContent); }),
             bs.map(function (b) { return b.textContent; }).join(' | '));

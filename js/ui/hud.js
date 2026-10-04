@@ -1327,7 +1327,10 @@ var JOGO = (typeof window !== 'undefined')
      // 13/09 (dono): "no menu inferior deve ter uma lista de amigos e inimigos"
       { ic: '👥', ico: 'fc-amigos', rot: 'Amigos', abre: 'amigos' },
       // 02/10: o Eco Primordial — a porta é a ficha, não uma construção nova (o dono: "não amontoe a praça")
-      { ic: '💠', ico: 'fc-eco', rot: 'Eco', abre: 'eco' }
+      { ic: '💠', ico: 'fc-eco', rot: 'Eco', abre: 'eco' },
+      // 03/10: o Santuário dos Elementos — o calabouço especial também entra pela ficha (a praça não
+      // ganha um sétimo portal). Com a 8ª porta o cais vira duas fileiras de quatro no celular (style.css)
+      { ic: '🏛️', ico: 'fc-santuario', rot: 'Santuário', abre: 'santuario' }
     ].forEach(function (d) {
       var b = el('button', 'hub-dock-b');
       b.type = 'button';
@@ -1539,6 +1542,19 @@ var JOGO = (typeof window !== 'undefined')
         });
         if (!lista.childNodes.length) lista.appendChild(el('p', 'hub-nota', 'Ninguém à vista… ainda.'));
         painel.appendChild(lista);
+        // 03/10: a sala do Santuário diz a regra dela ANTES de a luta começar
+        if (sala && sala.regra) {
+          var regrasPorta = sala.regra === 'altar' ? ['fogo', 'agua', 'terra', 'ar'] : [sala.regra];
+          var cxR = el('div', 'sant-porta');
+          regrasPorta.forEach(function (rg) {
+            var t = SANT_REGRA[rg];
+            if (!t) return;
+            var ln = el('p', 'sant-porta-ln', '<b>' + esc(t.curto) + ':</b> ' + t.resumo);
+            ln.style.setProperty('--ec', elemColor(rg));
+            cxR.appendChild(ln);
+          });
+          painel.appendChild(cxR);
+        }
         if (emGrupo()) painelPortaGrupo(painel);            // 11/09: a porta em grupo
         else {
           var sd2 = seletorDif();
@@ -2219,6 +2235,9 @@ var JOGO = (typeof window !== 'undefined')
         for (gi = 0; gi < ds2.length; gi++) {
           if (ds2[gi].id === did && ds2[gi].recommendedLevel != null) rec = ds2[gi].recommendedLevel;
         }
+        // 03/10: o calabouço especial (o Santuário) mora fora de DATA.dungeons
+        var esp = safe(function () { return D().especial(did); }, null);
+        if (rec == null && esp && esp.recommendedLevel != null) rec = esp.recommendedLevel;
       })();
 
       var lista = (selHeroes.length ? selHeroes : heroIds()).filter(function (hid) { return !!hero(hid); });
@@ -2788,6 +2807,11 @@ var JOGO = (typeof window !== 'undefined')
         parts.push(ef.type + (ef.stat || '') + (ef.value != null ? ef.value : '') + 'x' + ef.duration);
       }
     }
+    // 03/10: no Santuário a linha da sala diz braseiros acesos, pilares e a direção NA TELA (gira com a câmera)
+    if (s.santuario) {
+      parts.push('sa:' + s.santuario.br.join('') + s.santuario.pl.join('') + s.santuario.es.join('') + s.santuario.av +
+                 ':' + safe(function () { return JOGO.Renderer.rotation(); }, 0));
+    }
     // 03/10: a rodada do Eco esperando o sal do servidor (e a rede que caiu no meio) muda a barra
     if (s.eco) {
       var sal = safe(function () { return G().ecoSalEstado(); }, null);
@@ -2901,6 +2925,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < ds.length; i++) if (ds[i].id === s.dungeonId) dg = ds[i];
     // 02/10: os mapas de DATA.arenas (a Câmara do Eco, a Praça, o Salão da Sede) também têm nome
     if (!dg) dg = safe(function () { return D().arena ? D().arena(s.dungeonId) : null; }, null);
+    // 03/10: e os calabouços especiais (o Santuário dos Elementos)
+    if (!dg) dg = safe(function () { return D().especial ? D().especial(s.dungeonId) : null; }, null);
     var room = dg && dg.rooms && dg.rooms[s.roomIndex];
     bt.room.appendChild(el('b', null, esc((room && room.name) || (dg && dg.name) || 'Sala')));
     var wd = (D().weathers && D().weathers[s.weather]) || null;
@@ -2915,6 +2941,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     bt.room.appendChild(el('span', 'round-chip', 'Rodada ' + s.round + (s.eco ? ' de ' + s.eco.rodadas : '')));
     if (s.eco) pintaEcoNaSala(s);
+    if (s.santuario) pintaSantuarioNaSala(s);     // 03/10: as regras de terreno da sala, com o que vem na próxima rodada
     // O DESAFIO DA SALA: dourado enquanto vale, riscado quando se perde.
     // Mora aqui porque esta linha já é redesenhada a cada atualização.
     if (s.desafio) {
@@ -6052,6 +6079,204 @@ var JOGO = (typeof window !== 'undefined')
   }
   UI._buildEcoFim = buildEcoFim;            // provas
 
+  // ==========================================================================
+  // O SANTUÁRIO DOS ELEMENTOS (03/10) — a ficha, a linha da sala e os textos
+  // ==========================================================================
+  /* A PORTA é a ficha 'santuario', aberta pelo cais (como a do Eco: a praça não
+   * ganha portal novo). Ela diz o que é, as quatro regras em português simples,
+   * quem mora lá, o que paga e quem desce — e avisa quando a dupla de "Quem
+   * desce" não tem ninguém do Fogo (a Câmara Apagada fica cega para ela). A
+   * descida é a de qualquer calabouço: antessala, bilhete do servidor, vida
+   * única, recompensa por sala. Em grupo pela Rede, quem lidera desce com o outro.
+   *
+   * OS TEXTOS das regras moram AQUI (SANT_REGRA) e servem à ficha, à porta da
+   * antessala, à linha da sala na batalha e ao cartão de primeira visita
+   * (js/ui/tutor.js lê UI.santuarioTexto) — uma frase só para cada regra. Os
+   * números saem de DATA.santuario: mudar o dado muda o texto. */
+  function santCfg() { return D().santuario || {}; }
+  var SANT_REGRA = (function () {
+    var c = safe(function () { return JOGO.DATA.santuario; }, null) || {};
+    var visao = (c.escuro || {}).visao || 2, raio = (c.escuro || {}).raio || 2;
+    var custo = (c.agua || {}).custo || 2, custoAgua = (c.agua || {}).custoAgua || 1, troca = (c.agua || {}).trocaACada || 2;
+    var periodo = (c.pilares || {}).periodo || 2, gira = (c.vento || {}).giraACada || 2, alc = (c.vento || {}).alcance || 1;
+    return {
+      fogo: { sala: 'A Câmara Apagada', curto: 'Escuro',
+        resumo: 'quem não é do <b>Fogo</b> só mira a casa escura a <b>' + visao + ' casas</b>, e o monstro no breu some. Braseiro aceso clareia.',
+        texto: 'Aqui é escuro. Quem <b>não</b> é do caminho do <b>Fogo</b> só mira uma casa escura a <b>' + visao +
+               ' casas</b> — e não vê o monstro que está no breu. O <b>braseiro aceso</b> clareia ' + raio +
+               ' casas em volta: um golpe de <b>Fogo</b> acende, um de <b>Água</b> apaga.' },
+      agua: { sala: 'A Galeria Alagada', curto: 'Água',
+        resumo: 'entrar na água custa <b>' + custo + ' PP</b> (' + custoAgua + ' para quem é de <b>Água</b>) e a correnteza leva 1 casa no fim da rodada. A ponte é seca.',
+        texto: 'Entrar numa casa com água custa <b>' + custo + ' PP</b> (' + custoAgua + ' para quem é do caminho da <b>Água</b>). ' +
+               'No <b>fim de cada rodada</b> a correnteza leva 1 casa quem está na água, para onde os riscos correm; ' +
+               'ela vira a cada ' + troca + ' rodadas, e a bica que vai verter avisa antes. A <b>ponte</b> é seca.' },
+      terra: { sala: 'O Salão dos Pilares Vivos', curto: 'Pilares',
+        resumo: 'os pilares <b>sobem e descem a cada ' + periodo + ' rodadas</b>; a seta ▲ ou ▼ avisa uma rodada antes. Quem está em cima segura o pilar.',
+        texto: 'Os pilares <b>sobem e descem a cada ' + periodo + ' rodadas</b>. Uma rodada antes a casa pisca e a seta diz: ' +
+               '<b>▲</b> vai subir, <b>▼</b> vai descer. Pilar de pé fecha o caminho e a visão. ' +
+               'Ninguém é esmagado: quem está em cima do soquete <b>segura</b> o pilar até sair.' },
+      ar: { sala: 'O Terraço da Ventania', curto: 'Vento',
+        resumo: 'no fim da rodada a <b>rajada</b> empurra todo mundo 1 casa para onde o cata-vento aponta; feitiço de <b>Ar</b> alcança +' + alc + '. Ao lado do respiro o vento não pega.',
+        texto: 'No <b>fim de cada rodada</b> a rajada empurra todo mundo 1 casa para onde o <b>cata-vento</b> e as setas do chão apontam; ' +
+               'ela gira a cada ' + gira + ' rodadas, e as setas ficam âmbar na rodada antes de virar. ' +
+               'Feitiço de <b>Ar</b> lançado do terraço alcança <b>' + alc + ' casa a mais</b>. Nas casas ao lado de um <b>respiro</b> o vento não pega.' },
+      altar: { sala: 'O Altar dos Quatro', curto: 'As quatro',
+        resumo: 'as quatro regras de uma vez, cada uma no seu canto.',
+        texto: 'As quatro regras de uma vez, cada uma no seu canto: <b>escuro</b> a noroeste, <b>água</b> a nordeste, ' +
+               '<b>pilares</b> a sudoeste e <b>vento</b> a sudeste, em volta do altar.' }
+    };
+  })();
+  UI.santuarioTexto = function (regra) { return SANT_REGRA[regra] || null; };
+
+  /* A direção do motor ('n' | 's' | 'l' | 'o') como seta NA TELA. O tabuleiro é visto de quina: na
+   * câmera de sempre o leste do mapa sobe para a direita (↗), o sul desce para a direita (↘), e cada
+   * quarto de volta da câmera (R.rotation) gira tudo 90° no sentido do relógio. A conta sai do
+   * QUADRANTE da câmera, e não de projetar um ponto: a linha da sala repinta quando o quadrante
+   * muda, no meio do giro animado, e a projeção daquele quadro daria a seta de meio caminho —
+   * que ficaria na tela até a próxima repintura (a prova da tela confere a tabela contra a projeção). */
+  var SANT_SETAS = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+  var SANT_BASE = { l: 7, s: 1, o: 3, n: 5 };
+  function santSeta(dir) {
+    if (SANT_BASE[dir] == null) return '';
+    var rot = safe(function () { return JOGO.Renderer.rotation(); }, 0) || 0;
+    return SANT_SETAS[(SANT_BASE[dir] + 2 * rot) % 8];
+  }
+  UI._santSeta = santSeta;                  // provas
+
+  /* a linha da sala na batalha: uma pílula por regra, com o que vale AGORA e o que muda na rodada que vem */
+  function pintaSantuarioNaSala(s) {
+    var info = safe(function () { return JOGO.Santuario.info(s); }, null);
+    if (!info) return;
+    function chip(regra, html, urgente) {
+      var c = el('span', 'sant-chip' + (urgente ? ' is-aviso' : ''), html);
+      c.setAttribute('data-regra', regra);
+      c.style.setProperty('--ec', elemColor(regra));
+      tipOn(c, SANT_REGRA[regra].sala, SANT_REGRA[regra].texto, elemColor(regra));
+      bt.room.appendChild(c);
+    }
+    if (info.escuro) {
+      var acesos = info.escuro.braseiros.filter(function (b) { return b.aceso; }).length;
+      chip('fogo', 'Escuro · <b>' + acesos + '</b> de ' + info.escuro.braseiros.length + ' braseiros acesos');
+    }
+    if (info.agua) {
+      var vira = info.agua.proxima !== info.agua.dir;
+      chip('agua', 'Correnteza <b>' + santSeta(info.agua.dir) + '</b>' +
+        (vira ? ' · vira <b>' + santSeta(info.agua.proxima) + '</b> na próxima' : ''), vira);
+    }
+    if (info.pilares) {
+      var jaAvisou = info.pilares.aviso === s.round + 1;
+      var espera = info.pilares.lista.filter(function (p) { return p.espera; }).length;
+      chip('terra', (jaAvisou ? 'Pilares trocam na <b>próxima rodada</b>' : 'Pilares trocam na rodada <b>' + info.pilares.trocaNa + '</b>') +
+        (espera ? ' · ' + espera + ' esperando' : ''), jaAvisou);
+    }
+    if (info.vento) {
+      var gira = info.vento.proxima !== info.vento.dir;
+      chip('ar', 'Rajada <b>' + santSeta(info.vento.dir) + '</b>' +
+        (gira ? ' · gira <b>' + santSeta(info.vento.proxima) + '</b> na próxima' : ''), gira);
+    }
+  }
+
+  function sheetSantuario() {
+    var dg = safe(function () { return D().especial(santCfg().id || 'elementsanctum'); }, null);
+    var body = sheetShell('O Santuário dos Elementos',
+      'O calabouço em que o mapa joga: cada sala tem uma regra de terreno, e quem conhece o elemento dela leva vantagem.');
+    sheetName = 'santuario';
+    if (!dg) { body.appendChild(el('p', 'empty', 'O Santuário não está nesta versão do jogo.')); return; }
+
+    body.appendChild(el('p', 'sant-desc', esc(dg.description || '')));
+    body.appendChild(el('p', 'sant-linha', '<b>' + dg.rooms.length + ' salas</b>, sem chefe · nível recomendado <b>' +
+      dg.recommendedLevel + '</b> · vale em dupla e em grupo pela Rede'));
+
+    // ---- quem desce, e o que a dupla enxerga
+    var dupla = el('p', 'sant-dupla', '');
+    body.appendChild(dupla);
+    var avisos = el('div', 'sant-avisos');
+    body.appendChild(avisos);
+    (function () {
+      var hs = selHeroes.map(hero).filter(Boolean);
+      dupla.innerHTML = hs.length
+        ? 'Desce a dupla de <b>Quem desce</b>: ' + hs.map(function (h) {
+            return esc(className(h.classId)) + ' <small>nv ' + (h.level || 1) + ' · ' + esc(ELEM_PT[h.element || 'neutro'] || '') + '</small>';
+          }).join(' e ') + '.'
+        : 'Escolha a dupla em <b>Quem desce</b> para entrar.';
+      if (!hs.length) return;
+      if (!hs.some(function (h) { return h.element === 'fogo'; })) {
+        avisos.appendChild(el('p', 'sant-aviso', 'Ninguém do <b>Fogo</b> na dupla: na Câmara Apagada vocês só miram a ' +
+          ((santCfg().escuro || {}).visao || 2) + ' casas no escuro. Dá para vencer acendendo os braseiros — com golpe de Fogo — ou chegando perto.'));
+      }
+      var baixo = hs.filter(function (h) { return (h.level || 1) < dg.recommendedLevel - 4; });
+      if (baixo.length) {
+        avisos.appendChild(el('p', 'sant-aviso', 'Abaixo do nível recomendado (' + dg.recommendedLevel + '): os guardiões daqui batem mais forte que os do Coração Partido.'));
+      }
+    })();
+
+    // ---- descer
+    var acts = el('div', 'sant-acts');
+    body.appendChild(acts);
+    if (emGrupo()) {
+      var nome = nomeParceiro();
+      if (souLider()) {
+        var sdG = seletorDif();
+        if (sdG) acts.appendChild(sdG);
+        acts.appendChild(btn('Descer ao Santuário com ' + esc(nome), 'btn-primary btn-block sant-entra', function () {
+          var r = safe(function () { return Gp().descer(dg.id); }, null);
+          if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'ocupado', r && r.motivo === 'sumido' ? nome : null));
+          else { toast('Chamando ' + nome + '…'); if (sheetName === 'santuario') closeSheet(); }
+        }));
+      } else {
+        acts.appendChild(el('p', 'hub-nota', 'Só quem lidera (<b>' + esc(nome) + '</b>) escolhe o calabouço.'));
+        acts.appendChild(btn('Descer ao Santuário', 'btn-primary btn-block sant-entra is-apagado', function () {
+          toast('Só quem lidera (' + nome + ') escolhe o calabouço.');
+        }));
+      }
+    } else {
+      var sd = seletorDif();
+      if (sd) acts.appendChild(sd);
+      acts.appendChild(btn('Descer ao Santuário', 'btn-primary btn-block sant-entra', function () {
+        if (!selHeroes.length) { toast('Escolha a sua dupla em "Quem desce" primeiro.'); return; }
+        var ok = safe(function () { return G().startRun(selHeroes.slice(), dg.id); }, false);
+        if (!ok) { toast('Não deu para começar essa descida.'); return; }
+        if (sheetName === 'santuario') closeSheet();
+      }));
+    }
+
+    // ---- as salas e as regras
+    body.appendChild(el('h3', 'hs-sec', 'As cinco salas'));
+    var lista = el('div', 'sant-salas');
+    dg.rooms.forEach(function (room, i) {
+      var regra = room.santuario && room.santuario.regra, t = SANT_REGRA[regra];
+      if (!t) return;
+      var card = el('div', 'sant-sala');
+      card.style.setProperty('--ec', regra === 'altar' ? '#e8c25a' : elemColor(regra));
+      card.appendChild(el('div', 'sant-sala-tit', '<span class="sant-n">' + (i + 1) + '</span> ' + esc(room.name) +
+        (regra !== 'altar' ? ' <small>' + esc(ELEM_PT[regra] || '') + '</small>' : '')));
+      card.appendChild(el('p', 'sant-sala-tx', t.texto));
+      var quem = safe(function () { return G().monstrosDaSala(dg.id, i); }, []) || [];
+      if (quem.length) {
+        card.appendChild(el('p', 'sant-sala-quem', 'Guardiões: ' + quem.map(function (m) {
+          return esc(m.name) + (m.qtd > 1 ? ' ×' + m.qtd : '');
+        }).join(' · ')));
+      }
+      lista.appendChild(card);
+    });
+    body.appendChild(lista);
+
+    // ---- o que paga
+    body.appendChild(el('h3', 'hs-sec', 'O que o Santuário paga'));
+    var paga = el('ul', 'sant-paga');
+    ['Experiência de fim de jogo em cada sala (a descida inteira rende mais que a do Coração Partido).',
+     'Pedras de forja do elemento de cada quadrante — é o melhor lugar para juntar pedra de um elemento só.',
+     'Peças do Coração Partido: comuns e raras nas quatro primeiras salas; épicas e lendárias no Altar, com dois sorteios.',
+     'Sem chefe: aqui não caem selo, insígnia, âncora nem carta.'
+    ].forEach(function (t) { paga.appendChild(el('li', null, esc(t))); });
+    body.appendChild(paga);
+    body.appendChild(btn('Rever as dicas das salas', 'btn-ghost btn-mini sant-dicas', function () {
+      var n = safe(function () { return JOGO.Tutor.reveSantuario(); }, 0);
+      toast(n ? 'As dicas do Santuário voltam a aparecer na entrada de cada sala.' : 'As dicas estão desligadas neste aparelho.');
+    }));
+  }
+  UI._sheetSantuario = sheetSantuario;      // provas
+
   /* O MEDALHÃO DE CADA FICHA (02/10, a frente dos menus): o cabeçalho ganha o
    * ícone da porta que abriu a ficha — o mesmo desenho do cais — para o
    * jogador saber onde está sem ler o título. Quem decide é o NOME da ficha
@@ -6065,7 +6290,8 @@ var JOGO = (typeof window !== 'undefined')
     perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
     arenaQuadro: 'fc-duelo', sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
     confirm: 'fc-alerta',
-    eco: 'fc-eco'   // 03/10, a junção com a frente do Eco Primordial
+    eco: 'fc-eco',  // 03/10, a junção com a frente do Eco Primordial
+    santuario: 'fc-santuario'   // 03/10: o Santuário dos Elementos
   };
   var ICONE_ABA = { inventario: 'fc-inventario', forja: 'fc-forja', feiticos: 'fc-feiticos',
                     colecao: 'fc-colecao', avatar: 'fc-personagem' };
@@ -6163,6 +6389,7 @@ var JOGO = (typeof window !== 'undefined')
     if (name === 'char') { sheetChar(); return; }   // 11/09: a ficha da conta
     if (name === 'amigos') { sheetAmigos(); return; }   // 13/09: amigos e inimigos
     if (name === 'eco') { sheetEco(); return; }         // 02/10: o Eco Primordial (o chefe supremo da semana)
+    if (name === 'santuario') { sheetSantuario(); return; }   // 03/10: o Santuário dos Elementos (o calabouço especial)
     if (name === 'party') sheetParty(null, arg);
     else if (name === 'collection') sheetParty('colecao', arg);
     else if (name === 'inventory') sheetParty('inventario', arg);

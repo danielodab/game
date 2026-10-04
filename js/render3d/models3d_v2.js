@@ -577,6 +577,43 @@ var JOGO = (typeof window !== 'undefined')
     return (prov && !temKitDe(chave)) ? prov.model : chave;
   };
 
+  /* OS OITO GUARDIÕES DO SANTUÁRIO DOS ELEMENTOS (03/10, a frente do modo jogável —
+   * js/core/data/santuario.js). O id do monstro usa '_' e a chave do modelo usa '-'
+   * ('el_fogo_1' → 'el-fogo-1'), como nos Colossos. A arte do dono entra por OUTRA
+   * frente, embutida com essas chaves (models-meshy-santuario.js), e a linha de
+   * cada um na tabela MONSTER_LOOK vem com ela: aqui só se põe o que FALTA —
+   *   · a linha do MONSTER_LOOK, se ainda não existir (a chave própria e o porte do
+   *     briefing: altura ÷ 1,80, docs/PROMPTS_LANCAMENTO.md);
+   *   · o CORPO PROVISÓRIO da chave, só enquanto o kit dela não existe (temKitDe —
+   *     embutido, no manifesto do servido ou no bundle): um monstro de arte própria
+   *     do MESMO elemento, de calabouço que não aparece no Santuário (a regra da
+   *     tinta da Mina: doador do mesmo elemento sai igual ao dono do corpo, então os
+   *     dois não podem dividir sala), e diferente dentro de cada par, porque no
+   *     Altar os oito se encontram.
+   * Feito por código, e não com linhas nas duas tabelas, para as duas frentes não
+   * escreverem no mesmo lugar do arquivo. Com a arte embutida este bloco não põe
+   * NADA: a linha do MONSTER_LOOK já existe e a chave com kit não entra na tabela
+   * do provisório (quem ganhou corpo não fica nela). */
+  (function () {
+    var SANTUARIO = {
+      // id            porte   provisório            quem é o doador
+      el_fogo_1:  [1.17, 'cinder-herald'],   // 2,11 m — o Arauto da Brasa (Coração): alto, de distância
+      el_fogo_2:  [0.83, 'ember-imp'],       // 1,49 m — o Diabrete (Fecho de Brasa): pequeno e rápido
+      el_agua_1:  [1.06, 'brine-golem'],     // 1,91 m — o Golem de Salmoura (Cisterna): o tanque
+      el_agua_2:  [1.11, 'moray-piper'],     // 2,00 m — a Enguia (Cisterna): comprida, de distância
+      el_terra_1: [1.22, 'stone-herald'],    // 2,20 m — o Arauto da Pedra (Coração): o tanque
+      el_terra_2: [0.89, 'pick-revenant'],   // 1,60 m — o Mineiro (Mina Trêmula): cava
+      el_ar_1:    [1.28, 'kite-serpent'],    // 2,30 m — a Pipa-Serpente (Andaimes): alta, de distância
+      el_ar_2:    [1.00, 'plank-shrike']     // 1,80 m — o Picanço (Andaimes): asa no lugar do braço
+    };
+    for (var id in SANTUARIO) {
+      if (!Object.prototype.hasOwnProperty.call(SANTUARIO, id)) continue;
+      var chave = id.replace(/_/g, '-');
+      if (!MONSTER_LOOK[id]) MONSTER_LOOK[id] = { model: chave, scale: SANTUARIO[id][0] };
+      if (!temKitDe(chave) && !M.CORPO_PROVISORIO[chave]) M.CORPO_PROVISORIO[chave] = { model: SANTUARIO[id][1] };
+    }
+  })();
+
   // OS PETS SÃO DO USUÁRIO (31/08) — os seis do Meshy aposentam o
   // velociraptor, a cobra, a vespa, o sapo, a aranha e a raposa
   // emprestados. A regra do dono: "o pet precisa ser pequeno, menor que os

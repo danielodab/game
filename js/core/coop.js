@@ -317,6 +317,8 @@ var JOGO = (typeof window !== 'undefined')
       fusionForms: d.fusionForms || null, fusionBlends: d.fusionBlends || null,
       fusionSpells: d.fusionSpells || null, fusionSummons: d.fusionSummons || null,
       dungeons: dgs, portaisFechados: d.portaisFechados || null,
+      // 03/10: o Santuário dos Elementos — as salas e os números das quatro regras decidem a batalha
+      especiais: d.especiais || null, santuario: d.santuario || null,
       dificuldades: d.dificuldades || null, roomFury: (d.leveling || {}).roomFury || null,
       summonCap: d.summonCap || null, tileEvents: d.tileEvents || null,
       weathers: d.weathers || null, rivals: d.rivals || null,
