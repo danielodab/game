@@ -527,6 +527,50 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(r['versao'], 2)
         self.assertEqual(r['registrados'], 0)
 
+    def test_jogador_id_e_de_uma_conta_so(self):
+        """04/10 — duas contas com o MESMO código de jogador (jogador.id) não se viam na praça: a Rede
+        trata como eco o que chega com o próprio id. O servidor guarda de quem é cada código (a primeira
+        conta que o trouxe) e manda a outra trocar — sem recusar o save, que o progresso não se perde."""
+        a, b = self.novo('Dona do Codigo'), self.novo('Copia do Codigo')
+        jid = 'jrepetido%d' % ProvaDaApi._n
+        pa, da = save_com(['ja-%d' % ProvaDaApi._n], db_extra={'jogador': {'id': jid, 'nome': 'Oda'}})
+        status, r = a.salva(0, pa, da, nasce('ja-%d' % ProvaDaApi._n))
+        self.assertEqual(status, 200, r)
+        self.assertNotIn('trocarId', r)
+        # a cópia: o mesmo código e o mesmo nome noutra conta. O save sobe, e a resposta manda trocar
+        pb, db_ = save_com(['jb-%d' % ProvaDaApi._n], db_extra={'jogador': {'id': jid, 'nome': 'Oda'}})
+        status, r = b.salva(0, pb, db_, nasce('jb-%d' % ProvaDaApi._n))
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r['versao'], r.get('trocarId')), (1, jid))
+        status, r = b.pede('GET', '/api/save')
+        self.assertEqual((r['versao'], r.get('trocarId')), (1, jid), 'o save guardado segue marcado para trocar')
+        self.assertEqual(r['progress'], pb, 'e nada do progresso se perdeu')
+        status, r = a.pede('GET', '/api/save')
+        self.assertNotIn('trocarId', r, 'a dona do código não troca nada')
+        # a pergunta do boot do jogo (o save desta máquina pode nem ter subido)
+        self.assertEqual(a.pede('POST', '/api/jogador-id', {'id': jid}), (200, {'ok': True, 'trocar': False}))
+        self.assertEqual(b.pede('POST', '/api/jogador-id', {'id': jid}), (200, {'ok': True, 'trocar': True}))
+        novo = jid + 'novo'
+        self.assertEqual(b.pede('POST', '/api/jogador-id', {'id': novo}), (200, {'ok': True, 'trocar': False}))
+        self.assertEqual(a.pede('POST', '/api/jogador-id', {'id': novo})[1]['trocar'], True, 'o novo já é da outra')
+        # a cópia sobe de novo com o código novo: ninguém mais manda trocar
+        db_['jogador']['id'] = novo
+        status, r = b.salva(1, pb, db_)
+        self.assertEqual(status, 200, r)
+        self.assertNotIn('trocarId', r)
+        self.assertNotIn('trocarId', b.pede('GET', '/api/save')[1])
+        # a forma do pedido e a porta
+        for torto in ({}, {'id': ''}, {'id': 7}, {'id': 'x' * 81}):
+            self.assertEqual(b.pede('POST', '/api/jogador-id', torto)[0], 400, torto)
+        self.assertEqual(b.pede('POST', '/api/jogador-id', {'id': jid}, token=None)[0], 401)
+        bd = self.banco()
+        donos = dict(bd.execute("SELECT jid, conta_id FROM jogador_ids WHERE jid IN (?, ?)", (jid, novo)))
+        ev = bd.execute("SELECT COUNT(*) FROM eventos WHERE conta_id = ? AND tipo = 'jogador-id-repetido'",
+                        (b.conta['id'],)).fetchone()[0]
+        bd.close()
+        self.assertEqual(donos, {jid: a.conta['id'], novo: b.conta['id']})
+        self.assertEqual(ev, 1, 'a pergunta que mandou trocar fica na trilha')
+
     def test_save_recusa_nascimento_torto(self):
         c = self.novo('Gil Torto')
         progress, db = save_com(['g-1'])
@@ -1479,7 +1523,9 @@ class ProvaDaApi(unittest.TestCase):
                 'sumo': {'classId': 'sumo', 'xp': 100 * (i + 1), 'level': 3, 'element': 'terra'},
                 'bruxo#2': {'classId': 'bruxo', 'xp': 50, 'level': 2},
                 'curandeira': {'xp': 10, 'level': 1}}}
-            db = {'jogador': {'nome': None, 'avatar': 'fus:sumo+bruxo'}}
+            # 04/10: cada save com o seu código de jogador; a 05 e a 06 trazem o MESMO (a cópia)
+            db = {'jogador': {'id': 'jcopiado' if i in (5, 6) else 'jant%02d' % i, 'nome': None,
+                              'avatar': 'fus:sumo+bruxo'}}
             b.execute("INSERT INTO saves(conta_id, progress, db, versao, atualizado_em) VALUES (?, ?, ?, 3, ?)",
                       (cid, json.dumps(progress), json.dumps(db), t - 3600))
             b.execute("INSERT INTO resumos(conta_id, nome, xp_total, nivel_max, classes, atualizado_em) "
@@ -1524,7 +1570,12 @@ class ProvaDaApi(unittest.TestCase):
             # vitrine a limpo, com a marca da versão da regra — cada uma aparece uma vez só
             # (13/09) e a foto das guildas de antes do servidor
             self.assertEqual([m for m in marcas if not m.startswith('resumos-nomes:')],
-                             ['guildas-antigas', 'resumos-v2'], marcas)
+                             ['guildas-antigas', 'jogador-ids', 'resumos-v2'], marcas)
+            # 04/10: os códigos de jogador que já estavam nos saves ganham dono — o repetido fica com
+            # a conta mais antiga (a 05), e a 06 troca quando abrir o jogo
+            donos = dict(b.execute("SELECT j.jid, c.nome FROM jogador_ids j JOIN contas c ON c.id = j.conta_id"))
+            self.assertEqual(len(donos), 39, donos)
+            self.assertEqual((donos['jcopiado'], donos['jant07']), ('Antiga 05', 'Antiga 07'))
             self.assertEqual(len([m for m in marcas if m.startswith('resumos-nomes:')]), 1, marcas)
             b.close()
         finally:

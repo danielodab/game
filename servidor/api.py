@@ -249,6 +249,16 @@ CREATE TABLE IF NOT EXISTS migracoes(
   nome          TEXT PRIMARY KEY,
   feita_em      INTEGER NOT NULL
 );
+-- 04/10: de quem é cada CÓDIGO DE JOGADOR (o jogador.id do save, que é a identidade na praça: o Relé
+-- trata como eco de si mesmo tudo o que chega com o próprio id). Duas contas com o mesmo código não se
+-- viam. O código é de UMA conta só — a primeira que o trouxe; a outra recebe a ordem de trocar
+-- (ver _jid_confere). Tabela nova, sem ALTER: o save e a conta ficam como estão.
+CREATE TABLE IF NOT EXISTS jogador_ids(
+  jid           TEXT PRIMARY KEY,
+  conta_id      INTEGER NOT NULL,
+  criado_em     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS jogador_ids_conta ON jogador_ids(conta_id);
 """
 
 # rota → (método da Api, precisa de conta?[, só do Mestre?[, a frase do 403 de quem não é]])
@@ -259,6 +269,7 @@ ROTAS = {
     ('GET',  '/api/eu'):       ('eu', True),
     ('GET',  '/api/save'):     ('save_ler', True),
     ('PUT',  '/api/save'):     ('salvar', True),
+    ('POST', '/api/jogador-id'): ('jogador_id', True),   # 04/10: o código de jogador é de uma conta só
     ('POST', '/api/troca'):    ('troca', True),
     ('GET',  '/api/ranking'):  ('ranking', False),
     ('GET',  '/api/saude'):    ('saude', False),
@@ -418,6 +429,9 @@ ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros 
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
+JID_MAX = 80                 # o teto do código de jogador (o mesmo do relé: ids de até 80 caracteres)
+
+
 def texto_ou_nulo(v, tam=40):
     return v.strip()[:tam] if isinstance(v, str) and v.strip() else None
 
@@ -822,6 +836,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         self._resumos_vistos = {}        # conta_id → a última foto pública — ver _resumo
         self._migra_resumos_v2()
         self._migra_resumos_nomes()
+        self._migra_jogador_ids()          # 04/10: de quem é cada código de jogador que já está nos saves
         self._migra_guildas_antigas()      # 13/09: a foto das guildas de antes do servidor
         with self._escrita():
             self._faxina_privacidade(forcar=True)   # 02/10: sessões vencidas, códigos e freios velhos (privacidade.py)
@@ -1068,9 +1083,78 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # hash: o último da economia que o juiz devolveu (13/09, salas.py); null antes da primeira op/sala
         if r is None:
             return 200, {'ok': True, 'versao': 0, 'progress': None, 'db': None, 'hash': None}
-        return 200, {'ok': True, 'versao': r['versao'],
-                     'progress': json.loads(r['progress']) if r['progress'] else None,
-                     'db': json.loads(r['db']) if r['db'] else None, 'hash': h['hash'] if h else None}
+        db = json.loads(r['db']) if r['db'] else None
+        resposta = {'ok': True, 'versao': r['versao'],
+                    'progress': json.loads(r['progress']) if r['progress'] else None,
+                    'db': db, 'hash': h['hash'] if h else None}
+        # 04/10: o save guardado traz o código de jogador de OUTRA conta (a cópia de antes do registro):
+        # o jogo que vai adotar este save já o adota com um código novo (js/core/nuvem.js). Só leitura aqui
+        jid = self._jid_do_db(db)
+        if jid:
+            with self.tranca:
+                dono = self.con.execute("SELECT conta_id FROM jogador_ids WHERE jid = ?", (jid,)).fetchone()
+            if dono is not None and dono['conta_id'] != conta['id']:
+                resposta['trocarId'] = jid
+        return 200, resposta
+
+    # -- o código de jogador é de UMA conta (04/10) -----------------------------------------------
+    # O DEFEITO: o dono entrou com a conta do Mestre no celular e com outra conta no PC, e uma não via a
+    # outra na praça. A identidade na Rede é o jogador.id do SAVE, e o js/core/rede.js joga fora toda
+    # mensagem que chega com o próprio id (é o eco dela mesma). A segunda conta tinha nascido com uma cópia
+    # do save da primeira (o mesmo navegador), então as duas tinham o MESMO código e cada uma tratava a
+    # outra como eco. Daqui em diante o servidor guarda de quem é cada código e manda a segunda trocar.
+    @staticmethod
+    def _jid_do_db(db):
+        jog = db.get('jogador') if isinstance(db, dict) else None
+        jid = jog.get('id') if isinstance(jog, dict) else None
+        return jid if isinstance(jid, str) and 0 < len(jid) <= JID_MAX else None
+
+    def _jid_confere(self, cid, jid):
+        """Dentro de uma transação de escrita. O código `jid` chegou pela conta `cid`: livre, fica dela
+        (devolve None); já dela, None; de OUTRA conta, devolve o próprio jid — a ordem de trocar. Nunca
+        recusa nada: o save sobe e o progresso fica; só a identidade na praça é que tem de mudar."""
+        if not jid:
+            return None
+        r = self.con.execute("SELECT conta_id FROM jogador_ids WHERE jid = ?", (jid,)).fetchone()
+        if r is None:
+            self.con.execute("INSERT INTO jogador_ids(jid, conta_id, criado_em) VALUES (?, ?, ?)", (jid, cid, agora()))
+            return None
+        return None if r['conta_id'] == cid else jid
+
+    def jogador_id(self, conta, corpo):
+        """POST /api/jogador-id {id} → {ok, trocar}. O jogo pergunta ao abrir, com o código que está no
+        save DESTA máquina (que pode nem ter subido: um save recusado também entra na praça). trocar:true
+        = esse código é de outra conta; o jogo gera um novo, grava e pergunta de novo."""
+        jid = corpo.get('id')
+        if not isinstance(jid, str) or not jid or len(jid) > JID_MAX:
+            raise Recusa(400, 'id precisa ser o código do jogador (texto de até %d caracteres)' % JID_MAX)
+        with self._escrita():
+            troca = self._jid_confere(conta['id'], jid)
+            if troca:
+                self._evento(conta['id'], 'jogador-id-repetido', {'id': jid})
+        if troca:
+            log.info("código de jogador repetido: a conta #%d chegou com um que é de outra — mandada trocar", conta['id'])
+        return 200, {'ok': True, 'trocar': bool(troca)}
+
+    def _migra_jogador_ids(self):
+        """Os saves que JÁ estão no banco: cada código fica com UMA conta — a do Mestre primeiro (é a
+        conta do dono, a original), depois a mais antiga. As outras que trazem o mesmo código ficam sem
+        registro e recebem a ordem de trocar na próxima vez que abrirem o jogo. Uma vez por banco."""
+        repetidos = 0
+        with self._escrita():
+            if self.con.execute("SELECT 1 FROM migracoes WHERE nome = 'jogador-ids'").fetchone():
+                return
+            for r in self.con.execute("SELECT s.conta_id, s.db FROM saves s JOIN contas c ON c.id = s.conta_id "
+                                      "ORDER BY c.gm DESC, c.id").fetchall():
+                try:
+                    jid = self._jid_do_db(json.loads(r['db']) if r['db'] else None)
+                except (TypeError, ValueError):
+                    jid = None
+                if self._jid_confere(r['conta_id'], jid):
+                    repetidos += 1
+            self.con.execute("INSERT INTO migracoes(nome, feita_em) VALUES ('jogador-ids', ?)", (agora(),))
+        if repetidos:
+            log.info("migração jogador-ids: %d contas com o código de jogador de outra (trocam ao abrir o jogo)", repetidos)
 
     def _recusa_save(self, conta_id, status, erro, **extra):
         """Toda recusa de save vira evento — é a trilha para achar quem tenta
@@ -1100,6 +1184,11 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         if self._autoridade_ligada():
             feito = self._salvar_cosmetico(conta, db)
             if feito is not None:
+                # 04/10: o id é campo de dono cliente (JOGADOR_CLIENTE): entrou no save; confere de quem é
+                with self._escrita():
+                    troca = self._jid_confere(cid, self._jid_do_db(db))
+                if troca:
+                    feito['trocarId'] = troca
                 return 200, feito
         brutos = corpo.get('nascimentos') or []
         if not isinstance(brutos, list):
@@ -1239,6 +1328,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
                 # a loja (Fase C): o que este save diz ter entregue ou recusado
                 # fecha junto com ele, na mesma transação; nunca recusa o save
                 loja = self._loja_confirma(cid, db, nova, t)
+                # 04/10: o código de jogador deste save é desta conta? (livre: passa a ser). De outra: o
+                # save SOBE assim mesmo — o progresso não se perde — e a resposta manda o jogo trocar
+                troca_id = self._jid_confere(cid, self._jid_do_db(db))
                 if registrar:
                     self._evento(cid, 'nascimentos', {'versao': nova, 'iids': [r[0] for r in registrar]})
                 self.con.commit()
@@ -1246,7 +1338,10 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
                 if self.con.in_transaction:
                     self.con.rollback()
                 raise
-        return 200, {'ok': True, 'versao': nova, 'registrados': len(registrar), 'loja': loja}
+        resposta = {'ok': True, 'versao': nova, 'registrados': len(registrar), 'loja': loja}
+        if troca_id:
+            resposta['trocarId'] = troca_id
+        return 200, resposta
 
     def _resumo(self, cid, conta, progress, db, t):
         """(d) a foto pública da conta, para o ranking — recalculada a cada save.

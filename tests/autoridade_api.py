@@ -477,6 +477,31 @@ class ProvaDaAutoridade(unittest.TestCase):
         self.assertEqual(self.sql("SELECT iid FROM itens WHERE iid = 'jforjado1'"), [], 'nascimentos ignorados')
         self.assertEqual(self.sql("SELECT nome FROM resumos WHERE conta_id = ?", c.conta['id'])[0]['nome'], 'Nome Bonito')
 
+    def test_09b_codigo_de_jogador_repetido_no_put_cosmetico(self):
+        """04/10 — com o juiz ligado o PUT só grava o cosmético, e o jogador.id é cosmético (dono
+        cliente): é por ele que o código novo chega ao servidor. O código de OUTRA conta sobe, mas a
+        resposta manda trocar; o código novo sobe e ninguém manda mais nada."""
+        a, b = self.novo('Dona Juiz'), self.novo('Copia Juiz')
+        pa, da = self.estado_de_partida()
+        da['jogador'] = dict(da.get('jogador') or {}, id='jjuizdona', nome='Oda')
+        self.assertNotIn('trocarId', self.poe_estado(a, pa, da))
+        pb, db_ = self.estado_de_partida(carteira=33)
+        db_['jogador'] = dict(db_.get('jogador') or {}, id='jjuizdona', nome='Oda')
+        self.assertEqual(self.poe_estado(b, pb, db_).get('trocarId'), 'jjuizdona', 'o primeiro PUT (inteiro) já avisa')
+        self.assertEqual(self.save(b).get('trocarId'), 'jjuizdona')
+        self.assertEqual(b.pede('POST', '/api/jogador-id', {'id': 'jjuizdona'})[1], {'ok': True, 'trocar': True})
+        status, r = b.salva(1, pb, db_)
+        self.assertEqual((status, r.get('autoridade'), r.get('trocarId')), (200, True, 'jjuizdona'), r)
+        db_['jogador']['id'], db_['jogador']['nome'] = 'jjuizcopia', None
+        status, r = b.salva(1, pb, db_)
+        self.assertEqual((status, r.get('autoridade')), (200, True), r)
+        self.assertNotIn('trocarId', r)
+        s = self.save(b)
+        self.assertNotIn('trocarId', s)
+        self.assertEqual((s['db']['jogador']['id'], s['db']['jogador']['nome'], s['db']['carteira']),
+                         ('jjuizcopia', None, {'moedas': 33}), 'o código trocou e a economia ficou')
+        self.assertNotIn('trocarId', self.save(a))
+
     # -- a op ---------------------------------------------------------------------------------
     def test_10_op_confere_forma_e_hash(self):
         c = self.novo('Operador')

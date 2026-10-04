@@ -148,7 +148,15 @@ var JOGO = (typeof window !== 'undefined')
     return dados;
   }
 
+  /* CONGELADO (04/10): a Nuvem acabou de trocar o save do disco (o de outra conta
+   * saiu, ou o do servidor entrou) e a página vai recarregar. Até lá o jogo segue
+   * rodando com o save ANTIGO na memória, e qualquer gravação o poria de volta no
+   * disco — foi assim que uma conta nova herdou o save (e o código de jogador) da
+   * conta anterior deste navegador. Congelado, nada mais vai para o disco. */
+  var congelado = false;
+  DB.congela = function () { congelado = true; };
   function grava() {
+    if (congelado) return;
     var s = armazem();
     try { if (s && dados) s.setItem(CHAVE, JSON.stringify(dados)); } catch (e) {}
     // A NUVEM (10/09) pendura aqui: toda gravação local agenda a subida
@@ -162,6 +170,28 @@ var JOGO = (typeof window !== 'undefined')
     try { return JSON.parse(JSON.stringify(d)); } catch (e) { return null; }
   };
   DB.recarregar = function () { dados = null; return carrega(); };
+
+  /* O CÓDIGO DE JOGADOR É DE UMA CONTA SÓ (04/10). O `jogador.id` é a identidade
+   * na praça: a Rede joga fora o que chega com o próprio id (é o eco dela mesma),
+   * então duas contas com o mesmo código não se veem. O servidor guarda de quem é
+   * cada código e, quando esta conta chega com o de outra (um save copiado), manda
+   * trocar. Troca SÓ a identidade: heróis, itens, séries, moedas e histórico ficam.
+   * Amigos, guilda, mercado, correio e troca são por CONTA no servidor, não por este
+   * código. O NOME sai junto: veio na mesma cópia, e o Acampamento pede o batismo de
+   * novo ("Como te chamam no fundo?"). `velho` (opcional) é o código condenado: se o
+   * daqui já é outro, nada muda. Devolve o código novo, ou null. */
+  DB.novoId = novoId;
+  DB.idDoJogador = function () { return carrega().jogador.id; };
+  DB.trocaId = function (velho) {
+    var d = carrega();
+    if (velho && d.jogador.id !== velho) return null;
+    var novo = novoId();
+    while (novo === d.jogador.id) novo = novoId();
+    d.jogador.id = novo;
+    d.jogador.nome = null;
+    grava();
+    return novo;
+  };
   DB.importar = function (obj) {
     if (!obj || typeof obj !== 'object') return false;
     var s = armazem();

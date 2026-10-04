@@ -113,27 +113,84 @@
     };
   }
 
+  /* A PÁGINA VAI RECARREGAR com outro save no disco (04/10): até lá o jogo segue
+   * rodando com o save ANTIGO na memória, e uma gravação qualquer (um relógio da
+   * HUD, a missão do dia) o punha de volta no disco. Na recarga o registro já
+   * dizia "é desta conta, pendente" e o save da conta ANTERIOR subia para a nova —
+   * com o mesmo código de jogador e o mesmo nome. Daqui até recarregar, nada grava. */
+  function congelaDisco() {
+    try { if (DB() && DB().congela) DB().congela(); } catch (e) {}
+    try { if (P()) P().save = function () {}; } catch (e2) {}
+  }
+  function recarrega() {
+    congelaDisco();
+    try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura (index.html) sai antes: é recarga de propósito
+    try { location.reload(); } catch (e4) {}
+  }
+
+  /* O CÓDIGO DE JOGADOR (04/10): o servidor avisou (`trocarId`) que o save
+   * guardado desta conta traz o código de OUTRA — a cópia de antes do registro.
+   * O save entra aqui já com um código novo e sem o nome copiado; o resto fica. */
+  function trocaNoSave(r) {
+    var jog = r && r.db && r.db.jogador;
+    if (!r || !r.trocarId || !jog || jog.id !== r.trocarId || !DB() || !DB().novoId) return false;
+    jog.id = DB().novoId();
+    jog.nome = null;
+    return true;
+  }
+
   /* O save do servidor vira o desta máquina. Gravado CRU (sem passar pelo
    * Progress.save enganchado) e a página recarrega uma vez — o jogo já leu o
-   * save antigo e a HUD inteira o refletiria. */
-  function aplica(r) {
+   * save antigo e a HUD inteira o refletiria. `outraConta`: o que está no disco
+   * é de outra conta — o que o servidor não trouxe sai, em vez de ficar. */
+  function aplica(r, outraConta) {
     var C = JOGO.Contas, s = armazem();
     if (!s || !C) return false;
+    if (!N.semRecarga) congelaDisco();               // antes de mexer no disco: nada do save velho volta
+    var trocou = trocaNoSave(r);
     try {
       if (r.progress) s.setItem(C.chaveSave(), JSON.stringify(r.progress));
       if (r.db) s.setItem(C.chaveConta(), JSON.stringify(r.db));
+      else if (outraConta) s.removeItem(C.chaveConta());
     } catch (e) { return false; }
     versao = r.versao || 0;
-    gravaRegistro(versao, S().contaId(), false);
-    sujo = false;
+    gravaRegistro(versao, S().contaId(), trocou);   // código trocado: o save sobe de novo depois da recarga
+    sujo = trocou;
     avisa('puxou', { versao: versao });
+    if (trocou) avisa('trocou-id', null);
     if (N.semRecarga) {
       try { if (P() && P().load) P().load(); } catch (e2) {}
       try { if (DB() && DB().importar && r.db) DB().importar(r.db); } catch (e3) {}
+      if (trocou) N.agendar();
       return true;
     }
-    try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura (index.html) sai antes: é recarga de propósito
-    try { location.reload(); } catch (e4) {}
+    recarrega();
+    return true;
+  }
+
+  /* O código de jogador que está NESTA máquina é desta conta? Pergunta ao servidor
+   * (POST /api/jogador-id): livre, fica dela; de outra conta, troca aqui (DB.trocaId)
+   * e a página recarrega — a praça, o grupo e a batalha já leram o código velho.
+   * Vale também para o save que o servidor recusou (ele entra na praça do mesmo
+   * jeito). Servidor antigo ou fora: segue como está; o PUT avisa depois.
+   * Resolve true se trocou. */
+  function confereId(s) {
+    var db = DB();
+    var id = null;
+    try { id = (db && db.idDoJogador) ? db.idDoJogador() : null; } catch (e) {}
+    if (!id || !db.trocaId) return Promise.resolve(false);
+    return s.api('/api/jogador-id', { method: 'POST', body: { id: id } }).then(function (r) {
+      if (!r || !r.ok || r.trocar !== true) return false;
+      return trocaAqui(id);
+    }, function () { return false; });
+  }
+  function trocaAqui(velho) {
+    var novo = null;
+    try { novo = DB().trocaId(velho); } catch (e) {}
+    if (!novo) return false;
+    sujo = true;
+    marcaSujo();
+    avisa('trocou-id', null);
     return true;
   }
 
@@ -141,6 +198,7 @@
   function limpaLocal() {
     var C = JOGO.Contas, s = armazem();
     if (!s || !C) return;
+    if (!N.semRecarga) congelaDisco();             // 04/10: a memória ainda tem o save da outra conta
     try { s.removeItem(C.chaveSave()); s.removeItem(C.chaveConta()); } catch (e) {}
     if (N.semRecarga) {
       try { if (P() && P().load) P().load(); } catch (e2) {}
@@ -270,7 +328,7 @@
       var mesmaConta = reg.conta === cid;
       var deLa = Math.max(0, Math.floor(Number(r.versao) || 0));
       if (r.progress && (!mesmaConta || deLa > reg.versao)) {
-        aplica(r);
+        aplica(r, !!reg.conta && !mesmaConta);
         return r;
       }
       // A CONTA TROCOU nesta máquina (o registro é de outra) e o servidor não
@@ -281,16 +339,20 @@
         versao = 0;
         gravaRegistro(0, cid, true);
         avisa('limpou', { conta: cid });
-        if (!N.semRecarga) try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('nuvem'); } catch (eB) {}   // a marca de abertura sai antes
-        if (!N.semRecarga) { try { location.reload(); } catch (e5) {} return r; }
+        if (!N.semRecarga) { recarrega(); return r; }
         return N.empurrar();
       }
       versao = deLa;
       gravaRegistro(versao, cid, reg.sujo);
-      // o servidor não tem nada, está atrás, ou o local mudou sem subir: sobe
-      if (!r.progress || !mesmaConta || reg.sujo || deLa < reg.versao) return N.empurrar();
-      avisa('emdia', { versao: versao });
-      return r;
+      // 04/10: o save desta máquina fica — antes de subir (e de a praça seguir com ele), o código de
+      // jogador dele é conferido; se é de outra conta, troca e recarrega
+      return confereId(s).then(function (trocou) {
+        if (trocou && !N.semRecarga) { recarrega(); return r; }
+        // o servidor não tem nada, está atrás, ou o local mudou sem subir: sobe
+        if (trocou || !r.progress || !mesmaConta || reg.sujo || deLa < reg.versao) return N.empurrar();
+        avisa('emdia', { versao: versao });
+        return r;
+      });
     });
   };
 
@@ -321,6 +383,10 @@
         } catch (e) {}
         gravaRegistro(versao, s.contaId(), sujo);
         avisa('subiu', { versao: versao, registrados: r.registrados || 0 });
+        // 04/10: o save subiu com o código de jogador de outra conta (a pergunta do boot não chegou ao
+        // servidor): troca agora e sobe de novo. Sem recarregar — pode haver luta aberta; a praça veste
+        // o código novo na próxima abertura
+        if (r.trocarId) trocaAqui(r.trocarId);
         if (sujo) N.agendar();
         return r;
       }

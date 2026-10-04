@@ -123,7 +123,8 @@ ROTAS_PRIVACIDADE = {
 # As tabelas que guardam o id da conta SEM chave estrangeira (o CASCADE não as alcança).
 # Coluna e tabela de cada uma; a prova confere que nenhuma linha fica para trás.
 SEM_CHAVE = (('rele_presenca', 'conta_id'), ('duelo_espera', 'conta_id'), ('guerra_espera', 'conta_id'),
-             ('guerra_saidas', 'conta_id'))
+             ('guerra_saidas', 'conta_id'),
+             ('jogador_ids', 'conta_id'))   # 04/10: o código de jogador some com a conta (e fica livre)
 
 
 def _json(texto):
