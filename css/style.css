@@ -3596,11 +3596,34 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .vida-praca { top: calc(var(--sa-t, 0px) + 40px); }
   .hub-dock { left: auto; right: calc(var(--sa-r, 0px) + 8px); transform: none; bottom: calc(var(--sa-b, 0px) + 6px);
               padding: 3px 4px; gap: 1px; flex-wrap: nowrap; width: auto; max-width: calc(100% - 250px); border-radius: 12px; }
-  .hub-dock-b { min-width: 44px; max-width: none; flex: 0 0 auto; min-height: 40px; padding: 4px 3px; font-size: 0; gap: 0; }
+  .hub-dock-b { min-width: 44px; max-width: none; flex: 0 0 auto; min-height: 44px; padding: 4px 3px; font-size: 0; gap: 0; }
   .hub-dock-b .tecla, .hub-dock-b .hd-conta { display: none; }
   .hub-dock-b .hd-ic.is-svg, .hub-dock-b .hd-ic.is-svg .ico-svg { width: 22px; height: 22px; }
   .hub-chat { left: calc(var(--sa-l, 0px) + 8px); bottom: calc(var(--sa-b, 0px) + 6px); width: min(230px, 30vw); gap: 4px; }
   .hub-chat-log { max-height: 84px; }
   .hub-chat-input { padding: 6px 8px; font-size: 12px; }
   .hub-painel { bottom: calc(var(--sa-b, 0px) + 60px); }
+}
+
+/* AS FICHAS NO CELULAR DEITADO (04/10): a tela tem ~370 px de altura e o cabeçalho (medalhão, título e a
+   frase de apoio) comia um terço dela. Só para o dedo: a ficha ocupa a altura inteira, o cabeçalho vira uma
+   linha (a frase de apoio some — ela repete o título) e o corpo ganha o espaço. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .sheet-panel { max-height: 100vh; max-height: 100dvh; border-radius: 12px 12px 0 0; }
+  .sheet-panel::before { display: none; }
+  .sheet-head { padding: 4px 62px 4px 10px; gap: 8px; align-items: center; }   /* a folga da direita é do botão de tela cheia */
+  .sheet-head p { display: none; }
+  .sheet-head h2 { font-size: 15px; }
+  .sheet-ico { width: 28px; height: 28px; min-width: 28px; }
+  .sheet-ico .ico-svg { width: 16px; height: 16px; }
+  .sheet-body { padding-top: 8px; gap: 8px; }
+}
+
+/* EM PÉ (04/10): o cais de duas fileiras ficava POR CIMA do chat. O chat sobe um degrau e o cais encolhe. */
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 480px) {
+  .hub-dock { padding: 3px 4px; bottom: calc(var(--sa-b, 0px) + 6px); }
+  .hub-dock-b { min-height: 44px; padding: 4px 2px 3px; gap: 2px; }
+  .hub-chat { left: calc(var(--sa-l, 0px) + 8px); bottom: calc(var(--sa-b, 0px) + 100px); width: min(240px, 62vw); }
+  .hub-chat-log { max-height: 96px; }
+  .hub-painel { bottom: calc(var(--sa-b, 0px) + 140px); }
 }
