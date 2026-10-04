@@ -57,6 +57,11 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+# 04/10: as ofertas da semana (servidor/loja.py) mudam o preço cobrado conforme a semana do calendário; as
+# provas da API contam barras com números fixos, então sobem a API com as ofertas DESLIGADAS. Quem prova as
+# ofertas (tests/loja_api.py, ProvaDasNovidades) liga de volta no ambiente do servidor dela
+os.environ.setdefault('LOJA_OFERTAS', '0')
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 API = os.path.join(AQUI, '..', 'servidor', 'api.py')
 # as funções puras do cartório (expande_regra, herois_por_classe…) sem subir

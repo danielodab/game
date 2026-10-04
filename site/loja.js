@@ -122,11 +122,45 @@
   function temBarras() { return !!(minha && minha.barras && typeof minha.barras === 'object'); }
   function barrasNoSaldo() { return Number(((minha && minha.barras) || {}).saldo) || 0; }
   function nBarras(n) { return N(n) + (Number(n) === 1 ? ' barra de ouro' : ' barras de ouro'); }
-  function precoTexto(it) { return moedaDe(it) === 'barras' ? nBarras(it.preco) : N(it.preco) + ' vinténs'; }
+  /* 04/10: a oferta da semana deste item (ou null). Vale enquanto o relógio do servidor não passou do
+   * `fim`; quem decide o preço cobrado é o servidor — aqui é só o que a página mostra. */
+  function oferta(it) {
+    var o = catalogo && catalogo.ofertas;
+    if (!o || !Array.isArray(o.itens) || !(Number(o.fim) > SITE.agora())) return null;
+    for (var i = 0; i < o.itens.length; i++) {
+      var x = o.itens[i];
+      if (x && x.sku === it.sku && Number(x.preco) > 0 && Number(x.preco) < Number(it.preco)) return x;
+    }
+    return null;
+  }
+  function precoDe(it) { var o = oferta(it); return o ? Number(o.preco) : Number(it.preco); }
+  // o preço cheio a riscar: o do catálogo quando há oferta, ou o `precoCheio` do Pacote de Boas-Vindas
+  function cheioDe(it) {
+    var c = oferta(it) ? Number(it.preco) : Number(it.precoCheio) || 0;
+    return c > precoDe(it) ? c : 0;
+  }
+  function menosPorCento(it) { var c = cheioDe(it); return c ? Math.round((1 - precoDe(it) / c) * 100) : 0; }
+  function precoTexto(it) { return moedaDe(it) === 'barras' ? nBarras(precoDe(it)) : N(precoDe(it)) + ' vinténs'; }
   function precoHtml(it) {
+    var cheio = cheioDe(it);
+    var antes = cheio ? '<s class="preco-cheio" aria-label="de ' + N(cheio) + '">' + N(cheio) + '</s>' : '';
     return moedaDe(it) === 'barras'
-      ? '<span class="preco preco-barras" data-moeda="barras">' + iconeBarra() + N(it.preco) + ' <small>barras</small></span>'
-      : '<span class="preco" data-moeda="vintens">' + N(it.preco) + ' <small>vinténs</small></span>';
+      ? '<span class="preco preco-barras' + (cheio ? ' em-oferta' : '') + '" data-moeda="barras">' + iconeBarra() + antes + N(precoDe(it)) + ' <small>barras</small></span>'
+      : '<span class="preco" data-moeda="vintens">' + N(precoDe(it)) + ' <small>vinténs</small></span>';
+  }
+  // os segundos que faltam, por extenso: "2 d 7 h", "1 h 23 min" (DIA e HORA: nenhum número solto, a
+  // prova do site lê este arquivo atrás de preço escrito à mão)
+  function faltaTexto(seg) {
+    var HORA = 60 * 60;
+    seg = Math.max(0, Math.floor(Number(seg) || 0));
+    var d = Math.floor(seg / DIA), h = Math.floor((seg % DIA) / HORA), m = Math.floor((seg % HORA) / 60);
+    if (d > 0) return d + ' d' + (h ? ' ' + h + ' h' : '');
+    if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
+    return m > 0 ? m + ' min' : 'menos de 1 min';
+  }
+  function presenteavel(it) {
+    var fora = catalogo && catalogo.presente && Array.isArray(catalogo.presente.fora) ? catalogo.presente.fora : null;
+    return !!fora && moedaDe(it) === 'barras' && fora.indexOf(it.tipo) < 0;
   }
   /* o câmbio que o servidor manda, em palavras (as duas seções de troca) */
   function cambio(id) {
@@ -634,10 +668,13 @@
       bt = '<button type="button" class="btn btn-ouro' + (motivo ? ' trancado' : '') + '" data-comprar="' + E(it.sku) + '"' +
         (motivo || ocupado ? ' disabled' : '') + '>' + rotulo + '</button>';
     }
-    return '<article class="produto t-' + E(it.tipo) + ' m-' + moedaDe(it) + '" data-sku="' + E(it.sku) + '">' + arte(it) +
+    var menos = oferta(it) ? menosPorCento(it) : 0;
+    return '<article class="produto t-' + E(it.tipo) + ' m-' + moedaDe(it) + (menos ? ' em-oferta' : '') + '" data-sku="' + E(it.sku) + '">' +
+      (menos ? '<span class="oferta-selo no-cartao">−' + menos + '%</span>' : '') + arte(it) +
       '<div class="corpo"><h4>' + E(it.nome) + '</h4>' + (it.descricao ? '<p>' + E(it.descricao) + '</p>' : '') + extra +
       '<div class="produto-pe">' + precoHtml(it) + bt + '</div>' +
       (motivo ? '<p class="motivo" data-motivo="' + E(motivo.chave) + '">' + E(motivo.texto) + '</p>' : '') +
+      (vitrine ? '' : presenteHtml(it)) +
       '</div></article>';
   }
 

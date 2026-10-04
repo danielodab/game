@@ -441,6 +441,61 @@ def entrega_de(item):
     return {'tipo': item['tipo'], 'alvo': item['alvo'], 'qtd': item['qtd']}
 
 
+def entrega_boas_vindas(classe, aura):
+    """04/10: a entrega do Pacote de Boas-Vindas, com as duas escolhas de quem compra congeladas. As pedras
+    vão antes da classe; o jogo confere TODOS os itens antes de entregar qualquer um (js/core/loja.js): se
+    a classe não puder entrar, o pacote inteiro é recusado e as barras voltam."""
+    itens = [entrega_de(i) for i in _BV_PEDRAS] + [entrega_de(POR_SKU['classe-' + classe])]
+    return {'tipo': 'pacote', 'alvo': 'boas-vindas', 'qtd': 1, 'itens': itens, 'aura': aura}
+
+
+# ---- as ofertas da semana (04/10) --------------------------------------------------------
+def semana_de(t):
+    """O número da semana de Brasília em que `t` cai (vira na segunda, 00:00 de lá)."""
+    return (int(t) - SEMANA_ZERO) // SEMANA_S
+
+
+def _conta_da_semana(semana, texto):
+    return hashlib.sha256(('soterra-oferta:%d:%s' % (semana, texto)).encode('utf-8')).hexdigest()
+
+
+def ofertas_da_semana(semana):
+    """Os skus em oferta numa semana, sempre os mesmos para a mesma semana: de cada seção de SECOES_OFERTA
+    sai o item de menor conta (sha256 da semana com o sku), e ficam as OFERTAS_POR_SEMANA seções de menor
+    conta — três itens de três seções diferentes. NÃO é sorteio pago: ninguém paga para girar, todo mundo
+    vê a mesma vitrine, e nada se guarda (a semana seguinte é outra conta)."""
+    if not OFERTAS_LIGADAS:
+        return ()
+    por_secao = {}
+    for i in CATALOGO:
+        if i['secao'] in SECOES_OFERTA and i['moeda'] == 'barras':
+            por_secao.setdefault(i['secao'], []).append(i['sku'])
+    secoes = sorted(por_secao, key=lambda s: _conta_da_semana(semana, 'secao:' + s))[:OFERTAS_POR_SEMANA]
+    return tuple(min(por_secao[s], key=lambda sku: _conta_da_semana(semana, sku)) for s in secoes)
+
+
+def preco_com_desconto(preco):
+    """O preço da oferta, arredondado para CIMA (a barra não se parte; o desconto nunca passa do anunciado)."""
+    return -(-preco * (100 - OFERTA_DESCONTO) // 100)
+
+
+def preco_de(item, t):
+    """O preço que o servidor COBRA de `item` no instante `t`: o do catálogo, ou o da oferta da semana."""
+    if item['sku'] in ofertas_da_semana(semana_de(t)):
+        return preco_com_desconto(item['preco'])
+    return item['preco']
+
+
+def ofertas_publico(t):
+    """{semana, desconto, inicio, fim, itens:[{sku, nome, preco, precoCheio}]} — o `fim` é a contagem
+    regressiva do site e do jogo (segundos do servidor)."""
+    semana = semana_de(t)
+    inicio = SEMANA_ZERO + semana * SEMANA_S
+    return {'semana': semana, 'desconto': OFERTA_DESCONTO, 'inicio': inicio, 'fim': inicio + SEMANA_S,
+            'itens': [{'sku': sku, 'nome': POR_SKU[sku]['nome'], 'preco': preco_com_desconto(POR_SKU[sku]['preco']),
+                       'precoCheio': POR_SKU[sku]['preco']} for sku in ofertas_da_semana(semana)]}
+
+
 def nome_do_pedido(sku, entrega=None, vintens=None):
     """O nome de um pedido: o do catálogo, o de um produto que saiu da venda, o
     de um pacote, '<N> vinténs' no presente de vinténs; senão, o próprio sku."""
@@ -878,25 +933,21 @@ class LojaMixin:
                 raise Recusa(409, 'o servidor ainda não viu seus vinténs: abra o jogo logado nesta conta '
                                   '(na conta Principal)')
             self._loja_confere_teto(cid, t)             # o teto de linhas vale para todo mundo, Mestre inclusive
-            self._loja_confere_item(cid, item, save['progress'] if save else None)
+            self._loja_confere_item(cid, item, save['progress'] if save else None, entrega)
             if not mestre:                              # o Mestre pula o saldo e os limites (bolsoSemFundo)
                 self._loja_confere_limites(cid, item, t)
                 if em_barras:
-                    if self._barras_saldo(cid) < item['preco']:
+                    if self._barras_saldo(cid) < preco_hoje:
                         raise Recusa(409, 'barras de ouro insuficientes', barras=self._barras_publico(cid, False))
                 else:
                     saldo = self._loja_saldo(cid, conta, save)
-                    if saldo['disponivel'] < item['preco']:
+                    if saldo['disponivel'] < preco_hoje:
                         raise Recusa(409, 'vinténs insuficientes', saldo=saldo)
             # o pedido anda com preço em VINTÉNS (0 se pago em barras); as barras moram em loja_barras
-            preco = 0 if mestre or em_barras else item['preco']
-            custo = 0 if mestre or not em_barras else item['preco']
+            preco = 0 if mestre or em_barras else preco_hoje
+            custo = 0 if mestre or not em_barras else preco_hoje
             ganho = item['qtd'] if item['tipo'] == 'barras' else 0
-            cur = self.con.execute(
-                "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) "
-                "VALUES (?, ?, ?, ?, 'pendente', ?, ?)",
-                (cid, sku, json.dumps(entrega_de(item), ensure_ascii=False), preco, idem, t))
-            pid = cur.lastrowid
+            pid = self._loja_cria_pedido(cid, sku, entrega, preco, idem, t)
             if custo or ganho:
                 self.con.execute("INSERT INTO loja_barras(pedido_id, custo, ganho, criado_em) VALUES (?, ?, ?, ?)",
                                  (pid, custo, ganho, t))
@@ -907,6 +958,8 @@ class LojaMixin:
             evento = {'id': pid, 'sku': sku, 'preco': preco}
             if custo:
                 evento['barras'] = custo
+            if preco_hoje != item['preco']:
+                evento['oferta'] = semana_de(t)         # 04/10: comprado na oferta desta semana
             self._evento(cid, 'loja-compra', evento)
             saldo = self._loja_saldo(cid, conta, save)
             barras = self._barras_publico(cid, False)
