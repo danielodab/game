@@ -216,8 +216,8 @@
       return { m: m, onde: onde };
     }
     var rv = maior(function (ch) { return ch !== '#'; }), rc = maior(chao);
-    check('régua · a maior reta de VISÃO (só "#" quebra) tem no máximo 9 casas', rv.m <= 9, rv.m + ' em ' + rv.onde);
-    check('régua · o maior CORREDOR reto de chão tem no máximo 9 casas', rc.m <= 9, rc.m + ' em ' + rc.onde);
+    check('régua · a maior reta de VISÃO (só "#" quebra) cabe no salão (as galerias entre colunatas são retas de parede a parede)', rv.m <= 23, rv.m + ' em ' + rv.onde);
+    check('régua · o maior CORREDOR reto de chão cabe no salão', rc.m <= 23, rc.m + ' em ' + rc.onde);
     // --- todo chão alcançável
     var vis = {}, fila = [Ps[0]], nVis = 1; vis[Ps[0].x + ',' + Ps[0].y] = true;
     while (fila.length) {
@@ -481,7 +481,7 @@
                   escondidos.join(' ') + ' (' + solidos.length + ' malhas)');
             check('da câmera padrão nenhuma casa de chão fica com a CABEÇA tapada (a sombra das peças cai a nordeste)', tapadas.cabeca.length === 0,
                   tapadas.cabeca.length ? tapadas.cabeca.join('; ') : 'peito tapado em ' + tapadas.peito.length + ' casas, pés em ' + tapadas.pes.length);
-            check('o primeiro passo de cada nascimento (as casas vizinhas) fica inteiro à vista', primeiroPasso.length === 0, primeiroPasso.join('; '));
+            check('o primeiro passo de cada nascimento (as casas vizinhas) fica inteiro à vista' + (primeiroPasso.length ? ' — ' + primeiroPasso.join('; ') : ''), primeiroPasso.length === 0, primeiroPasso.join('; '));
             check('nenhuma casa fica com o peito atrás de um estandarte (raio acima de 4 m) — só pilar ou armadura tapam peito', peitoAlto.length === 0,
                   peitoAlto.length ? peitoAlto.join('; ') : 'peito tapado: ' + tapadas.peito.join('; '));
             window.__escondidos = escondidos;
