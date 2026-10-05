@@ -7,9 +7,9 @@ português."* Combinado em **três etapas**:
 |---|---|---|
 | 1 | a base (`JOGO.I18n`), o seletor nas Configurações e os **dados** (tudo o que vem de `js/core/data`) | **feita** |
 | 2 | as telas e os menus do jogo (`js/ui/*`, as mensagens de `js/core/*`) | **feita** (05/10) |
-| 3 | o site (`site/*`) e as mensagens do servidor (`servidor/*.py`) | a fazer |
+| 3 | o site (`site/*`) e as mensagens do servidor (`servidor/*.py`) | **feita** (05/10) |
 
-Este arquivo é o manual de quem vai fazer a 3 (e de quem for acrescentar texto ao jogo) sem ter visto a 1 e a 2.
+As três entraram. Este arquivo é o manual de quem for acrescentar texto (ao jogo, ao site, ao servidor) ou um idioma.
 
 ## A regra que não se quebra
 
@@ -21,7 +21,9 @@ save, no servidor e no juiz. O idioma é uma camada por cima, no navegador.
 - Nada de idioma entra no save, no hash da batalha (`Engine.hash` não tem nome nenhum) nem vai ao
   servidor. `Engine.VERSAO_REGRAS` não muda por causa de tradução.
 - Não se traduz o arquivo de dados: traduz-se **por cima** dele (`js/i18n/dados_*.js`).
-- `node tests/idiomas.js` prova tudo isso (47 checagens, poucos segundos). Rode depois de qualquer mexida.
+- `node tests/idiomas.js` prova tudo isso (58 checagens, poucos segundos). Rode depois de qualquer mexida.
+- O **servidor fala português**. As recusas (`{"erro": "…"}`) saem em português e quem traduz é o cliente. A
+  única coisa que o servidor escreve em outra língua é o **e-mail** (ver a etapa 3).
 
 ## As peças
 
@@ -32,8 +34,15 @@ save, no servidor e no juiz. O idioma é uma camada por cima, no navegador.
 | `js/i18n/textos_en.js`, `textos_es.js` | a interface: `"texto em português": "tradução"`. **É aqui que a etapa 2 escreve.** |
 | `index.html` | carrega o `i18n.js` antes da lista, põe o `<html lang>` e, fora do português, desce o `textos_<idioma>.js` **logo depois do `i18n.js`** (o aplicativo desenha telas antes da lista) e encaixa o `dados_<idioma>.js` depois do último `js/core/data/*.js`. Em português não desce dicionário nenhum. A tela de carga e o aviso de abertura que parou têm um dicionário próprio, pequeno, DENTRO do `index.html` (`BT`): rodam antes do `i18n.js`. |
 | `js/ui/hud.js` → `sheetConfig` | o seletor (primeira seção da ficha) e o **exemplo vivo** de texto embrulhado. |
-| `tools/i18n_falta.js` | o que falta traduzir. |
-| `tests/idiomas.js` | a prova. |
+| `js/i18n/erros_en.js`, `erros_es.js` | o que o SERVIDOR diz: `"frase do servidor": "tradução"` (recusas, avisos, a loja). Etapa 3. |
+| `site/i18n.js` | o site: o seletor do topo, a tradução do HTML por cima, a lista de scripts de cada página. |
+| `site/i18n_en.js`, `i18n_es.js` | as frases do site (HTML e scripts). |
+| `site/i18n_juridico_en.js`, `_es.js` | os Termos e a Privacidade (tradução de cortesia). |
+| `tools/i18n_falta.js` | o que falta traduzir (jogo, site e servidor). |
+| `tools/i18n_site.js` | colhe as frases do site dos arquivos, como o navegador as colhe. |
+| `tools/erros_servidor.py` | colhe do código as frases que o servidor manda ao jogador. |
+| `tests/idiomas.js` | a prova (Node). |
+| `tests/idiomas_site.py` | a prova de navegador do site, do servidor e do caminho site → jogo. |
 
 Arquivo novo de dicionário (se um dia quiser separar por tela): crie `js/i18n/<nome>_en.js` e
 `_es.js`, registre com `JOGO.I18n.registra('en', { textos: {…} })` e acrescente o nome na linha do
@@ -51,10 +60,9 @@ Por **navegador** (`localStorage['soterra-idioma']`), como o som e os gráficos.
    o resto → en. A decisão é gravada na hora.
 
 O item 3 existe para que **quem já joga não veja nada mudar**: antes todo mundo jogava em português,
-inclusive com o navegador em inglês. Efeito colateral aceito: quem cria conta pelo site (que ainda é
-só português) e abre o jogo cai em português e troca nas Configurações. **A etapa 3 resolve**: o site
-deve ler e gravar a MESMA chave `soterra-idioma` (mesma origem), com a mesma regra — aí o idioma
-escolhido no site já vale no jogo.
+inclusive com o navegador em inglês. **O site usa a MESMA chave e a mesma regra** (carrega o próprio
+`js/core/i18n.js`): quem chega pelo site com o aparelho em inglês vê o site em inglês e, ao abrir o jogo,
+o jogo em inglês; quem troca no seletor do site troca o jogo junto, e vice-versa.
 
 Trocar nas Configurações grava e **recarrega** a página (no meio de uma batalha, só avisa e oferece o
 botão). A conta não sai: sessão e save moram em outras chaves.
@@ -133,7 +141,8 @@ A conta de `node tools/i18n_falta.js --candidatos` não zera, e não é para zer
 `'[object Array]'`, folhas de estilo e `cssText` em string, nomes de tecla (`'Enter'`, `'Escape'`,
 `'Tab'`) e os arquivos da lista acima. Português de verdade que ainda aparece ao jogador:
 
-- **as mensagens que o servidor manda** (`{"erro": "…"}`) — etapa 3;
+- as mensagens do servidor **montadas na hora** (94, quase todas código de `motivo` ou a recusa do juiz com valor
+  concatenado) e o que o relé manda por WebSocket — o resto do que o servidor diz já sai traduzido (etapa 3);
 - o **nome da etapa** no aviso de abertura que parou ("o download dos modelos") — é marca interna;
 - palavra solta em minúscula que a régua do embrulho não reconhece como texto (o que apareceu nas fotos
   da praça, das fichas e da batalha foi embrulhado à mão; tela que as fotos não abriram pode ter alguma)
@@ -155,35 +164,94 @@ desceu; no juiz não há dicionário.
 O nome do feitiço de fusão é montado em `js/core/fusion.js` como `formName + ' ' + affix`; os
 dicionários já foram escritos para essa ordem (ver o glossário) — não inverta no código.
 
-## Etapa 3 — site e servidor
+## Etapa 3 — o site e o servidor (feita em 05/10)
 
-O que a etapa 2 deixou combinado para ela:
+### O site
 
-- **A chave do idioma é uma só**: `localStorage['soterra-idioma']` (`pt`, `en` ou `es`), na mesma origem
-  do jogo. O site deve LER e GRAVAR essa chave com a regra de `js/core/i18n.js` (`decide()`): `?lang=`
-  vale só naquela abertura; depois o gravado; na primeira vez, português se há rastro de jogo, senão o
-  idioma do aparelho. O `index.html` do jogo também a lê sozinho, antes do `i18n.js`, para a tela de
-  carga (`lgBoot()`).
-- **Erro do servidor com código.** O cliente mostra `r.erro` cru em dezenas de lugares (`toast(r.erro ||
-  tr('não deu'))`): o texto de reserva já está traduzido, o do servidor não. O caminho: o servidor manda
-  `codigo` (e os números em campos) junto do `erro`, e o cliente troca `r.erro` por uma função única —
-  `erroDe(r, reserva)` — que procura `tr('erro.' + codigo)`... ou, mais simples, um mapa código → frase
-  já embrulhada. **Não** traduza pela frase do servidor: várias têm número dentro.
-- Os erros que o CLIENTE gera para a conta local (`guilda.js`, `db.js`, `missoes.js`, `nuvem.js`: "sem
-  guilda", "só o líder promove") já estão traduzidos; os mesmos textos vindos do servidor de verdade não.
-- A loja do site, os e-mails e o correio da Equipe entregam texto ao jogo (nome de pacote, recado): em
-  português até a etapa 3.
+Cada página de `site/*.html` (menos o `mestre.html`) carrega, no `<head>`, o `js/core/i18n.js` do jogo e o
+`site/i18n.js`. **Em português o HTML servido não muda uma letra** e nenhum dicionário desce; só aparece o
+seletor (Português / English / Español) no topo. Fora do português:
 
+- os dicionários descem no `<head>` (`site/i18n_<idioma>.js`, `js/i18n/erros_<idioma>.js` e, nas duas páginas
+  jurídicas, `site/i18n_juridico_<idioma>.js`) e a página é traduzida **antes** dos scripts dela rodarem — não
+  pisca em português. O `<html lang>`, o `<title>` e a `meta description` acompanham;
+- **não há `data-i18n`**: a página é andada uma vez e cada FRASE é procurada no dicionário pela própria frase em
+  português. A frase é o miolo de um elemento que só tem texto e tags de linha (`<b>`, `<a>`, `<span>`, `<br>`…),
+  com os espaços juntos e **as tags sem atributos**: `"Li e aceito os <a>Termos de Uso</a> e a <a>Política de
+  Privacidade</a>."`. A tradução devolve as mesmas tags (pode mudar a ordem das palavras em volta) e os elementos
+  de verdade — com o `href`, o `id`, o que um script vai preencher — são reaproveitados: o k-ésimo `<a>` da
+  tradução é o k-ésimo `<a>` do original. Também se traduzem `title`, `placeholder`, `aria-label`, `alt`;
+- o que o **JavaScript** do site escreve passa por `Tx('…')`, igual ao jogo: cada `site/*.js` tem o seu `Tx` com
+  rede, e os scripts de dentro das páginas (index, eventos, ranking) usam `SITE.Tx`;
+- as páginas que mostram dados do jogo (wiki, fusões, ranking, início) ganham os dicionários do jogo no lugar
+  certo: a lista de scripts do fim do `<body>` passa por `SITE_LISTA([...])`, que encaixa o `textos_<idioma>.js`
+  antes de tudo e o `dados_<idioma>.js` depois do último `js/core/data/*.js`;
+- `translate="no"` num elemento tira ele (e o que há dentro) da tradução. "SOTERRA" nunca se traduz.
 
-- `site/*.html` + `site/*.js`: 23 arquivos, ~140 KB de HTML. O texto está no HTML, não em JS: o caminho
-  barato é `data-i18n` nos elementos + um `site/i18n.js` pequeno com a mesma regra de escolha e a mesma
-  chave `soterra-idioma`. `termos.html` e `privacidade.html` são texto jurídico — tradução revisada por
-  gente, não por máquina. `mestre.html` e os `mestre*.js` **não se traduzem**.
-- `servidor/*.py` (~22 mil linhas): as mensagens de erro vão em português no JSON (`{"erro": "…"}`) e o
-  cliente as mostra cruas. Dois caminhos: (a) o cliente traduz pela frase com `tr()` (funciona para
-  mensagem fixa; a que tem número dentro precisa virar código + campos); (b) o servidor passa a mandar
-  `codigo` junto do `erro`, e o cliente traduz pelo código. O (b) é o certo para o que tem variável.
-  E-mails e avisos do correio da Equipe ficam por último.
+**Texto novo no site.** No HTML: escreva em português, como sempre; rode `node tools/i18n_falta.js --lista`, que
+mostra a frase exatamente como a chave tem de ser, e acrescente a linha em `site/i18n_en.js` e `i18n_es.js`. Num
+script: `Tx('Frase com {n} coisas.', { n: n })` e as mesmas duas linhas. Frase que ninguém traduziu aparece em
+português.
+
+**Mexeu numa frase em português** (trocou uma palavra): a chave mudou, a tradução velha fica órfã e a frase volta
+a aparecer em português até ganhar a linha nova. A ferramenta acusa.
+
+### Termos e Privacidade
+
+Traduzidos em `site/i18n_juridico_<idioma>.js`. É **tradução de cortesia**: a página traduzida abre com o aviso de
+que a versão em português é a única que vale, com o link `?lang=pt` para ela. O texto em português, a versão e o
+aceite não mudaram. A tradução foi feita e conferida por máquina (tags, números, lacunas `[PREENCHER: …]`
+intactas) — **a revisão jurídica é do dono**: os pontos duvidosos estão em `docs/REVISAO_JURIDICA.md`.
+
+### O que o servidor diz
+
+O servidor **não mudou as frases**: as provas e os clientes antigos dependem delas. Quem traduz é o cliente, no
+funil dos pedidos — `JOGO.I18n.resposta(j, rota)`, chamado em `js/core/sessao.js` (o jogo) e em `site/site.js`
+(o site) — uma vez, para toda tela que mostra `r.erro`:
+
+- `r.erro` e `r.mensagem` são trocados por `JOGO.I18n.erro(frase)`; o original fica em `r.erroPt`;
+- a chave é **a própria frase do servidor** (`js/i18n/erros_<idioma>.js`). Frase com valor dentro usa o MOLDE:
+  cada valor é `{a}`, `{b}`… na ordem — `"o nome vai até {a} caracteres"`. O cliente casa a frase recebida com o
+  molde e devolve o valor no lugar;
+- **a loja**: nas rotas `/api/loja/*`, `/api/pagamento/*` e `/api/play/*`, os campos `nome` e `descricao` de
+  qualquer objeto da resposta são trocados pela frase (catálogo, pedidos, extrato). Preço, sku e regra ficam como
+  vieram. É por frase e não por SKU de propósito: se o dono muda a descrição de um produto no servidor, ela
+  aparece em português até ser traduzida — nunca uma tradução velha dizendo outra coisa;
+- **a agenda**: em `/api/eventos`, só o evento que o próprio servidor escreve (`origem: 'supremo'`, o Eco da
+  semana) é traduzido; o que o Mestre escreve é dele;
+- em português nada disso roda.
+
+`tools/erros_servidor.py` colhe as frases do código (`Recusa(status, 'frase')`, `{'erro': …}`, as `FRASE_*`, as
+recusas do juiz em `servidor/juiz/*.js` e os textos da loja) e o `tools/i18n_falta.js` cobra a tradução de cada
+uma. **Recusa nova no servidor:** escreva em português, rode a ferramenta e acrescente a linha nos dois
+`erros_*.js`. O que ela não vê (a frase montada em tempo de execução) aparece em português.
+
+**Os e-mails** (o código do "esqueci a senha", os avisos de senha e de e-mail trocados, a conta excluída) saem no
+idioma do **pedido** que os causou: o site manda `idioma: 'en'|'es'` no corpo dessas rotas (`site/site.js`,
+`SITE.api`), o servidor lê com `comum.idioma_de(corpo)` e usa `conta.EMAILS` / `privacidade.EXCLUIDA`. Sem o
+campo, português. Nada é guardado na conta. O retorno de denúncia e as cartas da Equipe seguem em português.
+
+### Acrescentar um idioma (ex.: francês)
+
+1. `js/core/i18n.js`: `IDIOMAS`, `NOMES`, `TAG` e a regra de `doAparelho()`.
+2. Crie `js/i18n/dados_fr.js`, `textos_fr.js`, `erros_fr.js`, `site/i18n_fr.js`, `site/i18n_juridico_fr.js`
+   (copie os de um idioma e traduza os valores; as chaves são as mesmas).
+3. `index.html` do jogo: o dicionário da tela de carga (`BT`). `site/i18n.js`: a lista do seletor.
+4. `tools/i18n_falta.js`: a lista `IDIOMAS`. `servidor/comum.py`: `IDIOMAS_EMAIL`, e os
+   e-mails em `conta.EMAILS` e `privacidade.EXCLUIDA`.
+5. `node tools/i18n_falta.js` até zerar; `node tests/idiomas.js`; `tests/idiomas_site.py`.
+
+### O que ficou em português no site e no servidor (medido)
+
+- 94 frases do servidor **montadas na hora** (quase todas são código de `motivo`, não frase; as demais repassam a
+  recusa do juiz com valor concatenado);
+- o que o **relé** manda por WebSocket (3 frases) e os registros que o servidor guarda para a Equipe;
+- o **correio da Equipe** (cartas, retorno de denúncia) e os eventos que o Mestre escreve: são de quem escreveu;
+- o **painel do Mestre** (`site/mestre*`), de propósito;
+- na wiki, a contração do nome do calabouço ("do chefe **da** Mina…") é gramática portuguesa feita por regex
+  (`contrai()`): fora do português sai o nome traduzido sem a contração — a frase fica compreensível, não elegante;
+- algumas descrições da wiki ainda juntam pedaços traduzidos na ordem do português (o sinal, o atributo e a
+  duração de um efeito).
 
 ## Achar o que falta
 
@@ -191,7 +259,12 @@ O que a etapa 2 deixou combinado para ela:
 node tools/i18n_falta.js               # resumo; sai 1 se falta algo
 node tools/i18n_falta.js --lista       # tudo, um por linha
 node tools/i18n_falta.js --candidatos  # o que ainda está em português puro no código (estimativa)
+node tools/i18n_site.js                # quantas frases o site tem (HTML, scripts, jurídico)
+python tools/erros_servidor.py --resumo  # quantas frases o servidor manda
 ```
+
+A linha de cada idioma traz o jogo (dados e código) e, embaixo, o **site** e o **servidor**. Sem Python na
+máquina, o item do servidor é pulado, com aviso.
 
 Ela cobra: dado sem tradução; **número da tradução diferente do português** (alguém mudou "Cura 30 PV"
 para 35 no arquivo de dados e esqueceu o dicionário — depois de todo ajuste de equilíbrio, rode);
@@ -221,6 +294,18 @@ ferramenta e acrescente as linhas nos dois `dados_*.js`. Tabela nova com texto: 
 | Bárbaro, Caçador, Bruxo, Ladino | Barbarian, Hunter, Warlock, Rogue | Bárbaro, Cazador, Brujo, Pícaro |
 | Curandeiro, Xamã, Minotauro | Healer, Shaman, Minotaur | Curandero, Chamán, Minotauro |
 | mascote · guilda | pet · guild | mascota · gremio |
+| grupo (de jogadores) · dupla | **party** · duo | grupo · dúo |
+| a posição no placar (3º) | **#3** (nunca "3º" nem "3th") | 3.º |
+| conta · sessão · senha · e-mail | account · session · password · e-mail | cuenta · sesión · contraseña · correo |
+| Entrar · Sair · Criar conta | Sign in · Sign out · Create account | Entrar · Salir · Crear cuenta |
+| Loja · Eventos · Início · Jogar | Shop · Events · Home · Play | Tienda · Eventos · Inicio · Jugar |
+| Termos de Uso · Política de Privacidade | Terms of Use · Privacy Policy | Términos de Uso · Política de Privacidad |
+| pacote · pedido · presente | pack · order · gift | paquete · pedido · regalo |
+| o juiz (o servidor que confere a luta) | the referee | el juez |
+| mercadinho · saco · banco/cofre | market · bag · bank/vault | mercadillo · bolsa · banco/cofre |
+| insígnia de Fundação · pergaminho | Founding Badge · scroll | insignia de Fundación · pergamino |
+| Coroa (as dez da arena) · carta · estrela | Crown · card · star | Corona · carta · estrella |
+| Ecos do Mundo Enterrado (o subtítulo) | Echoes of the Buried World | Ecos del Mundo Enterrado |
 | praça, a Praça | plaza, the Plaza | plaza, la Plaza |
 | forja · pedra de forja | forge · forge stone | forja · piedra de forja |
 | vintém, vinténs | copper, coppers | vintén, vintenes |
@@ -263,6 +348,7 @@ tradução não passa muito do tamanho do português — botão e ficha de celul
 - O **chat**, os nomes de jogador e de guilda, os recados: são de quem escreveu.
 - O **painel do Mestre** (`js/ui/painel_mestre.js`, `js/ui/debug.js`, `js/core/gm.js`), o Terminal e o
   `site/mestre*`: ferramenta da equipe, em português.
+- O correio da Equipe, o retorno de denúncia e os eventos que o Mestre escreve.
 - O nome do jogo, **SOTERRA**.
 - Texto que viaja entre jogadores vai **no idioma de quem o gerou** (ver a etapa 2, acima).
 - `index2d.html`, `v2.html`, `v2_3d.html` (as linhas antigas) não carregam o i18n: seguem em português.

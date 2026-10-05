@@ -20,6 +20,14 @@
  *  2. CÓDIGO: cada tr('…') / Tx('…') (o atalho fora do hud.js) / I18n.t('…') / I18n.n(q, '…', '…') com texto literal
  *     em js/ tem entrada em js/i18n/textos_<idioma>.js; e as variáveis {assim}
  *     da tradução são as mesmas da chave.
+ *  3. SITE (etapa 3): cada frase dos site/*.html (colhida como o navegador a colhe:
+ *     tools/i18n_site.js) e cada Tx('…') dos site/*.js tem entrada em
+ *     site/i18n_<idioma>.js (ou i18n_juridico_<idioma>.js, os Termos e a
+ *     Privacidade); as tags e as variáveis da tradução são as da chave.
+ *  4. SERVIDOR (etapa 3): cada frase que o servidor manda ao jogador — as recusas
+ *     de servidor/*.py e do juiz, e os nomes e descrições da loja, colhidos pela
+ *     tools/erros_servidor.py (precisa de Python; sem ele, este item é pulado e a
+ *     ferramenta avisa) — tem entrada em js/i18n/erros_<idioma>.js.
  */
 const fs = require('fs');
 const path = require('path');
@@ -40,11 +48,32 @@ function mundo(idioma) {
   roda('js/core/i18n.js');
   // registra SEM aplicar: aqui se quer o português de um lado e o dicionário do outro
   ctx.JOGO.I18n.usa('pt');
-  ['dados_', 'textos_'].forEach((p) => {
-    const f = 'js/i18n/' + p + idioma + '.js';
+  ['js/i18n/dados_', 'js/i18n/textos_', 'js/i18n/erros_', 'site/i18n_', 'site/i18n_juridico_'].forEach((p) => {
+    const f = p + idioma + '.js';
     if (fs.existsSync(path.join(RAIZ, f))) roda(f);
   });
   return ctx.JOGO;
+}
+
+// ---- etapa 3: o site e o servidor
+const SITE = require('./i18n_site.js');
+// as tags de uma frase; `semAtributos` para as do HTML (a chave leva <a>, não <a href>)
+function tagsDe(s, semAtributos) {
+  const t = String(s).match(/<[^<>]+>/g) || [];
+  return (semAtributos ? t.filter((x) => x[1] !== '/') : t).sort().join(' ');
+}
+let SERVIDOR;
+function doServidor() {
+  if (SERVIDOR !== undefined) return SERVIDOR;
+  SERVIDOR = null;
+  for (const py of ['python', 'python3', 'py']) {
+    try {
+      const r = require('child_process').spawnSync(py, [path.join(__dirname, 'erros_servidor.py')],
+        { encoding: 'utf8', env: Object.assign({}, process.env, { PYTHONUTF8: '1' }), maxBuffer: 16 * 1024 * 1024 });
+      if (r.status === 0 && r.stdout) { SERVIDOR = JSON.parse(r.stdout); break; }
+    } catch (e) { /* tenta o próximo nome */ }
+  }
+  return SERVIDOR;
 }
 
 // os números de um texto, na ordem em que aparecem não importa: importa o conjunto
@@ -151,6 +180,40 @@ function main() {
       ' | código: ' + (doCodigo.size - semTexto.length) + ' de ' + doCodigo.size + ' textos embrulhados traduzidos' +
       ' · variáveis diferentes: ' + varTorta.length);
     const mostra = (tit, a) => { if (a.length && (lista || a.length <= 12)) { console.log('  ' + tit + ':'); a.forEach((x) => console.log('    ' + x)); } };
+    // ---- o site
+    const st = SITE.colhe();
+    const siteFalta = [], siteTorta = [];
+    let siteTotal = 0;
+    const confere = (mapa, doHtml) => mapa.forEach((onde, pt) => {
+      siteTotal++;
+      const v = dic.textos[pt];
+      if (typeof v !== 'string' || !v) siteFalta.push(onde + ' — ' + pt.slice(0, 70));
+      else if (variaveis(v) !== variaveis(pt)) siteTorta.push(onde + ' — variável: ' + pt.slice(0, 50) + ' → ' + v.slice(0, 50));
+      else if (tagsDe(v, doHtml) !== tagsDe(pt, doHtml)) siteTorta.push(onde + ' — tags: ' + pt.slice(0, 50) + ' → ' + v.slice(0, 50));
+    });
+    confere(st.html, true); confere(st.juridico, true); confere(st.js, false);
+    // ---- o servidor
+    const sv = doServidor(), svFalta = [], svTorta = [];
+    let svTotal = 0;
+    if (sv) {
+      Object.keys(sv.moldes).concat(sv.loja).forEach((pt) => {
+        svTotal++;
+        const v = dic.erros[pt];
+        const onde = (sv.moldes[pt] && sv.moldes[pt][0]) || 'loja.py';
+        if (typeof v !== 'string' || !v) svFalta.push(onde + ' — ' + pt.slice(0, 70));
+        else if (variaveis(v) !== variaveis(pt)) svTorta.push(onde + ' — ' + pt.slice(0, 50) + ' → ' + v.slice(0, 50));
+      });
+    }
+    console.log('     site: ' + (siteTotal - siteFalta.length) + ' de ' + siteTotal + ' frases traduzidas (' + st.html.size + ' do HTML, ' +
+      st.juridico.size + ' dos Termos e da Privacidade, ' + st.js.size + ' dos scripts) · tags ou variáveis diferentes: ' + siteTorta.length +
+      ' | servidor: ' + (sv ? (svTotal - svFalta.length) + ' de ' + svTotal + ' frases traduzidas (' + Object.keys(sv.moldes).length +
+      ' recusas e avisos, ' + sv.loja.length + ' da loja; ' + sv.dinamicos.length + ' montadas na hora ficam de fora) · variáveis diferentes: ' + svTorta.length
+        : 'PULADO (sem Python para rodar tools/erros_servidor.py)'));
+    mostra('frase do site sem tradução', siteFalta);
+    mostra('frase do site com tag ou variável diferente da chave', siteTorta);
+    mostra('frase do servidor sem tradução', svFalta);
+    mostra('frase do servidor com variável diferente', svTorta);
+    ruim += siteFalta.length + siteTorta.length + svFalta.length + svTorta.length;
     mostra('dados sem tradução', falta);
     mostra('dados com número diferente do português', numero);
     mostra('tradução de registro que não existe mais', sobra);

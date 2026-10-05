@@ -14,7 +14,11 @@
  *      em inglês é refeita por ele com o MESMO hash — o mesmo de um cliente em
  *      português;
  *  (e) a escolha do idioma: quem já joga fica em português, navegador virgem
- *      segue o aparelho, `?lang=` vale sem gravar, a escolha gravada manda. */
+ *      segue o aparelho, `?lang=` vale sem gravar, a escolha gravada manda;
+ *  (g) etapa 3: a frase do servidor é traduzida no cliente (inteira, ou pelo
+ *      molde quando tem valor dentro) e em português passa intacta; a loja
+ *      troca só nome e descrição; toda frase do site tem tradução com as
+ *      mesmas tags. A prova de navegador do site é tests/idiomas_site.py. */
 const path = require('path');
 const fs = require('fs');
 const vm = require('vm');
@@ -270,6 +274,67 @@ function decide(chaves, lingua, busca) {
         Jen.DATA.classes[c0].name !== cru.classes[c0].name && Jen.I18n.pt('classes', c0, 'name', Jen.DATA.classes[c0].name) === cru.classes[c0].name &&
         Jen.I18n.pt('classes', 'nao-existe', 'name', 'x') === 'x');
   check('(f) variável nula sai como na concatenação antiga ("null"), não como chave', pt.I18n.t('a {x} b', { x: null }) === 'a null b');
+})();
+
+// ---- (g) etapa 3: o que o SERVIDOR diz e o SITE
+(function () {
+  const mundoDe = (l) => {
+    const ctx = vm.createContext({ console }); ctx.globalThis = ctx;
+    ctx.location = { search: l === 'pt' ? '' : '?lang=' + l };
+    const roda = (f) => vm.runInContext(fs.readFileSync(path.join(RAIZ, f), 'utf8'), ctx, { filename: f });
+    roda(I18N);
+    ['js/i18n/erros_', 'site/i18n_', 'site/i18n_juridico_'].forEach((p) => ['en', 'es'].forEach((x) => roda(p + x + '.js')));
+    return ctx.JOGO.I18n;
+  };
+  const Ipt = mundoDe('pt'), Ien = mundoDe('en'), Ies = mundoDe('es');
+  const frase = 'vinténs insuficientes';
+  check('(g) em português a frase do servidor passa intacta, com os dicionários carregados',
+        Ipt.erro(frase) === frase && Ipt.resposta({ erro: frase }).erro === frase && Ipt.resposta({ erro: frase }).erroPt === undefined);
+  check('(g) em inglês e espanhol a recusa do servidor sai traduzida, e o original fica em erroPt',
+        Ien.erro(frase) !== frase && Ies.erro(frase) !== frase && Ien.erro(frase) !== Ies.erro(frase) &&
+        Ien.resposta({ erro: frase }).erroPt === frase, Ien.erro(frase) + ' | ' + Ies.erro(frase));
+  // a frase com valor dentro casa com o MOLDE ({a}, {b}) e o valor volta no lugar
+  const moldes = Object.keys(Ien.dicionario('en').erros).filter((k) => /\{a\}/.test(k) && !/\{b\}/.test(k) && /^[^{]{6,}\{a\}[^{]{4,}$/.test(k));
+  const m0 = moldes[0] || '', viva = m0.replace('{a}', '4321');
+  check('(g) a frase com número dentro é traduzida pelo molde e o número volta', !!m0 && Ien.erro(viva) !== viva && Ien.erro(viva).indexOf('4321') >= 0,
+        m0 + ' → ' + Ien.erro(viva));
+  check('(g) frase que ninguém traduziu sai como veio (nunca vazio, nunca chave)', Ien.erro('uma frase que o servidor nunca disse 77') === 'uma frase que o servidor nunca disse 77' &&
+        Ien.erro('') === '' && Ien.erro(null) === null);
+  const cat = Ien.resposta({ ok: true, itens: [{ sku: 'classe-bruxo', nome: 'Bruxo', preco: 300, descricao: 'x y z' }], de: 'Bruxo' }, '/api/loja/catalogo');
+  check('(g) a loja: o nome do produto é trocado na chegada; sku, preço e o resto ficam',
+        cat.itens[0].nome === 'Warlock' && cat.itens[0].sku === 'classe-bruxo' && cat.itens[0].preco === 300 && cat.itens[0].descricao === 'x y z' && cat.de === 'Bruxo',
+        JSON.stringify(cat));
+  check('(g) fora da loja, um campo `nome` nunca é traduzido (nome de jogador)', Ien.resposta({ ok: true, conta: { nome: 'Bruxo' } }, '/api/conta').conta.nome === 'Bruxo');
+  // o site: as chaves colhidas dos arquivos têm tradução, com as mesmas tags, e o texto jurídico não foi tocado em português
+  const S = require(path.join(RAIZ, 'tools', 'i18n_site.js'));
+  const st = S.colhe();
+  let semTr = 0, tagTorta = 0;
+  [Ien, Ies].forEach((I) => {
+    const d = I.dicionario(I.idioma).textos;
+    [st.html, st.juridico].forEach((mapa) => mapa.forEach((onde, k) => {
+      if (!d[k]) { semTr++; return; }
+      if (S.tags(d[k]) !== S.tags(k)) tagTorta++;
+    }));
+    st.js.forEach((onde, k) => { if (!d[k]) semTr++; });
+  });
+  check('(g) toda frase do site (' + st.html.size + ' do HTML, ' + st.juridico.size + ' dos Termos e da Privacidade, ' + st.js.size + ' dos scripts) tem inglês e espanhol',
+        semTr === 0 && st.html.size > 200 && st.juridico.size > 100, semTr + ' sem tradução');
+  check('(g) a tradução devolve as mesmas tags da frase (a página reaproveita os elementos)', tagTorta === 0, tagTorta + ' com tag diferente');
+  const semAtalho = fs.readdirSync(path.join(RAIZ, 'site')).filter((n) => /\.js$/.test(n) && !/^(mestre|i18n)/.test(n)).filter((n) => {
+    const t = fs.readFileSync(path.join(RAIZ, 'site', n), 'utf8');
+    return /\bTx\(/.test(t) && !/function Tx\(s, v\)/.test(t);
+  });
+  check('(g) script do site que usa Tx() traz o próprio atalho com rede', semAtalho.length === 0, semAtalho.join(', '));
+  const paginas = fs.readdirSync(path.join(RAIZ, 'site')).filter((n) => /\.html$/.test(n) && !/^mestre/.test(n));
+  const semSeletor = paginas.filter((n) => {
+    const t = fs.readFileSync(path.join(RAIZ, 'site', n), 'utf8');
+    return !/SITE_URL\('\.\.\/js\/core\/i18n\.js'\)/.test(t) || !/SITE_URL\('i18n\.js'\)/.test(t) || !/SITE_LISTA\(/.test(t) || !/<html lang="pt-BR">/.test(t);
+  });
+  check('(g) toda página do site carrega os idiomas (e o Mestre não)', semSeletor.length === 0 && paginas.length >= 9 &&
+        !/i18n\.js/.test(fs.readFileSync(path.join(RAIZ, 'site', 'mestre.html'), 'utf8')), semSeletor.join(', '));
+  const aviso = fs.readFileSync(path.join(RAIZ, 'site', 'i18n.js'), 'utf8');
+  check('(g) os Termos e a Privacidade traduzidos abrem com o aviso de que vale o português',
+        /aviso-traducao/.test(aviso) && !!Ien.dicionario('en').textos['Tradução de cortesia.'] && !!Ies.dicionario('es').textos['Tradução de cortesia.']);
 })();
 
 console.log('\n' + (total - falhas) + ' de ' + total + ' passaram' +
