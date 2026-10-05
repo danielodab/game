@@ -327,6 +327,16 @@ def prova_do_modulo():
     check(R + 'o Mestre conferido sai como "GM" (04/10), com o título e a guilda que escolheu, carimbado mestre:true e com o nuvem dele',
           m is not None and m['nome'] == 'GM' and m['titulo'] == 'Mestre do Fundo'
           and m['resumo']['guilda']['nome'] == 'Staff' and m['mestre'] is True and m['nuvem'] == 1, repr(m))
+    # 05/10: a coroa que o Mestre escolhe no painel viaja no resumo — e só no dele
+    m = rele_ident.carimba(oi(resumo={'brasa': 1000, 'partidas': 0, 'coroaMestre': 7}), mestre)
+    check(R + 'a coroa escolhida pelo Mestre conferido passa (resumo.coroaMestre), carimbada mestre:true',
+          m is not None and m['mestre'] is True and m['resumo'].get('coroaMestre') == 7, repr(m))
+    m = rele_ident.carimba(oi(resumo={'brasa': 1000, 'partidas': 0, 'coroaMestre': 10}), comum_)
+    check(R + 'conta comum conferida que forja o coroaMestre: o campo cai, os pontos dela ficam',
+          m is not None and 'coroaMestre' not in m['resumo'] and m['resumo'].get('brasa') == 1000 and 'mestre' not in m, repr(m))
+    m = rele_ident.carimba(oi(mestre=True, resumo={'brasa': 1000, 'coroaMestre': 10}), None)
+    check(R + 'sem conta conferida, com mestre:true e coroaMestre forjados: os dois caem',
+          m is not None and 'coroaMestre' not in m['resumo'] and 'mestre' not in m, repr(m))
     m = rele_ident.carimba(oi(titulo='Administrador', resumo={'guilda': {'nome': 'Os Admins', 'emblema': '⚑'},
                                                               'total': 9}), None)
     check(R + 'título reservado vira vazio e guilda reservada vira "Guilda" (o emblema e o resto do resumo ficam)',

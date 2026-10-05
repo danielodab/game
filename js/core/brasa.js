@@ -119,9 +119,21 @@ var JOGO = (typeof window !== 'undefined')
    * quem ESCONDEU a coroa na ficha (`oculta`) fica sem ela. `partidas` fica na assinatura para
    * quem chama dizer o que sabe — a regra não o usa mais. É a régua única do herói, dos
    * fantasmas da praça, da ficha, do perfil e do placar. */
-  B.coroaDe = function (pts, partidas, ehTopo, oculta) {
+  B.coroaDe = function (pts, partidas, ehTopo, oculta, escolha) {
     if (oculta === true) return null;
+    var n = B.coroaEscolha(escolha);
+    if (n) return B.TIERS[n - 1];
     return B.tierDe(pts, ehTopo === true);
+  };
+  /* A COROA QUE O MESTRE ESCOLHE (05/10). O dono: "preciso que no menu do mestre ele consiga
+   * liberar [...] o ranking da coroa também". O Mestre não joga a Arena (o servidor o recusa),
+   * então a coroa dele parava na I para sempre; pelo painel ele escolhe qual carrega, da I à X.
+   * É SÓ A ARTE acima da cabeça: pontos, partidas, placar e temporada não sabem disto, e o
+   * "esconder a coroa" continua por cima. Aqui só a régua: 1..10 inteiro vale, o resto é 0
+   * ("a de verdade"). Quem pode escolher é o JOGO.GM; quem confere que veio de um Mestre é o
+   * Relé (servidor/rele_ident.py) e a Rede (js/core/rede.js, vitrine). */
+  B.coroaEscolha = function (v) {
+    return (typeof v === 'number' && v === Math.floor(v) && v >= 1 && v <= B.TIERS.length) ? v : 0;
   };
 
   /* Elo clássico: o esperado vem da diferença, o K é fixo, o piso segura o

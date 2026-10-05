@@ -710,6 +710,12 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
         if isinstance(resumo, dict):
             if _guilda_limpa(resumo.get('guilda'), cai):
                 mudou = True
+            # 05/10: a coroa escolhida no painel do Mestre viaja no resumo e é SÓ dele (o ramo do
+            # Mestre saiu logo acima, com o resumo como veio) — de qualquer outro, cai: um cliente
+            # mexido não pendura a Coroa X que não ganhou
+            if 'coroaMestre' in resumo:
+                del resumo['coroaMestre']
+                mudou = True
             classes = resumo.get('classes')
             if isinstance(classes, dict) and CLASSE_MESTRE in classes:
                 del classes[CLASSE_MESTRE]           # a ficha do Mestre no placar é só dele

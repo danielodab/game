@@ -682,8 +682,12 @@ var JOGO = (typeof window !== 'undefined')
     var gNome = !!g && reservadoAqui(g.nome), gEmb = !!g && reservadoAqui(g.emblema);
     var cls = (r && r.classes && typeof r.classes === 'object') ? r.classes : null;
     var gmCls = !!cls && Object.prototype.hasOwnProperty.call(cls, 'gm');
-    if (gNome || gEmb || gmCls) {
+    // 05/10: a coroa escolhida no painel é só do Mestre conferido — de qualquer outro, cai aqui
+    // (o relé novo já a tirou; isto vale contra o relé antigo e o canal entre abas)
+    var coroaM = !!r && Object.prototype.hasOwnProperty.call(r, 'coroaMestre');
+    if (gNome || gEmb || gmCls || coroaM) {
       v.resumo = copia(r);
+      if (coroaM) delete v.resumo.coroaMestre;
       if (gNome || gEmb) {
         v.resumo.guilda = copia(g);
         if (gNome) v.resumo.guilda.nome = 'Guilda';
@@ -707,12 +711,18 @@ var JOGO = (typeof window !== 'undefined')
     return c;
   }
 
+  // o que do resumo muda a coroa SEM mudar os pontos: a vontade de esconder e a escolha do Mestre
+  function coroaDoResumo(r) {
+    if (!r || typeof r !== 'object') return '';
+    return (r.coroaOculta === true ? 'o' : '') + (typeof r.coroaMestre === 'number' ? r.coroaMestre : '');
+  }
   function conhece(m) {
     var atual = pares[m.de];
     // "novo" também cobre quem foi visto SÓ por pulso (guardado sem nome,
     // calado): o anúncio de entrada espera a mensagem que traz o nome
     var novo = !atual || !atual.nome;
     var salaAntes = atual ? (atual.sala || null) : null;
+    var coroaAntes = atual ? coroaDoResumo(atual.resumo) : null;
     var zonaAntes = atual ? zonaDe(atual.zona) : 'praca';
     var mestre = m.mestre === true && confiaMestre();
     var vit = vitrine(m, mestre);             // 10/09: o nome reservado de quem não é Mestre sai trocado
@@ -737,7 +747,11 @@ var JOGO = (typeof window !== 'undefined')
       avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
               resumo: pares[m.de].resumo, aura: pares[m.de].aura, auraCor: pares[m.de].auraCor, zona: pares[m.de].zona,
+              mestre: pares[m.de].mestre,     // 05/10: quem chega de outra sala também traz a marca (a coroa do Mestre a lê)
               sala: pares[m.de].sala, x: pares[m.de].x, z: pares[m.de].z });
+    } else if (coroaAntes !== coroaDoResumo(pares[m.de].resumo)) {
+      // 05/10: escondeu/mostrou a coroa, ou o Mestre trocou a dele — o corpo fica, só a coroa repinta
+      avisa({ tipo: 'mudouCoroa', id: m.de, resumo: pares[m.de].resumo, mestre: pares[m.de].mestre });
     }
     return novo;
   }

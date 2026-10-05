@@ -151,6 +151,22 @@ var JOGO = (typeof window !== 'undefined')
     injetaClasse();                        // os stats do def mudam na hora
     return true;
   };
+  /* A COROA DO MESTRE (05/10): qual das dez ele carrega acima da cabeça — 0 é "a de verdade".
+   * Mora neste navegador, junto do PA/PP: é enfeite, não vale nada no servidor, e assim não
+   * pede coluna no banco nem rota nova. Quem não é Mestre lê 0 sempre (a marca de um save
+   * mexido não veste ninguém); e o que viaja para os outros só vale carimbado pelo Relé. */
+  GM.coroa = function () {
+    if (!GM.ativo()) return 0;
+    var n = cfg.coroa;
+    return (typeof n === 'number' && n === Math.floor(n) && n >= 1 && n <= 10) ? n : 0;
+  };
+  GM.defineCoroa = function (n) {
+    if (!GM.ativo()) return false;
+    n = Math.floor(Number(n) || 0);
+    cfg.coroa = (n >= 1 && n <= 10) ? n : 0;
+    gravaConfig(cfg);
+    return true;
+  };
   function clampa(v, lo, hi, def) {
     v = Math.floor(Number(v));
     if (!isFinite(v)) return def;

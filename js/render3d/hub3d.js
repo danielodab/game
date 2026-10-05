@@ -5095,14 +5095,7 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     var corpo = { node: node, alvo: null, andando: false };
     reg.corpo = corpo;
     try { node.userData.play('idle', { fade: 0 }); } catch (e) {}
-    var tierF = null;
-    // quem escondeu a coroa na ficha não a usa aqui: a vontade viaja no resumo
-    if (perfil && perfil.resumo && typeof perfil.resumo.brasa === 'number' &&
-        JOGO.Brasa && JOGO.Brasa.coroaDe) {
-      // a mesma régua do herói (04/10): sem partida é a Coroa I; só a coroa escondida não aparece
-      tierF = JOGO.Brasa.coroaDe(perfil.resumo.brasa, perfil.resumo.partidas, false,
-                                 perfil.resumo.coroaOculta === true);
-    }
+    var tierF = tierDoFantasma(perfil);
     // a GUILDA do fantasma já viaja dentro do resumo do perfil (a Rede não
     // precisou mudar) — a placa dele nasce igual à do herói
     var guildaF = (perfil && perfil.resumo && perfil.resumo.guilda) || null;
@@ -5194,6 +5187,33 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     for (var e2 = 0; e2 < d.entra.length; e2++) materializa(fantasmas[d.entra[e2]]);
   }
 
+  /* A coroa de um fantasma, pelo resumo que a Rede entregou. Quem escondeu a coroa na ficha não
+   * a usa aqui (a vontade viaja no resumo); sem partida é a Coroa I (04/10, a mesma régua do
+   * herói). 05/10: o Mestre conferido carrega a que escolheu no painel — a Rede já tirou o
+   * `coroaMestre` de quem não é Mestre, e aqui o `mestre` do perfil é conferido de novo. */
+  function tierDoFantasma(perfil) {
+    var r = perfil && perfil.resumo;
+    if (!r || typeof r.brasa !== 'number' || !JOGO.Brasa || !JOGO.Brasa.coroaDe) return null;
+    return JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, r.coroaOculta === true,
+                              perfil.mestre === true ? r.coroaMestre : 0);
+  }
+  Hub._tierDoFantasma = tierDoFantasma;      // provas
+  /* 05/10: a coroa do fantasma mudou sem ele sair do lugar (escondeu, mostrou, o Mestre trocou a
+   * dele): repinta só a plaquinha, o corpo fica. */
+  Hub.fantasmaCoroa = function (id, resumo, mestre) {
+    var reg = fantasmas[id];
+    if (!reg) return false;
+    var pf = reg.perfil || {};
+    pf.resumo = resumo || null;
+    pf.mestre = mestre === true;
+    reg.perfil = pf;
+    reg.tierF = tierDoFantasma(pf);
+    if (reg.corpo) {
+      penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
+    }
+    return true;
+  };
   Hub.fantasmaEntra = function (id, perfil) {
     if (!scene || fantasmas[id]) return false;
     var reg = { id: id, perfil: perfil || {},
