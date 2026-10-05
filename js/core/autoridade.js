@@ -22,6 +22,16 @@ var JOGO = (typeof window !== 'undefined')
  * Sem sessão (em casa, file://), `ligada()` é false e o jogo é o local de sempre. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var A = {};
   JOGO.Autoridade = A;
@@ -77,7 +87,7 @@ var JOGO = (typeof window !== 'undefined')
     var vivo = !!(extra && extra.keepalive);
     if (typeof A._fetch === 'function') return A._fetch(rota, { method: 'POST', body: corpo, keepalive: vivo });
     var s = S();
-    if (!s || !s.api) return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
+    if (!s || !s.api) return Promise.resolve({ ok: false, status: 0, erro: Tx('sem sessão') });
     var op = { method: 'POST', body: corpo };
     // 15/09: o pedido que tem de sair mesmo com a página indo embora (a desistência declarada). O navegador limita o
     // corpo do keepalive a 64 KB: acima disso vai o pedido comum, e a fila de retentativa segue valendo
@@ -213,8 +223,8 @@ var JOGO = (typeof window !== 'undefined')
           try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
           return;
         }
-        aviso(foraDoAr(r) ? 'O servidor não respondeu para abrir a sala — tente de novo em instantes.'
-                          : ((r && r.erro) || 'O servidor não abriu a sala.'));
+        aviso(foraDoAr(r) ? Tx('O servidor não respondeu para abrir a sala — tente de novo em instantes.')
+                          : ((r && r.erro) || Tx('O servidor não abriu a sala.')));
       });
   };
   /* o bilhete pronto desta sala (e o consome: cada bilhete abre UMA batalha) */
@@ -240,7 +250,7 @@ var JOGO = (typeof window !== 'undefined')
    * O pagehide NÃO fecha: o sendBeacon não leva o cabeçalho Authorization da sessão, e o fetch keepalive levaria, mas
    * o pagehide também dispara na ida ao cache de voltar/avançar — fechar ali estragaria a luta que volta. */
   A.LUTA_CHAVE = 'soterra-luta-aberta-v1';
-  A.TEXTO_LARGADA = 'Você saiu da última luta sem terminar: os heróis dela voltam do zero';
+  A.TEXTO_LARGADA = Tx('Você saiu da última luta sem terminar: os heróis dela voltam do zero');
   function chaveLuta() {
     var C = JOGO.Contas;
     return A.LUTA_CHAVE + ((C && C.sufixo) ? C.sufixo() : '');
@@ -336,15 +346,15 @@ var JOGO = (typeof window !== 'undefined')
   A.abreEco = function (corpo) {
     return A.fechaPendente().then(null, function () { return null; }).then(function () { return descarregaFila(); })
       .then(function () { return api('/api/supremo/abrir', comVersao(corpo)); }).then(function (r) {
-      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
-      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (parado || outroAparelho(r)) return { ok: false, erro: Tx('sua conta entrou em outro aparelho'), motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' };
       if (!r.ok) {
-        return { ok: false, erro: r.erro || 'o servidor não abriu a tentativa', motivo: r.motivo || null,
+        return { ok: false, erro: r.erro || Tx('o servidor não abriu a tentativa'), motivo: r.motivo || null,
                  liberaEm: r.liberaEm };
       }
       if (typeof r.tentativa === 'string') A.abreLuta('eco', r.tentativa);
       return r;
-    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+    }, function () { return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' }; });
   };
   A.fechaEco = function (corpo) { return fechaEm('/api/supremo/fechar', corpo); };
   /* O SAL DA RODADA (03/10, engine.js "O SORTEIO RODADA A RODADA"): corpo {tentativa, rodada, caminho}. Resolve
@@ -354,13 +364,13 @@ var JOGO = (typeof window !== 'undefined')
    * de uma op lenta. */
   A.salEco = function (corpo) {
     return Promise.resolve(api('/api/supremo/sal', corpo)).then(function (r) {
-      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
-      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (parado || outroAparelho(r)) return { ok: false, erro: Tx('sua conta entrou em outro aparelho'), motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' };
       if (!r.ok || typeof r.sal !== 'number' || !isFinite(r.sal) || Math.floor(r.sal) !== r.sal) {
-        return { ok: false, erro: r.erro || 'o servidor não deu o sorteio da rodada', motivo: r.motivo || null };
+        return { ok: false, erro: r.erro || Tx('o servidor não deu o sorteio da rodada'), motivo: r.motivo || null };
       }
       return { ok: true, rodada: r.rodada, sal: r.sal };
-    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+    }, function () { return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' }; });
   };
   /* A SALA EM GRUPO (coop.js): o líder pede a semente ao servidor antes da ata (15/09: depois de fechar a luta pendente) */
   A.abreGrupo = function (corpo) {
@@ -450,18 +460,18 @@ var JOGO = (typeof window !== 'undefined')
       return api('/api/duelo/abrir', comVersao(corpo));
     }).then(function (r) {
       A.notaLargada(r);                                 // 15/09: o servidor largou uma luta de antes
-      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
-      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (parado || outroAparelho(r)) return { ok: false, erro: Tx('sua conta entrou em outro aparelho'), motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' };
       if (!r.ok) {
-        return { ok: false, erro: r.erro || 'o servidor não abriu o duelo', motivo: r.motivo || null,
+        return { ok: false, erro: r.erro || Tx('o servidor não abriu o duelo'), motivo: r.motivo || null,
                  heroi: r.heroi || null, esperaS: r.esperaS };
       }
       return { ok: true, carry: (r.carry && typeof r.carry === 'object') ? r.carry : null };
-    }, function () { return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' }; });
+    }, function () { return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' }; });
   };
   /* o texto de um 409 'vida-zero' (sala, grupo ou duelo): quem espera e quanto */
   A.textoVidaZero = function (r) {
-    var hid = (r && r.heroi) || '', classe = String(hid).split('#')[0], nome = hid || 'um herói';
+    var hid = (r && r.heroi) || '', classe = String(hid).split('#')[0], nome = hid || Tx('um herói');
     try {
       var h = P() && P().hero ? P().hero(hid) : null;
       if (h && h.classId) classe = h.classId;
@@ -469,14 +479,14 @@ var JOGO = (typeof window !== 'undefined')
       if (d && d.name) nome = d.name;
     } catch (e) {}
     var s = Math.max(1, Math.ceil(Number(r && r.esperaS) || 0));
-    return nome + ' está sem vida: espere ' + s + ' s (a vida volta sozinha) ou beba uma poção.';
+    return Tx('{nome} está sem vida: espere {s} s (a vida volta sozinha) ou beba uma poção.', { nome: nome, s: s });
   };
   function bebeEm(rota, corpo) {
     return descarregaFila().then(function () { return api(rota, corpo); }).then(function (r) {
-      if (parado || outroAparelho(r)) return { ok: false, erro: 'sua conta entrou em outro aparelho', motivo: 'outro-aparelho' };
-      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu', motivo: 'servidor' };
+      if (parado || outroAparelho(r)) return { ok: false, erro: Tx('sua conta entrou em outro aparelho'), motivo: 'outro-aparelho' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu'), motivo: 'servidor' };
       A.adotaResposta(r);
-      if (!r.ok) return { ok: false, erro: r.erro || 'o servidor recusou a poção', motivo: r.motivo || null };
+      if (!r.ok) return { ok: false, erro: r.erro || Tx('o servidor recusou a poção'), motivo: r.motivo || null };
       return r;
     });
   }
@@ -510,12 +520,12 @@ var JOGO = (typeof window !== 'undefined')
             // 13/09: a conta entrou em outro aparelho — sem tentar de novo (nem sem rede)
             var i = fechamentos.indexOf(pend);
             if (i >= 0) fechamentos.splice(i, 1);
-            resolve({ ok: false, recusada: true, derrubada: true, erro: 'sua conta entrou em outro aparelho',
+            resolve({ ok: false, recusada: true, derrubada: true, erro: Tx('sua conta entrou em outro aparelho'),
                       motivo: 'outro-aparelho' });
             return;
           }
           if (foraDoAr(r)) {
-            if (!avisou) aviso('Conferindo a ' + (rota.indexOf('/guerra/') >= 0 ? 'guerra' : (rota.indexOf('/supremo/') >= 0 ? 'tentativa do Eco' : 'sala')) + ' com o servidor… (sem resposta, tentando de novo)');
+            if (!avisou) aviso(Tx('Conferindo a {a} com o servidor… (sem resposta, tentando de novo)', { a: rota.indexOf('/guerra/') >= 0 ? 'guerra' : (rota.indexOf('/supremo/') >= 0 ? Tx('tentativa do Eco') : 'sala') }));
             setTimeout(function () { tenta(true); }, A.RETENTA_MS);
             return;
           }
@@ -528,7 +538,7 @@ var JOGO = (typeof window !== 'undefined')
           }
           ultimo.erro = (r && r.erro) || 'recusada';
           // 19/09: a `fase` e o `esperaAte` viajam na recusa também — o 422 do juiz na guerra vai para a espera
-          resolve({ ok: false, recusada: true, erro: (r && r.erro) || 'o servidor recusou a sala',
+          resolve({ ok: false, recusada: true, erro: (r && r.erro) || Tx('o servidor recusou a sala'),
                     motivo: r && r.motivo, fase: (r && r.fase) || null, esperaAte: r && r.esperaAte });
         });
       }
@@ -596,7 +606,7 @@ var JOGO = (typeof window !== 'undefined')
         A.adota(r.progress, r.db);
       } else if (r && !r.ok) {
         ultimo.erro = r.erro || 'op recusada';
-        aviso('O servidor recusou uma ação: ' + (r.erro || 'op recusada'));
+        aviso(Tx('O servidor recusou uma ação: {a}', { a: r.erro || 'op recusada' }));
         // o estado local já tem a op que o servidor não aceitou: busca o dele
         return A.puxaEstado();
       }
@@ -613,11 +623,11 @@ var JOGO = (typeof window !== 'undefined')
       var corpo = { hashAntes: ultimo.hash, ops: [{ nome: nome, args: args || {} }], hashDepois: null };
       return api('/api/op', corpo);
     }).then(function (r) {
-      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: 'o servidor não respondeu' };
+      if (foraDoAr(r)) return { ok: false, foraDoAr: true, erro: Tx('o servidor não respondeu') };
       anotaResposta(r);
       if (r && (r.progress || r.db)) A.adota(r.progress, r.db);
       // o `motivo` da recusa vai junto (a quebra distingue 'emprestada' sem ler o texto)
-      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor recusou', motivo: (r && r.motivo) || null };
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('o servidor recusou'), motivo: (r && r.motivo) || null };
       return { ok: true, resultado: (r.resultados || [])[0] };
     });
   };

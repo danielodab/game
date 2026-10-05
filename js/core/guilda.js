@@ -40,6 +40,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var G = {};
   JOGO.Guilda = G;
@@ -152,20 +162,19 @@ var JOGO = (typeof window !== 'undefined')
     var def = (JOGO.DATA && JOGO.DATA.items && JOGO.DATA.items[av.itemId]) || null;
     var nome = (def && def.name) || 'emprestada';
     if (av.motivo === 'dono-excluiu') {
-      return 'A peça ' + nome + ' saiu do seu saco: quem a emprestou excluiu a conta.';
+      return Tx('A peça {nome} saiu do seu saco: quem a emprestou excluiu a conta.', { nome: nome });
     }
     // 04/10: a guilda desfeita pela equipe — quem pegou emprestado perde a cópia, o dono recebe a peça
     if (av.motivo === 'guilda-desfeita') {
-      return 'A peça ' + nome + ' saiu do seu saco: a guilda que a emprestou foi desfeita pela equipe.';
+      return Tx('A peça {nome} saiu do seu saco: a guilda que a emprestou foi desfeita pela equipe.', { nome: nome });
     }
     if (av.motivo === 'devolvida-cofre') {
-      return 'A guilda foi desfeita pela equipe: a sua peça ' + nome + ' voltou do banco dela para o cofre do Acampamento (o saco estava cheio).';
+      return Tx('A guilda foi desfeita pela equipe: a sua peça {nome} voltou do banco dela para o cofre do Acampamento (o saco estava cheio).', { nome: nome });
     }
     if (av.motivo === 'devolvida-saco' || av.motivo === 'devolvida') {
-      return 'A guilda foi desfeita pela equipe: a sua peça ' + nome + ' voltou do banco dela para o seu saco.';
+      return Tx('A guilda foi desfeita pela equipe: a sua peça {nome} voltou do banco dela para o seu saco.', { nome: nome });
     }
-    return 'A peça ' + nome + ' voltou para o banco da guilda: você ficou mais de ' +
-           (av.dias || G.EMPRESTIMO_AUSENCIA_DIAS) + ' dias sem entrar.';
+    return Tx('A peça {nome} voltou para o banco da guilda: você ficou mais de {a} dias sem entrar.', { nome: nome, a: av.dias || G.EMPRESTIMO_AUSENCIA_DIAS });
   };
   /* O recado pode chegar antes de a HUD existir (a conta é reconhecida cedo):
    * fica na fila e sai no próximo pedido à guilda. */
@@ -280,26 +289,25 @@ var JOGO = (typeof window !== 'undefined')
     if (!Nm || typeof Nm.reservado !== 'function') return null;
     if (ehMestre()) return null;
     if (!Nm.reservado(nome)) return null;
-    return Nm.MOTIVO_RESERVADO || 'esse nome é reservado à equipe do jogo';
+    return Nm.MOTIVO_RESERVADO || Tx('esse nome é reservado à equipe do jogo');
   }
 
   G.criar = function (nome, emblema) {
-    if (!conta) return responde({ ok: false, erro: 'sem conta' });
+    if (!conta) return responde({ ok: false, erro: Tx('sem conta') });
     nome = String(nome || '').trim().slice(0, 24);
-    if (!nome) return responde({ ok: false, erro: 'diga um nome' });
+    if (!nome) return responde({ ok: false, erro: Tx('diga um nome') });
     var recusa = nomeDeEquipe(nome);
     if (recusa) return responde({ ok: false, erro: recusa });
     var d = le();
-    if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
+    if (d.porConta[conta.id]) return responde({ ok: false, erro: Tx('você já tem guilda') });
     var P = cofreInsignias();
     if (P) {
       var preco = precoCriar();
       if (P.insigniasVer() < preco) {
-        return responde({ ok: false, erro: 'faltam insígnias: ' +
-                          P.insigniasVer() + '/' + preco + ' — só chefe derruba' });
+        return responde({ ok: false, erro: Tx('faltam insígnias: {a}/{preco} — só chefe derruba', { a: P.insigniasVer(), preco: preco }) });
       }
       if (!P.gastaInsignias(preco)) {
-        return responde({ ok: false, erro: 'as insígnias escaparam da mão' });
+        return responde({ ok: false, erro: Tx('as insígnias escaparam da mão') });
       }
     }
     var g = { id: novoId(), nome: nome, emblema: String(emblema || '⚑').slice(0, 64),
@@ -351,32 +359,32 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder promove' });
-    if (idAlvo === conta.id) return responde({ ok: false, erro: 'você já lidera' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: Tx('só o líder promove') });
+    if (idAlvo === conta.id) return responde({ ok: false, erro: Tx('você já lidera') });
     for (var i = 0; i < g.membros.length; i++) {
       if (g.membros[i].id !== idAlvo) continue;
-      if (g.membros[i].cargo === 'oficial') return responde({ ok: false, erro: 'já é oficial' });
+      if (g.membros[i].cargo === 'oficial') return responde({ ok: false, erro: Tx('já é oficial') });
       g.membros[i].cargo = 'oficial';
       grava(d);
       return responde({ ok: true, cargo: 'oficial' });
     }
-    return responde({ ok: false, erro: 'não é membro' });
+    return responde({ ok: false, erro: Tx('não é membro') });
   };
   G.rebaixar = function (idAlvo) {
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder rebaixa' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: Tx('só o líder rebaixa') });
     for (var i = 0; i < g.membros.length; i++) {
       if (g.membros[i].id !== idAlvo) continue;
-      if (g.membros[i].cargo !== 'oficial') return responde({ ok: false, erro: 'já é membro raso' });
+      if (g.membros[i].cargo !== 'oficial') return responde({ ok: false, erro: Tx('já é membro raso') });
       delete g.membros[i].cargo;
       grava(d);
       return responde({ ok: true, cargo: 'membro' });
     }
-    return responde({ ok: false, erro: 'não é membro' });
+    return responde({ ok: false, erro: Tx('não é membro') });
   };
 
   /* A PORTA E OS PEDIDOS (30/08): "os usuários na sede podem ver as guildas
@@ -393,18 +401,18 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder mexe na porta' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: Tx('só o líder mexe na porta') });
     g.porta = modo;
     grava(d);
     return responde({ ok: true, porta: modo });
   };
   G.pedirEntrada = function (gid) {
-    if (!conta) return responde({ ok: false, erro: 'sem conta' });
+    if (!conta) return responde({ ok: false, erro: Tx('sem conta') });
     var d = le();
-    if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
+    if (d.porConta[conta.id]) return responde({ ok: false, erro: Tx('você já tem guilda') });
     var g = d.guildas[gid];
-    if (!g || escondida(g)) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    if (!g || escondida(g)) return responde({ ok: false, erro: Tx('essa guilda não existe mais') });
     if (portaDe(g) === 'aberta') {
       // porta aberta não tem fila: pedir É entrar
       g.membros.push({ id: conta.id, nome: conta.nome });
@@ -414,7 +422,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var fila = pedidosDe(g);
     for (var i = 0; i < fila.length; i++) {
-      if (fila[i].id === conta.id) return responde({ ok: false, erro: 'seu pedido já está na fila' });
+      if (fila[i].id === conta.id) return responde({ ok: false, erro: Tx('seu pedido já está na fila') });
     }
     fila.push({ id: conta.id, nome: conta.nome, em: agora() });
     grava(d);
@@ -424,9 +432,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     if (!podeGastarCofre(g, conta.id)) {
-      return responde({ ok: false, erro: 'só líder e oficiais aceitam pedidos' });
+      return responde({ ok: false, erro: Tx('só líder e oficiais aceitam pedidos') });
     }
     var fila = pedidosDe(g);
     for (var i = 0; i < fila.length; i++) {
@@ -434,28 +442,28 @@ var JOGO = (typeof window !== 'undefined')
       var p = fila.splice(i, 1)[0];
       if (d.porConta[p.id]) {                 // já achou outra casa nesse meio-tempo
         grava(d);
-        return responde({ ok: false, erro: 'essa conta já entrou noutra guilda' });
+        return responde({ ok: false, erro: Tx('essa conta já entrou noutra guilda') });
       }
       g.membros.push({ id: p.id, nome: p.nome });
       d.porConta[p.id] = g.id;
       grava(d);
       return responde({ ok: true, membro: { id: p.id, nome: p.nome } });
     }
-    return responde({ ok: false, erro: 'pedido não está mais na fila' });
+    return responde({ ok: false, erro: Tx('pedido não está mais na fila') });
   };
   G.recusarPedido = function (idAlvo) {
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     if (!podeGastarCofre(g, conta.id)) {
-      return responde({ ok: false, erro: 'só líder e oficiais recusam pedidos' });
+      return responde({ ok: false, erro: Tx('só líder e oficiais recusam pedidos') });
     }
     var fila = pedidosDe(g);
     for (var i = 0; i < fila.length; i++) {
       if (fila[i].id === idAlvo) { fila.splice(i, 1); grava(d); return responde({ ok: true }); }
     }
-    return responde({ ok: false, erro: 'pedido não está mais na fila' });
+    return responde({ ok: false, erro: Tx('pedido não está mais na fila') });
   };
 
   /* O DÍZIMO (30/08): "o líder define a % de doação de xp de cada um" — a
@@ -472,19 +480,19 @@ var JOGO = (typeof window !== 'undefined')
     if (!voltaAoPadrao) {
       pct = Math.floor(pct);
       if (!isFinite(pct) || pct < 0 || pct > G.DIZIMO_MAX) {
-        return responde({ ok: false, erro: 'o dízimo vai de 0 a ' + G.DIZIMO_MAX + '%' });
+        return responde({ ok: false, erro: Tx('o dízimo vai de 0 a {DIZIMO_MAX}%', { DIZIMO_MAX: G.DIZIMO_MAX }) });
       }
     }
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: 'só o líder define o dízimo' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
+    if (g.liderId !== conta.id) return responde({ ok: false, erro: Tx('só o líder define o dízimo') });
     if (!g.dizimoMembros || typeof g.dizimoMembros !== 'object') g.dizimoMembros = {};
     if (idAlvo == null) {
       g.dizimo = pct;
       if (op && op.todos === true) g.dizimoMembros = {};
     } else {
-      if (!cargoDe(g, idAlvo)) return responde({ ok: false, erro: 'não é membro' });
+      if (!cargoDe(g, idAlvo)) return responde({ ok: false, erro: Tx('não é membro') });
       if (voltaAoPadrao) delete g.dizimoMembros[idAlvo];
       else g.dizimoMembros[idAlvo] = pct;
     }
@@ -513,9 +521,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     if (!podeGastarCofre(g, conta.id)) {
-      return responde({ ok: false, erro: 'só líder e oficiais escrevem a mensagem da guilda' });
+      return responde({ ok: false, erro: Tx('só líder e oficiais escrevem a mensagem da guilda') });
     }
     texto = limpaMural(texto);
     if (texto) g.mural = { texto: texto, autorNome: conta.nome, em: agora() };
@@ -531,10 +539,10 @@ var JOGO = (typeof window !== 'undefined')
   G.doarXp = function (n) {
     if (!conta) return responde({ ok: false });
     n = Math.floor(n);
-    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
+    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: Tx('quantia inválida') });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     g.xp += n;
     if (!g.contrib || typeof g.contrib !== 'object') g.contrib = {};
     g.contrib[conta.id] = (g.contrib[conta.id] || 0) + n;      // 13/09: a ordem da grade de membros
@@ -558,18 +566,18 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   G.entrar = function (gid, op) {
-    if (!conta) return responde({ ok: false, erro: 'sem conta' });
+    if (!conta) return responde({ ok: false, erro: Tx('sem conta') });
     var d = le();
-    if (d.porConta[conta.id]) return responde({ ok: false, erro: 'você já tem guilda' });
+    if (d.porConta[conta.id]) return responde({ ok: false, erro: Tx('você já tem guilda') });
     var g = d.guildas[gid];
     // 04/10: na guilda da equipe só se entra pelo convite do Mestre
-    if (!g || (escondida(g) && !(op && op.convite === true))) return responde({ ok: false, erro: 'essa guilda não existe mais' });
+    if (!g || (escondida(g) && !(op && op.convite === true))) return responde({ ok: false, erro: Tx('essa guilda não existe mais') });
     // porta fechada (30/08): entrar direto só em guilda ABERTA — na de
     // convite o caminho é a fila (pedirEntrada) ou o convite da praça. 11/09:
     // o convite da praça ({ convite: true }) entra — antes ele batia nesta
     // porta e o "aceitar" não levava a lugar nenhum
     if (portaDe(g) === 'convite' && !(op && op.convite === true)) {
-      return responde({ ok: false, erro: 'a guilda é por convite — peça para entrar' });
+      return responde({ ok: false, erro: Tx('a guilda é por convite — peça para entrar') });
     }
     g.membros.push({ id: conta.id, nome: conta.nome });
     d.porConta[conta.id] = gid;
@@ -581,11 +589,11 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     // empréstimo ativo prende: devolve antes de bater a porta
     for (var b = 0; b < g.banco.length; b++) {
       if (g.banco[b].emprestadoPara === conta.id) {
-        return responde({ ok: false, erro: 'devolva o item emprestado antes de sair' });
+        return responde({ ok: false, erro: Tx('devolva o item emprestado antes de sair') });
       }
     }
     g.membros = g.membros.filter(function (m) { return m.id !== conta.id; });
@@ -616,14 +624,14 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------- o cofre e os bônus
   G.compraBonus = function (tipo) {
-    if (tipo !== 'drop' && tipo !== 'xp') return responde({ ok: false, erro: 'bônus desconhecido' });
+    if (tipo !== 'drop' && tipo !== 'xp') return responde({ ok: false, erro: Tx('bônus desconhecido') });
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     // cargos (30/08): oficiais também administram o cofre
     if (!podeGastarCofre(g, conta.id)) {
-      return responde({ ok: false, erro: 'só líder e oficiais gastam o cofre' });
+      return responde({ ok: false, erro: Tx('só líder e oficiais gastam o cofre') });
     }
     if (g.moedas < G.CUSTO_BONUS) return responde({ ok: false, erro: 'cofre insuficiente' });
     g.moedas -= G.CUSTO_BONUS;
@@ -645,7 +653,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta || !item || !item.itemId) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g) return responde({ ok: false, erro: 'sem guilda' });
+    if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
     g.banco.push({ itemId: item.itemId, level: item.level || 0, stars: item.stars || 0,
                    dono: conta.id, donoNome: conta.nome, emprestadoPara: null });
     grava(d);
@@ -663,9 +671,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!conta) return responde({ ok: false });
     var d = le();
     var g = minhaG(d);
-    if (!g || !g.banco[idx]) return responde({ ok: false, erro: 'essa peça já saiu' });
+    if (!g || !g.banco[idx]) return responde({ ok: false, erro: Tx('essa peça já saiu') });
     var e = g.banco[idx];
-    if (e.emprestadoPara) return responde({ ok: false, erro: 'já está emprestada' });
+    if (e.emprestadoPara) return responde({ ok: false, erro: Tx('já está emprestada') });
     if (e.dono === conta.id) {
       g.banco.splice(idx, 1);                       // retirada definitiva
       grava(d);
@@ -673,7 +681,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     for (var b = 0; b < g.banco.length; b++) {
       if (g.banco[b].emprestadoPara === conta.id) {
-        return responde({ ok: false, erro: 'devolva o empréstimo atual primeiro' });
+        return responde({ ok: false, erro: Tx('devolva o empréstimo atual primeiro') });
       }
     }
     e.emprestadoPara = conta.id;
@@ -689,7 +697,7 @@ var JOGO = (typeof window !== 'undefined')
     var g = minhaG(d);
     if (!g || !g.banco[idx]) return responde({ ok: false, erro: 'essa vaga sumiu' });
     var e = g.banco[idx];
-    if (e.emprestadoPara !== conta.id) return responde({ ok: false, erro: 'não foi você que pegou' });
+    if (e.emprestadoPara !== conta.id) return responde({ ok: false, erro: Tx('não foi você que pegou') });
     e.emprestadoPara = null;
     delete e.tomadorNome;
     grava(d);
@@ -721,7 +729,7 @@ var JOGO = (typeof window !== 'undefined')
       if (r.ok && r.avisos && r.avisos.length) { try { recebeAvisos(r.avisos); } catch (eA) {} }
       else mostraRecados();
       if (r.ok && r.devolucoes && r.devolucoes.length) { try { recebeDevolucoes(r.devolucoes); } catch (eD) {} }
-      if (!r.ok && !r.erro) r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)' : 'não deu';
+      if (!r.ok && !r.erro) r.erro = r.status === 0 ? Tx('o servidor está fora (não respondeu)') : Tx('não deu');
       return r;
     });
   }
@@ -817,7 +825,7 @@ var JOGO = (typeof window !== 'undefined')
   peloServidor('minha', function () {
     return pede('/api/guilda/minha').then(function (r) {
       if (r.ok) antigaSrv = r.guilda ? null : (r.antiga || null);
-      minhaFalha = r.ok ? null : (r.erro || 'não deu');
+      minhaFalha = r.ok ? null : (r.erro || Tx('não deu'));
       return r.ok ? (r.guilda || null) : ficha;
     });
   });
@@ -826,12 +834,12 @@ var JOGO = (typeof window !== 'undefined')
   });
   peloServidor('criar', function (nome, emblema) {
     nome = String(nome || '').trim().slice(0, 24);
-    if (!nome) return responde({ ok: false, erro: 'diga um nome' });
+    if (!nome) return responde({ ok: false, erro: Tx('diga um nome') });
     var recusa = nomeDeEquipe(nome);
     if (recusa) return responde({ ok: false, erro: recusa });
     var P = cofreInsignias(), preco = precoCriar();
     if (P && P.insigniasVer() < preco) {
-      return responde({ ok: false, erro: 'faltam insígnias: ' + P.insigniasVer() + '/' + preco + ' — só chefe derruba' });
+      return responde({ ok: false, erro: Tx('faltam insígnias: {a}/{preco} — só chefe derruba', { a: P.insigniasVer(), preco: preco }) });
     }
     return pede('/api/guilda/criar', { nome: nome, emblema: String(emblema || '⚑').slice(0, 64) }).then(function (r) {
       if (r.ok && P) P.gastaInsignias(preco);       // a cobrança vem DEPOIS do sim: fundação recusada não come insígnia
@@ -856,7 +864,7 @@ var JOGO = (typeof window !== 'undefined')
   });
   peloServidor('doarXp', function (n) {
     n = Math.floor(n);
-    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: 'quantia inválida' });
+    if (!isFinite(n) || n <= 0) return responde({ ok: false, erro: Tx('quantia inválida') });
     // 04/10: a origem vai dita — o servidor recusa a doação que não é o dízimo (a oferenda em vinténs acabou)
     return pede('/api/guilda/doar', { xp: n, origem: 'dizimo' }).then(function (r) { if (r.ok && ficha) ficha.xp = r.xp; return r; });
   });
@@ -878,7 +886,7 @@ var JOGO = (typeof window !== 'undefined')
   function vagaDe(idx) { var b = (ficha && ficha.banco) || []; return b[idx] || null; }
   peloServidor('bancoPegar', function (idx) {
     var v = vagaDe(idx);
-    return v ? pede('/api/guilda/banco/pegar', { id: v.id }) : responde({ ok: false, erro: 'essa peça já saiu' });
+    return v ? pede('/api/guilda/banco/pegar', { id: v.id }) : responde({ ok: false, erro: Tx('essa peça já saiu') });
   });
   peloServidor('bancoDevolver', function (idx) {
     var v = vagaDe(idx);
@@ -906,7 +914,7 @@ var JOGO = (typeof window !== 'undefined')
   G.convidar = function (contaAlvo) {
     if (!G.noServidor()) return responde({ ok: true, local: true });
     if (typeof contaAlvo !== 'number' || !(contaAlvo > 0)) {
-      return responde({ ok: false, erro: 'essa pessoa precisa entrar na conta para receber convite de guilda' });
+      return responde({ ok: false, erro: Tx('essa pessoa precisa entrar na conta para receber convite de guilda') });
     }
     return pede('/api/guilda/convidar', { conta: contaAlvo });
   };
@@ -926,7 +934,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   G.migrarLocal = function () {
     var a = G.guildaLocalLiderada();
-    if (!a) return responde({ ok: false, erro: 'nada para trazer' });
+    if (!a) return responde({ ok: false, erro: Tx('nada para trazer') });
     if (a.servidor) {
       return pede('/api/guilda/trazer', {}).then(function (r) { if (r.ok) antigaSrv = null; return r; });
     }

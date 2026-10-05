@@ -23,6 +23,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var M = {};
   JOGO.Mobile = M;
@@ -212,8 +222,8 @@ var JOGO = (typeof window !== 'undefined')
       b.addEventListener('click', fn);
       cx.appendChild(b);
     }
-    botao('app-sair-nao', 'Ficar', '#2a3038', fechaPergunta);
-    botao('app-sair-sim', 'Sair', '#7a2f25', sai);
+    botao('app-sair-nao', Tx('Ficar'), '#2a3038', fechaPergunta);
+    botao('app-sair-sim', Tx('Sair'), '#7a2f25', sai);
     capa.appendChild(cx);
     document.body.appendChild(capa);
     perguntaEl = capa;
@@ -226,8 +236,8 @@ var JOGO = (typeof window !== 'undefined')
     try { fechou = !!(JOGO.UI && JOGO.UI.voltar && JOGO.UI.voltar()); } catch (e) {}
     if (fechou) return 'fechou';
     pergunta(emBatalha()
-      ? 'Sair no meio da batalha? Ela continua sem você.'
-      : 'Sair do SOTERRA?');
+      ? Tx('Sair no meio da batalha? Ela continua sem você.')
+      : Tx('Sair do SOTERRA?'));
     return 'perguntou';
   };
   /* Segundo plano: `fora` verdadeiro ao sair da frente, falso ao voltar. */

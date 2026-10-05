@@ -180,6 +180,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Engine = {};
   JOGO.Engine = Engine;
@@ -280,11 +290,11 @@ var JOGO = (typeof window !== 'undefined')
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
-    calmo:     { id: 'calmo',     name: 'Calmo',     favors: null,    harms: null },
-    chuva:     { id: 'chuva',     name: 'Chuva',     favors: 'agua',  harms: 'fogo' },
-    estiagem:  { id: 'estiagem',  name: 'Estiagem',  favors: 'fogo',  harms: 'agua' },
-    vendaval:  { id: 'vendaval',  name: 'Vendaval',  favors: 'ar',    harms: 'terra' },
-    tremor:    { id: 'tremor',    name: 'Tremor',    favors: 'terra', harms: 'ar' }
+    calmo:     { id: 'calmo',     name: Tx('Calmo'),     favors: null,    harms: null },
+    chuva:     { id: 'chuva',     name: Tx('Chuva'),     favors: 'agua',  harms: 'fogo' },
+    estiagem:  { id: 'estiagem',  name: Tx('Estiagem'),  favors: 'fogo',  harms: 'agua' },
+    vendaval:  { id: 'vendaval',  name: Tx('Vendaval'),  favors: 'ar',    harms: 'terra' },
+    tremor:    { id: 'tremor',    name: Tx('Tremor'),    favors: 'terra', harms: 'ar' }
   };
 
   function emit(ev) { Engine.events.push(ev); }
@@ -641,7 +651,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!silent) {
       var def = weatherTable()[weatherId];
       emit({ type: 'weatherShift', weather: weatherId });
-      log('O clima muda: ' + ((def && def.name) || weatherId) + '.');
+      log(Tx('O clima muda: {a}.', { a: (def && def.name) || weatherId }));
     }
     return true;
   }
@@ -684,12 +694,12 @@ var JOGO = (typeof window !== 'undefined')
       var gain = Math.min(amount, u.hpMax - u.hp);
       u.hp += gain;
       emit({ type: 'weatherTick', uid: u.uid, amount: gain });
-      if (gain > 0) log(u.name + ' se fortalece com o clima (+' + gain + ').', u.uid);
+      if (gain > 0) log(Tx('{name} se fortalece com o clima (+{gain}).', { name: u.name, gain: gain }), u.uid);
     } else {
       // dano ambiental: ignora escudo e resistência, pode matar
       u.hp = Math.max(0, u.hp + amount);
       emit({ type: 'weatherTick', uid: u.uid, amount: amount });
-      log(u.name + ' sofre com o clima (' + amount + ').', u.uid);
+      log(Tx('{name} sofre com o clima ({amount}).', { name: u.name, amount: amount }), u.uid);
       checkEnrage(state, u);
       if (u.hp <= 0) processDeath(state, u);
     }
@@ -1505,8 +1515,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!isWalkable(state, x, y, u)) return;
     var need = bfs(state, u.x, u.y, -1, u).dist[x + ',' + y];
     if (need === undefined) return;                       // sem caminho: nada a dizer
-    if (u.pp <= 0) log(u.name + ' não tem mais Pontos de Passos neste turno.', u.uid);
-    else log(u.name + ' precisa de ' + need + ' PP para chegar aí e só tem ' + u.pp + '.', u.uid);
+    if (u.pp <= 0) log(Tx('{name} não tem mais Pontos de Passos neste turno.', { name: u.name }), u.uid);
+    else log(Tx('{name} precisa de {need} PP para chegar aí e só tem {pp}.', { name: u.name, need: need, pp: u.pp }), u.uid);
   }
 
   Engine.move = function (state, uid, x, y) {
@@ -1515,7 +1525,7 @@ var JOGO = (typeof window !== 'undefined')
     var u = Engine.findUnit(state, uid);
     if (!u || !u.alive || u.offBoard) return false;
     if (Engine.unitHasEffect(u, 'root')) {                // v2
-      log(u.name + ' está preso ao chão.', u.uid);
+      log(Tx('{name} está preso ao chão.', { name: u.name }), u.uid);
       return false;
     }
     var path = Engine.path(state, uid, x, y);
@@ -1542,7 +1552,7 @@ var JOGO = (typeof window !== 'undefined')
     if (corte < path.length) path = path.slice(0, corte);
     if (!path.length) {
       emit({ type: 'esbarrou', uid: uid, x: esbarrou.x, y: esbarrou.y });
-      log(u.name + ' esbarra em alguém que não se vê.', u.uid);
+      log(Tx('{name} esbarra em alguém que não se vê.', { name: u.name }), u.uid);
       return false;
     }
     x = path[path.length - 1].x;
@@ -1561,7 +1571,9 @@ var JOGO = (typeof window !== 'undefined')
         if (critical) u.pa = Math.max(0, u.pa - 1);
         emit({ type: 'dodgeFail', uid: uid, lockerUid: locker.uid,
                chance: chance, critical: critical });
-        log(u.name + ' não escapa de ' + locker.name + (critical ? ' (falha crítica!)' : '') + '.', u.uid);
+        log((critical
+          ? Tx('{name} não escapa de {a} (falha crítica!).', { name: u.name, a: locker.name })
+          : Tx('{name} não escapa de {a}.', { name: u.name, a: locker.name })), u.uid);
         return false;
       }
     }
@@ -1572,7 +1584,7 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'move', uid: uid, path: path });
     if (esbarrou) {
       emit({ type: 'esbarrou', uid: uid, x: esbarrou.x, y: esbarrou.y });
-      log(u.name + ' esbarra em alguém que não se vê.', u.uid);
+      log(Tx('{name} esbarra em alguém que não se vê.', { name: u.name }), u.uid);
     }
 
     // desafio ESTÁTUA: cada célula andada por herói/fusão conta; empurrão e
@@ -1580,7 +1592,7 @@ var JOGO = (typeof window !== 'undefined')
     if (state.desafio && state.desafio.vivo && state.desafio.id === 'estatua' &&
         u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion')) {
       state.desafio.passos += path.length;
-      if (state.desafio.passos > 6) desafioFalha(state, 'o grupo andou demais');
+      if (state.desafio.passos > 6) desafioFalha(state, Tx('o grupo andou demais'));
     }
 
     // v2: pisa em armadilhas e eventos de terreno ao longo do caminho
@@ -1754,7 +1766,7 @@ var JOGO = (typeof window !== 'undefined')
 
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
-    log('Arena de Duelos — clima: ' + state.weather + '. Que vença o mais fundo.');
+    log(Tx('Arena de Duelos — clima: {weather}. Que vença o mais fundo.', { weather: state.weather }));
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return state;
@@ -1906,8 +1918,7 @@ var JOGO = (typeof window !== 'undefined')
 
     Engine.state = state;
     emit({ type: 'battleStart', state: state });
-    log('Arena sorteada — ' + (dungeon.name || dungeonId) + ', ' + (room.name || ('sala ' + (roomIndex + 1))) +
-        '. Clima: ' + state.weather + '.');
+    log(Tx('Arena sorteada — {a}, {b}. Clima: {weather}.', { a: dungeon.name || dungeonId, b: room.name || Tx('sala {n}', { n: roomIndex + 1 }), weather: state.weather }));
     emit({ type: 'roundStart', round: 1 });
     startTurn(state, 0);
     return state;
@@ -1946,7 +1957,7 @@ var JOGO = (typeof window !== 'undefined')
     state.phase = w === 'player' ? 'won' : (w === 'enemy' ? 'lost' : 'empate');
     state.placement = null;
     emit({ type: 'battleEnd', winner: w, reason: motivo || null });
-    log(w ? 'A batalha foi encerrada (' + (motivo || 'fim') + ').' : 'A batalha terminou empatada.');
+    log(w ? Tx('A batalha foi encerrada ({a}).', { a: motivo || 'fim' }) : Tx('A batalha terminou empatada.'));
     return true;
   };
 
@@ -2079,16 +2090,16 @@ var JOGO = (typeof window !== 'undefined')
    * (relampago) e checkBattleEnd (fundido + veredito final). Regra de motor,
    * nao de interface. */
   var DESAFIOS = {
-    intocado:  { nome: 'Intocado',
-                 texto: 'Nenhum herói leva dano de golpe inimigo.' },
-    relampago: { nome: 'Relâmpago',
-                 texto: 'Vença até o fim da rodada 5.' },
-    executor:  { nome: 'Executor',
-                 texto: 'Derrube {alvo} antes de qualquer outro monstro.' },
-    estatua:   { nome: 'Estátua',
-                 texto: 'Os heróis andam no máximo 6 células, somando a luta inteira.' },
-    fundido:   { nome: 'Fundido',
-                 texto: 'Vença com uma fusão viva em campo.' }
+    intocado:  { nome: Tx('Intocado'),
+                 texto: Tx('Nenhum herói leva dano de golpe inimigo.') },
+    relampago: { nome: Tx('Relâmpago'),
+                 texto: Tx('Vença até o fim da rodada 5.') },
+    executor:  { nome: Tx('Executor'),
+                 texto: Tx('Derrube {alvo} antes de qualquer outro monstro.') },
+    estatua:   { nome: Tx('Estátua'),
+                 texto: Tx('Os heróis andam no máximo 6 células, somando a luta inteira.') },
+    fundido:   { nome: Tx('Fundido'),
+                 texto: Tx('Vença com uma fusão viva em campo.') }
   };
   Engine.DESAFIOS = DESAFIOS;
   Engine.DESAFIO_BONUS = 0.25;
@@ -2132,7 +2143,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     state.desafio = d;
     emit({ type: 'desafio', id: d.id, nome: d.nome, texto: d.texto });
-    log('Desafio da sala: ' + d.nome + ' — ' + d.texto);
+    log(Tx('Desafio da sala: {nome} — {texto}', { nome: d.nome, texto: d.texto }));
   }
 
   function desafioFalha(state, motivo) {
@@ -2140,7 +2151,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!d || !d.vivo) return;
     d.vivo = false;
     emit({ type: 'desafioFalhou', id: d.id });
-    log('O desafio ' + d.nome + ' se perde' + (motivo ? ' — ' + motivo : '') + '.');
+    log(Tx('O desafio {nome} se perde{a}.', { nome: d.nome, a: motivo ? ' — ' + motivo : '' }));
   }
 
   // --------------------------------------------------------------- feitiços
@@ -2479,7 +2490,7 @@ var JOGO = (typeof window !== 'undefined')
       var comCobertura = Math.max(1, Math.floor(amount * (100 - Engine.COBERTURA_PCT) / 100));
       if (comCobertura < amount) {
         cobertura = { reducao: amount - comCobertura };
-        log(target.name + ' tem cobertura −' + Engine.COBERTURA_PCT + '% (−' + cobertura.reducao + ').', target.uid);
+        log(Tx('{name} tem cobertura −{COBERTURA_PCT}% (−{reducao}).', { name: target.name, COBERTURA_PCT: Engine.COBERTURA_PCT, reducao: cobertura.reducao }), target.uid);
         amount = comCobertura;
       }
     }
@@ -2515,7 +2526,7 @@ var JOGO = (typeof window !== 'undefined')
         state.desafio.id === 'intocado' && target.side === 'player' &&
         (target.kind === 'hero' || target.kind === 'fusion')) {
       var qd2 = Engine.findUnit(state, sourceUid);
-      if (qd2 && qd2.side === 'enemy') desafioFalha(state, target.name + ' foi ferido');
+      if (qd2 && qd2.side === 'enemy') desafioFalha(state, Tx('{name} foi ferido', { name: target.name }));
     }
     var hpAntes = target.hp;
     target.hp = Math.max(0, target.hp - hpLoss);
@@ -2537,7 +2548,7 @@ var JOGO = (typeof window !== 'undefined')
         if (attacker && attacker.alive) {
           var back = Math.round(amount * pct / 100);
           if (back > 0) {
-            log(target.name + ' reflete ' + back + ' de dano.', target.uid);
+            log(Tx('{name} reflete {back} de dano.', { name: target.name, back: back }), target.uid);
             emit({ type: 'reflect', uid: target.uid, targetUid: attacker.uid, amount: back });
             dealDamage(state, attacker, back, 'neutro', target.uid, true);
           }
@@ -2574,7 +2585,7 @@ var JOGO = (typeof window !== 'undefined')
       var eff = { type: 'buff', stat: 'power', value: t.power, duration: 9999, sourceUid: unit.uid };
       unit.effects.push(eff);
       emit({ type: 'effectApplied', uid: unit.uid, effect: eff });
-      log(unit.name + ' se enfurece! (+' + t.power + ' de poder)', unit.uid);
+      log(Tx('{name} se enfurece! (+{power} de poder)', { name: unit.name, power: t.power }), unit.uid);
     }
   }
 
@@ -2652,7 +2663,7 @@ var JOGO = (typeof window !== 'undefined')
         unit.side === 'enemy' && unit.kind === 'monster' && !state.desafio.executado) {
       state.desafio.executado = true;
       if (unit.uid !== state.desafio.alvoUid) {
-        desafioFalha(state, unit.name + ' caiu antes de ' + state.desafio.alvoNome);
+        desafioFalha(state, Tx('{name} caiu antes de {alvoNome}', { name: unit.name, alvoNome: state.desafio.alvoNome }));
       }
     }
 
@@ -2663,7 +2674,7 @@ var JOGO = (typeof window !== 'undefined')
 
     var explode = getTrait(unit, 'explodeOnDeath');
     if (explode) {
-      log(unit.name + ' explode!');
+      log(Tx('{name} explode!', { name: unit.name }));
       var victims = [];
       for (var i = 0; i < state.units.length; i++) {
         var v = state.units[i];
@@ -2688,7 +2699,7 @@ var JOGO = (typeof window !== 'undefined')
         var kind = unit.kind === 'summon' ? 'summon' : unit.kind;
         spawnMonsterUnit(state, split.monsterId, cells[k].x, cells[k].y, kind, unit.side, unit.uid);
       }
-      if (cells.length > 0) log(unit.name + ' se divide em ' + cells.length + '!');
+      if (cells.length > 0) log(Tx('{name} se divide em {length}!', { name: unit.name, length: cells.length }));
     }
 
     checkBattleEnd(state);
@@ -2715,7 +2726,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!playerAlive) {
       state.phase = 'lost';
       emit({ type: 'battleEnd', winner: 'enemy' });
-      log('A Descida foi derrotada...');
+      log(Tx('A Descida foi derrotada...'));
     } else if (!enemyAlive) {
       state.phase = 'won';
       // o VEREDITO do desafio, antes do battleEnd: quem ouve o fim já ouve
@@ -2737,11 +2748,11 @@ var JOGO = (typeof window !== 'undefined')
         }
         if (dz.cumprido) {
           emit({ type: 'desafioCumprido', id: dz.id });
-          log('Desafio cumprido: ' + dz.nome + '! O prêmio cresce.');
+          log(Tx('Desafio cumprido: {nome}! O prêmio cresce.', { nome: dz.nome }));
         }
       }
       emit({ type: 'battleEnd', winner: 'player' });
-      log('Sala limpa!');
+      log(Tx('Sala limpa!'));
     }
   }
   Engine.checkBattleEnd = checkBattleEnd;
@@ -2751,7 +2762,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!target.alive || tiles <= 0) return;
     // 02/10: o corpo grande nunca é arrastado (decisão de design 19), com ou sem o traço
     if (Engine.unitHasTrait(target, 'pushImmune') || porteDe(target) > 1) {
-      log(target.name + ' não se move um palmo.', target.uid);
+      log(Tx('{name} não se move um palmo.', { name: target.name }), target.uid);
       return;
     }
     // 02/10: quem empurra sendo grande empurra da casa dele mais perto da vítima — o eixo
@@ -2806,7 +2817,7 @@ var JOGO = (typeof window !== 'undefined')
       emit({ type: 'pushed', uid: target.uid, fromX: fromX, fromY: fromY,
              toX: target.x, toY: target.y, collision: collisionDmg });
       if (collisionDmg > 0) {
-        log(target.name + ' colide! (' + collisionDmg + ' de dano)', target.uid);
+        log(Tx('{name} colide! ({collisionDmg} de dano)', { name: target.name, collisionDmg: collisionDmg }), target.uid);
         dealDamage(state, target, collisionDmg, 'neutro', caster.uid);
         // 03/10: jogado contra o muro de espinhos do outro lado, os espinhos ferem também
         if (bateuEm && target.alive && state.phase === 'playing') {
@@ -2884,8 +2895,8 @@ var JOGO = (typeof window !== 'undefined')
     emit({ type: 'muroFere', uid: u.uid, x: w.x, y: w.y, amount: dano,
            element: w.element || 'neutro', motivo: motivo });
     log(motivo === 'empurrado'
-      ? u.name + ' é jogado contra os espinhos do muro (' + dano + ').'
-      : u.name + ' encosta nos espinhos do muro (' + dano + ').', u.uid);
+      ? Tx('{name} é jogado contra os espinhos do muro ({dano}).', { name: u.name, dano: dano })
+      : Tx('{name} encosta nos espinhos do muro ({dano}).', { name: u.name, dano: dano }), u.uid);
     dealDamage(state, u, dano, w.element || 'neutro', w.ownerUid || null, true);
   }
   /* o fim da vez: quem encostou se fere (Engine.endTurn e a vez do pet) */
@@ -2978,7 +2989,7 @@ var JOGO = (typeof window !== 'undefined')
       if (tr.side === u.side) continue;              // não dispara para o próprio lado
       state.traps.splice(i, 1);
       emit({ type: 'trapTriggered', uid: uid, trapId: tr.trapId, x: x, y: y });
-      log(u.name + ' pisa em uma armadilha!');
+      log(Tx('{name} pisa em uma armadilha!', { name: u.name }));
       var sp = spellDef(tr.trapId);
       if (sp) {
         var owner = Engine.findUnit(state, tr.ownerUid);
@@ -3085,7 +3096,7 @@ var JOGO = (typeof window !== 'undefined')
       // 22/09: quem mira uma casa que pede chão livre e acha um corpo que não
       // via fica sabendo ali mesmo — como quem anda e esbarra (nada é gasto)
       var ali = spell.needsEmptyTile ? Engine.unitAt(state, x, y) : null;
-      if (ali && ocultoDe(caster, ali, state)) log(caster.name + ' não acha espaço ali: há alguém que não se vê.');
+      if (ali && ocultoDe(caster, ali, state)) log(Tx('{name} não acha espaço ali: há alguém que não se vê.', { name: caster.name }));
       return false;
     }
 
@@ -3150,7 +3161,7 @@ var JOGO = (typeof window !== 'undefined')
            fxKey: spell.fxKey, element: spell.element });
     // quem CONTINUA nas sombras não conta no diário do adversário o que lançou
     if (!opts.silent) log(caster.name + ' conjura ' + spell.name + '.', (oculto && !saiDasSombras) ? caster.uid : undefined);
-    if (saiDasSombras) log(caster.name + ' sai das sombras!');
+    if (saiDasSombras) log(Tx('{name} sai das sombras!', { name: caster.name }));
     applyEffects(state, caster, spell, x, y, opts);
     if (state.eco) ecoConfere(state);              // 02/10: a troca de fase só depois do golpe inteiro
     // 03/10: no Santuário, o golpe de Fogo acende e o de Água apaga os braseiros que a área cobre
@@ -3311,7 +3322,7 @@ var JOGO = (typeof window !== 'undefined')
               var stolen = Math.round(hpLoss / 2);
               if (stolen > 0) {
                 applyHeal(state, caster, stolen);
-                log(caster.name + ' rouba ' + stolen + ' de vida.', caster.uid);
+                log(Tx('{name} rouba {stolen} de vida.', { name: caster.name, stolen: stolen }), caster.uid);
               }
             }
           }
@@ -3419,7 +3430,7 @@ var JOGO = (typeof window !== 'undefined')
         case 'swap':
           u = Engine.unitAt(state, x, y);
           if (u && u !== caster && (porteDe(u) > 1 || porteDe(caster) > 1)) {
-            log(u.name + ' não troca de lugar com ninguém.', u.uid);   // 02/10: o quadrado não cabe na casa do outro
+            log(Tx('{name} não troca de lugar com ninguém.', { name: u.name }), u.uid);   // 02/10: o quadrado não cabe na casa do outro
             break;
           }
           if (u && u !== caster) {
@@ -3452,7 +3463,7 @@ var JOGO = (typeof window !== 'undefined')
             var minhas = Engine.summonsOf(state, caster);
             while (minhas.length >= teto && minhas.length > 0) {
               var velha = minhas.shift();
-              log(velha.name + ' se desfaz para abrir vaga.');
+              log(Tx('{name} se desfaz para abrir vaga.', { name: velha.name }));
               velha.hp = 0;
               processDeath(state, velha);
             }
@@ -3468,7 +3479,7 @@ var JOGO = (typeof window !== 'undefined')
             applied = { type: 'taunt', duration: eff.duration, sourceUid: caster.uid };
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
-            log(u.name + ' provoca os inimigos!', u.uid);
+            log(Tx('{name} provoca os inimigos!', { name: u.name }), u.uid);
           }
           break;
 
@@ -3493,7 +3504,7 @@ var JOGO = (typeof window !== 'undefined')
             if (u === Engine.activeUnit(state)) applied.lancadoNoTurno = state.turno || 0;
             u.effects.push(applied);
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
-            log(u.name + ' some nas sombras.');
+            log(Tx('{name} some nas sombras.', { name: u.name }));
           }
           break;
 
@@ -3506,7 +3517,7 @@ var JOGO = (typeof window !== 'undefined')
             u.effects.push(applied);
             u.pp = 0;                                   // prende já neste turno
             emit({ type: 'effectApplied', uid: u.uid, effect: applied });
-            log(u.name + ' fica preso ao chão.', u.uid);
+            log(Tx('{name} fica preso ao chão.', { name: u.name }), u.uid);
           }
           break;
 
@@ -3598,10 +3609,10 @@ var JOGO = (typeof window !== 'undefined')
           // DIZER QUANTOS SUBIRAM. Quem esperava tres e ve "ergue 2 muros"
           // entende na hora que uma casa estava ocupada; antes so via menos
           // pedra e nao tinha como saber por que.
-          var espinhos = fereMuro > 0 ? ' de espinhos (fere ' + fereMuro + ' quem encostar)' : '';
-          if (subiram === 1) log(caster.name + ' ergue um muro' + espinhos + '.');
+          var espinhos = fereMuro > 0 ? ' ' + Tx('de espinhos (fere {fereMuro} quem encostar)', { fereMuro: fereMuro }) : '';
+          if (subiram === 1) log(Tx('{name} ergue um muro{espinhos}.', { name: caster.name, espinhos: espinhos }));
           else if (subiram > 1) log(caster.name + ' ergue ' + subiram + ' muros' + espinhos + '.');
-          else log(caster.name + ' não acha onde erguer o muro.');
+          else log(Tx('{name} não acha onde erguer o muro.', { name: caster.name }));
           break;
         }
 
@@ -3647,7 +3658,7 @@ var JOGO = (typeof window !== 'undefined')
             emit({ type: 'trapSet', uid: caster.uid, trapId: eff.trapId, x: tx2, y: ty2, side: caster.side });
             nArm++;
           }
-          if (nArm === 1) log(caster.name + ' arma uma armadilha.');
+          if (nArm === 1) log(Tx('{name} arma uma armadilha.', { name: caster.name }));
           else if (nArm > 1) log(caster.name + ' arma ' + nArm + ' armadilhas.');
           break;
         }
@@ -3668,7 +3679,7 @@ var JOGO = (typeof window !== 'undefined')
             recomputeShield(u);
             if (removed > 0) {
               emit({ type: 'cleanse', uid: u.uid, kinds: kinds.slice(), removed: removed });
-              log(u.name + ' se purifica.', u.uid);
+              log(Tx('{name} se purifica.', { name: u.name }), u.uid);
             }
           }
           break;
@@ -3695,7 +3706,7 @@ var JOGO = (typeof window !== 'undefined')
             if (had > 0) {
               emit({ type: 'dispelShield', uid: u.uid, removed: had });
               emit({ type: 'shield', uid: u.uid, amount: 0 });
-              log(u.name + ' perde o escudo.', u.uid);
+              log(Tx('{name} perde o escudo.', { name: u.name }), u.uid);
             }
           }
           break;
@@ -3855,7 +3866,7 @@ var JOGO = (typeof window !== 'undefined')
     var cfg = ecoCfg(), el = u.element;
     var nomeEl = ((DATA().elementInfo || {})[el] || {}).name || el;
     emit({ type: 'ecoFase', uid: u.uid, fase: nova, element: el });
-    log(u.name + ' muda de fase: agora é ' + nomeEl + '!', u.uid);
+    log(Tx('{name} muda de fase: agora é {nomeEl}!', { name: u.name, nomeEl: nomeEl }), u.uid);
     chamaMenores(state, u, (cfg.menores || {})[el], cfg.menoresPorTroca || 0);
   }
   /* OS ECOS MENORES nascem nas casas livres em volta do corpo dele, das mais
@@ -3881,7 +3892,9 @@ var JOGO = (typeof window !== 'undefined')
         if (m) postos++;
       }
     }
-    if (postos) log(u.name + ' chama ' + postos + (postos === 1 ? ' Eco Menor.' : ' Ecos Menores.'), u.uid);
+    if (postos) log((postos === 1
+      ? Tx('{name} chama {postos} Eco Menor.', { name: u.name, postos: postos })
+      : Tx('{name} chama {postos} Ecos Menores.', { name: u.name, postos: postos })), u.uid);
   }
   /* AS CASAS DO GOLPE GRANDE (o desenho de cada `padrao` está em eco.js).
    * Só chão; nunca as casas do próprio Eco; ordem de leitura, sem repetir. */
@@ -3938,7 +3951,7 @@ var JOGO = (typeof window !== 'undefined')
     var casas = casasDoGolpe(state, u, g);
     e.aviso = { golpe: g.id, el: u.element, nome: g.nome, casas: casas };
     emit({ type: 'ecoAviso', uid: u.uid, golpe: g.id, nome: g.nome, element: u.element, casas: casas.slice() });
-    log(u.name + ' prepara ' + g.nome + ': as casas marcadas explodem na próxima vez dele.', u.uid);
+    log(Tx('{name} prepara {nome}: as casas marcadas explodem na próxima vez dele.', { name: u.name, nome: g.nome }), u.uid);
   }
   /* O COMEÇO DA VEZ DELE: o golpe avisado cai. Pega QUALQUER UM nas casas
    * (menos ele): herói, pet, invocação e Eco Menor — o chão não escolhe lado.
@@ -3950,7 +3963,7 @@ var JOGO = (typeof window !== 'undefined')
     e.aviso = null;
     var g = golpeDaFase(av.el) || {};
     emit({ type: 'ecoGolpe', uid: u.uid, golpe: av.golpe, nome: av.nome, element: av.el, casas: av.casas.slice() });
-    log(av.nome + ' cai sobre a câmara!', u.uid);
+    log(Tx('{nome} cai sobre a câmara!', { nome: av.nome }), u.uid);
     var poder = Engine.castPower(state, u, { element: av.el });
     var vitimas = [];
     for (var i = 0; i < av.casas.length; i++) {
@@ -4148,7 +4161,7 @@ var JOGO = (typeof window !== 'undefined')
       if (eff.type === 'poison') {
         var amt = rollDamageAmount(state, eff.min, eff.max,
           eff.sourcePower || 0, Engine.effResist(u, eff.element), Engine.markMultiplier(u));
-        if (amt > 0) log(u.name + ' sofre ' + amt + ' de veneno.', u.uid);
+        if (amt > 0) log(Tx('{name} sofre {amt} de veneno.', { name: u.name, amt: amt }), u.uid);
         dealDamage(state, u, amt, eff.element, eff.sourceUid);
       } else if (eff.type === 'regen') {
         applyHeal(state, u, rollInt(state, eff.min, eff.max));
@@ -4160,11 +4173,11 @@ var JOGO = (typeof window !== 'undefined')
    * no código; o diário de batalha, não. "Bárbaro: efeito root expira" era a
    * única pista de que a unidade voltara a andar — e em inglês. */
   var EFEITO_PT = {
-    root: 'não está mais preso ao chão', poison: 'se livra do veneno',
-    regen: 'para de se regenerar', shield: 'perde o escudo',
-    buff: 'perde o bônus', resist: 'perde a resistência',
-    taunt: 'não está mais provocado', invisible: 'reaparece',
-    mark: 'perde uma marca', reflect: 'para de refletir dano'
+    root: Tx('não está mais preso ao chão'), poison: Tx('se livra do veneno'),
+    regen: Tx('para de se regenerar'), shield: Tx('perde o escudo'),
+    buff: Tx('perde o bônus'), resist: Tx('perde a resistência'),
+    taunt: Tx('não está mais provocado'), invisible: Tx('reaparece'),
+    mark: Tx('perde uma marca'), reflect: Tx('para de refletir dano')
   };
 
   function tickDownEffects(state, u) {
@@ -4186,7 +4199,7 @@ var JOGO = (typeof window !== 'undefined')
       eff.duration--;
       if (eff.duration <= 0) {
         u.effects.splice(i, 1);
-        log(u.name + ' ' + (EFEITO_PT[eff.type] || ('perde o efeito ' + eff.type)) + '.', u.uid);
+        log(u.name + ' ' + (EFEITO_PT[eff.type] || (Tx('perde o efeito {type}', { type: eff.type }))) + '.', u.uid);
       }
     }
     recomputeShield(u);
@@ -4244,7 +4257,7 @@ var JOGO = (typeof window !== 'undefined')
     state.phase = winner === 'player' ? 'won' : (winner === 'enemy' ? 'lost' : 'empate');
     emit({ type: 'furyTimeout', round: state.round, maxRounds: fcfg.maxRounds });
     emit({ type: 'battleEnd', winner: winner, reason: 'fury' });
-    log(winner ? 'O tempo da arena acabou: vence quem tem mais vida.' : 'O tempo da arena acabou: empate.');
+    log(winner ? Tx('O tempo da arena acabou: vence quem tem mais vida.') : Tx('O tempo da arena acabou: empate.'));
   }
 
   // v2: início de rodada — clima automático, armadilhas e eventos de terreno
@@ -4256,7 +4269,7 @@ var JOGO = (typeof window !== 'undefined')
       state.phase = 'lost';
       emit({ type: 'ecoTempo', rodadas: state.eco.rodadas });
       emit({ type: 'battleEnd', winner: 'enemy', reason: 'eco-tempo' });
-      log('As ' + state.eco.rodadas + ' rodadas acabaram: o Eco Primordial se cala até a próxima tentativa.');
+      log(Tx('As {rodadas} rodadas acabaram: o Eco Primordial se cala até a próxima tentativa.', { rodadas: state.eco.rodadas }));
       return;
     }
     // v2.3: a sala esquenta. Avisa a interface a cada degrau para o jogador ver
@@ -4267,14 +4280,14 @@ var JOGO = (typeof window !== 'undefined')
     if (fury.rounds > 0) {
       emit({ type: 'fury', round: state.round, power: fury.power,
              healScale: fury.healScale, rounds: fury.rounds });
-      if (fury.rounds === 1) log('A sala se enfurece! Os inimigos ganham força a cada rodada.');
+      if (fury.rounds === 1) log(Tx('A sala se enfurece! Os inimigos ganham força a cada rodada.'));
     }
     if (fcfg.maxRounds > 0 && state.round >= fcfg.maxRounds) {
       if (state.pvp) { tetoDoDuelo(state, fcfg); return; }
       state.phase = 'lost';
       emit({ type: 'furyTimeout', round: state.round, maxRounds: fcfg.maxRounds });
       emit({ type: 'battleEnd', winner: 'enemy', reason: 'fury' });
-      log('A sala consome quem demora demais.');
+      log(Tx('A sala consome quem demora demais.'));
       return;
     }
     var dungeon = getDungeon(state.dungeonId);

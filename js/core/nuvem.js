@@ -21,6 +21,16 @@
  * Sem sessão nada disto roda e o jogo é o local de sempre. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var JOGO = window.JOGO = window.JOGO || {};
   var N = JOGO.Nuvem = {};
   N.ESPERA_MS = 3000;          // a gravação local espera isto antes de subir
@@ -248,15 +258,15 @@
   /* Fora do ar (rede) ou reiniciando (o Caddy responde 502/503 enquanto a
    * API sobe): não é recusa, é esperar e tentar de novo. */
   function foraDoAr(r) {
-    if (r.status === 0) return r.erro || 'o servidor está fora (não respondeu)';
-    if (r.status >= 500) return 'o servidor está fora do ar ou reiniciando (HTTP ' + r.status + ')';
+    if (r.status === 0) return r.erro || Tx('o servidor está fora (não respondeu)');
+    if (r.status >= 500) return Tx('o servidor está fora do ar ou reiniciando (HTTP {status})', { status: r.status });
     return r.erro || ('HTTP ' + r.status);
   }
 
   N.iniciar = function () {
     var s = S();
     if (encerrada) return Promise.resolve({ ok: false, erro: 'encerrada' });
-    if (!s || !s.ativa() || !s.disponivel() || !P()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    if (!s || !s.ativa() || !s.disponivel() || !P()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
     // 13/09 (um aparelho só): com sessão, a olhada em /api/eu a cada 30 s — é
     // ela que derruba o jogo quando a conta entra em outro aparelho sem relé no meio
     if (s.vigiaOutroAparelho) { try { s.vigiaOutroAparelho(); } catch (eV) {} }
@@ -309,7 +319,7 @@
   N.puxar = function () {
     var s = S();
     if (encerrada) return Promise.resolve({ ok: false, erro: 'encerrada' });
-    if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
     return s.api('/api/save').then(function (r) {
       if (!r.ok) {
         // a conta entrou em outro aparelho: quem cuida é a Sessao (a queda, ou o
@@ -368,8 +378,8 @@
   N.empurrar = function (op) {
     op = op || {};
     var s = S();
-    if (!ligada || parada || !s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
-    if (subindo) { sujo = true; return Promise.resolve({ ok: false, erro: 'já subindo' }); }
+    if (!ligada || parada || !s || !s.ativa()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
+    if (subindo) { sujo = true; return Promise.resolve({ ok: false, erro: Tx('já subindo') }); }
     if (!puxou) {                                  // sem a versão do servidor, subir seria às cegas
       sujo = true;
       marcaSujo();
@@ -406,7 +416,7 @@
         return r;
       }
       if (r.status === 401 || r.status === 403) {
-        erro = r.erro || 'a sessão não vale mais';
+        erro = r.erro || Tx('a sessão não vale mais');
         if (r.status === 401) { s.esquece(); ligada = false; guardaParaADona(); }
         else parada = true;                         // instância de outra conta: o save local está errado
         avisa('erro', { erro: erro, status: r.status });
@@ -451,7 +461,7 @@
 
   N.troca = function (comContaId, dou, recebo) {
     var s = S();
-    if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    if (!s || !s.ativa()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
     return s.api('/api/troca', { method: 'POST', body: { com: comContaId, dou: dou || [], recebo: recebo || [] } })
       .then(function (r) { avisa('troca', { ok: !!r.ok, feita: !!r.feita, erro: r.erro || null }); return r; });
   };

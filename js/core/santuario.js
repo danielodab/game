@@ -62,6 +62,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Sa = {};
   JOGO.Santuario = Sa;
@@ -223,10 +233,10 @@ var JOGO = (typeof window !== 'undefined')
       t.deco = false;
     });
     var falas = {
-      fogo: 'Câmara escura: quem não é de Fogo só mira a 2 casas no breu. Braseiro aceso clareia; Fogo acende, Água apaga.',
-      agua: 'Galeria alagada: entrar na água custa 2 PP (1 para quem é de Água) e a correnteza empurra 1 casa no fim da rodada.',
-      terra: 'Pilares vivos: sobem e descem a cada 2 rodadas, com aviso uma rodada antes. Quem está em cima do soquete segura o pilar.',
-      ar: 'Ventania: a rajada empurra 1 casa no fim da rodada e gira a cada 2 rodadas. Feitiço de Ar alcança 1 casa a mais.'
+      fogo: Tx('Câmara escura: quem não é de Fogo só mira a 2 casas no breu. Braseiro aceso clareia; Fogo acende, Água apaga.'),
+      agua: Tx('Galeria alagada: entrar na água custa 2 PP (1 para quem é de Água) e a correnteza empurra 1 casa no fim da rodada.'),
+      terra: Tx('Pilares vivos: sobem e descem a cada 2 rodadas, com aviso uma rodada antes. Quem está em cima do soquete segura o pilar.'),
+      ar: Tx('Ventania: a rajada empurra 1 casa no fim da rodada e gira a cada 2 rodadas. Feitiço de Ar alcança 1 casa a mais.')
     };
     p.regras.forEach(function (r) { E().log(falas[r]); });
     anuncia(state, p, I, 1);
@@ -238,14 +248,14 @@ var JOGO = (typeof window !== 'undefined')
     if (p.temAgua && p.bicas.length) {
       var dc = correntezaNa(p, r), pc = correntezaNa(p, r + 1), ac = r > 1 ? correntezaNa(p, r - 1) : dc;
       I.emit({ type: 'santuarioCorrenteza', rodada: r, dir: dc, proxima: pc, bica: bicaNa(p, r) });
-      if (ac !== dc) E().log('A outra bica começa a verter: a correnteza agora corre para o ' + NOME_DIR[dc] + '.');
-      if (pc !== dc) E().log('A correnteza vira na próxima rodada: vai correr para o ' + NOME_DIR[pc] + '.');
+      if (ac !== dc) E().log(Tx('A outra bica começa a verter: a correnteza agora corre para o {a}.', { a: NOME_DIR[dc] }));
+      if (pc !== dc) E().log(Tx('A correnteza vira na próxima rodada: vai correr para o {a}.', { a: NOME_DIR[pc] }));
     }
     if (p.vento.length) {
       var dv = ventoNa(p, r), pv = ventoNa(p, r + 1), av = r > 1 ? ventoNa(p, r - 1) : dv;
       I.emit({ type: 'santuarioVento', rodada: r, dir: dv, proxima: pv });
-      if (av !== dv) E().log('O cata-vento girou: a rajada agora sopra para o ' + NOME_DIR[dv] + '.');
-      if (pv !== dv) E().log('O vento vira na próxima rodada: vai soprar para o ' + NOME_DIR[pv] + '.');
+      if (av !== dv) E().log(Tx('O cata-vento girou: a rajada agora sopra para o {a}.', { a: NOME_DIR[dv] }));
+      if (pv !== dv) E().log(Tx('O vento vira na próxima rodada: vai soprar para o {a}.', { a: NOME_DIR[pv] }));
     }
   }
 
@@ -347,7 +357,7 @@ var JOGO = (typeof window !== 'undefined')
       if (antes === depois) continue;
       S.br[i] = depois ? 1 : 0;
       I.emit({ type: 'santuarioBraseiro', x: tiles[t].x, y: tiles[t].y, aceso: depois, uid: caster ? caster.uid : null });
-      E().log(depois ? 'O braseiro acende: a luz abre o escuro em volta.' : 'O braseiro apaga: o escuro fecha em volta.');
+      E().log(depois ? Tx('O braseiro acende: a luz abre o escuro em volta.') : Tx('O braseiro apaga: o escuro fecha em volta.'));
     }
   };
 
@@ -406,9 +416,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (sobem.length || descem.length || esperam.length) {
       I.emit({ type: 'santuarioPilares', rodada: r, sobem: sobem, descem: descem, esperam: esperam });
-      if (sobem.length || descem.length) E().log('Os pilares vivos trocam de lugar: ' + sobem.length + ' de pé, ' + descem.length + ' no chão.');
-      if (esperam.length) E().log(esperam.length === 1 ? 'Um pilar espera: há alguém em cima do soquete.'
-                                                         : esperam.length + ' pilares esperam: há alguém em cima dos soquetes.');
+      if (sobem.length || descem.length) E().log(Tx('Os pilares vivos trocam de lugar: {length} de pé, {a} no chão.', { length: sobem.length, a: descem.length }));
+      if (esperam.length) E().log(esperam.length === 1 ? Tx('Um pilar espera: há alguém em cima do soquete.')
+                                                         : Tx('{length} pilares esperam: há alguém em cima dos soquetes.', { length: esperam.length }));
     }
   }
   function avisaPilares(state, p, I) {
@@ -421,7 +431,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!sobem.length && !descem.length) { if (S.av <= r) S.av = 0; return; }
     S.av = r + 1;
     I.emit({ type: 'santuarioAviso', regra: 'terra', rodada: r + 1, sobem: sobem, descem: descem });
-    E().log('Os pilares vivos tremem: trocam de lugar no começo da próxima rodada.');
+    E().log(Tx('Os pilares vivos tremem: trocam de lugar no começo da próxima rodada.'));
   }
 
   // ---------------------------------------------------------- AR E CORRENTEZA
@@ -479,11 +489,15 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (dc) {
       I.emit({ type: 'santuarioMare', rodada: r, dir: dc, movidos: idos.correnteza });
-      E().log('A correnteza corre para o ' + NOME_DIR[dc] + (idos.correnteza.length ? ' e arrasta quem está na água.' : '.'));
+      E().log((idos.correnteza.length
+        ? Tx('A correnteza corre para o {a} e arrasta quem está na água.', { a: NOME_DIR[dc] })
+        : Tx('A correnteza corre para o {a}.', { a: NOME_DIR[dc] })));
     }
     if (dv) {
       I.emit({ type: 'santuarioRajada', rodada: r, dir: dv, movidos: idos.rajada });
-      E().log('A rajada sopra para o ' + NOME_DIR[dv] + (idos.rajada.length ? ' e empurra quem está no terraço.' : '.'));
+      E().log((idos.rajada.length
+        ? Tx('A rajada sopra para o {a} e empurra quem está no terraço.', { a: NOME_DIR[dv] })
+        : Tx('A rajada sopra para o {a}.', { a: NOME_DIR[dv] })));
     }
   };
 

@@ -141,11 +141,13 @@ var JOGO = (typeof window !== 'undefined')
 
   function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
 
-  // {nome} → vars.nome. Chave que não veio fica como está (aparece o erro, não some o texto)
+  // {nome} → vars.nome. Chave que não veio fica como está (aparece o erro, não some o texto).
+  // Valor nulo vira "null"/"undefined", igual à concatenação que o tr() substituiu na etapa 2:
+  // em português o texto tem de sair byte a byte o que saía antes.
   function troca(s, vars) {
     if (!vars) return s;
     return s.replace(/\{([A-Za-z_][\w]*)\}/g, function (m, k) {
-      return (has(vars, k) && vars[k] != null) ? String(vars[k]) : m;
+      return has(vars, k) ? String(vars[k]) : m;
     });
   }
 
@@ -245,6 +247,15 @@ var JOGO = (typeof window !== 'undefined')
   /* Troca os textos do DATA pelos do idioma. Devolve { trocados, faltam }.
    * Campo sem tradução fica em português. NUNCA cria campo, nunca mexe em
    * número, id ou ordem: só reescreve string que já era string. */
+  /* O PORTUGUÊS de um campo que o aplicaDados trocou (etapa 2). Serve a quem usa o nome como CHAVE
+   * — o título "Top 1 Bárbaro" é montado com o nome da classe, e o save e o relé o guardam em
+   * português: I18n.pt('classes', 'barbarian', 'name', atual). Sem troca, devolve o `atual`. */
+  var ORIG = {};
+  I.pt = function (tabela, reg, campo, atual) {
+    var k = tabela + '|' + reg + '|' + campo;
+    return has(ORIG, k) ? ORIG[k] : atual;
+  };
+
   I.aplicaDados = function (DATA, idioma) {
     var l = idioma || I.idioma, r = { trocados: 0, faltam: 0 };
     if (l === I.PADRAO || !DIC[l]) return r;
@@ -252,7 +263,7 @@ var JOGO = (typeof window !== 'undefined')
     I.percorre(DATA, function (t, reg, campo, texto, dono) {
       var e = dd[t] && has(dd[t], reg) ? dd[t][reg] : null;
       var v = e && has(e, campo) ? e[campo] : null;
-      if (typeof v === 'string' && v) { dono[campo] = v; r.trocados++; }
+      if (typeof v === 'string' && v) { ORIG[t + '|' + reg + '|' + campo] = texto; dono[campo] = v; r.trocados++; }
       else r.faltam++;
     });
     I.aplicado = r;

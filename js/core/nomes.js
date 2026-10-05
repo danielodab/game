@@ -140,6 +140,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var N = {};
   JOGO.Nomes = N;
@@ -539,11 +549,11 @@ var JOGO = (typeof window !== 'undefined')
                 '\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a' +
                 '\u200b\u200c\u200d\u2028\u2029\u202f\u205f\u3000\ufeff';
 
-  var MOTIVO_VAZIO = 'diga um nome';
-  var MOTIVO_PONTAS = 'sem espaço no começo nem no fim';
-  var MOTIVO_CARACTERES = 'use só letras, números, espaço, apóstrofo, _ ou -';
-  var MOTIVO_LETRA = 'o nome precisa ter pelo menos uma letra';
-  var MOTIVO_RESERVADO = 'esse nome é reservado à equipe do jogo';
+  var MOTIVO_VAZIO = Tx('diga um nome');
+  var MOTIVO_PONTAS = Tx('sem espaço no começo nem no fim');
+  var MOTIVO_CARACTERES = Tx('use só letras, números, espaço, apóstrofo, _ ou -');
+  var MOTIVO_LETRA = Tx('o nome precisa ter pelo menos uma letra');
+  var MOTIVO_RESERVADO = Tx('esse nome é reservado à equipe do jogo');
   N.MOTIVO_RESERVADO = MOTIVO_RESERVADO;   // a guilda e a HUD falam a mesma língua
 
   // ---------------------------------------------------------------- miudezas
@@ -1243,7 +1253,7 @@ var JOGO = (typeof window !== 'undefined')
     /* o comprimento é contado DEPOIS do conjunto de caracteres de propósito:
      * só sobra o plano básico, e o JavaScript conta o mesmo que o Python */
     if (nome.length < minimo || nome.length > maximo) {
-      return { ok: false, motivo: 'de ' + minimo + ' a ' + maximo + ' caracteres' };
+      return { ok: false, motivo: Tx('de {minimo} a {maximo} caracteres', { minimo: minimo, maximo: maximo }) };
     }
     if (!temLetra(nome)) return { ok: false, motivo: MOTIVO_LETRA };
     if (N.reservado(nome)) return { ok: false, motivo: MOTIVO_RESERVADO };

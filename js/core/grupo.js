@@ -33,6 +33,16 @@ var JOGO = (typeof window !== 'undefined')
  * ==========================================================================*/
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Grupo = {}, Duelo = {}, Sussurros = {};
   JOGO.Grupo = Grupo;
@@ -96,7 +106,7 @@ var JOGO = (typeof window !== 'undefined')
   /* o nome de quem está do outro lado: o registro da Rede (julgado pelo relé);
    * sem R.nomeDe (Rede antiga), a lista de pares; nunca o envelope */
   function nomeDe(id, sug) {
-    if (!id) return sug || 'Aventureiro';
+    if (!id) return sug || Tx('Aventureiro');
     var r = R();
     if (r && typeof r.nomeDe === 'function') {
       var n = safe(function () { return r.nomeDe(id, sug); }, null);
@@ -107,7 +117,7 @@ var JOGO = (typeof window !== 'undefined')
       r.pares().forEach(function (p) { if (p && p.id === id && p.nome) achado = p.nome; });
       return true;
     }, false);
-    return achado || sug || 'Aventureiro';
+    return achado || sug || Tx('Aventureiro');
   }
 
   /* A VERSÃO dos dois lados tem de bater: o carimbo do build mais a assinatura
@@ -334,59 +344,59 @@ var JOGO = (typeof window !== 'undefined')
   /* Os motivos padronizados (seção 2.6) em pt-BR. `nome` = quem está do outro
    * lado (null: é sobre mim). "Quem lidera" é a forma única da HUD (4.11). */
   var SOBRE_OUTRO = {
-    'ocupado': '{n} está ocupado(a) agora.',
-    'em-batalha': '{n} está ocupado(a) agora.',
-    'em-grupo': '{n} já está num grupo.',
-    'troca': '{n} está numa troca.',
-    'versao': 'Vocês estão em versões diferentes do jogo — recarreguem a página.',
-    'mestre': 'O Mestre do Fundo não entra em duelo.',
-    'so-mestre-chama': 'O Mestre do Fundo é quem chama para o grupo.',
-    'mestre-falso': 'Esse Mestre do Fundo não foi conferido pelo servidor.',
-    'sem-heroi': '{n} não tem herói escolhido.',
-    'portal': 'Esse calabouço não abre agora.',
-    'poco': 'O Poço é só para quem desce sozinho — por enquanto.',
-    'expirou': 'O convite expirou.',
+    'ocupado': Tx('{n} está ocupado(a) agora.'),
+    'em-batalha': Tx('{n} está ocupado(a) agora.'),
+    'em-grupo': Tx('{n} já está num grupo.'),
+    'troca': Tx('{n} está numa troca.'),
+    'versao': Tx('Vocês estão em versões diferentes do jogo — recarreguem a página.'),
+    'mestre': Tx('O Mestre do Fundo não entra em duelo.'),
+    'so-mestre-chama': Tx('O Mestre do Fundo é quem chama para o grupo.'),
+    'mestre-falso': Tx('Esse Mestre do Fundo não foi conferido pelo servidor.'),
+    'sem-heroi': Tx('{n} não tem herói escolhido.'),
+    'portal': Tx('Esse calabouço não abre agora.'),
+    'poco': Tx('O Poço é só para quem desce sozinho — por enquanto.'),
+    'expirou': Tx('O convite expirou.'),
     'recusou': '{n} recusou.',
-    'rele-antigo': 'Grupo e duelo precisam do servidor novo da Rede.',
-    'sem-conexao': 'Sem conexão com a Rede agora.',
-    'sumido': '{n} não está mais conectado(a).',
-    'trapaca': 'O duelo foi cancelado: a dupla revelada não bate com a escolhida.',
-    'desistiu': '{n} desistiu do duelo.',
+    'rele-antigo': Tx('Grupo e duelo precisam do servidor novo da Rede.'),
+    'sem-conexao': Tx('Sem conexão com a Rede agora.'),
+    'sumido': Tx('{n} não está mais conectado(a).'),
+    'trapaca': Tx('O duelo foi cancelado: a dupla revelada não bate com a escolhida.'),
+    'desistiu': Tx('{n} desistiu do duelo.'),
     // 14/09: o Campo de PvP e a Arena
-    'fora-do-campo': '{n} não está mais no Campo de PvP.',
-    'alvo-fora': '{n} não está no Campo de PvP.',
-    'alvo-luta': '{n} já está numa luta.',
-    'vida-zero-alvo': '{n} está sem vida agora — espere recuperar.',
-    'paridade': 'A diferença de nível entre vocês passa de 10: no Campo não dá.'
+    'fora-do-campo': Tx('{n} não está mais no Campo de PvP.'),
+    'alvo-fora': Tx('{n} não está no Campo de PvP.'),
+    'alvo-luta': Tx('{n} já está numa luta.'),
+    'vida-zero-alvo': Tx('{n} está sem vida agora — espere recuperar.'),
+    'paridade': Tx('A diferença de nível entre vocês passa de 10: no Campo não dá.')
   };
   var SOBRE_MIM = {
-    'ocupado': 'Termine o que está fazendo antes.',
-    'em-batalha': 'Não dá no meio da descida.',
-    'em-grupo': 'Você já está num grupo.',
-    'troca': 'Feche a troca aberta antes.',
-    'sem-heroi': 'Escolha um herói primeiro.',
-    'mestre': 'O Mestre do Fundo não entra em duelo.',
-    'so-mestre-chama': 'O Mestre do Fundo é quem chama para o grupo.',
-    'mestre-falso': 'Esse Mestre do Fundo não foi conferido pelo servidor.',
-    'nao-lider': 'Só quem lidera escolhe o calabouço.',
-    'sem-grupo': 'Você não está num grupo.',
-    'privado': 'Mensagem particular precisa do servidor da Rede.',
-    'vazio': 'Escreva alguma coisa.',
-    'n': 'Escolha um ou dois heróis.',
+    'ocupado': Tx('Termine o que está fazendo antes.'),
+    'em-batalha': Tx('Não dá no meio da descida.'),
+    'em-grupo': Tx('Você já está num grupo.'),
+    'troca': Tx('Feche a troca aberta antes.'),
+    'sem-heroi': Tx('Escolha um herói primeiro.'),
+    'mestre': Tx('O Mestre do Fundo não entra em duelo.'),
+    'so-mestre-chama': Tx('O Mestre do Fundo é quem chama para o grupo.'),
+    'mestre-falso': Tx('Esse Mestre do Fundo não foi conferido pelo servidor.'),
+    'nao-lider': Tx('Só quem lidera escolhe o calabouço.'),
+    'sem-grupo': Tx('Você não está num grupo.'),
+    'privado': Tx('Mensagem particular precisa do servidor da Rede.'),
+    'vazio': Tx('Escreva alguma coisa.'),
+    'n': Tx('Escolha um ou dois heróis.'),
     // 14/09 (o dono): "pede para ele selecionar os dois que ele quer ir para a batalha"
-    'dois': 'Escolha os dois heróis que vão lutar.',
-    'fora-do-campo': 'Isso é só dentro do Campo de PvP.',
-    'paridade': 'A diferença de nível passa de 10: no Campo não dá.',
-    'arena': 'A Arena não aceitou agora.',
+    'dois': Tx('Escolha os dois heróis que vão lutar.'),
+    'fora-do-campo': Tx('Isso é só dentro do Campo de PvP.'),
+    'paridade': Tx('A diferença de nível passa de 10: no Campo não dá.'),
+    'arena': Tx('A Arena não aceitou agora.'),
     // 14/09: a vida única — herói a 0 PV não entra em duelo até recuperar (ou beber uma poção)
-    'vida-zero': 'Esse herói está sem vida: espere ele recuperar ou beba uma poção.',
-    'servidor': 'O servidor não respondeu — tente de novo em instantes.'
+    'vida-zero': Tx('Esse herói está sem vida: espere ele recuperar ou beba uma poção.'),
+    'servidor': Tx('O servidor não respondeu — tente de novo em instantes.')
   };
   Grupo.textoMotivo = function (motivo, nome) {
     var m = String(motivo || 'ocupado');
     var t = nome ? (SOBRE_OUTRO[m] || SOBRE_MIM[m]) : (SOBRE_MIM[m] || SOBRE_OUTRO[m]);
-    if (!t) t = nome ? '{n} não pôde agora.' : 'Não deu agora.';
-    return t.replace('{n}', nome || 'O outro lado');
+    if (!t) t = nome ? Tx('{n} não pôde agora.') : Tx('Não deu agora.');
+    return t.replace('{n}', nome || Tx('O outro lado'));
   };
 
   function aviso(texto, kind) {
@@ -442,7 +452,7 @@ var JOGO = (typeof window !== 'undefined')
     var membros = [];
     if (Grupo.emGrupo()) {
       var meus = heroisResumo(meusHerois);
-      var mim = { id: e, cx: meuCx(), nome: meuNome || 'Você', heroi: meus[0] || null, herois: meus,
+      var mim = { id: e, cx: meuCx(), nome: meuNome || Tx('Você'), heroi: meus[0] || null, herois: meus,
                   on: true, sumidoDesde: null, eu: true };
       var ele = { id: st.par.id, cx: st.par.cx, nome: st.par.nome,
                   heroi: st.par.heroi, herois: (st.par.herois || []).slice(),
@@ -550,7 +560,7 @@ var JOGO = (typeof window !== 'undefined')
     var ok = safe(function () { return G().startRun(meusHerois.slice(), dg, { grupo: true }); }, false);
     if (!ok) {
       descidaG = null;
-      aviso('Não deu para começar a descida.');
+      aviso(Tx('Não deu para começar a descida.'));
       if (Grupo.emGrupo()) manda('grupo', st.par.id, 'subir', { gid: st.gid, motivo: 'falhou' }, st.par.cx);
     }
     muda();
@@ -757,12 +767,12 @@ var JOGO = (typeof window !== 'undefined')
       st.fase = 'livre';
       if (agora() > p.expira) {
         if (d.ok === true && umaVez(de, d.gid)) manda('grupo', de, 'sair', { gid: d.gid, motivo: 'expirou' }, ev.cx);
-        aviso('O convite expirou.');
+        aviso(Tx('O convite expirou.'));
         muda();
         return;
       }
       if (d.ok !== true) {
-        aviso(!d.motivo || d.motivo === 'recusou' ? nomeDe(de) + ' recusou o convite.'
+        aviso(!d.motivo || d.motivo === 'recusou' ? Tx('{a} recusou o convite.', { a: nomeDe(de) })
                                                   : Grupo.textoMotivo(d.motivo, nomeDe(de)));
         muda();
         return;
@@ -776,7 +786,7 @@ var JOGO = (typeof window !== 'undefined')
       st.descidaAcabou = false;
       vigia(de, st.par.cx);
       mandaEstado();
-      aviso(st.par.nome + ' entrou no grupo!', 'good');
+      aviso(Tx('{nome} entrou no grupo!', { nome: st.par.nome }), 'good');
       muda();
     } else if (a === 'estado') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
@@ -802,7 +812,7 @@ var JOGO = (typeof window !== 'undefined')
       st.lider = eu();
       st.v = Math.max(st.v, Math.floor(Number(d.v) || 0));
       mandaEstado();
-      aviso('Agora você lidera o grupo.', 'good');
+      aviso(Tx('Agora você lidera o grupo.'), 'good');
       muda();
     } else if (a === 'heroi') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
@@ -819,7 +829,7 @@ var JOGO = (typeof window !== 'undefined')
                        (d.prova === provaDe(st.chave, ev.cx) || (st.voltaProva && d.prova === st.voltaProva)));
       if (Grupo.emGrupo() && d.gid === st.gid && de === st.par.id && (doPar(ev) || provaOk)) {
         var nome = st.par.nome;
-        desfaz(d.motivo === 'expirou' ? null : nome + ' saiu do grupo.');
+        desfaz(d.motivo === 'expirou' ? null : Tx('{nome} saiu do grupo.', { nome: nome }));
       } else if (st.pendente && !st.pendente.meu && st.pendente.gid === d.gid && st.pendente.id === de &&
                  (!st.pendente.cx || ev.cx === st.pendente.cx)) {   // achado 18: só pela conexão que convidou
         st.pendente = null;
@@ -832,8 +842,7 @@ var JOGO = (typeof window !== 'undefined')
       var mot2 = validaDescida(dg) || motivoPodeSeguir();
       if (mot2) {
         manda('grupo', de, 'desci', { gid: st.gid, dungeonId: dg, ok: false, motivo: mot2 }, st.par.cx);
-        aviso(st.par.nome + ' chamou para descer, mas ' + Grupo.textoMotivo(mot2, null).charAt(0).toLowerCase() +
-              Grupo.textoMotivo(mot2, null).slice(1));
+        aviso(Tx('{nome} chamou para descer, mas {a}{b}', { nome: st.par.nome, a: Grupo.textoMotivo(mot2, null).charAt(0).toLowerCase(), b: Grupo.textoMotivo(mot2, null).slice(1) }));
         return;
       }
       // 11/09 (revisão): quem segue é AVISADO (a descida fecha a ficha aberta sem uma
@@ -841,8 +850,7 @@ var JOGO = (typeof window !== 'undefined')
       st.descidaDif = difValida(d.dificuldade) || st.descidaDif || 'normal';
       var dd = acharDungeon(dg);
       var cfgDif = safe(function () { return D().dificuldades[st.descidaDif]; }, null);
-      aviso(st.par.nome + ' escolheu ' + ((dd && (dd.name || dd.nome)) || 'o calabouço') +
-            (cfgDif && cfgDif.nome ? ' (' + cfgDif.nome + ')' : '') + ' — descendo juntos.', 'good');
+      aviso(Tx('{nome} escolheu {a}{b} — descendo juntos.', { nome: st.par.nome, a: (dd && (dd.name || dd.nome)) || Tx('o calabouço'), b: cfgDif && cfgDif.nome ? ' (' + cfgDif.nome + ')' : '' }), 'good');
       manda('grupo', de, 'desci', { gid: st.gid, dungeonId: dg, ok: true }, st.par.cx);
       comecaDescida(dg);
     } else if (a === 'desci') {
@@ -864,11 +872,11 @@ var JOGO = (typeof window !== 'undefined')
     } else if (a === 'subir') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
       st.descer = null;
-      var tx = d.motivo === 'expirou' ? 'Quem lidera não esperou: a descida foi cancelada.'
-             : (st.par.nome + ' saiu da descida — vocês voltaram ao Acampamento.');
+      var tx = d.motivo === 'expirou' ? Tx('Quem lidera não esperou: a descida foi cancelada.')
+             : (Tx('{nome} saiu da descida — vocês voltaram ao Acampamento.', { nome: st.par.nome }));
       if (tela() === 'battle') {
         st.descidaAcabou = true;
-        aviso(st.par.nome + ' saiu da descida — ela acaba no fim desta sala.');
+        aviso(Tx('{nome} saiu da descida — ela acaba no fim desta sala.', { nome: st.par.nome }));
         muda();
       } else if (descidaAtual() !== 'praca' || descidaG) {
         aviso(tx);
@@ -917,8 +925,8 @@ var JOGO = (typeof window !== 'undefined')
     if (p && p.id === id && !(cx && p.cx && cx !== p.cx)) {
       st.pendente = null;
       if (st.fase !== 'formado') st.fase = 'livre';
-      aviso(p.meu ? nomeDe(id) + ' não está mais conectado(a) — o convite caiu.'
-                  : 'O convite de ' + nomeDe(id) + ' caiu: a conexão fechou.');
+      aviso(p.meu ? Tx('{a} não está mais conectado(a) — o convite caiu.', { a: nomeDe(id) })
+                  : Tx('O convite de {a} caiu: a conexão fechou.', { a: nomeDe(id) }));
       muda();
     }
     if (Grupo.emGrupo() && st.par.id === id && !(soPendente && st.par.cx) &&
@@ -927,7 +935,7 @@ var JOGO = (typeof window !== 'undefined')
       st.par.sumidoDesde = t0;
       safe(function () { C().parceiroSumiu(id, t0); return true; }, false);
       // na batalha quem avisa é o Coop (a mesma frase): aqui só fora dela
-      if (tela() !== 'battle') aviso(st.par.nome + ' caiu — esperando voltar (' + Math.round(graca() / 1000) + ' s)…');
+      if (tela() !== 'battle') aviso(Tx('{nome} caiu — esperando voltar ({a} s)…', { nome: st.par.nome, a: Math.round(graca() / 1000) }));
       muda();
     }
     sinalSumiuDuelo(id, cx, t0, soPendente);
@@ -961,12 +969,12 @@ var JOGO = (typeof window !== 'undefined')
     if (p && t > p.expira) {
       st.pendente = null;
       if (st.fase !== 'formado') st.fase = 'livre';
-      aviso(p.meu ? 'O convite expirou.' : 'O convite de ' + nomeDe(p.id) + ' expirou.');
+      aviso(p.meu ? Tx('O convite expirou.') : Tx('O convite de {a} expirou.', { a: nomeDe(p.id) }));
       muda();
     }
     if (st.descer && t > st.descer.expira) {
       st.descer = null;
-      aviso((st.par ? st.par.nome : 'O outro lado') + ' não respondeu.');
+      aviso(Tx('{a} não respondeu.', { a: st.par ? st.par.nome : Tx('O outro lado') }));
       muda();
     }
     if (Grupo.emGrupo() && !st.par.on && st.par.sumidoDesde && !st.dissolver &&
@@ -986,7 +994,7 @@ var JOGO = (typeof window !== 'undefined')
         // D21: quem ficou lidera (a autoridade da batalha é do Coop)
         if (st.lider !== eu()) { st.lider = eu(); st.v++; muda(); }
       } else {
-        desfaz(nome + ' saiu — o grupo se desfez.');
+        desfaz(Tx('{nome} saiu — o grupo se desfez.', { nome: nome }));
       }
     }
     if (st.dissolver && tela() !== 'battle') {
@@ -1305,7 +1313,7 @@ var JOGO = (typeof window !== 'undefined')
           if (r && r.motivo === 'vida-zero') {
             aviso(A.textoVidaZero ? A.textoVidaZero(r) : Grupo.textoMotivo('vida-zero', null));
             safe(function () { return Vd.sincroniza(); }, null);
-          } else aviso('O servidor não abriu o duelo: ' + ((r && r.erro) || 'sem resposta') + '.');
+          } else aviso(Tx('O servidor não abriu o duelo: {a}.', { a: (r && r.erro) || Tx('sem resposta') }));
           // 14/09: no Campo e na Arena não há ficha de escolha para tentar de novo — a luta cai na hora
           if (dst.modo === 'campo' || dst.modo === 'arena') { cancelaCalado(r && r.motivo === 'vida-zero' ? 'vida-zero-alvo' : 'desistiu'); return; }
           mudaD();
@@ -1359,7 +1367,7 @@ var JOGO = (typeof window !== 'undefined')
     var nome = dst.op ? dst.op.nome : null;
     if (avisaOutro && dst.op) manda('duelo', dst.op.id, 'cancela', { did: dst.did, motivo: motivo }, dst.op.cx);
     zeraDuelo();
-    aviso(motivo === 'expirou' ? 'O duelo foi cancelado: o tempo de escolher a dupla acabou.'
+    aviso(motivo === 'expirou' ? Tx('O duelo foi cancelado: o tempo de escolher a dupla acabou.')
                                : Grupo.textoMotivo(motivo, nome));
     mudaD();
   }
@@ -1413,9 +1421,9 @@ var JOGO = (typeof window !== 'undefined')
   }
   function nomeArena(ar) {
     var m = ar ? acharMapaDeLuta(ar.dungeonId) : null;
-    if (m) return m.name || 'A Praça';                 // a praça tem um mapa só: sem "sala 1"
+    if (m) return m.name || Tx('A Praça');                 // a praça tem um mapa só: sem "sala 1"
     var d = ar ? acharDungeon(ar.dungeonId) : null;
-    return ((d && d.name) || (ar && ar.dungeonId) || 'Arena') + ' — sala ' + ((ar && ar.roomIndex || 0) + 1);
+    return ((d && d.name) || (ar && ar.dungeonId) || Tx('Arena')) + ' — ' + Tx('sala {n}', { n: (ar && ar.roomIndex || 0) + 1 });
   }
   /* O MAPA DE CADA MODO (14/09): o desafio amistoso é SEMPRE a praça, sala 0; a arena e o campo sorteiam
    * pela semente dos dois entre os calabouços abertos (o Coop, ou o gêmeo daqui) */
@@ -1466,8 +1474,8 @@ var JOGO = (typeof window !== 'undefined')
     dst.prazo = 0;
     dst.inicio = agoraD();
     dst.viuBatalha = false;
-    aviso(dst.modo === 'desafio' ? 'Desafio amistoso na Praça — a coroa não muda.'
-                                 : 'Arena sorteada: ' + nomeArena(ata) + '.', 'good');
+    aviso(dst.modo === 'desafio' ? Tx('Desafio amistoso na Praça — a coroa não muda.')
+                                 : Tx('Arena sorteada: {a}.', { a: nomeArena(ata) }), 'good');
     var ok = !!(c && typeof c.iniciaDuelo === 'function') && safe(function () { return c.iniciaDuelo(ata); }, false);
     if (!ok) { cancelaD('rele-antigo', true); return; }
     mudaD();
@@ -1515,7 +1523,7 @@ var JOGO = (typeof window !== 'undefined')
           dst.fase = 'escolhendo';
           dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
           vigia(de, dst.op.cx);
-          aviso(dst.op.nome + ' chegou à Arena — a luta começa!', 'good');
+          aviso(Tx('{nome} chegou à Arena — a luta começa!', { nome: dst.op.nome }), 'good');
           mudaD();
           autoEscolhe();                                        // as duplas são as do quadro: sem escolha
         } else if ((dst.fase === 'escolhendo' || dst.fase === 'comprometido' || dst.fase === 'revelado') &&
@@ -1543,7 +1551,7 @@ var JOGO = (typeof window !== 'undefined')
       dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
       if (!manda('duelo', de, 'resposta', { did: didC, ok: true, kb: dst.kb, modo: 'campo' }, ev.cx)) { zeraDuelo(); mudaD(); return; }
       vigia(de, dst.op.cx);
-      aviso(dst.op.nome + ' te atacou no Campo de PvP — a luta começa!', 'bad');
+      aviso(Tx('{nome} te atacou no Campo de PvP — a luta começa!', { nome: dst.op.nome }), 'bad');
       mudaD();
       autoEscolhe();
     } else if (a === 'resposta') {
@@ -1551,7 +1559,7 @@ var JOGO = (typeof window !== 'undefined')
       if (d.ok !== true) {
         var n = dst.op.nome;
         zeraDuelo();
-        aviso(d.motivo === 'recusou' || !d.motivo ? n + ' recusou o duelo.' : Grupo.textoMotivo(d.motivo, n));
+        aviso(d.motivo === 'recusou' || !d.motivo ? Tx('{n} recusou o duelo.', { n: n }) : Grupo.textoMotivo(d.motivo, n));
         mudaD();
         return;
       }
@@ -1561,13 +1569,13 @@ var JOGO = (typeof window !== 'undefined')
       dst.prazo = agoraD() + Duelo.ESCOLHA_MS;
       vigia(de, dst.op.cx);
       if (dst.modo === 'campo' || dst.modo === 'arena') {
-        aviso(dst.modo === 'campo' ? 'Você atacou ' + dst.op.nome + ' — a luta começa!'
-                                   : dst.op.nome + ' chegou à Arena — a luta começa!', 'good');
+        aviso(dst.modo === 'campo' ? Tx('Você atacou {nome} — a luta começa!', { nome: dst.op.nome })
+                                   : Tx('{nome} chegou à Arena — a luta começa!', { nome: dst.op.nome }), 'good');
         mudaD();
         autoEscolhe();                                          // 14/09: a dupla do Campo ou a do quadro, sem ficha
         return;
       }
-      aviso(dst.op.nome + ' aceitou o duelo! Escolha a sua dupla.', 'good');
+      aviso(Tx('{nome} aceitou o duelo! Escolha a sua dupla.', { nome: dst.op.nome }), 'good');
       mudaD();
     } else if (a === 'compromisso') {
       if (!doOp(ev, d) || (dst.fase !== 'escolhendo' && dst.fase !== 'comprometido')) return;
@@ -1603,12 +1611,12 @@ var JOGO = (typeof window !== 'undefined')
       if (dst.op.cx && ev.cx !== dst.op.cx) return;          // achado 18: só pela conexão do oponente (a `volta` troca o cx)
       var nome = dst.op.nome, m4 = String(d.motivo || 'desistiu');
       zeraDuelo();
-      aviso(m4 === 'expirou' ? 'O duelo foi cancelado: o tempo de escolher a dupla acabou.'
-          : m4 === 'trapaca' ? 'O duelo foi cancelado pelo outro lado: as duplas não bateram.'
+      aviso(m4 === 'expirou' ? Tx('O duelo foi cancelado: o tempo de escolher a dupla acabou.')
+          : m4 === 'trapaca' ? Tx('O duelo foi cancelado pelo outro lado: as duplas não bateram.')
           : m4 === 'versao' ? Grupo.textoMotivo('versao', nome)
-          : m4 === 'retirou' ? 'O desafio de ' + nome + ' foi retirado.'
+          : m4 === 'retirou' ? Tx('O desafio de {nome} foi retirado.', { nome: nome })
           : (m4 !== 'desistiu' && SOBRE_OUTRO.hasOwnProperty(m4)) ? Grupo.textoMotivo(m4, nome)   // 14/09: vida, paridade…
-          : nome + ' desistiu do duelo.');
+          : Tx('{nome} desistiu do duelo.', { nome: nome }));
       mudaD();
     } else if (a === 'fim') {
       if (!dst.op || de !== dst.op.id || d.did !== (dst.ata ? dst.ata.did : dst.did)) return;
@@ -1632,7 +1640,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var n = dst.op.nome;
     zeraDuelo();
-    aviso(n + ' saiu — o duelo foi cancelado.');
+    aviso(Tx('{n} saiu — o duelo foi cancelado.', { n: n }));
     mudaD();
   }
   function tiqueDuelo(t) {
@@ -1645,9 +1653,9 @@ var JOGO = (typeof window !== 'undefined')
         var meu = f === 'desafiei', modoT = dst.modo;
         if (!meu && dst.op) manda('duelo', dst.op.id, 'resposta', { did: dst.did, ok: false, motivo: 'expirou' }, dst.op.cx);
         zeraDuelo();
-        aviso(modoT === 'arena' ? 'O adversário da Arena não apareceu — a partida caiu.'
-            : modoT === 'campo' ? 'O ataque não teve resposta.'
-            : (meu ? 'O desafio expirou.' : 'O desafio de ' + n + ' expirou.'));
+        aviso(modoT === 'arena' ? Tx('O adversário da Arena não apareceu — a partida caiu.')
+            : modoT === 'campo' ? Tx('O ataque não teve resposta.')
+            : (meu ? Tx('O desafio expirou.') : Tx('O desafio de {n} expirou.', { n: n })));
         mudaD();
       }
     } else if (f === 'escolhendo' || f === 'comprometido' || f === 'revelado') {
@@ -1757,18 +1765,18 @@ var JOGO = (typeof window !== 'undefined')
   Arena.disponivel = function () {
     var proto = safe(function () { return window.location.protocol; }, '');
     if (proto === 'file:') {
-      return { ok: false, motivo: 'arquivo', texto: 'A Arena ranqueada precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.' };
+      return { ok: false, motivo: 'arquivo', texto: Tx('A Arena ranqueada precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.') };
     }
     var s = JOGO.Sessao;
     if (!s || typeof s.api !== 'function' || !safe(function () { return s.ativa(); }, false)) {
-      return { ok: false, motivo: 'sem-sessao', texto: 'A Arena ranqueada precisa da sua conta do site: entre para jogar.' };
+      return { ok: false, motivo: 'sem-sessao', texto: Tx('A Arena ranqueada precisa da sua conta do site: entre para jogar.') };
     }
     var A = JOGO.Autoridade;
     if (A && typeof A.ligada === 'function' && !safe(function () { return A.ligada(); }, false)) {
-      return { ok: false, motivo: 'servidor', texto: 'O servidor da Arena não está ligado agora.' };
+      return { ok: false, motivo: 'servidor', texto: Tx('O servidor da Arena não está ligado agora.') };
     }
     if (!safe(function () { return R().privado(); }, false)) {
-      return { ok: false, motivo: 'rede', texto: 'A Arena precisa do servidor da Rede (o duelo sai por ele).' };
+      return { ok: false, motivo: 'rede', texto: Tx('A Arena precisa do servidor da Rede (o duelo sai por ele).') };
     }
     return { ok: true };
   };
@@ -1794,7 +1802,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   function pedeArena(rota, metodo, corpo) {
     var s = JOGO.Sessao;
-    if (!s || typeof s.api !== 'function') return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
+    if (!s || typeof s.api !== 'function') return Promise.resolve({ ok: false, status: 0, erro: Tx('sem sessão') });
     var op = { method: metodo };
     if (corpo !== undefined) op.body = corpo;
     // 15/09, a luta largada: a ABERTURA na Arena ou na guerra espera a luta que ficou aberta fechar (autoridade.js) —
@@ -1812,8 +1820,8 @@ var JOGO = (typeof window !== 'undefined')
         .then(function (r) {
           try { if (A && A.notaLargada) A.notaLargada(r); } catch (eL) {}
           return r || { ok: false, status: 0 };
-        }, function () { return { ok: false, status: 0, erro: 'o servidor não respondeu' }; });
-    } catch (e) { return Promise.resolve({ ok: false, status: 0, erro: 'o servidor não respondeu' }); }
+        }, function () { return { ok: false, status: 0, erro: Tx('o servidor não respondeu') }; });
+    } catch (e) { return Promise.resolve({ ok: false, status: 0, erro: Tx('o servidor não respondeu') }); }
   }
   function adota(r, era) {
     if (era && ast !== era) return;                     // saiu no meio: a resposta velha não reinscreve
@@ -1831,7 +1839,7 @@ var JOGO = (typeof window !== 'undefined')
       var res = Duelo.iniciaArena({ did: r.did, lado: r.lado, conta: ad.conta, nome: ad.nome,
                                     herois: r.herois, heroisDele: ad.herois });
       if (!res || !res.ok) {
-        aviso('A partida da Arena caiu: ' + Grupo.textoMotivo(res ? res.motivo : 'ocupado', null).toLowerCase());
+        aviso(Tx('A partida da Arena caiu: {a}', { a: Grupo.textoMotivo(res ? res.motivo : 'ocupado', null).toLowerCase() }));
         Arena.sair();
         return;
       }
@@ -1898,7 +1906,7 @@ var JOGO = (typeof window !== 'undefined')
     var disp = Arena.disponivel();
     if (!disp.ok) return Promise.resolve({ ok: false, motivo: disp.motivo, erro: disp.texto, inscritos: [] });
     return pedeArena('/api/arena/quadro', 'GET').then(function (r) {
-      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'o servidor não respondeu', inscritos: [] };
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('o servidor não respondeu'), inscritos: [] };
       var off = (typeof r.agoraMs === 'number') ? r.agoraMs - Arena._agora() : 0;
       var lista = (Array.isArray(r.inscritos) ? r.inscritos : []).map(function (x) {
         return { conta: x.conta, nome: String(x.nome || '?'), nivel: x.nivel, brasa: x.brasa, eu: !!x.eu,
@@ -1956,7 +1964,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!Arena.inscrita()) return;
     if (emBatalhaOuDescida() || minhaSala() || descidaG || Grupo.emGrupo()) {
-      aviso('Você saiu da Arena.');
+      aviso(Tx('Você saiu da Arena.'));
       Arena.sair();
       return;
     }
@@ -2002,18 +2010,18 @@ var JOGO = (typeof window !== 'undefined')
   Guerra.disponivel = function () {
     var proto = safe(function () { return window.location.protocol; }, '');
     if (proto === 'file:') {
-      return { ok: false, motivo: 'arquivo', texto: 'A guerra de guilda precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.' };
+      return { ok: false, motivo: 'arquivo', texto: Tx('A guerra de guilda precisa do jogo aberto pelo site — do arquivo ele não fala com o servidor.') };
     }
     var s = JOGO.Sessao;
     if (!s || typeof s.api !== 'function' || !safe(function () { return s.ativa(); }, false)) {
-      return { ok: false, motivo: 'sem-sessao', texto: 'A guerra de guilda precisa da sua conta do site: entre para jogar.' };
+      return { ok: false, motivo: 'sem-sessao', texto: Tx('A guerra de guilda precisa da sua conta do site: entre para jogar.') };
     }
     var A = JOGO.Autoridade;
     if (A && typeof A.ligada === 'function' && !safe(function () { return A.ligada(); }, false)) {
-      return { ok: false, motivo: 'servidor', texto: 'O servidor da guerra de guilda não está ligado agora.' };
+      return { ok: false, motivo: 'servidor', texto: Tx('O servidor da guerra de guilda não está ligado agora.') };
     }
     if (!safe(function () { return R().privado(); }, false)) {
-      return { ok: false, motivo: 'rede', texto: 'A guerra de guilda precisa do servidor da Rede (a batalha dos quatro sai por ele).' };
+      return { ok: false, motivo: 'rede', texto: Tx('A guerra de guilda precisa do servidor da Rede (a batalha dos quatro sai por ele).') };
     }
     return { ok: true };
   };
@@ -2083,7 +2091,7 @@ var JOGO = (typeof window !== 'undefined')
       var ok = !!(c && typeof c.iniciaGuerra === 'function' && safe(function () {
         return c.iniciaGuerra({ gid: r.gid, ata: r.ata, jogadores: r.jogadores, guildas: r.guildas, eu: eu() });
       }, false));
-      if (!ok) aviso('A guerra de guilda não abriu aqui — a ata não bateu com este jogo (recarregue a página).');
+      if (!ok) aviso(Tx('A guerra de guilda não abriu aqui — a ata não bateu com este jogo (recarregue a página).'));
     }
     mudaG();
   }
@@ -2179,7 +2187,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   function guardaFimGuerra(r, corpo) {
     ultimaGuerra = (r && r.ok) ? r : { ok: false, gid: corpo && corpo.gid, motivo: (r && r.motivo) || null,
-                                       fase: (r && r.fase) || null, erro: (r && r.erro) || 'o servidor não respondeu' };
+                                       fase: (r && r.fase) || null, erro: (r && r.erro) || Tx('o servidor não respondeu') };
     safe(function () { JOGO.Vida.sincroniza(); return true; }, null);
     if (Guerra.aoFechou) { try { Guerra.aoFechou(copiaG(ultimaGuerra)); } catch (e) {} }
     mudaG();
@@ -2226,7 +2234,7 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
     if (FASES_FILA[gst.fase] === true && (emBatalhaOuDescida() || minhaSala() || descidaG || !Grupo.emGrupo())) {
-      aviso('Você saiu da fila da guerra de guilda.');
+      aviso(Tx('Você saiu da fila da guerra de guilda.'));
       Guerra.sair();
       return;
     }
@@ -2303,7 +2311,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var nome = nomeDe(para);
     poeLinha({ de: eu(), para: para, nome: nome, sistema: true, meu: true, falhou: true, t: agora(),
-               texto: nome + ' não está mais conectado(a) — a mensagem não foi entregue.' });
+               texto: Tx('{nome} não está mais conectado(a) — a mensagem não foi entregue.', { nome: nome }) });
   }
   Sussurros._reset = function () { linhas = []; conversas = {}; nConversas = 0; };
 

@@ -18,6 +18,16 @@ var JOGO = (typeof window !== 'undefined')
  * há lista. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var A = {};
   JOGO.Amigos = A;
@@ -46,20 +56,20 @@ var JOGO = (typeof window !== 'undefined')
   }
   function responde(r) {
     r = (r && typeof r === 'object') ? r : { ok: false };
-    if (!r.ok && !r.erro) r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)' : 'não deu';
+    if (!r.ok && !r.erro) r.erro = r.status === 0 ? Tx('o servidor está fora (não respondeu)') : Tx('não deu');
     return r;
   }
 
   A.carrega = function () {
     var S = sessao();
-    if (!S) return Promise.resolve({ ok: false, erro: 'entre na conta para ter amigos' });
+    if (!S) return Promise.resolve({ ok: false, erro: Tx('entre na conta para ter amigos') });
     return S.api('/api/amigos').then(function (r) { return guarda(responde(r)); });
   };
 
   /* alvo = { conta } (o toque na praça) ou { nome }; tipo = 'amigo' | 'inimigo' | null (tira) */
   A.definir = function (alvo, tipo) {
     var S = sessao();
-    if (!S) return Promise.resolve({ ok: false, erro: 'entre na conta para ter amigos' });
+    if (!S) return Promise.resolve({ ok: false, erro: Tx('entre na conta para ter amigos') });
     var corpo = { tipo: (tipo === 'amigo' || tipo === 'inimigo') ? tipo : null };
     if (alvo && typeof alvo.conta === 'number') corpo.conta = alvo.conta;
     else if (alvo && typeof alvo.nome === 'string') corpo.nome = alvo.nome.slice(0, 40);

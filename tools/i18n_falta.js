@@ -17,7 +17,7 @@
  *     português — a armadilha de verdade: alguém muda "Cura 30 PV" para 35 no
  *     arquivo de dados e a tradução segue dizendo 30. Tradução velha de registro
  *     que não existe mais também aparece (sobra).
- *  2. CÓDIGO: cada tr('…') / I18n.t('…') / I18n.n(q, '…', '…') com texto literal
+ *  2. CÓDIGO: cada tr('…') / Tx('…') (o atalho fora do hud.js) / I18n.t('…') / I18n.n(q, '…', '…') com texto literal
  *     em js/ tem entrada em js/i18n/textos_<idioma>.js; e as variáveis {assim}
  *     da tradução são as mesmas da chave.
  */
@@ -71,7 +71,7 @@ const LIT = "'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\"";
 
 function chavesDoCodigo() {
   const achadas = new Map();   // texto -> primeiro lugar
-  const reT = new RegExp('(?:\\btr|I18n\\.t|\\bId\\.t)\\(\\s*(' + LIT + ')', 'g');
+  const reT = new RegExp('(?:\\btr|\\bTx|I18n\\.t|\\bId\\.t)\\(\\s*(' + LIT + ')', 'g');
   const reN = new RegExp('(?:I18n\\.n|\\btrn)\\(\\s*[^,]+,\\s*(' + LIT + ')\\s*,\\s*(' + LIT + ')', 'g');
   for (const f of arquivosJs('js', ['js/i18n', 'js/core/data', 'js/core/i18n.js', 'js/assets_bundle.js'])) {
     // sem os comentários de bloco (o número das linhas não muda): exemplo de tr('…') em comentário não é texto do jogo
@@ -92,7 +92,7 @@ function chavesDoCodigo() {
  * comentário-em-string e perde frase montada aos pedaços); serve para medir o
  * serviço e achar por onde começar. */
 function candidatos() {
-  const re = new RegExp('(\\btr\\(\\s*|I18n\\.[tn]\\([^)\']*?)?(' + LIT + ')', 'g');
+  const re = new RegExp('(\\b(?:tr|Tx)\\(\\s*|I18n\\.[tn]\\([^)\']*?)?(' + LIT + ')', 'g');
   const linhas = [];
   let total = 0;
   for (const f of arquivosJs('js', ['js/i18n', 'js/core/data', 'js/assets_bundle.js', 'js/versao.js',

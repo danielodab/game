@@ -41,6 +41,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var T = {};
   JOGO.Troca = T;
@@ -97,22 +107,20 @@ var JOGO = (typeof window !== 'undefined')
     var nuvemPar = null;
     if (Rd && Rd.pares) Rd.pares().forEach(function (p) { if (p.id === mesa.par) nuvemPar = p.nuvem || null; });
     if (!nuvemPar) {
-      return 'Troca cancelada: o servidor não conferiu a conta de ' + (mesa.nomePar || 'quem troca com você') +
-             ', e peça com número de série só muda de mão pelo cartório. Ela precisa entrar na conta e recarregar a página.';
+      return Tx('Troca cancelada: o servidor não conferiu a conta de {a}, e peça com número de série só muda de mão pelo cartório. Ela precisa entrar na conta e recarregar a página.', { a: mesa.nomePar || Tx('quem troca com você') });
     }
     if (Rd && Rd.identidade && Rd.identidade() === false) {
-      return 'Troca cancelada: o servidor não conferiu a sua conta nesta conexão. Recarregue a página (F5) e tente de novo.';
+      return Tx('Troca cancelada: o servidor não conferiu a sua conta nesta conexão. Recarregue a página (F5) e tente de novo.');
     }
     return null;
   }
-  var MOTIVO_DE_LA = 'Troca cancelada: o cartório não conferiu uma das contas, e peça com número de série ' +
-                     'só muda de mão por lá. Recarreguem a página e tentem de novo.';
+  var MOTIVO_DE_LA = Tx('Troca cancelada: o cartório não conferiu uma das contas, e peça com número de série só muda de mão por lá. Recarreguem a página e tentem de novo.');
   /* 11/09: o porquê que o OUTRO lado lê quando a troca cai no fim */
   var MOTIVOS_DE_LA = {
     cartorio: MOTIVO_DE_LA,
-    falta: 'Troca cancelada: uma peça ou bicho da mesa do outro lado não estava mais com ele.',
-    saco: 'Troca cancelada: o saco do outro lado não tinha espaço para o que ia.',
-    pet: 'Troca cancelada: o outro lado já tem um dos bichos da mesa — é um de cada.'
+    falta: Tx('Troca cancelada: uma peça ou bicho da mesa do outro lado não estava mais com ele.'),
+    saco: Tx('Troca cancelada: o saco do outro lado não tinha espaço para o que ia.'),
+    pet: Tx('Troca cancelada: o outro lado já tem um dos bichos da mesa — é um de cada.')
   };
   function caiComMotivo(codigo, motivo) {
     manda('cancela', { motivo: codigo });
@@ -186,7 +194,7 @@ var JOGO = (typeof window !== 'undefined')
     return null;
   }
   function motivoRepetido(o) {
-    return 'Troca cancelada: você já tem o ' + T.descrevePet(o).nome + ' — é um bicho de cada.';
+    return Tx('Troca cancelada: você já tem o {nome} — é um bicho de cada.', { nome: T.descrevePet(o).nome });
   }
 
   // ------------------------------------------------------------- o fluxo meu
@@ -402,12 +410,12 @@ var JOGO = (typeof window !== 'undefined')
     // 11/09: a troca que cai no fim diz o porquê, dos DOIS lados (antes a
     // janela só fechava, e no ar parecia defeito)
     if (falta) {
-      caiComMotivo('falta', 'Troca cancelada: uma peça que você pôs na mesa não está mais no seu saco.');
+      caiComMotivo('falta', Tx('Troca cancelada: uma peça que você pôs na mesa não está mais no seu saco.'));
       return;
     }
     // 1a) os bichos (12/09): o meu segue solto? o dele não é um que já tenho?
     if (st.minha.pets.some(function (o) { return !petSolto(o.petId); })) {
-      caiComMotivo('falta', 'Troca cancelada: um bicho que você pôs na mesa não está mais solto (foi vestido ou já saiu).');
+      caiComMotivo('falta', Tx('Troca cancelada: um bicho que você pôs na mesa não está mais solto (foi vestido ou já saiu).'));
       return;
     }
     var rep2 = petRepetido(st);
@@ -418,7 +426,7 @@ var JOGO = (typeof window !== 'undefined')
     // do que estourar o limite por uma porta lateral.
     var limite = (prog.bagLimit) ? prog.bagLimit() : Infinity;
     if (inv.length - indices.length + st.dele.itens.length > limite) {
-      caiComMotivo('saco', 'Troca cancelada: o seu saco não tem espaço para o que vem.');
+      caiComMotivo('saco', Tx('Troca cancelada: o seu saco não tem espaço para o que vem.'));
       return;
     }
 
@@ -458,7 +466,7 @@ var JOGO = (typeof window !== 'undefined')
           try { if (DB() && DB().registrarTroca) DB().registrarTroca(paraHistorico); } catch (eH2) {}
           return;
         }
-        try { if (ui && ui.toast) ui.toast('A troca não foi registrada no servidor: ' + ((r && r.erro) || 'sem resposta')); } catch (eT) {}
+        try { if (ui && ui.toast) ui.toast(Tx('A troca não foi registrada no servidor: {a}', { a: (r && r.erro) || Tx('sem resposta') })); } catch (eT) {}
         Aut.puxaEstado();
       });
       return;

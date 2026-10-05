@@ -41,6 +41,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var M = {};
   JOGO.Mercado = M;
@@ -154,22 +164,22 @@ var JOGO = (typeof window !== 'undefined')
   };
   M.comprarPocao = function (pocaoId, qtd) {
     var db = DB(), P = JOGO.Progress;
-    if (!db || !P || !P.poeConsumivel) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db || !P || !P.poeConsumivel) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     var c = consumiveis();
     var def = (typeof pocaoId === 'string' && c.hasOwnProperty(pocaoId)) ? c[pocaoId] : null;
-    if (!def || def.tipo !== 'vida' || !(def.preco > 0)) return Promise.resolve({ ok: false, erro: 'o mercador não vende isso' });
+    if (!def || def.tipo !== 'vida' || !(def.preco > 0)) return Promise.resolve({ ok: false, erro: Tx('o mercador não vende isso') });
     var teto = P.consumivelTeto ? P.consumivelTeto() : 20;
     qtd = Math.floor(Number(qtd));
-    if (!isFinite(qtd) || qtd < 1) return Promise.resolve({ ok: false, erro: 'quantidade de 1 a ' + teto });
+    if (!isFinite(qtd) || qtd < 1) return Promise.resolve({ ok: false, erro: Tx('quantidade de 1 a {teto}', { teto: teto }) });
     function cabe() { return P.consumivelVer(pocaoId) + qtd <= teto; }
     function cheio() {
-      return { ok: false, cheio: true, erro: 'Cabem ' + teto + ' de cada poção — você já tem ' + P.consumivelVer(pocaoId) + '.' };
+      return { ok: false, cheio: true, erro: Tx('Cabem {teto} de cada poção — você já tem {a}.', { teto: teto, a: P.consumivelVer(pocaoId) }) };
     }
     if (!cabe()) return Promise.resolve(cheio());
     var preco = def.preco * qtd;
     return db.gastarMoedas(preco).then(function (pg) {
       if (!pg || !pg.ok) {
-        return { ok: false, semVintem: true, erro: 'Faltam vinténs no saco: ' + qtd + '× ' + def.name + ' custa ' + preco + '.' };
+        return { ok: false, semVintem: true, erro: Tx('Faltam vinténs no saco: {qtd}× {name} custa {preco}.', { qtd: qtd, name: def.name, preco: preco }) };
       }
       // duas compras juntas: a outra pode ter enchido o frasco enquanto esta pagava — devolve
       if (!cabe() || !P.poeConsumivel(pocaoId, qtd)) {
@@ -208,11 +218,11 @@ var JOGO = (typeof window !== 'undefined')
    * ficha), como no banco — este módulo só registra a oferta. */
   M.anunciar = function (entrada, preco, dataForcada) {
     var db = DB();
-    if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     preco = Math.floor(Number(preco));
-    if (!entrada || !entrada.itemId) return Promise.resolve({ ok: false, erro: 'peça inválida' });
+    if (!entrada || !entrada.itemId) return Promise.resolve({ ok: false, erro: Tx('peça inválida') });
     if (!isFinite(preco) || preco < 1 || preco > M.PRECO_MAX) {
-      return Promise.resolve({ ok: false, erro: 'preço entre 1 e ' + M.PRECO_MAX });
+      return Promise.resolve({ ok: false, erro: Tx('preço entre 1 e {PRECO_MAX}', { PRECO_MAX: M.PRECO_MAX }) });
     }
     return M.abrir(dataForcada).then(function (mc) {
       mc.ofertas.push({
@@ -234,23 +244,22 @@ var JOGO = (typeof window !== 'undefined')
    * depois do débito elas voltam (addStones) — pedra não some no meio. */
   M.anunciarPedras = function (stoneId, qtd, preco, dataForcada) {
     var db = DB(), P = JOGO.Progress;
-    if (!db || !P || !P.gastaPedras || !P.addStones) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db || !P || !P.gastaPedras || !P.addStones) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     if (typeof stoneId !== 'string' || !temChave(pedrasDef(), stoneId)) {
       return Promise.resolve({ ok: false, erro: 'pedra desconhecida' });
     }
     qtd = Number(qtd);
     if (M.LOTES_PEDRA.indexOf(qtd) < 0) {
-      return Promise.resolve({ ok: false, erro: 'o lote é de ' + M.LOTES_PEDRA.join(', ') + ' pedras' });
+      return Promise.resolve({ ok: false, erro: Tx('o lote é de {a} pedras', { a: M.LOTES_PEDRA.join(', ') }) });
     }
     preco = Math.floor(Number(preco));
     if (!isFinite(preco) || preco < 1 || preco > M.PRECO_MAX) {
-      return Promise.resolve({ ok: false, erro: 'preço entre 1 e ' + M.PRECO_MAX });
+      return Promise.resolve({ ok: false, erro: Tx('preço entre 1 e {PRECO_MAX}', { PRECO_MAX: M.PRECO_MAX }) });
     }
     return M.abrir(dataForcada).then(function (mc) {
-      if (!mc) return { ok: false, erro: 'sem conta' };
+      if (!mc) return { ok: false, erro: Tx('sem conta') };
       if (!P.gastaPedras(stoneId, qtd)) {
-        return { ok: false, erro: 'pedras insuficientes: o lote pede ' + qtd + ' e você tem ' +
-                 (P.stoneCount ? P.stoneCount(stoneId) : 0) };
+        return { ok: false, erro: Tx('pedras insuficientes: o lote pede {qtd} e você tem {a}', { qtd: qtd, a: P.stoneCount ? P.stoneCount(stoneId) : 0 }) };
       }
       mc.ofertas.push({
         id: 'jg-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36),
@@ -258,7 +267,7 @@ var JOGO = (typeof window !== 'undefined')
       });
       function devolve(e) {
         P.addStones(stoneId, qtd);
-        return { ok: false, erro: 'o balcão não gravou — as pedras voltaram (' + ((e && e.message) || e || 'erro') + ')' };
+        return { ok: false, erro: Tx('o balcão não gravou — as pedras voltaram ({a})', { a: (e && e.message) || e || 'erro' }) };
       }
       var gravou;
       try { gravou = db.mercadoGravar(mc); } catch (e) { return devolve(e); }
@@ -274,19 +283,19 @@ var JOGO = (typeof window !== 'undefined')
    * (22/09) entra direto no estoque (addStones): pedra não ocupa o saco. */
   M.comprar = function (ofertaId, dataForcada) {
     var db = DB();
-    if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     return M.abrir(dataForcada).then(function (mc) {
       var idx = -1;
       for (var i = 0; i < mc.ofertas.length; i++) {
         if (mc.ofertas[i].id === ofertaId) idx = i;
       }
-      if (idx < 0) return { ok: false, erro: 'essa oferta já saiu do balcão' };
+      if (idx < 0) return { ok: false, erro: Tx('essa oferta já saiu do balcão') };
       var of = mc.ofertas[idx];
       var lote = M.ehLote(of), P = JOGO.Progress;
       // sem o Progress não há onde pôr a pedra: recusa ANTES de cobrar
-      if (lote && !(P && P.addStones)) return { ok: false, erro: 'sem conta' };
+      if (lote && !(P && P.addStones)) return { ok: false, erro: Tx('sem conta') };
       return db.gastarMoedas(of.preco).then(function (pg) {
-        if (!pg.ok) return { ok: false, erro: pg.erro || 'vinténs insuficientes' };
+        if (!pg.ok) return { ok: false, erro: pg.erro || Tx('vinténs insuficientes') };
         mc.ofertas.splice(idx, 1);
         var repasse = 0;
         var cadeia = db.mercadoGravar(mc);
@@ -311,17 +320,17 @@ var JOGO = (typeof window !== 'undefined')
    * de pedras volta direto ao estoque (addStones), como na compra. */
   M.retirar = function (ofertaId, dataForcada) {
     var db = DB();
-    if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     return M.abrir(dataForcada).then(function (mc) {
       var idx = -1;
       for (var i = 0; i < mc.ofertas.length; i++) {
         if (mc.ofertas[i].id === ofertaId) idx = i;
       }
-      if (idx < 0) return { ok: false, erro: 'essa oferta já saiu do balcão' };
+      if (idx < 0) return { ok: false, erro: Tx('essa oferta já saiu do balcão') };
       var of = mc.ofertas[idx];
-      if (of.vendedor !== 'jogador') return { ok: false, erro: 'a banca do mercador não é sua' };
+      if (of.vendedor !== 'jogador') return { ok: false, erro: Tx('a banca do mercador não é sua') };
       var lote = M.ehLote(of), P = JOGO.Progress;
-      if (lote && !(P && P.addStones)) return { ok: false, erro: 'sem conta' };
+      if (lote && !(P && P.addStones)) return { ok: false, erro: Tx('sem conta') };
       mc.ofertas.splice(idx, 1);
       return db.mercadoGravar(mc).then(function () {
         if (lote) {
@@ -366,7 +375,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function pede(rota, corpo) {
     var S = JOGO.Sessao, A = JOGO.Autoridade;
-    if (!S || !S.api) return Promise.resolve({ ok: false, status: 0, erro: 'sem sessão' });
+    if (!S || !S.api) return Promise.resolve({ ok: false, status: 0, erro: Tx('sem sessão') });
     // as ops na fila sobem ANTES: o servidor anuncia e cobra sobre o estado com elas
     var antes = (corpo && A && A.descarrega) ? A.descarrega() : Promise.resolve(null);
     return antes.then(function () {
@@ -377,8 +386,8 @@ var JOGO = (typeof window !== 'undefined')
       if (r && (r.progress || r.db) && A && A.adotaResposta) {
         try { A.adotaResposta(r); } catch (e) {}
       }
-      if (r && r.status === 0 && !r.erro) r.erro = 'o servidor não respondeu — tente de novo em instantes';
-      return r || { ok: false, status: 0, erro: 'o servidor não respondeu' };
+      if (r && r.status === 0 && !r.erro) r.erro = Tx('o servidor não respondeu — tente de novo em instantes');
+      return r || { ok: false, status: 0, erro: Tx('o servidor não respondeu') };
     });
   }
 
@@ -430,23 +439,23 @@ var JOGO = (typeof window !== 'undefined')
     return nomeDo(x.itemId) + (x.level ? ' +' + x.level : '') + (x.stars ? ' ★' + x.stars : '');
   }
   /* depois de "o", "do", "pelo": "o lote de 50× Brasa Coagulada", "o Ferrão de Vespa +1" */
-  function oQue(x) { return (M.ehLote(x) ? 'lote de ' : '') + peca(x); }
+  function oQue(x) { return (M.ehLote(x) ? Tx('lote de ') : '') + peca(x); }
   Srv.textoVenda = function (v) {
-    return 'Vendido: ' + peca(v) + ' para ' + (v.comprador || 'um jogador') + ' por ' + v.valor + ' vinténs' +
-      (v.viaProposta ? ' (proposta)' : '') + ' — taxa de ' + v.taxa + ', +' + v.recebeu + ' no saco.';
+    return (v.viaProposta
+      ? Tx('Vendido: {a} para {b} por {valor} vinténs (proposta) — taxa de {taxa}, +{recebeu} no saco.', { a: peca(v), b: v.comprador || Tx('um jogador'), valor: v.valor, taxa: v.taxa, recebeu: v.recebeu })
+      : Tx('Vendido: {a} para {b} por {valor} vinténs — taxa de {taxa}, +{recebeu} no saco.', { a: peca(v), b: v.comprador || Tx('um jogador'), valor: v.valor, taxa: v.taxa, recebeu: v.recebeu }));
   };
   Srv.textoDesfecho = function (p) {
     if (p.estado === 'perdida') {
-      return 'O ' + oQue(p) + ' foi vendido a outro jogador — você perdeu essa negociação (' + p.valor + ' vinténs).';
+      return Tx('O {a} foi vendido a outro jogador — você perdeu essa negociação ({valor} vinténs).', { a: oQue(p), valor: p.valor });
     }
     if (p.estado === 'recusada') {
-      return (p.vendedor || 'O vendedor') + ' recusou sua oferta de ' + p.valor + ' vinténs pelo ' + oQue(p) + '.';
+      return Tx('{a} recusou sua oferta de {valor} vinténs pelo {b}.', { a: p.vendedor || Tx('O vendedor'), valor: p.valor, b: oQue(p) });
     }
-    return 'O anúncio do ' + oQue(p) + ' saiu do balcão — sua oferta de ' + p.valor + ' vinténs foi cancelada.';
+    return Tx('O anúncio do {a} saiu do balcão — sua oferta de {valor} vinténs foi cancelada.', { a: oQue(p), valor: p.valor });
   };
   Srv.textoRecebida = function (p) {
-    return (p.comprador || 'Um jogador') + ' ofereceu ' + p.valor + ' vinténs pelo seu ' + oQue(p) +
-      ' (à venda por ' + p.preco + '). Responda em Meus anúncios.';
+    return Tx('{a} ofereceu {valor} vinténs pelo seu {b} (à venda por {preco}). Responda em Meus anúncios.', { a: p.comprador || Tx('Um jogador'), valor: p.valor, b: oQue(p), preco: p.preco });
   };
 
   /* ------------------------------------------------------------ o vigia */
@@ -505,8 +514,9 @@ var JOGO = (typeof window !== 'undefined')
       if (textos.length > Srv.AVISOS_UM_A_UM) {
         var resto = textos.length - Srv.AVISOS_UM_A_UM;
         textos = textos.slice(0, Srv.AVISOS_UM_A_UM);
-        textos.push({ texto: 'E mais ' + resto + (resto === 1 ? ' aviso' : ' avisos') +
-          ' do Mercadinho — veja em Meus anúncios e Minhas ofertas.', tipo: null });
+        textos.push({ texto: (resto === 1
+          ? Tx('E mais {resto} aviso do Mercadinho — veja em Meus anúncios e Minhas ofertas.', { resto: resto })
+          : Tx('E mais {resto} avisos do Mercadinho — veja em Meus anúncios e Minhas ofertas.', { resto: resto })), tipo: null });
       }
       if (marcas.desfechos.length || marcas.vendas.length || marcas.recebidas.length) {
         Srv.visto(marcas);

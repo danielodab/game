@@ -24,6 +24,16 @@
  * Só biblioteca do navegador. Sem sessão o jogo é o de sempre (local). */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var JOGO = window.JOGO = window.JOGO || {};
   var S = JOGO.Sessao = {};
   S.CHAVE = 'soterra-sessao';
@@ -103,7 +113,7 @@
   S.api = function (rota, op) {
     op = op || {};
     if (typeof window.fetch !== 'function') {
-      return Promise.resolve({ ok: false, status: 0, erro: 'este navegador não tem fetch' });
+      return Promise.resolve({ ok: false, status: 0, erro: Tx('este navegador não tem fetch') });
     }
     var cab = { 'Content-Type': 'application/json' };
     var s = S.ler();
@@ -117,7 +127,7 @@
     var fetchFn = (typeof S._fetch === 'function') ? S._fetch : window.fetch.bind(window);
     try {
       return fetchFn(S.base() + rota, pedido).then(function (r) {
-        return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
+        return r.json().catch(function () { return { ok: false, erro: Tx('resposta que não é JSON') }; })
           .then(function (j) {
             if (!j || typeof j !== 'object') j = { ok: false };
             j.status = r.status;
@@ -140,10 +150,10 @@
             return j;
           });
       }).catch(function () {
-        return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
+        return { ok: false, status: 0, erro: Tx('o servidor está fora (não respondeu)') };
       });
     } catch (e) {
-      return Promise.resolve({ ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' });
+      return Promise.resolve({ ok: false, status: 0, erro: Tx('o servidor está fora (não respondeu)') });
     }
   };
 
@@ -304,7 +314,7 @@
    * derrubadaJa) e uma capa cobre tudo com o "Entrar de novo". Nada de alert().
    * Sem sessão (file://, jogo local) nada disto roda: não há token para cair. */
   S.MOTIVO_OUTRO_APARELHO = 'outro-aparelho';     // o de servidor/conta.py e servidor/rele_ident.py
-  S.FRASE_DERRUBADA = 'Sua conta entrou em outro aparelho. Este jogo foi encerrado aqui.';
+  S.FRASE_DERRUBADA = Tx('Sua conta entrou em outro aparelho. Este jogo foi encerrado aqui.');
   S.CHAVE_AVISO = 'soterra-aviso-entrar';         // sessionStorage: a frase que a página de entrar mostra (site/conta.js)
   S.VIGIA_MS = 30000;
   S.semRecarga = false;                            // provas: o "Entrar de novo" não navega
@@ -314,12 +324,12 @@
   var motivoQueda = null;
   S.MOTIVO_SAIU = 'saiu';
   S.MOTIVO_OUTRA_CONTA = 'outra-conta';
-  S.FRASE_SAIU = 'Você saiu desta conta neste navegador.';
+  S.FRASE_SAIU = Tx('Você saiu desta conta neste navegador.');
   var TEXTOS_QUEDA = {
-    'saiu': ['Você saiu desta conta.', 'A conta saiu em outra aba deste navegador, e este jogo foi encerrado aqui.',
-             'O progresso está guardado no servidor. Entre de novo para continuar.'],
-    'outra-conta': ['Outra conta entrou neste navegador.', 'Este jogo era da conta de antes e foi encerrado aqui.',
-                    'Recarregue para jogar com a conta que entrou.']
+    'saiu': [Tx('Você saiu desta conta.'), Tx('A conta saiu em outra aba deste navegador, e este jogo foi encerrado aqui.'),
+             Tx('O progresso está guardado no servidor. Entre de novo para continuar.')],
+    'outra-conta': [Tx('Outra conta entrou neste navegador.'), Tx('Este jogo era da conta de antes e foi encerrado aqui.'),
+                    Tx('Recarregue para jogar com a conta que entrou.')]
   };
   var daPagina = null;                             // {token, contaId} com que esta página joga
   function anotaDaPagina(s) {
@@ -424,8 +434,8 @@
     cx.className = 'inativo-cx';
     var h = document.createElement('h2');
     h.id = 'sessao-derrubada-titulo';
-    var tx = TEXTOS_QUEDA[motivoQueda] || ['Sua conta entrou em outro aparelho.', 'Este jogo foi encerrado aqui.',
-      'Uma conta fica aberta em um aparelho por vez. Se não foi você, entre e troque a senha na página da conta.'];
+    var tx = TEXTOS_QUEDA[motivoQueda] || [Tx('Sua conta entrou em outro aparelho.'), Tx('Este jogo foi encerrado aqui.'),
+      Tx('Uma conta fica aberta em um aparelho por vez. Se não foi você, entre e troque a senha na página da conta.')];
     h.textContent = tx[0];
     var p = document.createElement('p');
     p.textContent = tx[1];
@@ -434,7 +444,7 @@
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'btn btn-primary';
-    b.textContent = motivoQueda === S.MOTIVO_OUTRA_CONTA ? 'Recarregar' : 'Entrar de novo';
+    b.textContent = motivoQueda === S.MOTIVO_OUTRA_CONTA ? Tx('Recarregar') : Tx('Entrar de novo');
     b.addEventListener('click', function () { S.entrarDeNovo(); });
     cx.appendChild(h); cx.appendChild(p); cx.appendChild(p2); cx.appendChild(b);
     capa.appendChild(cx);

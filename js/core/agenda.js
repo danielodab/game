@@ -37,6 +37,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Ag = {};
   JOGO.Agenda = Ag;
@@ -50,7 +60,7 @@ var JOGO = (typeof window !== 'undefined')
    * maior que isso vale sozinho — o comprado pausa, sem gastar carga. */
   Ag.TETO_XP_COMPRADO = 2.0;
   Ag.TIPOS = ['xp', 'vintem', 'pedras', 'saque', 'aviso'];
-  Ag.NOMES = { xp: 'XP', vintem: 'Vinténs', pedras: 'Pedras de forja', saque: 'Saque', aviso: 'Aviso' };
+  Ag.NOMES = { xp: 'XP', vintem: Tx('Vinténs'), pedras: Tx('Pedras de forja'), saque: Tx('Saque'), aviso: Tx('Aviso') };
   // os 7 que o servidor aceita; quem está fechado quem sabe é DATA.portalFechado
   Ag.CALABOUCOS = ['greenhouse', 'cistern', 'emberlock', 'windscaffold', 'quakemine', 'brokenheart', 'poco'];
   // Brasília fixo: o contêiner não tem tzdata, e o Brasil não tem horário de verão desde 2019
@@ -58,7 +68,7 @@ var JOGO = (typeof window !== 'undefined')
   Ag.JANELA_DIAS = 14;
   Ag.BUSCA_MS = 10 * 60 * 1000;
   Ag.TIQUE_MS = 60 * 1000;
-  Ag.NOTA_MESTRE = 'Para ligar evento, entre no site com a conta do Mestre: o servidor confere a marca.';
+  Ag.NOTA_MESTRE = Tx('Para ligar evento, entre no site com a conta do Mestre: o servidor confere a marca.');
 
   /* relógio injetável (as provas andam no tempo sem esperar) */
   Ag._agora = null;
@@ -414,7 +424,7 @@ var JOGO = (typeof window !== 'undefined')
   function escreve(rota, corpo, depois) {
     var S = JOGO.Sessao;
     if (!S || typeof S.api !== 'function') {
-      return Promise.resolve({ ok: false, status: 0, erro: 'o jogo não achou a sessão do site' });
+      return Promise.resolve({ ok: false, status: 0, erro: Tx('o jogo não achou a sessão do site') });
     }
     if (!(typeof S.ativa === 'function' && S.ativa())) {
       return Promise.resolve({ ok: false, status: 401, erro: Ag.NOTA_MESTRE });
@@ -422,15 +432,15 @@ var JOGO = (typeof window !== 'undefined')
     var p = null;
     try { p = S.api(rota, { method: 'POST', body: corpo }); } catch (e) { p = null; }
     if (!p || typeof p.then !== 'function') {
-      return Promise.resolve({ ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' });
+      return Promise.resolve({ ok: false, status: 0, erro: Tx('o servidor está fora (não respondeu)') });
     }
     return p.then(function (r) {
       r = (r && typeof r === 'object') ? r : { ok: false, status: 0 };
       if (!r.ok) {
         if (!r.erro) {
-          r.erro = r.status === 0 ? 'o servidor está fora (não respondeu)'
-                 : r.status === 404 ? 'o servidor ainda não conhece os eventos do mundo'
-                 : 'o servidor recusou (' + r.status + ')';
+          r.erro = r.status === 0 ? Tx('o servidor está fora (não respondeu)')
+                 : r.status === 404 ? Tx('o servidor ainda não conhece os eventos do mundo')
+                 : Tx('o servidor recusou ({status})', { status: r.status });
         }
         return r;
       }
@@ -439,7 +449,7 @@ var JOGO = (typeof window !== 'undefined')
       confereMudanca();
       return Ag.atualizar().then(function () { return r; }, function () { return r; });
     }, function () {
-      return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
+      return { ok: false, status: 0, erro: Tx('o servidor está fora (não respondeu)') };
     });
   }
   function mescla(evs) {
@@ -472,9 +482,9 @@ var JOGO = (typeof window !== 'undefined')
   Ag.cancelar = function (alvo, id) {
     var n = (typeof id === 'number') ? id : parseInt(String(id == null ? '' : id).replace(/^[er]/, ''), 10);
     if (alvo !== 'evento' && alvo !== 'regra') {
-      return Promise.resolve({ ok: false, status: 400, erro: 'cancelar o quê? (evento ou regra)' });
+      return Promise.resolve({ ok: false, status: 400, erro: Tx('cancelar o quê? (evento ou regra)') });
     }
-    if (!isFinite(n)) return Promise.resolve({ ok: false, status: 400, erro: 'id de ' + alvo + ' inválido' });
+    if (!isFinite(n)) return Promise.resolve({ ok: false, status: 400, erro: Tx('id de {alvo} inválido', { alvo: alvo }) });
     return escreve('/api/eventos/cancelar', { alvo: alvo, id: n }, function () {
       if (alvo === 'evento') {
         lista = lista.filter(function (e) { return e.id !== 'e' + n; });
@@ -510,16 +520,16 @@ var JOGO = (typeof window !== 'undefined')
   /* "5 h", "3 h 20 min", "2 d 4 h" — para "termina em …" */
   Ag.falta = function (ms) {
     var min = Math.max(0, Math.round(Number(ms) / 60000));
-    if (!isFinite(min) || min < 1) return 'menos de 1 min';
+    if (!isFinite(min) || min < 1) return Tx('menos de 1 min');
     var d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
     if (d > 0) return d + ' d' + (h ? ' ' + h + ' h' : '');
     if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
     return m + ' min';
   };
 
-  var DIA_CURTO = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-  var DIA_TODO = ['todo domingo', 'toda segunda', 'toda terça', 'toda quarta', 'toda quinta', 'toda sexta', 'todo sábado'];
-  var DIA_PLURAL = ['aos domingos', 'às segundas', 'às terças', 'às quartas', 'às quintas', 'às sextas', 'aos sábados'];
+  var DIA_CURTO = [Tx('dom'), Tx('seg'), Tx('ter'), Tx('qua'), Tx('qui'), Tx('sex'), Tx('sáb')];
+  var DIA_TODO = [Tx('todo domingo'), Tx('toda segunda'), Tx('toda terça'), Tx('toda quarta'), Tx('toda quinta'), Tx('toda sexta'), Tx('todo sábado')];
+  var DIA_PLURAL = [Tx('aos domingos'), Tx('às segundas'), Tx('às terças'), Tx('às quartas'), Tx('às quintas'), Tx('às sextas'), Tx('aos sábados')];
   Ag.DIA_CURTO = DIA_CURTO.slice();
   function dois(n) { return (n < 10 ? '0' : '') + n; }
   /* um instante (epoch em s) lido no relógio de parede de Brasília */
@@ -559,21 +569,20 @@ var JOGO = (typeof window !== 'undefined')
     var hm = /^(\d{2}):(\d{2})$/.exec(String(r.hora || '')) || [0, '00', '00'];
     var ini = (+hm[1]) * 60 + (+hm[2]);
     var fim = (ini + Math.round(Number(r.duracaoMin) || 0)) % 1440;
-    var txt = quando.charAt(0).toUpperCase() + quando.slice(1) + ', ' + dois(+hm[1]) + ':' + hm[2] +
-      '–' + dois(Math.floor(fim / 60)) + ':' + dois(fim % 60) + ' (Brasília)';
+    var txt = Tx('{a}{b}, {c}:{d}–{e}:{f} (Brasília)', { a: quando.charAt(0).toUpperCase(), b: quando.slice(1), c: dois(+hm[1]), d: hm[2], e: dois(Math.floor(fim / 60)), f: dois(fim % 60) });
     return txt;
   };
 
   /* o nome do calabouço para a tela ("todos os calabouços" quando é geral) */
   Ag.nomeCalabouco = function (id) {
-    if (!id) return 'todos os calabouços';
+    if (!id) return Tx('todos os calabouços');
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     var ks = Object.keys(ds);
     for (var i = 0; i < ks.length; i++) {
       var d = ds[ks[i]];
       if (d && (d.id || ks[i]) === id && d.name) return d.name;
     }
-    if (id === 'poco') return 'O Poço sem Fundo';
+    if (id === 'poco') return Tx('O Poço sem Fundo');
     return id;
   };
   /* os calabouços que o painel oferece: os ABERTOS (DATA.portalFechado) e o

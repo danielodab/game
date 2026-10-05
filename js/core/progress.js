@@ -210,6 +210,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Progress = {};
   JOGO.Progress = Progress;
@@ -1515,10 +1525,10 @@ var JOGO = (typeof window !== 'undefined')
    * Devolve {ok, stars, usadas} ou {ok:false, motivo}. */
   Progress.canMergeItem = function (itemId, stars) {
     var st = Progress.state;
-    if (!st) return { ok: false, motivo: 'sem save' };
+    if (!st) return { ok: false, motivo: Tx('sem save') };
     var cfg = starItemCfg();
     var alvo = num(stars, 0);
-    if (alvo >= num(cfg.max, 3)) return { ok: false, motivo: 'já está no máximo' };
+    if (alvo >= num(cfg.max, 3)) return { ok: false, motivo: Tx('já está no máximo') };
     var precisa = num(cfg.copies, 3);
     var tem = 0;
     for (var i = 0; i < st.inventory.length; i++) {
@@ -1747,11 +1757,11 @@ var JOGO = (typeof window !== 'undefined')
   Progress.nivelUsoDe = nivelUsoDe;
   Progress.podeUsar = function (heroId, itemId) {
     var n = nivelUsoDe(itemId);
-    return veredito(heroId, n, 'precisa do nível ' + n);
+    return veredito(heroId, n, Tx('precisa do nível {n}', { n: n }));
   };
   Progress.podeUsarPet = function (heroId, petId) {
     var n = nivelUsoDe(petId);
-    return veredito(heroId, n, 'pets a partir do nível ' + n);
+    return veredito(heroId, n, Tx('pets a partir do nível {n}', { n: n }));
   };
   /* A última recusa de equip/equipPet, para quem chamou mostrar o motivo
    * ({heroId, itemId|petId, precisa, nivel, motivo}); sucesso limpa. */

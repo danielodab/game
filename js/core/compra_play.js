@@ -35,6 +35,16 @@
  * ========================================================================= */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var JOGO = window.JOGO = window.JOGO || {};
   var P = JOGO.CompraPlay = {};
 
@@ -67,7 +77,7 @@
       if (JOGO.Sessao && JOGO.Sessao.api) return JOGO.Sessao.api(rota, op);
       if (window.SITE && window.SITE.api) return window.SITE.api(rota, op);
     } catch (e) {}
-    return Promise.resolve({ ok: false, status: 0, erro: 'sem servidor' });
+    return Promise.resolve({ ok: false, status: 0, erro: Tx('sem servidor') });
   }
   function temSessao() {
     try {
@@ -127,7 +137,7 @@
       if (!r || !r.ok || !Array.isArray(r.pacotes)) {
         if (r && r.status === 401) return fim('fora');
         return fim(r && r.status === 503 ? 'desligado' : 'erro',
-                   r && r.status === 0 ? 'O servidor não respondeu.' : (r && r.erro) || 'Não deu para ler os pacotes.');
+                   r && r.status === 0 ? Tx('O servidor não respondeu.') : (r && r.erro) || Tx('Não deu para ler os pacotes.'));
       }
       st.conta = r.conta || null;
       st.teste = r.teste === true;
@@ -245,7 +255,7 @@
       if (r.creditadas) {
         recado({ estado: 'creditada', barras: r.barras, retomada: true });
         avisa('creditada', { barras: r.barras, saldo: st.saldo, retomada: true });
-        brinde('Chegaram ' + milhar(r.barras) + ' barras de ouro da sua compra na Google Play.');
+        brinde(Tx('Chegaram {a} barras de ouro da sua compra na Google Play.', { a: milhar(r.barras) }));
       }
       pinta();
       return r;
@@ -255,28 +265,28 @@
 
   /* ---- os textos ---- */
   var FASE = {
-    carregando: 'Carregando os pacotes…',
-    fora: 'Entre na sua conta do jogo para comprar barras de ouro.',
-    desligado: 'A compra de barras de ouro pelo aplicativo chega em breve.',
-    'sem-loja': 'Não deu para falar com a Google Play neste aparelho. Abra a Play Store, entre com a sua conta Google e tente de novo.',
-    'sem-produtos': 'Os pacotes ainda não estão disponíveis na Google Play. Tente de novo mais tarde.'
+    carregando: Tx('Carregando os pacotes…'),
+    fora: Tx('Entre na sua conta do jogo para comprar barras de ouro.'),
+    desligado: Tx('A compra de barras de ouro pelo aplicativo chega em breve.'),
+    'sem-loja': Tx('Não deu para falar com a Google Play neste aparelho. Abra a Play Store, entre com a sua conta Google e tente de novo.'),
+    'sem-produtos': Tx('Os pacotes ainda não estão disponíveis na Google Play. Tente de novo mais tarde.')
   };
   function textoDoRecado(r) {
     switch (r.estado) {
-      case 'creditada': return { tipo: 'bom', texto: (r.retomada ? 'Sua compra chegou: ' : 'Pronto! ') + milhar(r.barras) +
-                                 ' barras de ouro entraram na sua conta.' };
-      case 'repetida': return { tipo: 'neutro', texto: 'Essa compra já tinha sido creditada na sua conta.' };
-      case 'pendente': return { tipo: 'neutro', texto: 'A Google ainda espera o pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.' };
-      case 'cancelada': return { tipo: 'neutro', texto: r.status === 409 ? 'Essa compra foi cancelada ou reembolsada. Nada foi creditado.'
-                                 : 'Compra cancelada. Nada foi cobrado.' };
-      case 'teto': return { tipo: 'neutro', texto: r.texto ? 'O limite de compras por dia foi atingido: ' + r.texto + '.'
-                            : 'O limite de compras por dia foi atingido. Tente de novo amanhã.' };
+      case 'creditada': return { tipo: 'bom', texto: (r.retomada
+        ? Tx('Sua compra chegou: {a} barras de ouro entraram na sua conta.', { a: milhar(r.barras) })
+        : Tx('Pronto! {a} barras de ouro entraram na sua conta.', { a: milhar(r.barras) })) };
+      case 'repetida': return { tipo: 'neutro', texto: Tx('Essa compra já tinha sido creditada na sua conta.') };
+      case 'pendente': return { tipo: 'neutro', texto: Tx('A Google ainda espera o pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.') };
+      case 'cancelada': return { tipo: 'neutro', texto: r.status === 409 ? Tx('Essa compra foi cancelada ou reembolsada. Nada foi creditado.')
+                                 : Tx('Compra cancelada. Nada foi cobrado.') };
+      case 'teto': return { tipo: 'neutro', texto: r.texto ? Tx('O limite de compras por dia foi atingido: {texto}.', { texto: r.texto })
+                            : Tx('O limite de compras por dia foi atingido. Tente de novo amanhã.') };
       case 'sem-loja': return { tipo: 'erro', texto: FASE['sem-loja'] };
-      case 'sem-rede': return { tipo: 'erro', texto: 'O servidor do jogo não respondeu. Se você pagou, as barras entram sozinhas quando a conexão voltar.' };
-      case 'outra-conta': return { tipo: 'erro', texto: 'Essa compra foi feita por outra conta do jogo. Entre nela para receber as barras.' };
-      case 'recusada': return { tipo: 'erro', texto: 'A Google não concluiu a compra. Nada foi creditado.' };
-      default: return { tipo: 'erro', texto: (r.texto ? r.texto.charAt(0).toUpperCase() + r.texto.slice(1) + '. ' : '') +
-                        'Se você pagou, as barras entram sozinhas em instantes; se não entrarem, a Google devolve o valor.' };
+      case 'sem-rede': return { tipo: 'erro', texto: Tx('O servidor do jogo não respondeu. Se você pagou, as barras entram sozinhas quando a conexão voltar.') };
+      case 'outra-conta': return { tipo: 'erro', texto: Tx('Essa compra foi feita por outra conta do jogo. Entre nela para receber as barras.') };
+      case 'recusada': return { tipo: 'erro', texto: Tx('A Google não concluiu a compra. Nada foi creditado.') };
+      default: return { tipo: 'erro', texto: Tx('{a}Se você pagou, as barras entram sozinhas em instantes; se não entrarem, a Google devolve o valor.', { a: r.texto ? r.texto.charAt(0).toUpperCase() + r.texto.slice(1) + '. ' : '' }) };
     }
   }
   function recado(r) { st.recado = textoDoRecado(r); pinta(); return r; }
@@ -313,25 +323,30 @@
   }
   function html() {
     var h = '';
-    if (st.saldo != null) h += '<p class="cpl-saldo">Você tem <b data-cpl-saldo>' + milhar(st.saldo) + '</b> barras de ouro.</p>';
+    if (st.saldo != null) h += '<p class="cpl-saldo">' + Tx('Você tem <b data-cpl-saldo>{a}</b> barras de ouro.', { a: milhar(st.saldo) }) + '</p>';
     if (st.recado) h += '<p class="cpl-recado ' + st.recado.tipo + '" role="status" data-cpl-recado>' + esc(st.recado.texto) + '</p>';
     else if (st.pendentes) h += '<p class="cpl-recado neutro" role="status" data-cpl-recado>' + esc(textoDoRecado({ estado: 'pendente' }).texto) + '</p>';
     if (st.fase !== 'ok') {
-      h += '<p class="cpl-estado" data-cpl-fase="' + esc(st.fase) + '">' + esc(FASE[st.fase] || st.erro || 'Não deu para abrir a compra.') + '</p>';
-      if (st.fase !== 'carregando' && st.fase !== 'desligado') h += '<button type="button" class="cpl-bt" data-cpl-de-novo style="padding:0 16px">Tentar de novo</button>';
+      h += '<p class="cpl-estado" data-cpl-fase="' + esc(st.fase) + '">' + esc(FASE[st.fase] || st.erro || Tx('Não deu para abrir a compra.')) + '</p>';
+      if (st.fase !== 'carregando' && st.fase !== 'desligado') h += Tx('<button type="button" class="cpl-bt" data-cpl-de-novo style="padding:0 16px">Tentar de novo</button>');
       return h;
     }
     h += '<div class="cpl-lista">' + st.pacotes.map(function (p) {
-      var ocupado = !!st.ocupado, rotulo = st.ocupado === p.id ? 'Abrindo a Google Play…'
-        : !p.preco ? 'Indisponível' : !p.cabe ? 'Limite do dia atingido' : 'Comprar';
-      return '<article class="cpl-pacote" data-cpl-pacote="' + esc(p.id) + '"><h4>' + esc(p.nome) + '</h4>' +
-        '<p class="cpl-qtd"><b>' + milhar(p.barras) + '</b> barras de ouro</p>' +
-        '<p class="cpl-preco">' + esc(p.preco || '—') + '</p>' +
-        '<button type="button" class="cpl-bt" data-cpl-comprar="' + esc(p.id) + '"' +
-        (ocupado || !p.preco || !p.cabe ? ' disabled' : '') + '>' + rotulo + '</button></article>';
+      var ocupado = !!st.ocupado, rotulo = st.ocupado === p.id ? Tx('Abrindo a Google Play…')
+        : !p.preco ? Tx('Indisponível') : !p.cabe ? Tx('Limite do dia atingido') : Tx('Comprar');
+      return '<article class="cpl-pacote" data-cpl-pacote="' +
+        esc(p.id) +
+        '">' +
+        Tx('<h4>{b}</h4><p class="cpl-qtd"><b>{c}</b> barras de ouro</p><p class="cpl-preco">{d}</p><button type="button" class="cpl-bt" data-cpl-comprar="{a}"{e}>{rotulo}</button>', { b: esc(p.nome), c: milhar(p.barras), d: esc(p.preco || '—'), a: esc(p.id), e: ocupado || !p.preco || !p.cabe ? ' disabled' : '', rotulo: rotulo }) +
+        '</article>';
     }).join('') + '</div>';
-    h += '<p class="cpl-nota">A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo' +
-      (st.teste ? ' · servidor em modo de teste' : '') + '.</p>';
+    h += (st.teste
+      ? '<p class="cpl-nota">' +
+      Tx('A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo · servidor em modo de teste.') +
+      '</p>'
+      : '<p class="cpl-nota">' +
+      Tx('A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo.') +
+      '</p>');
     return h;
   }
   function pinta() {
@@ -373,9 +388,10 @@
     fundo.className = 'cpl-fundo';
     fundo.setAttribute('role', 'dialog');
     fundo.setAttribute('aria-modal', 'true');
-    fundo.setAttribute('aria-label', 'Comprar barras de ouro');
-    fundo.innerHTML = '<div class="cpl-caixa"><div class="cpl-cab"><h3>Barras de ouro</h3>' +
-      '<button type="button" class="cpl-fechar" data-cpl-fechar>Fechar</button></div><div data-cpl-corpo></div></div>';
+    fundo.setAttribute('aria-label', Tx('Comprar barras de ouro'));
+    fundo.innerHTML = '<div class="cpl-caixa">' +
+      Tx('<div class="cpl-cab"><h3>Barras de ouro</h3><button type="button" class="cpl-fechar" data-cpl-fechar>Fechar</button></div><div data-cpl-corpo></div>') +
+      '</div>';
     fundo.addEventListener('click', function (ev) {
       if (ev.target === fundo || (ev.target.closest && ev.target.closest('[data-cpl-fechar]'))) P.fecha();
     });

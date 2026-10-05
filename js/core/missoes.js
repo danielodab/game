@@ -26,6 +26,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var M = {};
   JOGO.Missoes = M;
@@ -36,15 +46,15 @@ var JOGO = (typeof window !== 'undefined')
    * true quando o evento já cumpre a missão inteira (limiares, como "tenha
    * 100 no cofre"). */
   var DIARIAS = {
-    'd-vitorias': { texto: 'Vença 3 salas', alvo: 3, premio: 30,
+    'd-vitorias': { texto: Tx('Vença 3 salas'), alvo: 3, premio: 30,
       conta: function (ev) { return ev.tipo === 'vitoria' ? 1 : 0; } },
-    'd-dificil': { texto: 'Vença 1 sala no difícil', alvo: 1, premio: 40,
+    'd-dificil': { texto: Tx('Vença 1 sala no difícil'), alvo: 1, premio: 40,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.dificuldade === 'dificil') ? 1 : 0; } },
-    'd-desafios': { texto: 'Cumpra 2 desafios de sala', alvo: 2, premio: 35,
+    'd-desafios': { texto: Tx('Cumpra 2 desafios de sala'), alvo: 2, premio: 35,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.desafioCumprido) ? 1 : 0; } },
-    'd-fundido': { texto: 'Vença 1 sala com uma fusão em campo', alvo: 1, premio: 35,
+    'd-fundido': { texto: Tx('Vença 1 sala com uma fusão em campo'), alvo: 1, premio: 35,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.fundido) ? 1 : 0; } },
-    'd-cofre': { texto: 'Guarde 40 vinténs no cofre', alvo: 40, premio: 25,
+    'd-cofre': { texto: Tx('Guarde 40 vinténs no cofre'), alvo: 40, premio: 25,
       conta: function (ev) { return ev.tipo === 'deposito' ? (ev.valor || 0) : 0; } }
   };
 
@@ -53,13 +63,13 @@ var JOGO = (typeof window !== 'undefined')
    * missão". Título agora é posição no ranking ou dez quedas do mesmo chefe
    * no difícil, sozinho — a régua toda mora em js/core/titulos.js. */
   var CONQUISTAS = {
-    'c-fusao': { texto: 'Vença uma sala fundido', alvo: 1, premio: 30,
+    'c-fusao': { texto: Tx('Vença uma sala fundido'), alvo: 1, premio: 30,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.fundido) ? 1 : 0; } },
-    'c-dificil5': { texto: 'Vença 5 salas no difícil', alvo: 5, premio: 60,
+    'c-dificil5': { texto: Tx('Vença 5 salas no difícil'), alvo: 5, premio: 60,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.dificuldade === 'dificil') ? 1 : 0; } },
-    'c-desafios10': { texto: 'Cumpra 10 desafios de sala', alvo: 10, premio: 60,
+    'c-desafios10': { texto: Tx('Cumpra 10 desafios de sala'), alvo: 10, premio: 60,
       conta: function (ev) { return (ev.tipo === 'vitoria' && ev.desafioCumprido) ? 1 : 0; } },
-    'c-cofre100': { texto: 'Tenha 100 vinténs no cofre de uma vez', alvo: 1, premio: 50,
+    'c-cofre100': { texto: Tx('Tenha 100 vinténs no cofre de uma vez'), alvo: 1, premio: 50,
       atinge: function (ev) { return ev.tipo === 'deposito' && (ev.cofreTotal || 0) >= 100; } }
   };
 
@@ -176,21 +186,21 @@ var JOGO = (typeof window !== 'undefined')
    * DB.ganharMoedas — o mesmo funil dos vinténs de batalha. */
   M.reivindicar = function (id, dataForcada) {
     var db = DB();
-    if (!db) return Promise.resolve({ ok: false, erro: 'sem conta' });
+    if (!db) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     return M.carregar(dataForcada).then(function (quadro) {
       var def = DIARIAS[id] || CONQUISTAS[id];
-      if (!def) return { ok: false, erro: 'missão desconhecida' };
+      if (!def) return { ok: false, erro: Tx('missão desconhecida') };
       var st = null, ehDiaria = !!DIARIAS[id];
       if (ehDiaria) {
         for (var i = 0; i < quadro.lista.length; i++) {
           if (quadro.lista[i].id === id) st = quadro.lista[i];
         }
-        if (!st) return { ok: false, erro: 'não é uma missão de hoje' };
+        if (!st) return { ok: false, erro: Tx('não é uma missão de hoje') };
       } else {
         st = quadro.conquistas[id] || { prog: 0, pago: false };
       }
-      if (st.prog < def.alvo) return { ok: false, erro: 'ainda não terminou' };
-      if (st.pago) return { ok: false, erro: 'já recebido' };
+      if (st.prog < def.alvo) return { ok: false, erro: Tx('ainda não terminou') };
+      if (st.pago) return { ok: false, erro: Tx('já recebido') };
       st.pago = true;
       if (!ehDiaria) quadro.conquistas[id] = st;
       var salvar = ehDiaria

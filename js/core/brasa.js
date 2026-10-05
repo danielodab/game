@@ -26,6 +26,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var B = {};
   JOGO.Brasa = B;
@@ -66,16 +76,16 @@ var JOGO = (typeof window !== 'undefined')
    * violeta arcano do reinado na X. Quem desenha é o hub3d; aqui só a régua. */
   B.BRILHO_DESDE = 5;                    // o degrau em que a coroa começa a acender
   B.TIERS = [
-    { id: 'n1',  nivel: 1,  nome: 'Coroa I',    min: 0,    tam: 0.70, brilho: 0 },
-    { id: 'n2',  nivel: 2,  nome: 'Coroa II',   min: 1100, tam: 0.76, brilho: 0 },
-    { id: 'n3',  nivel: 3,  nome: 'Coroa III',  min: 1200, tam: 0.81, brilho: 0 },
-    { id: 'n4',  nivel: 4,  nome: 'Coroa IV',   min: 1300, tam: 0.86, brilho: 0 },
-    { id: 'n5',  nivel: 5,  nome: 'Coroa V',    min: 1400, tam: 0.92, brilho: 0.17, cor: '#ffd36a' },
-    { id: 'n6',  nivel: 6,  nome: 'Coroa VI',   min: 1500, tam: 1.00, brilho: 0.33, cor: '#ffd36a' },
-    { id: 'n7',  nivel: 7,  nome: 'Coroa VII',  min: 1600, tam: 1.08, brilho: 0.50, cor: '#ffca4d' },
-    { id: 'n8',  nivel: 8,  nome: 'Coroa VIII', min: 1700, tam: 1.16, brilho: 0.67, cor: '#ffc23a' },
-    { id: 'n9',  nivel: 9,  nome: 'Coroa IX',   min: 1800, tam: 1.27, brilho: 0.83, cor: '#fff0c0' },
-    { id: 'n10', nivel: 10, nome: 'Coroa X',    min: 1900, tam: 1.42, brilho: 1.00, cor: '#c8a6ff',
+    { id: 'n1',  nivel: 1,  nome: Tx('Coroa I'),    min: 0,    tam: 0.70, brilho: 0 },
+    { id: 'n2',  nivel: 2,  nome: Tx('Coroa II'),   min: 1100, tam: 0.76, brilho: 0 },
+    { id: 'n3',  nivel: 3,  nome: Tx('Coroa III'),  min: 1200, tam: 0.81, brilho: 0 },
+    { id: 'n4',  nivel: 4,  nome: Tx('Coroa IV'),   min: 1300, tam: 0.86, brilho: 0 },
+    { id: 'n5',  nivel: 5,  nome: Tx('Coroa V'),    min: 1400, tam: 0.92, brilho: 0.17, cor: '#ffd36a' },
+    { id: 'n6',  nivel: 6,  nome: Tx('Coroa VI'),   min: 1500, tam: 1.00, brilho: 0.33, cor: '#ffd36a' },
+    { id: 'n7',  nivel: 7,  nome: Tx('Coroa VII'),  min: 1600, tam: 1.08, brilho: 0.50, cor: '#ffca4d' },
+    { id: 'n8',  nivel: 8,  nome: Tx('Coroa VIII'), min: 1700, tam: 1.16, brilho: 0.67, cor: '#ffc23a' },
+    { id: 'n9',  nivel: 9,  nome: Tx('Coroa IX'),   min: 1800, tam: 1.27, brilho: 0.83, cor: '#fff0c0' },
+    { id: 'n10', nivel: 10, nome: Tx('Coroa X'),    min: 1900, tam: 1.42, brilho: 1.00, cor: '#c8a6ff',
       exigeTopo: true }
   ];
   /* O brilho de um degrau, para quem tem só o número na mão (a ficha 2D). */

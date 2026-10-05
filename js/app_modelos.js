@@ -33,6 +33,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var A = {};
   JOGO.AppModelos = A;
@@ -89,8 +99,8 @@ var JOGO = (typeof window !== 'undefined')
   A.resta = function (bytes, porSegundo) {
     if (!(porSegundo > 0) || !(bytes > 0)) return '';
     var s = bytes / porSegundo;
-    if (s < 60) return 'menos de 1 min';
-    return 'cerca de ' + Math.round(s / 60) + ' min';
+    if (s < 60) return Tx('menos de 1 min');
+    return Tx('cerca de {a} min', { a: Math.round(s / 60) });
   };
   /* A rede, quando dá para saber: 'movel', 'wifi' ou '?'. O WebView do Android
    * informa `connection.type`; onde ele não existe, não se adivinha. */
@@ -319,17 +329,17 @@ var JOGO = (typeof window !== 'undefined')
 
   /* A PRIMEIRA ABERTURA: as duas opções. */
   function telaEscolha(p, segue) {
-    var cx = caixa('Modelos do jogo');
-    paragrafo(cx, 'Os cenários e personagens em 3D ficam no servidor. Escolha como baixar — dá para mudar depois, nas Configurações.');
-    botao(cx, 'am-agora', 'Jogar agora',
-          'Abre na hora. Cada mapa baixa o que precisa na primeira vez e fica guardado no aparelho.', '#2a3038',
+    var cx = caixa(Tx('Modelos do jogo'));
+    paragrafo(cx, Tx('Os cenários e personagens em 3D ficam no servidor. Escolha como baixar — dá para mudar depois, nas Configurações.'));
+    botao(cx, 'am-agora', Tx('Jogar agora'),
+          Tx('Abre na hora. Cada mapa baixa o que precisa na primeira vez e fica guardado no aparelho.'), '#2a3038',
           function () { A.escolhe('agora'); fecha(); segue(); });
-    botao(cx, 'am-tudo', 'Baixar tudo — ' + A.mb(p.faltam) + ' MB',
-          'Baixa o pacote inteiro agora. Depois os mapas abrem sem esperar e sem gastar dados.', '#3a2f16',
+    botao(cx, 'am-tudo', Tx('Baixar tudo — {a} MB', { a: A.mb(p.faltam) }),
+          Tx('Baixa o pacote inteiro agora. Depois os mapas abrem sem esperar e sem gastar dados.'), '#3a2f16',
           function () { pedeTudo(p, segue, true); });
     var r = A.rede(conexao());
-    paragrafo(cx, r === 'movel' ? 'Você está nos dados móveis: baixar tudo gasta ' + A.mb(p.faltam) + ' MB do seu plano.'
-                : r === 'wifi' ? 'Você está no Wi-Fi.' : 'Se puder, baixe tudo no Wi-Fi.', 'am-rede')
+    paragrafo(cx, r === 'movel' ? Tx('Você está nos dados móveis: baixar tudo gasta {a} MB do seu plano.', { a: A.mb(p.faltam) })
+                : r === 'wifi' ? Tx('Você está no Wi-Fi.') : Tx('Se puder, baixe tudo no Wi-Fi.'), 'am-rede')
       .style.fontSize = '13.5px';
   }
 
@@ -340,17 +350,16 @@ var JOGO = (typeof window !== 'undefined')
     estimativa().then(function (est) {
       var c = A.cabe(p.faltam, est);
       if (c && !c.cabe) {
-        return aviso('Falta espaço', 'O pacote precisa de ' + A.mb(p.faltam) + ' MB e o aparelho tem ' + A.mb(c.livre) +
-          ' MB livres para o jogo. Libere espaço e tente de novo.', [
-          ['am-continuar', 'Tentar de novo', function () { pedeTudo(p, segue, primeira); }],
-          ['am-jogar', 'Jogar agora, sem baixar tudo', function () { if (!A.escolha()) A.escolhe('agora'); fecha(); segue(); }]
+        return aviso(Tx('Falta espaço'), Tx('O pacote precisa de {a} MB e o aparelho tem {b} MB livres para o jogo. Libere espaço e tente de novo.', { a: A.mb(p.faltam), b: A.mb(c.livre) }), [
+          ['am-continuar', Tx('Tentar de novo'), function () { pedeTudo(p, segue, primeira); }],
+          ['am-jogar', Tx('Jogar agora, sem baixar tudo'), function () { if (!A.escolha()) A.escolhe('agora'); fecha(); segue(); }]
         ]);
       }
       if (A.rede(conexao()) === 'movel') {
-        return aviso('Dados móveis', 'Você não está no Wi-Fi. Baixar agora gasta ' + A.mb(p.faltam) + ' MB do seu plano de dados.', [
-          ['am-sim', 'Baixar mesmo assim', function () { comeca(p, segue); }],
+        return aviso(Tx('Dados móveis'), Tx('Você não está no Wi-Fi. Baixar agora gasta {a} MB do seu plano de dados.', { a: A.mb(p.faltam) }), [
+          ['am-sim', Tx('Baixar mesmo assim'), function () { comeca(p, segue); }],
           // a vontade fica gravada: na próxima abertura, já no Wi-Fi, o download começa sozinho
-          ['am-nao', 'Esperar o Wi-Fi e jogar agora', function () { A.escolhe('tudo'); fecha(); segue(); }]
+          ['am-nao', Tx('Esperar o Wi-Fi e jogar agora'), function () { A.escolhe('tudo'); fecha(); segue(); }]
         ]);
       }
       comeca(p, segue);
@@ -364,7 +373,7 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function telaProgresso(p, segue) {
-    var cx = caixa('Baixando os modelos');
+    var cx = caixa(Tx('Baixando os modelos'));
     var trilho = cria('div', 'height:12px;border-radius:6px;background:#22272e;overflow:hidden;margin:0 0 10px');
     var barra = cria('div', 'height:100%;width:0;background:#e9c46a;transition:width .2s', null, 'am-barra');
     trilho.appendChild(barra);
@@ -373,29 +382,28 @@ var JOGO = (typeof window !== 'undefined')
     function pinta(a) {
       barra.style.width = (a.total ? Math.round(100 * a.feitos / a.total) : 100) + '%';
       var r = A.resta(a.faltam, a.porSegundo);
-      txt.textContent = A.mb(a.feitos) + ' de ' + A.mb(a.total) + ' MB · faltam ' + A.mb(a.faltam) + ' MB' + (r ? ' · ' + r : '');
+      txt.textContent = Tx('{a} de {b} MB · faltam {c} MB{d}', { a: A.mb(a.feitos), b: A.mb(a.total), c: A.mb(a.faltam), d: r ? ' · ' + r : '' });
     }
     pinta({ feitos: p.feitos, total: p.total, faltam: p.faltam, porSegundo: 0 });
-    botao(cx, 'am-pausa', 'Pausar e jogar agora', 'O que já baixou fica guardado. O resto continua na próxima abertura.', '#2a3038',
+    botao(cx, 'am-pausa', Tx('Pausar e jogar agora'), Tx('O que já baixou fica guardado. O resto continua na próxima abertura.'), '#2a3038',
           function () { if (st.baixando) st.baixando.para('pausa'); });
     baixa(p, pinta).then(function (r) {
       if (r.ok || r.motivo === 'pausa') { fecha(); segue(); return; }
       // refaz a conta pelo que está guardado DE VERDADE e oferece continuar dali
       function deNovo() { sincroniza().then(function (p2) { telaProgresso(p2, segue); }, function () { fecha(); segue(); }); }
-      var guardado = A.mb(r.feitos) + ' de ' + A.mb(r.total) + ' MB';
+      var guardado = Tx('{a} de {b} MB', { a: A.mb(r.feitos), b: A.mb(r.total) });
       if (r.motivo === 'rede') {
         var voltou = function () { window.removeEventListener('online', voltou); if (raizEl) deNovo(); };
         window.addEventListener('online', voltou);        // a rede voltou: continua sem esperar o toque
-        aviso('A conexão caiu', 'O que já baixou está guardado: ' + guardado + '. O download continua de onde parou.', [
-          ['am-continuar', 'Continuar', function () { window.removeEventListener('online', voltou); deNovo(); }],
-          ['am-jogar', 'Jogar agora e continuar depois', function () { window.removeEventListener('online', voltou); fecha(); segue(); }]
+        aviso(Tx('A conexão caiu'), Tx('O que já baixou está guardado: {guardado}. O download continua de onde parou.', { guardado: guardado }), [
+          ['am-continuar', Tx('Continuar'), function () { window.removeEventListener('online', voltou); deNovo(); }],
+          ['am-jogar', Tx('Jogar agora e continuar depois'), function () { window.removeEventListener('online', voltou); fecha(); segue(); }]
         ]);
       } else {
-        aviso(r.motivo === 'espaco' ? 'Faltou espaço no aparelho' : 'Não consegui guardar',
-          (r.motivo === 'espaco' ? 'Libere ' + A.mb(r.total - r.feitos) + ' MB e continue. ' : 'O aparelho recusou a gravação. ') +
-          'O que já baixou está guardado: ' + guardado + '.', [
-          ['am-continuar', 'Tentar de novo', deNovo],
-          ['am-jogar', 'Jogar agora', function () { fecha(); segue(); }]
+        aviso(r.motivo === 'espaco' ? Tx('Faltou espaço no aparelho') : Tx('Não consegui guardar'),
+          Tx('{a}O que já baixou está guardado: {guardado}.', { a: r.motivo === 'espaco' ? Tx('Libere {a} MB e continue.', { a: A.mb(r.total - r.feitos) }) + ' ' : Tx('O aparelho recusou a gravação. '), guardado: guardado }), [
+          ['am-continuar', Tx('Tentar de novo'), deNovo],
+          ['am-jogar', Tx('Jogar agora'), function () { fecha(); segue(); }]
         ]);
       }
     });
@@ -405,9 +413,9 @@ var JOGO = (typeof window !== 'undefined')
    * aplicativo fechou no meio, ou a arte mudou no servidor. */
   function retoma(p, segue) {
     if (A.rede(conexao()) !== 'movel') return pedeTudo(p, segue, false);
-    aviso('Faltam ' + A.mb(p.faltam) + ' MB', 'Há modelos para baixar (download interrompido ou arte nova) e você está nos dados móveis.', [
-      ['am-sim', 'Baixar agora', function () { comeca(p, segue); }],
-      ['am-nao', 'Depois, no Wi-Fi', function () { fecha(); segue(); }]
+    aviso(Tx('Faltam {a} MB', { a: A.mb(p.faltam) }), Tx('Há modelos para baixar (download interrompido ou arte nova) e você está nos dados móveis.'), [
+      ['am-sim', Tx('Baixar agora'), function () { comeca(p, segue); }],
+      ['am-nao', Tx('Depois, no Wi-Fi'), function () { fecha(); segue(); }]
     ]);
   }
 
@@ -437,16 +445,16 @@ var JOGO = (typeof window !== 'undefined')
     function pinta() {
       sincroniza().then(function (p) {
         sec.textContent = '';
-        var h = document.createElement('h3'); h.className = 'bk-tit'; h.textContent = 'Modelos no aparelho';
+        var h = document.createElement('h3'); h.className = 'bk-tit'; h.textContent = Tx('Modelos no aparelho');
         sec.appendChild(h);
         var ln = document.createElement('div'); ln.className = 'cfg-linha';
         var tx = document.createElement('div'); tx.className = 'cfg-tx';
         var b = document.createElement('b'); b.className = 'cfg-tit'; b.id = 'cfg-modelos-uso';
-        b.textContent = A.mb(p.feitos) + ' de ' + A.mb(p.total) + ' MB guardados';
+        b.textContent = Tx('{a} de {b} MB guardados', { a: A.mb(p.feitos), b: A.mb(p.total) });
         var d = document.createElement('span'); d.className = 'cfg-dica';
         d.textContent = p.baixar.length
-          ? p.nFeitos + ' de ' + p.nTotal + ' arquivos. O que falta baixa quando o mapa precisa — ou tudo de uma vez.'
-          : 'O pacote está completo: os mapas abrem sem baixar nada.';
+          ? Tx('{nFeitos} de {nTotal} arquivos. O que falta baixa quando o mapa precisa — ou tudo de uma vez.', { nFeitos: p.nFeitos, nTotal: p.nTotal })
+          : Tx('O pacote está completo: os mapas abrem sem baixar nada.');
         tx.appendChild(b); tx.appendChild(d); ln.appendChild(tx);
         var bs = document.createElement('div');
         function mini(id, rotulo, cls, fn) {
@@ -455,12 +463,12 @@ var JOGO = (typeof window !== 'undefined')
           x.addEventListener('click', fn);
           bs.appendChild(x);
         }
-        if (p.baixar.length) mini('cfg-modelos-baixar', 'Baixar tudo (' + A.mb(p.faltam) + ' MB)', 'btn-gold',
+        if (p.baixar.length) mini('cfg-modelos-baixar', Tx('Baixar tudo ({a} MB)', { a: A.mb(p.faltam) }), 'btn-gold',
           function () { pedeTudo(p, pinta, false); });
-        if (p.nFeitos) mini('cfg-modelos-apagar', 'Apagar', '', function () {
-          aviso('Apagar os modelos?', 'Libera ' + A.mb(p.feitos) + ' MB. O jogo volta a baixar cada mapa quando precisar.', [
-            ['am-nao', 'Cancelar', function () { fecha(); }],
-            ['am-sim', 'Apagar', function () { A.apagaTudo().then(function () { fecha(); pinta(); }); }]
+        if (p.nFeitos) mini('cfg-modelos-apagar', Tx('Apagar'), '', function () {
+          aviso(Tx('Apagar os modelos?'), Tx('Libera {a} MB. O jogo volta a baixar cada mapa quando precisar.', { a: A.mb(p.feitos) }), [
+            ['am-nao', Tx('Cancelar'), function () { fecha(); }],
+            ['am-sim', Tx('Apagar'), function () { A.apagaTudo().then(function () { fecha(); pinta(); }); }]
           ]);
         });
         ln.appendChild(bs);

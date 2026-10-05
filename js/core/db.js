@@ -39,6 +39,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var DB = {};
   JOGO.DB = DB;
@@ -295,7 +305,7 @@ var JOGO = (typeof window !== 'undefined')
     if (bolsoSemFundo()) return responde({ ok: true, moedas: 999999 });
     var d = carrega();
     n = Math.max(0, Math.floor(n || 0));
-    if (d.carteira.moedas < n) return responde({ ok: false, erro: 'vinténs insuficientes', moedas: d.carteira.moedas });
+    if (d.carteira.moedas < n) return responde({ ok: false, erro: Tx('vinténs insuficientes'), moedas: d.carteira.moedas });
     d.carteira.moedas -= n;
     grava();
     return responde({ ok: true, moedas: d.carteira.moedas });
@@ -310,7 +320,7 @@ var JOGO = (typeof window !== 'undefined')
   DB.depositarMoedas = function (n) {
     var d = carrega();
     n = Math.max(0, Math.floor(n || 0));
-    if (d.carteira.moedas < n) return responde({ ok: false, erro: 'vinténs insuficientes' });
+    if (d.carteira.moedas < n) return responde({ ok: false, erro: Tx('vinténs insuficientes') });
     d.carteira.moedas -= n;
     d.banco.moedas += n;
     grava();
@@ -320,7 +330,7 @@ var JOGO = (typeof window !== 'undefined')
   DB.sacarMoedas = function (n) {
     var d = carrega();
     n = Math.max(0, Math.floor(n || 0));
-    if (d.banco.moedas < n) return responde({ ok: false, erro: 'o cofre não tem tudo isso' });
+    if (d.banco.moedas < n) return responde({ ok: false, erro: Tx('o cofre não tem tudo isso') });
     d.banco.moedas -= n;
     d.carteira.moedas += n;
     grava();
@@ -332,7 +342,7 @@ var JOGO = (typeof window !== 'undefined')
    * as estrelas da peça, e o jogador sacaria um item pior do que guardou. */
   DB.depositarItem = function (entrada) {
     var d = carrega();
-    if (!entrada || !entrada.itemId) return responde({ ok: false, erro: 'item inválido' });
+    if (!entrada || !entrada.itemId) return responde({ ok: false, erro: Tx('item inválido') });
     // `|| 0`, não `|| 1`: nível 0 é UM VALOR (peça sem forja), e o `|| 1`
     // fazia o cofre devolver a peça mais forte do que entrou — forja de graça,
     // que ainda por cima quebrava o empilhamento (0 e 1 não agrupam).
@@ -349,7 +359,7 @@ var JOGO = (typeof window !== 'undefined')
     // um índice esquecido passaria pela guarda e sacaria o primeiro item.
     indice = Math.floor(Number(indice));
     if (!isFinite(indice) || indice < 0 || indice >= d.banco.itens.length) {
-      return responde({ ok: false, erro: 'não está no cofre' });
+      return responde({ ok: false, erro: Tx('não está no cofre') });
     }
     var item = d.banco.itens.splice(indice, 1)[0];
     grava();
@@ -636,7 +646,7 @@ var JOGO = (typeof window !== 'undefined')
   DB.lojaAplica = function (id, preco) {
     var d = carrega(), l = lojaDe(d);
     id = idLoja(id);
-    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (!id) return responde({ ok: false, erro: Tx('pedido inválido') });
     if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
     preco = Math.max(0, Math.floor(Number(preco) || 0));
     if (bolsoSemFundo()) {                       // o Mestre: anota sem descontar
@@ -655,7 +665,7 @@ var JOGO = (typeof window !== 'undefined')
   DB.lojaRecusa = function (id, motivo) {
     var d = carrega(), l = lojaDe(d);
     id = idLoja(id);
-    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (!id) return responde({ ok: false, erro: Tx('pedido inválido') });
     if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
     lojaAnota(l.recusadas, { id: id, motivo: motivoLoja(motivo) });
     grava();
@@ -667,7 +677,7 @@ var JOGO = (typeof window !== 'undefined')
     var d = carrega(), l = lojaDe(d);
     id = idLoja(id);
     var i = id ? l.aplicadas.indexOf(id) : -1;
-    if (i < 0) return responde({ ok: false, erro: 'pedido não aplicado aqui' });
+    if (i < 0) return responde({ ok: false, erro: Tx('pedido não aplicado aqui') });
     l.aplicadas.splice(i, 1);
     if (!bolsoSemFundo()) d.carteira.moedas += Math.max(0, Math.floor(Number(preco) || 0));
     lojaAnota(l.recusadas, { id: id, motivo: motivoLoja(motivo || 'erro-local') });
@@ -685,10 +695,10 @@ var JOGO = (typeof window !== 'undefined')
   DB.lojaCredita = function (id, qtd) {
     var d = carrega(), l = lojaDe(d);
     id = idLoja(id);
-    if (!id) return responde({ ok: false, erro: 'pedido inválido' });
+    if (!id) return responde({ ok: false, erro: Tx('pedido inválido') });
     if (lojaTratou(l, id)) return responde({ ok: false, ja: true });
     if (!(typeof qtd === 'number' && isFinite(qtd) && Math.floor(qtd) === qtd && qtd >= 1 && qtd <= 10000000)) {
-      return responde({ ok: false, erro: 'quantia inválida' });
+      return responde({ ok: false, erro: Tx('quantia inválida') });
     }
     if (bolsoSemFundo()) {
       lojaAnota(l.aplicadas, id);

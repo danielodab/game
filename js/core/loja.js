@@ -90,6 +90,16 @@
  * volta ao estado de página nova). */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var JOGO = window.JOGO = window.JOGO || {};
   var L = JOGO.Loja = {};
   L.INTERVALO_MS = 5 * 60 * 1000;   // a busca de fundo
@@ -139,14 +149,14 @@
 
   /* Por que NÃO buscar agora (null = pode). */
   function porQueNao() {
-    if (congelada) return 'a página vai recarregar';
+    if (congelada) return Tx('a página vai recarregar');
     var s = S(), n = N();
-    if (!s || !s.ativa || !s.ativa()) return 'sem sessão';
+    if (!s || !s.ativa || !s.ativa()) return Tx('sem sessão');
     if (!n || !n.estado) return 'sem a nuvem';
     var e = n.estado();
     if (!e.principal) return 'conta local';
-    if (!e.ligada) return 'a nuvem está desligada';
-    if (e.parada) return 'a nuvem está parada';
+    if (!e.ligada) return Tx('a nuvem está desligada');
+    if (e.parada) return Tx('a nuvem está parada');
     if (!liberada) return 'esperando a nuvem';
     if (!DB() || !DB().lojaAplica || !P()) return 'sem o jogo';
     if (oculta()) return 'aba escondida';
@@ -180,7 +190,7 @@
     try {
       p = lk.request(L.CANAL, { ifAvailable: true }, function (trava) {
         rodou = true;
-        if (!trava) return { ok: false, erro: 'outra aba está buscando' };
+        if (!trava) return { ok: false, erro: Tx('outra aba está buscando') };
         return fn();
       });
     } catch (e2) { return fn(); }
@@ -310,9 +320,9 @@
   /* liga, troca ou desliga (null) a aura da praça: o SERVIDOR confere a posse e guarda a escolha */
   L.escolheAura = function (cor) {
     if (cor !== null && AURAS_DA_FICHA.indexOf(cor) < 0) return Promise.resolve({ ok: false, erro: 'aura desconhecida' });
-    if (!comSessao()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
+    if (!comSessao()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
     return Promise.resolve(pede('/api/loja/aura', { method: 'POST', body: { aura: cor } })).then(function (r) {
-      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'não deu para trocar a aura agora' };
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('não deu para trocar a aura agora') };
       if (vit && r.auras) {
         guardaVitrine({ agora: L.agoraServidor(), auras: r.auras, ofertas: vit.ofertas, boasVindas: vit.boasVindas });
       }

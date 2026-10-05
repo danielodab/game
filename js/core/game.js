@@ -97,6 +97,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Game = {};
   JOGO.Game = Game;
@@ -546,7 +556,7 @@ var JOGO = (typeof window !== 'undefined')
         .then(function (r) {
           meu.conferindo = false;
           if (r && r.ok) meu.oficial = r;
-          else meu.erro = (r && r.erro) || 'o servidor não conferiu a tentativa';
+          else meu.erro = (r && r.erro) || Tx('o servidor não conferiu a tentativa');
           if (Game.screen === 'ecoFim' && fimEco === meu) setScreen('ecoFim', meu);
         });
     }
@@ -581,7 +591,7 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
     var A = JOGO.Autoridade;
-    if (!A || !A.salEco) { encerraEcoSemSal({ erro: 'este jogo não sabe pedir o sorteio da rodada' }); return; }
+    if (!A || !A.salEco) { encerraEcoSemSal({ erro: Tx('este jogo não sabe pedir o sorteio da rodada') }); return; }
     var tent = ataEco.tentativa;
     var antes = (salEco && salEco.rodada === r) ? salEco : null;
     var pedido = { rodada: r, pedindo: true, dormindo: false, semRede: !!(antes && antes.semRede),
@@ -635,7 +645,7 @@ var JOGO = (typeof window !== 'undefined')
     var fim = fechaEco(true);
     if (!fim) return;
     fim.parouNaRodada = rodada || null;
-    fim.semSal = (resp && resp.erro) || 'o servidor não deu o sorteio da rodada';
+    fim.semSal = (resp && resp.erro) || Tx('o servidor não deu o sorteio da rodada');
     setScreen('ecoFim', fim);
   }
   Game._pedeSalEco = pedeSalEco;                 // provas
@@ -788,7 +798,7 @@ var JOGO = (typeof window !== 'undefined')
     var n = (d && d.rooms) ? d.rooms.length : 3;
     var room = (d && d.rooms) ? d.rooms[Game.roomIndex] : null;
     return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex, total: n,
-             nome: (room && room.name) || ('Sala ' + (Game.roomIndex + 1)),
+             nome: (room && room.name) || (Tx('Sala {a}', { a: Game.roomIndex + 1 })),
              tema: (d && d.theme) || null, calabouco: (d && d.name) || Game.dungeonId,
              // 03/10: a regra de terreno da sala do Santuário ('fogo' | 'agua' | 'terra' | 'ar' | 'altar'):
              // a porta da antessala a diz ANTES de a luta começar
@@ -2254,7 +2264,7 @@ var JOGO = (typeof window !== 'undefined')
       return { ok: false, motivo: (r && r.motivo) || 'servidor', erro: (r && r.erro) || null };
     }, function () {
       bebendo = false;
-      return { ok: false, motivo: 'servidor', erro: 'o servidor não respondeu' };
+      return { ok: false, motivo: 'servidor', erro: Tx('o servidor não respondeu') };
     });
   };
   /* {meuDono:heroId: PV agora} dos MEUS heróis da descida que não estão cheios — o `pronto`
@@ -2792,12 +2802,12 @@ var JOGO = (typeof window !== 'undefined')
     if (fEvXp > 1 && xpGanho > 0) eventos.push(evAg('xp', fEvXp, tAg));
     // o pergaminho que pesou, no mesmo formato: a chipsEvento('xp') da HUD mostra
     if (pergaminhoSala) {
-      eventos.push({ id: null, titulo: 'Pergaminho da Sabedoria', tipo: 'xp',
+      eventos.push({ id: null, titulo: Tx('Pergaminho da Sabedoria'), tipo: 'xp',
                      fator: pergaminhoSala.fator, origem: 'pergaminho', restam: pergaminhoSala.restam });
     }
     // o bônus de XP por tempo que pesou (loja 2): o chip diz quanto ainda falta
     if (bonusTempoSala) {
-      eventos.push({ id: null, titulo: 'Bônus de XP', tipo: 'xp', fator: bonusTempoSala.fator,
+      eventos.push({ id: null, titulo: Tx('Bônus de XP'), tipo: 'xp', fator: bonusTempoSala.fator,
                      origem: 'bonus-tempo', ate: bonusTempoSala.ate });
     }
     if (fEvVintem > 1 && moedasGanhas > 0) eventos.push(evAg('vintem', fEvVintem, tAg));
@@ -2814,7 +2824,7 @@ var JOGO = (typeof window !== 'undefined')
       moedas: moedasGanhas,
       saqueDupla: saqueDupla,    // 11/09 (achado 19): na dupla pela Rede, {minha, pela}: de quem foi a vez do saque; senão null
       dificuldade: difSala.id || 'normal',
-      difNome: difSala.nome || 'Normal',
+      difNome: difSala.nome || Tx('Normal'),
       desafio: desafioSala ? { id: desafioSala.id, nome: desafioSala.nome,
                                texto: desafioSala.texto,
                                cumprido: !!desafioSala.cumprido } : null,
@@ -2881,7 +2891,7 @@ var JOGO = (typeof window !== 'undefined')
     conferindoSala = true;
     var lastRoom = ultimaSalaDe(Game.dungeonId);
     var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
-    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória com o servidor…'); } catch (eT) {}
+    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('Conferindo a vitória com o servidor…')); } catch (eT) {}
     promessa.then(function (r) {
       conferindoSala = false;
       if (Game.screen !== 'battle') return;            // saiu no meio (abandonou)
@@ -2890,8 +2900,8 @@ var JOGO = (typeof window !== 'undefined')
         setScreen(tela, r.recompensa || recompensaVazia());
         return;
       }
-      var motivo = (r && r.erro) || 'o servidor não confirmou a vitória';
-      try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('A sala não rendeu recompensa: ' + motivo); } catch (eT2) {}
+      var motivo = (r && r.erro) || Tx('o servidor não confirmou a vitória');
+      try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('A sala não rendeu recompensa: {motivo}', { motivo: motivo })); } catch (eT2) {}
       setScreen(tela, recompensaVazia(motivo));
     });
   }
@@ -2921,7 +2931,7 @@ var JOGO = (typeof window !== 'undefined')
     conferindoSala = true;
     var lastRoom = ultimaSalaDe(Game.dungeonId);
     var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
-    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('Conferindo a vitória do grupo com o servidor…'); } catch (eT) {}
+    try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('Conferindo a vitória do grupo com o servidor…')); } catch (eT) {}
     promessa.then(function (r) {
       conferindoSala = false;
       if (Game.screen !== 'battle') return;
@@ -2929,8 +2939,8 @@ var JOGO = (typeof window !== 'undefined')
       var rw;
       if (r && r.ok && r.fase === 'won' && r.recompensa) rw = r.recompensa;
       else {
-        var motivo = (r && r.erro) || 'o servidor não confirmou a vitória do grupo';
-        try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast('A sala não rendeu recompensa: ' + motivo); } catch (eT2) {}
+        var motivo = (r && r.erro) || Tx('o servidor não confirmou a vitória do grupo');
+        try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('A sala não rendeu recompensa: {motivo}', { motivo: motivo })); } catch (eT2) {}
         rw = recompensaVazia(motivo);
       }
       marcaRecompensaRede(rw);

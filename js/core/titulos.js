@@ -28,6 +28,16 @@ var JOGO = (typeof window !== 'undefined')
  * posição no ranking é a HUD (que tem o placar), e quem pendura é o hub3d. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var T = {};
   JOGO.Titulos = T;
@@ -121,40 +131,42 @@ var JOGO = (typeof window !== 'undefined')
     var chefes = estado.chefes || {};
     var fora = [];
     T.PVM.forEach(function (d) {
-      fora.push({ titulo: d.titulo, fonte: 'pvm', de: d.pos + 'º do ranking de XP',
+      fora.push({ titulo: d.titulo, fonte: 'pvm', de: Tx('{pos}º do ranking de XP', { pos: d.pos }),
                   ganho: estado.pvm === d.pos, emprestado: true,
-                  comoGanhar: 'Seja o ' + d.pos + 'º do ranking de XP (e ande com o nome em ' +
-                              T.MEDALHA_PVM[d.pos] + ').' });
+                  comoGanhar: Tx('Seja o {pos}º do ranking de XP (e ande com o nome em {medalha}).',
+                                 { pos: d.pos, medalha: Tx(T.MEDALHA_PVM[d.pos]) }) });
     });
     T.PVP.forEach(function (d) {
-      fora.push({ titulo: d.titulo, fonte: 'pvp', de: d.pos + 'º do ranking PvP',
+      fora.push({ titulo: d.titulo, fonte: 'pvp', de: Tx('{pos}º do ranking PvP', { pos: d.pos }),
                   ganho: estado.pvp === d.pos, emprestado: true,
-                  comoGanhar: 'Seja o ' + d.pos + 'º do ranking PvP (pontos de Brasa).' });
+                  comoGanhar: Tx('Seja o {pos}º do ranking PvP (pontos de Brasa).', { pos: d.pos }) });
     });
     // os pódios de classe: `estado.classeNomes` = {classId: nome}, `estado.porClasse` = {classId: posição}
     var nomesClasse = estado.classeNomes || {}, porClasse = estado.porClasse || {};
+    // o nome da classe NO IDIOMA do jogador, só para a explicação (o título leva o português)
+    var nomesVista = estado.classeNomesVista || nomesClasse;
     Object.keys(nomesClasse).forEach(function (cid) {
       [1, 2, 3].forEach(function (pos) {
         fora.push({ titulo: T.tituloDeClasse(pos, nomesClasse[cid]), fonte: 'classe', classe: cid, pos: pos,
-                    de: pos + 'º do ranking de ' + nomesClasse[cid],
+                    de: Tx('{pos}º do ranking de {classe}', { pos: pos, classe: nomesVista[cid] || nomesClasse[cid] }),
                     ganho: porClasse[cid] === pos, emprestado: true,
-                    comoGanhar: 'Seja o ' + pos + 'º do ranking de ' + nomesClasse[cid] + ' (a XP dessa classe).' });
+                    comoGanhar: Tx('Seja o {pos}º do ranking de {classe} (a XP dessa classe).',
+                                   { pos: pos, classe: nomesVista[cid] || nomesClasse[cid] }) });
       });
     });
     // 02/10: o do Eco — `estado.eco` = os títulos que a conta já ganhou (Progress.titulosEco)
     var ecoGanhos = Object.prototype.toString.call(estado.eco) === '[object Array]' ? estado.eco : [];
     T.ECO.forEach(function (d) {
-      fora.push({ titulo: d.titulo, fonte: 'eco', de: d.de, ganho: ecoGanhos.indexOf(d.titulo) >= 0,
+      fora.push({ titulo: d.titulo, fonte: 'eco', de: Tx(d.de), ganho: ecoGanhos.indexOf(d.titulo) >= 0,
                   emprestado: false,
-                  comoGanhar: 'Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.' });
+                  comoGanhar: Tx('Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.') });
     });
     T.CHEFES.forEach(function (c) {
       var n = Math.max(0, num(chefes[c.chefe]));
-      fora.push({ titulo: c.titulo, fonte: 'chefe', de: c.nome, chefe: c.chefe,
+      fora.push({ titulo: c.titulo, fonte: 'chefe', de: Tx(c.nome), chefe: c.chefe,
                   ganho: n >= T.ALVO_CHEFE, emprestado: false,
                   prog: Math.min(n, T.ALVO_CHEFE), alvo: T.ALVO_CHEFE,
-                  comoGanhar: 'Derrube ' + c.nome + ' ' + T.ALVO_CHEFE +
-                              ' vezes no DIFÍCIL e SOZINHO.' });
+                  comoGanhar: Tx('Derrube {nome} {vezes} vezes no DIFÍCIL e SOZINHO.', { nome: Tx(c.nome), vezes: T.ALVO_CHEFE }) });
     });
     return fora;
   };

@@ -33,6 +33,16 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Po = {};
   JOGO.Poco = Po;
@@ -64,8 +74,8 @@ var JOGO = (typeof window !== 'undefined')
   function dungeonPoco() {
     var ds = D().dungeons || [];
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === Po.ID) return ds[i];
-    var novo = { id: Po.ID, name: 'O Poço sem Fundo',
-                 description: 'Ninguém cavou. Ele já estava lá.',
+    var novo = { id: Po.ID, name: Tx('O Poço sem Fundo'),
+                 description: Tx('Ninguém cavou. Ele já estava lá.'),
                  rooms: [] };
     ds.push(novo);
     return novo;
@@ -184,7 +194,7 @@ var JOGO = (typeof window !== 'undefined')
     Object.keys(mistura).forEach(function (le) { if (!vivas[le]) delete mistura[le]; });
 
     return {
-      name: 'Andar ' + andar + ' — ' + (palco.name || 'o fundo'),
+      name: Tx('Andar {andar}', { andar: andar }) + ' — ' + (palco.name || 'o fundo'),
       weather: palco.weather,
       sceneryTheme: palco.sceneryTheme,
       layout: grade.map(function (row) { return row.join(''); }),   // o palco, com o chefe e o colosso na casa deles
@@ -232,10 +242,10 @@ var JOGO = (typeof window !== 'undefined')
   Po.DANO = { placa: 0.12, jato: 0.15, rachado: 0.10 };   // fração da vida máxima
   Po.DANO_GRANDE = 0.5;             // chefe e colosso levam metade
   Po.TIPOS = {
-    placa:   { desde: 1, peso: 3, nome: 'placa de setas' },
-    runa:    { desde: 1, peso: 2, nome: 'runa de exaustão' },
+    placa:   { desde: 1, peso: 3, nome: Tx('placa de setas') },
+    runa:    { desde: 1, peso: 2, nome: Tx('runa de exaustão') },
     jato:    { desde: 2, peso: 3, nome: 'jato' },
-    rachado: { desde: 3, peso: 2, nome: 'chão rachado' }
+    rachado: { desde: 3, peso: 2, nome: Tx('chão rachado') }
   };
   var ELEMENTOS_JATO = ['fogo', 'agua', 'terra', 'ar'];
 
@@ -419,10 +429,10 @@ var JOGO = (typeof window !== 'undefined')
   }
   function quemEsta(state, x, y) { return E().unitAt(state, x, y); }
   function nomeDoTipo(p) {
-    if (p.tipo === 'jato') return 'jato de ' + nomeEl(p.elemento);
+    if (p.tipo === 'jato') return Tx('jato de {a}', { a: nomeEl(p.elemento) });
     return (Po.TIPOS[p.tipo] && Po.TIPOS[p.tipo].nome) || p.tipo;
   }
-  var NOME_EL = { fogo: 'fogo', agua: 'água', terra: 'terra', ar: 'ar' };
+  var NOME_EL = { fogo: 'fogo', agua: Tx('água'), terra: 'terra', ar: 'ar' };
   function nomeEl(el) { return NOME_EL[el] || el || 'neutro'; }
   function copiaCasas(l) { return l.map(function (c) { return { x: c.x, y: c.y }; }); }
 
@@ -454,7 +464,7 @@ var JOGO = (typeof window !== 'undefined')
         if (!cont[nome]) { cont[nome] = 0; ordem.push(nome); }
         cont[nome]++;
       });
-      E().log('O chão deste andar: ' + ordem.map(function (nm) { return cont[nm] + '× ' + nm; }).join(', ') + '.');
+      E().log(Tx('O chão deste andar: {a}.', { a: ordem.map(function (nm) { return cont[nm] + '× ' + nm; }).join(', ') }));
     }
   };
 
@@ -493,12 +503,12 @@ var JOGO = (typeof window !== 'undefined')
       p.aviso = state.round + Po.PLACA_ATRASO;
       I.emit({ type: 'perigoAviso', id: p.id, tipo: 'placa', x: p.x, y: p.y, casas: copiaCasas(p.casas),
                rodada: p.aviso, armadaPor: u.uid });
-      E().log(u.name + ' pisa numa placa: setas na linha marcada no começo da rodada ' + p.aviso + '!');
+      E().log(Tx('{name} pisa numa placa: setas na linha marcada no começo da rodada {aviso}!', { name: u.name, aviso: p.aviso }));
     } else if (p.tipo === 'runa') {
       var antes = u.pp;
       u.pp = Math.max(0, u.pp - (p.pp || Po.RUNA_PP));
       I.emit({ type: 'perigoRuna', id: p.id, uid: u.uid, x: x, y: y, pp: antes - u.pp });
-      E().log('A runa prende o passo de ' + u.name + (antes > u.pp ? ' e leva ' + (antes - u.pp) + ' PP.' : '.'), u.uid);
+      E().log(Tx('A runa prende o passo de {name}{a}', { name: u.name, a: antes > u.pp ? ' ' + Tx('e leva {a} PP.', { a: antes - u.pp }) : '.' }), u.uid);
     }
   };
 
@@ -517,7 +527,7 @@ var JOGO = (typeof window !== 'undefined')
         I.emit({ type: 'trapSet', uid: u.uid, trapId: t.spellId, x: c.x, y: c.y, side: u.side });
         n++;
       }
-      if (n) E().log('O chão arde por onde ' + u.name + ' passou.');
+      if (n) E().log(Tx('O chão arde por onde {name} passou.', { name: u.name }));
     }
     if (I.getTrait(u, 'mare')) u._andou = true;
   };
@@ -533,7 +543,7 @@ var JOGO = (typeof window !== 'undefined')
     var poca = porCasa(state, u.x, u.y, 'poca');
     if (parado && poca && u.hp < u.hpMax) {
       var cura = I.cura(state, u, Math.max(1, Math.round(u.hpMax * t.cura)));
-      if (cura > 0) E().log(u.name + ' se refaz parado na poça (+' + cura + ').', u.uid);
+      if (cura > 0) E().log(Tx('{name} se refaz parado na poça (+{cura}).', { name: u.name, cura: cura }), u.uid);
     }
     var ate = state.round + (t.duration || 3);
     if (poca) poca.ate = Math.max(poca.ate, ate);
@@ -589,7 +599,7 @@ var JOGO = (typeof window !== 'undefined')
       state.perigos = state.perigos.filter(function (q) { return q.tipo !== 'poca' || q.x !== p.x || q.y !== p.y; });
       I.emit({ type: 'perigoDispara', id: p.id, tipo: 'rachado', x: p.x, y: p.y, casas: [{ x: p.x, y: p.y }],
                elemento: 'neutro', atingidos: [] });
-      E().log('O chão rachado cede por baixo do muro: quando o muro cair, ali é buraco.');
+      E().log(Tx('O chão rachado cede por baixo do muro: quando o muro cair, ali é buraco.'));
       return;
     }
     if (!tile || tile.type !== 'floor') { p.caiu = true; p.aviso = 0; return; }
@@ -617,12 +627,12 @@ var JOGO = (typeof window !== 'undefined')
     state.perigos = state.perigos.filter(function (q) { return q.tipo !== 'poca' || q.x !== p.x || q.y !== p.y; });
     I.emit({ type: 'perigoDispara', id: p.id, tipo: 'rachado', x: p.x, y: p.y, casas: [{ x: p.x, y: p.y }],
              elemento: 'neutro', atingidos: u ? [u.uid] : [] });
-    E().log('O chão rachado desaba e vira buraco.');
+    E().log(Tx('O chão rachado desaba e vira buraco.'));
     if (u) {
       var fx = u.x, fy = u.y;
       u.x = destino.x; u.y = destino.y;
       I.emit({ type: 'pushed', uid: u.uid, fromX: fx, fromY: fy, toX: u.x, toY: u.y, collision: 0, queda: true });
-      E().log(u.name + ' cai no buraco e sobe na beira.', u.uid);
+      E().log(Tx('{name} cai no buraco e sobe na beira.', { name: u.name }), u.uid);
       I.dano(state, u, danoDoPerigo(u, Po.DANO.rachado, null), 'neutro', null);
     }
   }
@@ -646,11 +656,13 @@ var JOGO = (typeof window !== 'undefined')
       if (p.tipo === 'placa') {
         p.armada = false; p.aviso = 0;
         var n = fereCasas(state, p, Po.DANO.placa, null, I);
-        E().log('As setas da placa varrem a linha' + (n ? '!' : ' vazia.'));
+        E().log((n
+          ? Tx('As setas da placa varrem a linha!')
+          : Tx('As setas da placa varrem a linha vazia.')));
       } else if (p.tipo === 'jato') {
         p.aviso = 0;
         var nj = fereCasas(state, p, Po.DANO.jato, p.elemento, I);
-        E().log('O jato de ' + nomeEl(p.elemento) + ' irrompe do chão' + (nj ? '!' : '.'));
+        E().log(Tx('O jato de {a} irrompe do chão{b}', { a: nomeEl(p.elemento), b: nj ? '!' : '.' }));
       } else if (p.tipo === 'rachado' && !p.caiu) {
         desaba(state, p, I);
       }
@@ -665,8 +677,8 @@ var JOGO = (typeof window !== 'undefined')
       q.aviso = prox;
       I.emit({ type: 'perigoAviso', id: q.id, tipo: q.tipo, x: q.x, y: q.y, casas: copiaCasas(q.casas),
                rodada: prox, elemento: q.elemento || 'neutro' });
-      E().log(q.tipo === 'jato' ? 'O respiro de ' + nomeEl(q.elemento) + ' ronca: o chão marcado explode no começo da próxima rodada.'
-                                : 'O chão rachado range: desaba no começo da próxima rodada.');
+      E().log(q.tipo === 'jato' ? Tx('O respiro de {a} ronca: o chão marcado explode no começo da próxima rodada.', { a: nomeEl(q.elemento) })
+                                : Tx('O chão rachado range: desaba no começo da próxima rodada.'));
     });
   };
 
@@ -679,7 +691,7 @@ var JOGO = (typeof window !== 'undefined')
     u.couraca = Math.max(0, u.couraca - (element === 'ar' ? 2 : 1));
     if (u.couraca === 0) {
       I.emit({ type: 'couracaCaiu', uid: u.uid });
-      E().log('A couraça de ' + u.name + ' cai em pedaços!', u.uid);
+      E().log(Tx('A couraça de {name} cai em pedaços!', { name: u.name }), u.uid);
     }
     return cortado;
   };
@@ -700,7 +712,7 @@ var JOGO = (typeof window !== 'undefined')
     if (alvo._ventania === chave) return;
     alvo._ventania = chave;
     I.emit({ type: 'ventania', uid: alvo.uid, alvoUid: a.uid });
-    E().log('O vento preso em ' + alvo.name + ' sopra ' + a.name + ' para longe!');
+    E().log(Tx('O vento preso em {name} sopra {a} para longe!', { name: alvo.name, a: a.name }));
     I.empurra(state, alvo, a, t.tiles || 2, 'push');
   };
 

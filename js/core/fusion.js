@@ -40,6 +40,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var Fusion = {};
   JOGO.Fusion = Fusion;
@@ -362,7 +372,7 @@ var JOGO = (typeof window !== 'undefined')
     a.fusionIntent = uidB;
     state.pendingFusion = { a: uidA, b: uidB };
     E().emit({ type: 'fusionDeclared', a: uidA, b: uidB });
-    E().log(a.name + ' se prepara para fundir com ' + b.name + '.');
+    E().log(Tx('{name} se prepara para fundir com {a}.', { name: a.name, a: b.name }));
     return true;
   };
 
@@ -385,12 +395,12 @@ var JOGO = (typeof window !== 'undefined')
 
     if (!a || !a.alive || a.offBoard || !b || !b.alive || b.offBoard) {
       E().emit({ type: 'fusionFailed', a: p.a, b: p.b, reason: 'morte' });
-      E().log('A fusão se desfaz.');
+      E().log(Tx('A fusão se desfaz.'));
       return false;
     }
     if (manhattan(a.x, a.y, b.x, b.y) !== 1) {
       E().emit({ type: 'fusionFailed', a: p.a, b: p.b, reason: 'afastamento' });
-      E().log(a.name + ' e ' + b.name + ' se afastaram: a fusão falha.');
+      E().log(Tx('{name} e {a} se afastaram: a fusão falha.', { name: a.name, a: b.name }));
       return false;
     }
     return doFuse(state, a, b);
@@ -529,14 +539,14 @@ var JOGO = (typeof window !== 'undefined')
       E().emit({ type: 'death', uid: iv.uid });   // o desenho precisa retirá-la
     }
     if (saiu) {
-      E().log(saiu === 1 ? 'A invocação se desfaz com a fusão.'
-                           : ('As ' + saiu + ' invocações se desfazem com a fusão.'));
+      E().log(saiu === 1 ? Tx('A invocação se desfaz com a fusão.')
+                           : (Tx('As {saiu} invocações se desfazem com a fusão.', { saiu: saiu })));
     }
 
     E().emit({ type: 'fusion', uid: a.uid, from: fromUids, classPair: kKey,
                elemPair: eKey, level: level, defId: a.defId, spells: ids.slice() });
     E().emit({ type: 'shield', uid: a.uid, amount: Fusion.BONUS_SHIELD });
-    E().log(a.name + ' surge da fusão!');
+    E().log(Tx('{name} surge da fusão!', { name: a.name }));
     return true;
   }
 

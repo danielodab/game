@@ -4,6 +4,16 @@ var JOGO = (typeof window !== 'undefined')
   : (globalThis.JOGO = globalThis.JOGO || {});
 
 (function () {
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var lastTime = 0;
 
   function pumpEvents() {
@@ -88,9 +98,9 @@ var JOGO = (typeof window !== 'undefined')
       if (JOGO.Renderer && JOGO.Renderer.init) JOGO.Renderer.init(canvas);
     } catch (e) {
       rendererOk = false;
-      showFatal('<div><h2 style="color:#ffd98a;font-family:Georgia,serif;margin-bottom:12px">SOTERRA precisa de WebGL</h2>' +
-        'Seu navegador ou placa de vídeo não conseguiu iniciar o modo 3D.<br>' +
-        'Tente atualizar o navegador, habilitar aceleração de hardware nas configurações, ou usar Chrome/Edge/Firefox recentes.</div>');
+      showFatal('<div>' +
+        Tx('<h2 style="color:#ffd98a;font-family:Georgia,serif;margin-bottom:12px">SOTERRA precisa de WebGL</h2>Seu navegador ou placa de vídeo não conseguiu iniciar o modo 3D.<br>Tente atualizar o navegador, habilitar aceleração de hardware nas configurações, ou usar Chrome/Edge/Firefox recentes.') +
+        '</div>');
     }
     if (rendererOk) {
       marca('UI.init');
