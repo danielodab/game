@@ -59,6 +59,7 @@ import string
 import threading
 import time
 
+from comum import idioma_de
 from comum import (LOGIN_JANELA, SESSAO_DIAS, Recusa, agora, chave_do_ip, email_novo_valido, email_valido,
                    ip_e_publico, le_ip, pica_senha, senha_valida)
 from comum import CLASSES_RANK, INICIAIS, classe_do_heroi, liberadas
@@ -92,6 +93,54 @@ AGENTE_MAX = 160
 ATIVIDADE = ('cadastro', 'login', 'login-recusado', 'senha-recusada', 'senha-trocada', 'senha-redefinida',
              'email-pedido', 'email-trocado', 'sessoes-encerradas', 'esqueci-pedido')
 RE_CODIGO = re.compile(r'^\d{6}$')
+# 05/10, os e-mails em inglês e espanhol (docs/IDIOMAS.md). O português mora em _textos, como sempre;
+# estes são os MESMOS e-mails, para o pedido que chega com `idioma`. Assunto, e o miolo com {novo} e
+# {codigo}. Mexeu no texto em português? Mexa aqui também.
+EMAILS = {
+    'en': {
+        'ola': 'Hello, %s.',
+        'conta': 'Your account: %s/site/conta.html',
+        'fim': '— SOTERRA (automatic message; no need to reply)',
+        'codigo-email': ('SOTERRA: code to change your account e-mail',
+                         'Someone asked to change the e-mail of your SOTERRA account to {novo}.\n\n'
+                         'The code is: {codigo}\n\n'
+                         'It is valid for 15 minutes. Type it on the account page, on the site.\n\n'
+                         'If it was not you, change your password now: whoever asked knew your password.'),
+        'codigo-senha': ('SOTERRA: code to reset your password',
+                         'Someone asked to reset the password of your SOTERRA account.\n\n'
+                         'The code is: {codigo}\n\n'
+                         'It is valid for 15 minutes. Type it on the site, along with the new password.\n\n'
+                         'If it was not you, ignore this e-mail: the password stays the same.'),
+        'senha-trocada': ('SOTERRA: your password was changed',
+                          'The password of your SOTERRA account has just been changed, and the other sessions were closed.\n\n'
+                          'If it was not you, use "forgot my password" on the site to get the account back.'),
+        'email-trocado': ('SOTERRA: the account e-mail changed',
+                          'The e-mail of your SOTERRA account was changed. It is now {novo}.\n\n'
+                          'If it was not you, contact the owner of the game.'),
+    },
+    'es': {
+        'ola': 'Hola, %s.',
+        'conta': 'Tu cuenta: %s/site/conta.html',
+        'fim': '— SOTERRA (mensaje automático; no hace falta responder)',
+        'codigo-email': ('SOTERRA: código para cambiar el correo de la cuenta',
+                         'Pidieron cambiar el correo de tu cuenta de SOTERRA a {novo}.\n\n'
+                         'El código es: {codigo}\n\n'
+                         'Vale por 15 minutos. Escríbelo en la página de la cuenta, en el sitio.\n\n'
+                         'Si no fuiste tú, cambia la contraseña ahora: quien lo pidió sabía tu contraseña.'),
+        'codigo-senha': ('SOTERRA: código para restablecer la contraseña',
+                         'Pidieron restablecer la contraseña de tu cuenta de SOTERRA.\n\n'
+                         'El código es: {codigo}\n\n'
+                         'Vale por 15 minutos. Escríbelo en el sitio, junto con la contraseña nueva.\n\n'
+                         'Si no fuiste tú, ignora este correo: la contraseña sigue siendo la misma.'),
+        'senha-trocada': ('SOTERRA: tu contraseña fue cambiada',
+                          'La contraseña de tu cuenta de SOTERRA acaba de ser cambiada, y las otras sesiones se cerraron.\n\n'
+                          'Si no fuiste tú, usa "olvidé la contraseña" en el sitio para recuperar la cuenta.'),
+        'email-trocado': ('SOTERRA: el correo de la cuenta cambió',
+                          'El correo de tu cuenta de SOTERRA fue cambiado. Ahora es {novo}.\n\n'
+                          'Si no fuiste tú, busca al dueño del juego.'),
+    },
+}
+
 FRASE_ESQUECI = 'Se houver conta com esse e-mail, o código chega em instantes. Ele vale por 15 minutos.'
 SEM_CORREIO = 'o envio de e-mails ainda não foi ligado neste servidor'
 CORREIO_FALHOU = 'o correio do servidor falhou agora; tente de novo em alguns minutos'
@@ -528,8 +577,12 @@ class ContaMixin:
 
         threading.Thread(target=vai, name='correio', daemon=True).start()
 
-    def _textos(self, qual, nome, **d):
-        """(assunto, texto) de cada e-mail. Nenhum leva link com token."""
+    def _textos(self, qual, nome, idioma='pt', **d):
+        """(assunto, texto) de cada e-mail. Nenhum leva link com token. `idioma`
+        é o do PEDIDO que causou o e-mail (comum.idioma_de): 'en' e 'es' têm o
+        texto em EMAILS; qualquer outro valor é o português de sempre."""
+        if idioma in EMAILS:
+            return self._textos_em(idioma, qual, nome, **d)
         if qual == 'codigo-email':
             assunto = 'SOTERRA: código para trocar o e-mail da conta'
             miolo = ('Pediram para trocar o e-mail da sua conta do SOTERRA para %s.\n\n'
@@ -556,6 +609,17 @@ class ContaMixin:
         if self.correio.endereco:
             texto += '\nA sua conta: %s/site/conta.html\n' % self.correio.endereco
         texto += '\n— SOTERRA (mensagem automática; não precisa responder)\n'
+        return assunto, texto
+
+    def _textos_em(self, idioma, qual, nome, **d):
+        m = EMAILS[idioma]
+        if qual not in m:
+            raise ValueError(qual)
+        assunto, miolo = m[qual]
+        texto = m['ola'] % nome + '\n\n' + miolo.format(**d) + '\n'
+        if self.correio.endereco:
+            texto += '\n' + m['conta'] % self.correio.endereco + '\n'
+        texto += '\n' + m['fim'] + '\n'
         return assunto, texto
 
     @staticmethod
@@ -619,7 +683,7 @@ class ContaMixin:
             self._evento(cid, 'senha-trocada', {'sessoesEncerradas': n})
             self._anota_limite('senha-ok:%d' % cid, agora())
         log.info("conta: #%d trocou a senha (%d sessões encerradas)", cid, n)
-        assunto, texto = self._textos('senha-trocada', conta['nome'])
+        assunto, texto = self._textos('senha-trocada', conta['nome'], idioma_de(corpo))
         self._envia_depois(conta['email'], assunto, texto, 'o aviso de senha trocada')
         return 200, {'ok': True, 'sessoesEncerradas': n}
 
@@ -662,7 +726,7 @@ class ContaMixin:
         if erro is not None:                            # depois do commit: a sondagem ficou contada
             raise erro
         # depois do commit e fora da tranca; o código vai para o e-mail ATUAL
-        assunto, texto = self._textos('codigo-email', conta['nome'], novo=novo, codigo=codigo)
+        assunto, texto = self._textos('codigo-email', conta['nome'], idioma_de(corpo), novo=novo, codigo=codigo)
         try:
             self.correio.envia(conta['email'], assunto, texto)
         except Exception as e:                          # noqa: BLE001
@@ -717,7 +781,7 @@ class ContaMixin:
             raise erro
         log.info("conta: #%d trocou o e-mail", cid)
         # o aviso vai ao e-mail ANTIGO: é ele que pode dar o alarme
-        assunto, texto = self._textos('email-trocado', conta['nome'], novo=mascara_email(para))
+        assunto, texto = self._textos('email-trocado', conta['nome'], idioma_de(corpo), novo=mascara_email(para))
         self._envia_depois(de, assunto, texto, 'o aviso de e-mail trocado')
         return 200, {'ok': True, 'conta': self._conta_publica(dict(conta, email=para))}
 
@@ -753,7 +817,7 @@ class ContaMixin:
                 envio = (c['id'], c['nome'], c['email'], codigo, cod_id)
         if envio is not None:
             cid, nome, para, codigo, cod_id = envio
-            assunto, texto = self._textos('codigo-senha', nome, codigo=codigo)
+            assunto, texto = self._textos('codigo-senha', nome, idioma_de(corpo), codigo=codigo)
 
             def apaga():
                 with self._escrita():
@@ -813,7 +877,7 @@ class ContaMixin:
             self._derruba_outras(cid, token)
             self._evento(cid, 'senha-redefinida', None)
         log.info("conta: #%d redefiniu a senha pelo código", cid)
-        assunto, texto = self._textos('senha-trocada', alvo['nome'])
+        assunto, texto = self._textos('senha-trocada', alvo['nome'], idioma_de(corpo))
         self._envia_depois(alvo['email'], assunto, texto, 'o aviso de senha redefinida')
         return 200, {'ok': True, 'token': token, 'conta': {'id': cid, 'nome': alvo['nome'], 'gm': bool(alvo['gm'])}}
 

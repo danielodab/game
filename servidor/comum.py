@@ -75,6 +75,20 @@ class Recusa(Exception):
         self.extra = extra
 
 
+# ---- o idioma do pedido -----------------------------------------------------
+# 05/10 (docs/IDIOMAS.md, etapa 3). O servidor fala português: as recusas saem em
+# português e quem traduz é o cliente. A ÚNICA coisa que o servidor escreve em
+# outro idioma é o E-MAIL, que não passa por cliente nenhum: o pedido diz
+# `idioma` ('en' ou 'es') e o e-mail daquele pedido sai nele. Sem o campo, ou
+# com qualquer outro valor, português — como sempre foi. Nada é guardado.
+IDIOMAS_EMAIL = ('en', 'es')
+
+
+def idioma_de(corpo):
+    v = corpo.get('idioma') if isinstance(corpo, dict) else None
+    return v if isinstance(v, str) and v in IDIOMAS_EMAIL else 'pt'
+
+
 # ---- validações miúdas ------------------------------------------------------
 def nome_valido(nome):
     """O nome de uma conta NOVA: 3 a 20 caracteres, sem espaço nas pontas, e o

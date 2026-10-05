@@ -64,7 +64,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 
-from comum import SESSAO_DIAS, EstadoMudou, Recusa, agora
+from comum import SESSAO_DIAS, EstadoMudou, Recusa, agora, idioma_de
 from conta import FAXINA
 from registros import RETENCAO_DIAS
 
@@ -76,6 +76,26 @@ log = logging.getLogger('api')
 # deriva entre os quatro.
 VERSAO_TERMOS = '2026-10-02'
 DOCUMENTOS = ('termos', 'privacidade')
+# 05/10, o e-mail da conta excluída em inglês e espanhol (docs/IDIOMAS.md); o português mora em _texto_excluida
+EXCLUIDA = {
+    'en': {'assunto': 'SOTERRA: your account was deleted',
+           'texto': ('Hello, %s.\n\nYour SOTERRA account was deleted at your request, just now. The name, the e-mail, the save, '
+                     'the friends, the guild, the listings and the sessions are gone from the server.\n\n'
+                     'Only the payment records the law requires us to keep remain, already without your name and without your e-mail '
+                     '(the Privacy Policy explains).\n\n'
+                     'This is the last e-mail we send to this address.\n'),
+           'politica': 'The Privacy Policy: %s/site/privacidade.html',
+           'fim': '— SOTERRA (automatic message; no need to reply)'},
+    'es': {'assunto': 'SOTERRA: tu cuenta fue eliminada',
+           'texto': ('Hola, %s.\n\nTu cuenta de SOTERRA fue eliminada a pedido tuyo, ahora. El nombre, el correo, la partida guardada, '
+                     'los amigos, el gremio, los anuncios y las sesiones salieron del servidor.\n\n'
+                     'Solo quedan los registros de pago que la ley manda guardar, ya sin tu nombre y sin tu correo '
+                     '(la Política de Privacidad lo explica).\n\n'
+                     'Este es el último correo que enviamos a esta dirección.\n'),
+           'politica': 'La Política de Privacidad: %s/site/privacidade.html',
+           'fim': '— SOTERRA (mensaje automático; no hace falta responder)'},
+}
+
 FRASE_SEM_ACEITE = 'para criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade'
 FRASE_TERMOS_VELHOS = 'os Termos de Uso mudaram: recarregue a página, leia a versão nova e aceite de novo'
 
@@ -389,10 +409,17 @@ class PrivacidadeMixin:
             for chave in [k for k in self.intencoes if cid in k]:
                 self.intencoes.pop(chave, None)
         log.info("conta #%d excluída pelo titular (guilda: %s)", cid, guilda or '-')
-        self._envia_depois(email, *self._texto_excluida(conta['nome']), rotulo='o aviso de conta excluída')
+        self._envia_depois(email, *self._texto_excluida(conta['nome'], idioma_de(corpo)), rotulo='o aviso de conta excluída')
         return 200, {'ok': True, 'excluida': True, 'guilda': guilda}
 
-    def _texto_excluida(self, nome):
+    def _texto_excluida(self, nome, idioma='pt'):
+        # 05/10: no idioma do pedido de exclusão (comum.idioma_de); o português é o de sempre
+        if idioma in EXCLUIDA:
+            m = EXCLUIDA[idioma]
+            texto = m['texto'] % nome
+            if self.correio.endereco:
+                texto += '\n' + m['politica'] % self.correio.endereco + '\n'
+            return m['assunto'], texto + '\n' + m['fim'] + '\n'
         assunto = 'SOTERRA: sua conta foi excluída'
         texto = ('Olá, %s.\n\nA sua conta do SOTERRA foi excluída a seu pedido, agora. O nome, o e-mail, o save, '
                  'os amigos, a guilda, os anúncios e as sessões saíram do servidor.\n\n'
