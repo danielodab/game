@@ -118,7 +118,7 @@ var JOGO = (typeof window !== 'undefined')
 
   // ---- os dicionários: { en: { textos: {pt: en}, dados: {tabela: {registro: {campo: en}}} } }
   var DIC = {};
-  function dic(l) { return DIC[l] || (DIC[l] = { textos: {}, dados: {} }); }
+  function dic(l) { return DIC[l] || (DIC[l] = { textos: {}, dados: {}, erros: {} }); }
 
   /* Cada arquivo de js/i18n/ se registra por aqui. Pode haver vários por
    * idioma (dados, textos da interface, e o que a etapa 2 e a 3 criarem): as
@@ -129,6 +129,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!valido(l) || !pacote) return;
     var d = dic(l), k, t;
     if (pacote.textos) for (k in pacote.textos) if (has(pacote.textos, k)) d.textos[k] = pacote.textos[k];
+    // etapa 3: as frases que o SERVIDOR manda (js/i18n/erros_<idioma>.js) — ver I.erro, mais abaixo
+    if (pacote.erros) { for (k in pacote.erros) if (has(pacote.erros, k)) d.erros[k] = pacote.erros[k]; MOLDES[l] = null; }
     if (pacote.dados) {
       for (t in pacote.dados) if (has(pacote.dados, t)) {
         d.dados[t] = d.dados[t] || {};
@@ -166,6 +168,88 @@ var JOGO = (typeof window !== 'undefined')
     }
     return troca(out, vars);
   };
+
+  /* O QUE O SERVIDOR DIZ (etapa 3). O servidor responde em português — `{"erro": "vinténs
+   * insuficientes"}` — e CONTINUA assim: as provas e os clientes antigos dependem da frase. Quem
+   * traduz é o cliente, com a própria frase como chave (js/i18n/erros_<idioma>.js):
+   *
+   *   I18n.erro('vinténs insuficientes')              →  "not enough coppers"
+   *   I18n.erro('o nome vai até 24 caracteres')       →  casa com o MOLDE "o nome vai até {a} caracteres"
+   *
+   * O molde é a frase do servidor com cada valor trocado por {a}, {b}… na ordem (é o que a
+   * tools/erros_servidor.py colhe do código; o tools/i18n_falta.js cobra a tradução). Frase que
+   * ninguém traduziu sai como veio, em português: nunca vazio, nunca chave crua. Em português
+   * devolve o que recebeu, sem olhar nada. Quem chama é o funil dos pedidos (js/core/sessao.js
+   * e site/site.js) — as telas seguem mostrando `r.erro`. */
+  var MOLDES = {};
+  function moldes(l) {
+    if (MOLDES[l]) return MOLDES[l];
+    var m = [], er = (DIC[l] && DIC[l].erros) || {}, k;
+    for (k in er) if (has(er, k) && /\{[a-j]\}/.test(k)) {
+      var nomes = [];
+      var re = k.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{([a-j])\}/g, function (x, n) { nomes.push(n); return '([\\s\\S]+?)'; });
+      try { m.push({ re: new RegExp('^' + re + '$'), nomes: nomes, para: er[k], fixo: k.replace(/\{[a-j]\}/g, '').length }); } catch (e) {}
+    }
+    m.sort(function (a, b) { return b.fixo - a.fixo; });     // o molde com mais texto fixo ganha
+    return (MOLDES[l] = m);
+  }
+  I.erro = function (frase) {
+    if (frase == null) return frase;
+    if (I.idioma === I.PADRAO || typeof frase !== 'string' || !frase) return frase;
+    var d = DIC[I.idioma];
+    if (!d) return frase;
+    if (has(d.erros, frase) && d.erros[frase]) return d.erros[frase];
+    if (has(d.textos, frase) && d.textos[frase]) return d.textos[frase];
+    var ms = moldes(I.idioma), i, c, v, j;
+    for (i = 0; i < ms.length; i++) {
+      c = ms[i].re.exec(frase);
+      if (!c) continue;
+      v = {};
+      // o valor que veio dentro da frase também pode ser texto do servidor ("faltam 3 (somando saco e banco)" não; um nome de item sim)
+      for (j = 0; j < ms[i].nomes.length; j++) v[ms[i].nomes[j]] = (has(d.erros, c[j + 1]) && d.erros[c[j + 1]]) || c[j + 1];
+      return troca(ms[i].para, v);
+    }
+    return frase;
+  };
+  /* A resposta inteira de um pedido: troca `erro` e `mensagem` (as duas frases que o servidor
+   * escreve para o jogador ler) e guarda o original em `erroPt`. Só fora do português. */
+  I.resposta = function (j, rota) {
+    if (I.idioma === I.PADRAO || !j || typeof j !== 'object') return j;
+    try {
+      if (typeof j.erro === 'string' && j.erro) { j.erroPt = j.erro; j.erro = I.erro(j.erro); }
+      if (typeof j.mensagem === 'string' && j.mensagem) j.mensagem = I.erro(j.mensagem);
+      // A LOJA: o catálogo, os pedidos e o extrato trazem o nome e a descrição do produto em português
+      // (servidor/loja.py). Troca-se na chegada, pela frase — preço, sku e o resto ficam como vieram.
+      if (/^\/api\/(loja|pagamento|play)\//.test(String(rota || ''))) daLoja(j, 0);
+      // A AGENDA DO MUNDO: o evento que o PRÓPRIO servidor escreve (o Eco da semana, `origem: 'supremo'`) tem
+      // título e texto em português; o que o Mestre escreve é dele e fica como foi escrito.
+      if (/^\/api\/eventos/.test(String(rota || ''))) {
+        var listas = ['ativos', 'proximos', 'semanais'], q, w, ev;
+        for (q = 0; q < listas.length; q++) {
+          if (!Array.isArray(j[listas[q]])) continue;
+          for (w = 0; w < j[listas[q]].length; w++) {
+            ev = j[listas[q]][w];
+            if (ev && ev.origem === 'supremo') {
+              if (typeof ev.titulo === 'string') ev.titulo = I.erro(ev.titulo);
+              if (typeof ev.texto === 'string') ev.texto = I.erro(ev.texto);
+            }
+          }
+        }
+      }
+    } catch (e) {}
+    return j;
+  };
+  var CAMPOS_LOJA = { nome: 1, descricao: 1 };
+  function daLoja(o, fundo) {
+    if (!o || typeof o !== 'object' || fundo > 6) return;
+    var k, v;
+    if (Array.isArray(o)) { for (k = 0; k < o.length; k++) daLoja(o[k], fundo + 1); return; }
+    for (k in o) if (has(o, k)) {
+      v = o[k];
+      if (typeof v === 'string') { if (CAMPOS_LOJA[k] === 1 && v) o[k] = I.erro(v); }
+      else if (v && typeof v === 'object') daLoja(v, fundo + 1);
+    }
+  }
 
   /* Plural simples (os três idiomas só têm um e muitos):
    *   I18n.n(qtd, '{n} sala', '{n} salas')  →  "1 sala" / "3 rooms"

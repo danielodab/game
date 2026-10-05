@@ -562,6 +562,8 @@
     var LG0 = (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma) || 'pt';
     if (LG0 !== 'pt') {
       document.write('<scr' + 'ipt src="' + window.__url('js/i18n/textos_' + LG0 + '.js') + '"><\/scr' + 'ipt>');
+      // etapa 3: o que o SERVIDOR diz (as recusas, a loja) — o funil dos pedidos (js/core/sessao.js) troca na chegada
+      document.write('<scr' + 'ipt src="' + window.__url('js/i18n/erros_' + LG0 + '.js') + '"><\/scr' + 'ipt>');
       var tC0 = document.getElementById('carga-txt');
       if (tC0 && window.__bt) tC0.textContent = window.__bt('preparando…');
     }

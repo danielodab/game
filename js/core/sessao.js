@@ -131,6 +131,9 @@
           .then(function (j) {
             if (!j || typeof j !== 'object') j = { ok: false };
             j.status = r.status;
+            // os idiomas (etapa 3): o servidor responde em português; fora dele, a frase é trocada AQUI,
+            // uma vez, para toda tela que mostra `r.erro` (JOGO.I18n.erro; js/i18n/erros_<idioma>.js)
+            if (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.resposta) window.JOGO.I18n.resposta(j, rota);
             // 13/09, UM APARELHO SÓ: o token desta página caiu por um login em
             // outro aparelho. Se a MESMA conta entrou de novo neste navegador
             // (outra aba, o site), a página adota o token novo e o pedido sai
