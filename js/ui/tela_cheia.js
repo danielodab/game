@@ -31,6 +31,16 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   if (typeof document === 'undefined') return;
 
   var TC = {};
@@ -85,7 +95,7 @@ var JOGO = (typeof window !== 'undefined')
     var dentro = !!cheia();
     botao.innerHTML = dentro ? ICONE_SAI : ICONE_ENTRA;
     botao.classList.toggle('is-cheia', dentro);
-    var rot = dentro ? 'Sair da tela cheia' : 'Tela cheia';
+    var rot = dentro ? Tx('Sair da tela cheia') : Tx('Tela cheia');
     botao.title = rot;
     botao.setAttribute('aria-label', rot);
     botao.setAttribute('aria-pressed', dentro ? 'true' : 'false');
@@ -105,13 +115,8 @@ var JOGO = (typeof window !== 'undefined')
       ajuda = doc.createElement('div');
       ajuda.className = 'tc-ajuda';
       ajuda.setAttribute('role', 'dialog');
-      ajuda.setAttribute('aria-label', 'Tela cheia');
-      ajuda.innerHTML = '<b>Tela cheia</b>' +
-        '<p>Este navegador não deixa o jogo ocupar a tela inteira — é o caso do Safari no iPhone.</p>' +
-        '<p>O jeito que funciona é instalar o SOTERRA na tela de início e abrir pelo ícone: ele roda sem as barras do navegador, em pé ou deitado.</p>' +
-        '<ul><li><b>iPhone e iPad</b> (Safari): Compartilhar → <i>Adicionar à Tela de Início</i></li>' +
-        '<li><b>Android</b>: menu ⋮ do navegador → <i>Instalar app</i> ou <i>Adicionar à tela inicial</i></li></ul>' +
-        '<button type="button" class="btn btn-mini btn-primary tc-ok">Entendi</button>';
+      ajuda.setAttribute('aria-label', Tx('Tela cheia'));
+      ajuda.innerHTML = Tx('<b>Tela cheia</b><p>Este navegador não deixa o jogo ocupar a tela inteira — é o caso do Safari no iPhone.</p><p>O jeito que funciona é instalar o SOTERRA na tela de início e abrir pelo ícone: ele roda sem as barras do navegador, em pé ou deitado.</p><ul><li><b>iPhone e iPad</b> (Safari): Compartilhar → <i>Adicionar à Tela de Início</i></li><li><b>Android</b>: menu ⋮ do navegador → <i>Instalar app</i> ou <i>Adicionar à tela inicial</i></li></ul><button type="button" class="btn btn-mini btn-primary tc-ok">Entendi</button>');
       ajuda.querySelector('.tc-ok').addEventListener('click', fechaAjuda);
       doc.body.appendChild(ajuda);
     }

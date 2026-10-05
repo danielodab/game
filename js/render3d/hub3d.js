@@ -3284,6 +3284,8 @@ var JOGO = (typeof window !== 'undefined')
    * a placa de borda dourada grossa, com ◆ (ou ♛ se lidera) antes do nome. */
   function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho) {
     if (!corpo || !THREE) return;
+    // 05/10, os idiomas: o título viaja e é guardado em português (é chave); na plaquinha vai o do idioma de quem olha
+    if (titulo && JOGO.UI && JOGO.UI.titExibe) titulo = JOGO.UI.titExibe(titulo);
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
       if (!corpo[campo]) return;
       corpo.node.remove(corpo[campo]);

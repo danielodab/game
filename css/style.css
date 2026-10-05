@@ -2563,6 +2563,9 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   font: 600 11px var(--ui-sans, system-ui); letter-spacing: .04em; text-transform: uppercase;
   color: #0c1620; background: #7fc8ff;
 }
+/* 05/10, os idiomas: o único texto do jogo que mora no CSS (o <html lang> vem do JOGO.I18n) */
+:lang(en) .hub-chat.is-guilda::before { content: 'Guild chat'; }
+:lang(es) .hub-chat.is-guilda::before { content: 'Chat del gremio'; }
 .hub-chat-input.is-guilda { border-color: #7fc8ff; }
 
 /* ------------------------------------------------------------ ACAMPAMENTO */

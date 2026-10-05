@@ -28,14 +28,24 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
   var M = JOGO.Moderacao = JOGO.Moderacao || {};
   var FUSO_S = -3 * 3600;          // o relógio de parede do servidor: Brasília, deslocamento fixo (api.py, FUSO)
   M.DURACOES = [['1h', '1 hora'], ['24h', '24 horas'], ['7d', '7 dias'], ['30d', '30 dias'],
-                ['permanente', 'para sempre'], ['personalizado', 'até uma data…']];
-  M.CATEGORIAS = [['ofensa', 'Ofensa ou assédio'], ['trapaca', 'Trapaça ou abuso de bug'],
-                  ['nome', 'Nome impróprio'], ['spam', 'Spam ou golpe'], ['outro', 'Outro']];
+                ['permanente', Tx('para sempre')], ['personalizado', Tx('até uma data…')]];
+  M.CATEGORIAS = [['ofensa', Tx('Ofensa ou assédio')], ['trapaca', Tx('Trapaça ou abuso de bug')],
+                  ['nome', Tx('Nome impróprio')], ['spam', Tx('Spam ou golpe')], ['outro', Tx('Outro')]];
   M.TEXTO_MAX = 500;
   M.FALAS_MAX = 20;
   M._fetch = null;                 // provas: (rota, op) → Promise<resposta>
@@ -44,7 +54,7 @@ var JOGO = (typeof window !== 'undefined')
   M.api = function (rota, op) {
     if (typeof M._fetch === 'function') return Promise.resolve(M._fetch(rota, op || {}));
     var S = JOGO.Sessao;
-    if (!S || !S.api || !S.ativa || !S.ativa()) return Promise.resolve({ ok: false, status: 0, erro: 'entre na sua conta' });
+    if (!S || !S.api || !S.ativa || !S.ativa()) return Promise.resolve({ ok: false, status: 0, erro: Tx('entre na sua conta') });
     return S.api(rota, op || {});
   };
   M.idem = function () {
@@ -60,7 +70,7 @@ var JOGO = (typeof window !== 'undefined')
     var n = Number(seg);
     if (!isFinite(n) || n <= 0) return '';
     var d = new Date((n + FUSO_S) * 1000);
-    return z(d.getUTCDate()) + '/' + z(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + ' às ' +
+    return z(d.getUTCDate()) + '/' + z(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + Tx(' às ') +
            z(d.getUTCHours()) + ':' + z(d.getUTCMinutes());
   };
   /* "2026-10-05T14:00" (o <input type=datetime-local>, lido como Brasília) → epoch em segundos */
@@ -76,8 +86,8 @@ var JOGO = (typeof window !== 'undefined')
   };
   M.fimTexto = function (p) {
     if (!p) return '';
-    if (p.permanente || p.fim == null) return 'para sempre';
-    return 'até ' + M.quando(p.fim) + ' (horário de Brasília)';
+    if (p.permanente || p.fim == null) return Tx('para sempre');
+    return Tx('até {a} (horário de Brasília)', { a: M.quando(p.fim) });
   };
   M.el = function (tag, cls, texto) {
     var e = document.createElement(tag);
@@ -107,8 +117,8 @@ var JOGO = (typeof window !== 'undefined')
   M.erro = function (r, padrao) {
     if (!r) return padrao;
     var e = r.erro || padrao;
-    if (r.status === 429 && r.liberaEm) e += ' (de novo ' + M.quando(r.liberaEm) + ')';
-    if (r.status === 0) e = 'o servidor não respondeu — tente de novo';
+    if (r.status === 429 && r.liberaEm) e += ' ' + Tx('(de novo {a})', { a: M.quando(r.liberaEm) });
+    if (r.status === 0) e = Tx('o servidor não respondeu — tente de novo');
     return e;
   };
   /* as teclas que caem num campo daqui não chegam ao jogo (a HUD abre fichas com I, M…) */
@@ -290,23 +300,23 @@ var JOGO = (typeof window !== 'undefined')
     capa.setAttribute('aria-modal', 'true');
     capa.setAttribute('aria-labelledby', 'mod-ban-titulo');
     var cx = M.el('div', 'mod-caixa');
-    var h = M.el('h2', null, 'Sua conta está banida');
+    var h = M.el('h2', null, Tx('Sua conta está banida'));
     h.id = 'mod-ban-titulo';
     cx.appendChild(h);
-    var fim = M.el('p', 'mod-fim', !sabido ? 'Buscando o motivo e a data do fim…'
-      : info.permanente || info.fim == null ? 'O banimento é permanente.'
-      : 'O banimento termina em ' + M.quando(info.fim) + ' (horário de Brasília).');
+    var fim = M.el('p', 'mod-fim', !sabido ? Tx('Buscando o motivo e a data do fim…')
+      : info.permanente || info.fim == null ? Tx('O banimento é permanente.')
+      : Tx('O banimento termina em {a} (horário de Brasília).', { a: M.quando(info.fim) }));
     cx.appendChild(fim);
     if (sabido) {
-      cx.appendChild(M.el('div', 'mod-motivo', info.motivo ? 'Motivo: ' + info.motivo
-        : 'A Equipe não registrou o motivo deste banimento.'));
+      cx.appendChild(M.el('div', 'mod-motivo', info.motivo ? Tx('Motivo: {motivo}', { motivo: info.motivo })
+        : Tx('A Equipe não registrou o motivo deste banimento.')));
     }
     cx.appendChild(M.el('p', null, info.permanente || info.fim == null
-      ? 'Se você acha que foi um engano, procure a Equipe do jogo.'
-      : 'Depois dessa data, é só entrar de novo. Se você acha que foi um engano, procure a Equipe do jogo.'));
+      ? Tx('Se você acha que foi um engano, procure a Equipe do jogo.')
+      : Tx('Depois dessa data, é só entrar de novo. Se você acha que foi um engano, procure a Equipe do jogo.')));
     var acoes = M.el('div', 'mod-acoes');
     var S = JOGO.Sessao;
-    acoes.appendChild(M.botao('Sair da conta', 'mod-b mod-b-ok', function () {
+    acoes.appendChild(M.botao(Tx('Sair da conta'), 'mod-b mod-b-ok', function () {
       try { if (S && S.esquece) S.esquece(); } catch (e) {}
       if (B.semNavegar) return;
       try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); } catch (eB) {}
@@ -369,25 +379,24 @@ var JOGO = (typeof window !== 'undefined')
     if (conta === null && alvo.heroId && vistas[alvo.heroId]) conta = vistas[alvo.heroId].nuvem;
     var nome = alvo.nome || (alvo.heroId && vistas[alvo.heroId] ? vistas[alvo.heroId].nome : 'o jogador');
     var S = JOGO.Sessao;
-    var j = M.janela('Denunciar ' + nome);
+    var j = M.janela(Tx('Denunciar {nome}', { nome: nome }));
     var cx = j.caixa;
     if (!S || !S.ativa || !S.ativa()) {
-      cx.appendChild(M.el('p', null, 'Entre na sua conta para denunciar alguém.'));
+      cx.appendChild(M.el('p', null, Tx('Entre na sua conta para denunciar alguém.')));
       cx.appendChild(acoesFechar(j));
       return j;
     }
     if (conta === null) {
-      cx.appendChild(M.el('p', null, 'Esse jogador não está com a conta conferida pelo servidor, então a denúncia ' +
-        'não teria a quem chegar. Se for alguém insistente, use "Silenciar" no perfil dele.'));
+      cx.appendChild(M.el('p', null, Tx('Esse jogador não está com a conta conferida pelo servidor, então a denúncia não teria a quem chegar. Se for alguém insistente, use "Silenciar" no perfil dele.')));
       cx.appendChild(acoesFechar(j));
       return j;
     }
     if (S.contaId && S.contaId() === conta) {
-      cx.appendChild(M.el('p', null, 'Essa conta é a sua.'));
+      cx.appendChild(M.el('p', null, Tx('Essa conta é a sua.')));
       cx.appendChild(acoesFechar(j));
       return j;
     }
-    cx.appendChild(M.el('p', null, 'A Equipe lê toda denúncia. Escolha o que aconteceu e, se quiser, conte com suas palavras.'));
+    cx.appendChild(M.el('p', null, Tx('A Equipe lê toda denúncia. Escolha o que aconteceu e, se quiser, conte com suas palavras.')));
     var escolhida = null;
     var grupo = M.el('div', 'mod-cats');
     M.CATEGORIAS.forEach(function (c) {
@@ -404,7 +413,7 @@ var JOGO = (typeof window !== 'undefined')
     cx.appendChild(grupo);
     var ta = document.createElement('textarea');
     ta.maxLength = M.TEXTO_MAX;
-    ta.placeholder = 'O que aconteceu? (até ' + M.TEXTO_MAX + ' caracteres)';
+    ta.placeholder = Tx('O que aconteceu? (até {TEXTO_MAX} caracteres)', { TEXTO_MAX: M.TEXTO_MAX });
     var conta2 = M.el('div', 'mod-conta', '0/' + M.TEXTO_MAX);
     ta.addEventListener('input', function () { conta2.textContent = ta.value.length + '/' + M.TEXTO_MAX; confere(); });
     cx.appendChild(ta);
@@ -417,16 +426,16 @@ var JOGO = (typeof window !== 'undefined')
       anexa.type = 'checkbox';
       anexa.checked = true;
       lf.appendChild(anexa);
-      lf.appendChild(M.el('span', null, 'Anexar as últimas falas de ' + nome + ' que você viu (' + falas.length + ')'));
+      lf.appendChild(M.el('span', null, Tx('Anexar as últimas falas de {nome} que você viu ({length})', { nome: nome, length: falas.length })));
       cx.appendChild(lf);
       var caixaF = M.el('div', 'mod-falas');
       falas.forEach(function (f) { caixaF.appendChild(M.el('div', null, '“' + f.texto + '”')); });
       cx.appendChild(caixaF);
-      cx.appendChild(M.el('p', 'mod-conta', 'Vão como relato seu: o servidor não guarda o chat.'));
+      cx.appendChild(M.el('p', 'mod-conta', Tx('Vão como relato seu: o servidor não guarda o chat.')));
     }
     var acoes = M.el('div', 'mod-acoes');
-    acoes.appendChild(M.botao('Cancelar', 'mod-b', j.fecha));
-    var envia = M.botao('Enviar denúncia', 'mod-b mod-b-ok', function () {
+    acoes.appendChild(M.botao(Tx('Cancelar'), 'mod-b', j.fecha));
+    var envia = M.botao(Tx('Enviar denúncia'), 'mod-b mod-b-ok', function () {
       if (envia.disabled) return;
       envia.disabled = true;
       var corpo = { alvo: conta, categoria: escolhida, texto: ta.value.trim(), onde: alvo.onde || 'outro' };
@@ -434,12 +443,12 @@ var JOGO = (typeof window !== 'undefined')
       M.api('/api/denuncia', { method: 'POST', body: corpo }).then(function (r) {
         if (r && r.ok) {
           j.fecha();
-          M.aviso('Denúncia enviada. A Equipe vai olhar — o retorno chega pelo correio do jogo.', 'good');
+          M.aviso(Tx('Denúncia enviada. A Equipe vai olhar — o retorno chega pelo correio do jogo.'), 'good');
           D.ultima = corpo;
           return;
         }
         envia.disabled = false;
-        M.aviso(M.erro(r, 'não deu para enviar a denúncia'));
+        M.aviso(M.erro(r, Tx('não deu para enviar a denúncia')));
       });
     });
     acoes.appendChild(envia);
@@ -453,7 +462,7 @@ var JOGO = (typeof window !== 'undefined')
   };
   function acoesFechar(j) {
     var a = M.el('div', 'mod-acoes');
-    a.appendChild(M.botao('Fechar', 'mod-b', j.fecha));
+    a.appendChild(M.botao(Tx('Fechar'), 'mod-b', j.fecha));
     return a;
   }
   /* O botão "Denunciar" para as listas da HUD (o perfil da praça, a ficha do perfil, os amigos):
@@ -462,7 +471,7 @@ var JOGO = (typeof window !== 'undefined')
     var b = document.createElement('button');
     b.type = 'button';
     b.className = cls || 'btn btn-ghost';
-    b.textContent = 'Denunciar';
+    b.textContent = Tx('Denunciar');
     b.addEventListener('click', function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -488,11 +497,11 @@ var JOGO = (typeof window !== 'undefined')
     // o nome que a Rede deu (a linha do /g leva "[Guilda] Nome" no data-nome)
     var nome = v.nome || linha.getAttribute('data-nome') || 'o jogador';
     var menu = M.el('div', 'mod-menu');
-    menu.appendChild(M.botao('Denunciar ' + nome, null, function () {
+    menu.appendChild(M.botao(Tx('Denunciar {nome}', { nome: nome }), null, function () {
       fechaMenu();
       D.abrir({ heroId: de, nome: nome, onde: 'chat' });
     }));
-    menu.appendChild(M.botao('Fechar', null, fechaMenu));
+    menu.appendChild(M.botao(Tx('Fechar'), null, fechaMenu));
     menu.style.left = Math.max(4, Math.min(x, window.innerWidth - 200)) + 'px';
     menu.style.top = Math.max(4, Math.min(y, window.innerHeight - 90)) + 'px';
     document.body.appendChild(menu);
@@ -530,8 +539,7 @@ var JOGO = (typeof window !== 'undefined')
     if (t - silAvisado < 10000) return false;
     silAvisado = t;
     sil = sil || {};
-    M.aviso('A Equipe silenciou você no chat ' + M.fimTexto(sil) + (sil.motivo ? ' — ' + sil.motivo : '') +
-            '. Ninguém recebeu essa mensagem.');
+    M.aviso(Tx('A Equipe silenciou você no chat {a}{b}. Ninguém recebeu essa mensagem.', { a: M.fimTexto(sil), b: sil.motivo ? ' — ' + sil.motivo : '' }));
     return true;
   };
 
@@ -556,21 +564,23 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (!botaoCarta) {
       botaoCarta = M.botao('', 'mod-carta-botao', C.abrir);
-      botaoCarta.title = 'Cartas da Equipe do jogo';
+      botaoCarta.title = Tx('Cartas da Equipe do jogo');
     }
-    botaoCarta.textContent = '✉ ' + n + (n === 1 ? ' carta da Equipe' : ' cartas da Equipe');
+    botaoCarta.textContent = (n === 1
+      ? Tx('✉ {n} carta da Equipe', { n: n })
+      : Tx('✉ {n} cartas da Equipe', { n: n }));
     if (!botaoCarta.parentNode) document.body.appendChild(botaoCarta);
   }
   C.abrir = function () {
-    var j = M.janela('Cartas da Equipe');
+    var j = M.janela(Tx('Cartas da Equipe'));
     var lista = M.el('div');
     j.caixa.appendChild(lista);
     lista.appendChild(M.el('p', null, 'carregando…'));
     j.caixa.appendChild(acoesFechar(j));
     M.api('/api/correio').then(function (r) {
       lista.textContent = '';
-      if (!r || !r.ok) { lista.appendChild(M.el('p', null, M.erro(r, 'não deu para abrir o correio'))); return; }
-      if (!r.cartas.length) lista.appendChild(M.el('p', null, 'Nenhuma carta por enquanto.'));
+      if (!r || !r.ok) { lista.appendChild(M.el('p', null, M.erro(r, Tx('não deu para abrir o correio')))); return; }
+      if (!r.cartas.length) lista.appendChild(M.el('p', null, Tx('Nenhuma carta por enquanto.')));
       r.cartas.forEach(function (c) {
         var d = M.el('div', 'mod-carta' + (c.lida ? '' : ' is-nova'));
         d.appendChild(M.el('b', null, c.assunto));
@@ -608,7 +618,7 @@ var JOGO = (typeof window !== 'undefined')
   function enumera(lista) {
     var t = lista.map(function (x) { return x.texto; }).filter(Boolean);
     if (!t.length) return '';
-    if (t.length > 3) t = t.slice(0, 3).concat(['e mais ' + (lista.length - 3)]);
+    if (t.length > 3) t = t.slice(0, 3).concat([Tx('e mais {a}', { a: lista.length - 3 })]);
     return t.length === 1 ? t[0] : t.slice(0, -1).join(', ') + ' e ' + t[t.length - 1];
   }
   /* 04/10: a mesma caixa traz o que a LOJA entregou na hora (tipo 'loja': o servidor aplicou a compra
@@ -617,8 +627,8 @@ var JOGO = (typeof window !== 'undefined')
     var loja = (lista || []).filter(function (x) { return x && x.tipo === 'loja'; });
     var mestre = (lista || []).filter(function (x) { return x && x.tipo !== 'loja'; });
     var frases = [], m = enumera(mestre), l = enumera(loja);
-    if (m) frases.push('O Mestre te enviou ' + m + '.');
-    if (l) frases.push('Chegou da loja: ' + l + '.');
+    if (m) frases.push(Tx('O Mestre te enviou {m}.', { m: m }));
+    if (l) frases.push(Tx('Chegou da loja: {l}.', { l: l }));
     return frases.join(' ');
   };
   E.confere = function () {

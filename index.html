@@ -52,6 +52,50 @@
     var CHAVE = 'soterra-boot', CHAVE_ANTES = 'soterra-boot-antes';
     var VALIDADE_MS = 10 * 60 * 1000;
     var MODELOS = 'o download dos modelos';
+    /* OS IDIOMAS (05/10, etapa 2). Este bloco roda ANTES do js/core/i18n.js e tem de funcionar mesmo
+     * quando ele não chega (é a tela de quem ficou preso na abertura) — por isso os poucos textos daqui
+     * têm o seu próprio dicionário, e não o js/i18n/textos_*.js. O idioma é o do JOGO.I18n quando ele já
+     * rodou; antes disso, o `?lang=` e a mesma chave `soterra-idioma`. O NOME DA ETAPA ("o começo",
+     * "o download dos modelos") é marca interna, gravada e comparada: segue em português. */
+    var BT = {
+      en: { 'Tentar de novo': 'Try again', 'Abrir sem o save deste navegador': "Open without this browser's save",
+            'Abrir numa conta local vazia': 'Open on an empty local account',
+            'A última abertura parou em:': 'The last launch stopped at:',
+            ' Parou nessa mesma etapa duas vezes seguidas.': ' It stopped at this same step twice in a row.',
+            ' Parou nessa mesma etapa {n} vezes seguidas.': ' It stopped at this same step {n} times in a row.',
+            'Ainda abrindo — parado em:': 'Still loading — stuck at:',
+            'Não consegui guardar a cópia do save ({erro}) — nada foi apagado.': "Couldn't store the save backup ({erro}) — nothing was erased.",
+            'o armazenamento deste navegador está cheio': "this browser's storage is full",
+            'preparando…': 'preparing…', 'lendo {nome} ({idx} de {total})': 'loading {nome} ({idx} of {total})' },
+      es: { 'Tentar de novo': 'Reintentar', 'Abrir sem o save deste navegador': 'Abrir sin la partida de este navegador',
+            'Abrir numa conta local vazia': 'Abrir en una cuenta local vacía',
+            'A última abertura parou em:': 'La última apertura se detuvo en:',
+            ' Parou nessa mesma etapa duas vezes seguidas.': ' Se detuvo en esta misma etapa dos veces seguidas.',
+            ' Parou nessa mesma etapa {n} vezes seguidas.': ' Se detuvo en esta misma etapa {n} veces seguidas.',
+            'Ainda abrindo — parado em:': 'Sigue abriendo — detenido en:',
+            'Não consegui guardar a cópia do save ({erro}) — nada foi apagado.': 'No pude guardar la copia de la partida ({erro}) — no se borró nada.',
+            'o armazenamento deste navegador está cheio': 'el almacenamiento de este navegador está lleno',
+            'preparando…': 'preparando…', 'lendo {nome} ({idx} de {total})': 'leyendo {nome} ({idx} de {total})' }
+    };
+    function lgBoot() {
+      try {
+        if (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma) return window.JOGO.I18n.idioma;
+        var mL = /[?&]lang=(pt|en|es)(&|$)/.exec(String(location.search || ''));
+        if (mL) return mL[1];
+        var gL = window.localStorage.getItem('soterra-idioma');
+        return (gL === 'en' || gL === 'es') ? gL : 'pt';
+      } catch (e) { return 'pt'; }
+    }
+    function bt(s, v) {
+      var d = BT[lgBoot()], o = (d && d[s]) || s, k;
+      if (v) for (k in v) if (tem.call(v, k)) o = o.split('{' + k + '}').join(String(v[k]));
+      return o;
+    }
+    window.__bt = bt;
+    // fora do português não há "no/na": vai "parou em: <etapa> (arquivo)"
+    function ondeLg(m, rotulo) {
+      return bt(rotulo) + ' ' + String(m.etapa || '') + (m.arquivo ? ' (' + m.arquivo + ')' : '');
+    }
     var t0 = Date.now();
     var tem = Object.prototype.hasOwnProperty;
     var B = window.__boot = { VIGIA_MS: 45000, CHAVE: CHAVE, CHAVE_ANTES: CHAVE_ANTES };
@@ -276,15 +320,16 @@
       if (!parada || avisoEl || acabou) return;
       var c = caixa();
       if (!c) return;
-      var txt = 'A última abertura parou ' + onde(parada) + '.';
-      if (parada.vezes === 2) txt += ' Parou nessa mesma etapa duas vezes seguidas.';
-      else if (parada.vezes > 2) txt += ' Parou nessa mesma etapa ' + parada.vezes + ' vezes seguidas.';
+      var txt = lgBoot() === 'pt' ? 'A última abertura parou ' + onde(parada) + '.'
+                                  : ondeLg(parada, 'A última abertura parou em:') + '.';
+      if (parada.vezes === 2) txt += bt(' Parou nessa mesma etapa duas vezes seguidas.');
+      else if (parada.vezes > 2) txt += bt(' Parou nessa mesma etapa {n} vezes seguidas.', { n: parada.vezes });
       avisoEl = bloco('carga-boot');
       avisoEl.firstChild.textContent = txt;
       var a = fileira();
-      a.appendChild(botao('Tentar de novo', 'btn-primary boot-tentar', tentar));
-      a.appendChild(botao('Abrir sem o save deste navegador', 'btn-ghost boot-sem-save', semSave));
-      a.appendChild(botao('Abrir numa conta local vazia', 'btn-ghost boot-vazia', vazia));
+      a.appendChild(botao(bt('Tentar de novo'), 'btn-primary boot-tentar', tentar));
+      a.appendChild(botao(bt('Abrir sem o save deste navegador'), 'btn-ghost boot-sem-save', semSave));
+      a.appendChild(botao(bt('Abrir numa conta local vazia'), 'btn-ghost boot-vazia', vazia));
       avisoEl.appendChild(a);
       c.appendChild(avisoEl);             // DEPOIS da barra e do texto: o progresso desta segue à vista
     }
@@ -310,14 +355,15 @@
         vigiaEl = bloco('carga-vigia');
         if (!c.querySelector('.boot-tentar')) {
           var a = fileira();
-          a.appendChild(botao('Tentar de novo', 'btn-primary boot-tentar', tentar));
+          a.appendChild(botao(bt('Tentar de novo'), 'btn-primary boot-tentar', tentar));
           vigiaEl.appendChild(a);
         }
         c.appendChild(vigiaEl);
         avisaConsole('[abertura] ainda abrindo, parada há ' + Math.round((Date.now() - movimento) / 1000) +
                      ' s; a marca: ' + JSON.stringify(marca));
       }
-      vigiaEl.firstChild.textContent = 'Ainda abrindo — parado ' + onde(marca);
+      vigiaEl.firstChild.textContent = lgBoot() === 'pt' ? 'Ainda abrindo — parado ' + onde(marca)
+                                                         : ondeLg(marca, 'Ainda abrindo — parado em:');
       parado = true;
     }
     function tiraVigia() {
@@ -352,7 +398,7 @@
           e.style.cssText = ESTILO_TXT + ';color:#ff9a8a';
           avisoEl.appendChild(e);
         }
-        if (e) e.textContent = 'Não consegui guardar a cópia do save (' + r.erro + ') — nada foi apagado.';
+        if (e) e.textContent = bt('Não consegui guardar a cópia do save ({erro}) — nada foi apagado.', { erro: r.erro });
         return;
       }
       vaiEmbora(true);
@@ -405,7 +451,7 @@
         }
       } catch (e3) {
         for (i = 0; i < copias.length; i++) { try { ls.removeItem(copias[i].para); } catch (e4) {} }
-        var erro = (e3 && e3.name === 'QuotaExceededError') ? 'o armazenamento deste navegador está cheio'
+        var erro = (e3 && e3.name === 'QuotaExceededError') ? bt('o armazenamento deste navegador está cheio')
                  : String((e3 && e3.message) || e3);
         return (B.ultimaMudanca = { ok: false, erro: erro, movidas: [] });
       }
@@ -506,6 +552,20 @@
   // dicionários descem (só os do idioma em uso; em português, nenhum). Ver docs/IDIOMAS.md.
   document.write('<scr' + 'ipt src="' + window.__url('js/core/i18n.js') + '"><\/scr' + 'ipt>');
   try { if (window.__boot) window.__boot.espera(['js/core/i18n.js'], 'A'); } catch (eI) {}
+</script>
+<script>
+  /* Etapa 2 dos idiomas: fora do português, os TEXTOS DA INTERFACE descem já aqui — os dois arquivos do
+   * aplicativo (logo abaixo: os modelos guardados e a compra pela Play) desenham telas ANTES da lista de
+   * arquivos, e sem o dicionário elas sairiam em português. Os DADOS (dados_*.js) seguem na lista, depois do
+   * último js/core/data/*.js. Em português não desce nada. */
+  try {
+    var LG0 = (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma) || 'pt';
+    if (LG0 !== 'pt') {
+      document.write('<scr' + 'ipt src="' + window.__url('js/i18n/textos_' + LG0 + '.js') + '"><\/scr' + 'ipt>');
+      var tC0 = document.getElementById('carga-txt');
+      if (tC0 && window.__bt) tC0.textContent = window.__bt('preparando…');
+    }
+  } catch (eLg0) {}
   // SÓ NO APLICATIVO de Android (o Capacitor põe window.Capacitor antes do primeiro script; `?app=1` é a
   // casca fingida das provas): os modelos guardados no aparelho. Na web este arquivo nem é pedido.
   try {
@@ -647,7 +707,7 @@
     try { document.documentElement.lang = window.JOGO.I18n.TAG[LG] || 'pt-BR'; } catch (eLg) {}
     if (LG !== 'pt') {
       var iLg = arquivos.indexOf('js/core/data/santuario.js');
-      if (iLg >= 0) arquivos.splice(iLg + 1, 0, 'js/i18n/dados_' + LG + '.js', 'js/i18n/textos_' + LG + '.js');
+      if (iLg >= 0) arquivos.splice(iLg + 1, 0, 'js/i18n/dados_' + LG + '.js');   // os textos_* já desceram, logo depois do i18n.js
     }
 
     // O QUE O CAMINHO SERVIDO NÃO LÊ — os embutidos que tools/extrai_assets.py
@@ -710,7 +770,8 @@
         var b1 = document.getElementById('carga-barra');
         var t1 = document.getElementById('carga-txt');
         if (b1) b1.style.width = Math.round(100 * idx / total) + '%';
-        if (t1) t1.textContent = 'lendo ' + nome + ' (' + idx + ' de ' + total + ')';
+        if (t1) t1.textContent = window.__bt ? window.__bt('lendo {nome} ({idx} de {total})', { nome: nome, idx: idx, total: total })
+                                             : 'lendo ' + nome + ' (' + idx + ' de ' + total + ')';
       };
       var visto = 0;
       for (i1 = 0; i1 < arquivos.length; i1++) {

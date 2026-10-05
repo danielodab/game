@@ -26,32 +26,36 @@ var JOGO = (typeof window !== 'undefined')
  */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (docs/IDIOMAS.md): a chave é o próprio português. Sem o JOGO.I18n
+   * (o juiz do servidor e as provas em Node não o carregam) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
 
   var T = {};
   JOGO.Tutor = T;
 
   var DICAS = {
     heroSelect: {
-      titulo: 'Quem desce',
-      texto: 'Escolha <b>1 ou 2</b> heróis. Sozinho, a sorte de saque é máxima; ' +
-             'em dupla, vocês podem <b>FUNDIR</b> no meio da luta e virar outra coisa.'
+      titulo: Tx('Quem desce'),
+      texto: Tx('Escolha <b>1 ou 2</b> heróis. Sozinho, a sorte de saque é máxima; em dupla, vocês podem <b>FUNDIR</b> no meio da luta e virar outra coisa.')
     },
     hub: {
-      titulo: 'O Acampamento',
-      texto: 'Toque no chão para <b>andar</b>. Chegue perto de um portal para descer, ' +
-             'do banco para guardar, da arena para duelar. O <b>cais</b> aí embaixo ' +
-             'abre inventário, forja e missões — e a tecla <b>I</b> abre o saco.'
+      titulo: Tx('O Acampamento'),
+      texto: Tx('Toque no chão para <b>andar</b>. Chegue perto de um portal para descer, do banco para guardar, da arena para duelar. O <b>cais</b> aí embaixo abre inventário, forja e missões — e a tecla <b>I</b> abre o saco.')
     },
     battle: {
-      titulo: 'A batalha',
-      texto: 'Toque no chão para andar (o segundo toque <b>confirma</b>). Toque num ' +
-             'feitiço e depois no alvo. O relógio de <b>30s</b> acumula o que sobrar ' +
-             'para os próximos turnos.'
+      titulo: Tx('A batalha'),
+      texto: Tx('Toque no chão para andar (o segundo toque <b>confirma</b>). Toque num feitiço e depois no alvo. O relógio de <b>30s</b> acumula o que sobrar para os próximos turnos.')
     },
     roomClear: {
-      titulo: 'Sala limpa',
-      texto: 'O saque já está no <b>saco</b> (tecla I). Os vivos curam metade do que ' +
-             'perderam ao avançar — e a próxima sala vem inteira.'
+      titulo: Tx('Sala limpa'),
+      texto: Tx('O saque já está no <b>saco</b> (tecla I). Os vivos curam metade do que perderam ao avançar — e a próxima sala vem inteira.')
     }
   };
 
@@ -113,7 +117,7 @@ var JOGO = (typeof window !== 'undefined')
     var b1 = document.createElement('button');
     b1.type = 'button';
     b1.className = 'btn btn-primary btn-mini';
-    b1.textContent = 'Entendi';
+    b1.textContent = Tx('Entendi');
     b1.addEventListener('click', function () {
       var d2 = le();
       d2.vistos[nome] = true;
@@ -123,7 +127,7 @@ var JOGO = (typeof window !== 'undefined')
     var b2 = document.createElement('button');
     b2.type = 'button';
     b2.className = 'btn btn-ghost btn-mini';
-    b2.textContent = 'Não mostrar dicas';
+    b2.textContent = Tx('Não mostrar dicas');
     b2.addEventListener('click', function () {
       var d3 = le();
       d3.off = true;
