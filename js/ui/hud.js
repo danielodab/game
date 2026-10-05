@@ -9716,6 +9716,14 @@ var JOGO = (typeof window !== 'undefined')
    * o que é do APARELHO — nada daqui é progresso nem vai para a conta: o som
    * mora no js/audio.js (chave própria), o movimento numa chave soterra-* que
    * o save_sandbox das provas já blinda. */
+  /* O TEXTO NO IDIOMA DO JOGADOR (05/10). `tr('Texto em português', { v: valor })` é o JOGO.I18n.t com
+   * rede: a chave é o próprio texto em português, e sem tradução (ou sem o módulo) volta o português.
+   * A ficha das Configurações, logo abaixo, é o EXEMPLO VIVO de como embrulhar; o resto deste arquivo
+   * ainda está em português puro e é a etapa 2 (docs/IDIOMAS.md). */
+  function tr(s, v) {
+    var I = JOGO.I18n;
+    return (I && I.t) ? I.t(s, v) : s;
+  }
   var PREF_UI = 'soterra-pref-ui';
   function prefUi() {
     try { return JSON.parse(localStorage.getItem(PREF_UI) || '{}') || {}; } catch (e) { return {}; }
@@ -9772,18 +9780,61 @@ var JOGO = (typeof window !== 'undefined')
     c.classList.toggle('is-on', on);
   }
   function sheetConfig() {
-    var body = sheetShell('Configurações',
-      'O que vale para este aparelho: o som, a tela e o movimento da interface. Nada daqui mexe no seu progresso.');
+    var body = sheetShell(tr('Configurações'),
+      tr('O que vale para este aparelho: o som, a tela e o movimento da interface. Nada daqui mexe no seu progresso.'));
     sheetName = 'config';
     var Au = JOGO.Audio;
 
+    /* IDIOMA (05/10, o dono: "quero que o jogo tenha os principais idiomas para poder mudar: inglês,
+     * espanhol ou português"). É a PRIMEIRA seção de propósito: quem caiu num idioma que não lê precisa
+     * achá-la sem ler o resto — por isso o título traz as três palavras e cada opção vem escrita no
+     * próprio idioma. A escolha é do NAVEGADOR (JOGO.I18n, chave própria): não entra no save, não vai ao
+     * servidor e não tira ninguém da conta. Trocar RECARREGA: metade das telas já leu o DATA, e trocar a
+     * quente deixaria a tela meio a meio. No meio de uma batalha não recarrega sozinho — avisa e espera. */
+    var Id = JOGO.I18n;
+    if (Id && Id.escolhe) {
+      var isec = el('section', 'cfg-sec');
+      isec.appendChild(el('h3', 'bk-tit', 'Idioma · Language · Idioma'));
+      var selI = document.createElement('select');
+      selI.className = 'cfg-select';
+      selI.setAttribute('aria-label', 'Idioma / Language');
+      selI.setAttribute('lang', 'mul');
+      Id.IDIOMAS.forEach(function (l) {
+        var op = document.createElement('option'); op.value = l; op.textContent = Id.NOMES[l];
+        op.setAttribute('lang', Id.TAG[l]);
+        if (l === Id.idioma) op.selected = true;
+        selI.appendChild(op);
+      });
+      var avisoI = el('div', 'cfg-recarrega');
+      // o `?lang=` da URL manda mais que a escolha gravada: se ele ficasse, a recarga voltaria ao idioma do link
+      var recarregaIdioma = function () {
+        try {
+          var u = String(location.href), limpa = u.replace(/([?&])lang=[a-z]{2}(&|(?=#)|$)/i, function (m, a, b) { return b === '&' ? a : ''; });
+          if (limpa !== u) location.replace(limpa); else location.reload();
+        } catch (e) {}
+      };
+      selI.addEventListener('change', function () {
+        if (!Id.escolhe(selI.value)) return;
+        clear(avisoI);
+        if (selI.value === Id.idioma) return;
+        if (root.classList.contains('in-battle')) {
+          avisoI.appendChild(el('span', 'inv-dica', tr('Vale depois de recarregar o jogo.')));
+          avisoI.appendChild(btn(tr('Recarregar agora'), 'btn-mini btn-gold', recarregaIdioma));
+        } else recarregaIdioma();
+      });
+      selI.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      isec.appendChild(linhaConfig(tr('Idioma do jogo'), tr('Nomes de jogador, guilda e o chat ficam como foram escritos.'), selI));
+      isec.appendChild(avisoI);
+      body.appendChild(isec);
+    }
+
     var som = el('section', 'cfg-sec');
-    som.appendChild(el('h3', 'bk-tit', 'Som'));
+    som.appendChild(el('h3', 'bk-tit', tr('Som')));
     if (Au && Au.isMudo) {
       var volume = document.createElement('input');
       var lnVol = null;
-      som.appendChild(linhaConfig('Som do jogo', 'Golpes, passos e a interface.',
-        chaveConfig(!Au.isMudo(), 'Som do jogo', function (on) {
+      som.appendChild(linhaConfig(tr('Som do jogo'), tr('Golpes, passos e a interface.'),
+        chaveConfig(!Au.isMudo(), tr('Som do jogo'), function (on) {
           Au.setMudo(!on);
           pintaBotaoSom();
           volume.disabled = !on;
@@ -9793,7 +9844,7 @@ var JOGO = (typeof window !== 'undefined')
       volume.min = '0'; volume.max = '100'; volume.step = '5';
       volume.className = 'cfg-volume';
       volume.value = String(Math.round((Au.getVolume ? Au.getVolume() : 0.7) * 100));
-      volume.setAttribute('aria-label', 'Volume');
+      volume.setAttribute('aria-label', tr('Volume'));
       volume.disabled = Au.isMudo();
       var vNum = el('output', 'cfg-num', volume.value + '%');
       volume.addEventListener('input', function () {
@@ -9805,33 +9856,33 @@ var JOGO = (typeof window !== 'undefined')
       var vol = el('div', 'cfg-vol');
       vol.appendChild(volume);
       vol.appendChild(vNum);
-      lnVol = linhaConfig('Volume', null, vol);
+      lnVol = linhaConfig(tr('Volume'), null, vol);
       if (Au.isMudo()) lnVol.classList.add('is-apagado');
       som.appendChild(lnVol);
-    } else som.appendChild(el('p', 'empty', 'O som não carregou neste aparelho.'));
+    } else som.appendChild(el('p', 'empty', tr('O som não carregou neste aparelho.')));
     body.appendChild(som);
 
     var tela = el('section', 'cfg-sec');
-    tela.appendChild(el('h3', 'bk-tit', 'Tela'));
+    tela.appendChild(el('h3', 'bk-tit', tr('Tela')));
     var TC = JOGO.TelaCheia;
     if (TC && TC.suporta && TC.suporta()) {
       /* 03/10 (revisão): a chave segue a tela, não o toque. Ela virava na hora
        * e ficava "ligada" quando o navegador recusava (quadro sem permissão)
        * e também depois do Esc, que sai da tela cheia sem passar por aqui — e o
        * toque seguinte fazia o contrário do que a chave mostrava. */
-      chaveTelaViva = chaveConfig(TC.cheia(), 'Tela cheia', function (on) {
+      chaveTelaViva = chaveConfig(TC.cheia(), tr('Tela cheia'), function (on) {
         var p = on ? TC.entra() : TC.sai();
         if (p && typeof p.then === 'function') p.then(sincChaveTela, sincChaveTela);
       });
-      tela.appendChild(linhaConfig('Tela cheia', 'Some a barra do navegador. Esc sai.', chaveTelaViva));
+      tela.appendChild(linhaConfig(tr('Tela cheia'), tr('Some a barra do navegador. Esc sai.'), chaveTelaViva));
       if (!ouveTela) {
         ouveTela = true;
         document.addEventListener('fullscreenchange', sincChaveTela);
         document.addEventListener('webkitfullscreenchange', sincChaveTela);
       }
     }
-    tela.appendChild(linhaConfig('Menos movimento', 'As fichas abrem sem deslizar e os botões não afundam.',
-      chaveConfig(!!prefUi().menosMovimento, 'Menos movimento', function (on) {
+    tela.appendChild(linhaConfig(tr('Menos movimento'), tr('As fichas abrem sem deslizar e os botões não afundam.'),
+      chaveConfig(!!prefUi().menosMovimento, tr('Menos movimento'), function (on) {
         var p = prefUi(); p.menosMovimento = on; gravaPrefUi(p);
       })));
     body.appendChild(tela);
@@ -9842,13 +9893,13 @@ var JOGO = (typeof window !== 'undefined')
     var Mb = JOGO.Mobile;
     if (Mb && Mb.qualidade) {
       var gsec = el('section', 'cfg-sec');
-      gsec.appendChild(el('h3', 'bk-tit', 'Gráficos'));
+      gsec.appendChild(el('h3', 'bk-tit', tr('Gráficos')));
       // sem escolha gravada, a lista mostra o padrão DESTE lugar (web: alta; aplicativo: média ou baixa)
       var escolhida = prefUi().graficos || (Mb.padraoGrafico ? Mb.padraoGrafico() : 'alta'), emUso = Mb.qualidade();
       var selG = document.createElement('select');
       selG.className = 'cfg-select';
-      selG.setAttribute('aria-label', 'Qualidade gráfica');
-      [['alta', 'Alta — tudo no máximo'], ['media', 'Média — resolução e relevo menores'], ['baixa', 'Baixa — para aparelho fraco']].forEach(function (o) {
+      selG.setAttribute('aria-label', tr('Qualidade gráfica'));
+      [['alta', tr('Alta — tudo no máximo')], ['media', tr('Média — resolução e relevo menores')], ['baixa', tr('Baixa — para aparelho fraco')]].forEach(function (o) {
         var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1];
         if (o[0] === escolhida) op.selected = true;
         selG.appendChild(op);
@@ -9857,12 +9908,12 @@ var JOGO = (typeof window !== 'undefined')
       var pintaAvisoG = function () {
         clear(avisoG);
         if (selG.value === emUso) return;
-        avisoG.appendChild(el('span', 'inv-dica', 'Vale depois de recarregar o jogo.'));
-        avisoG.appendChild(btn('Recarregar agora', 'btn-mini btn-gold', function () { try { location.reload(); } catch (e) {} }));
+        avisoG.appendChild(el('span', 'inv-dica', tr('Vale depois de recarregar o jogo.')));
+        avisoG.appendChild(btn(tr('Recarregar agora'), 'btn-mini btn-gold', function () { try { location.reload(); } catch (e) {} }));
       };
       selG.addEventListener('change', function () { var p = prefUi(); p.graficos = selG.value; gravaPrefUi(p); pintaAvisoG(); });
       selG.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
-      gsec.appendChild(linhaConfig('Qualidade', 'Menos qualidade usa menos memória e roda melhor em PC ou celular fraco.', selG));
+      gsec.appendChild(linhaConfig(tr('Qualidade'), tr('Menos qualidade usa menos memória e roda melhor em PC ou celular fraco.'), selG));
       gsec.appendChild(avisoG);
       pintaAvisoG();
       body.appendChild(gsec);
@@ -9877,9 +9928,9 @@ var JOGO = (typeof window !== 'undefined')
      * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */
     if (JOGO.CompraPlay && JOGO.CompraPlay.noApp()) {
       var secBarras = el('section', 'cfg-sec');
-      secBarras.appendChild(el('h3', 'bk-tit', 'Barras de ouro'));
-      secBarras.appendChild(el('p', 'inv-dica', 'A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.'));
-      secBarras.appendChild(btn('Comprar barras de ouro', 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
+      secBarras.appendChild(el('h3', 'bk-tit', tr('Barras de ouro')));
+      secBarras.appendChild(el('p', 'inv-dica', tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.')));
+      secBarras.appendChild(btn(tr('Comprar barras de ouro'), 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
       body.appendChild(secBarras);
     }
 
@@ -9887,10 +9938,10 @@ var JOGO = (typeof window !== 'undefined')
     var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
     if (!toque) {
       var at = el('section', 'cfg-sec');
-      at.appendChild(el('h3', 'bk-tit', 'Atalhos de teclado'));
+      at.appendChild(el('h3', 'bk-tit', tr('Atalhos de teclado')));
       var lista = el('dl', 'cfg-atalhos');
-      [['I', 'abre e fecha o inventário'], ['Esc', 'fecha a ficha aberta'],
-       ['Tab', 'anda pelos botões da ficha; Enter ou Espaço aperta']]
+      [['I', tr('abre e fecha o inventário')], ['Esc', tr('fecha a ficha aberta')],
+       ['Tab', tr('anda pelos botões da ficha; Enter ou Espaço aperta')]]
         .concat(mestreAtivo() ? [['M', 'abre e fecha o Painel do Mestre (a Caixa, os jogadores, os eventos, o grimório…)'],
                                  ['F9', 'o mesmo painel, de qualquer tela (também Ctrl+Alt+M)']] : [])
         .forEach(function (a) {
@@ -9902,11 +9953,11 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     var conta = el('section', 'cfg-sec');
-    conta.appendChild(el('h3', 'bk-tit', 'Conta'));
-    conta.appendChild(btn('Contas e nuvem', 'btn-ghost btn-block', function () { openSheet('contas'); }));
+    conta.appendChild(el('h3', 'bk-tit', tr('Conta')));
+    conta.appendChild(btn(tr('Contas e nuvem'), 'btn-ghost btn-block', function () { openSheet('contas'); }));
     body.appendChild(conta);
     var ver = safe(function () { return window.SOTERRA_VERSAO.versao; }, null);
-    body.appendChild(el('p', 'cfg-versao', 'SOTERRA — Ecos do Mundo Enterrado' + (ver ? ' · versão ' + esc(ver) : '')));
+    body.appendChild(el('p', 'cfg-versao', 'SOTERRA — Ecos do Mundo Enterrado' + (ver ? tr(' · versão {v}', { v: esc(ver) }) : '')));
   }
 
   function sheetContas() {

@@ -502,6 +502,10 @@
   // O carregador de modelos precisa existir antes da decisão abaixo.
   document.write('<scr' + 'ipt src="' + window.__url('js/assets_bundle.js') + '"><\/scr' + 'ipt>');
   try { if (window.__boot) window.__boot.espera(['js/assets_bundle.js'], 'A'); } catch (eB) {}   // a marca de abertura
+  // 05/10, os IDIOMAS: o JOGO.I18n decide o idioma AQUI, antes da lista — é ela que escolhe quais
+  // dicionários descem (só os do idioma em uso; em português, nenhum). Ver docs/IDIOMAS.md.
+  document.write('<scr' + 'ipt src="' + window.__url('js/core/i18n.js') + '"><\/scr' + 'ipt>');
+  try { if (window.__boot) window.__boot.espera(['js/core/i18n.js'], 'A'); } catch (eI) {}
   // SÓ NO APLICATIVO de Android (o Capacitor põe window.Capacitor antes do primeiro script; `?app=1` é a
   // casca fingida das provas): os modelos guardados no aparelho. Na web este arquivo nem é pedido.
   try {
@@ -633,6 +637,18 @@
       'js/ui/tela_cheia.js',           // 11/09: o botão de tela cheia do canto (⛶ entra, ✕ sai)
       'js/main.js'
     ];
+
+    /* OS IDIOMAS (05/10). O js/core/i18n.js já rodou (o bloco de cima) e disse o idioma deste
+     * navegador. Em português a lista fica como sempre foi. Em inglês ou espanhol entram os DOIS
+     * dicionários daquele idioma, LOGO DEPOIS do último arquivo de dados e ANTES de qualquer
+     * módulo que leia o DATA: o dados_* troca nomes e descrições na hora em que carrega. O juiz
+     * do servidor não passa por aqui — ele lê os dados crus, em português. */
+    var LG = (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma) || 'pt';
+    try { document.documentElement.lang = window.JOGO.I18n.TAG[LG] || 'pt-BR'; } catch (eLg) {}
+    if (LG !== 'pt') {
+      var iLg = arquivos.indexOf('js/core/data/santuario.js');
+      if (iLg >= 0) arquivos.splice(iLg + 1, 0, 'js/i18n/dados_' + LG + '.js', 'js/i18n/textos_' + LG + '.js');
+    }
 
     // O QUE O CAMINHO SERVIDO NÃO LÊ — os embutidos que tools/extrai_assets.py
     // virou arquivo em assets/models/bundle/:
