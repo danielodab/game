@@ -48,3 +48,49 @@ Quando qualquer um dos dois documentos mudar de um jeito que mude direito ou
 dever de alguém: suba a data em `servidor/privacidade.py` (`VERSAO_TERMOS`),
 `site/site.js` (`SITE.VERSAO_TERMOS`) e no `data-versao` e no "Versão de" das
 duas páginas. Quem tem conta passa a ver o pedido de novo aceite na página da conta.
+
+## Traduções dos Termos e da Política (05/10) — revisar
+
+Os dois documentos ganharam versão em **inglês** e **espanhol** (`site/i18n_juridico_en.js`,
+`site/i18n_juridico_es.js`), mostradas quando o visitante escolhe o idioma no topo do site.
+O que foi combinado com o dono e está no ar:
+
+- é **tradução de cortesia**: a página traduzida abre com o aviso "a versão em português é a
+  única que vale: se houver diferença entre as duas, vale o que está escrito em português", com
+  o link para o original (`?lang=pt`);
+- o texto em português, a `VERSAO_TERMOS` e o aceite **não mudaram**; o aceite continua sendo da
+  versão em português (a caixa de aceite aparece traduzida, com os links para as páginas);
+- a tradução foi feita por máquina e conferida por máquina (mesmas tags, mesmos números e
+  datas, lacunas `[PREENCHER: …]` intactas). **Ninguém com formação jurídica a leu.**
+
+Pontos que a própria tradução marcou como duvidosos, para o advogado (ou um tradutor
+jurídico) decidir:
+
+1. **"encarregado"** (LGPD, art. 41): en "data protection officer"; es "encargado" — em
+   espanhol pode ser confundido com o "encargado del tratamiento" (o operador) do RGPD;
+   talvez "delegado de protección de datos".
+2. **"arrependimento"** (CDC, art. 49): en "withdrawal" / "withdraw from a purchase"; es
+   "arrepentimiento" / "desistimiento" (os dois aparecem). Uniformizar.
+3. **"estorno"**: saiu como "refund", "chargeback" e "reversed" conforme o trecho (es
+   "reembolso", "contracargo", "revertido"). São coisas diferentes em inglês; escolher uma por
+   sentido (devolução pedida a nós × contestação no cartão).
+4. **"foro da comarca" / "fica eleito o foro"**: tradução literal; não há equivalente exato.
+5. **"embaralhada"** (a senha e os códigos guardados): en "hashed" num trecho e "scrambled"
+   em outro; es "mezclada" e "codificada". O original não diz "hash" nem "cifrada".
+6. **Nomes de lei**: "Código de Defesa do Consumidor", "LGPD", "ANPD", "Estatuto Digital da
+   Criança e do Adolescente (Lei 15.211/2025)" ficaram em português, alguns com glosa entre
+   parênteses na primeira menção. "art. 7º, V" ficou como está.
+7. **"interesse legítimo"** e **"portabilidade"**: literais (legitimate interest / interés
+   legítimo; portability / portabilidad).
+8. **"roleta" e "sortear"** (seção dos sorteios): en "wheel" e "draw"; es "ruleta" e
+   "sortear". A distinção entre sorteio e saque aleatório tem peso (ECA Digital).
+9. **"barras trocadas por vinténs (80 vinténs por barra)"**: o original é ambíguo quanto ao
+   sentido da troca, e a tradução ficou literal.
+10. **"Freios contra abuso"**: literal ("Brakes against abuse" / "Frenos contra el abuso").
+11. A marca **"excluída#número"** da conta excluída foi traduzida no texto ("deleted#number");
+    o servidor grava a marca em português.
+
+Quando o texto em português mudar: a frase mudada **volta a aparecer em português** nas
+páginas traduzidas até a tradução ser refeita (`node tools/i18n_falta.js --lista` mostra quais).
+Os e-mails automáticos (código de senha, avisos, conta excluída) também existem nos três
+idiomas (`servidor/conta.py`, `EMAILS`; `servidor/privacidade.py`, `EXCLUIDA`).
