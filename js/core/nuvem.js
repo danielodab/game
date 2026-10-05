@@ -233,6 +233,14 @@
     var rg = leRegistro();
     gravaRegistro(rg.versao, rg.conta, true);
   }
+  /* A SESSÃO MORREU com o jogo aberto (venceu, foi encerrada na página da conta): a página segue
+   * jogando sem subir nada. O registro fica marcado como pendente — sem sessão, o save de uma
+   * conta que está em dia com o servidor sai do disco na próxima abertura (js/core/contas.js), e
+   * o que for jogado daqui até lá não pode ir junto: pendente, ele fica guardado para a conta. */
+  function guardaParaADona() {
+    var rg = leRegistro();
+    if (rg.conta !== null) gravaRegistro(rg.versao, rg.conta, true);
+  }
   function agendaPuxar() {
     if (timerPuxa || !ligada) return;
     timerPuxa = setTimeout(function () { timerPuxa = null; N.puxar(); }, N.RETENTA_MS);
@@ -309,6 +317,7 @@
         if (outroAparelho(r) || encerrada) return r;
         if (r.status === 401 || r.status === 403) {
           s.esquece(); ligada = false;
+          guardaParaADona();
           erro = r.erro || ('HTTP ' + r.status);
           avisa('erro', { erro: erro, status: r.status });
           return r;
@@ -398,7 +407,7 @@
       }
       if (r.status === 401 || r.status === 403) {
         erro = r.erro || 'a sessão não vale mais';
-        if (r.status === 401) { s.esquece(); ligada = false; }
+        if (r.status === 401) { s.esquece(); ligada = false; guardaParaADona(); }
         else parada = true;                         // instância de outra conta: o save local está errado
         avisa('erro', { erro: erro, status: r.status });
         return r;
@@ -463,15 +472,39 @@
   };
   N.encerrada = function () { return encerrada; };
 
-  /* Sair da nuvem: a sessão some, a subida para; o local fica como está. */
-  N.sair = function () {
+  /* A ÚLTIMA SUBIDA, para o sair (04/10, Sessao.sair): a Nuvem para aqui e, se havia gravação
+   * que não subiu, ela sobe agora com o token que ainda vale (explícito: a sessão local some em
+   * seguida). Subiu, o registro fica "em dia" — é o que deixa o sair tirar o save do disco.
+   * Não subiu (servidor fora, recusa), o registro segue pendente e o save fica guardado para a
+   * mesma conta. Sem nada pendente, ou sem ter ouvido a versão do servidor, não manda nada. */
+  N.sobeParaSair = function (token) {
     var s = S();
+    var devia = ligada && !parada && !encerrada && puxou && !subindo && (sujo || !!timer) && !!token && !!s;
     if (timer) { clearTimeout(timer); timer = null; }
     if (timerPuxa) { clearTimeout(timerPuxa); timerPuxa = null; }
     ligada = false;
     parada = false;
     puxou = false;
     if (DB()) DB().aoGravar = null;
-    return s ? s.sair() : Promise.resolve({ ok: true });
+    if (!devia) return Promise.resolve(null);
+    var cid = s.contaId(), corpo = montaCorpo();
+    return s.api('/api/save', { method: 'PUT', body: corpo, token: token }).then(function (r) {
+      if (r && r.ok) {
+        sujo = false;
+        versao = Math.max(0, Math.floor(Number(r.versao) || 0));
+        gravaRegistro(versao, cid, false);
+        avisa('subiu', { versao: versao, registrados: r.registrados || 0 });
+      }
+      return r;
+    }, function () { return null; });
+  };
+
+  /* Sair da conta (o botão da ficha Contas): é o sair de verdade — a Sessao sobe o que falta,
+   * mata o token no servidor e tira o save desta conta do navegador (Sessao.sair). */
+  N.sair = function () {
+    var s = S();
+    if (s && s.ativa()) return s.sair();
+    N.sobeParaSair(null);
+    return Promise.resolve({ ok: true });
   };
 })();

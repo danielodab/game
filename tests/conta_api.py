@@ -440,6 +440,34 @@ class ProvaDaConta(unittest.TestCase):
         self.assertEqual(Cliente(self.base).pede('GET', '/api/eu', token=r['token'])[0], 200)
 
     # -- trocar a senha ----------------------------------------------------------------
+    def test_sair_mata_o_token(self):
+        """04/10, "sair é sair": o token do /api/logout deixa de valer em TODA rota com sessão,
+        na hora — quem o guardou (outra aba, uma cópia do localStorage) não entra mais com ele.
+        O sair de uma conta não toca na sessão de outra, e quem saiu não ouve "outro aparelho"."""
+        a, b = self.novo('Lia Sair'), self.novo('Rui Fica')
+        morto = a.token
+        self.assertEqual(a.pede('GET', '/api/eu')[0], 200)
+        self.assertEqual(a.pede('POST', '/api/logout', {}), (200, {'ok': True}))
+        for metodo, rota, corpo in (('GET', '/api/eu', None), ('GET', '/api/conta', None), ('GET', '/api/save', None),
+                                    ('PUT', '/api/save', {'versao': 0, 'progress': {'version': 22}, 'db': None,
+                                                          'nascimentos': []}),
+                                    ('POST', '/api/conta/sessoes/encerrar', {'todas': True}),
+                                    ('POST', '/api/logout', {})):
+            status, r = a.pede(metodo, rota, corpo, token=morto)
+            self.assertEqual(status, 401, (metodo, rota, r))
+            self.assertNotEqual(r.get('motivo'), 'outro-aparelho', (metodo, rota, r))
+        self.assertEqual(b.pede('GET', '/api/eu')[0], 200)                     # a outra conta segue logada
+        self.assertEqual(Cliente(self.base).pede('POST', '/api/logout', {}, token=None)[0], 401)   # sair sem token não é sair
+        # entrar de novo pede a senha e dá um token NOVO; o morto continua morto
+        a2 = self.entra(a)
+        self.assertNotEqual(a2.token, morto)
+        self.assertEqual((a2.pede('GET', '/api/eu')[0], a.pede('GET', '/api/eu', token=morto)[0]), (200, 401))
+        banco = self.banco()
+        try:
+            self.assertEqual(banco.execute("SELECT COUNT(*) FROM sessoes WHERE token = ?", (morto,)).fetchone()[0], 0)
+        finally:
+            banco.close()
+
     def test_trocar_senha(self):
         c = self.novo('Tito Senha')
         c2, c3 = self.entra_sem_derrubar(c), self.entra_sem_derrubar(c)     # 13/09: outras sessões vivas (ver o ajudante)

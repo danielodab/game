@@ -65,12 +65,65 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) { return null; }
   }
 
+  /* SAIR É SAIR (04/10, o dono: "saí da conta, cliquei em jogar e já logou na minha
+   * outra conta... com conta deslogada coloquei para jogar e ele abriu uma sessão").
+   * Não era sessão: o token morria no servidor e a chave 'soterra-sessao' sumia. O que
+   * ficava era o SAVE da última conta que jogou neste navegador, nas chaves nuas da
+   * conta Principal — e o jogo sem sessão abria com ele: os heróis, o nome, os itens,
+   * a praça. Quem entrava na conta do Mestre só para usar o painel do site e saía
+   * encontrava, no "Jogar", o jogo da OUTRA conta dele.
+   *
+   * A regra, decidida AQUI porque é antes de o db.js e o progress.js lerem o disco:
+   * o registro da Nuvem ('soterra-nuvem-v1') diz de qual conta do servidor é o save da
+   * Principal. Sem sessão, save com dono não é de quem está na frente do jogo:
+   *   - em dia com o servidor (nada pendente): sai do disco — ele está inteiro lá, e
+   *     volta quando a conta entrar de novo;
+   *   - com gravação que não subiu (o servidor estava fora): fica guardado e ESCONDIDO,
+   *     e esta janela joga na conta local 'visitante'. Quando a mesma conta entrar, a
+   *     Nuvem o encontra e sobe; se entrar outra, ela o troca (js/core/nuvem.js).
+   * O jogo sem conta continua existindo — começa do zero, sem nome e sem save de ninguém. */
+  var VISITANTE = 'visitante';
+  // o que o navegador guarda de uma conta do servidor (as chaves nuas, as da Principal)
+  var DA_CONTA = ['soterra-save-v2', 'soterra-conta-v1', 'soterra-nuvem-v1', 'soterra-vida-v1',
+                  'soterra-save-v2--antes-do-teste'];
+  function temSessao() {
+    var s = armazem();
+    try {
+      var x = JSON.parse((s && s.getItem('soterra-sessao')) || 'null');
+      return !!(x && typeof x.token === 'string' && x.token && x.conta && typeof x.conta === 'object');
+    } catch (e) { return false; }
+  }
+  /* De quem é o save da Principal: {conta, sujo}, ou null se nunca subiu para conta nenhuma. */
+  function donoDoDisco() {
+    var s = armazem();
+    try {
+      var r = JSON.parse((s && s.getItem('soterra-nuvem-v1')) || 'null');
+      if (r && typeof r === 'object' && r.conta !== null && r.conta !== undefined) return { conta: r.conta, sujo: !!r.sujo };
+    } catch (e) {}
+    return null;
+  }
+  /* Tira do disco o que é da conta do servidor. `ateSujo`: mesmo com gravação pendente
+   * (só quando quem chama acabou de ver que ela não tem mais para onde ir). Devolve
+   * true se o disco ficou sem nada dela. */
+  function esqueceDaConta(ateSujo) {
+    var s = armazem(), dono = donoDoDisco();
+    if (!s || !dono) return true;
+    if (dono.sujo && ateSujo !== true) return false;
+    try { for (var i = 0; i < DA_CONTA.length; i++) s.removeItem(DA_CONTA[i]); } catch (e) { return false; }
+    return true;
+  }
+  C.VISITANTE = VISITANTE;
+  C.donoDoDisco = donoDoDisco;
+  C.esqueceDaConta = esqueceDaConta;
+
   var reg = leReg();
   var ativa = daUrl() || reg.ativa || 'principal';
+  // a escolha vale só para ESTA janela e não vai para o registro: com sessão, a Principal volta
+  if (!temSessao() && !esqueceDaConta() && ativa === 'principal') ativa = VISITANTE;
   // conta pedida na URL que ainda não existe nasce NA HORA — "?conta=2" na
   // segunda janela é o suficiente para criar o segundo jogador
   if (!reg.lista.some(function (c) { return c.id === ativa; })) {
-    reg.lista.push({ id: ativa, rotulo: ativa, criadaEm: agora() });
+    reg.lista.push({ id: ativa, rotulo: ativa === VISITANTE ? 'Visitante' : ativa, criadaEm: agora() });
     gravaReg(reg);
   }
 

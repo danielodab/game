@@ -980,3 +980,48 @@ cada entrega mora em `GM.cru`, a mesma na Caixa do Mestre e no juiz.
 
 Provas: `tests/moderacao_api.py` (API + juiz, 16), `tests/entregas_cliente.js` (o jogo do jogador online, 11) e
 `tests/moderacao_rele_prova.py` (relé de verdade, 19).
+
+## 11. A sessão: sair é sair (04/10)
+
+O relato do dono: "eu tava na conta admin, saí dela, cliquei em jogar e já logou na minha outra conta...
+várias vezes com conta deslogada coloquei para jogar e ele abriu uma sessão".
+
+**O que era.** Não era sessão. A sessão do navegador é UMA chave (`localStorage['soterra-sessao']`, a mesma
+para o site e o jogo, nunca no endereço), e o `POST /api/logout` sempre apagou o token no servidor. O que
+ficava era o **save da última conta que jogou**, nas chaves da conta local Principal (`soterra-save-v2`,
+`soterra-conta-v1`), e o jogo sem sessão abria com ele: heróis, nome, itens, a praça. Quem entrava na conta
+do Mestre só para usar o painel do site e saía encontrava, no "Jogar", o jogo da outra conta dele. Só se
+via o save de contas que já tinham jogado NAQUELE navegador; nenhum token valia, nada subia ao servidor.
+
+**A regra.**
+
+- **Sair** (o "sair" do site, o "Sair da conta" da ficha Contas, os 15 min de inatividade): a chave da sessão
+  some na hora, o token morre no servidor (o pedido vai com `keepalive`, para chegar mesmo com a página indo
+  embora) e o save da conta sai do navegador. No jogo, a gravação pendente sobe antes, com o token que ainda
+  vale (`Nuvem.sobeParaSair`), e o disco congela até a página ir embora.
+- **O registro da Nuvem diz de quem é o save** (`soterra-nuvem-v1` = `{versao, conta, sujo}`). Ao abrir o
+  jogo SEM sessão (`js/core/contas.js`, antes de o db e o progress lerem o disco): save com dono e em dia com
+  o servidor **sai do disco**; com gravação que não subiu (`sujo`) **fica guardado e escondido**, e a janela
+  joga na conta local `visitante`. Quando a mesma conta entra, a Nuvem o encontra e sobe; se entra outra, ela
+  o troca pelo dela (como já fazia). É a rede de proteção de todo caminho em que a sessão acaba sem um sair:
+  o token vencido, a queda por outro aparelho, o "sair de todas as sessões".
+- **O jogo sem conta continua existindo** (é de propósito: `file://`, as provas, quem quer experimentar):
+  começa do zero, sem nome e sem save de ninguém, e o progresso dele fica só naquele navegador. Save que
+  nunca subiu para conta nenhuma (registro sem `conta`) não é tocado.
+- **Outra aba**: a sessão é do navegador inteiro. Sair numa aba (ou outra conta entrar) derruba o jogo
+  aberto nas outras — o evento `storage` da chave —, com a capa "Você saiu desta conta" e o disco congelado.
+- **Não há "lembrar várias contas"**: o navegador guarda no máximo uma sessão, e nenhuma depois de sair. As
+  contas locais da ficha Contas (`?conta=<id>`) são saves locais para testar dois jogadores num PC; nunca
+  guardam token nem o save de uma conta do servidor.
+- **Um aparelho só** (13/09) segue igual: o aparelho derrubado para numa tela que diz por quê e NÃO retoma
+  sozinho — entrar de novo pede a senha. Trocar a senha encerra as outras sessões; redefinir pelo e-mail, todas.
+
+**As provas.** `tests/sessao_navegador.py` (a API de verdade + o site + o jogo num perfil de Chrome: o
+relato refeito passo a passo), `tests/sessao_sair_cliente.js` (a decisão do `contas.js` em cada estado do
+disco), `tests/conta_api.py` (`test_sair_mata_o_token`) e `tests/um_aparelho_navegador.py` (dois perfis de
+Chrome na mesma conta, com o juiz e o Relé: contam-se logins, recargas, reconexões e praças refeitas).
+
+**Limites conhecidos.** O save com gravação pendente fica no disco (escondido) até a conta voltar ou outra
+entrar. As cópias `:bak-<instante>` que a abertura segura faz a pedido ("Abrir sem o save deste navegador",
+`index.html`) não são apagadas pelo sair. Com sessão e uma conta local que não é a Principal, a Nuvem não
+roda mas o resto do jogo ainda fala com o servidor com o token da sessão (comportamento de antes).

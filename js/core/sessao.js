@@ -107,7 +107,9 @@
     }
     var cab = { 'Content-Type': 'application/json' };
     var s = S.ler();
-    var tokenUsado = (s && op.semToken !== true) ? s.token : null;
+    // `op.token`: o sair manda o token explícito — a sessão local já foi apagada e o servidor
+    // precisa dele para saber QUAL sessão matar
+    var tokenUsado = op.token || ((s && op.semToken !== true) ? s.token : null);
     if (tokenUsado) cab.Authorization = 'Bearer ' + tokenUsado;
     var pedido = { method: op.method || 'GET', headers: cab };
     if (op.body !== undefined) pedido.body = JSON.stringify(op.body);
@@ -123,7 +125,7 @@
             // outro aparelho. Se a MESMA conta entrou de novo neste navegador
             // (outra aba, o site), a página adota o token novo e o pedido sai
             // de novo uma vez com ele; senão o jogo cai aqui (S.derrubada)
-            if (j.status === 401 && j.motivo === S.MOTIVO_OUTRO_APARELHO && tokenUsado) {
+            if (j.status === 401 && j.motivo === S.MOTIVO_OUTRO_APARELHO && tokenUsado && !op.token) {
               if (S.derrubada(j.motivo, tokenUsado) === false && !op._deNovo) {
                 var op2 = {};
                 for (var k in op) if (Object.prototype.hasOwnProperty.call(op, k)) op2[k] = op[k];
@@ -169,16 +171,49 @@
   S.excluir = function (nome, senha) {
     return S.api('/api/conta/excluir', { method: 'POST', body: { nome: nome, senha: senha } })
       .then(function (r) {
-        if (r.ok) S.esquece();
+        // a conta não existe mais: o save dela sai deste navegador, com ou sem gravação pendente
+        if (r.ok) { S.esquece(); congelaDisco(); esqueceDoDisco(true); }
         return r;
       });
   };
+  /* SAIR É SAIR (04/10): depois de sair, nada neste navegador entra em conta nenhuma sem a
+   * pessoa se identificar de novo — e o jogo não abre mais com o save da conta que saiu
+   * (era o relato do dono; a regra inteira está no js/core/contas.js). Na ordem:
+   *   1. a sessão local some JÁ (o local sai mesmo com o servidor fora) e o disco congela:
+   *      o jogo desta página ainda tem o save na memória e não pode regravá-lo;
+   *   2. a gravação pendente sobe uma última vez, com o token que ainda vale (a Nuvem);
+   *   3. o token morre no servidor (/api/logout; `keepalive`, para o pedido chegar mesmo
+   *      com a página indo embora);
+   *   4. o save da conta sai do disco — se subiu inteiro. O que não subiu fica guardado e
+   *      escondido para a mesma conta (Contas.esqueceDaConta).
+   * Resolve com a resposta do logout. */
   S.sair = function () {
     var s = S.ler();
-    var p = s ? S.api('/api/logout', { method: 'POST', body: {} }) : Promise.resolve({ ok: true, status: 0 });
-    S.esquece();                       // o local sai mesmo com o servidor fora
-    return p;
+    if (!s) return Promise.resolve({ ok: true, status: 0 });
+    var N = JOGO.Nuvem, ultima = null;
+    try { if (N && N.sobeParaSair) ultima = N.sobeParaSair(s.token); } catch (e) {}
+    S.esquece();
+    congelaDisco();
+    return Promise.resolve(ultima).then(function () {
+      return S.api('/api/logout', { method: 'POST', body: {}, token: s.token, keepalive: true });
+    }).then(function (r) {
+      esqueceDoDisco(false);
+      return r;
+    });
   };
+  /* Daqui até a página recarregar nada vai para o disco (o mesmo da troca de save da Nuvem).
+   * As provas que seguem na MESMA página depois de sair (Nuvem.semRecarga) não congelam nem
+   * perdem o save: lá não há recarga para descongelar. */
+  function emProva() { return !!(JOGO.Nuvem && JOGO.Nuvem.semRecarga); }
+  function congelaDisco() {
+    if (emProva()) return;
+    try { if (JOGO.DB && JOGO.DB.congela) JOGO.DB.congela(); } catch (e) {}
+    try { if (JOGO.Progress) JOGO.Progress.save = function () {}; } catch (e2) {}
+  }
+  function esqueceDoDisco(ateSujo) {
+    if (emProva()) return;
+    try { if (JOGO.Contas && JOGO.Contas.esqueceDaConta) JOGO.Contas.esqueceDaConta(ateSujo); } catch (e) {}
+  }
 
   /* ====================================================================
    * O RELÓGIO DA INATIVIDADE (12/09, pedido do dono: "15 min de inatividade a
@@ -274,6 +309,18 @@
   S.VIGIA_MS = 30000;
   S.semRecarga = false;                            // provas: o "Entrar de novo" não navega
   var derrubadaJa = false, capaDerrubada = null, tiraTeclas = null;
+  /* POR QUE o jogo caiu aqui: 'outro-aparelho' (o de sempre), 'saiu' (04/10: a conta saiu em
+   * outra aba deste navegador) ou 'outra-conta' (outra conta entrou em outra aba). */
+  var motivoQueda = null;
+  S.MOTIVO_SAIU = 'saiu';
+  S.MOTIVO_OUTRA_CONTA = 'outra-conta';
+  S.FRASE_SAIU = 'Você saiu desta conta neste navegador.';
+  var TEXTOS_QUEDA = {
+    'saiu': ['Você saiu desta conta.', 'A conta saiu em outra aba deste navegador, e este jogo foi encerrado aqui.',
+             'O progresso está guardado no servidor. Entre de novo para continuar.'],
+    'outra-conta': ['Outra conta entrou neste navegador.', 'Este jogo era da conta de antes e foi encerrado aqui.',
+                    'Recarregue para jogar com a conta que entrou.']
+  };
   var daPagina = null;                             // {token, contaId} com que esta página joga
   function anotaDaPagina(s) {
     daPagina = (s && typeof s.token === 'string') ? { token: s.token, contaId: (s.conta && typeof s.conta.id === 'number') ? s.conta.id : null } : null;
@@ -299,11 +346,40 @@
       return false;
     }
     derrubadaJa = true;
+    motivoQueda = motivo || S.MOTIVO_OUTRO_APARELHO;
     encerraTudo();
-    avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivo || S.MOTIVO_OUTRO_APARELHO });
+    avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivoQueda });
     S.mostraDerrubada();
     return true;
   };
+
+  /* SAIR EM OUTRA ABA (04/10, "sair é sair"): a sessão é do navegador inteiro — uma chave só no
+   * localStorage. Antes, sair pelo site deixava o jogo aberto na outra aba rodando com o save da
+   * conta na memória; e se OUTRA conta entrasse, esta página passava a falar com o servidor com o
+   * token dela e o save da anterior. O navegador avisa as outras abas quando a chave muda (o evento
+   * `storage`): sem sessão, ou com a de outra conta, o jogo desta página cai — nada mais sobe, o
+   * disco congela (a outra aba já limpou o save; a memória daqui não pode devolvê-lo) e a capa
+   * cobre tudo. Token novo da MESMA conta não é queda: é o caso de cima (adota no próximo pedido).
+   * Página que abriu sem sessão (o jogo sem conta) não tem do que cair. */
+  S._mudouEmOutraAba = function () {
+    if (derrubadaJa || !daPagina) return false;
+    var atual = S.ler();
+    if (atual && (daPagina.contaId === null || (atual.conta && atual.conta.id === daPagina.contaId))) return false;
+    derrubadaJa = true;
+    motivoQueda = atual ? S.MOTIVO_OUTRA_CONTA : S.MOTIVO_SAIU;
+    congelaDisco();
+    encerraTudo();
+    avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivoQueda });
+    S.mostraDerrubada();
+    return true;
+  };
+  try {
+    window.addEventListener('storage', function (ev) {
+      // key null = o armazenamento inteiro foi limpo (localStorage.clear, "limpar dados do site")
+      if (ev && ev.key !== null && ev.key !== S.CHAVE) return;
+      S._mudouEmOutraAba();
+    });
+  } catch (eS) {}
 
   /* A CONTA BANIDA (02/10, servidor/moderacao.py): o mesmo "cai o jogo" do outro
    * aparelho — nada mais sobe, a Rede sai sem religar, o laço para —, com a capa do
@@ -348,15 +424,17 @@
     cx.className = 'inativo-cx';
     var h = document.createElement('h2');
     h.id = 'sessao-derrubada-titulo';
-    h.textContent = 'Sua conta entrou em outro aparelho.';
+    var tx = TEXTOS_QUEDA[motivoQueda] || ['Sua conta entrou em outro aparelho.', 'Este jogo foi encerrado aqui.',
+      'Uma conta fica aberta em um aparelho por vez. Se não foi você, entre e troque a senha na página da conta.'];
+    h.textContent = tx[0];
     var p = document.createElement('p');
-    p.textContent = 'Este jogo foi encerrado aqui.';
+    p.textContent = tx[1];
     var p2 = document.createElement('p');
-    p2.textContent = 'Uma conta fica aberta em um aparelho por vez. Se não foi você, entre e troque a senha na página da conta.';
+    p2.textContent = tx[2];
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'btn btn-primary';
-    b.textContent = 'Entrar de novo';
+    b.textContent = motivoQueda === S.MOTIVO_OUTRA_CONTA ? 'Recarregar' : 'Entrar de novo';
     b.addEventListener('click', function () { S.entrarDeNovo(); });
     cx.appendChild(h); cx.appendChild(p); cx.appendChild(p2); cx.appendChild(b);
     capa.appendChild(cx);
@@ -390,7 +468,7 @@
     var novo = !!(atual && daPagina && atual.token !== daPagina.token);
     if (!novo) {
       S.esquece();
-      try { window.sessionStorage.setItem(S.CHAVE_AVISO, S.FRASE_DERRUBADA); } catch (e) {}
+      try { window.sessionStorage.setItem(S.CHAVE_AVISO, motivoQueda === S.MOTIVO_SAIU ? S.FRASE_SAIU : S.FRASE_DERRUBADA); } catch (e) {}
     }
     if (S.semRecarga) return novo ? 'recarrega' : 'entrar';
     try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); } catch (eB) {}

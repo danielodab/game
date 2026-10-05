@@ -105,6 +105,7 @@ var JOGO = (typeof window !== 'undefined')
   A.adota = function (progress, db, manterFila) {
     var p = P(), d = DB(), e = Ec(), C = JOGO.Contas;
     if (!p || !d || !e) return false;
+    var antes = fotoDaTela(p, d);
     adotando = true;
     try {
       var chave = (C && C.chaveSave) ? C.chaveSave() : (p.SAVE_KEY || 'soterra-save-v2');
@@ -124,9 +125,21 @@ var JOGO = (typeof window !== 'undefined')
     } finally {
       adotando = false;
     }
+    // 04/10: só repinta se o estado MUDOU. Repintar é reconstruir a tela inteira — na praça, o corpo
+    // do herói renasce (a coroa volta ao bilhete e depois ao modelo 3D) e o cartão de vida é refeito
+    // e reposicionado. Toda abertura adotava o estado do servidor quatro ou cinco vezes em poucos
+    // segundos (o 409 da 1ª op, a loja, as entregas), quase sempre IGUAL ao que já estava na tela — e
+    // o dono via a coroa "passando entre dois modelos" e o cartão de vida "pulando"
+    var depois = fotoDaTela(p, d);
+    if (antes !== null && antes === depois) return true;
     try { if (JOGO.UI && JOGO.UI.repaint) JOGO.UI.repaint(); } catch (e2) {}
     return true;
   };
+  /* O que a tela desenha, em texto, para comparar o antes e o depois de uma adoção. null = não deu
+   * para tirar a foto (aí a adoção repinta, como sempre). */
+  function fotoDaTela(p, d) {
+    try { return JSON.stringify([p.state, d.exportar ? d.exportar() : null]); } catch (e) { return null; }
+  }
   function anotaResposta(r) {
     if (!r) return;
     if (typeof r.versao === 'number') {

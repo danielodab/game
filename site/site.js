@@ -126,6 +126,7 @@
     if (token) cab.Authorization = 'Bearer ' + token;
     var pedido = { method: op.method || 'GET', headers: cab };
     if (op.body !== undefined) pedido.body = JSON.stringify(op.body);
+    if (op.keepalive) pedido.keepalive = true;      // o pedido chega mesmo com a página indo embora (o sair)
     return fetch(SITE.base() + rota, pedido).then(function (r) {
       return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
         .then(function (j) {
@@ -193,13 +194,33 @@
     } catch (e) { return ''; }
   };
 
+  /* SAIR É SAIR (04/10, o dono: "saí da conta, cliquei em jogar e já logou na minha outra
+   * conta"). A sessão sempre saiu direito — a chave some e o token morre no servidor. O que
+   * ficava era o SAVE da conta no navegador (as chaves do jogo), e o "Jogar" abria o jogo
+   * sem sessão com ele. Agora o sair também tira do navegador o save da conta, quando ele
+   * está inteiro no servidor; com gravação que não subiu, fica guardado e o jogo não o mostra
+   * a ninguém sem sessão (a regra e o porquê: js/core/contas.js, que a repete ao abrir o jogo).
+   * A sessão some PRIMEIRO: é o que avisa o jogo aberto em outra aba (js/core/sessao.js, o
+   * evento `storage`) para parar de gravar; o save sai logo depois. */
+  var DA_CONTA = ['soterra-save-v2', 'soterra-conta-v1', 'soterra-nuvem-v1', 'soterra-vida-v1',
+                  'soterra-save-v2--antes-do-teste'];      // as mesmas do js/core/contas.js
+  SITE.esqueceJogoDaConta = function () {
+    try {
+      var r = JSON.parse(leLocal('soterra-nuvem-v1') || 'null');
+      if (!r || typeof r !== 'object' || r.conta === null || r.conta === undefined) return true;   // save sem dono: é do jogo sem conta
+      if (r.sujo) return false;
+      for (var i = 0; i < DA_CONTA.length; i++) gravaLocal(DA_CONTA[i], null);
+      return true;
+    } catch (e) { return false; }
+  };
   SITE.sair = function () {
     var s = SITE.sessao();
     SITE.esquece();                       // primeiro o local: mesmo sem rede a página sai
     SITE.cabecalho();
     // o token vai explícito: a sessão local já foi apagada e o servidor
     // precisa dele para saber QUAL sessão matar
-    if (s) SITE.api('/api/logout', { method: 'POST', body: {}, token: s.token });
+    if (s) SITE.api('/api/logout', { method: 'POST', body: {}, token: s.token, keepalive: true });
+    if (s) { try { setTimeout(SITE.esqueceJogoDaConta, 333); } catch (e0) { SITE.esqueceJogoDaConta(); } }
     // Fase C: a conta e a loja se redesenham sem sessão (o "sair" do topo vale em toda página)
     try { window.dispatchEvent(new CustomEvent('site:sessao', { detail: { tipo: 'saiu' } })); } catch (e) { /* navegador antigo */ }
   };

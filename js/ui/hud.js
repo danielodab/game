@@ -225,6 +225,11 @@ var JOGO = (typeof window !== 'undefined')
    * (Progress.devolvidasPorNivel(true) salva): a abertura seguinte já não
    * acha a peça vestida e o toast não se repete. */
   function avisaDevolvidasPorNivel() {
+    // 04/10: primeiro só OLHA. Consumir (true) é uma operação que sobe ao servidor (js/core/autoridade.js),
+    // e toda entrada na praça mandava uma, mesmo sem nada devolvido: o servidor respondia com o estado
+    // dele, a tela inteira era refeita, a praça nova mandava outra — coroa e cartão de vida piscando
+    var ha = safe(function () { return P().devolvidasPorNivel(false); }, []) || [];
+    if (!ha.length) return;
     var lista = safe(function () { return P().devolvidasPorNivel(true); }, []) || [];
     if (!lista.length) return;
     var pecas = 0, bichos = 0;
@@ -643,7 +648,14 @@ var JOGO = (typeof window !== 'undefined')
         'a conexão fechou para não ocupar o servidor. O seu progresso já está guardado.'));
       var b = el('button', 'btn btn-primary', 'Entrar de novo');
       b.type = 'button';
-      tap(b, function () { try { location.reload(); } catch (e) {} });
+      // 04/10: quem tinha conta saiu dela — "entrar de novo" é a tela de entrar, com a senha. Recarregar
+      // abria o jogo sem conta (e, antes, com o save da conta que tinha acabado de sair)
+      tap(b, function () {
+        try {
+          if (info && info.tinhaConta && !Se.semRecarga) location.href = Se.paginaConta() + '#entrar';
+          else location.reload();
+        } catch (e) {}
+      });
       cx.appendChild(b);
       var a = el('a', 'btn btn-ghost', 'Ir para o site');
       a.href = safe(function () { return Se.paginaSite(); }, 'site/index.html');
@@ -9957,10 +9969,20 @@ var JOGO = (typeof window !== 'undefined')
           var pN = estN.parada ? Nx.retomar() : Nx.iniciar();
           pN.then(function () { if (sheetName === 'contas') sheetContas(); });
         }));
-        linhaN.appendChild(btn('Sair da nuvem', '', function () {
-          confirmSheet('Sair da nuvem?',
-            'O save desta máquina fica como está, e o do servidor também. Para voltar, entre de novo pelo site.',
-            function () { Nx.sair().then(function () { sheetContas(); }); });
+        // 04/10, "sair é sair": o save da conta sai deste navegador junto com a sessão (antes ficava, e o
+        // jogo sem conta abria com ele); a página vai para a tela de entrar
+        linhaN.appendChild(btn('Sair da conta', '', function () {
+          confirmSheet('Sair da conta?',
+            'Você sai desta conta neste navegador e o jogo dela fecha aqui. O progresso fica guardado no servidor: ' +
+            'para voltar, entre de novo com a sua senha.',
+            function () {
+              Nx.sair().then(function () {
+                if (Sx.semRecarga) { sheetContas(); return; }
+                safe(function () { window.sessionStorage.setItem(Sx.CHAVE_AVISO, Sx.FRASE_SAIU); return true; }, false);
+                safe(function () { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); return true; }, false);
+                safe(function () { location.href = Sx.paginaConta() + '#entrar'; return true; }, false);
+              });
+            });
         }));
         caixaN.appendChild(linhaN);
         // 02/10: os direitos do titular (servidor/privacidade.py): os documentos, baixar os dados, excluir
