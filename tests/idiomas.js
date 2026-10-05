@@ -197,6 +197,81 @@ function decide(chaves, lingua, busca) {
         decide({ 'soterra-idioma': 'es' }, 'pt-BR').idioma === 'es');
 })();
 
+// ---- (f) a etapa 2: as telas, os menus e o registro da batalha
+(function () {
+  const fs = require('fs');
+  /* O registro da batalha (os eventos `log` do motor): no juiz e em português sai o MESMO texto de
+   * sempre — o motor roda lá sem o JOGO.I18n, e o atalho Tx() tem de preencher as {variáveis} sozinho;
+   * em inglês sai traduzido, com o mesmo número de linhas (texto não muda o que acontece). */
+  function registro(J, cs) {
+    const E = J.Engine, linhas = [];
+    const st = E.createBattle(cs.dungeonId, cs.roomIndex, cs.party, { seed: cs.semente, dificuldade: 'normal', escolhePosicao: false });
+    const colhe = () => { E.events.forEach((ev) => { if (ev && ev.type === 'log') linhas.push(String(ev.text)); }); E.events.length = 0; };
+    colhe();
+    let voltas = 0;
+    while (st.phase === 'playing' && voltas++ < 400) {
+      const u = E.activeUnit(st);
+      if (!u) break;
+      for (const a of (J.AI.planTurn(st, u.uid) || [])) {
+        if (st.phase !== 'playing') break;
+        if (a.action === 'move') E.move(st, u.uid, a.x, a.y);
+        else if (a.action === 'cast') E.cast(st, u.uid, a.spellId, a.x, a.y);
+        colhe();
+      }
+      if (st.phase === 'playing') E.endTurn(st);
+      colhe();
+    }
+    return linhas;
+  }
+  const classes = Object.keys(cru.classes).filter((c) => c !== 'gm');
+  const cs = { dungeonId: cru.dungeons[0].id, roomIndex: 0, semente: 9001,
+               party: [0, 1].map((k) => ({ heroId: classes[k], classId: classes[k], element: 'neutro', level: 30 })) };
+  const doJuiz = registro(motor.mundo().JOGO, cs), emPt = registro(cliente('pt').JOGO, cs), emEn = registro(cliente('en').JOGO, cs);
+  check('(f) o registro da batalha no juiz (sem o i18n) é o mesmo, linha a linha, do cliente em português',
+        doJuiz.length > 5 && JSON.stringify(doJuiz) === JSON.stringify(emPt), doJuiz.length + ' x ' + emPt.length);
+  check('(f) nenhuma linha do registro sai com {variável} por preencher', !doJuiz.concat(emEn).some((l) => /\{[A-Za-z_]\w*\}/.test(l)),
+        doJuiz.concat(emEn).filter((l) => /\{[A-Za-z_]\w*\}/.test(l))[0]);
+  check('(f) em inglês o registro tem as mesmas linhas, com outro texto',
+        emEn.length === emPt.length && emEn.filter((l, i) => l !== emPt[i]).length > emPt.length / 2,
+        emEn.length + ' x ' + emPt.length);
+
+  /* Os dicionários da interface: a mesma chave nos dois idiomas, e a marcação (tags HTML) igual à do
+   * português — tag que some ou sobra na tradução quebra a ficha, e a ferramenta só confere {variáveis}. */
+  const tags = (s) => (String(s).match(/<\/?[a-zA-Z][^<>]*>/g) || []).sort().join(' ');
+  const bordas = (s) => String(s).match(/^\s*/)[0] + '|' + String(s).match(/\s*$/)[0];
+  const T = {};
+  ['en', 'es'].forEach((l) => { T[l] = cliente(l).JOGO.I18n.dicionario(l).textos; });
+  const chavesEn = Object.keys(T.en), soNum = chavesEn.filter((k) => !Object.prototype.hasOwnProperty.call(T.es, k));
+  check('(f) os dois dicionários da interface têm as mesmas chaves (' + chavesEn.length + ')',
+        chavesEn.length > 2000 && soNum.length === 0 && Object.keys(T.es).length === chavesEn.length, soNum.slice(0, 3).join(' | '));
+  ['en', 'es'].forEach((l) => {
+    const torta = chavesEn.filter((k) => tags(T[l][k]) !== tags(k) || bordas(T[l][k]) !== bordas(k));
+    check('(f) ' + l + ': tags HTML e espaços das pontas da tradução são os do português', torta.length === 0, torta.slice(0, 2).join(' | '));
+  });
+
+  /* O atalho fora do hud.js: todo arquivo que chama Tx('…') define o SEU Tx com rede (o juiz e as
+   * provas em Node carregam vários deles sem o JOGO.I18n). */
+  const semAtalho = [];
+  (function anda(d) {
+    fs.readdirSync(path.join(RAIZ, d)).forEach((n) => {
+      const rel = d + '/' + n;
+      if (fs.statSync(path.join(RAIZ, rel)).isDirectory()) { if (!/i18n|data$/.test(rel)) anda(rel); return; }
+      if (!/\.js$/.test(n) || /assets_bundle/.test(n)) return;
+      const t = fs.readFileSync(path.join(RAIZ, rel), 'utf8');
+      if (/\bTx\(/.test(t) && !/function Tx\(s, v\)/.test(t)) semAtalho.push(rel);
+    });
+  })('js');
+  check('(f) quem usa Tx() traz o próprio atalho com rede', semAtalho.length === 0, semAtalho.join(', '));
+
+  /* O título é CHAVE: o de classe é montado com o nome da classe em português mesmo com o DATA em
+   * inglês (I18n.pt devolve o original), e o que não foi trocado volta como está. */
+  const Jen = cliente('en').JOGO, c0 = classes[0];
+  check('(f) I18n.pt devolve o português de um campo trocado, e o próprio valor de um que não foi',
+        Jen.DATA.classes[c0].name !== cru.classes[c0].name && Jen.I18n.pt('classes', c0, 'name', Jen.DATA.classes[c0].name) === cru.classes[c0].name &&
+        Jen.I18n.pt('classes', 'nao-existe', 'name', 'x') === 'x');
+  check('(f) variável nula sai como na concatenação antiga ("null"), não como chave', pt.I18n.t('a {x} b', { x: null }) === 'a null b');
+})();
+
 console.log('\n' + (total - falhas) + ' de ' + total + ' passaram' +
   ' · textos de dados traduzidos: en ' + contagem.en + ', es ' + contagem.es);
 process.exit(falhas ? 1 : 0);

@@ -6,10 +6,10 @@ português."* Combinado em **três etapas**:
 | etapa | o quê | estado |
 |---|---|---|
 | 1 | a base (`JOGO.I18n`), o seletor nas Configurações e os **dados** (tudo o que vem de `js/core/data`) | **feita** |
-| 2 | as telas e os menus do jogo (`js/ui/*`, as mensagens de `js/core/*`) | a fazer |
+| 2 | as telas e os menus do jogo (`js/ui/*`, as mensagens de `js/core/*`) | **feita** (05/10) |
 | 3 | o site (`site/*`) e as mensagens do servidor (`servidor/*.py`) | a fazer |
 
-Este arquivo é o manual de quem vai fazer a 2 e a 3 sem ter visto a 1.
+Este arquivo é o manual de quem vai fazer a 3 (e de quem for acrescentar texto ao jogo) sem ter visto a 1 e a 2.
 
 ## A regra que não se quebra
 
@@ -21,7 +21,7 @@ save, no servidor e no juiz. O idioma é uma camada por cima, no navegador.
 - Nada de idioma entra no save, no hash da batalha (`Engine.hash` não tem nome nenhum) nem vai ao
   servidor. `Engine.VERSAO_REGRAS` não muda por causa de tradução.
 - Não se traduz o arquivo de dados: traduz-se **por cima** dele (`js/i18n/dados_*.js`).
-- `node tests/idiomas.js` prova tudo isso (30 e poucas checagens, 2 s). Rode depois de qualquer mexida.
+- `node tests/idiomas.js` prova tudo isso (47 checagens, poucos segundos). Rode depois de qualquer mexida.
 
 ## As peças
 
@@ -30,12 +30,12 @@ save, no servidor e no juiz. O idioma é uma camada por cima, no navegador.
 | `js/core/i18n.js` | `JOGO.I18n`: decide o idioma, `t()`, `n()`, `registra()`, `aplicaDados()`. Sem DOM. |
 | `js/i18n/dados_en.js`, `dados_es.js` | os dados: tabela → registro → campo. Uma linha por registro, edita-se à mão. |
 | `js/i18n/textos_en.js`, `textos_es.js` | a interface: `"texto em português": "tradução"`. **É aqui que a etapa 2 escreve.** |
-| `index.html` | carrega o `i18n.js` antes da lista, põe o `<html lang>` e, fora do português, encaixa os dois dicionários do idioma logo depois do último `js/core/data/*.js`. Em português não desce dicionário nenhum. |
+| `index.html` | carrega o `i18n.js` antes da lista, põe o `<html lang>` e, fora do português, desce o `textos_<idioma>.js` **logo depois do `i18n.js`** (o aplicativo desenha telas antes da lista) e encaixa o `dados_<idioma>.js` depois do último `js/core/data/*.js`. Em português não desce dicionário nenhum. A tela de carga e o aviso de abertura que parou têm um dicionário próprio, pequeno, DENTRO do `index.html` (`BT`): rodam antes do `i18n.js`. |
 | `js/ui/hud.js` → `sheetConfig` | o seletor (primeira seção da ficha) e o **exemplo vivo** de texto embrulhado. |
 | `tools/i18n_falta.js` | o que falta traduzir. |
 | `tests/idiomas.js` | a prova. |
 
-Arquivo novo de dicionário (se a etapa 2 quiser separar por tela): crie `js/i18n/<nome>_en.js` e
+Arquivo novo de dicionário (se um dia quiser separar por tela): crie `js/i18n/<nome>_en.js` e
 `_es.js`, registre com `JOGO.I18n.registra('en', { textos: {…} })` e acrescente o nome na linha do
 `arquivos.splice(…)` do `index.html`. O `servidor/coolify/versao.py` dá hash a todo `.js` sozinho, e o
 aplicativo de Android copia a pasta `js/` inteira — não há outra lista para atualizar.
@@ -59,7 +59,15 @@ escolhido no site já vale no jogo.
 Trocar nas Configurações grava e **recarrega** a página (no meio de uma batalha, só avisa e oferece o
 botão). A conta não sai: sessão e save moram em outras chaves.
 
-## Etapa 2 — como embrulhar um texto
+## Etapa 2 — o que foi feito, e como embrulhar um texto novo
+
+**Feita em 05/10.** 2.400 textos embrulhados (frase solta e frase que era montada aos pedaços), todos
+com inglês e espanhol: `js/ui/hud.js` (≈ 1.750 chaves), o registro da batalha (`engine.js`, `poco.js`,
+`santuario.js`, `fusion.js`), `grupo.js`, `coop.js`, `guilda.js`, `mercado.js`, `troca.js`, `agenda.js`,
+`autoridade.js`, `game.js`, `loja.js`, `sessao.js`, `nuvem.js`, `db.js`, `missoes.js`, `amigos.js`,
+`nomes.js`, `progress.js`, `brasa.js`, `titulos.js`, `js/ui/moderacao.js`, `brasao.js`, `tutor.js`,
+`tela_cheia.js`, `js/app_modelos.js`, `compra_play.js`, `main.js`, `mobile.js`, o `content:` do CSS e
+a tela de carga do `index.html`.
 
 A chave é **o próprio texto em português**. Não invente chave.
 
@@ -72,48 +80,100 @@ el('h3', 'bk-tit', tr('Gráficos'))
 toast(tr('Faltam {n} vinténs.', { n: n }), 'bad')
 ```
 
-- No `hud.js` use `tr(…)` (já existe, com rede se o módulo faltar). Nos outros arquivos de `js/ui` crie o
-  mesmo atalho de três linhas; em `js/core/*` use `JOGO.I18n ? JOGO.I18n.t(…) : texto` — o juiz carrega
-  alguns desses arquivos SEM o i18n, e eles têm de seguir funcionando.
+- No `hud.js` o atalho é `tr(…)`. **Em todos os outros arquivos é `Tx(…)`**, uma função de dez linhas no
+  topo de cada um (`tr` é nome de variável em vários deles — armadilha, trilha). Os dois têm rede: sem o
+  `JOGO.I18n` (o juiz, as provas em Node, página de prova que não carrega o `i18n.js`) devolvem o
+  português **com as {variáveis} preenchidas**. Arquivo novo que precise de texto: copie o `Tx` de um
+  vizinho (`tests/idiomas.js` cobra que quem chama `Tx(` o defina).
 - **Frase montada aos pedaços vira UMA frase com variáveis.** `'Faltam ' + n + ' vinténs'` não se traduz
   pedaço a pedaço: a ordem das palavras muda de idioma para idioma.
-- Plural: `JOGO.I18n.n(qtd, '{n} sala', '{n} salas')` — as duas formas são chaves do dicionário.
-- O texto tem de estar **literal** dentro do `tr('…')`: é assim que o `tools/i18n_falta.js` o acha.
-  `tr(variavel)` funciona, mas a ferramenta não vê — use só para o que já está no dicionário (família
-  de monstro, grau de forja, título).
-- HTML dentro do texto (`<b>`, `<kbd>`) fica na chave e na tradução, igual.
+- **Pedaço que muda conforme a conta vira frase inteira por ramo**, não pedacinho traduzido:
+  `n === 1 ? tr('Falta <b>{n}</b> carta.', …) : tr('Faltam <b>{n}</b> cartas.', …)`. O `JOGO.I18n.n(qtd,
+  '{n} sala', '{n} salas')` serve ao plural simples.
+- O texto tem de estar **literal** dentro do `tr('…')`/`Tx('…')`: é assim que o `tools/i18n_falta.js` o
+  acha. `tr(variavel)` funciona, mas a ferramenta não vê — use só para o que já está no dicionário
+  (grau de forja, título, a medalha "ouro/prata/bronze", o nome do chefe no catálogo de títulos).
+- HTML dentro do texto (`<b>`, `<kbd>`) fica na chave e na tradução, igual — `tests/idiomas.js` confere
+  as tags e os espaços das pontas; a ferramenta confere as `{variáveis}`.
+- Em português **nada pode mudar**: `tr(modelo, vars)` tem de dar, byte a byte, o texto que a
+  concatenação dava (as provas de `tests/` procuram texto em português). Valor nulo numa variável sai
+  "null", como saía.
 - Depois de embrulhar, acrescente a linha nos DOIS `js/i18n/textos_*.js` e rode a ferramenta.
 
-### Três textos que o DATA guarda em português de propósito
+### O que NÃO se embrulha (o embrulho automático respeitou; quem mexer à mão, cuidado)
 
-Têm cara de texto, mas alguém os usa como chave — por isso **não** são trocados no DATA, e a etapa 2
-os passa por `tr()` na hora de desenhar (as traduções já estão nos `textos_*.js`):
+- Texto que é **chave**: comparação (`===`, `case`, `indexOf`), nome de propriedade, classe de CSS, id,
+  chave de `localStorage`, evento, o que vai para `throw`/`console`.
+- `js/core/contas.js` e `js/core/rede.js` ficaram de fora inteiros: os rótulos "Principal", "Visitante",
+  "Conta 2", "Mestre do Fundo" são **gravados** no registro de contas e comparados; "Aventureiro" e
+  "Guilda" viajam pelo relé como nome de reserva.
+- `js/core/registro_erros.js` (o relato que vai para a equipe) e os `throw new Error('…')` de
+  `js/core/loja.js` e do `engine.js`: são para quem lê o registro, não para o jogador.
+- O painel do Mestre, o `debug.js`, o `gm.js`, o 3D (`js/render*`).
 
-| o quê | quem usa como chave |
+### Texto que é chave e só se traduz NA TELA
+
+| o quê | onde se traduz |
 |---|---|
-| `monster.family` ("Flora Voraz"…) | `js/render3d/models3d_v2.js`, `M.FAMILY_LOOK[md.family]` — o visual do monstro |
-| `DATA.upgrade.tiers[].name` ("Comum", "Raro", "Supremo", "Magnífico") | `hud.js`, `tierClass()` faz a classe de CSS com ele — traduza em `tierOf()` **só na exibição**, nunca no `tierClass` |
-| os títulos de `js/core/titulos.js` ("o Podador da Viúva", "Voz do Eco"…) | o texto do título é o que o save e o relé guardam e comparam |
+| o grau da forja ("Comum", "Raro", "Supremo", "Magnífico") | `hud.js`: `tierOf()` devolve o português (o `tierClass()` faz a classe de CSS com ele); `tierNome()` é o da tela |
+| o título ("o Podador da Viúva", "Voz do Eco", "Top 2 Bárbaro") | `hud.js`: `titExibe()`, também exposto como `JOGO.UI.titExibe` para a plaquinha do `hub3d.js`. O título de classe é montado com o nome da classe **em português** mesmo com o DATA traduzido: `JOGO.I18n.pt('classes', id, 'name', atual)` devolve o original de qualquer campo que o `aplicaDados` trocou |
+| `monster.family` | não aparece em tela nenhuma hoje; as traduções estão no dicionário para quando aparecer |
+
+### Texto que viaja entre jogadores
+
+Vai **no idioma de quem o gerou** — não se mexeu no protocolo: os avisos do grupo e do duelo que o outro
+lado monta ("X escolheu o calabouço Y"), o nome do item numa oferta de troca ou do mercado, a foto de
+resgate da batalha em dupla e, nela, o **registro da batalha** (quem recebe a foto do parceiro vê as
+linhas que ele gerou no idioma dele). O nome de reserva "Você" do `grupo.js` também. É cosmético; o
+conserto certo é mandar id + campos e traduzir na ponta.
+
+### O que sobrou em português (medido com `--candidatos`: 179, quase tudo falso positivo)
+
+A conta de `node tools/i18n_falta.js --candidatos` não zera, e não é para zerar: sobram os
+`'[object Array]'`, folhas de estilo e `cssText` em string, nomes de tecla (`'Enter'`, `'Escape'`,
+`'Tab'`) e os arquivos da lista acima. Português de verdade que ainda aparece ao jogador:
+
+- **as mensagens que o servidor manda** (`{"erro": "…"}`) — etapa 3;
+- o **nome da etapa** no aviso de abertura que parou ("o download dos modelos") — é marca interna;
+- palavra solta em minúscula que a régua do embrulho não reconhece como texto (o que apareceu nas fotos
+  da praça, das fichas e da batalha foi embrulhado à mão; tela que as fotos não abriram pode ter alguma)
+  e atributo `title="…"` escrito dentro de marcação em string (`title="quem manda na guerra"`);
+- o que a conta de candidatos chama de sobra e é de propósito: 45 `'[object Array]'`, 44 folhas de estilo
+  em string, 11 nomes de tecla, 27 `throw`/`console`, 35 nos arquivos que ficaram de fora;
+- frases que ainda saem em dois pedaços (uma variável que carrega outro pedaço traduzido: "{a} — vida
+  cheia"): estão traduzidas, mas a ordem das palavras ficou a do português.
 
 ### Onde o motor escreve texto
 
 `js/core/engine.js`, `poco.js`, `santuario.js`, `fusion.js` escrevem o registro da batalha com
-`log('… ' + u.name + ' …')`. Esses arquivos rodam no juiz. O jeito seguro: `log(T('{nome} morre.', {
-nome: u.name }))` com `var T = (JOGO.I18n && JOGO.I18n.t) || function (s, v) { /* interpola */ }` — o
-log não entra no hash, mas **confira** com `node tests/idiomas.js` e `node tests/juiz_sala.js`.
+`log(Tx('{name} pisa em uma armadilha!', { name: u.name }))`. Esses arquivos rodam no juiz, sem o
+`JOGO.I18n`: o `Tx` de cada um devolve o português. O log não entra no hash — `node tests/idiomas.js`
+prova que o juiz e o cliente em português escrevem o mesmo registro, linha a linha, e que o cliente em
+inglês chega ao mesmo hash. As tabelas de texto do motor (`WEATHERS`, os desafios de sala, o "perde o
+bônus" do efeito que acaba) são traduzidas **na carga do arquivo**: no navegador o dicionário já
+desceu; no juiz não há dicionário.
 O nome do feitiço de fusão é montado em `js/core/fusion.js` como `formName + ' ' + affix`; os
 dicionários já foram escritos para essa ordem (ver o glossário) — não inverta no código.
 
-### O tamanho do serviço (medido em 05/10 com `node tools/i18n_falta.js --candidatos`)
-
-Cerca de **2.900 literais** com cara de texto em português: `js/ui/hud.js` ≈ 2.030, `js/core/grupo.js`
-≈ 110, `engine.js` ≈ 75, `js/ui/moderacao.js` ≈ 70, `coop.js` ≈ 55, `js/app_modelos.js` ≈ 55,
-`guilda.js` e `js/ui/brasao.js` ≈ 50 cada, `compra_play.js` ≈ 40, `mercado.js` ≈ 30, e mais uns 300
-espalhados em 25 arquivos pequenos. É estimativa (pega falso positivo e perde frase aos pedaços).
-Sugestão de ordem: batalha e inventário do `hud.js` primeiro (é o que mais aparece), depois praça e
-fichas, depois as mensagens de `js/core`. O `css/style.css` tem texto em `content:` — confira.
-
 ## Etapa 3 — site e servidor
+
+O que a etapa 2 deixou combinado para ela:
+
+- **A chave do idioma é uma só**: `localStorage['soterra-idioma']` (`pt`, `en` ou `es`), na mesma origem
+  do jogo. O site deve LER e GRAVAR essa chave com a regra de `js/core/i18n.js` (`decide()`): `?lang=`
+  vale só naquela abertura; depois o gravado; na primeira vez, português se há rastro de jogo, senão o
+  idioma do aparelho. O `index.html` do jogo também a lê sozinho, antes do `i18n.js`, para a tela de
+  carga (`lgBoot()`).
+- **Erro do servidor com código.** O cliente mostra `r.erro` cru em dezenas de lugares (`toast(r.erro ||
+  tr('não deu'))`): o texto de reserva já está traduzido, o do servidor não. O caminho: o servidor manda
+  `codigo` (e os números em campos) junto do `erro`, e o cliente troca `r.erro` por uma função única —
+  `erroDe(r, reserva)` — que procura `tr('erro.' + codigo)`... ou, mais simples, um mapa código → frase
+  já embrulhada. **Não** traduza pela frase do servidor: várias têm número dentro.
+- Os erros que o CLIENTE gera para a conta local (`guilda.js`, `db.js`, `missoes.js`, `nuvem.js`: "sem
+  guilda", "só o líder promove") já estão traduzidos; os mesmos textos vindos do servidor de verdade não.
+- A loja do site, os e-mails e o correio da Equipe entregam texto ao jogo (nome de pacote, recado): em
+  português até a etapa 3.
+
 
 - `site/*.html` + `site/*.js`: 23 arquivos, ~140 KB de HTML. O texto está no HTML, não em JS: o caminho
   barato é `data-i18n` nos elementos + um `site/i18n.js` pequeno com a mesma regra de escolha e a mesma
@@ -204,7 +264,5 @@ tradução não passa muito do tamanho do português — botão e ficha de celul
 - O **painel do Mestre** (`js/ui/painel_mestre.js`, `js/ui/debug.js`, `js/core/gm.js`), o Terminal e o
   `site/mestre*`: ferramenta da equipe, em português.
 - O nome do jogo, **SOTERRA**.
-- Texto que viaja entre jogadores vai **no idioma de quem o gerou**: o nome do item numa oferta de troca
-  ou do mercado (`troca.js`, `mercado.js`), o "X escolheu o calabouço Y" do grupo, a foto de resgate da
-  batalha em dupla. É cosmético; se incomodar, a etapa 2 troca o nome pelo id e traduz na ponta.
+- Texto que viaja entre jogadores vai **no idioma de quem o gerou** (ver a etapa 2, acima).
 - `index2d.html`, `v2.html`, `v2_3d.html` (as linhas antigas) não carregam o i18n: seguem em português.
