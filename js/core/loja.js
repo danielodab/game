@@ -110,6 +110,8 @@
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra'];   // o gêmeo de loja.AURAS (servidor)
   // 04/10: a 'mestre' (Chama do Mestre) não é entrega da loja — só a conta do Mestre a tem, pelo servidor
+  // ...mas CHEGA na vitrine dessa conta: a ficha aceita as da loja e as do Mestre (o filtro só com AURAS a jogava fora)
+  var AURAS_DA_FICHA = AURAS.concat(['mestre']);
   var ITENS_DO_PACOTE = { pedras: 1, classe: 1 };          // o que um pacote pode trazer dentro
   var TETO_ITENS_PACOTE = 12;
   var ELEMENTOS_SELO = ['fogo', 'agua', 'terra', 'ar'];
@@ -272,8 +274,8 @@
   }
   function guardaVitrine(r) {
     var a = (r.auras && typeof r.auras === 'object') ? r.auras : {};
-    var tem = lista(a.tem).filter(function (c) { return AURAS.indexOf(c) >= 0; });
-    var todas = lista(a.todas).filter(function (x) { return x && AURAS.indexOf(x.cor) >= 0; })
+    var tem = lista(a.tem).filter(function (c) { return AURAS_DA_FICHA.indexOf(c) >= 0; });
+    var todas = lista(a.todas).filter(function (x) { return x && AURAS_DA_FICHA.indexOf(x.cor) >= 0; })
       .map(function (x) { return { cor: x.cor, nome: String(x.nome || x.cor) }; });
     var of = (r.ofertas && typeof r.ofertas === 'object') ? r.ofertas : {};
     var bv = (r.boasVindas && typeof r.boasVindas === 'object') ? r.boasVindas : {};
@@ -307,7 +309,7 @@
   L.auraEscolhida = function () { return (vit && vit.auras.escolhida) || null; };
   /* liga, troca ou desliga (null) a aura da praça: o SERVIDOR confere a posse e guarda a escolha */
   L.escolheAura = function (cor) {
-    if (cor !== null && AURAS.indexOf(cor) < 0) return Promise.resolve({ ok: false, erro: 'aura desconhecida' });
+    if (cor !== null && AURAS_DA_FICHA.indexOf(cor) < 0) return Promise.resolve({ ok: false, erro: 'aura desconhecida' });
     if (!comSessao()) return Promise.resolve({ ok: false, erro: 'sem sessão' });
     return Promise.resolve(pede('/api/loja/aura', { method: 'POST', body: { aura: cor } })).then(function (r) {
       if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'não deu para trocar a aura agora' };

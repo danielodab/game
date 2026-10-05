@@ -96,20 +96,9 @@
 
     S.guarda({ token: 'tok-mestre', conta: { id: 1, nome: 'Dono', gm: true } });
     PM.pintaBotao();
-    var b = q('.pm-abrir');
-    check('a conta que o servidor marcou (gm:true): o botão discreto aparece e recebe clique',
-          !!b && pe(b) === 'auto' && PM.noServidor() === true);
-    // 03/10 (revisão): no celular, na batalha, o ⚖ caía em cima do recentrar (⌖) e roubava o toque
-    var html = document.documentElement, btTop = document.createElement('div');
-    btTop.className = 'bt-top';
-    html.classList.add('celular');
-    document.getElementById('ui-root').appendChild(btTop);
-    var naBatalha = getComputedStyle(b).display;
-    btTop.parentNode.removeChild(btTop);
-    var naPraca = getComputedStyle(b).display;
-    html.classList.remove('celular');
-    check('no celular, na batalha (a fileira do cadeado, do ⌖ e do som), o ⚖ some; na praça, volta',
-          naBatalha === 'none' && naPraca !== 'none', naBatalha + ' / ' + naPraca);
+    // 04/10: o ⚖ flutuante saiu (era o mesmo painel do "⚔ Mestre") — nem o Mestre o vê
+    check('a conta que o servidor marcou (gm:true): é o Mestre, e não há botão flutuante',
+          !q('.pm-abrir') && PM.noServidor() === true);
     var ev = tecla('F9');
     check('F9 abre o painel, e a tecla não segue para o jogo (preventDefault)', PM.aberto() && ev.defaultPrevented);
     var capa = q('.pm-capa');
@@ -381,9 +370,9 @@
 
     // ============================================================ Ferramentas (o MESMO painel de teste)
     PM.abrir('ferramentas');
-    check('Ferramentas desenha o corpo do painel de teste (JOGO.Debug.desenhaEm), sem cópia',
-          qq('.pm-corpo .dbg-acoes').length >= 1 && !!botaoCom('Liberar as 6 classes', q('.pm-corpo')) &&
-          !!q('.pm-corpo .pm-cartao h3') && q('.pm-corpo').textContent.indexOf('PA e PP do Mestre') >= 0);
+    check('Ferramentas: PA/PP do Mestre, e o painel de teste não é mais desenhado (04/10)',
+          !q('.pm-corpo .dbg-acoes') && !botaoCom('Liberar as 6 classes', q('.pm-corpo')) &&
+          q('.pm-corpo').textContent.indexOf('PA e PP do Mestre') >= 0);
     check('o "Aparelhar o Mestre" (da ficha da tecla M) mora nas Ferramentas, uma vez só',
           qq('.pm-corpo button').filter(function (b) { return b.textContent === 'Aparelhar o Mestre'; }).length === 1);
     PM.fechar();

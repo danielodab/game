@@ -45,7 +45,7 @@ limite e entrega (`servidor/loja.py`; o porquê de cada trava em `docs/SEGURANCA
 
 | o quê | preço | limite |
 |---|---|---|
-| **Auras na praça** (Brasa, Maré, Raiz, Vento e a neutra, da Lousa) | 150 barras cada | uma de cada por conta |
+| **Auras na praça** (Brasa, Maré, Raiz, Vento e a neutra, da Lousa) | 150 barras cada; a da Lousa, 250 (e fica fora do Pacote) | uma de cada por conta |
 | **Pacote de Boas-Vindas** (Xamã ou Bruxo + 10 pedras de cada tipo + uma aura) | 250 barras (o conteúdo avulso soma 820: −70%) | 1 por conta, para sempre |
 | **Ofertas da semana** (3 itens de 3 seções diferentes) | −25%, arredondado para cima | giram toda segunda, 00:00 de Brasília |
 | **Presentear um amigo** | o preço do produto no dia | 3 presentes por dia; moeda e o Pacote não se presenteiam |

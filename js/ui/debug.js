@@ -454,8 +454,8 @@ var JOGO = (typeof window !== 'undefined')
       // No ar, o painel dá níveis, pedras e itens: só a conta que o servidor
       // marcou o vê. Em casa (file://, localhost) continua como sempre.
       if (bloqueado()) return;
-      guardaCopia();
-      botao();
+      // 04/10 (o dono: "remova o binóculo e o teste"): o "🔧 teste" flutuante saiu da tela — sem ele não há
+      // o que desfazer, então a cópia do save também não é tirada. O JOGO.Debug segue para as provas.
     };
     if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', liga);
     else liga();

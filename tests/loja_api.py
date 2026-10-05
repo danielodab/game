@@ -70,7 +70,7 @@ PRECOS = {'boas-vindas': 250,                 # 04/10: o Pacote de Boas-Vindas, 
           'pedras-neutro-50': 180,
           'insignia-1': 25, 'insignias-10': 225,
           'pergaminho-elemento': 250,
-          'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 150}     # 04/10
+          'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 250}     # 04/10
 SECOES = (['boas-vindas'] + ['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 5 + ['bonus'] * 3 + ['pedras'] * 10
           + ['guilda'] * 2 + ['pergaminhos'] + ['aparencia'] * 5)
 GRUPOS = {'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro',

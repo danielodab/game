@@ -178,6 +178,10 @@ AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')
 AURAS_MESTRE = ('mestre',)
 AURA_MESTRE_NOME = {'mestre': 'Chama do Mestre'}
 AURA_PRECO = 150
+# 04/10 (o dono: "essa lousa é mais cara por ser mais bonita"): a Lousa custa mais que as quatro dos elementos
+# e, por isso, NÃO é uma das escolhas do Pacote de Boas-Vindas — o pacote traz uma aura de elemento
+AURA_PRECO_DE = {'neutra': 250}
+AURAS_BOAS_VINDAS = tuple(a for a in AURAS if a not in AURA_PRECO_DE)
 # 04/10: o Pacote de Boas-Vindas — uma classe rara à escolha, PEDRAS_BOAS_VINDAS pedras de cada e uma aura
 BOAS_VINDAS_SKU = 'boas-vindas'
 BOAS_VINDAS_PRECO = 250
@@ -379,7 +383,7 @@ def _aura(cor, nome, efeito):
     return {'sku': 'aura-' + cor, 'secao': 'aparencia', 'tipo': 'aura', 'alvo': cor, 'qtd': 1, 'nome': nome,
             'descricao': ('%s Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não '
                           'muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.' % efeito),
-            'preco': AURA_PRECO, 'moeda': 'barras', 'limite': {'grupo': 'aura-' + cor, 'max': 1, 'dias': None}}
+            'preco': AURA_PRECO_DE.get(cor, AURA_PRECO), 'moeda': 'barras', 'limite': {'grupo': 'aura-' + cor, 'max': 1, 'dias': None}}
 
 
 # (elemento, pedra, nome, (da/de), preço de 10, preço de 50), em barras de ouro (13/09). Água e terra caem na
@@ -439,10 +443,10 @@ CATALOGO = ({
     'sku': BOAS_VINDAS_SKU, 'secao': 'boas-vindas', 'tipo': 'pacote', 'alvo': 'boas-vindas', 'qtd': 1,
     'nome': 'Pacote de Boas-Vindas',
     'descricao': ('Uma vez por conta: um personagem raro à sua escolha (Xamã ou Bruxo), %d pedras de forja de '
-                  'cada tipo (%d ao todo) e uma aura para a praça, também à sua escolha.'
+                  'cada tipo (%d ao todo) e uma aura de elemento para a praça (Brasa, Maré, Raiz ou Vento), também à sua escolha.'
                   % (PEDRAS_BOAS_VINDAS, PEDRAS_BOAS_VINDAS * len(_BV_PEDRAS))),
     'preco': BOAS_VINDAS_PRECO, 'precoCheio': BOAS_VINDAS_CHEIO, 'moeda': 'barras',
-    'escolhas': {'classe': list(BOAS_VINDAS_CLASSES), 'aura': list(AURAS)},
+    'escolhas': {'classe': list(BOAS_VINDAS_CLASSES), 'aura': list(AURAS_BOAS_VINDAS)},
     'limite': {'grupo': BOAS_VINDAS_SKU, 'max': 1, 'dias': None}},) + CATALOGO
 POR_SKU = {i['sku']: i for i in CATALOGO}
 SKUS_VINTENS = tuple(i['sku'] for i in CATALOGO if i['tipo'] == 'vintens')   # os vinténs comprados com barras
@@ -1116,8 +1120,8 @@ class LojaMixin:
             classe, aura = corpo.get('classe'), corpo.get('aura')
             if classe not in BOAS_VINDAS_CLASSES:
                 raise Recusa(400, 'escolha o personagem do pacote: Xamã ou Bruxo')
-            if aura not in AURAS:
-                raise Recusa(400, 'escolha a aura do pacote')
+            if aura not in AURAS_BOAS_VINDAS:
+                raise Recusa(400, 'escolha a aura do pacote: Brasa, Maré, Raiz ou Vento')
             entrega = entrega_boas_vindas(classe, aura)
         # 04/10: o preço cobrado é o de AGORA no relógio do servidor (a oferta da semana, se o item estiver nela)
         preco_hoje = preco_de(item, t)

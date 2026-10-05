@@ -1046,28 +1046,16 @@ var JOGO = (typeof window !== 'undefined')
         'divergir no juiz do servidor (docs/SEGURANCA.md, limites conhecidos).'));
       alvo.appendChild(c);
     }
-    var dbg = el('div', 'pm-cartao dbg-corpo');
-    alvo.appendChild(dbg);
-    var Dg = JOGO.Debug;
-    if (!Dg || !Dg.desenhaEm || !Dg.desenhaEm(dbg)) {
-      dbg.appendChild(el('p', 'pm-dim', 'O painel de teste (js/ui/debug.js) não está carregado nesta página.'));
-    }
+    // 04/10 (o dono: "o modo teste retire também, qualquer coisa dou nível para outra conta minha"): o corpo
+    // do painel de teste (js/ui/debug.js) não é mais desenhado aqui — nível e item saem pela Caixa
   };
 
   // ============================================================ o botão e o atalho
   function pintaBotao() {
-    var deve = PM.ehMestre();
-    if (deve && !botao) {
-      estilo();
-      botao = bt('⚖', 'pm-abrir', function () { PM.alterna(); });
-      botao.title = 'Painel do Mestre (F9)';
-      botao.setAttribute('aria-label', 'Painel do Mestre');
-      document.body.appendChild(botao);
-    } else if (!deve && botao) {
-      if (botao.parentNode) botao.parentNode.removeChild(botao);
-      botao = null;
-      PM.fechar();
-    }
+    // 04/10 (o dono: "remova o binóculo"): o ⚖ flutuante abria o MESMO painel do "⚔ Mestre" da praça e da
+    // batalha — saiu. O painel abre por esse botão e pelo M/F9; aqui só sobra fechá-lo quando a conta deixa
+    // de ser a do Mestre (saiu, trocou de conta, a marca foi tirada).
+    if (!PM.ehMestre() && PM.aberto()) PM.fechar();
   }
   PM.pintaBotao = pintaBotao;
   PM.ehAtalho = function (ev) {
