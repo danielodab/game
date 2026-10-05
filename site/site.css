@@ -917,3 +917,20 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
 .presente-botoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .presente .apoio { font-size: 13px; margin: 0; }
 @media (pointer: coarse) { .presente .btn-mini { min-height: 44px; } }
+
+/* ---- o seletor de idioma (05/10, site/i18n.js) ---------------------------
+ * Português / English / Español no topo de toda página. No celular fica na
+ * primeira linha, entre a marca e a sessão. */
+.idioma-sel {
+  flex: none; height: 30px; padding: 0 6px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, .04); color: var(--texto-2); border: 1px solid var(--ouro-a18);
+  font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+}
+.idioma-sel:hover, .idioma-sel:focus { color: var(--ouro); border-color: var(--ouro-esc); }
+.idioma-sel option { background: #14181d; color: #e9e4d6; }
+/* a tradução de cortesia dos Termos e da Privacidade: o aviso de que vale o português */
+.aviso-traducao {
+  margin: 14px 0 18px; padding: 12px 14px; border-radius: 10px; font-size: 14.5px; line-height: 1.5;
+  background: var(--ouro-a10); border: 1px solid var(--ouro-esc); color: var(--texto);
+}
+.aviso-traducao b { color: var(--ouro); }

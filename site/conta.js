@@ -37,6 +37,16 @@
  * vem do servidor passa pelo SITE.esc, ou entra por textContent. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO VISITANTE (docs/IDIOMAS.md, etapa 3): a chave é o próprio português. Sem o
+   * JOGO.I18n (página de prova que não carrega o js/core/i18n.js) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = window.JOGO && window.JOGO.I18n;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var E = SITE.esc;
   function $(id) { return document.getElementById(id); }
   function proprio(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
@@ -114,12 +124,12 @@
       try {
         var v = N.valida(nome, 3, 20);
         if (v && typeof v.ok === 'boolean') {
-          return { ok: v.ok, motivo: v.ok ? '' : String(v.motivo || 'esse nome não pode ser usado') };
+          return { ok: v.ok, motivo: v.ok ? '' : String(v.motivo || Tx('esse nome não pode ser usado')) };
         }
       } catch (e) { /* a lei quebrou: fica a conferência de sempre, e o servidor decide */ }
     }
     return nomeValido(nome) ? { ok: true, motivo: '' }
-      : { ok: false, motivo: 'Nome: 3 a 20 caracteres (letras, números, espaço, apóstrofo, _ ou -), sem espaço nas pontas.' };
+      : { ok: false, motivo: Tx('Nome: 3 a 20 caracteres (letras, números, espaço, apóstrofo, _ ou -), sem espaço nas pontas.') };
   }
 
   /* ---- as telas e o endereço ---- */
@@ -161,7 +171,7 @@
     var a = $('esqueci');
     a.classList.toggle('desligado', !correio);
     a.setAttribute('aria-disabled', correio ? 'false' : 'true');
-    if (correio) a.removeAttribute('title'); else a.title = 'em breve';
+    if (correio) a.removeAttribute('title'); else a.title = Tx('em breve');
     if (correio && querEsqueci && !SITE.sessao() && tela !== 'esqueci') mostra('esqueci');
   }
 
@@ -197,21 +207,21 @@
     if (!dados) {
       mostra('carregando');
       $('cc-texto').className = 'estado';
-      $('cc-texto').textContent = 'carregando a sua conta…';
+      $('cc-texto').textContent = Tx('carregando a sua conta…');
       $('cc-botoes').hidden = true;
     }
     return SITE.api('/api/conta').then(function (r) {
       if (r.status === 401) {
-        sessaoMorta('A sessão desta página tinha vencido (ou foi encerrada em outro lugar). Entre de novo.');
+        sessaoMorta(Tx('A sessão desta página tinha vencido (ou foi encerrada em outro lugar). Entre de novo.'));
         return;
       }
       if (!r.ok || !r.conta) {
-        if (dados) { aviso('mc-aviso', SITE.erro(r, 'não deu para atualizar a conta')); return; }
+        if (dados) { aviso('mc-aviso', SITE.erro(r, Tx('não deu para atualizar a conta'))); return; }
         mostra('carregando');
         $('cc-texto').className = 'estado fora';
-        $('cc-texto').textContent = r.status === 0 ? 'O servidor está fora — a sua conta volta com ele.'
-          : r.status === 404 ? 'A página da conta ainda não chegou a este servidor.'
-          : SITE.erro(r, 'não deu para ler a conta');
+        $('cc-texto').textContent = r.status === 0 ? Tx('O servidor está fora — a sua conta volta com ele.')
+          : r.status === 404 ? Tx('A página da conta ainda não chegou a este servidor.')
+          : SITE.erro(r, Tx('não deu para ler a conta'));
         $('cc-botoes').hidden = false;
         return;
       }
@@ -227,10 +237,9 @@
   function desenhaConta() {
     var c = dados.conta || {};
     $('mc-dados').innerHTML =
-      '<dt>Nome</dt><dd>' + E(c.nome) +
-        (c.gm ? ' <span class="marca-gm" title="Mestre do Fundo">◆ Mestre do Fundo</span>' : '') + '</dd>' +
-      '<dt>E-mail</dt><dd>' + E(c.email) + '</dd>' +
-      '<dt>Criada em</dt><dd>' + E(data(c.criadoEm)) + '</dd>';
+      (c.gm
+        ? Tx('<dt>Nome</dt><dd>{a} <span class="marca-gm" title="Mestre do Fundo">◆ Mestre do Fundo</span></dd><dt>E-mail</dt><dd>{b}</dd><dt>Criada em</dt><dd>{c}</dd>', { a: E(c.nome), b: E(c.email), c: E(data(c.criadoEm)) })
+        : Tx('<dt>Nome</dt><dd>{a}</dd><dt>E-mail</dt><dd>{b}</dd><dt>Criada em</dt><dd>{c}</dd>', { a: E(c.nome), b: E(c.email), c: E(data(c.criadoEm)) }));
     desenhaEmail();
     desenhaSessoes();
     desenhaAtividade();
@@ -255,7 +264,7 @@
     // o Mestre: a arte do Cavaleiro Negro, a MESMA da caixa "Equipe" do ranking (conserto 11/09), na moldura
     // escura do .busto.gm; sem o arquivo, o ◆
     if (id === 'gm') {
-      return { nome: 'Cavaleiro Negro', foto: SITE.busto({ src: 'img/equipe-cavaleiro-busto.webp', reserva: 'img/equipe-cavaleiro.webp',
+      return { nome: Tx('Cavaleiro Negro'), foto: SITE.busto({ src: 'img/equipe-cavaleiro-busto.webp', reserva: 'img/equipe-cavaleiro.webp',
                                                           letra: '◆', cor: '#8a1f2d' }).replace('class="busto', 'class="busto gm') };
     }
     var m = /^classe:([a-z][a-z0-9]*)$/.exec(id || '');
@@ -279,15 +288,15 @@
   function carregaAvatar() {
     return SITE.api('/api/avatar').then(function (r) {
       if (r.status === 401) {
-        if (SITE.sessao()) sessaoMorta('A sessão desta página tinha vencido (ou foi encerrada em outro lugar). Entre de novo.');
+        if (SITE.sessao()) sessaoMorta(Tx('A sessão desta página tinha vencido (ou foi encerrada em outro lugar). Entre de novo.'));
         return;
       }
       if (r.ok && Array.isArray(r.opcoes)) { avatar = r; avatarErro = ''; }
       else {
         avatar = null;
-        avatarErro = r.status === 0 ? 'O servidor está fora — os retratos voltam com ele.'
-          : r.status === 404 ? 'A escolha do retrato ainda não chegou a este servidor.'
-          : SITE.erro(r, 'não deu para ler os retratos');
+        avatarErro = r.status === 0 ? Tx('O servidor está fora — os retratos voltam com ele.')
+          : r.status === 404 ? Tx('A escolha do retrato ainda não chegou a este servidor.')
+          : SITE.erro(r, Tx('não deu para ler os retratos'));
       }
       desenhaAvatar();
     });
@@ -296,14 +305,15 @@
     var g = $('av-grade'), ef = $('av-efetivo'), txt = $('av-texto');
     if (!avatar) {
       ef.hidden = true;
-      g.innerHTML = '<div class="estado' + (avatarErro ? ' fora' : '') + '">' + E(avatarErro || 'carregando os retratos…') + '</div>';
+      g.innerHTML = '<div class="estado' + (avatarErro ? ' fora' : '') + '">' + E(avatarErro || Tx('carregando os retratos…')) + '</div>';
       return;
     }
     if (avatar.gm) {
-      txt.textContent = 'A conta do Mestre do Fundo aparece com o Cavaleiro Negro: ele não troca de retrato.';
+      txt.textContent = Tx('A conta do Mestre do Fundo aparece com o Cavaleiro Negro: ele não troca de retrato.');
       ef.hidden = true;
-      g.innerHTML = '<div class="av-mestre" data-avatar-mestre>' + retrato('gm').foto +
-        '<div><b>Cavaleiro Negro</b><small>o retrato do Mestre do Fundo</small></div></div>';
+      g.innerHTML = '<div class="av-mestre" data-avatar-mestre>' +
+        Tx('{foto}<div><b>Cavaleiro Negro</b><small>o retrato do Mestre do Fundo</small></div>', { foto: retrato('gm').foto }) +
+        '</div>';
       return;
     }
     var ops = (Array.isArray(avatar.opcoes) ? avatar.opcoes : []).map(function (o) {
@@ -311,10 +321,10 @@
     }).filter(function (id, i, todos) { return RE_AVATAR.test(id) && id !== 'gm' && todos.indexOf(id) === i && !!retrato(id); });
     var escolhido = typeof avatar.escolhido === 'string' ? avatar.escolhido : '';
     var vale = !escolhido || ops.indexOf(escolhido) >= 0;
-    txt.textContent = 'O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos.' +
-      (avatar.semSave ? ' Sem save no servidor ainda: por enquanto, só os retratos das classes do começo.' : '') +
-      (vale ? '' : ' O retrato escolhido não vale mais (a classe saiu do seu save): o ranking usa o automático.');
-    var html = botaoAvatar('', '<span class="busto sem-foto" data-letra="✦"></span>', 'Automático', 'o seu melhor herói',
+    txt.textContent = (avatar.semSave
+      ? (vale ? Tx('O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos. Sem save no servidor ainda: por enquanto, só os retratos das classes do começo.') : Tx('O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos. Sem save no servidor ainda: por enquanto, só os retratos das classes do começo. O retrato escolhido não vale mais (a classe saiu do seu save): o ranking usa o automático.'))
+      : (vale ? Tx('O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos.') : Tx('O retrato aparece no ranking. Libere classes no jogo para ganhar mais retratos. O retrato escolhido não vale mais (a classe saiu do seu save): o ranking usa o automático.')));
+    var html = botaoAvatar('', '<span class="busto sem-foto" data-letra="✦"></span>', Tx('Automático'), Tx('o seu melhor herói'),
                            !escolhido || !vale);
     ops.forEach(function (id) {
       var r = retrato(id);
@@ -326,26 +336,25 @@
     var nomeConta = (dados && dados.conta && dados.conta.nome) || '';
     var par = SITE.parDe(e.avatar);
     var agora = par ? nomeClasse(par[0]) + ' + ' + nomeClasse(par[1])
-      : proprio(classesDoJogo(), e.classe) && e.classe !== 'gm' ? nomeClasse(e.classe) : 'a inicial do seu nome';
-    ef.innerHTML = SITE.bustoJogador({ avatar: e.avatar, classe: e.classe, nome: nomeConta }) +
-      '<span>No ranking agora: <b>' + E(agora) + '</b></span>';
+      : proprio(classesDoJogo(), e.classe) && e.classe !== 'gm' ? nomeClasse(e.classe) : Tx('a inicial do seu nome');
+    ef.innerHTML = Tx('{a}<span>No ranking agora: <b>{b}</b></span>', { a: SITE.bustoJogador({ avatar: e.avatar, classe: e.classe, nome: nomeConta }), b: E(agora) });
     ef.hidden = false;
   }
   function escolheAvatar(id) {
     if (avOcupado || !avatar || avatar.gm) return;
     avOcupado = true;
     desenhaAvatar();
-    aviso('av-aviso', 'Trocando o retrato…', 'neutro');
+    aviso('av-aviso', Tx('Trocando o retrato…'), 'neutro');
     SITE.api('/api/avatar', { method: 'POST', body: { avatar: id || null } }).then(function (r) {
       avOcupado = false;
-      if (r.status === 401) { sessaoMorta('A sessão desta página tinha vencido. Entre de novo.'); return; }
-      if (!r.ok) { aviso('av-aviso', SITE.erro(r, 'não deu para trocar o retrato')); desenhaAvatar(); return; }
+      if (r.status === 401) { sessaoMorta(Tx('A sessão desta página tinha vencido. Entre de novo.')); return; }
+      if (!r.ok) { aviso('av-aviso', SITE.erro(r, Tx('não deu para trocar o retrato'))); desenhaAvatar(); return; }
       if (avatar) {
         avatar.escolhido = typeof r.escolhido === 'string' ? r.escolhido : null;
         if (r.efetivo && typeof r.efetivo === 'object') avatar.efetivo = r.efetivo;
       }
       desenhaAvatar();
-      aviso('av-aviso', 'Retrato trocado: o ranking já mostra.', 'certo');
+      aviso('av-aviso', Tx('Retrato trocado: o ranking já mostra.'), 'certo');
     });
   }
 
@@ -365,10 +374,10 @@
     var falta = Math.ceil(Number(troca.reenviarEm) - SITE.agora());
     if (falta > 0) {
       bt.disabled = true;
-      bt.textContent = 'reenviar em ' + (falta >= 60 ? SITE.duracao(falta) : falta + ' s');
+      bt.textContent = Tx('reenviar em {a}', { a: falta >= 60 ? SITE.duracao(falta) : falta + ' s' });
     } else {
       bt.disabled = false;
-      bt.textContent = 'reenviar o código';
+      bt.textContent = Tx('reenviar o código');
     }
   }
   function passoEmail(n) {
@@ -381,13 +390,11 @@
     paraRelogio();
     if (n !== 2) return;
     var vale = Number(troca.expiraEm) > SITE.agora()
-      ? ' Ele vale até as ' + E(SITE.hora(troca.expiraEm)) + '.'
-      : ' Se ele já venceu, peça outro.';
+      ? ' ' + Tx('Ele vale até as {a}.', { a: E(SITE.hora(troca.expiraEm)) })
+      : Tx(' Se ele já venceu, peça outro.');
     // o servidor manda o endereço já mascarado; sem ele, a página mascara o da conta
     var para = troca.enviadoPara || SITE.mascara(dados && dados.conta && dados.conta.email) || 'o e-mail atual da conta';
-    $('em-enviado').innerHTML = 'O código foi para <b>' + E(para) +
-      '</b>, o e-mail atual da conta. Ele troca o e-mail' + (troca.para ? ' para <b>' + E(troca.para) + '</b>' : '') +
-      '.' + vale;
+    $('em-enviado').innerHTML = Tx('O código foi para <b>{a}</b>, o e-mail atual da conta. Ele troca o e-mail{b}.{vale}', { a: E(para), b: troca.para ? ' ' + Tx('para <b>{a}</b>', { a: E(troca.para) }) : '', vale: vale });
     contaReenvio();
     relogio = setInterval(contaReenvio, 1000);
   }
@@ -408,78 +415,76 @@
     });
     $('mc-sessoes').innerHTML = lista.length ? lista.map(function (s) {
       var ip = ipMascarado(s.ip);
-      var miudo = [ip ? 'IP ' + ip : '', s.ultimoUso ? 'último uso ' + SITE.ha(s.ultimoUso) : '',
-                   s.criadoEm ? 'desde ' + data(s.criadoEm) : ''].filter(Boolean).map(E).join(' · ');
+      var miudo = [ip ? 'IP ' + ip : '', s.ultimoUso ? Tx('último uso {a}', { a: SITE.ha(s.ultimoUso) }) : '',
+                   s.criadoEm ? Tx('desde {a}', { a: data(s.criadoEm) }) : ''].filter(Boolean).map(E).join(' · ');
       return '<li' + (s.estaAqui ? ' class="esta"' : '') + ' data-sessao="' + E(s.id) + '"><div><b>' +
-        E(SITE.navegador(s.agente)) + '</b>' + (s.estaAqui ? '<span class="etiqueta aberto">esta</span>' : '') +
+        E(SITE.navegador(s.agente)) + '</b>' + (s.estaAqui ? '<span class="etiqueta aberto">' + Tx('esta') + '</span>' : '') +
         (miudo ? '<small>' + miudo + '</small>' : '') + '</div>' +
-        (s.estaAqui ? '' : '<button type="button" class="btn btn-mini" data-encerrar="' + E(s.id) + '">encerrar</button>') +
+        (s.estaAqui ? '' : '<button type="button" class="btn btn-mini" data-encerrar="' + E(s.id) + '">' + Tx('encerrar') + '</button>') +
         '</li>';
-    }).join('') : '<li class="apoio">nenhuma sessão aberta</li>';
+    }).join('') : Tx('<li class="apoio">nenhuma sessão aberta</li>');
     $('ss-outras').disabled = !lista.some(function (s) { return !s.estaAqui; });
   }
 
   /* -- atividade: só o tipo e a hora (o servidor não manda mais nada) */
   var ATIVIDADE = {
-    'cadastro': 'conta criada',
-    'login': 'entrada na conta',
-    'login-recusado': 'tentativa de entrar com a senha errada',
-    'senha-recusada': 'senha atual errada na página da conta',
-    'senha-trocada': 'senha trocada',
-    'senha-redefinida': 'senha redefinida pelo e-mail',
-    'email-pedido': 'pedido de troca de e-mail',
-    'email-trocado': 'e-mail trocado',
-    'sessoes-encerradas': 'sessões encerradas',
-    'esqueci-pedido': 'pedido de "esqueci a senha"'
+    'cadastro': Tx('conta criada'),
+    'login': Tx('entrada na conta'),
+    'login-recusado': Tx('tentativa de entrar com a senha errada'),
+    'senha-recusada': Tx('senha atual errada na página da conta'),
+    'senha-trocada': Tx('senha trocada'),
+    'senha-redefinida': Tx('senha redefinida pelo e-mail'),
+    'email-pedido': Tx('pedido de troca de e-mail'),
+    'email-trocado': Tx('e-mail trocado'),
+    'sessoes-encerradas': Tx('sessões encerradas'),
+    'esqueci-pedido': Tx('pedido de "esqueci a senha"')
   };
   var ALERTA = { 'login-recusado': true, 'senha-recusada': true };
   function desenhaAtividade() {
     var lista = Array.isArray(dados.atividade) ? dados.atividade.slice(0, 10) : [];
     $('mc-atividade').innerHTML = lista.length ? lista.map(function (a) {
       a = a || {};
-      var nome = proprio(ATIVIDADE, a.tipo) ? ATIVIDADE[a.tipo] : String(a.tipo == null ? 'acontecimento' : a.tipo);
+      var nome = proprio(ATIVIDADE, a.tipo) ? ATIVIDADE[a.tipo] : String(a.tipo == null ? Tx('acontecimento') : a.tipo);
       return '<li' + (proprio(ALERTA, a.tipo) ? ' class="alerta"' : '') + '><span>' + E(nome) + '</span>' +
         '<time>' + E(SITE.quando(a.em)) + '</time></li>';
-    }).join('') : '<li class="apoio">nada registrado ainda</li>';
+    }).join('') : Tx('<li class="apoio">nada registrado ainda</li>');
   }
 
   /* ---- Minha conta: as ações ---- */
   function pedeCodigo(senha, novo, idAviso, bt) {
-    aviso(idAviso, 'Mandando o código…', 'neutro');
+    aviso(idAviso, Tx('Mandando o código…'), 'neutro');
     bt.disabled = true;
     return SITE.api('/api/conta/email/pedir', { method: 'POST', body: { senha: senha, novoEmail: novo } }).then(function (r) {
       bt.disabled = false;
-      if (r.status === 401) { sessaoMorta('A sessão desta página tinha vencido. Entre de novo.'); return; }
-      if (!r.ok) { aviso(idAviso, SITE.erro(r, 'não deu para mandar o código')); return; }
+      if (r.status === 401) { sessaoMorta(Tx('A sessão desta página tinha vencido. Entre de novo.')); return; }
+      if (!r.ok) { aviso(idAviso, SITE.erro(r, Tx('não deu para mandar o código'))); return; }
       limpa(['em-senha', 'em-novo', 'em-novo2', 'em-senha-re', 'em-codigo']);
       troca = { para: novo, enviadoPara: r.enviadoPara, expiraEm: r.expiraEm, reenviarEm: r.reenviarEm };
       emOutro = false;
       aviso('em-aviso1', '');
       passoEmail(2);
-      aviso('em-aviso2', 'Código enviado para ' + (r.enviadoPara || 'o e-mail atual') +
-        '. Confira a caixa de entrada e o spam.', 'certo');
+      aviso('em-aviso2', Tx('Código enviado para {a}. Confira a caixa de entrada e o spam.', { a: r.enviadoPara || 'o e-mail atual' }), 'certo');
     });
   }
 
   function encerra(corpo, bt) {
     if (bt) bt.disabled = true;
-    aviso('ss-aviso', 'Encerrando…', 'neutro');
+    aviso('ss-aviso', Tx('Encerrando…'), 'neutro');
     return SITE.api('/api/conta/sessoes/encerrar', { method: 'POST', body: corpo }).then(function (r) {
       if (bt) bt.disabled = false;
-      if (r.status === 401) { sessaoMorta('Esta sessão já tinha sido encerrada. Entre de novo.'); return; }
+      if (r.status === 401) { sessaoMorta(Tx('Esta sessão já tinha sido encerrada. Entre de novo.')); return; }
       if (!r.ok) {
-        aviso('ss-aviso', SITE.erro(r, 'não deu para encerrar'));
+        aviso('ss-aviso', SITE.erro(r, Tx('não deu para encerrar')));
         if (r.status === 404) carregaConta();
         return;
       }
       var n = Number(r.encerradas) || 0;
       if (corpo.todas || r.estaEncerrada) {
         // "sair de todas" inclui esta: a página esquece a sessão logo em seguida
-        sessaoMorta(corpo.todas ? 'Você saiu de todas as sessões' + (n > 1 ? ' (' + n + ')' : '') +
-          '. Entre de novo quando quiser.' : 'Esta sessão foi encerrada. Entre de novo quando quiser.', 'certo');
+        sessaoMorta(corpo.todas ? Tx('Você saiu de todas as sessões{a}. Entre de novo quando quiser.', { a: n > 1 ? ' (' + n + ')' : '' }) : Tx('Esta sessão foi encerrada. Entre de novo quando quiser.'), 'certo');
         return;
       }
-      aviso('ss-aviso', n === 1 ? '1 sessão encerrada.' : n ? n + ' sessões encerradas.' : 'Não havia sessão para encerrar.', 'certo');
+      aviso('ss-aviso', n === 1 ? Tx('1 sessão encerrada.') : n ? Tx('{n} sessões encerradas.', { n: n }) : Tx('Não havia sessão para encerrar.'), 'certo');
       carregaConta();
     });
   }
@@ -503,7 +508,7 @@
       avatar = null;
       avatarErro = '';
       mostra('entrar');
-      aviso('e-aviso', 'Você saiu desta conta neste navegador.', 'neutro');
+      aviso('e-aviso', Tx('Você saiu desta conta neste navegador.'), 'neutro');
     });
     $('mc-sair').addEventListener('click', function () { SITE.sair(); });
     $('cc-sair').addEventListener('click', function () { SITE.sair(); });
@@ -517,7 +522,7 @@
       ev.preventDefault();
       var bt = $('c-bt');
       if (bt.disabled) return;
-      if (!lei()) aviso('c-aviso', 'Conferindo o nome…', 'neutro');
+      if (!lei()) aviso('c-aviso', Tx('Conferindo o nome…'), 'neutro');
       bt.disabled = true;
       esperaLei().then(function (N) {
         bt.disabled = false;
@@ -536,19 +541,19 @@
       var aceitou = !!$('c-aceite').checked;
       $('c-aceite').parentNode.classList.toggle('invalido', !aceitou);
       if (!vn.ok) erro = vn.motivo;
-      else if (!emailParece(email)) erro = 'Esse e-mail não parece um e-mail.';
-      else if (senha.length < 8) erro = 'A senha precisa ter pelo menos 8 caracteres.';
-      else if (senha2 !== senha) erro = 'As duas senhas não batem.';
-      else if (!aceitou) erro = 'Para criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade.';
+      else if (!emailParece(email)) erro = Tx('Esse e-mail não parece um e-mail.');
+      else if (senha.length < 8) erro = Tx('A senha precisa ter pelo menos 8 caracteres.');
+      else if (senha2 !== senha) erro = Tx('As duas senhas não batem.');
+      else if (!aceitou) erro = Tx('Para criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade.');
       if (erro) { aviso('c-aviso', erro); return; }
-      aviso('c-aviso', 'Criando a conta…', 'neutro');
+      aviso('c-aviso', Tx('Criando a conta…'), 'neutro');
       $('c-bt').disabled = true;
       SITE.api('/api/cadastro', { method: 'POST', semToken: true,
                                   body: { nome: nome, email: email, senha: senha, aceiteTermos: SITE.VERSAO_TERMOS } })
         .then(function (r) {
           $('c-bt').disabled = false;
-          if (!r.ok) { aviso('c-aviso', SITE.erro(r, 'não deu para criar a conta')); return; }
-          aviso('c-aviso', 'Conta criada! Entrando no jogo…', 'certo');
+          if (!r.ok) { aviso('c-aviso', SITE.erro(r, Tx('não deu para criar a conta'))); return; }
+          aviso('c-aviso', Tx('Conta criada! Entrando no jogo…'), 'certo');
           entrou(r, true);
         });
     }
@@ -559,14 +564,14 @@
       var login = $('e-login').value.trim(), senha = $('e-senha').value;
       marca($('e-login'), !login);
       marca($('e-senha'), !senha);
-      if (!login || !senha) { aviso('e-aviso', 'Informe o nome (ou e-mail) e a senha.'); return; }
-      aviso('e-aviso', 'Entrando…', 'neutro');
+      if (!login || !senha) { aviso('e-aviso', Tx('Informe o nome (ou e-mail) e a senha.')); return; }
+      aviso('e-aviso', Tx('Entrando…'), 'neutro');
       $('e-bt').disabled = true;
       SITE.api('/api/login', { method: 'POST', semToken: true, body: { login: login, senha: senha } })
         .then(function (r) {
           $('e-bt').disabled = false;
-          if (!r.ok) { aviso('e-aviso', SITE.erro(r, 'não deu para entrar')); return; }
-          aviso('e-aviso', 'Bem-vindo de volta, ' + r.conta.nome + '.', 'certo');
+          if (!r.ok) { aviso('e-aviso', SITE.erro(r, Tx('não deu para entrar'))); return; }
+          aviso('e-aviso', Tx('Bem-vindo de volta, {nome}.', { nome: r.conta.nome }), 'certo');
           entrou(r);                 // fica na conta: quem quer jogar aperta Jogar
         });
     });
@@ -575,7 +580,7 @@
     $('esqueci').addEventListener('click', function (ev) {
       ev.preventDefault();
       if (correio !== true) {
-        aviso('esqueci-aviso', 'Recuperação de senha: em breve. Por enquanto, fale com o dono do servidor.', 'neutro');
+        aviso('esqueci-aviso', Tx('Recuperação de senha: em breve. Por enquanto, fale com o dono do servidor.'), 'neutro');
         return;
       }
       var digitado = $('e-login').value.trim();
@@ -593,21 +598,21 @@
       ev.preventDefault();
       var email = $('eq-email').value.trim();
       marca($('eq-email'), !emailParece(email));
-      if (!emailParece(email)) { aviso('eq-aviso1', 'Esse e-mail não parece um e-mail.'); return; }
-      aviso('eq-aviso1', 'Pedindo o código…', 'neutro');
+      if (!emailParece(email)) { aviso('eq-aviso1', Tx('Esse e-mail não parece um e-mail.')); return; }
+      aviso('eq-aviso1', Tx('Pedindo o código…'), 'neutro');
       $('eq-bt1').disabled = true;
       SITE.api('/api/esqueci', { method: 'POST', semToken: true, body: { email: email } }).then(function (r) {
         $('eq-bt1').disabled = false;
-        if (!r.ok) { aviso('eq-aviso1', SITE.erro(r, 'não deu para pedir o código')); return; }
+        if (!r.ok) { aviso('eq-aviso1', SITE.erro(r, Tx('não deu para pedir o código'))); return; }
         eqEmail = email;
-        aviso('eq-aviso1', r.mensagem || 'Se houver conta com esse e-mail, o código chega em instantes.', 'certo');
+        aviso('eq-aviso1', r.mensagem || Tx('Se houver conta com esse e-mail, o código chega em instantes.'), 'certo');
         passoEsqueci(2);
       });
     });
     $('eq-ja-tenho').addEventListener('click', function (ev) {
       ev.preventDefault();
       var email = $('eq-email').value.trim();
-      if (!emailParece(email)) { marca($('eq-email'), true); aviso('eq-aviso1', 'Digite antes o e-mail da conta.'); return; }
+      if (!emailParece(email)) { marca($('eq-email'), true); aviso('eq-aviso1', Tx('Digite antes o e-mail da conta.')); return; }
       eqEmail = email;
       aviso('eq-aviso1', '');
       passoEsqueci(2);
@@ -619,17 +624,17 @@
       marca($('eq-codigo'), !seisDigitos(cod));
       marca($('eq-nova'), nova.length < 8);
       marca($('eq-nova2'), nova2 !== nova);
-      if (!emailParece(email)) erro = 'Volte ao passo 1 e informe o e-mail da conta.';
-      else if (!seisDigitos(cod)) erro = 'O código tem 6 dígitos.';
-      else if (nova.length < 8) erro = 'A senha nova precisa ter pelo menos 8 caracteres.';
-      else if (nova2 !== nova) erro = 'As duas senhas não batem.';
+      if (!emailParece(email)) erro = Tx('Volte ao passo 1 e informe o e-mail da conta.');
+      else if (!seisDigitos(cod)) erro = Tx('O código tem 6 dígitos.');
+      else if (nova.length < 8) erro = Tx('A senha nova precisa ter pelo menos 8 caracteres.');
+      else if (nova2 !== nova) erro = Tx('As duas senhas não batem.');
       if (erro) { aviso('eq-aviso2', erro); return; }
-      aviso('eq-aviso2', 'Conferindo o código…', 'neutro');
+      aviso('eq-aviso2', Tx('Conferindo o código…'), 'neutro');
       $('eq-bt2').disabled = true;
       SITE.api('/api/esqueci/confirmar', { method: 'POST', semToken: true, body: { email: email, codigo: cod, nova: nova } })
         .then(function (r) {
           $('eq-bt2').disabled = false;
-          if (!r.ok || !r.token || !r.conta) { aviso('eq-aviso2', SITE.erro(r, 'não deu para redefinir a senha')); return; }
+          if (!r.ok || !r.token || !r.conta) { aviso('eq-aviso2', SITE.erro(r, Tx('não deu para redefinir a senha'))); return; }
           SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
           SITE.cabecalho();
           limpa(['eq-codigo', 'eq-nova', 'eq-nova2']);
@@ -639,7 +644,7 @@
           passoEsqueci(1);
           querEsqueci = false;
           dados = null;
-          carregaConta({ geral: 'Senha redefinida; as outras sessões foram encerradas.' });
+          carregaConta({ geral: Tx('Senha redefinida; as outras sessões foram encerradas.') });
         });
     });
 
@@ -650,21 +655,21 @@
       marca($('sn-atual'), !atual);
       marca($('sn-nova'), nova.length < 8 || nova === atual);
       marca($('sn-nova2'), nova2 !== nova);
-      if (!atual) erro = 'Informe a senha atual.';
-      else if (nova.length < 8) erro = 'A senha nova precisa ter pelo menos 8 caracteres.';
-      else if (nova2 !== nova) erro = 'As duas senhas novas não batem.';
-      else if (nova === atual) erro = 'A senha nova é igual à atual.';
+      if (!atual) erro = Tx('Informe a senha atual.');
+      else if (nova.length < 8) erro = Tx('A senha nova precisa ter pelo menos 8 caracteres.');
+      else if (nova2 !== nova) erro = Tx('As duas senhas novas não batem.');
+      else if (nova === atual) erro = Tx('A senha nova é igual à atual.');
       if (erro) { aviso('sn-aviso', erro); return; }
-      aviso('sn-aviso', 'Trocando a senha…', 'neutro');
+      aviso('sn-aviso', Tx('Trocando a senha…'), 'neutro');
       $('sn-bt').disabled = true;
       SITE.api('/api/conta/senha', { method: 'POST', body: { atual: atual, nova: nova } }).then(function (r) {
         $('sn-bt').disabled = false;
-        if (r.status === 401) { sessaoMorta('A sessão desta página tinha vencido. Entre de novo.'); return; }
-        if (!r.ok) { aviso('sn-aviso', SITE.erro(r, 'não deu para trocar a senha')); return; }
+        if (r.status === 401) { sessaoMorta(Tx('A sessão desta página tinha vencido. Entre de novo.')); return; }
+        if (!r.ok) { aviso('sn-aviso', SITE.erro(r, Tx('não deu para trocar a senha'))); return; }
         limpa(['sn-atual', 'sn-nova', 'sn-nova2']);
         var n = Number(r.sessoesEncerradas) || 0;
-        aviso('sn-aviso', 'Senha trocada. ' + (n === 1 ? '1 outra sessão foi encerrada.'
-          : n ? n + ' outras sessões foram encerradas.' : 'Não havia outra sessão aberta.'), 'certo');
+        aviso('sn-aviso', Tx('Senha trocada. {a}', { a: n === 1 ? Tx('1 outra sessão foi encerrada.')
+          : n ? Tx('{n} outras sessões foram encerradas.', { n: n }) : Tx('Não havia outra sessão aberta.') }), 'certo');
         carregaConta();
       });
     });
@@ -677,10 +682,10 @@
       marca($('em-senha'), !senha);
       marca($('em-novo'), !emailParece(novo));
       marca($('em-novo2'), novo2 !== novo);
-      if (!senha) erro = 'Informe a senha atual.';
-      else if (!emailParece(novo)) erro = 'Esse e-mail não parece um e-mail.';
-      else if (novo2 !== novo) erro = 'Os dois e-mails não batem: digite o e-mail novo igual nas duas vezes.';
-      else if (novo.toLowerCase() === atual) erro = 'Esse já é o e-mail da conta.';
+      if (!senha) erro = Tx('Informe a senha atual.');
+      else if (!emailParece(novo)) erro = Tx('Esse e-mail não parece um e-mail.');
+      else if (novo2 !== novo) erro = Tx('Os dois e-mails não batem: digite o e-mail novo igual nas duas vezes.');
+      else if (novo.toLowerCase() === atual) erro = Tx('Esse já é o e-mail da conta.');
       if (erro) { aviso('em-aviso1', erro); return; }
       pedeCodigo(senha, novo, 'em-aviso1', $('em-bt1'));
     });
@@ -689,14 +694,14 @@
       ev.preventDefault();
       var cod = codigoDe($('em-codigo'));
       marca($('em-codigo'), !seisDigitos(cod));
-      if (!seisDigitos(cod)) { aviso('em-aviso2', 'O código tem 6 dígitos.'); return; }
-      aviso('em-aviso2', 'Conferindo o código…', 'neutro');
+      if (!seisDigitos(cod)) { aviso('em-aviso2', Tx('O código tem 6 dígitos.')); return; }
+      aviso('em-aviso2', Tx('Conferindo o código…'), 'neutro');
       $('em-bt2').disabled = true;
       SITE.api('/api/conta/email/confirmar', { method: 'POST', body: { codigo: cod } }).then(function (r) {
         $('em-bt2').disabled = false;
-        if (r.status === 401) { sessaoMorta('A sessão desta página tinha vencido. Entre de novo.'); return; }
+        if (r.status === 401) { sessaoMorta(Tx('A sessão desta página tinha vencido. Entre de novo.')); return; }
         if (!r.ok) {
-          var msg = SITE.erro(r, 'não deu para conferir o código');
+          var msg = SITE.erro(r, Tx('não deu para conferir o código'));
           if (typeof r.restam === 'number' || r.status !== 400 && r.status !== 409) { aviso('em-aviso2', msg); return; }
           // o pedido venceu, queimou, ou o e-mail ficou com outra conta: o
           // servidor diz em que pé a troca está
@@ -712,15 +717,14 @@
           desenhaConta();
         }
         aviso('em-aviso2', '');
-        carregaConta({ geral: 'E-mail trocado' + (r.conta && r.conta.email ? ' para ' + r.conta.email : '') +
-          '. O endereço antigo recebeu um aviso.' });
+        carregaConta({ geral: Tx('E-mail trocado{a}. O endereço antigo recebeu um aviso.', { a: r.conta && r.conta.email ? ' ' + Tx('para {email}', { email: r.conta.email }) : '' }) });
       });
     });
     $('em-reenviar').addEventListener('click', function () {
       if (!troca || !troca.para) {
         emOutro = true;
         passoEmail(1);
-        aviso('em-aviso1', 'Digite de novo a senha e o e-mail novo para pedir outro código.', 'neutro');
+        aviso('em-aviso1', Tx('Digite de novo a senha e o e-mail novo para pedir outro código.'), 'neutro');
         return;
       }
       $('em-reenvio').hidden = false;
@@ -728,7 +732,7 @@
     });
     $('em-bt-re').addEventListener('click', function () {
       var senha = $('em-senha-re').value;
-      if (!senha) { marca($('em-senha-re'), true); aviso('em-aviso2', 'Para reenviar, digite a senha atual.'); return; }
+      if (!senha) { marca($('em-senha-re'), true); aviso('em-aviso2', Tx('Para reenviar, digite a senha atual.')); return; }
       pedeCodigo(senha, troca.para, 'em-aviso2', $('em-bt-re'));
     });
     $('em-outro').addEventListener('click', function (ev) {
@@ -753,10 +757,10 @@
     $('ss-outras').addEventListener('click', function () { encerra({ outras: true }, $('ss-outras')); });
     $('ss-todas').addEventListener('click', function () {
       SITE.confirma({
-        titulo: 'Sair de todas as sessões?',
-        texto: 'Isto encerra também esta página.',
-        nota: 'O jogo aberto em qualquer máquina para de salvar na nuvem até entrar de novo.',
-        sim: 'Sair de todas', nao: 'Voltar'
+        titulo: Tx('Sair de todas as sessões?'),
+        texto: Tx('Isto encerra também esta página.'),
+        nota: Tx('O jogo aberto em qualquer máquina para de salvar na nuvem até entrar de novo.'),
+        sim: Tx('Sair de todas'), nao: Tx('Voltar')
       }).then(function (sim) { if (sim) encerra({ todas: true }, $('ss-todas')); });
     });
 

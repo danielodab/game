@@ -19,6 +19,10 @@
     return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
   };
   document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  // os idiomas (docs/IDIOMAS.md): o mesmo js/core/i18n.js do jogo decide (a chave soterra-idioma é uma só) e o
+  // site/i18n.js traduz esta página por cima; em português nada muda. A lista de scripts do fim passa por SITE_LISTA.
+  document.write('<script src="' + SITE_URL('../js/core/i18n.js') + '"><\/script><script src="' + SITE_URL('i18n.js') + '"><\/script>');
+  window.SITE_LISTA = function (a) { return window.SITE_I18N ? window.SITE_I18N.lista(a) : a; };
 </script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!-- As três tabelas completas (até 50 linhas cada), lendo /api/ranking.
@@ -124,14 +128,15 @@
 /* 10/09: os nomes das classes e dos elementos saem dos dados do próprio jogo
  * (mesma origem), cada um com o hash do conteúdo (SITE_URL, no topo). */
 (function () {
-  ['site.js', '../js/ui/brasao.js',
-   '../js/core/data/elements.js', '../js/core/data/classes.js'].forEach(function (s) {
+  SITE_LISTA(['site.js', '../js/ui/brasao.js',
+   '../js/core/data/elements.js', '../js/core/data/classes.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();
 </script>
 <script>
 (function () {
+  var Tx = SITE.Tx;      // o texto no idioma do visitante (site/i18n.js; docs/IDIOMAS.md)
   var E = SITE.esc, N = SITE.num;
   var DATA = (window.JOGO && JOGO.DATA) || {};
   var CLASSES = DATA.classes || {}, ELEM = DATA.elementInfo || {};
@@ -154,7 +159,7 @@
   function tabela(id, lista, celulas) {
     var corpo = document.getElementById('rk-' + id);
     corpo.innerHTML = '';
-    if (!lista.length) { estado(id, 'ninguém ainda — seja o primeiro'); return; }
+    if (!lista.length) { estado(id, Tx('ninguém ainda — seja o primeiro')); return; }
     document.getElementById('es-' + id).style.display = 'none';
     corpo.innerHTML = lista.map(function (r, i) {
       return '<tr class="top' + (i + 1) + '"><td class="pos">' + (i + 1) + '</td>' + celulas(r) + '</tr>';
@@ -165,7 +170,7 @@
    * conhece vira Neutro, como o servidor já faz */
   function elemento(id) {
     var info = ELEM[id] || ELEM.neutro;
-    return info ? '<span class="elem" style="--cor:' + info.color + '">' + E(info.name) + '</span>' : 'Neutro';
+    return info ? '<span class="elem" style="--cor:' + info.color + '">' + E(info.name) + '</span>' : Tx('Neutro');
   }
 
   /* ---- as abas por classe ---- */
@@ -199,7 +204,7 @@
     if (!ultimo) return;                 // carregando ou servidor fora: o estado já diz
     if (!ultimo.porClasse) {
       document.getElementById('rk-classe').innerHTML = '';
-      estado('classe', 'o placar por classe chega com a próxima versão do servidor');
+      estado('classe', Tx('o placar por classe chega com a próxima versão do servidor'));
       return;
     }
     tabela('classe', ultimo.porClasse[aba] || [], function (h) {
@@ -228,7 +233,7 @@
   }
 
   function carrega() {
-    IDS.forEach(function (id) { estado(id, 'carregando…'); });
+    IDS.forEach(function (id) { estado(id, Tx('carregando…')); });
     var bt = document.getElementById('bt-atualizar');
     bt.disabled = true;
     SITE.api('/api/ranking', { semToken: true }).then(function (r) {
@@ -236,7 +241,7 @@
       if (!r.ok) {
         ultimo = null;
         desenhaEquipe([]);
-        var msg = r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco' : (r.erro || 'não deu para ler o ranking');
+        var msg = r.status === 0 ? Tx('o servidor está fora — tente de novo daqui a pouco') : (r.erro || Tx('não deu para ler o ranking'));
         IDS.forEach(function (id) { estado(id, msg, 'fora'); });
         return;
       }
@@ -275,26 +280,25 @@
   function ecoFaixas(fx) {
     document.getElementById('eco-faixas').innerHTML = (fx || []).map(function (f) {
       var partes = [];
-      if (f.vintens) partes.push(N(f.vintens) + ' vinténs');
-      if (f.selos) partes.push(N(f.selos) + ' selos de chefe');
-      if (f.titulo) partes.push('o título “' + E(f.titulo) + '”');
+      if (f.vintens) partes.push(Tx('{a} vinténs', { a: N(f.vintens) }));
+      if (f.selos) partes.push(Tx('{a} selos de chefe', { a: N(f.selos) }));
+      if (f.titulo) partes.push(Tx('o título “{a}”', { a: E(f.titulo) }));
       return '<li><b>' + E(f.nome) + '</b>: ' + partes.join(' · ') + '</li>';
-    }).join('') + (fx && fx.length ? '<li class="apoio">Nada disso se compra: os prêmios saem no fechamento da semana, pela fila de entregas da conta.</li>' : '');
+    }).join('') + (fx && fx.length ? Tx('<li class="apoio">Nada disso se compra: os prêmios saem no fechamento da semana, pela fila de entregas da conta.</li>') : '');
   }
   function ecoDesenha(r) {
     var corpo = document.getElementById('rk-eco');
     var cab = document.getElementById('eco-semana');
-    cab.textContent = 'Semana de ' + ecoDia(r.semana.inicio) + ' a ' + ecoDia(r.semana.fim) + ' · ' +
-      (r.semana.id === r.atual ? SITE.falta(r.semana.fim + 1, 'fecha em') + ' (domingo, 23:59 de Brasília)'
-                               : (r.fechada ? 'fechada — os prêmios já saíram' : 'fechando'));
+    cab.textContent = Tx('Semana de {a} a {b} · {c}', { a: ecoDia(r.semana.inicio), b: ecoDia(r.semana.fim), c: r.semana.id === r.atual ? Tx('{a} (domingo, 23:59 de Brasília)', { a: SITE.falta(r.semana.fim + 1, Tx('fecha em')) })
+                               : (r.fechada ? Tx('fechada — os prêmios já saíram') : 'fechando') });
     var abas = [r.atual].concat((r.semanasFechadas || []).filter(function (w) { return w !== r.atual; }));
     document.getElementById('eco-semanas').innerHTML = abas.slice(0, 6).map(function (w) {
       return '<button type="button" role="tab" data-semana="' + w + '" class="' + (w === r.semana.id ? 'ligada' : '') + '">' +
-        (w === r.atual ? 'esta semana' : 'semana de ' + ecoDatas(w)) + '</button>';
+        (w === r.atual ? Tx('esta semana') : Tx('semana de {a}', { a: ecoDatas(w) })) + '</button>';
     }).join('');
     corpo.innerHTML = '';
     var lista = r.ranking || [];
-    if (!lista.length) { estado('eco', 'ninguém pontuou nesta semana — o primeiro lugar está livre'); }
+    if (!lista.length) { estado('eco', Tx('ninguém pontuou nesta semana — o primeiro lugar está livre')); }
     else {
       document.getElementById('es-eco').style.display = 'none';
       corpo.innerHTML = lista.map(function (l) {
@@ -305,13 +309,13 @@
     ecoFaixas(r.faixas);
   }
   function ecoCarrega(semana) {
-    estado('eco', 'carregando…');
+    estado('eco', Tx('carregando…'));
     SITE.api('/api/supremo/ranking' + (semana != null ? '?semana=' + encodeURIComponent(semana) : ''), { semToken: true })
       .then(function (r) {
         if (!r || !r.ok) {
           document.getElementById('eco-semana').textContent = '';
-          estado('eco', r && r.status === 0 ? 'o servidor está fora — tente de novo daqui a pouco'
-                                            : ((r && r.erro) || 'o placar do Eco chega com a próxima versão do servidor'), 'fora');
+          estado('eco', r && r.status === 0 ? Tx('o servidor está fora — tente de novo daqui a pouco')
+                                            : ((r && r.erro) || Tx('o placar do Eco chega com a próxima versão do servidor')), 'fora');
           return;
         }
         ecoResp = r;

@@ -11,6 +11,16 @@
  * com a conta (conta, loja, mestre) o carregam depois do site.js. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO VISITANTE (docs/IDIOMAS.md, etapa 3): a chave é o próprio português. Sem o
+   * JOGO.I18n (página de prova que não carrega o js/core/i18n.js) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = window.JOGO && window.JOGO.I18n;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var FUSO_S = -3 * 3600;
   var B = window.SITE_BANIMENTO = {};
   function z(n) { return (n < 10 ? '0' : '') + n; }
@@ -18,14 +28,15 @@
     var n = Number(seg);
     if (!isFinite(n) || n <= 0) return '';
     var d = new Date((n + FUSO_S) * 1000);
-    return z(d.getUTCDate()) + '/' + z(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + ' às ' +
+    return z(d.getUTCDate()) + '/' + z(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + Tx(' às ') +
            z(d.getUTCHours()) + ':' + z(d.getUTCMinutes());
   };
   /* a frase curta (o SITE.erro a usa no aviso do formulário de entrar) */
   B.frase = function (b) {
-    if (!b) return 'conta banida';
-    var fim = (b.permanente || b.fim == null) ? 'para sempre' : 'até ' + B.quando(b.fim) + ' (horário de Brasília)';
-    return 'Sua conta está banida ' + fim + (b.motivo ? '. Motivo: ' + b.motivo : '') + '.';
+    if (!b) return Tx('conta banida');
+    var fim = (b.permanente || b.fim == null) ? Tx('para sempre') : Tx('até {a} (horário de Brasília)', { a: B.quando(b.fim) });
+    return b.motivo ? Tx('Sua conta está banida {fim}. Motivo: {motivo}.', { fim: fim, motivo: b.motivo })
+      : Tx('Sua conta está banida {fim}.', { fim: fim });
   };
   var aberta = null;
   B.mostra = function (b) {
@@ -44,17 +55,17 @@
       cx.appendChild(e);
       return e;
     }
-    linha('h3', 'Sua conta está banida');
-    linha('p', (b.permanente || b.fim == null) ? 'O banimento é permanente.'
-      : 'O banimento termina em ' + B.quando(b.fim) + ' (horário de Brasília). Depois disso, é só entrar de novo.');
-    linha('p', b.motivo ? 'Motivo: ' + b.motivo : 'A Equipe não registrou o motivo deste banimento.', 'ban-motivo');
-    linha('p', 'Se você acha que foi um engano, procure a Equipe do jogo.', 'apoio');
+    linha('h3', Tx('Sua conta está banida'));
+    linha('p', (b.permanente || b.fim == null) ? Tx('O banimento é permanente.')
+      : Tx('O banimento termina em {a} (horário de Brasília). Depois disso, é só entrar de novo.', { a: B.quando(b.fim) }));
+    linha('p', b.motivo ? Tx('Motivo: {motivo}', { motivo: b.motivo }) : Tx('A Equipe não registrou o motivo deste banimento.'), 'ban-motivo');
+    linha('p', Tx('Se você acha que foi um engano, procure a Equipe do jogo.'), 'apoio');
     var bt = document.createElement('div');
     bt.className = 'modal-botoes';
     var ok = document.createElement('button');
     ok.type = 'button';
     ok.className = 'btn btn-ouro';
-    ok.textContent = 'Entendi';
+    ok.textContent = Tx('Entendi');
     ok.addEventListener('click', function () {
       // a sessão de uma conta banida não serve para nada aqui: sai, e a página volta sem conta
       try { if (window.SITE && SITE.sessao && SITE.sessao()) SITE.sair(); } catch (e) {}

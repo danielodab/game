@@ -50,9 +50,20 @@
  * Sem framework e sem CDN, no espírito do jogo (globais JOGO.*). */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO VISITANTE (docs/IDIOMAS.md, etapa 3): a chave é o próprio português. Sem o
+   * JOGO.I18n (página de prova que não carrega o js/core/i18n.js) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = window.JOGO && window.JOGO.I18n;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var CHAVE_SESSAO = 'soterra-sessao';
   var CHAVE_API = 'soterra-api-base';
   var SITE = window.SITE = {};
+  SITE.Tx = Tx;      // os scripts dentro das páginas (index, eventos, ranking) usam este
   /* 02/10: a versão dos Termos de Uso e da Política de Privacidade que estas
    * páginas mostram (site/termos.html e privacidade.html, data-versao). O
    * cadastro manda esta no `aceiteTermos`; o servidor (servidor/privacidade.py,
@@ -125,12 +136,25 @@
     var token = op.token || (s && op.semToken !== true ? s.token : null);
     if (token) cab.Authorization = 'Bearer ' + token;
     var pedido = { method: op.method || 'GET', headers: cab };
+    /* os idiomas (etapa 3): os pedidos que fazem o servidor mandar E-MAIL (o código do "esqueci", os
+     * avisos de senha e de e-mail trocados, a conta excluída) levam o idioma desta página, e o e-mail
+     * sai nele. Em português o pedido sai como sempre saiu, sem o campo. */
+    var lg = window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma;
+    if (lg && lg !== 'pt' && op.body && typeof op.body === 'object' && !Array.isArray(op.body) && op.body.idioma === undefined &&
+        /^\/api\/(esqueci|conta\/(senha|email|excluir))(\/|$)/.test(rota)) {
+      var comIdioma = { idioma: lg };
+      for (var kb in op.body) if (Object.prototype.hasOwnProperty.call(op.body, kb)) comIdioma[kb] = op.body[kb];
+      op.body = comIdioma;
+    }
     if (op.body !== undefined) pedido.body = JSON.stringify(op.body);
     if (op.keepalive) pedido.keepalive = true;      // o pedido chega mesmo com a página indo embora (o sair)
     return fetch(SITE.base() + rota, pedido).then(function (r) {
-      return r.json().catch(function () { return { ok: false, erro: 'resposta que não é JSON' }; })
+      return r.json().catch(function () { return { ok: false, erro: Tx('resposta que não é JSON') }; })
         .then(function (j) {
           j.status = r.status;
+          // os idiomas (etapa 3): o servidor responde em português; fora dele, a frase é trocada AQUI,
+          // uma vez, para toda tela que mostra `r.erro` (JOGO.I18n.erro; js/i18n/erros_<idioma>.js)
+          if (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.resposta) window.JOGO.I18n.resposta(j, rota);
           // 02/10 (servidor/moderacao.py): a conta banida — a tela do motivo e do fim (site/banimento.js)
           if (r.status === 403 && j.banimento && typeof j.banimento === 'object' && window.SITE_BANIMENTO) SITE_BANIMENTO.mostra(j.banimento);
           // 13/09, UM APARELHO SÓ: o token desta página caiu por um login em
@@ -155,7 +179,7 @@
           return j;
         });
     }).catch(function () {
-      return { ok: false, status: 0, erro: 'o servidor está fora (não respondeu)' };
+      return { ok: false, status: 0, erro: Tx('o servidor está fora (não respondeu)') };
     });
   };
 
@@ -168,7 +192,7 @@
    * vencido") não pode passar por cima da frase. SITE.semNavegar (provas)
    * devolve a resposta em vez de navegar. */
   SITE.MOTIVO_OUTRO_APARELHO = 'outro-aparelho';
-  SITE.FRASE_OUTRO_APARELHO = 'Sua conta entrou em outro aparelho. Entre de novo para continuar.';
+  SITE.FRASE_OUTRO_APARELHO = Tx('Sua conta entrou em outro aparelho. Entre de novo para continuar.');
   SITE.CHAVE_AVISO = 'soterra-aviso-entrar';     // a mesma do js/core/sessao.js (S.CHAVE_AVISO)
   SITE.semNavegar = false;
   SITE.derrubada = function (resposta) {
@@ -244,7 +268,7 @@
       var a = document.createElement('a');
       a.href = 'mestre.html';
       a.setAttribute('data-mestre', '');
-      a.textContent = 'Mestre';
+      a.textContent = Tx('Mestre');
       nav.insertBefore(a, nav.querySelector('a.jogar'));
       return;
     }
@@ -278,14 +302,12 @@
     if (!caixa) return;
     var s = SITE.sessao();
     if (!s) {
-      caixa.innerHTML = '<a href="conta.html#entrar">Entrar</a>';
+      caixa.innerHTML = Tx('<a href="conta.html#entrar">Entrar</a>');
       return;
     }
     // Fase C: "Olá, Daniel · minha conta · sair". No celular o nome encolhe
     // com "…" (site.css) e os dois links ficam sempre à vista.
-    caixa.innerHTML = '<span class="ola"><span class="ola-oi">Olá, </span><b>' + SITE.esc(s.conta.nome) + '</b></span>' +
-      (s.conta.gm ? ' <span class="marca-gm" title="Mestre do Fundo">◆</span>' : '') +
-      ' · <a href="conta.html#conta">minha conta</a> · <button type="button" id="bt-sair">sair</button>';
+    caixa.innerHTML = Tx('<span class="ola"><span class="ola-oi">Olá, </span><b>{a}</b></span>{b} · <a href="conta.html#conta">minha conta</a> · <button type="button" id="bt-sair">sair</button>', { a: SITE.esc(s.conta.nome), b: s.conta.gm ? ' <span class="marca-gm" title="Mestre do Fundo">◆</span>' : '' });
     document.getElementById('bt-sair').addEventListener('click', SITE.sair);
   };
 
@@ -313,21 +335,21 @@
    * o Edge e o Opera dizem "Chrome" também, e o Android diz "Linux". */
   SITE.navegador = function (ua) {
     ua = String(ua == null ? '' : ua);
-    if (!ua.trim()) return 'navegador desconhecido';
-    var nav = /Edg(e|A|iOS)?\//.test(ua) ? 'Edge'
-      : /OPR\/|Opera/.test(ua) ? 'Opera'
-      : /SamsungBrowser\//.test(ua) ? 'Samsung Internet'
-      : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox'
-      : /Chrome\/|CriOS\/|Chromium\//.test(ua) ? 'Chrome'
-      : /Safari\//.test(ua) && /Version\//.test(ua) ? 'Safari'
-      : /python|curl|wget|okhttp|Go-http/i.test(ua) ? 'programa'
-      : 'navegador';
-    var so = /Windows/.test(ua) ? 'Windows'
-      : /Android/.test(ua) ? 'Android'
+    if (!ua.trim()) return Tx('navegador desconhecido');
+    var nav = /Edg(e|A|iOS)?\//.test(ua) ? Tx('Edge')
+      : /OPR\/|Opera/.test(ua) ? Tx('Opera')
+      : /SamsungBrowser\//.test(ua) ? Tx('Samsung Internet')
+      : /Firefox\/|FxiOS\//.test(ua) ? Tx('Firefox')
+      : /Chrome\/|CriOS\/|Chromium\//.test(ua) ? Tx('Chrome')
+      : /Safari\//.test(ua) && /Version\//.test(ua) ? Tx('Safari')
+      : /python|curl|wget|okhttp|Go-http/i.test(ua) ? Tx('programa')
+      : Tx('navegador');
+    var so = /Windows/.test(ua) ? Tx('Windows')
+      : /Android/.test(ua) ? Tx('Android')
       : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
       : /CrOS/.test(ua) ? 'ChromeOS'
       : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
-      : /Linux/.test(ua) ? 'Linux' : '';
+      : /Linux/.test(ua) ? Tx('Linux') : '';
     return so ? nav + ' · ' + so : nav;
   };
 
@@ -344,13 +366,13 @@
   SITE.ha = function (ts) {
     var s = SITE.agora() - Number(ts);
     if (!isFinite(s)) return '';
-    if (s < 60) return 'agora mesmo';
-    return 'há ' + SITE.duracao(Math.floor(s / 60) * 60);
+    if (s < 60) return Tx('agora mesmo');
+    return Tx('há {a}', { a: SITE.duracao(Math.floor(s / 60) * 60) });
   };
   /* "de novo em 3 dias": quando um limite volta */
   SITE.deNovo = function (ts) {
     var s = Number(ts) - SITE.agora();
-    return s > 0 ? 'de novo em ' + SITE.duracao(s) : 'já liberado';
+    return s > 0 ? Tx('de novo em {a}', { a: SITE.duracao(s) }) : Tx('já liberado');
   };
 
   /* A frase de erro de uma resposta do SITE.api. O 503 com `correio:false` é o
@@ -358,12 +380,12 @@
    * que falhou agora, e a frase dele diz isso. */
   SITE.erro = function (r, padrao) {
     r = r || {};
-    if (r.status === 503 && r.correio === false) return 'o envio de e-mails ainda não foi ligado neste servidor';
+    if (r.status === 503 && r.correio === false) return Tx('o envio de e-mails ainda não foi ligado neste servidor');
     if (r.status === 403 && r.banimento && window.SITE_BANIMENTO) return SITE_BANIMENTO.frase(r.banimento);   // 02/10
-    var t = String(r.erro || padrao || 'algo deu errado');
+    var t = String(r.erro || padrao || Tx('algo deu errado'));
     if (r.status === 429 && Number(r.liberaEm) > SITE.agora()) t += ' (' + SITE.deNovo(r.liberaEm) + ')';
     if (typeof r.restam === 'number' && r.restam >= 0) {
-      t += ' — ' + (r.restam === 1 ? 'resta 1 tentativa' : 'restam ' + r.restam + ' tentativas');
+      t += ' — ' + (r.restam === 1 ? Tx('resta 1 tentativa') : Tx('restam {n} tentativas', { n: r.restam }));
     }
     return t;
   };
@@ -384,8 +406,8 @@
       fundo.setAttribute('aria-modal', 'true');
       fundo.innerHTML = '<div class="modal-caixa">' + (op.titulo ? '<h3>' + E(op.titulo) + '</h3>' : '') +
         '<p>' + E(op.texto) + '</p>' + (op.nota ? '<p class="apoio">' + E(op.nota) + '</p>' : '') +
-        '<div class="modal-botoes"><button type="button" class="btn" data-nao>' + E(op.nao || 'Voltar') + '</button>' +
-        '<button type="button" class="btn btn-ouro" data-sim>' + E(op.sim || 'Confirmar') + '</button></div></div>';
+        '<div class="modal-botoes"><button type="button" class="btn" data-nao>' + E(op.nao || Tx('Voltar')) + '</button>' +
+        '<button type="button" class="btn btn-ouro" data-sim>' + E(op.sim || Tx('Confirmar')) + '</button></div></div>';
       function tecla(ev) { if (ev.key === 'Escape') fecha(false); }
       function fecha(v) {
         if (fechaModal !== fecha) return;
@@ -441,7 +463,7 @@
 
   /* Datas no fuso de QUEM VÊ (o navegador sabe qual é). Só a regra semanal
    * fala em Brasília, porque é assim que o servidor a guarda. */
-  var DIA_CURTO = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  var DIA_CURTO = [Tx('dom'), Tx('seg'), Tx('ter'), Tx('qua'), Tx('qui'), Tx('sex'), Tx('sáb')];
   function dd(n) { return (n < 10 ? '0' : '') + n; }
   function dataDe(ts) {
     var d = new Date(Number(ts) * 1000);
@@ -478,24 +500,25 @@
    * resposta. */
   SITE.duracao = function (seg) {
     var min = Math.ceil(Math.max(0, Number(seg) || 0) / 60);
-    if (min < 1) return 'menos de 1 min';
+    if (min < 1) return Tx('menos de 1 min');
     if (min < 60) return min + ' min';
     var h = Math.floor(min / 60), m = min % 60;
     if (h < 24) return h + ' h' + (m ? ' ' + m + ' min' : '');
     var d = Math.floor(h / 24), hh = h % 24;
-    return d + (d === 1 ? ' dia' : ' dias') + (hh ? ' e ' + hh + ' h' : '');
+    var dias = d === 1 ? Tx('{d} dia', { d: d }) : Tx('{d} dias', { d: d });
+    return hh ? Tx('{dias} e {h} h', { dias: dias, h: hh }) : dias;
   };
   SITE.falta = function (ts, prefixo) {
-    prefixo = prefixo || 'termina em';
+    prefixo = prefixo || Tx('termina em');
     var s = Number(ts) - SITE.agora();
-    if (!(s > 0)) return /^começa/.test(prefixo) ? 'já começou' : 'já terminou';
+    if (!(s > 0)) return /^começa/.test(prefixo) ? Tx('já começou') : Tx('já terminou');
     return prefixo + ' ' + SITE.duracao(s);
   };
 
   /* OS CINCO TIPOS DE EVENTO (lista fechada do contrato de 10/09). Um tipo que
    * o site não conhece é ignorado, como no jogo, e nunca vira "undefined ×2". */
   SITE.TIPOS = ['xp', 'vintem', 'pedras', 'saque', 'aviso'];
-  var NOME_TIPO = { xp: 'XP', vintem: 'Vinténs', pedras: 'Pedras', saque: 'Saque', aviso: 'Aviso' };
+  var NOME_TIPO = { xp: 'XP', vintem: Tx('Vinténs'), pedras: Tx('Pedras'), saque: Tx('Saque'), aviso: Tx('Aviso') };
   SITE.nomeTipo = function (tipo) { return NOME_TIPO[tipo] || ''; };
   SITE.fator = function (tipo, n) {
     var nome = NOME_TIPO[tipo];
@@ -507,8 +530,8 @@
    * vira "Todo sábado, 10:00–22:00 (Brasília)". Os dias são os do
    * Date.getDay() (0 = domingo), e a lista sai de segunda a domingo, que é
    * como se fala a semana. */
-  var DIA_UM = ['Todo domingo', 'Toda segunda', 'Toda terça', 'Toda quarta', 'Toda quinta', 'Toda sexta', 'Todo sábado'];
-  var DIA_VARIOS = ['aos domingos', 'às segundas', 'às terças', 'às quartas', 'às quintas', 'às sextas', 'aos sábados'];
+  var DIA_UM = [Tx('Todo domingo'), Tx('Toda segunda'), Tx('Toda terça'), Tx('Toda quarta'), Tx('Toda quinta'), Tx('Toda sexta'), Tx('Todo sábado')];
+  var DIA_VARIOS = [Tx('aos domingos'), Tx('às segundas'), Tx('às terças'), Tx('às quartas'), Tx('às quintas'), Tx('às sextas'), Tx('aos sábados')];
   function hhmm(min) { return dd(Math.floor(min / 60) % 24) + ':' + dd(min % 60); }
   function dataBrasilia(ts) {
     // o servidor guarda a regra no fuso fixo de −3 h (sem horário de verão)
@@ -525,9 +548,9 @@
     if (!dias.length) return '';
     dias.sort(function (a, b) { return ((a + 6) % 7) - ((b + 6) % 7); });
     var chave = dias.join(','), quando;
-    if (dias.length === 7) quando = 'Todo dia';
-    else if (chave === '1,2,3,4,5') quando = 'De segunda a sexta';
-    else if (chave === '6,0') quando = 'Todo fim de semana';
+    if (dias.length === 7) quando = Tx('Todo dia');
+    else if (chave === '1,2,3,4,5') quando = Tx('De segunda a sexta');
+    else if (chave === '6,0') quando = Tx('Todo fim de semana');
     else if (dias.length === 1) quando = DIA_UM[dias[0]];
     else {
       var nomes = dias.map(function (d) { return DIA_VARIOS[d]; });
@@ -538,13 +561,13 @@
     var dur = Math.round(Number(r.duracaoMin) || 0);
     if (!m || dur <= 0) return quando;
     var ini = Number(m[1]) * 60 + Number(m[2]), fim = ini + dur, faixa;
-    if (ini === 0 && dur >= 1440) faixa = 'o dia inteiro';
-    else if (fim === 1440) faixa = hhmm(ini) + ' até a meia-noite';
-    else if (fim > 1440) faixa = hhmm(ini) + '–' + hhmm(fim - 1440) + ' do dia seguinte';
+    if (ini === 0 && dur >= 1440) faixa = Tx('o dia inteiro');
+    else if (fim === 1440) faixa = Tx('{a} até a meia-noite', { a: hhmm(ini) });
+    else if (fim > 1440) faixa = Tx('{a}–{b} do dia seguinte', { a: hhmm(ini), b: hhmm(fim - 1440) });
     else faixa = hhmm(ini) + '–' + hhmm(fim);
-    var txt = quando + ', ' + faixa + ' (Brasília)';
-    if (r.vigenteDe != null && Number(r.vigenteDe) > SITE.agora()) txt += ', a partir de ' + dataBrasilia(r.vigenteDe);
-    if (r.vigenteAte != null && isFinite(Number(r.vigenteAte))) txt += ', até ' + dataBrasilia(r.vigenteAte);
+    var txt = Tx('{quando}, {faixa} (Brasília)', { quando: quando, faixa: faixa });
+    if (r.vigenteDe != null && Number(r.vigenteDe) > SITE.agora()) txt += Tx(', a partir de {a}', { a: dataBrasilia(r.vigenteDe) });
+    if (r.vigenteAte != null && isFinite(Number(r.vigenteAte))) txt += Tx(', até {a}', { a: dataBrasilia(r.vigenteAte) });
     return txt;
   };
 
@@ -552,7 +575,7 @@
    * página carrega esse arquivo. O Poço não mora nessa lista: é o calabouço
    * sintético de js/core/poco.js. */
   SITE.calabouco = function (id) {
-    if (id === 'poco') return 'O Poço sem Fundo';
+    if (id === 'poco') return Tx('O Poço sem Fundo');
     var dgs = (window.JOGO && JOGO.DATA && JOGO.DATA.dungeons) || [];
     var ks = Object.keys(dgs);
     for (var i = 0; i < ks.length; i++) {
@@ -565,11 +588,11 @@
   var CONTRAI = { A: 'na', O: 'no', As: 'nas', Os: 'nos' };
   /* "em todos os calabouços" / "só na Cisterna dos Afogados" */
   SITE.onde = function (id) {
-    if (!id) return 'em todos os calabouços';
+    if (!id) return Tx('em todos os calabouços');
     var nome = SITE.calabouco(id);
-    if (!nome) return 'num calabouço só';
+    if (!nome) return Tx('num calabouço só');
     var m = /^(A|O|As|Os) (.*)$/.exec(nome);
-    return 'só ' + (m ? CONTRAI[m[1]] + ' ' + m[2] : 'em ' + nome);
+    return Tx('só {a}', { a: m ? CONTRAI[m[1]] + ' ' + m[2] : Tx('em {nome}', { nome: nome }) });
   };
 
   /* O CALABOUÇO DO DIA de `ts` (segundos), pela MESMA função do jogo:
@@ -621,12 +644,11 @@
    * veio do servidor passa pelo esc; o tipo já é da lista fechada. */
   SITE.cartaoEvento = function (e) {
     var E = SITE.esc;
-    return '<div class="evento no-ar t-' + e.tipo + '">' +
-      '<div class="evento-topo"><span class="chip-tipo t-' + e.tipo + '">' + E(SITE.fator(e.tipo, e.mult)) + '</span>' +
-      '<span class="etiqueta aberto">No ar</span></div>' +
-      '<h4>' + E(e.titulo) + '</h4>' + (e.texto ? '<p>' + E(e.texto) + '</p>' : '') +
-      '<div class="evento-pe"><span>' + E(SITE.onde(e.calabouco)) + '</span>' +
-      '<span class="falta">' + E(SITE.falta(e.fim)) + '</span></div></div>';
+    return '<div class="evento no-ar t-' +
+      e.tipo +
+      '">' +
+      Tx('<div class="evento-topo"><span class="chip-tipo t-{tipo}">{a}</span><span class="etiqueta aberto">No ar</span></div><h4>{b}</h4>{c}<div class="evento-pe"><span>{d}</span><span class="falta">{e}</span></div>', { tipo: e.tipo, a: E(SITE.fator(e.tipo, e.mult)), b: E(e.titulo), c: e.texto ? '<p>' + E(e.texto) + '</p>' : '', d: E(SITE.onde(e.calabouco)), e: E(SITE.falta(e.fim)) }) +
+      '</div>';
   };
   SITE.linhaEvento = function (e) {
     var E = SITE.esc;

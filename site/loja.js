@@ -59,6 +59,16 @@
  * um SVG desenhado aqui (iconeBarra), sem imagem de fora. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO VISITANTE (docs/IDIOMAS.md, etapa 3): a chave é o próprio português. Sem o
+   * JOGO.I18n (página de prova que não carrega o js/core/i18n.js) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = window.JOGO && window.JOGO.I18n;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   var E = SITE.esc, N = SITE.num;
   function $(id) { return document.getElementById(id); }
   function proprio(o, k) { return !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k); }
@@ -82,15 +92,15 @@
   /* as seções que a página conhece (o título e a frase de apoio); a ORDEM é a
    * do catálogo do servidor, e uma seção nova dele entra com o próprio id */
   var SECOES = {
-    vintens: { titulo: 'Vinténs para o jogo', sub: 'Troque barras de ouro por vinténs na carteira do jogo. As barras saem da conta e os vinténs entram na carteira na hora, mesmo com o jogo fechado.' },
-    'barras-por-vintens': { titulo: 'Barras por vinténs — para quem farma', sub: 'O caminho de quem desce muito: troque os vinténs que você juntou no jogo por barras de ouro e leve qualquer coisa desta loja sem gastar dinheiro. Custa bem mais que a troca de ida, de propósito. Os vinténs saem e as barras entram na hora da compra, mesmo com o jogo fechado.' },
-    personagens: { titulo: 'Personagens', sub: 'Libera a classe no jogo, e o herói chega no nível 1. As cartas que você já tem entram no desbloqueio, mas o preço é o mesmo: se faltam poucas, talvez valha esperar a queda.' },
-    bonus: { titulo: 'Bônus de XP', sub: 'Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.' },
-    pedras: { titulo: 'Pedras de forja', sub: 'Pacotes de pedras para a Forja do Acampamento. A Âncora de Forja não está à venda: ela se conquista lá embaixo.' },
-    guilda: { titulo: 'Guilda', sub: 'Dez Insígnias fundam uma guilda.' },
-    pergaminhos: { titulo: 'Pergaminhos', sub: 'Chegam guardados no jogo; você lê quando quiser.' },
+    vintens: { titulo: Tx('Vinténs para o jogo'), sub: Tx('Troque barras de ouro por vinténs na carteira do jogo. As barras saem da conta e os vinténs entram na carteira na hora, mesmo com o jogo fechado.') },
+    'barras-por-vintens': { titulo: Tx('Barras por vinténs — para quem farma'), sub: Tx('O caminho de quem desce muito: troque os vinténs que você juntou no jogo por barras de ouro e leve qualquer coisa desta loja sem gastar dinheiro. Custa bem mais que a troca de ida, de propósito. Os vinténs saem e as barras entram na hora da compra, mesmo com o jogo fechado.') },
+    personagens: { titulo: Tx('Personagens'), sub: Tx('Libera a classe no jogo, e o herói chega no nível 1. As cartas que você já tem entram no desbloqueio, mas o preço é o mesmo: se faltam poucas, talvez valha esperar a queda.') },
+    bonus: { titulo: Tx('Bônus de XP'), sub: Tx('Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.') },
+    pedras: { titulo: Tx('Pedras de forja'), sub: Tx('Pacotes de pedras para a Forja do Acampamento. A Âncora de Forja não está à venda: ela se conquista lá embaixo.') },
+    guilda: { titulo: Tx('Guilda'), sub: Tx('Dez Insígnias fundam uma guilda.') },
+    pergaminhos: { titulo: Tx('Pergaminhos'), sub: Tx('Chegam guardados no jogo; você lê quando quiser.') },
     // 04/10: as auras da praça — só aparência, e por isso podem se vender
-    aparencia: { titulo: 'Aparência', sub: 'Auras para a praça, cada uma com o seu efeito em volta do herói — chamas, ondas, folhas, vento em espiral, pedras e runas —, que todo mundo vê. Só aparência — não muda nada em batalha. A aura é sua na hora; liga, desliga e troca na ficha do Personagem, no jogo.' }
+    aparencia: { titulo: Tx('Aparência'), sub: Tx('Auras para a praça, cada uma com o seu efeito em volta do herói — chamas, ondas, folhas, vento em espiral, pedras e runas —, que todo mundo vê. Só aparência — não muda nada em batalha. A aura é sua na hora; liga, desliga e troca na ficha do Personagem, no jogo.') }
   };
   /* 04/10 — AS NOVIDADES (servidor/loja.py manda tudo; aqui não mora número nenhum):
    *   - o PACOTE DE BOAS-VINDAS (seção 'boas-vindas'): não é uma seção comum, é o destaque do topo,
@@ -101,21 +111,21 @@
    *     diz os tipos que não: moeda e o Pacote). */
   var bvClasse = '', bvAura = '';      // as escolhas do Pacote de Boas-Vindas (sobrevivem ao redesenho)
   var presenteAberto = null, presenteNome = '';   // o sku com o formulário de presente aberto e o nome digitado
-  var ESTADO = { pendente: 'esperando o jogo abrir', retirado: 'a caminho do jogo', entregue: 'entregue',
-                 estornado: 'devolvido', cancelado: 'cancelado' };
+  var ESTADO = { pendente: Tx('esperando o jogo abrir'), retirado: Tx('a caminho do jogo'), entregue: Tx('entregue'),
+                 estornado: Tx('devolvido'), cancelado: Tx('cancelado') };
   // 04/10: por que um pedido ainda não entrou, quando a entrega é na hora (pedido.espera, do servidor)
-  var ESPERA = { luta: 'chega quando a sala terminar', juiz: 'entra em instantes',
-                 estado: 'esperando o jogo abrir uma vez nesta conta' };
-  var MOTIVO = { 'sem-saldo': 'vinténs insuficientes no jogo', 'classe-ja-liberada': 'a classe já estava liberada no jogo',
-                 'item-invalido': 'o jogo não reconheceu o produto', 'erro-local': 'o jogo falhou ao entregar',
-                 'recusado': 'o jogo recusou o pedido' };
-  var ESTADO_PAG = { aberto: 'esperando o pagamento', pendente: 'em análise', aprovado: 'aprovado',
-                     recusado: 'não aprovado', estornado: 'estornado', falhou: 'não abriu' };
-  var RARIDADE = { comum: 'Comum', raro: 'Raro', epico: 'Épico', lendario: 'Lendário' };
+  var ESPERA = { luta: Tx('chega quando a sala terminar'), juiz: Tx('entra em instantes'),
+                 estado: Tx('esperando o jogo abrir uma vez nesta conta') };
+  var MOTIVO = { 'sem-saldo': Tx('vinténs insuficientes no jogo'), 'classe-ja-liberada': Tx('a classe já estava liberada no jogo'),
+                 'item-invalido': Tx('o jogo não reconheceu o produto'), 'erro-local': Tx('o jogo falhou ao entregar'),
+                 'recusado': Tx('o jogo recusou o pedido') };
+  var ESTADO_PAG = { aberto: Tx('esperando o pagamento'), pendente: Tx('em análise'), aprovado: Tx('aprovado'),
+                     recusado: Tx('não aprovado'), estornado: Tx('estornado'), falhou: Tx('não abriu') };
+  var RARIDADE = { comum: Tx('Comum'), raro: Tx('Raro'), epico: Tx('Épico'), lendario: Tx('Lendário') };
   var ELEMENTOS = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
-  var MOTIVO_BARRAS = { pacote: 'pacote pago', loja: 'compra na loja', 'estorno-loja': 'devolvidas: pedido cancelado ou recusado',
-                        'troca-vintens': 'troca com vinténs', presente: 'presente do Mestre',
-                        'estorno-pagamento': 'pagamento estornado', ajuste: 'ajuste do dono do jogo' };
+  var MOTIVO_BARRAS = { pacote: Tx('pacote pago'), loja: Tx('compra na loja'), 'estorno-loja': Tx('devolvidas: pedido cancelado ou recusado'),
+                        'troca-vintens': Tx('troca com vinténs'), presente: Tx('presente do Mestre'),
+                        'estorno-pagamento': Tx('pagamento estornado'), ajuste: Tx('ajuste do dono do jogo') };
 
   /* ---- as barras de ouro (13/09) ---- */
   /* a barra de ouro desenhada à mão: a face de cima clara, a da frente mais funda, um brilho */
@@ -129,7 +139,7 @@
   function moedaDe(it) { return it && it.moeda === 'barras' ? 'barras' : 'vintens'; }
   function temBarras() { return !!(minha && minha.barras && typeof minha.barras === 'object'); }
   function barrasNoSaldo() { return Number(((minha && minha.barras) || {}).saldo) || 0; }
-  function nBarras(n) { return N(n) + (Number(n) === 1 ? ' barra de ouro' : ' barras de ouro'); }
+  function nBarras(n) { return N(n) + (Number(n) === 1 ? Tx(' barra de ouro') : Tx(' barras de ouro')); }
   /* 04/10: a oferta da semana deste item (ou null). Vale enquanto o relógio do servidor não passou do
    * `fim`; quem decide o preço cobrado é o servidor — aqui é só o que a página mostra. */
   function oferta(it) {
@@ -148,13 +158,13 @@
     return c > precoDe(it) ? c : 0;
   }
   function menosPorCento(it) { var c = cheioDe(it); return c ? Math.round((1 - precoDe(it) / c) * 100) : 0; }
-  function precoTexto(it) { return moedaDe(it) === 'barras' ? nBarras(precoDe(it)) : N(precoDe(it)) + ' vinténs'; }
+  function precoTexto(it) { return moedaDe(it) === 'barras' ? nBarras(precoDe(it)) : Tx('{a} vinténs', { a: N(precoDe(it)) }); }
   function precoHtml(it) {
     var cheio = cheioDe(it);
     var antes = cheio ? '<s class="preco-cheio" aria-label="de ' + N(cheio) + '">' + N(cheio) + '</s>' : '';
     return moedaDe(it) === 'barras'
-      ? '<span class="preco preco-barras' + (cheio ? ' em-oferta' : '') + '" data-moeda="barras">' + iconeBarra() + antes + N(precoDe(it)) + ' <small>barras</small></span>'
-      : '<span class="preco" data-moeda="vintens">' + N(precoDe(it)) + ' <small>vinténs</small></span>';
+      ? '<span class="preco preco-barras' + (cheio ? ' em-oferta' : '') + '" data-moeda="barras">' + iconeBarra() + antes + N(precoDe(it)) + ' <small>' + Tx('barras') + '</small></span>'
+      : '<span class="preco" data-moeda="vintens">' + Tx('{a} <small>vinténs</small>', { a: N(precoDe(it)) }) + '</span>';
   }
   // os segundos que faltam, por extenso: "2 d 7 h", "1 h 23 min" (DIA e HORA: nenhum número solto, a
   // prova do site lê este arquivo atrás de preço escrito à mão)
@@ -164,7 +174,7 @@
     var d = Math.floor(seg / DIA), h = Math.floor((seg % DIA) / HORA), m = Math.floor((seg % HORA) / 60);
     if (d > 0) return d + ' d' + (h ? ' ' + h + ' h' : '');
     if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
-    return m > 0 ? m + ' min' : 'menos de 1 min';
+    return m > 0 ? m + ' min' : Tx('menos de 1 min');
   }
   function presenteavel(it) {
     var fora = catalogo && catalogo.presente && Array.isArray(catalogo.presente.fora) ? catalogo.presente.fora : null;
@@ -174,10 +184,9 @@
   function cambio(id) {
     var b = catalogo && catalogo.barras;
     if (!b || !(Number(b.vintensPorBarra) > 0) || !(Number(b.vintensPorBarraFarmada) > 0)) return '';
-    if (id === 'vintens') return 'Cada barra de ouro vira ' + N(b.vintensPorBarra) + ' vinténs.';
+    if (id === 'vintens') return Tx('Cada barra de ouro vira {a} vinténs.', { a: N(b.vintensPorBarra) });
     if (id === 'barras-por-vintens') {
-      return 'Aqui cada barra de ouro custa ' + N(b.vintensPorBarraFarmada) + ' vinténs (na troca de ida, uma barra vira ' +
-        N(b.vintensPorBarra) + ').';
+      return Tx('Aqui cada barra de ouro custa {a} vinténs (na troca de ida, uma barra vira {b}).', { a: N(b.vintensPorBarraFarmada), b: N(b.vintensPorBarra) });
     }
     return '';
   }
@@ -194,7 +203,7 @@
     pagamentos = null;
     estadoMinha = 'fora';
     if (volta && volta.estado !== 'ok') volta.estado = 'fora';
-    aviso('A sessão desta página tinha vencido. Entre de novo para comprar.', 'neutro');
+    aviso(Tx('A sessão desta página tinha vencido. Entre de novo para comprar.'), 'neutro');
     desenha();
   }
   function semSave() {
@@ -215,9 +224,9 @@
       if (r.ok && Array.isArray(r.itens)) { catalogo = r; erroCatalogo = ''; }
       else {
         catalogo = null;
-        erroCatalogo = r.status === 0 ? 'O servidor está fora — a loja volta com ele.'
-          : r.status === 404 ? 'A loja ainda não chegou a este servidor.'
-          : SITE.erro(r, 'não deu para ler o catálogo');
+        erroCatalogo = r.status === 0 ? Tx('O servidor está fora — a loja volta com ele.')
+          : r.status === 404 ? Tx('A loja ainda não chegou a este servidor.')
+          : SITE.erro(r, Tx('não deu para ler o catálogo'));
       }
       desenha();
     });
@@ -231,8 +240,8 @@
       if (r.ok) { minha = r; estadoMinha = 'ok'; erroMinha = ''; }
       else if (!minha) {
         estadoMinha = 'erro';
-        erroMinha = r.status === 0 ? 'O servidor está fora — o seu saldo volta com ele.' : SITE.erro(r, 'não deu para ler o seu saldo');
-      } else aviso(SITE.erro(r, 'não deu para atualizar o saldo'));
+        erroMinha = r.status === 0 ? Tx('O servidor está fora — o seu saldo volta com ele.') : SITE.erro(r, Tx('não deu para ler o seu saldo'));
+      } else aviso(SITE.erro(r, Tx('não deu para atualizar o saldo')));
       desenha();
     });
   }
@@ -254,41 +263,30 @@
   function desenhaSaldo() {
     var caixa = $('lj-saldo');
     if (estadoMinha === 'fora') {
-      caixa.innerHTML = '<div class="saldo-fora">' + iconeBarra('grande') + '<p><b>Entre para comprar.</b> A loja vende em barras de ouro, ' +
-        'que ficam na sua conta do site: vêm dos pacotes' + (noApp() ? '' : ' (Pix ou cartão)') + ' ou da troca pelos vinténs do seu jogo.</p>' +
-        '<a class="btn btn-ouro" href="conta.html#entrar">Entrar</a><a class="btn" href="conta.html#criar">Criar conta</a></div>';
+      caixa.innerHTML = (noApp()
+        ? '<div class="saldo-fora">' +
+        Tx('{a}<p><b>Entre para comprar.</b> A loja vende em barras de ouro, que ficam na sua conta do site: vêm dos pacotes ou da troca pelos vinténs do seu jogo.</p><a class="btn btn-ouro" href="conta.html#entrar">Entrar</a><a class="btn" href="conta.html#criar">Criar conta</a>', { a: iconeBarra('grande') }) +
+        '</div>'
+        : '<div class="saldo-fora">' +
+        Tx('{a}<p><b>Entre para comprar.</b> A loja vende em barras de ouro, que ficam na sua conta do site: vêm dos pacotes (Pix ou cartão) ou da troca pelos vinténs do seu jogo.</p><a class="btn btn-ouro" href="conta.html#entrar">Entrar</a><a class="btn" href="conta.html#criar">Criar conta</a>', { a: iconeBarra('grande') }) +
+        '</div>');
       return;
     }
-    if (estadoMinha === 'carregando') { caixa.innerHTML = '<div class="estado">carregando o seu saldo…</div>'; return; }
+    if (estadoMinha === 'carregando') { caixa.innerHTML = Tx('<div class="estado">carregando o seu saldo…</div>'); return; }
     if (estadoMinha === 'erro') { caixa.innerHTML = '<div class="estado fora">' + E(erroMinha) + '</div>'; return; }
     var s = minha.saldo || {};
     var temCaminho = proprio(s, 'aCaminho');     // um servidor de antes da loja 2 não manda o campo
     var caminho = aCaminhoNoSaldo();
-    var quando = !semSave() ? 'Do último save que subiu' + (Number(s.saveEm) > 0 ? ', ' + SITE.ha(s.saveEm) : '') + '.'
-      : caminho > 0 ? 'O servidor ainda não viu a carteira do seu jogo: por enquanto, só os vinténs a caminho contam. ' +
-                      'Abra o jogo logado nesta conta (na conta Principal).'
-      : 'O servidor ainda não viu seus vinténs: abra o jogo logado nesta conta (na conta Principal).';
+    var quando = !semSave() ? Tx('Do último save que subiu{a}.', { a: Number(s.saveEm) > 0 ? ', ' + SITE.ha(s.saveEm) : '' })
+      : caminho > 0 ? Tx('O servidor ainda não viu a carteira do seu jogo: por enquanto, só os vinténs a caminho contam. Abra o jogo logado nesta conta (na conta Principal).')
+      : Tx('O servidor ainda não viu seus vinténs: abra o jogo logado nesta conta (na conta Principal).');
     // 13/09: os DOIS saldos — as barras de ouro da conta (se o servidor já as tem) e os vinténs do jogo
     var barras = temBarras()
-      ? '<section class="saldo-bloco bloco-barras"><h3>Barras de ouro <small>da conta do site</small></h3>' +
-        '<div class="saldo-barras">' + iconeBarra('grande') + '<b data-saldo="barras">' + N(barrasNoSaldo()) + '</b></div>' +
-        '<p class="apoio">Gastam-se só aqui na loja. Entram na hora quando um pacote é aprovado, e voltam se um pedido for cancelado ou devolvido pelo jogo.</p></section>'
+      ? '<section class="saldo-bloco bloco-barras">' +
+        Tx('<h3>Barras de ouro <small>da conta do site</small></h3><div class="saldo-barras">{a}<b data-saldo="barras">{b}</b></div><p class="apoio">Gastam-se só aqui na loja. Entram na hora quando um pacote é aprovado, e voltam se um pedido for cancelado ou devolvido pelo jogo.</p>', { a: iconeBarra('grande'), b: N(barrasNoSaldo()) }) +
+        '</section>'
       : '';
-    caixa.innerHTML = (s.semFundo ? '<p class="selo-mestre">◆ Mestre: compra sem gastar</p>' : '') +
-      '<div class="saldos' + (barras ? ' dois' : '') + '">' + barras +
-      '<section class="saldo-bloco bloco-vintens"><h3>' + (barras ? 'Vinténs do jogo' : 'Seu saldo') + ' <small>' +
-        (barras ? 'para a troca por barras' : 'em vinténs') + '</small></h3>' +
-      '<div class="saldo-numeros' + (temCaminho ? ' quatro' : '') + '">' +
-        '<div><span>Carteira do jogo</span><b data-saldo="carteira">' + N(s.carteira) + '</b></div>' +
-        (temCaminho ? '<div class="a-caminho"><span>A caminho</span><b data-saldo="aCaminho">' + N(caminho) + '</b></div>' : '') +
-        '<div><span>Reservado</span><b data-saldo="reservado">' + N(s.reservado) + '</b></div>' +
-        '<div class="disponivel"><span>Disponível</span><b data-saldo="disponivel">' + N(s.disponivel) + '</b></div>' +
-      '</div>' +
-      '<p class="saldo-quando apoio">' + E(quando) + '</p>' +
-      '<ul><li>Só os vinténs do bolso contam; se estão no cofre, saque no jogo.</li>' +
-      (temCaminho ? '<li class="nota-caminho">A caminho: vinténs de presentes e de trocas que o jogo ainda não recebeu. Eles já contam no disponível daqui.</li>' : '') +
-      '<li>O reservado é o que está nos pedidos pagos em vinténs que ainda não entraram.</li>' +
-      '<li>A compra vale na hora, mesmo com o jogo fechado. No meio de uma luta, o personagem comprado chega quando ela terminar.</li></ul></section></div>';
+    caixa.innerHTML = Tx('{a}<div class="saldos{b}">{barras}<section class="saldo-bloco bloco-vintens"><h3>{c} <small>{d}</small></h3><div class="saldo-numeros{e}"><div><span>Carteira do jogo</span><b data-saldo="carteira">{f}</b></div>{g}<div><span>Reservado</span><b data-saldo="reservado">{h}</b></div><div class="disponivel"><span>Disponível</span><b data-saldo="disponivel">{i}</b></div></div><p class="saldo-quando apoio">{j}</p><ul><li>Só os vinténs do bolso contam; se estão no cofre, saque no jogo.</li>{k}<li>O reservado é o que está nos pedidos pagos em vinténs que ainda não entraram.</li><li>A compra vale na hora, mesmo com o jogo fechado. No meio de uma luta, o personagem comprado chega quando ela terminar.</li></ul></section></div>', { a: s.semFundo ? Tx('<p class="selo-mestre">◆ Mestre: compra sem gastar</p>') : '', b: barras ? ' dois' : '', barras: barras, c: barras ? Tx('Vinténs do jogo') : Tx('Seu saldo'), d: barras ? Tx('para a troca por barras') : Tx('em vinténs'), e: temCaminho ? ' quatro' : '', f: N(s.carteira), g: temCaminho ? '<div class="a-caminho">' + Tx('<span>A caminho</span><b data-saldo="aCaminho">{a}</b>', { a: N(caminho) }) + '</div>' : '', h: N(s.reservado), i: N(s.disponivel), j: E(quando), k: temCaminho ? Tx('<li class="nota-caminho">A caminho: vinténs de presentes e de trocas que o jogo ainda não recebeu. Eles já contam no disponível daqui.</li>') : '' });
   }
 
   /* ---- os pacotes em reais (13/09: de barras de ouro; o de vinténs, de um servidor de antes, ainda desenha) ---- */
@@ -304,15 +302,19 @@
     var ligado = pagamentoLigado();
     var teste = ligado && catalogo.pagamento.teste === true;
     var emBarras = ps.some(pacoteEmBarras);
-    caixa.innerHTML = '<div class="pacotes-cab">' + (emBarras ? iconeBarra() : '') + '<h3>' + (emBarras ? 'Barras de Ouro' : 'Pacotes de vinténs') + '</h3>' +
-      (!ligado ? '<span class="etiqueta embreve" data-em-breve>em breve</span>'
-        : teste ? '<span class="etiqueta modo-teste">modo de teste</span>' : '') + '</div>' +
-      '<p class="apoio">' + (emBarras
-        ? (ligado ? 'Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora, prontas para gastar aqui.'
-                  : 'Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, as barras vêm da troca pelos vinténs do jogo, logo abaixo.')
-        : (ligado ? 'Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, os vinténs entram na sua conta na hora (já dá para gastar aqui) e o jogo os recebe na próxima abertura.'
-                  : 'Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, os vinténs vêm das descidas.')) + '</p>' +
-      '<div class="pacotes">' + ps.map(cartaoPacote).join('') + '</div>';
+    caixa.innerHTML = (emBarras
+      ? Tx('<div class="pacotes-cab">{a}<h3>Barras de Ouro</h3>{b}</div><p class="apoio">{c}</p><div class="pacotes">{d}</div>', { a: emBarras ? iconeBarra() : '', b: !ligado ? Tx('<span class="etiqueta embreve" data-em-breve>em breve</span>')
+        : teste ? Tx('<span class="etiqueta modo-teste">modo de teste</span>') : '', c: emBarras
+        ? (ligado ? Tx('Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora, prontas para gastar aqui.')
+                  : Tx('Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, as barras vêm da troca pelos vinténs do jogo, logo abaixo.'))
+        : (ligado ? Tx('Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, os vinténs entram na sua conta na hora (já dá para gastar aqui) e o jogo os recebe na próxima abertura.')
+                  : Tx('Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, os vinténs vêm das descidas.')), d: ps.map(cartaoPacote).join('') })
+      : Tx('<div class="pacotes-cab">{a}<h3>Pacotes de vinténs</h3>{b}</div><p class="apoio">{c}</p><div class="pacotes">{d}</div>', { a: emBarras ? iconeBarra() : '', b: !ligado ? Tx('<span class="etiqueta embreve" data-em-breve>em breve</span>')
+        : teste ? Tx('<span class="etiqueta modo-teste">modo de teste</span>') : '', c: emBarras
+        ? (ligado ? Tx('Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora, prontas para gastar aqui.')
+                  : Tx('Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, as barras vêm da troca pelos vinténs do jogo, logo abaixo.'))
+        : (ligado ? Tx('Pix ou cartão, pelo Mercado Pago. Aprovado o pagamento, os vinténs entram na sua conta na hora (já dá para gastar aqui) e o jogo os recebe na próxima abertura.')
+                  : Tx('Pix ou cartão, pelo Mercado Pago: chegam em breve. Por enquanto, os vinténs vêm das descidas.')), d: ps.map(cartaoPacote).join('') }));
   }
   /* No aplicativo: a tela da compra pela Google no lugar dos pacotes em reais. O elemento é um só e é
    * reaproveitado (o desenha() roda muitas vezes; a tela guarda o estado dela e se repinta sozinha). */
@@ -322,7 +324,7 @@
     caixa.hidden = !cp;
     if (!cp) { caixa.innerHTML = ''; return; }
     if (caixaPlay && caixaPlay.parentNode === caixa) return;
-    caixa.innerHTML = '<div class="pacotes-cab">' + iconeBarra() + '<h3>Barras de Ouro</h3></div>';
+    caixa.innerHTML = '<div class="pacotes-cab">' + Tx('{a}<h3>Barras de Ouro</h3>', { a: iconeBarra() }) + '</div>';
     caixaPlay = document.createElement('div');
     caixaPlay.id = 'lj-play';
     caixa.appendChild(caixaPlay);
@@ -330,58 +332,66 @@
   }
   function cartaoPacote(p) {
     var bt;
-    if (!pagamentoLigado()) bt = '<button type="button" class="btn trancado" disabled>em breve</button>';
-    else if (estadoMinha === 'fora') bt = '<a class="btn btn-borda" href="conta.html#entrar">Entre para comprar</a>';
-    else if (estadoMinha !== 'ok') bt = '<button type="button" class="btn trancado" disabled>Comprar com Pix ou cartão</button>';
-    else bt = '<button type="button" class="btn btn-ouro" data-pacote="' + E(p.id) + '"' + (ocupado ? ' disabled' : '') + '>Comprar com Pix ou cartão</button>';
+    if (!pagamentoLigado()) bt = Tx('<button type="button" class="btn trancado" disabled>em breve</button>');
+    else if (estadoMinha === 'fora') bt = Tx('<a class="btn btn-borda" href="conta.html#entrar">Entre para comprar</a>');
+    else if (estadoMinha !== 'ok') bt = Tx('<button type="button" class="btn trancado" disabled>Comprar com Pix ou cartão</button>');
+    else bt = '<button type="button" class="btn btn-ouro" data-pacote="' +
+      E(p.id) +
+      '"' +
+      (ocupado ? ' disabled' : '') +
+      '>' +
+      Tx('Comprar com Pix ou cartão') +
+      '</button>';
     var barras = pacoteEmBarras(p);
     return '<article class="pacote' + (barras ? ' p-barras' : '') + '" data-pacote-id="' + E(p.id) + '">' +
       '<div class="pacote-arte" aria-hidden="true">' + (barras ? iconeBarra('pilha') + iconeBarra('pilha') + iconeBarra('pilha')
         : '<span class="moeda"></span><span class="moeda"></span><span class="moeda"></span>') + '</div>' +
       '<div class="corpo"><h4>' + E(p.nome || p.id) + '</h4>' +
-      (barras ? '<p class="pacote-vintens pacote-barras"><b>' + N(p.barras) + '</b> barras de ouro</p>'
-        : '<p class="pacote-vintens"><b>' + N(p.vintens) + '</b> vinténs</p>') +
+      (barras ? '<p class="pacote-vintens pacote-barras">' + Tx('<b>{a}</b> barras de ouro', { a: N(p.barras) }) + '</p>'
+        : '<p class="pacote-vintens">' + Tx('<b>{a}</b> vinténs', { a: N(p.vintens) }) + '</p>') +
       '<div class="produto-pe"><span class="preco preco-reais">' + E(p.preco == null ? '' : p.preco) + '</span>' + bt + '</div>' +
       '</div></article>';
   }
 
   /* ---- a faixa da volta do Mercado Pago ---- */
   function textoVolta(v) {
-    if (v.estado === 'fora') return { tipo: 'neutro', texto: 'Entre na sua conta para acompanhar o pagamento: ele aparece em "Seus pacotes".' };
-    if (v.estado === 'esperando' || v.estado === 'conferindo') return { tipo: 'neutro', texto: 'Conferindo o pagamento com o Mercado Pago…' };
+    if (v.estado === 'fora') return { tipo: 'neutro', texto: Tx('Entre na sua conta para acompanhar o pagamento: ele aparece em "Seus pacotes".') };
+    if (v.estado === 'esperando' || v.estado === 'conferindo') return { tipo: 'neutro', texto: Tx('Conferindo o pagamento com o Mercado Pago…') };
     if (v.estado === 'desligado') {
-      return { tipo: 'neutro', texto: 'Os pacotes estão desligados agora; o pagamento continua registrado no servidor.' };
+      return { tipo: 'neutro', texto: Tx('Os pacotes estão desligados agora; o pagamento continua registrado no servidor.') };
     }
     if (v.estado === 'erro') {
-      return { tipo: 'erro', texto: v.erro + '. O pagamento aparece em "Seus pacotes" quando o Mercado Pago confirmar.' };
+      return { tipo: 'erro', texto: Tx('{erro}. O pagamento aparece em "Seus pacotes" quando o Mercado Pago confirmar.', { erro: v.erro }) };
     }
     var p = v.pag || {};
     // 13/09: o pacote de barras de ouro entra direto na conta, sem esperar o jogo
     if (p.moeda === 'barras') {
       if (p.estado === 'aprovado') {
         return p.creditado === false || !(Number(p.barras) > 0)
-          ? { tipo: 'neutro', texto: 'Pagamento aprovado e em conferência: as barras de ouro entram quando o dono do jogo liberar.' }
-          : { tipo: 'certo', texto: 'Pagamento aprovado: ' + nBarras(p.barras) + ' já estão na sua conta.' };
+          ? { tipo: 'neutro', texto: Tx('Pagamento aprovado e em conferência: as barras de ouro entram quando o dono do jogo liberar.') }
+          : { tipo: 'certo', texto: Tx('Pagamento aprovado: {a} já estão na sua conta.', { a: nBarras(p.barras) }) };
       }
-      if (p.estado === 'estornado') return { tipo: 'erro', texto: 'Esse pagamento foi estornado: as barras de ouro dele saíram da conta.' };
+      if (p.estado === 'estornado') return { tipo: 'erro', texto: Tx('Esse pagamento foi estornado: as barras de ouro dele saíram da conta.') };
     }
     if (p.estado === 'aprovado') {
       if (p.creditado === false || !(Number(p.vintens) > 0)) {
-        return { tipo: 'neutro', texto: 'Pagamento aprovado e em conferência: os vinténs entram quando o dono do jogo liberar.' };
+        return { tipo: 'neutro', texto: Tx('Pagamento aprovado e em conferência: os vinténs entram quando o dono do jogo liberar.') };
       }
       var entregue = p.pedido && p.pedido.estado === 'entregue';
-      return { tipo: 'certo', texto: 'Pagamento aprovado: ' + N(p.vintens) + ' vinténs ' + (entregue ? 'já entregues no jogo.' : 'a caminho do jogo.') };
+      return { tipo: 'certo', texto: (entregue
+        ? Tx('Pagamento aprovado: {a} vinténs já entregues no jogo.', { a: N(p.vintens) })
+        : Tx('Pagamento aprovado: {a} vinténs a caminho do jogo.', { a: N(p.vintens) })) };
     }
-    if (p.estado === 'pendente') return { tipo: 'neutro', texto: 'Pagamento em análise (Pix aparece em instantes).' };
+    if (p.estado === 'pendente') return { tipo: 'neutro', texto: Tx('Pagamento em análise (Pix aparece em instantes).') };
     if (p.estado === 'aberto') {
       return { tipo: 'neutro', texto: v.lidas >= VOLTAS_CONFERIR
-        ? 'O Mercado Pago ainda não mostrou o pagamento. Se você pagou, ele aparece em "Seus pacotes" em alguns minutos.'
-        : 'Esperando o Mercado Pago confirmar o pagamento (Pix aparece em instantes).' };
+        ? Tx('O Mercado Pago ainda não mostrou o pagamento. Se você pagou, ele aparece em "Seus pacotes" em alguns minutos.')
+        : Tx('Esperando o Mercado Pago confirmar o pagamento (Pix aparece em instantes).') };
     }
-    if (p.estado === 'recusado') return { tipo: 'erro', texto: 'O pagamento não foi aprovado; nada foi cobrado.' };
-    if (p.estado === 'estornado') return { tipo: 'erro', texto: 'Esse pagamento foi estornado: os vinténs dele não entram.' };
-    if (p.estado === 'falhou') return { tipo: 'erro', texto: 'O pagamento não chegou a abrir; nada foi cobrado.' };
-    return { tipo: 'neutro', texto: 'Pagamento registrado: o estado dele aparece em "Seus pacotes".' };
+    if (p.estado === 'recusado') return { tipo: 'erro', texto: Tx('O pagamento não foi aprovado; nada foi cobrado.') };
+    if (p.estado === 'estornado') return { tipo: 'erro', texto: Tx('Esse pagamento foi estornado: os vinténs dele não entram.') };
+    if (p.estado === 'falhou') return { tipo: 'erro', texto: Tx('O pagamento não chegou a abrir; nada foi cobrado.') };
+    return { tipo: 'neutro', texto: Tx('Pagamento registrado: o estado dele aparece em "Seus pacotes".') };
   }
   function desenhaVolta() {
     var el = $('lj-volta');
@@ -415,7 +425,7 @@
   function iniciaVolta() {
     if (!volta || volta.estado !== 'esperando') return carregaPagamentos();
     if (!SITE.sessao()) { volta.estado = 'fora'; desenhaVolta(); return; }
-    if (!catalogo) { volta.estado = 'erro'; volta.erro = erroCatalogo.replace(/\.$/, '') || 'O servidor está fora'; desenhaVolta(); return; }
+    if (!catalogo) { volta.estado = 'erro'; volta.erro = erroCatalogo.replace(/\.$/, '') || Tx('O servidor está fora'); desenhaVolta(); return; }
     if (!pagamentoLigado()) { volta.estado = 'desligado'; desenhaVolta(); return; }
     volta.estado = 'conferindo';
     desenhaVolta();
@@ -426,7 +436,7 @@
         volta.pag = r.pagamento;
       } else {
         volta.estado = 'erro';
-        volta.erro = r.status === 0 ? 'O servidor não respondeu' : SITE.erro(r, 'não deu para conferir o pagamento');
+        volta.erro = r.status === 0 ? Tx('O servidor não respondeu') : SITE.erro(r, Tx('não deu para conferir o pagamento'));
       }
       desenhaVolta();
       return carregaPagamentos().then(function () {
@@ -469,7 +479,7 @@
   function desenhaCatalogo() {
     var caixa = $('lj-catalogo');
     if (!catalogo) {
-      caixa.innerHTML = '<div class="estado' + (erroCatalogo ? ' fora' : '') + '">' + E(erroCatalogo || 'carregando o catálogo…') + '</div>';
+      caixa.innerHTML = '<div class="estado' + (erroCatalogo ? ' fora' : '') + '">' + E(erroCatalogo || Tx('carregando o catálogo…')) + '</div>';
       return;
     }
     var itens = catalogo.itens.filter(function (it) {
@@ -484,14 +494,14 @@
     ordem = ordem.filter(function (id) { return id !== 'boas-vindas'; });   // 04/10: o Pacote é o destaque do topo
     var html = destaqueBoasVindas(itens) + secaoOfertas(itens) + ordem.map(function (id) {
       var s = proprio(SECOES, id) ? SECOES[id]
-        : { titulo: id === 'outros' ? 'Outros' : id.charAt(0).toUpperCase() + id.slice(1), sub: '' };
+        : { titulo: id === 'outros' ? Tx('Outros') : id.charAt(0).toUpperCase() + id.slice(1), sub: '' };
       var dela = itens.filter(function (it) { return secaoDe(it) === id; });
       var sub = [s.sub, cambio(id)].filter(Boolean).join(' ');
       return '<section class="loja-secao s-' + E(id) + '" data-secao="' + E(id) + '"><h3>' + E(s.titulo) + '</h3>' +
         (sub ? '<p class="sub">' + E(sub) + '</p>' : '') +
         '<div class="catalogo">' + dela.map(function (it) { return cartao(it, itens); }).join('') + '</div></section>';
     }).join('');
-    caixa.innerHTML = html || '<div class="estado">A loja está vazia por enquanto.</div>';
+    caixa.innerHTML = html || Tx('<div class="estado">A loja está vazia por enquanto.</div>');
   }
 
   function corClasse(id) {
@@ -525,21 +535,24 @@
     var motivo = null;
     if (logado && !mestre) {
       var faltaB = precoDe(it) - barrasNoSaldo();
-      if (!bvClasse || !bvAura) motivo = { chave: 'sem-escolha', texto: 'Não há o que escolher neste pacote para a sua conta.' };
-      else if (faltaB > 0) motivo = { chave: 'saldo-barras', texto: 'Faltam ' + nBarras(faltaB) + ' na sua conta.' };
+      if (!bvClasse || !bvAura) motivo = { chave: 'sem-escolha', texto: Tx('Não há o que escolher neste pacote para a sua conta.') };
+      else if (faltaB > 0) motivo = { chave: 'saldo-barras', texto: Tx('Faltam {a} na sua conta.', { a: nBarras(faltaB) }) };
     }
-    var bt = estadoMinha === 'fora' ? '<a class="btn btn-ouro" href="conta.html#entrar">Entre para comprar</a>'
-      : '<button type="button" class="btn btn-ouro' + (motivo ? ' trancado' : '') + '" data-comprar="' + E(it.sku) + '"' +
-        (!logado || motivo || ocupado ? ' disabled' : '') + '>Comprar com barras</button>';
+    var bt = estadoMinha === 'fora' ? Tx('<a class="btn btn-ouro" href="conta.html#entrar">Entre para comprar</a>')
+      : '<button type="button" class="btn btn-ouro' +
+        (motivo ? ' trancado' : '') +
+        '" data-comprar="' +
+        E(it.sku) +
+        '"' +
+        (!logado || motivo || ocupado ? ' disabled' : '') +
+        '>' +
+        Tx('Comprar com barras') +
+        '</button>';
     var menos = menosPorCento(it);
-    return '<section class="loja-secao s-boas-vindas destaque-bv" data-secao="boas-vindas" data-sku="' + E(it.sku) + '">' +
-      '<span class="bv-selo">Uma vez por conta' + (menos ? ' · −' + menos + '%' : '') + '</span>' +
-      '<h3>' + E(it.nome) + '</h3>' + (it.descricao ? '<p class="sub">' + E(it.descricao) + '</p>' : '') +
-      '<div class="bv-escolhas">' +
-      '<label>O personagem <select data-bv="classe">' + opcoes(classes, bvClasse, 'classe-') + '</select></label>' +
-      '<label>A aura <select data-bv="aura">' + opcoes(auras, bvAura, 'aura-') + '</select></label></div>' +
-      '<div class="produto-pe">' + precoHtml(it) + bt + '</div>' +
-      (motivo ? '<p class="motivo" data-motivo="' + E(motivo.chave) + '">' + E(motivo.texto) + '</p>' : '') +
+    return '<section class="loja-secao s-boas-vindas destaque-bv" data-secao="boas-vindas" data-sku="' +
+      E(it.sku) +
+      '">' +
+      Tx('<span class="bv-selo">Uma vez por conta{b}</span><h3>{c}</h3>{d}<div class="bv-escolhas"><label>O personagem <select data-bv="classe">{e}</select></label><label>A aura <select data-bv="aura">{f}</select></label></div><div class="produto-pe">{g}{bt}</div>{h}', { b: menos ? ' · −' + menos + '%' : '', c: E(it.nome), d: it.descricao ? '<p class="sub">' + E(it.descricao) + '</p>' : '', e: opcoes(classes, bvClasse, 'classe-'), f: opcoes(auras, bvAura, 'aura-'), g: precoHtml(it), bt: bt, h: motivo ? '<p class="motivo" data-motivo="' + E(motivo.chave) + '">' + E(motivo.texto) + '</p>' : '' }) +
       '</section>';
   }
   /* 04/10: as ofertas da semana — os mesmos cartões, numa seção no topo, com o tempo que falta */
@@ -547,11 +560,9 @@
     var o = catalogo.ofertas;
     var dela = itens.filter(function (it) { return !!oferta(it); });
     if (!o || !dela.length) return '';
-    return '<section class="loja-secao s-ofertas" data-secao="ofertas"><h3>Ofertas da semana' +
-      (Number(o.desconto) > 0 ? ' <span class="oferta-selo">−' + N(o.desconto) + '%</span>' : '') + '</h3>' +
-      '<p class="sub">Produtos com desconto que mudam toda segunda-feira, iguais para todo mundo. ' +
-      '<b class="oferta-falta" data-fim="' + E(o.fim) + '">Terminam em ' + E(faltaTexto(Number(o.fim) - SITE.agora())) + '.</b></p>' +
-      '<div class="catalogo">' + dela.map(function (it) { return cartao(it, itens, true); }).join('') + '</div></section>';
+    return '<section class="loja-secao s-ofertas" data-secao="ofertas">' +
+      Tx('<h3>Ofertas da semana{a}</h3><p class="sub">Produtos com desconto que mudam toda segunda-feira, iguais para todo mundo. <b class="oferta-falta" data-fim="{b}">Terminam em {c}.</b></p><div class="catalogo">{d}</div>', { a: Number(o.desconto) > 0 ? ' <span class="oferta-selo">−' + N(o.desconto) + '%</span>' : '', b: E(o.fim), c: E(faltaTexto(Number(o.fim) - SITE.agora())), d: dela.map(function (it) { return cartao(it, itens, true); }).join('') }) +
+      '</section>';
   }
   // a contagem regressiva anda sozinha; passou do fim, o catálogo é lido de novo (a semana virou)
   function andaOfertas() {
@@ -560,7 +571,7 @@
     var falta = Number(o.fim) - SITE.agora();
     if (falta <= 0) { carregaCatalogo(); return; }
     var els = document.querySelectorAll('.oferta-falta');
-    for (var i = 0; i < els.length; i++) els[i].textContent = 'Terminam em ' + faltaTexto(falta) + '.';
+    for (var i = 0; i < els.length; i++) els[i].textContent = Tx('Terminam em {a}.', { a: faltaTexto(falta) });
   }
 
   /* 04/10: cada aura é um efeito PRÓPRIO na praça (o dono: "não só mudar a cor") — e a vitrine mostrava o
@@ -604,7 +615,7 @@
     if (it.tipo === 'bonus-xp') {
       var d = Math.floor(Number(it.dias != null ? it.dias : it.qtd)) || 0;
       return '<div class="arte-produto arte-bonus"><span class="glifo">✦</span>' +
-        (d > 0 ? '<span class="qtd">' + N(d) + (d === 1 ? ' dia' : ' dias') + '</span>' : '') + '</div>';
+        (d > 0 ? '<span class="qtd">' + (d === 1 ? Tx('{d} dia', { d: N(d) }) : Tx('{d} dias', { d: N(d) })) + '</span>' : '') + '</div>';
     }
     if (it.tipo === 'insignias') {
       return '<div class="arte-produto arte-insignia"><span class="glifo">⚜</span>' +
@@ -630,17 +641,19 @@
     var l = it.limite;
     if (!l || !(Number(l.max) > 0)) return '';
     var max = Number(l.max), t;
-    if (l.dias == null) t = max === 1 ? 'Compra única' : 'No máximo ' + N(max) + ' por conta';
+    if (l.dias == null) t = max === 1 ? Tx('Compra única') : Tx('No máximo {a} por conta', { a: N(max) });
     else {
-      t = (max === 1 ? '1 a cada ' : 'Até ' + N(max) + ' a cada ') + N(l.dias) + (Number(l.dias) === 1 ? ' dia' : ' dias');
+      var umDia = Number(l.dias) === 1;
+      t = max === 1 ? (umDia ? Tx('1 a cada {d} dia', { d: N(l.dias) }) : Tx('1 a cada {d} dias', { d: N(l.dias) }))
+        : (umDia ? Tx('Até {a} a cada {d} dia', { a: N(max), d: N(l.dias) }) : Tx('Até {a} a cada {d} dias', { a: N(max), d: N(l.dias) }));
       var grupo = itens.filter(function (x) { return x.limite && x.limite.grupo === l.grupo; });
       if (grupo.length > 1) {
         t += grupo.every(function (x) { return secaoDe(x) === secaoDe(it); })
-          ? ', somando os ' + grupo.length + ' desta seção' : ', somando ' + grupo.length + ' produtos';
+          ? Tx(', somando os {length} desta seção', { length: grupo.length }) : Tx(', somando {n} produtos', { n: grupo.length });
       }
       if (estadoMinha === 'ok' && !(minha.saldo || {}).semFundo && proprio(minha.limites, l.grupo)) {
         var u = Number(minha.limites[l.grupo].usados) || 0;
-        if (u > 0) t += ' (você usou ' + N(u) + ')';
+        if (u > 0) t += ' ' + Tx('(você usou {a})', { a: N(u) });
       }
     }
     return t + '.';
@@ -661,38 +674,38 @@
     var emBarras = moedaDe(it) === 'barras';
     // sem save, só o crédito a caminho sustenta uma compra em VINTÉNS (as barras moram no servidor)
     if (!emBarras && semVer && !(aCaminhoNoSaldo() > 0)) {
-      return { chave: 'sem-save', texto: 'Abra o jogo logado nesta conta primeiro: o servidor ainda não viu seus vinténs.' };
+      return { chave: 'sem-save', texto: Tx('Abra o jogo logado nesta conta primeiro: o servidor ainda não viu seus vinténs.') };
     }
     if (semVer && it.tipo === 'pergaminho' && it.alvo === 'elemento') {
-      return { chave: 'sem-save', texto: 'A Reescrita precisa de um herói com caminho elemental: abra o jogo logado nesta conta primeiro.' };
+      return { chave: 'sem-save', texto: Tx('A Reescrita precisa de um herói com caminho elemental: abra o jogo logado nesta conta primeiro.') };
     }
     if (it.tipo === 'classe') {
       var c = proprio(minha.classes, it.alvo) ? minha.classes[it.alvo] : null;
-      if (c && c.liberada) return { chave: 'classe-liberada', texto: 'Essa classe já está liberada no seu jogo.' };
+      if (c && c.liberada) return { chave: 'classe-liberada', texto: Tx('Essa classe já está liberada no seu jogo.') };
       var ped = pedidoACaminho(it.sku);
       if (ped) {
-        return { chave: 'classe-a-caminho', texto: ped.origem === 'presente' ? 'Essa classe está chegando como presente do Mestre.'
-                                                                              : 'Já há um pedido dessa classe a caminho.' };
+        return { chave: 'classe-a-caminho', texto: ped.origem === 'presente' ? Tx('Essa classe está chegando como presente do Mestre.')
+                                                                              : Tx('Já há um pedido dessa classe a caminho.') };
       }
     }
     if (it.tipo === 'aura' && minha.auras && Array.isArray(minha.auras.tem) && minha.auras.tem.indexOf(it.alvo) >= 0) {
-      return { chave: 'aura-ja', texto: 'Essa aura já é sua: ligue na ficha do Personagem, no jogo.' };
+      return { chave: 'aura-ja', texto: Tx('Essa aura já é sua: ligue na ficha do Personagem, no jogo.') };
     }
     if (s.semFundo) return null;          // o Mestre pula o saldo e os limites, como no servidor
     var lim = it.limite && proprio(minha.limites, it.limite.grupo) ? minha.limites[it.limite.grupo] : null;
     if (lim && Number(lim.usados) >= Number(lim.max)) {
       if (lim.dias == null) {
-        return { chave: 'limite', texto: it.tipo === 'classe' ? 'Essa classe já foi comprada.' : 'Esse produto só pode ser comprado uma vez.' };
+        return { chave: 'limite', texto: it.tipo === 'classe' ? Tx('Essa classe já foi comprada.') : Tx('Esse produto só pode ser comprado uma vez.') };
       }
-      return { chave: 'limite', texto: 'Limite atingido: ' + (Number(lim.liberaEm) > 0 ? SITE.deNovo(lim.liberaEm) : 'espere a janela passar') + '.' };
+      return { chave: 'limite', texto: Tx('Limite atingido: {a}.', { a: Number(lim.liberaEm) > 0 ? SITE.deNovo(lim.liberaEm) : Tx('espere a janela passar') }) };
     }
     if (emBarras) {
       var faltaB = precoDe(it) - barrasNoSaldo();
-      if (faltaB > 0) return { chave: 'saldo-barras', texto: 'Faltam ' + nBarras(faltaB) + ' na sua conta.' };
+      if (faltaB > 0) return { chave: 'saldo-barras', texto: Tx('Faltam {a} na sua conta.', { a: nBarras(faltaB) }) };
       return null;
     }
     var falta = precoDe(it) - Number(s.disponivel);
-    if (falta > 0) return { chave: 'saldo', texto: 'Faltam ' + N(falta) + ' vinténs no disponível.' };
+    if (falta > 0) return { chave: 'saldo', texto: Tx('Faltam {a} vinténs no disponível.', { a: N(falta) }) };
     return null;
   }
 
@@ -701,15 +714,17 @@
   function presenteHtml(it) {
     if (estadoMinha !== 'ok' || !presenteavel(it)) return '';
     if (presenteAberto !== it.sku) {
-      return '<div class="presente"><button type="button" class="btn btn-mini btn-borda" data-presentear="' + E(it.sku) + '"' +
-        (ocupado ? ' disabled' : '') + '>Presentear um amigo</button></div>';
+      return '<div class="presente"><button type="button" class="btn btn-mini btn-borda" data-presentear="' +
+        E(it.sku) +
+        '"' +
+        (ocupado ? ' disabled' : '') +
+        '>' +
+        Tx('Presentear um amigo') +
+        '</button></div>';
     }
-    return '<div class="presente presente-aberto"><label>Para quem? <input type="text" data-presente-nome maxlength="60" ' +
-      'autocomplete="off" placeholder="o nome do jogador" value="' + E(presenteNome) + '"></label>' +
-      '<div class="presente-botoes"><button type="button" class="btn btn-mini btn-ouro" data-presente-envia="' + E(it.sku) + '"' +
-      (ocupado ? ' disabled' : '') + '>Enviar o presente</button>' +
-      '<button type="button" class="btn btn-mini" data-presente-fecha>fechar</button></div>' +
-      '<p class="apoio">Você paga ' + E(precoTexto(it)) + '; o presente chega ao jogo dele com uma carta dizendo quem mandou.</p></div>';
+    return '<div class="presente presente-aberto">' +
+      Tx('<label>Para quem? <input type="text" data-presente-nome maxlength="60" autocomplete="off" placeholder="o nome do jogador" value="{a}"></label><div class="presente-botoes"><button type="button" class="btn btn-mini btn-ouro" data-presente-envia="{b}"{c}>Enviar o presente</button><button type="button" class="btn btn-mini" data-presente-fecha>fechar</button></div><p class="apoio">Você paga {d}; o presente chega ao jogo dele com uma carta dizendo quem mandou.</p>', { a: E(presenteNome), b: E(it.sku), c: ocupado ? ' disabled' : '', d: E(precoTexto(it)) }) +
+      '</div>';
   }
   function cartao(it, itens, vitrine) {
     var logado = estadoMinha === 'ok';
@@ -718,13 +733,13 @@
     if (it.tipo === 'classe' && Number(it.cartas) > 0) {
       var c = logado && proprio(minha.classes, it.alvo) ? minha.classes[it.alvo] : null;
       extra += '<p class="cartas">' + (c && !c.liberada
-        ? 'Você tem ' + N(c.cartas) + ' de ' + N(it.cartas) + ' cartas.'
-        : 'Libera com ' + N(it.cartas) + ' cartas.') + '</p>';
+        ? Tx('Você tem {a} de {b} cartas.', { a: N(c.cartas), b: N(it.cartas) })
+        : Tx('Libera com {a} cartas.', { a: N(it.cartas) })) + '</p>';
     }
     var lim = textoLimite(it, itens);
     if (lim) extra += '<p class="limite">' + E(lim) + '</p>';
-    var bt, rotulo = moedaDe(it) === 'barras' ? 'Comprar com barras' : 'Comprar com vinténs';   // o botão diz a moeda
-    if (estadoMinha === 'fora') bt = '<a class="btn btn-borda" href="conta.html#entrar">Entre para comprar</a>';
+    var bt, rotulo = moedaDe(it) === 'barras' ? Tx('Comprar com barras') : Tx('Comprar com vinténs');   // o botão diz a moeda
+    if (estadoMinha === 'fora') bt = Tx('<a class="btn btn-borda" href="conta.html#entrar">Entre para comprar</a>');
     else if (!logado) bt = '<button type="button" class="btn trancado" disabled>' + rotulo + '</button>';
     else {
       bt = '<button type="button" class="btn btn-ouro' + (motivo ? ' trancado' : '') + '" data-comprar="' + E(it.sku) + '"' +
@@ -746,7 +761,7 @@
     caixa.hidden = estadoMinha !== 'ok';
     if (caixa.hidden) return;
     var ps = (Array.isArray(minha.pedidos) ? minha.pedidos : []).filter(function (p) { return p && p.id != null; });
-    $('lj-pedidos').innerHTML = ps.length ? ps.map(linhaPedido).join('') : '<li class="apoio">Nenhum pedido ainda.</li>';
+    $('lj-pedidos').innerHTML = ps.length ? ps.map(linhaPedido).join('') : Tx('<li class="apoio">Nenhum pedido ainda.</li>');
   }
   function linhaPedido(p) {
     var est = proprio(ESTADO, p.estado) ? p.estado : 'outro';
@@ -757,25 +772,25 @@
     var emBarras = p.moeda === 'barras';
     if (est === 'estornado') {
       // o crédito de um pacote que o jogo recusou não se perde: o servidor manda de novo
-      txt = pago ? 'não entrou no jogo: o servidor manda de novo'
-                 : txt + ': ' + (proprio(MOTIVO, p.motivo) ? MOTIVO[p.motivo] : MOTIVO.recusado) + (emBarras ? ' (as barras voltaram)' : '');
+      txt = pago ? Tx('não entrou no jogo: o servidor manda de novo')
+                 : txt + ': ' + (proprio(MOTIVO, p.motivo) ? MOTIVO[p.motivo] : MOTIVO.recusado) + (emBarras ? Tx(' (as barras voltaram)') : '');
     }
-    if (est === 'cancelado' && emBarras) txt = 'cancelado (as barras voltaram)';
-    if (est === 'cancelado' && pago) txt = 'cancelado (o pagamento foi estornado)';
+    if (est === 'cancelado' && emBarras) txt = Tx('cancelado (as barras voltaram)');
+    if (est === 'cancelado' && pago) txt = Tx('cancelado (o pagamento foi estornado)');
     // o pedido "preso": retirado há mais de um dia (o servidor confere de novo)
     var desde = Number(p.retiradoEm) || Number(p.criadoEm) || 0;
     var preso = est === 'retirado' && desde > 0 && SITE.agora() - desde > DIA;
     // crédito de pacote e presente do Mestre não se cancelam por aqui
     var pode = !pago && !presente && p.cancelavel !== false && (est === 'pendente' || preso);
-    var custo = pago ? 'pacote pago' : deAmigo ? 'presente de ' + (p.de || 'um amigo') : presente ? 'presente do Mestre'
-      : emBarras ? nBarras(p.barras) : Number(p.preco) === 0 ? 'sem custo (Mestre)' : N(p.preco) + ' vinténs';
+    var custo = pago ? Tx('pacote pago') : deAmigo ? Tx('presente de {a}', { a: p.de || Tx('um amigo') }) : presente ? Tx('presente do Mestre')
+      : emBarras ? nBarras(p.barras) : Number(p.preco) === 0 ? Tx('sem custo (Mestre)') : Tx('{a} vinténs', { a: N(p.preco) });
     var miudo = [custo,
-                 Number(p.criadoEm) > 0 ? (pago ? 'aprovado ' : presente ? 'dado ' : 'pedido ') + SITE.quando(p.criadoEm) : '',
-                 est === 'retirado' && !preso && !pago && !presente ? 'se não chegar em 24 h, dá para cancelar' : ''].filter(Boolean);
+                 Number(p.criadoEm) > 0 ? (pago ? Tx('aprovado {a}', { a: SITE.quando(p.criadoEm) }) : presente ? Tx('dado {a}', { a: SITE.quando(p.criadoEm) }) : Tx('pedido {a}', { a: SITE.quando(p.criadoEm) })) : '',
+                 est === 'retirado' && !preso && !pago && !presente ? Tx('se não chegar em 24 h, dá para cancelar') : ''].filter(Boolean);
     return '<li class="pedido e-' + est + (pago ? ' o-pagamento' : presente ? ' o-presente' : '') + '" data-pedido="' + E(p.id) + '">' +
       '<div><b>' + E(p.nome || p.sku) + '</b><small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita">' +
       '<span class="estado-pedido">' + E(txt) + '</span>' +
-      (pode ? '<button type="button" class="btn btn-mini" data-cancelar="' + E(p.id) + '">cancelar</button>' : '') +
+      (pode ? '<button type="button" class="btn btn-mini" data-cancelar="' + E(p.id) + '">' + Tx('cancelar') + '</button>' : '') +
       '</div></li>';
   }
   /* "Suas barras de ouro" (13/09): o extrato que /minha traz, o mais novo antes */
@@ -786,13 +801,13 @@
     if (caixa.hidden) return;
     var ms = (Array.isArray(minha.barras.movimentos) ? minha.barras.movimentos : []).filter(function (m) { return m && m.id != null; });
     $('lj-extrato').innerHTML = ms.length ? ms.map(linhaMovimento).join('')
-      : '<li class="apoio">Nenhum movimento ainda: as barras aparecem aqui quando um pacote for aprovado ou uma troca for entregue.</li>';
+      : Tx('<li class="apoio">Nenhum movimento ainda: as barras aparecem aqui quando um pacote for aprovado ou uma troca for entregue.</li>');
   }
   function linhaMovimento(m) {
     var d = Math.floor(Number(m.delta) || 0);
     var motivo = proprio(MOTIVO_BARRAS, m.motivo) ? MOTIVO_BARRAS[m.motivo] : String(m.motivo == null ? '' : m.motivo);
     var miudo = [m.nome ? motivo : '', Number(m.criadoEm) > 0 ? SITE.quando(m.criadoEm) : '',
-                 m.saldo != null ? 'saldo ' + N(m.saldo) : ''].filter(Boolean);
+                 m.saldo != null ? Tx('saldo {a}', { a: N(m.saldo) }) : ''].filter(Boolean);
     return '<li class="movimento ' + (d > 0 ? 'entra' : 'sai') + '" data-movimento="' + E(m.id) + '"><div><b>' + E(m.nome || motivo) + '</b>' +
       '<small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita"><span class="delta">' + (d > 0 ? '+' : '−') +
       N(Math.abs(d)) + '</span>' + iconeBarra() + '</div></li>';
@@ -810,16 +825,16 @@
     var emBarras = p.moeda === 'barras';
     if (est === 'aprovado') {
       var pe = p.pedido && p.pedido.estado;
-      txt += p.creditado === false ? ' · em conferência' : emBarras ? ' · na sua conta' : pe === 'entregue' ? ' · entregue no jogo'
-        : pe === 'cancelado' ? ' · crédito cancelado' : ' · a caminho do jogo';
+      txt += p.creditado === false ? Tx(' · em conferência') : emBarras ? Tx(' · na sua conta') : pe === 'entregue' ? Tx(' · entregue no jogo')
+        : pe === 'cancelado' ? Tx(' · crédito cancelado') : Tx(' · a caminho do jogo');
     }
     var miudo = [p.preco == null ? '' : String(p.preco),
-                 emBarras ? (Number(p.barras) > 0 ? nBarras(p.barras) : '') : Number(p.vintens) > 0 ? N(p.vintens) + ' vinténs' : '',
+                 emBarras ? (Number(p.barras) > 0 ? nBarras(p.barras) : '') : Number(p.vintens) > 0 ? Tx('{a} vinténs', { a: N(p.vintens) }) : '',
                  Number(p.criadoEm) > 0 ? SITE.quando(p.criadoEm) : ''].filter(Boolean);
     // aberto ou em análise: o "conferir" (a mesma conferência da volta, para quem pagou e fechou a aba)
     var bt = (est === 'aberto' || est === 'pendente')
       ? '<button type="button" class="btn btn-mini" data-conferir="' + E(p.id) + '"' + (conferindo[p.id] ? ' disabled' : '') + '>' +
-        (conferindo[p.id] ? 'conferindo…' : 'conferir') + '</button>' : '';
+        (conferindo[p.id] ? Tx('conferindo…') : Tx('conferir')) + '</button>' : '';
     return '<li class="pagamento g-' + est + '" data-pagamento="' + E(p.id) + '"><div><b>' + E(p.nome || p.pacote || 'pacote') + '</b>' +
       '<small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita"><span class="estado-pedido">' + E(txt) + '</span>' + bt +
       '</div></li>';
@@ -840,15 +855,15 @@
         if (volta && Number(volta.id) === id) { volta.pag = r.pagamento; volta.estado = 'ok'; desenhaVolta(); }
         var e = r.pagamento.estado;
         if (e === 'aprovado') {
-          aviso(r.pagamento.moeda === 'barras' ? 'Pagamento aprovado: as barras de ouro já estão na sua conta.'
-            : 'Pagamento aprovado: os vinténs estão a caminho do jogo.', 'certo');
+          aviso(r.pagamento.moeda === 'barras' ? Tx('Pagamento aprovado: as barras de ouro já estão na sua conta.')
+            : Tx('Pagamento aprovado: os vinténs estão a caminho do jogo.'), 'certo');
         }
-        else if (e === 'pendente') aviso('O Mercado Pago ainda está analisando esse pagamento.', 'neutro');
-        else if (e === 'aberto') aviso('O Mercado Pago ainda não mostrou esse pagamento. Se você pagou, confira de novo em alguns minutos.', 'neutro');
-        else aviso('Pagamento conferido: ' + (proprio(ESTADO_PAG, e) ? ESTADO_PAG[e] : String(e)) + '.', 'neutro');
+        else if (e === 'pendente') aviso(Tx('O Mercado Pago ainda está analisando esse pagamento.'), 'neutro');
+        else if (e === 'aberto') aviso(Tx('O Mercado Pago ainda não mostrou esse pagamento. Se você pagou, confira de novo em alguns minutos.'), 'neutro');
+        else aviso(Tx('Pagamento conferido: {a}.', { a: proprio(ESTADO_PAG, e) ? ESTADO_PAG[e] : String(e) }), 'neutro');
         if (e === 'aprovado') { avisaJogo(); carregaMinha(); }
       } else {
-        aviso(r.status === 0 ? 'O servidor não respondeu; tente de novo.' : SITE.erro(r, 'não deu para conferir o pagamento'));
+        aviso(r.status === 0 ? Tx('O servidor não respondeu; tente de novo.') : SITE.erro(r, Tx('não deu para conferir o pagamento')));
       }
       desenhaPagamentos();
     });
@@ -886,14 +901,14 @@
     if (!it || ocupado || estadoMinha !== 'ok') return;
     var mestre = !!(minha.saldo || {}).semFundo;
     var emBarras = moedaDe(it) === 'barras';
-    var nota = mestre ? 'Conta do Mestre: o pedido não gasta barras de ouro nem vinténs, nem conta nos limites.'
+    var nota = mestre ? Tx('Conta do Mestre: o pedido não gasta barras de ouro nem vinténs, nem conta nos limites.')
       : it.tipo === 'vintens' && emBarras
-        ? 'As barras de ouro saem da sua conta e os vinténs entram na carteira do jogo agora, na hora. Depois de entregue, não há devolução.'
+        ? Tx('As barras de ouro saem da sua conta e os vinténs entram na carteira do jogo agora, na hora. Depois de entregue, não há devolução.')
       : it.tipo === 'barras'
-        ? 'Os vinténs saem da carteira do jogo e as barras de ouro entram na sua conta agora, na hora. Depois de entregue, não há devolução.'
+        ? Tx('Os vinténs saem da carteira do jogo e as barras de ouro entram na sua conta agora, na hora. Depois de entregue, não há devolução.')
       : emBarras
-        ? 'As barras de ouro saem da sua conta agora e a compra entra no jogo na hora. Se o jogo a devolver, as barras voltam; depois de entregue, não há devolução.'
-        : 'Os vinténs saem da carteira do jogo agora, na hora. Depois de entregue, não há devolução.';
+        ? Tx('As barras de ouro saem da sua conta agora e a compra entra no jogo na hora. Se o jogo a devolver, as barras voltam; depois de entregue, não há devolução.')
+        : Tx('Os vinténs saem da carteira do jogo agora, na hora. Depois de entregue, não há devolução.');
     // 04/10: o Pacote de Boas-Vindas leva as duas escolhas; a aura já nasce entregue (não há o que cancelar)
     var corpo = { sku: it.sku };
     var oQue = it.nome;
@@ -903,46 +918,57 @@
       corpo.aura = bvAura;
       var nc = acha('classe-' + bvClasse), na = acha('aura-' + bvAura);
       oQue += ' (' + (nc ? nc.nome : bvClasse) + ' e ' + (na ? na.nome : bvAura) + ')';
-      if (!mestre) nota += ' Este pacote só pode ser comprado uma vez por conta.';
+      if (!mestre) nota += Tx(' Este pacote só pode ser comprado uma vez por conta.');
     }
     if (it.tipo === 'aura' && !mestre) {
-      nota = 'As barras de ouro saem da sua conta agora e a aura já é sua, na hora: não há cancelamento nem devolução.';
+      nota = Tx('As barras de ouro saem da sua conta agora e a aura já é sua, na hora: não há cancelamento nem devolução.');
     }
     SITE.confirma({
-      titulo: 'Confirmar a compra',
-      texto: 'Comprar ' + oQue + ' por ' + precoTexto(it) + '?',
-      nota: nota + (!mestre && it.tipo === 'bonus-xp' ? ' O prazo do bônus corre a partir da entrega no jogo.' : ''),
-      sim: emBarras ? 'Comprar com barras' : 'Comprar com vinténs', nao: 'Voltar'
+      titulo: Tx('Confirmar a compra'),
+      texto: Tx('Comprar {oQue} por {a}?', { oQue: oQue, a: precoTexto(it) }),
+      nota: nota + (!mestre && it.tipo === 'bonus-xp' ? Tx(' O prazo do bônus corre a partir da entrega no jogo.') : ''),
+      sim: emBarras ? Tx('Comprar com barras') : Tx('Comprar com vinténs'), nao: Tx('Voltar')
     }).then(function (sim) {
       if (!sim || ocupado) return;
       var idem = chave('sku', it.sku);
       ocupa(true);
-      aviso('Fazendo o pedido…', 'neutro');
+      aviso(Tx('Fazendo o pedido…'), 'neutro');
       corpo.idem = idem;
       return SITE.api('/api/loja/comprar', { method: 'POST', body: corpo }).then(function (r) {
         ocupado = false;
         if (r.status === 401) { sessaoVencida(); return; }
         if (r.status === 0) {
           semResposta = { tipo: 'sku', id: it.sku, idem: idem };
-          aviso('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o pedido não sai dobrado.');
+          aviso(Tx('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o pedido não sai dobrado.'));
           desenha();
           return;
         }
-        if (!r.ok) { aviso(SITE.erro(r, 'não deu para fazer o pedido')); desenha(); return carregaMinha(); }
+        if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para fazer o pedido'))); desenha(); return carregaMinha(); }
         avisaJogo();
         // 04/10: o servidor diz se a compra já entrou (`naHora`) ou por que ainda espera (`pedido.espera`)
         var espera = (r.pedido || {}).espera;
         var entrou = r.naHora === true || (r.pedido || {}).estado === 'entregue';
-        aviso((entrou ? 'Compra feita: ' : 'Pedido feito: ') + it.nome + '. ' + (it.tipo === 'aura'
-          ? 'A aura já é sua: ligue na ficha do Personagem, no jogo.'
-          : entrou ? (it.tipo === 'barras' ? 'As barras de ouro já estão na sua conta.'
-                      : it.tipo === 'peca' ? 'Já está no banco do jogo, no cofre do Acampamento.'
-                      : 'Já está na sua conta do jogo.')
-          : espera === 'luta' ? 'Você está no meio de uma luta: chega quando a sala terminar. Já está pago e guardado.'
-          : espera === 'juiz' ? 'Entra na sua conta em instantes.'
+        aviso((entrou
+          ? Tx('Compra feita: {nome}. {a}', { nome: it.nome, a: it.tipo === 'aura'
+          ? Tx('A aura já é sua: ligue na ficha do Personagem, no jogo.')
+          : entrou ? (it.tipo === 'barras' ? Tx('As barras de ouro já estão na sua conta.')
+                      : it.tipo === 'peca' ? Tx('Já está no banco do jogo, no cofre do Acampamento.')
+                      : Tx('Já está na sua conta do jogo.'))
+          : espera === 'luta' ? Tx('Você está no meio de uma luta: chega quando a sala terminar. Já está pago e guardado.')
+          : espera === 'juiz' ? Tx('Entra na sua conta em instantes.')
           : it.tipo === 'barras'
-          ? 'As barras entram quando o jogo abrir logado na conta Principal e pagar os vinténs.'
-          : 'Ele chega quando o jogo abrir logado na conta Principal.'), 'certo');
+          ? Tx('As barras entram quando o jogo abrir logado na conta Principal e pagar os vinténs.')
+          : Tx('Ele chega quando o jogo abrir logado na conta Principal.') })
+          : Tx('Pedido feito: {nome}. {a}', { nome: it.nome, a: it.tipo === 'aura'
+          ? Tx('A aura já é sua: ligue na ficha do Personagem, no jogo.')
+          : entrou ? (it.tipo === 'barras' ? Tx('As barras de ouro já estão na sua conta.')
+                      : it.tipo === 'peca' ? Tx('Já está no banco do jogo, no cofre do Acampamento.')
+                      : Tx('Já está na sua conta do jogo.'))
+          : espera === 'luta' ? Tx('Você está no meio de uma luta: chega quando a sala terminar. Já está pago e guardado.')
+          : espera === 'juiz' ? Tx('Entra na sua conta em instantes.')
+          : it.tipo === 'barras'
+          ? Tx('As barras entram quando o jogo abrir logado na conta Principal e pagar os vinténs.')
+          : Tx('Ele chega quando o jogo abrir logado na conta Principal.') })), 'certo');
         if (r.pedido && minha) {
           minha.pedidos = [r.pedido].concat((minha.pedidos || []).filter(function (p) { return p && p.id !== r.pedido.id; }));
           if (r.saldo && typeof r.saldo === 'object') {
@@ -963,31 +989,31 @@
     var it = acha(sku);
     var nome = String(presenteNome || '').trim();
     if (!it || ocupado || estadoMinha !== 'ok') return;
-    if (!nome) { aviso('Diga o nome do jogador que vai receber o presente.'); return; }
+    if (!nome) { aviso(Tx('Diga o nome do jogador que vai receber o presente.')); return; }
     var porDia = Number(((catalogo || {}).presente || {}).porDia) || 0;
     SITE.confirma({
-      titulo: 'Confirmar o presente',
-      texto: 'Dar ' + it.nome + ' de presente para ' + nome + ' por ' + precoTexto(it) + '?',
-      nota: 'As barras de ouro saem da SUA conta agora. Presente não se cancela; se o jogo de quem recebe o devolver, as barras voltam para você.' +
-            (porDia ? ' Dá para dar até ' + N(porDia) + ' presentes por dia.' : ''),
-      sim: 'Dar o presente', nao: 'Voltar'
+      titulo: Tx('Confirmar o presente'),
+      texto: Tx('Dar {nome} de presente para {a} por {b}?', { nome: it.nome, a: nome, b: precoTexto(it) }),
+      nota: Tx('As barras de ouro saem da SUA conta agora. Presente não se cancela; se o jogo de quem recebe o devolver, as barras voltam para você.{a}', { a: porDia ? ' ' + Tx('Dá para dar até {a} presentes por dia.', { a: N(porDia) }) : '' }),
+      sim: Tx('Dar o presente'), nao: Tx('Voltar')
     }).then(function (sim) {
       if (!sim || ocupado) return;
       var idem = chave('presente', it.sku + '|' + nome);
       ocupa(true);
-      aviso('Mandando o presente…', 'neutro');
+      aviso(Tx('Mandando o presente…'), 'neutro');
       return SITE.api('/api/loja/presentear', { method: 'POST', body: { sku: it.sku, nome: nome, idem: idem } }).then(function (r) {
         ocupado = false;
         if (r.status === 401) { sessaoVencida(); return; }
         if (r.status === 0) {
           semResposta = { tipo: 'presente', id: it.sku + '|' + nome, idem: idem };
-          aviso('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o presente não sai dobrado.');
+          aviso(Tx('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o presente não sai dobrado.'));
           desenha();
           return;
         }
-        if (!r.ok) { aviso(SITE.erro(r, 'não deu para mandar o presente')); desenha(); return carregaMinha(); }
-        aviso('Presente enviado: ' + it.nome + ' para ' + ((r.presente || {}).para || nome) + '.' +
-              (r.naHora === true ? ' Já está na conta de quem recebeu.' : ''), 'certo');
+        if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para mandar o presente'))); desenha(); return carregaMinha(); }
+        aviso((r.naHora === true
+          ? Tx('Presente enviado: {nome} para {a}. Já está na conta de quem recebeu.', { nome: it.nome, a: (r.presente || {}).para || nome })
+          : Tx('Presente enviado: {nome} para {a}.', { nome: it.nome, a: (r.presente || {}).para || nome })), 'certo');
         presenteAberto = null;
         presenteNome = '';
         if (r.barras && typeof r.barras === 'object' && temBarras()) minha.barras.saldo = r.barras.saldo;
@@ -1002,40 +1028,41 @@
     if (!pc || ocupado || estadoMinha !== 'ok' || !pagamentoLigado()) return;
     var barras = pacoteEmBarras(pc);
     SITE.confirma({
-      titulo: barras ? 'Comprar barras de ouro' : 'Comprar vinténs',
-      texto: 'Comprar ' + (pc.nome || pc.id) + ' por ' + String(pc.preco == null ? '' : pc.preco) + '?',
-      nota: barras ? 'Você vai para a página do Mercado Pago. As barras de ouro entram na sua conta quando o pagamento for aprovado.'
-        : 'Você vai para a página do Mercado Pago. Os vinténs chegam à sua conta quando o pagamento for aprovado, ' +
-          'e o jogo os recebe na próxima abertura.',
-      sim: 'Ir para o pagamento', nao: 'Voltar'
+      titulo: barras ? Tx('Comprar barras de ouro') : Tx('Comprar vinténs'),
+      texto: Tx('Comprar {a} por {b}?', { a: pc.nome || pc.id, b: String(pc.preco == null ? '' : pc.preco) }),
+      nota: barras ? Tx('Você vai para a página do Mercado Pago. As barras de ouro entram na sua conta quando o pagamento for aprovado.')
+        : Tx('Você vai para a página do Mercado Pago. Os vinténs chegam à sua conta quando o pagamento for aprovado, e o jogo os recebe na próxima abertura.'),
+      sim: Tx('Ir para o pagamento'), nao: Tx('Voltar')
     }).then(function (sim) {
       if (!sim || ocupado) return;
       var idem = chave('pacote', pc.id);
       ocupa(true);
-      aviso('Preparando o pagamento…', 'neutro');
+      aviso(Tx('Preparando o pagamento…'), 'neutro');
       return SITE.api('/api/pagamento/pacote', { method: 'POST', body: { pacote: pc.id, idem: idem } }).then(function (r) {
         ocupado = false;
         if (r.status === 401) { sessaoVencida(); return; }
         if (r.status === 0) {
           semResposta = { tipo: 'pacote', id: pc.id, idem: idem };
-          aviso('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o pagamento não sai dobrado.');
+          aviso(Tx('O servidor não respondeu. Tente de novo: a página repete a mesma chave, e o pagamento não sai dobrado.'));
           desenha();
           return;
         }
         if (r.status === 503 && r.pagamento === false) {
           catalogo.pagamento = { ligado: false };
-          aviso((barras ? 'Os pacotes de barras de ouro' : 'Os pacotes de vinténs') + ' chegam em breve: nada foi cobrado.', 'neutro');
+          aviso((barras
+            ? Tx('Os pacotes de barras de ouro chegam em breve: nada foi cobrado.')
+            : Tx('Os pacotes de vinténs chegam em breve: nada foi cobrado.')), 'neutro');
           desenha();
           return;
         }
-        if (!r.ok) { aviso(SITE.erro(r, 'não deu para preparar o pagamento')); desenha(); return; }
+        if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para preparar o pagamento'))); desenha(); return; }
         var ok = typeof SITE.ehMercadoPago === 'function' && SITE.ehMercadoPago(r.endereco);
         if (!ok) {
-          aviso('Endereço de pagamento estranho; nada foi cobrado. A página não vai até ele: avise o dono do jogo.');
+          aviso(Tx('Endereço de pagamento estranho; nada foi cobrado. A página não vai até ele: avise o dono do jogo.'));
           desenha();
           return;
         }
-        aviso('Indo para o Mercado Pago…', 'neutro');
+        aviso(Tx('Indo para o Mercado Pago…'), 'neutro');
         desenha();
         LOJA.vai(r.endereco);
       });
@@ -1046,20 +1073,20 @@
     var p = (minha && Array.isArray(minha.pedidos) ? minha.pedidos : []).filter(function (x) { return x && Number(x.id) === id; })[0];
     if (!p || ocupado) return;
     SITE.confirma({
-      titulo: 'Cancelar o pedido?',
-      texto: 'Cancelar o pedido de ' + (p.nome || p.sku) + '?',
-      nota: p.moeda === 'barras' && Number(p.barras) > 0 ? 'As ' + nBarras(p.barras) + ' voltam para a sua conta.'
-        : Number(p.preco) > 0 ? 'A reserva de ' + N(p.preco) + ' vinténs volta a ficar disponível.' : '',
-      sim: 'Cancelar o pedido', nao: 'Manter'
+      titulo: Tx('Cancelar o pedido?'),
+      texto: Tx('Cancelar o pedido de {a}?', { a: p.nome || p.sku }),
+      nota: p.moeda === 'barras' && Number(p.barras) > 0 ? Tx('As {a} voltam para a sua conta.', { a: nBarras(p.barras) })
+        : Number(p.preco) > 0 ? Tx('A reserva de {a} vinténs volta a ficar disponível.', { a: N(p.preco) }) : '',
+      sim: Tx('Cancelar o pedido'), nao: Tx('Manter')
     }).then(function (sim) {
       if (!sim || ocupado) return;
       ocupado = true;
-      aviso('Cancelando…', 'neutro');
+      aviso(Tx('Cancelando…'), 'neutro');
       return SITE.api('/api/loja/cancelar', { method: 'POST', body: { id: id } }).then(function (r) {
         ocupado = false;
         if (r.status === 401) { sessaoVencida(); return; }
-        if (!r.ok) { aviso(SITE.erro(r, 'não deu para cancelar')); return carregaMinha(); }
-        aviso('Pedido cancelado: ' + (p.nome || p.sku) + '.', 'certo');
+        if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para cancelar'))); return carregaMinha(); }
+        aviso(Tx('Pedido cancelado: {a}.', { a: p.nome || p.sku }), 'certo');
         return carregaMinha();
       });
     });
@@ -1123,9 +1150,7 @@
     });
     if (noApp()) {
       // o texto do topo fala do Mercado Pago: no aplicativo ele não pode aparecer
-      $('lj-sub').textContent = 'Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, ' +
-        'por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes ou da troca pelos ' +
-        'vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.';
+      $('lj-sub').textContent = Tx('Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes ou da troca pelos vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.');
       // as barras compradas pela Google entraram (na hora, ou uma compra retomada): o saldo e o extrato andaram
       window.addEventListener('soterra:barras-play', function () { carregaMinha(); });
     }

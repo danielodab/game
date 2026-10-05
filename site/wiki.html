@@ -20,6 +20,10 @@
     return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
   };
   document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  // os idiomas (docs/IDIOMAS.md): o mesmo js/core/i18n.js do jogo decide (a chave soterra-idioma é uma só) e o
+  // site/i18n.js traduz esta página por cima; em português nada muda. A lista de scripts do fim passa por SITE_LISTA.
+  document.write('<script src="' + SITE_URL('../js/core/i18n.js') + '"><\/script><script src="' + SITE_URL('i18n.js') + '"><\/script>');
+  window.SITE_LISTA = function (a) { return window.SITE_I18N ? window.SITE_I18N.lista(a) : a; };
   document.write('<link rel="stylesheet" href="' + SITE_URL('wiki.css') + '">');
 </script>
 <noscript><link rel="stylesheet" href="site.css"><link rel="stylesheet" href="wiki.css"></noscript>
@@ -88,7 +92,7 @@
  * carimba o nível de uso dos pets, então pets.js vem antes; items_extra.js e
  * items_selos.js depois de items.js. Cada um com o hash do conteúdo. */
 (function () {
-  ['site.js',
+  SITE_LISTA(['site.js',
    '../js/core/data/elements.js', '../js/core/data/classes.js', '../js/core/data/spells.js',
    '../js/core/data/progression.js', '../js/core/data/monsters.js', '../js/core/data/dungeons.js',
    '../js/core/data/arenas.js',     // 21/09: os tabuleiros que NÃO são calabouço (a Praça, o Salão da Sede)
@@ -98,7 +102,7 @@
    '../js/core/data/items_extra.js', '../js/core/data/items_selos.js', '../js/core/data/consumiveis.js',
    '../js/core/engine.js', '../js/core/fusion.js', '../js/core/missoes.js', '../js/core/diario.js',
    '../js/core/poco.js', '../js/core/guilda.js', '../js/core/mercado.js', '../js/core/brasa.js',
-   'wiki.js'].forEach(function (s) {
+   'wiki.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

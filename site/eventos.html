@@ -20,6 +20,10 @@
     return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
   };
   document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  // os idiomas (docs/IDIOMAS.md): o mesmo js/core/i18n.js do jogo decide (a chave soterra-idioma é uma só) e o
+  // site/i18n.js traduz esta página por cima; em português nada muda. A lista de scripts do fim passa por SITE_LISTA.
+  document.write('<script src="' + SITE_URL('../js/core/i18n.js') + '"><\/script><script src="' + SITE_URL('i18n.js') + '"><\/script>');
+  window.SITE_LISTA = function (a) { return window.SITE_I18N ? window.SITE_I18N.lista(a) : a; };
 </script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
@@ -119,13 +123,14 @@
 /* 10/09: os calabouços e o Calabouço do Dia vêm dos arquivos do próprio jogo
  * (mesma origem), cada um com o hash do conteúdo (SITE_URL, no topo). */
 (function () {
-  ['site.js', '../js/core/data/dungeons.js', '../js/core/diario.js'].forEach(function (s) {
+  SITE_LISTA(['site.js', '../js/core/data/dungeons.js', '../js/core/diario.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();
 </script>
 <script>
 (function () {
+  var Tx = SITE.Tx;      // o texto no idioma do visitante (site/i18n.js; docs/IDIOMAS.md)
   var E = SITE.esc;
   var DIAS = 14;                // a janela do calendário (a do servidor também é de 14)
   var resposta = null;          // a última resposta boa de /api/eventos
@@ -143,23 +148,27 @@
     var agora = SITE.agora(), d = SITE.diaDoCalabouco(agora);
     if (!d) return '';
     var saqueAqui = ag.ativos.some(function (e) { return e.tipo === 'saque' && (!e.calabouco || e.calabouco === d.id); });
-    return '<div class="evento dia-do-calabouco" data-calabouco-dia="' + E(d.id) + '">' +
-      '<div class="evento-topo"><span class="chip-tipo t-saque">Saque +' + d.bonus + '%</span>' +
-      '<span class="etiqueta aberto">Hoje</span></div>' +
-      '<h4>Calabouço do Dia: ' + E(d.nome) + '</h4>' +
-      '<p>Todo dia um calabouço aberto paga mais saque, e ele troca à meia-noite.' +
-      (saqueAqui ? ' Hoje há evento de saque valendo aqui também: os dois não somam, vale o maior.' : '') + '</p>' +
-      '<div class="evento-pe"><span>' + E(SITE.onde(d.id)) + '</span>' +
-      '<span class="falta">' + E(SITE.falta(SITE.inicioDoDia(agora, 1), 'troca em')) + '</span></div></div>';
+    return (saqueAqui
+      ? '<div class="evento dia-do-calabouco" data-calabouco-dia="' +
+      E(d.id) +
+      '">' +
+      Tx('<div class="evento-topo"><span class="chip-tipo t-saque">Saque +{bonus}%</span><span class="etiqueta aberto">Hoje</span></div><h4>Calabouço do Dia: {b}</h4><p>Todo dia um calabouço aberto paga mais saque, e ele troca à meia-noite. Hoje há evento de saque valendo aqui também: os dois não somam, vale o maior.</p><div class="evento-pe"><span>{c}</span><span class="falta">{d}</span></div>', { bonus: d.bonus, b: E(d.nome), c: E(SITE.onde(d.id)), d: E(SITE.falta(SITE.inicioDoDia(agora, 1), Tx('troca em'))) }) +
+      '</div>'
+      : '<div class="evento dia-do-calabouco" data-calabouco-dia="' +
+      E(d.id) +
+      '">' +
+      Tx('<div class="evento-topo"><span class="chip-tipo t-saque">Saque +{bonus}%</span><span class="etiqueta aberto">Hoje</span></div><h4>Calabouço do Dia: {b}</h4><p>Todo dia um calabouço aberto paga mais saque, e ele troca à meia-noite.</p><div class="evento-pe"><span>{c}</span><span class="falta">{d}</span></div>', { bonus: d.bonus, b: E(d.nome), c: E(SITE.onde(d.id)), d: E(SITE.falta(SITE.inicioDoDia(agora, 1), Tx('troca em'))) }) +
+      '</div>');
   }
   function desenhaAgora(ag) {
     var html = ag.ativos.map(SITE.cartaoEvento).join('');
     if (!ag.ativos.length) {
       var prox = ag.proximos[0];
       html += '<div class="evento vazio"><h4>' +
-        (!lida ? 'carregando a agenda…' : resposta ? 'Nenhum evento no ar agora.' : 'Sem a agenda do servidor.') + '</h4>' +
-        (prox ? '<p>O próximo: <b>' + E(prox.titulo) + '</b> (' + E(SITE.fator(prox.tipo, prox.mult)) + '), ' +
-                E(SITE.quando(prox.inicio)) + ' — ' + E(SITE.falta(prox.inicio, 'começa em')) + '.</p>' : '') +
+        (!lida ? Tx('carregando a agenda…') : resposta ? Tx('Nenhum evento no ar agora.') : Tx('Sem a agenda do servidor.')) + '</h4>' +
+        (prox ? '<p>' +
+          Tx('O próximo: <b>{a}</b> ({b}), {c} — {d}.', { a: E(prox.titulo), b: E(SITE.fator(prox.tipo, prox.mult)), c: E(SITE.quando(prox.inicio)), d: E(SITE.falta(prox.inicio, Tx('começa em'))) }) +
+          '</p>' : '') +
         '</div>';
     }
     $('ev-agora').innerHTML = html + cartaoDia(ag);
@@ -168,9 +177,9 @@
   /* ---- os próximos 14 dias: 7 colunas × 2 linhas, a partir de hoje ---- */
   function faixaNoDia(e, ini, fim) {
     var comecou = e.inicio <= ini, segue = e.fim >= fim;
-    if (comecou && segue) return 'o dia todo';
-    if (comecou) return 'até ' + SITE.hora(e.fim);
-    if (segue) return 'desde ' + SITE.hora(e.inicio);
+    if (comecou && segue) return Tx('o dia todo');
+    if (comecou) return Tx('até {a}', { a: SITE.hora(e.fim) });
+    if (segue) return Tx('desde {a}', { a: SITE.hora(e.inicio) });
     return SITE.hora(e.inicio) + '–' + SITE.hora(e.fim);
   }
   function desenhaCalendario(ag) {
@@ -186,8 +195,8 @@
       html += '<div class="dia' + (i === 0 ? ' hoje' : '') + '" data-dia="' + chave + '"' +
         (d ? ' data-calabouco-dia="' + E(d.id) + '"' : '') + '>' +
         '<div class="dia-cab"><b>' + E(partes[0]) + '</b> ' + E(partes[1] || '') +
-        (i === 0 ? ' <span class="hoje-marca">hoje</span>' : '') + '</div>' +
-        (d ? '<div class="dia-calabouco" title="Calabouço do Dia: +' + d.bonus + '% de saque">★ ' + E(SITE.semArtigo(d.nome)) + '</div>' : '') +
+        (i === 0 ? ' <span class="hoje-marca">' + Tx('hoje') + '</span>' : '') + '</div>' +
+        (d ? '<div class="dia-calabouco" title="' + E(Tx('Calabouço do Dia: +{a}% de saque', { a: d.bonus })) + '">★ ' + E(SITE.semArtigo(d.nome)) + '</div>' : '') +
         (doDia.length ? '<ul class="dia-eventos">' + doDia.map(function (e) {
           return '<li><span class="chip-tipo t-' + e.tipo + '">' + E(SITE.fator(e.tipo, e.mult)) + '</span> ' + E(e.titulo) +
             '<small>' + E(faixaNoDia(e, ini, fim)) + ' · ' + E(SITE.onde(e.calabouco)) + '</small></li>';
@@ -201,14 +210,14 @@
   function desenhaRegras() {
     var ul = $('ev-regras');
     if (!resposta) {
-      ul.innerHTML = '<li class="apoio">' + (lida ? 'sem o servidor, sem o calendário automático' : 'carregando…') + '</li>';
+      ul.innerHTML = '<li class="apoio">' + (lida ? Tx('sem o servidor, sem o calendário automático') : Tx('carregando…')) + '</li>';
       return;
     }
     var tetos = resposta.tetos || {};
     var regras = (Array.isArray(resposta.regras) ? resposta.regras : []).filter(function (r) {
       return r && SITE.TIPOS.indexOf(r.tipo) >= 0 && SITE.textoRegra(r);
     });
-    if (!regras.length) { ul.innerHTML = '<li class="apoio">Nenhum evento semanal por enquanto.</li>'; return; }
+    if (!regras.length) { ul.innerHTML = Tx('<li class="apoio">Nenhum evento semanal por enquanto.</li>'); return; }
     ul.innerHTML = regras.map(function (r) {
       var m = Number(r.multiplicador), teto = Number(tetos[r.tipo]);
       if (!isFinite(m) || m < 1) m = 1;
@@ -225,7 +234,7 @@
     var tetos = (resposta && resposta.tetos) || {};
     [].forEach.call(document.querySelectorAll('[data-teto]'), function (td) {
       var t = td.getAttribute('data-teto'), v = Number(tetos[t]);
-      td.textContent = t === 'aviso' ? 'só o recado' : (v >= 1 ? '×' + SITE.decimal(v) : '—');
+      td.textContent = t === 'aviso' ? Tx('só o recado') : (v >= 1 ? '×' + SITE.decimal(v) : '—');
     });
   }
 
@@ -250,9 +259,9 @@
       } else {
         // a última resposta boa fica: a agenda é recalculada pelo relógio,
         // então ela continua certa por um bom tempo sem nova busca
-        aviso(r.status === 0 ? 'O servidor está fora — a agenda volta com ele. O Calabouço do Dia não depende do servidor e segue abaixo.'
-          : r.status === 404 ? 'A agenda de eventos ainda não chegou a este servidor. O Calabouço do Dia segue abaixo.'
-          : (r.erro || 'Não deu para ler a agenda.'));
+        aviso(r.status === 0 ? Tx('O servidor está fora — a agenda volta com ele. O Calabouço do Dia não depende do servidor e segue abaixo.')
+          : r.status === 404 ? Tx('A agenda de eventos ainda não chegou a este servidor. O Calabouço do Dia segue abaixo.')
+          : (r.erro || Tx('Não deu para ler a agenda.')));
       }
       desenha();
     });

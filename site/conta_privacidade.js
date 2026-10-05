@@ -21,6 +21,16 @@
  * entra por textContent ou SITE.esc. Senha só no corpo do POST. */
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO VISITANTE (docs/IDIOMAS.md, etapa 3): a chave é o próprio português. Sem o
+   * JOGO.I18n (página de prova que não carrega o js/core/i18n.js) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = window.JOGO && window.JOGO.I18n;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   function $(id) { return document.getElementById(id); }
   if (!$('bl-privacidade') || !window.SITE) return;
 
@@ -48,8 +58,7 @@
     var pendente = !!r.pendente;
     $('pv-aceite').hidden = !pendente;
     $('pv-aceite-ok').textContent = (!pendente && r.aceite)
-      ? 'Você aceitou os Termos de Uso e a Política de Privacidade de ' + versaoLegivel(r.aceite.versao) +
-        ' em ' + data(r.aceite.em) + '.'
+      ? Tx('Você aceitou os Termos de Uso e a Política de Privacidade de {a} em {b}.', { a: versaoLegivel(r.aceite.versao), b: data(r.aceite.em) })
       : '';
   }
   function leAceite() {
@@ -60,12 +69,12 @@
   }
   $('pv-aceitar').addEventListener('click', function () {
     if (ocupado) return;
-    if (!$('pv-aceite-caixa').checked) { aviso('Marque a caixa depois de ler os dois documentos.'); return; }
+    if (!$('pv-aceite-caixa').checked) { aviso(Tx('Marque a caixa depois de ler os dois documentos.')); return; }
     ocupado = true;
     SITE.api('/api/conta/aceite', { method: 'POST', body: { versao: SITE.VERSAO_TERMOS } }).then(function (r) {
       ocupado = false;
-      if (!r.ok) { aviso(SITE.erro(r, 'não deu para gravar o aceite')); return; }
-      aviso('Aceite gravado. Obrigado!', 'certo');
+      if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para gravar o aceite'))); return; }
+      aviso(Tx('Aceite gravado. Obrigado!'), 'certo');
       desenhaAceite(r);
     });
   });
@@ -82,11 +91,11 @@
     ocupado = true;
     var bt = $('pv-baixar');
     bt.disabled = true;
-    aviso('Juntando os seus dados…', 'neutro');
+    aviso(Tx('Juntando os seus dados…'), 'neutro');
     SITE.api('/api/conta/meus-dados').then(function (r) {
       ocupado = false;
       bt.disabled = false;
-      if (!r.ok || !r.dados) { aviso(SITE.erro(r, 'não deu para juntar os dados')); return; }
+      if (!r.ok || !r.dados) { aviso(SITE.erro(r, Tx('não deu para juntar os dados'))); return; }
       try {
         var blob = new Blob([JSON.stringify(r.dados, null, 2)], { type: 'application/json' });
         var a = document.createElement('a');
@@ -95,9 +104,9 @@
         document.body.appendChild(a);
         a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); }, 1000);
-        aviso('Pronto: o arquivo ' + a.download + ' foi baixado.', 'certo');
+        aviso(Tx('Pronto: o arquivo {download} foi baixado.', { download: a.download }), 'certo');
       } catch (e) {
-        aviso('O navegador não deixou salvar o arquivo.');
+        aviso(Tx('O navegador não deixou salvar o arquivo.'));
       }
     });
   });
@@ -129,20 +138,20 @@
     if ($('pv-excluir-bt').disabled) return;
     var nome = $('pv-nome').value.trim(), senha = $('pv-senha').value;
     SITE.confirma({
-      titulo: 'Excluir a conta ' + nomeConta + '?',
-      texto: 'O save, os itens, os personagens, as barras de ouro e os vinténs somem para sempre.',
-      nota: 'Quer o arrependimento de uma compra? Peça antes de excluir.',
-      sim: 'Excluir para sempre', nao: 'Voltar'
+      titulo: Tx('Excluir a conta {nomeConta}?', { nomeConta: nomeConta }),
+      texto: Tx('O save, os itens, os personagens, as barras de ouro e os vinténs somem para sempre.'),
+      nota: Tx('Quer o arrependimento de uma compra? Peça antes de excluir.'),
+      sim: Tx('Excluir para sempre'), nao: Tx('Voltar')
     }).then(function (sim) {
       if (!sim) return;
       ocupado = true;
       confere();
-      aviso('Excluindo a conta…', 'neutro');
+      aviso(Tx('Excluindo a conta…'), 'neutro');
       SITE.api('/api/conta/excluir', { method: 'POST', body: { nome: nome, senha: senha } }).then(function (r) {
         ocupado = false;
         $('pv-senha').value = '';
         confere();
-        if (!r.ok) { aviso(SITE.erro(r, 'não deu para excluir a conta')); return; }
+        if (!r.ok) { aviso(SITE.erro(r, Tx('não deu para excluir a conta'))); return; }
         SITE.esquece();
         SITE.cabecalho();
         $('minha-conta').hidden = true;

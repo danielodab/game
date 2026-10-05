@@ -27,6 +27,10 @@
     return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
   };
   document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  // os idiomas (docs/IDIOMAS.md): o mesmo js/core/i18n.js do jogo decide (a chave soterra-idioma é uma só) e o
+  // site/i18n.js traduz esta página por cima; em português nada muda. A lista de scripts do fim passa por SITE_LISTA.
+  document.write('<script src="' + SITE_URL('../js/core/i18n.js') + '"><\/script><script src="' + SITE_URL('i18n.js') + '"><\/script>');
+  window.SITE_LISTA = function (a) { return window.SITE_I18N ? window.SITE_I18N.lista(a) : a; };
 </script>
 <noscript><link rel="stylesheet" href="site.css"></noscript>
 <!--
@@ -309,15 +313,16 @@
  * cópia que envelhece. Cada arquivo vai com o hash do conteúdo dele
  * (SITE_URL, no topo): um dado que mudou tem endereço novo e desce na hora. */
 (function () {
-  ['site.js', '../js/ui/brasao.js',
+  SITE_LISTA(['site.js', '../js/ui/brasao.js',
    '../js/core/data/classes.js', '../js/core/data/dungeons.js', '../js/core/diario.js',
-   '../js/core/data/fusions.js', '../js/core/fusion.js'].forEach(function (s) {
+   '../js/core/data/fusions.js', '../js/core/fusion.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();
 </script>
 <script>
 (function () {
+  var Tx = SITE.Tx;      // o texto no idioma do visitante (site/i18n.js; docs/IDIOMAS.md)
   var E = SITE.esc, N = SITE.num;
   var JG = window.JOGO || {}, DATA = JG.DATA || {}, CLASSES = DATA.classes || {};
   function $(id) { return document.getElementById(id); }
@@ -339,9 +344,12 @@
   function desenhaDia() {
     var d = SITE.diaDoCalabouco(SITE.inicioDoDia(SITE.agora(), 0) + 12 * 3600);
     $('ev-dia').innerHTML = d
-      ? '<li class="hoje" data-calabouco-dia="' + E(d.id) + '"><span class="quando">hoje</span>' +
-        '<span><a href="wiki.html#/calabouco/' + E(d.id) + '">' + E(d.nome) + '</a> <small>+' + d.bonus + '% de saque</small></span></li>'
-      : '<li class="apoio">não deu para ler os calabouços do jogo</li>';
+      ? '<li class="hoje" data-calabouco-dia="' +
+        E(d.id) +
+        '">' +
+        Tx('<span class="quando">hoje</span><span><a href="wiki.html#/calabouco/{a}">{b}</a> <small>+{bonus}% de saque</small></span>', { a: E(d.id), b: E(d.nome), bonus: d.bonus }) +
+        '</li>'
+      : Tx('<li class="apoio">não deu para ler os calabouços do jogo</li>');
   }
   function desenhaEventos() {
     desenhaDia();
@@ -353,17 +361,17 @@
     }
     var ag = SITE.agenda(agenda);
     $('ev-agora').innerHTML = ag.ativos.length ? ag.ativos.map(SITE.cartaoEvento).join('')
-      : '<div class="estado">Nenhum evento no ar agora.</div>';
+      : Tx('<div class="estado">Nenhum evento no ar agora.</div>');
     $('ev-proximos').innerHTML = ag.proximos.length ? ag.proximos.slice(0, 3).map(SITE.linhaEvento).join('')
-      : '<li class="apoio">nada marcado por enquanto</li>';
+      : Tx('<li class="apoio">nada marcado por enquanto</li>');
   }
   SITE.api('/api/eventos', { semToken: true }).then(function (r) {
     lida = true;
     if (r.ok) { SITE.acertaRelogio(r.agora); agenda = r; }
     else {
-      msg = r.status === 0 ? 'O servidor está fora — os eventos voltam com ele. O Calabouço do Dia, ao lado, não depende dele.'
-        : r.status === 404 ? 'A agenda de eventos ainda não chegou a este servidor.'
-        : (r.erro || 'Não deu para ler os eventos.');
+      msg = r.status === 0 ? Tx('O servidor está fora — os eventos voltam com ele. O Calabouço do Dia, ao lado, não depende dele.')
+        : r.status === 404 ? Tx('A agenda de eventos ainda não chegou a este servidor.')
+        : (r.erro || Tx('Não deu para ler os eventos.'));
     }
     desenhaEventos();
   });
@@ -375,16 +383,15 @@
     var F = JG.Fusion, formas = DATA.fusionForms || {}, idents = DATA.fusionIdentities || {};
     var misturas = DATA.fusionBlends || {};
     if (!F || !Object.keys(formas).length) {
-      $('fu-regras').innerHTML = '<li class="apoio">não deu para ler as regras do jogo agora — a <a href="fusoes.html">página das fusões</a> explica tudo</li>';
+      $('fu-regras').innerHTML = Tx('<li class="apoio">não deu para ler as regras do jogo agora — a <a href="fusoes.html">página das fusões</a> explica tudo</li>');
       return;
     }
     var nMisturas = Object.keys(misturas).filter(function (k) { return !misturas[k].mirrorOf; }).length;
     $('fu-regras').innerHTML = [
-      '<b>Lado a lado</b>, sem diagonal: dois heróis seus. Pet e invocação não fundem.',
-      '<b>Quem declara paga ' + F.FUSION_PA_COST + ' PA</b>, e a fusão sai no fim do turno se os dois ainda estiverem colados.',
-      '<b>Vida somada, +' + F.BONUS_PA + ' PA e +' + F.BONUS_PP + ' PP</b>, com escudo de ' + F.BONUS_SHIELD + ' até o fim da batalha.',
-      '<b>Feitiços próprios</b>: a forma vem das duas classes e o sabor da mistura dos elementos — ' +
-        Object.keys(formas).length + ' duplas, ' + nMisturas + ' misturas.'
+      Tx('<b>Lado a lado</b>, sem diagonal: dois heróis seus. Pet e invocação não fundem.'),
+      Tx('<b>Quem declara paga {FUSION_PA_COST} PA</b>, e a fusão sai no fim do turno se os dois ainda estiverem colados.', { FUSION_PA_COST: F.FUSION_PA_COST }),
+      Tx('<b>Vida somada, +{BONUS_PA} PA e +{BONUS_PP} PP</b>, com escudo de {BONUS_SHIELD} até o fim da batalha.', { BONUS_PA: F.BONUS_PA, BONUS_PP: F.BONUS_PP, BONUS_SHIELD: F.BONUS_SHIELD }),
+      Tx('<b>Feitiços próprios</b>: a forma vem das duas classes e o sabor da mistura dos elementos — {length} duplas, {nMisturas} misturas.', { length: Object.keys(formas).length, nMisturas: nMisturas })
     ].map(function (t) { return '<li>' + t + '</li>'; }).join('');
     // quatro duplas que mostram o leque: de longe, cuidando, sumindo e barrando
     var DESTAQUES = ['arqueiro+bruxo', 'curandeiro+sumo', 'espadachim+invocador', 'minotauro+sumo'];
@@ -404,7 +411,7 @@
    * Sem servidor (ou com ele fora) as caixas dizem isso, sem quebrar o resto. */
   function linhas(id, lista, celulas) {
     var corpo = $('rk-' + id), estado = $('es-' + id);
-    if (!lista.length) { estado.textContent = 'ninguém ainda — seja o primeiro'; return; }
+    if (!lista.length) { estado.textContent = Tx('ninguém ainda — seja o primeiro'); return; }
     estado.style.display = 'none';
     corpo.innerHTML = lista.slice(0, 5).map(function (r, i) {
       return '<tr class="top' + (i + 1) + '"><td class="pos">' + (i + 1) + '</td>' + celulas(r) + '</tr>';
@@ -416,14 +423,14 @@
     var corpo = $('rk-classes'), es = $('es-classes');
     var ordem = Object.keys(CLASSES).filter(ehClasse);
     if (!ordem.length) ordem = (r.classes || []).filter(function (id) { return /^[a-z]+$/.test(id) && id !== 'gm'; });
-    if (!r.porClasse || !ordem.length) { es.textContent = 'o placar por classe chega com a próxima versão do servidor'; return; }
+    if (!r.porClasse || !ordem.length) { es.textContent = Tx('o placar por classe chega com a próxima versão do servidor'); return; }
     es.style.display = 'none';
     corpo.innerHTML = ordem.map(function (id) {
       var top = (r.porClasse[id] || [])[0];
       var busto = SITE.busto({ src: SITE.img('classe', id, true), letra: SITE.inicial(nomeClasse(id)), cor: corClasse(id) });
       return '<tr><td class="nome">' + busto + E(nomeClasse(id)) + '</td>' +
         (top ? '<td>' + E(top.nome) + '</td><td class="num">' + N(top.nivel) + '</td>'
-             : '<td class="apoio">ninguém ainda</td><td class="num apoio">—</td>') + '</tr>';
+             : Tx('<td class="apoio">ninguém ainda</td><td class="num apoio">—</td>')) + '</tr>';
     }).join('');
   }
   SITE.api('/api/ranking', { semToken: true }).then(function (r) {
@@ -431,7 +438,7 @@
       ['jogadores', 'pvp', 'guildas', 'classes'].forEach(function (id) {
         var es = $('es-' + id);
         es.className = 'estado fora';
-        es.textContent = r.status === 0 ? 'o servidor está fora — o ranking volta com ele' : (r.erro || 'não deu para ler o ranking');
+        es.textContent = r.status === 0 ? Tx('o servidor está fora — o ranking volta com ele') : (r.erro || Tx('não deu para ler o ranking'));
       });
       return;
     }
