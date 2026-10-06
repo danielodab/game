@@ -191,13 +191,14 @@ const nomes = (l) => l.map((x) => x.arquivo).sort().join(' ');
         /Sem conexão/.test(CASCA) && /Tentar de novo/.test(CASCA) && /addEventListener\('online'/.test(CASCA));
   const pares = [['@capacitor/core/dist/capacitor.js', 'capacitor.js'], ['@capacitor/app/dist/plugin.js', 'app.js'],
                  ['@capacitor-community/keep-awake/dist/plugin.js', 'keep-awake.js'],
-                 ['@capgo/native-purchases/dist/plugin.js', 'native-purchases.js']];
+                 ['@capgo/native-purchases/dist/plugin.js', 'native-purchases.js'],
+                 ['@capacitor-community/admob/dist/plugin.js', 'admob.js']];
   const lf = (f) => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
   if (fs.existsSync(path.join(raiz, 'node_modules', '@capacitor', 'core'))) {
     check('vendor/capacitor/ (o que o servidor entrega ao aplicativo) é igual ao node_modules (a parte nativa)',
           pares.every(([o, n]) => lf(path.join(raiz, 'node_modules', o)) === lf(path.join(raiz, 'vendor', 'capacitor', n))));
   } else {
-    check('vendor/capacitor/ tem os quatro arquivos (sem node_modules aqui, a comparação fica para o empacota_www.py)',
+    check('vendor/capacitor/ tem os cinco arquivos (sem node_modules aqui, a comparação fica para o empacota_www.py)',
           pares.every(([, n]) => fs.existsSync(path.join(raiz, 'vendor', 'capacitor', n))));
   }
   const MOBILE = le('js', 'mobile.js');

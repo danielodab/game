@@ -67,6 +67,7 @@ from correio import Correio
 from loja import ESQUEMA_LOJA, LojaMixin
 from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
+from anuncio import ESQUEMA_ANUNCIO, Anuncios, AnuncioMixin
 from pagamento_play import ESQUEMA_PLAY, GooglePlay, PagamentoPlayMixin, liga_varredura
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
@@ -312,6 +313,11 @@ ROTAS = {
     # 04/10: as barras compradas pela Google Play DENTRO do aplicativo (pagamento_play.py); a web segue no Mercado Pago
     ('GET',  '/api/pagamento/play'):         ('play_ver', True),
     ('POST', '/api/pagamento/play'):         ('play_compra', True),
+    # 06/10: o anúncio premiado do aplicativo (anuncio.py), só para quem ENTRA na área e toca no botão.
+    # O prêmio é SEM conta (quem chama é a Google): a assinatura dela é a porta
+    ('GET',  '/api/anuncio'):                ('anuncio_ver', True),
+    ('POST', '/api/anuncio/bilhete'):        ('anuncio_bilhete', True),
+    ('GET',  '/api/anuncio/premio'):         ('anuncio_premio', False),
     ('POST', '/api/mestre/pagamento/play/estornos'): ('mestre_play_estornos', True, True, FRASE_SO_MESTRE),
     # o painel do Mestre (10/09, mestre.py): buscar contas, dar presentes e ver os
     # alertas de pagamento. A busca é POST: o e-mail não vai para a URL (nem para o
@@ -783,7 +789,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
           AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin):
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
@@ -794,7 +800,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
     e os pacotes pagos (pagamento.py) entram como mixins: as rotas deles são
     métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
 
-    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None):
+    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None, anuncios=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
@@ -805,6 +811,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
         self.con.executescript(ESQUEMA_PLAY)     # 04/10: a compra pela Google Play (pagamento_play.py) — só tabela nova
+        self.con.executescript(ESQUEMA_ANUNCIO)  # 06/10: o anúncio premiado do aplicativo (anuncio.py) — idem
         self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
         self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem
@@ -831,6 +838,8 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # a Google Play (pagamento_play.py): a compra de barras DENTRO do aplicativo. Sem a conta de serviço,
         # desligada: as rotas dela respondem 503 e o resto funciona igual
         self.play = play if play is not None else GooglePlay()
+        # o anúncio premiado (anuncio.py): só credita com a assinatura da Google conferida
+        self.anuncios = anuncios if anuncios is not None else Anuncios.do_ambiente()
         # o JUIZ (12/09, juiz_ponte.py): as regras do jogo em Node. Sem ele, as rotas
         # que precisam conferir respondem 503 — nada é pago sem conferir
         self.juiz = juiz if juiz is not None else Juiz(None)
@@ -1868,6 +1877,8 @@ class Atendente(BaseHTTPRequestHandler):
             # Pago: ?data.id=…&type=…) e os dois cabeçalhos da assinatura dele,
             # também postos DEPOIS do corpo lido
             corpo['_query'] = le_consulta(urlsplit(self.path).query)
+            # a consulta CRUA: a assinatura do AdMob (anuncio.py) é sobre o texto como chegou
+            corpo['_consulta'] = urlsplit(self.path).query
             corpo['_cabecalhos'] = {'x-signature': self.headers.get('x-signature'),
                                     'x-request-id': self.headers.get('x-request-id')}
             status, resposta = self.api.despacha(metodo, caminho, token, corpo)
@@ -1895,6 +1906,9 @@ if __name__ == '__main__':
     ap.add_argument("--play-api", metavar="URL", default=None,
                     help="SÓ PARA AS PROVAS: a Google Play de mentira (tests/play_falso.py), "
                          "http://127.0.0.1:PORTA; a credencial continua vindo do ambiente")
+    ap.add_argument("--anuncio-chaves", metavar="ARQ", default=None,
+                    help="SÓ PARA AS PROVAS: as chaves públicas do AdMob saem deste arquivo (o formato do "
+                         "verifier-keys.json) em vez da Google; a assinatura continua sendo conferida")
     ap.add_argument("--juiz", metavar="URL", default=None,
                     help="o juiz (servidor/juiz/juiz.js), http://127.0.0.1:PORTA — as regras do jogo que "
                          "conferem salas e economia; sem ele, essas rotas respondem 503")
@@ -1911,13 +1925,15 @@ if __name__ == '__main__':
     log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
     play = GooglePlay.do_ambiente(base=base_play)
     log.info("pagamento: %s", play.descricao())       # nunca a chave da conta de serviço
+    anuncios = Anuncios.do_ambiente(arquivo=args.anuncio_chaves)
+    log.info("anúncio: %s", anuncios.descricao())
     juiz = Juiz(args.juiz)
     if args.juiz:
         log.info("juiz: %s — autoridade LIGADA (o servidor manda na economia; docs/SEGURANCA.md)", args.juiz)
     else:
         log.warning("juiz: desligado — autoridade DESLIGADA: o save do cliente vale inteiro e as rotas "
                     "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
-    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play)
+    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play, anuncios=anuncios)
     liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))

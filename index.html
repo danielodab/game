@@ -593,6 +593,9 @@
       });
       // a compra de barras de ouro pela Google Play (a regra da Play: no aplicativo, só a cobrança dela)
       document.write('<scr' + 'ipt src="' + window.__url('js/core/compra_play.js') + '"><\/scr' + 'ipt>');
+      // "Ganhar prêmios": o anúncio premiado, só para quem ENTRA na área e toca no botão. Este arquivo não
+      // carrega nada de anúncio; a ponte e o SDK só sobem quando a área é aberta (js/core/premio_anuncio.js)
+      document.write('<scr' + 'ipt src="' + window.__url('js/core/premio_anuncio.js') + '"><\/scr' + 'ipt>');
     }
   } catch (eApp) {}
 </script>

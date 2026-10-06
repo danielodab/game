@@ -12,7 +12,7 @@ FROM caddy:2-alpine
 # python3 + websockets para a API e o Relé; sqlite para o backup e o admin;
 # su-exec para rodá-los sem root; tini para os sinais e os processos órfãos;
 # nodejs para o JUIZ (servidor/juiz/): as regras do jogo rodando no servidor
-RUN apk add --no-cache python3 py3-websockets sqlite su-exec tini nodejs \
+RUN apk add --no-cache python3 py3-websockets py3-cryptography sqlite su-exec tini nodejs \
  && addgroup -S soterra \
  && adduser -S -G soterra -H -s /sbin/nologin soterra
 

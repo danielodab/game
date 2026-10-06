@@ -95,7 +95,7 @@ atualiza_listas() {
   return 1
 }
 atualiza_listas
-$APT install -y -q python3 python3-websockets sqlite3 rsync cron curl ca-certificates gnupg
+$APT install -y -q python3 python3-websockets python3-cryptography sqlite3 rsync cron curl ca-certificates gnupg
 if ! command -v caddy >/dev/null 2>&1; then
   # o repositório OFICIAL do Caddy (caddyserver.com/docs/install): o Ubuntu
   # 22.04 não tem o pacote, e o do 24.04 é uma versão de 2022

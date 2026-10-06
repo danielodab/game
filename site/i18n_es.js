@@ -1215,5 +1215,7 @@ JOGO.I18n.registra('es', { textos: {
   "Erro": "Error",
   "<h1>Esta página não abriu</h1><div class=\"wk-nota\">Algo nos dados do jogo não bateu com a wiki. Volte ao <a href=\"#/\">início</a>.</div>": "<h1>Esta página no abrió</h1><div class=\"wk-nota\">Algo en los datos del juego no coincidió con la wiki. Vuelve al <a href=\"#/\">inicio</a>.</div>",
   "{a}Wiki do SOTERRA": "{a}Wiki de SOTERRA",
-  "<div class=\"estado fora\">Não deu para ler os dados do jogo (../js/core/data/).</div>": "<div class=\"estado fora\">No se pudieron leer los datos del juego (../js/core/data/).</div>"
+  "<div class=\"estado fora\">Não deu para ler os dados do jogo (../js/core/data/).</div>": "<div class=\"estado fora\">No se pudieron leer los datos del juego (../js/core/data/).</div>",
+  // ---- o extrato das barras: o anúncio premiado do aplicativo (06/10)
+  "anúncio assistido no aplicativo": "anuncio visto en la aplicación"
 } });

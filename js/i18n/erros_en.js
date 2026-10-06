@@ -601,5 +601,13 @@ JOGO.I18n.registra('en', { erros: {
   "Uma vez por conta: um personagem raro à sua escolha (Xamã ou Bruxo), 10 pedras de forja de cada tipo (50 ao todo) e uma aura de elemento para a praça (Brasa, Maré, Raiz ou Vento), também à sua escolha.": "Once per account: a rare character of your choice (Shaman or Warlock), 10 forge stones of each type (50 in all) and an element aura for the plaza (Ember, Tide, Root or Wind), also of your choice.",
   "Xamã": "Shaman",
   "faltam vinténs na carteira do jogo": "not enough coppers in the game wallet",
-  "o jogo não reconheceu o item": "the game did not recognize the item"
+  "o jogo não reconheceu o item": "the game did not recognize the item",
+  // ---- o anúncio premiado do aplicativo (servidor/anuncio.py, 06/10)
+  "os anúncios premiados não estão disponíveis agora": "rewarded ads aren't available right now",
+  "a conta do Mestre não assiste a anúncios": "the Mestre account doesn't watch ads",
+  "prêmio desconhecido": "unknown reward",
+  "o limite de hoje desse prêmio já foi atingido": "today's limit for this reward has been reached",
+  "anúncios demais nesta hora; tente de novo mais tarde": "too many ads this hour; try again later",
+  "Anúncio assistido": "Ad watched",
+  "Vinténs do anúncio": "Coppers from the ad"
 } });

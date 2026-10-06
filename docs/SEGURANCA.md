@@ -259,6 +259,47 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
     `JOGO.Mobile.app()`): regra da Play. Prova: `tests/pagamento_play_api.py` e
     `tests/compra_play.html`.
 
+### 4.5.1 O anúncio premiado do aplicativo (06/10, `servidor/anuncio.py`)
+
+A área "Ganhar prêmios" (só no aplicativo; `docs/GOOGLE_PLAY.md` §10) dá 50 vinténs ou 1 barra
+de ouro por anúncio visto até o fim, 5 de cada por conta por dia de Brasília. **O cliente não
+credita nada**: quem credita é o servidor, e só com a palavra ASSINADA da Google — a
+verificação pelo servidor do AdMob (SSV).
+
+- `POST /api/anuncio/bilhete {tipo}` (com sessão): um bilhete de uso único (`secrets`, 192 bits),
+  ligado à conta e ao TIPO de prêmio, que vale 30 min. Freio: 30 por conta e 90 por IP por hora.
+  O Mestre não recebe bilhete (o dono não clica no próprio anúncio); a conta banida não chega à rota.
+- O anúncio leva `custom_data` = bilhete e `user_id` = um hmac da conta com o segredo do servidor.
+- `GET /api/anuncio/premio?…&signature=…&key_id=…` (SEM sessão; quem chama é a Google). O servidor:
+  1. confere a **assinatura** ECDSA P-256/SHA-256 sobre a consulta CRUA (tudo antes de
+     `&signature=`), com a chave pública `key_id` de
+     `https://www.gstatic.com/admob/reward/verifier-keys.json` (cache de 24 h; id desconhecido
+     refaz a busca, no máximo uma vez por minuto). A conta é da biblioteca `cryptography` — não
+     há curva elíptica escrita à mão. **Sem assinatura válida: 403 e nada mais é lido**;
+  2. `ad_unit` tem de ser o bloco do jogo;
+  3. o bilhete existe, o `user_id` é o da conta DELE (`hmac.compare_digest`), não foi usado, não
+     venceu; a conta não está banida nem é Mestre;
+  4. o `transaction_id` é `UNIQUE` em `propaganda_premios`: o mesmo nunca credita duas vezes (a
+     Google repete o aviso), e o movimento leva `idem`;
+  5. o limite do dia DAQUELE tipo (`propaganda_premios` por conta, tipo e dia);
+  6. credita pelo caminho de sempre, na mesma `_escrita`: a barra por `barras_move` (motivo
+     `presente` no banco — o `CHECK` da tabela não se altera no rolling update — com a `ref`
+     `anuncio:<id>`, que o extrato mostra como `anuncio`); os vinténs por `credita` (o pedido de
+     preço 0 `anuncio-vintens`, que o juiz aplica como o presente de vinténs).
+- **O prêmio é o do bilhete**: `reward_item` e `reward_amount` do pedido não são lidos.
+- O que cada fraude encontra: pedido forjado → sem a chave privada da Google não há assinatura;
+  consulta adulterada (trocar o bilhete, a conta) → a assinatura deixa de conferir; repetir o
+  aviso → `transaction_id`; reusar o bilhete → `usado_em`; bilhete de outro → o `user_id` não
+  bate; cliente modificado que "pula" o anúncio → nenhum aviso da Google, nenhum prêmio; pedir
+  bilhetes em massa → o freio, e o limite do dia é contado no CRÉDITO, não no bilhete.
+- Com a assinatura boa a resposta é sempre 200 (`creditado`, `motivo`): a Google repete o que não
+  leva 200, e repetir um bilhete gasto não muda nada.
+- **Não há modo sem conferência.** As provas trocam só a FONTE das chaves (`--anuncio-chaves ARQ`,
+  linha de comando, nunca variável de ambiente nem padrão): o par é gerado na prova e a
+  assinatura é conferida do mesmo jeito. Sem a `cryptography` a área responde 503.
+- No cliente (`js/core/premio_anuncio.js`): nada de anúncio antes de o jogador ENTRAR na área, e
+  o anúncio só é pedido depois do toque. Provas: `tests/anuncio_api.py`, `tests/premio_anuncio.js`.
+
 ### 4.6 A troca
 `POST /api/troca` move itens (por iid), bichos e vinténs entre os DOIS estados do
 servidor numa transação: o juiz tira do estado de quem dá e põe no de quem recebe

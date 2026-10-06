@@ -125,7 +125,8 @@
   var ELEMENTOS = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
   var MOTIVO_BARRAS = { pacote: Tx('pacote pago'), loja: Tx('compra na loja'), 'estorno-loja': Tx('devolvidas: pedido cancelado ou recusado'),
                         'troca-vintens': Tx('troca com vinténs'), presente: Tx('presente do Mestre'),
-                        'estorno-pagamento': Tx('pagamento estornado'), ajuste: Tx('ajuste do dono do jogo') };
+                        'estorno-pagamento': Tx('pagamento estornado'), ajuste: Tx('ajuste do dono do jogo'),
+                        anuncio: Tx('anúncio assistido no aplicativo') };
 
   /* ---- as barras de ouro (13/09) ---- */
   /* a barra de ouro desenhada à mão: a face de cima clara, a da frente mais funda, um brilho */

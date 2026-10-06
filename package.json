@@ -10,6 +10,7 @@
     "icones": "npx @capacitor/assets generate --android"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.2.0",
     "@capacitor-community/keep-awake": "^8.0.1",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.2",

@@ -84,6 +84,8 @@ CAPACITOR = [
     ('node_modules/@capacitor-community/keep-awake/dist/plugin.js', 'keep-awake.js'),
     # a compra de barras pela Google Play (js/core/compra_play.js)
     ('node_modules/@capgo/native-purchases/dist/plugin.js', 'native-purchases.js'),
+    # o anuncio premiado (js/core/premio_anuncio.js): so e pedido quando o jogador ENTRA na area
+    ('node_modules/@capacitor-community/admob/dist/plugin.js', 'admob.js'),
 ]
 
 # A Play recusa o que passa disto no download inicial. A www/ fica muito

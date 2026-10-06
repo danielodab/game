@@ -51,3 +51,18 @@ limite e entrega (`servidor/loja.py`; o porquê de cada trava em `docs/SEGURANCA
 | **Presentear um amigo** | o preço do produto no dia | 3 presentes por dia; moeda e o Pacote não se presenteiam |
 
 O Pacote cabe no Saco de 280 barras (R$ 19,90), com 30 de troco: a primeira compra é uma só.
+
+## O que já entrou (06/10/2026): "Ganhar prêmios", o anúncio premiado
+
+Só no aplicativo de Android, opcional, nas Configurações. O jogador escolhe o prêmio e assiste a
+um anúncio até o fim. Anúncio só ali e só depois do toque — o jogo não tem banner nem anúncio
+automático (`docs/GOOGLE_PLAY.md` §10; `docs/SEGURANCA.md` §4.5.1).
+
+| prêmio | por anúncio | limite |
+|---|---|---|
+| vinténs | 50 | 5 por conta por dia |
+| barra de ouro | 1 | 5 por conta por dia |
+
+No teto, um jogador tira 5 barras e 250 vinténs por dia sem pagar. As 5 barras por dia são 150 por
+mês: metade de um Saco de 280 — devagar o bastante para a barra continuar valendo. A troca de
+vinténs por barras da loja não mudou. Os números são constantes em `servidor/anuncio.py`.

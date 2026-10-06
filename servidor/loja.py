@@ -570,6 +570,12 @@ def nome_do_pedido(sku, entrega=None, vintens=None):
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
         if isinstance(n, int) and not isinstance(n, bool) and n > 0:
             return '%s vinténs' % milhar(n)
+    # 06/10: os vinténs do anúncio premiado do aplicativo (anuncio.py)
+    if sku == 'anuncio-vintens':
+        n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return '%s vinténs (anúncio)' % milhar(n)
+        return 'Vinténs do anúncio'
     # 02/10: os prêmios da semana do Eco Primordial (supremo.py)
     if isinstance(sku, str) and sku.startswith('eco-'):
         n = entrega.get('qtd') if isinstance(entrega, dict) else None
@@ -794,6 +800,10 @@ class LojaMixin:
                 m['pedido'] = int(r['ref'][7:]) if r['ref'][7:].isdigit() else None
             if r['por'] is not None:
                 m['por'] = {'id': r['por'], 'nome': r['por_nome']}
+            # 06/10: a barra do anúncio premiado (anuncio.py). No banco o motivo é 'presente' (o CHECK da
+            # tabela não se altera no rolling update); a `ref` diz a origem, e é ela que o extrato mostra
+            if (r['ref'] or '').startswith('anuncio:'):
+                m['motivo'], m['nome'] = 'anuncio', 'Anúncio assistido'
             saida.append(m)
         return saida
 

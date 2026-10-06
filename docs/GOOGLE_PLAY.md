@@ -266,7 +266,11 @@ de 02/10/2026). Se a política mudar, este formulário muda junto.
 | Atividade no app → **Interações no app** | o progresso (heróis, itens, salas, duelos), amigos, guilda, mercado | obrigatório | Funcionalidade do app; Prevenção de fraudes, segurança e conformidade |
 | Informações e desempenho do app → **Registros de falhas** e **Diagnóstico** | a mensagem do erro, a versão do jogo, a tela e o tipo de navegador | obrigatório | Análise; Funcionalidade do app |
 
-**O que NÃO se marca** (seção 3 da política): localização, contatos, fotos e
+> **06/10 — com o anúncio premiado (seção 10) este formulário MUDA:** o SDK de
+> anúncios da Google coleta o identificador de publicidade e deduz o local
+> aproximado. O que acrescentar está na seção 10.4.
+
+**O que NÃO se marca** (seção 3 da política; ver o aviso acima): localização, contatos, fotos e
 vídeos, arquivos, agenda, áudio, saúde, navegação na web, identificadores do
 aparelho ou de publicidade. Dados de cartão, Pix e CPF não passam pelo jogo.
 
@@ -300,7 +304,8 @@ países de uma vez — no Brasil, a do ClassInd. As respostas do SOTERRA:
 | **O app permite comprar itens digitais?** | **Sim** — as barras de ouro, pela cobrança da Google (seção 9) |
 
 O resultado esperado é **Livre ou 10 anos**, com os avisos "Interação entre
-usuários" e "Compras no app".
+usuários" e "Compras no app". Com a área "Ganhar prêmios" (seção 10) entra também
+o aviso **"Contém anúncios"**.
 
 À parte, a Play pergunta o **público-alvo**. Marque **13 anos ou mais** (ou só
 18+): marcar faixas abaixo de 13 põe o aplicativo no programa "Feito para
@@ -666,3 +671,175 @@ aparelho mostra:
    item") foram lidos no código dele; um aparelho pode mostrar outro caso.
 5. **Os nomes dos menus do Play Console** mudam de tempos em tempos: se um
    caminho acima não existir, procure pelo nome da função.
+
+---
+
+## 10. "Ganhar prêmios": o anúncio premiado (AdMob) — o que fazer
+
+**O que é (06/10/2026).** Uma área **opcional**, só no aplicativo, nas
+Configurações → **Ganhar prêmios**. O jogador entra, escolhe o prêmio e toca em
+**Assistir anúncio**. Visto até o fim, ganha:
+
+| prêmio | por anúncio | limite por conta, por dia (vira à 00:00 de Brasília) |
+|---|---|---|
+| vinténs | **50** | **5** |
+| barra de ouro | **1** | **5** |
+
+Os dois limites são separados (até 10 anúncios por dia, 5 de cada). Fechou antes
+do fim: não ganha nem perde. Os números moram em `servidor/anuncio.py`
+(`ANUNCIO_VINTENS`, `ANUNCIO_BARRAS`, `ANUNCIO_MAX_DIA`): mudar é mexer ali e
+publicar o servidor — não precisa de AAB novo. A troca de vinténs por barras da
+loja não mudou.
+
+**A regra que não se quebra** (sua, e cobrada por `node tests/premio_anuncio.js`):
+anúncio **só** nessa área e **só** depois do toque. Não há banner, intersticial
+nem anúncio de abertura; nada de anúncio é carregado, ligado ou perguntado antes
+de o jogador **entrar** na área (nem a tela de privacidade da Google); na web a
+área não existe e nenhum código de anúncio é pedido.
+
+**Quem dá o prêmio é o servidor**, e só quando a **Google** o avisa com a
+assinatura dela (a "verificação pelo servidor", SSV). O aplicativo nunca credita
+nada. Ver [`SEGURANCA.md`](SEGURANCA.md), "O anúncio premiado".
+
+### 10.1 Antes de tudo: é preciso um AAB novo
+
+O plugin de anúncio (`@capacitor-community/admob` 8.2.0) é código **nativo**: ele
+só existe no aplicativo depois de **recompilar**. Na pasta onde você compila:
+
+```
+git pull
+npm install
+npm run sync          (monta a www/ e roda o npx cap sync android)
+```
+
+Depois, o de sempre (seção 1.4): subir o `versionCode`, gerar o AAB assinado,
+enviar. Quem está com o aplicativo antigo **não vê nada quebrar**: a tela da
+área diz "Atualize o aplicativo pela Play Store". O `AndroidManifest.xml` já leva
+o id do aplicativo no AdMob (`ca-app-pub-4989579635131748~7013903357`) e a
+permissão `AD_ID`.
+
+O servidor precisa da biblioteca `cryptography` (para conferir a assinatura): o
+`Dockerfile` já a instala (`py3-cryptography`); basta **reimplantar** no Coolify.
+Sem ela a área responde "não disponível" e nada é creditado.
+
+### 10.2 Colar a URL de verificação no bloco premiado (AdMob)
+
+1. Abra **https://admob.google.com** → **Apps** → SOTERRA → **Blocos de anúncios**
+   → o bloco premiado (`ca-app-pub-4989579635131748/7206484209`).
+2. Em **Configurações avançadas** → **Verificação pelo servidor** (Server-side
+   verification), cole exatamente:
+
+   ```
+   https://soterra.viidoo.io/api/anuncio/premio
+   ```
+
+3. Clique em **Verificar URL**. O servidor responde 200 (com
+   `"creditado": false`, porque o teste da Google não traz bilhete) — é o
+   esperado. Salve.
+4. A "recompensa" cadastrada no bloco (nome e quantidade) **não importa**: o
+   servidor ignora o que vem ali e dá o prêmio do bilhete. Pode deixar "1 premio".
+
+A mudança leva até **algumas horas** para valer nos anúncios.
+
+### 10.3 Cadastrar o SEU telefone como aparelho de teste
+
+**Clicar no próprio anúncio de verdade suspende a conta do AdMob.** Proteções
+que já existem:
+
+- o APK de **depuração** (o do `Run` no Android Studio) usa sempre o bloco de
+  **teste** da Google (`ca-app-pub-3940256099942544/5224354917`), nunca o seu.
+  Ali o anúncio aparece com a faixa "Test Ad" e **o prêmio não chega** (o bloco
+  de teste é da Google e não avisa o seu servidor) — a tela diz isso;
+- a conta do **Mestre** não recebe bilhete: logado como Mestre, os botões ficam
+  apagados.
+
+Para testar o caminho inteiro (AAB de verdade, conta de jogador comum) sem risco,
+cadastre o telefone:
+
+1. No telefone: **Configurações → Google → Anúncios** e copie o **ID de
+   publicidade** (se estiver apagado, crie um novo ali).
+2. No AdMob: **Configurações → Dispositivos de teste → Adicionar dispositivo de
+   teste** → Android → cole o ID → dê um nome → Salvar.
+3. Espere uns 15 minutos. Abra o jogo, vá em **Ganhar prêmios**: o anúncio tem de
+   vir com a faixa **"Test Ad" / "Anúncio de teste"**. **Sem a faixa, não toque no
+   anúncio** e feche.
+
+(Outro caminho, se o painel não bastar: a variável
+`SOTERRA_ANUNCIO_APARELHOS_TESTE` no Coolify, com o código do aparelho que o SDK
+escreve no Logcat — a linha "Use RequestConfiguration.Builder().setTestDeviceIds" —,
+separados por vírgula.)
+
+### 10.4 O que muda no Play Console
+
+| onde | o que marcar |
+|---|---|
+| **Conteúdo do app → Anúncios** | **Sim, meu app contém anúncios.** A ficha da loja passa a mostrar "Contém anúncios" |
+| **Conteúdo do app → ID de publicidade** | **Sim, usa o ID de publicidade** — finalidade: **Publicidade ou marketing** (o manifesto leva `com.google.android.gms.permission.AD_ID`) |
+| **Segurança dos dados** (seção 4) | acrescentar o que o **SDK da Google** coleta (abaixo) |
+| **Público-alvo** (seção 5) | segue **13 anos ou mais**. Com anúncio, marcar faixa abaixo de 13 obrigaria a anúncios certificados para famílias — **não marque** |
+| **Classificação indicativa** | no questionário, responder **Sim** a "o app exibe anúncios" se perguntado |
+
+**Segurança dos dados — o que acrescentar** (a Google publica a lista do SDK na
+página "Preparar-se para os requisitos de divulgação de dados do Google Play" da
+ajuda do AdMob; confira lá na hora de preencher, porque ela muda):
+
+| tipo (nome da Play) | coletado | compartilhado | finalidades |
+|---|---|---|---|
+| Identificadores do aparelho ou outros → **IDs do dispositivo ou outros IDs** (o ID de publicidade) | Sim | **Sim** (com a Google, para anúncio) | Publicidade ou marketing; Análise; Prevenção de fraudes |
+| Atividade no app → **Interações no app** (ver e tocar no anúncio) | Sim | Sim | Publicidade ou marketing; Análise |
+| Informações e desempenho do app → **Diagnóstico** e **Registros de falhas** | Sim | Sim | Análise |
+| Local → **Local aproximado** (deduzido do IP pelo SDK) | Sim | Sim | Publicidade ou marketing |
+
+Em todos: *opcional* (só para quem entra na área e assiste). O parágrafo "O que
+NÃO se marca" da seção 4 deixa de valer para o **identificador de publicidade** e
+para o **local aproximado** — os dois passam a ser marcados por causa do SDK.
+**Confira com o advogado** (`REVISAO_JURIDICA.md`).
+
+O anúncio é pedido com classificação máxima **"T" (adolescente)** — combina com
+o público de 13 anos ou mais. Está em `js/core/premio_anuncio.js`
+(`maxAdContentRating`).
+
+### 10.5 Depois de publicado: vincular o app à loja e o app-ads.txt
+
+1. No AdMob → **Apps** → SOTERRA → **Configurações do app** → **Loja de apps** →
+   **Adicionar** → procure `br.com.soterra.jogo`. Só aparece depois que o
+   aplicativo estiver **publicado** na Play. Sem o vínculo o AdMob limita a
+   veiculação.
+2. O AdMob pede o **app-ads.txt** no site que consta na ficha da Play como "site
+   do desenvolvedor". O conteúdo é a linha que o AdMob mostra em **Apps →
+   app-ads.txt** (algo como `google.com, pub-4989579635131748, DIRECT,
+   f08c47fec0942fa0` — copie a de lá). Ela tem de responder em
+   `https://<o site da ficha>/app-ads.txt`. **Este arquivo ainda não existe no
+   repositório**: crie-o quando decidir o domínio da ficha.
+3. **Pagamentos** do AdMob: preencher os dados fiscais e a forma de recebimento.
+4. **Privacidade e mensagens** (AdMob): se o jogo for oferecido na Europa ou no
+   Reino Unido, crie ali a **mensagem de consentimento**. O aplicativo já mostra
+   a tela da Google quando ela é exigida — e só ao entrar na área.
+
+### 10.6 Ligar e desligar
+
+- `SOTERRA_ANUNCIOS=0` no Coolify desliga a área (a tela diz "não disponível").
+- `SOTERRA_ANUNCIO_BLOCO` troca o bloco sem AAB novo (o aplicativo lê o bloco do
+  servidor).
+
+### 10.7 O que não pôde ser provado sem aparelho e sem a Google
+
+O servidor foi provado com um par de chaves de prova fazendo o papel da Google
+(`python tests/anuncio_api.py`), e a tela com um plugin de mentira
+(`node tests/premio_anuncio.js`). Falta, e só o aparelho mostra:
+
+1. **O projeto compila** com o plugin (o `npx cap update android` passou aqui;
+   nada foi compilado). Se o Gradle reclamar de versão, olhe primeiro o `minSdk`
+   (24) e o `compileSdk` (36) em `android/variables.gradle`.
+2. **A Google chamando o servidor de verdade**: o formato do pedido e a conta da
+   assinatura foram escritos pela documentação do AdMob e nunca viram um pedido
+   real. O botão **Verificar URL** (10.2) é a primeira prova; a segunda é um
+   anúncio visto até o fim num aparelho cadastrado, com o contador andando. Se a
+   Google **não avisar o servidor em anúncio de teste** no seu bloco, a tela vai
+   dizer "a confirmação ainda não chegou" — aí só um jogador comum, com anúncio
+   de verdade, fecha a prova.
+3. **A tela de privacidade da Google** e o anúncio em tela cheia por cima do
+   jogo; o botão voltar durante o anúncio.
+4. **Quanto tempo a Google leva** para avisar: a tela espera até uns 30 s e
+   depois diz que o prêmio entra sozinho.
+5. **Os nomes dos menus** do AdMob e do Play Console mudam de tempos em tempos.

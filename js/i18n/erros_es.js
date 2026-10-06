@@ -601,5 +601,13 @@ JOGO.I18n.registra('es', { erros: {
   "Uma vez por conta: um personagem raro à sua escolha (Xamã ou Bruxo), 10 pedras de forja de cada tipo (50 ao todo) e uma aura de elemento para a praça (Brasa, Maré, Raiz ou Vento), também à sua escolha.": "Una vez por cuenta: un personaje raro a tu elección (Chamán o Brujo), 10 piedras de forja de cada tipo (50 en total) y un aura de elemento para la plaza (Brasa, Marea, Raíz o Viento), también a tu elección.",
   "Xamã": "Chamán",
   "faltam vinténs na carteira do jogo": "faltan vintenes en la cartera del juego",
-  "o jogo não reconheceu o item": "el juego no reconoció el objeto"
+  "o jogo não reconheceu o item": "el juego no reconoció el objeto",
+  // ---- o anúncio premiado do aplicativo (servidor/anuncio.py, 06/10)
+  "os anúncios premiados não estão disponíveis agora": "los anuncios con premio no están disponibles ahora",
+  "a conta do Mestre não assiste a anúncios": "la cuenta del Mestre no ve anuncios",
+  "prêmio desconhecido": "premio desconocido",
+  "o limite de hoje desse prêmio já foi atingido": "ya alcanzaste el límite de hoy para este premio",
+  "anúncios demais nesta hora; tente de novo mais tarde": "demasiados anuncios en esta hora; inténtalo más tarde",
+  "Anúncio assistido": "Anuncio visto",
+  "Vinténs do anúncio": "Vintenes del anuncio"
 } });

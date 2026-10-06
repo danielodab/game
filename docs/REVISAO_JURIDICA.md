@@ -43,6 +43,31 @@ de ler os dois, preencher o que falta e decidir as questões abaixo.
    de um teste de balanceamento documentado.
 6. **Suspensão e banimento**: os Termos descrevem medidas graduais e o direito de
    contestar pelo e-mail; alinhar com o que o painel do Mestre de fato faz.
+7. **Publicidade e menores de idade (06/10).** O aplicativo de Android ganhou a área
+   opcional "Ganhar prêmios": o jogador escolhe assistir a um anúncio (Google AdMob) e
+   recebe 50 vinténs ou 1 barra de ouro, até 5 de cada por dia. Não há anúncio em nenhum
+   outro lugar, e o serviço de anúncios só é ligado quando o jogador entra na área. Mesmo
+   assim, a partir daí a Google coleta o **identificador de publicidade**, o IP (local
+   aproximado) e a interação com o anúncio. Pontos para decidir:
+   - a Política ganhou três trechos (seção 4, a exceção; seção 6, "Google (AdMob)"; seção
+     10, o item da propaganda e um parágrafo) **sem subir a `VERSAO_TERMOS`** nem pedir novo
+     aceite. A seção 10 PROMETIA "não mostra propaganda de terceiros": o texto mudou para
+     abrir a exceção. **Isso muda um compromisso** — avaliar se a versão tem de subir e o
+     aceite ser pedido de novo ANTES de o aplicativo com anúncios ser publicado (se sim, é o
+     passo descrito logo abaixo);
+   - **base legal** para o dado de publicidade (consentimento? a tela de consentimento da
+     Google só aparece onde a Google a exige — Europa e Reino Unido —, não no Brasil);
+   - **menores**: LGPD art. 14, ECA e a Lei 15.211/2025 (ECA Digital) quanto a publicidade
+     dirigida a crianças e adolescentes e ao uso de dados deles para perfil. Hoje o anúncio
+     é pedido com limite de conteúdo "adolescente" e a Play declara público de 13+, mas o
+     jogo **não sabe a idade** de quem assiste: decidir se o anúncio deve ser só **não
+     personalizado**, se a área deve ficar fechada a quem declarou menos de 18, ou se basta
+     o que está;
+   - recompensa por assistir a anúncio: confirmar que não esbarra em regra de publicidade
+     infantil (incentivo a consumir publicidade);
+   - **transferência internacional** (a Google) e a lista de "com quem dividimos";
+   - os Termos (seção 5, barras e vinténs) não falam do prêmio por anúncio: avaliar uma
+     linha dizendo que ele é um bônus, sem valor em dinheiro, que pode acabar ou mudar.
 
 Quando qualquer um dos dois documentos mudar de um jeito que mude direito ou
 dever de alguém: suba a data em `servidor/privacidade.py` (`VERSAO_TERMOS`),
@@ -94,3 +119,6 @@ Quando o texto em português mudar: a frase mudada **volta a aparecer em portugu
 páginas traduzidas até a tradução ser refeita (`node tools/i18n_falta.js --lista` mostra quais).
 Os e-mails automáticos (código de senha, avisos, conta excluída) também existem nos três
 idiomas (`servidor/conta.py`, `EMAILS`; `servidor/privacidade.py`, `EXCLUIDA`).
+
+As três frases novas da Política sobre publicidade (06/10) também foram traduzidas por máquina
+para o inglês e o espanhol, no fim de `site/i18n_juridico_en.js` e `_es.js`: revisar junto.

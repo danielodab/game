@@ -323,11 +323,19 @@ Os quatro arquivos do Capacitor (`vendor/capacitor/`) são carregados pelo
 `js/app_modelos.js` e o `js/core/compra_play.js` só são escritos pelo `index.html` dentro do aplicativo: a web
 não pede nenhum dos quatro.
 
+**06/10 — "Ganhar prêmios" (o anúncio premiado).** Um quinto arquivo, `vendor/capacitor/admob.js`, mora
+na mesma pasta mas **não** entra na lista do `js/mobile.js`: quem o busca é o
+`js/core/premio_anuncio.js`, e só quando o jogador ENTRA na área (Configurações → Ganhar prêmios). A
+regra do dono é anúncio só ali e só depois do toque; o prêmio (50 vinténs ou 1 barra de ouro, 5 de cada
+por dia) é dado pelo servidor com a assinatura da Google. O passo a passo está em
+[`GOOGLE_PLAY.md`](GOOGLE_PLAY.md) §10.
+
 ### As provas
 
 ```bash
 node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa · a escolha vence · onde mora a API
 # tests/app_casca.html             # botão voltar, segundo plano e tela acesa, com eventos simulados
+node tests/premio_anuncio.js     # anúncio só na área e só depois do toque · a web não carrega nada · depuração usa bloco de teste
 node tests/app_modelos.js         # o que baixar/apagar pelo manifesto · retomada · MB · a web não usa · a casca
 # tests/app_modelos.html           # a escolha, o progresso, a rede que cai, apagar, o Cache Storage de verdade
 node tests/app_jogo.js            # o jogo guardado: o que é interceptado, hash igual/diferente, apagar, as válvulas, a web não usa

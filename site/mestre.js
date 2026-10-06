@@ -277,7 +277,7 @@
   /* 13/09: as barras de ouro da conta — o saldo, o formulário do presente e os últimos movimentos */
   var MOTIVO_BARRAS = { pacote: 'pacote pago', loja: 'compra na loja', 'estorno-loja': 'devolvidas (pedido cancelado ou recusado)',
                         'troca-vintens': 'troca com vinténs', presente: 'presente do Mestre',
-                        'estorno-pagamento': 'pagamento estornado', ajuste: 'ajuste do dono' };
+                        'estorno-pagamento': 'pagamento estornado', ajuste: 'ajuste do dono', anuncio: 'anúncio assistido' };
   function desenhaBarras(c) {
     var b = (ficha.barras && typeof ficha.barras === 'object') ? ficha.barras : null;
     $('ms-barras').disabled = ocupado || !!c.banido || !b;

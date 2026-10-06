@@ -506,6 +506,9 @@ class PrivacidadeMixin:
             'compras_google_play': self._lista("SELECT pacote, barras, centavos, estado, teste, criado_em, creditado_em, "
                                                "estornado_em FROM pagamentos_play WHERE conta_id = ? ORDER BY id DESC",
                                                (cid,)),
+            # 06/10: os prêmios do anúncio premiado do aplicativo (anuncio.py), sem o bilhete nem a transação da Google
+            'premios_de_anuncio': self._lista("SELECT tipo, qtd, criado_em FROM propaganda_premios WHERE conta_id = ? "
+                                              "ORDER BY id DESC", (cid,)),
             'mercadinho': {
                 'anuncios': self._lista("SELECT item_id, level, stars, preco, estado, criado_em, valor_final, fechado_em "
                                         "FROM mercado_anuncios WHERE vendedor_id = ? ORDER BY id DESC", (cid,)),

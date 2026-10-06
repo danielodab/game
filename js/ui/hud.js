@@ -9858,6 +9858,16 @@ var JOGO = (typeof window !== 'undefined')
       secBarras.appendChild(btn(tr('Comprar barras de ouro'), 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
       body.appendChild(secBarras);
     }
+    /* GANHAR PRÊMIOS (06/10): o anúncio premiado, também só no aplicativo (na web `JOGO.PremioAnuncio` não é
+     * carregado). A regra do dono: anúncio SÓ para quem entra nesta área e toca no botão — nada de anúncio é
+     * carregado, ligado ou mostrado antes disso (js/core/premio_anuncio.js; o prêmio é do servidor). */
+    if (JOGO.PremioAnuncio && JOGO.PremioAnuncio.noApp()) {
+      var secPremio = el('section', 'cfg-sec');
+      secPremio.appendChild(el('h3', 'bk-tit', tr('Ganhar prêmios')));
+      secPremio.appendChild(el('p', 'inv-dica', tr('Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.')));
+      secPremio.appendChild(btn(tr('Ganhar prêmios'), 'btn-ghost btn-block', function () { JOGO.PremioAnuncio.abre(); }));
+      body.appendChild(secPremio);
+    }
 
     // os atalhos só fazem sentido com teclado — no aparelho de toque a seção não aparece
     var toque = safe(function () { return !!(JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()); }, false);
@@ -11966,6 +11976,7 @@ var JOGO = (typeof window !== 'undefined')
   UI.voltar = function () {
     // a tela da compra pela Google Play (só no aplicativo) fica por cima de tudo: fecha primeiro
     if (JOGO.CompraPlay && JOGO.CompraPlay.aberto && JOGO.CompraPlay.aberto()) { JOGO.CompraPlay.fecha(); return true; }
+    if (JOGO.PremioAnuncio && JOGO.PremioAnuncio.aberto && JOGO.PremioAnuncio.aberto()) { JOGO.PremioAnuncio.fecha(); return true; }
     if (sheetName) { closeSheet(); return true; }
     var p = painelVivo();
     if (p && !p.classList.contains('is-off')) { fechaPainel(); return true; }
