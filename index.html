@@ -574,6 +574,23 @@
     if (/[?&]app=1(&|$)/.test(location.search) ||
         (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
       document.write('<scr' + 'ipt src="' + window.__url('js/app_modelos.js') + '"><\/scr' + 'ipt>');
+      // O CÓDIGO DO JOGO GUARDADO NO APARELHO (06/10): js/app_jogo.js registra o /sw.js, que guarda os .js e
+      // .css com hash para o aplicativo abrir mais rápido. O jogo segue SOMENTE ONLINE: esta página e o
+      // js/versao.js vêm sempre da rede. A VÁLVULA é a linha abaixo: `false` e publicar → na abertura seguinte
+      // cada aparelho desregistra o service worker e apaga o cache, AQUI MESMO, sem depender de arquivo guardado.
+      window.__guardaJogo = true;
+      if (window.__guardaJogo === false && navigator.serviceWorker) {
+        try {
+          navigator.serviceWorker.getRegistrations().then(function (rs) {
+            for (var i = 0; i < rs.length; i++) rs[i].unregister();
+          });
+          if (window.caches) window.caches.delete('soterra-jogo-1');
+        } catch (eSw) {}
+      }
+      document.write('<scr' + 'ipt src="' + window.__url('js/app_jogo.js') + '"><\/scr' + 'ipt>');
+      window.addEventListener('load', function () {
+        try { if (window.JOGO && window.JOGO.AppJogo) window.JOGO.AppJogo.abre(); } catch (eAj) {}
+      });
       // a compra de barras de ouro pela Google Play (a regra da Play: no aplicativo, só a cobrança dela)
       document.write('<scr' + 'ipt src="' + window.__url('js/core/compra_play.js') + '"><\/scr' + 'ipt>');
     }

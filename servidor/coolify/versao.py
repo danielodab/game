@@ -194,10 +194,23 @@ def grava_marcas(raiz, arquivos):
     return n
 
 
+def do_jogo(rel):
+    """O que o aplicativo de Android guarda no aparelho (sw.js, js/app_jogo.js):
+    os .js e .css do jogo. O site, o próprio sw.js e o js/versao.js ficam de
+    fora. A MESMA regra está em js/app_jogo.js (doJogo) — mude as duas."""
+    return rel.endswith(EXTENSOES) and not rel.startswith('site/') and rel != 'sw.js'
+
+
+def peso_do_jogo(raiz, arquivos):
+    """Os bytes (sem compressão) do que o aplicativo guarda: é o número que a
+    tela mostra ao jogador antes de ele escolher."""
+    return sum(os.path.getsize(os.path.join(raiz, *rel.split('/'))) for rel in arquivos if do_jogo(rel))
+
+
 def escreve(raiz, arquivos):
     versao = impressao('\n'.join('%s %s' % kv for kv in sorted(arquivos.items())).encode('utf-8'))
     dados = {'versao': versao, 'gerado': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-             'arquivos': arquivos}
+             'arquivos': arquivos, 'peso': peso_do_jogo(raiz, arquivos)}
     texto = ('// GERADO no build por servidor/coolify/versao.py — não edite nem versione.\n'
              '// O index.html pede cada arquivo com o hash dele: o que não mudou mantém\n'
              '// o endereço entre deploys e fica no cache do navegador.\n'

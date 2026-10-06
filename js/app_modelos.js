@@ -327,6 +327,11 @@ var JOGO = (typeof window !== 'undefined')
     return Promise.resolve(null);
   }
 
+  /* O CÓDIGO DO JOGO (06/10, js/app_jogo.js): nas duas opções o que desce fica guardado; no "Baixar
+   * tudo" o resto desce junto, em pano de fundo. Sem o AppJogo (ou desligado), nada muda aqui. */
+  function jogoGuardado() { var G = JOGO.AppJogo; return !!(G && G.ligado && G.ligado()); }
+  function pesoJogo() { return jogoGuardado() ? (JOGO.AppJogo.peso() || 0) : 0; }
+
   /* A PRIMEIRA ABERTURA: as duas opções. */
   function telaEscolha(p, segue) {
     var cx = caixa(Tx('Modelos do jogo'));
@@ -334,9 +339,12 @@ var JOGO = (typeof window !== 'undefined')
     botao(cx, 'am-agora', Tx('Jogar agora'),
           Tx('Abre na hora. Cada mapa baixa o que precisa na primeira vez e fica guardado no aparelho.'), '#2a3038',
           function () { A.escolhe('agora'); fecha(); segue(); });
-    botao(cx, 'am-tudo', Tx('Baixar tudo — {a} MB', { a: A.mb(p.faltam) }),
+    // com o código do jogo junto (js/app_jogo.js): o número do botão é o que vai ocupar no aparelho
+    botao(cx, 'am-tudo', Tx('Baixar tudo — {a} MB', { a: A.mb(p.faltam + pesoJogo()) }),
           Tx('Baixa o pacote inteiro agora. Depois os mapas abrem sem esperar e sem gastar dados.'), '#3a2f16',
           function () { pedeTudo(p, segue, true); });
+    if (jogoGuardado()) paragrafo(cx, Tx('O jogo também fica guardado no aparelho, para abrir mais rápido. Mesmo assim, é preciso internet para entrar e jogar.'), 'am-online')
+      .style.fontSize = '13.5px';
     var r = A.rede(conexao());
     paragrafo(cx, r === 'movel' ? Tx('Você está nos dados móveis: baixar tudo gasta {a} MB do seu plano.', { a: A.mb(p.faltam) })
                 : r === 'wifi' ? Tx('Você está no Wi-Fi.') : Tx('Se puder, baixe tudo no Wi-Fi.'), 'am-rede')
@@ -367,6 +375,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function comeca(p, segue) {
     A.escolhe('tudo');
+    try { if (jogoGuardado()) JOGO.AppJogo.completa(); } catch (e) {}   // o código do jogo, em pano de fundo
     // pede ao WebView para não despejar este armazenamento por conta própria (onde ele atende)
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then(null, function () {}); } catch (e) {}
     telaProgresso(p, segue);

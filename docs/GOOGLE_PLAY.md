@@ -411,6 +411,14 @@ WebView, e a parte nativa (o Capacitor e os plugins) vai inteira no AAB.
 | **A ficha e a classificação continuam verdadeiras** | o jogo ganha chat, compra ou conteúdo novo e a ficha não acompanha | mudou algo assim na web → refaça o questionário de classificação e a *Segurança dos dados* no Play Console, mesmo sem enviar AAB |
 | **Links para fora** | — | qualquer domínio que não seja o do jogo abre no navegador do aparelho, não dentro do aplicativo |
 
+**O jogo guardado no aparelho (06/10) não muda nada disto.** São arquivos do
+próprio jogo num cache do aplicativo, para abrir mais rápido; o jogo continua
+somente online e a tela "Sem conexão" continua valendo. **O formulário de
+*Segurança dos dados* não muda:** nada novo é coletado nem enviado — o que se
+guarda são arquivos públicos do jogo, no aparelho, e nenhum dado do jogador.
+Nenhuma permissão nova do Android, nenhum plugin novo, **nenhum AAB novo**.
+Se a ficha da loja disser "jogue offline", está errada: não diga.
+
 O próprio Capacitor escreve, na documentação do `server.url`, que ele foi
 pensado para desenvolvimento e "não para produção". **Não é uma proibição da
 loja**; é um aviso de que o aplicativo passa a depender do servidor: sem
@@ -473,6 +481,25 @@ provado no Chrome com a casca fingida — falta o telefone:
 10. **A compra pela Google** (seção 9.5): a tela da Google abre, as barras
     entram, e o mesmo pacote pode ser comprado de novo em seguida (sinal de que
     a compra foi consumida).
+
+**O jogo guardado no aparelho (06/10 — `docs/CELULAR.md`, seção 9).** O
+aplicativo passou a registrar um service worker que guarda os `.js`/`.css`.
+Provado num Chrome; no WebView com o Capacitor, falta:
+
+11. **Guarda:** abra o jogo duas vezes. Em `chrome://inspect` → Application →
+    *Service Workers* aparece o `/sw.js` ativo, e em *Cache Storage* o
+    `soterra-jogo-1` com os arquivos. Configurações → *Jogo no aparelho* mostra
+    os MB (uns 12 depois de "Baixar tudo").
+12. **Modo avião DEPOIS de guardar:** feche o aplicativo, ligue o modo avião,
+    abra. Tem de aparecer **"Sem conexão"** — nunca o jogo. (O service worker
+    não responde pela página; se o jogo abrir, feche as válvulas.)
+13. **Depois de um deploy na web:** feche e abra — o jogo novo aparece, e em
+    *Network* só o que mudou vem da rede (o resto diz *ServiceWorker*).
+14. **Apagar:** Configurações → *Apagar o jogo guardado* → o `/sw.js` some da
+    lista e o cache também; abrir de novo não registra. *Guardar o jogo* volta.
+15. **Botão voltar, tela acesa e compra pela Google** continuam funcionando com
+    o service worker ativo (a ponte do Capacitor não passa por ele, mas é a
+    primeira vez que os dois convivem).
 
 ---
 

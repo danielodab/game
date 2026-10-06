@@ -9844,6 +9844,10 @@ var JOGO = (typeof window !== 'undefined')
      * carregado. Mostra o espaço usado, baixa o pacote inteiro e apaga (js/app_modelos.js). */
     var secModelos = safe(function () { return JOGO.AppModelos && JOGO.AppModelos.secaoConfig(); }, null);
     if (secModelos) body.appendChild(secModelos);
+    /* JOGO NO APARELHO (06/10): também só no aplicativo. O código do jogo fica guardado para abrir mais
+     * rápido — o jogo segue somente online — e é aqui que o jogador apaga ou volta a guardar (js/app_jogo.js). */
+    var secJogo = safe(function () { return JOGO.AppJogo && JOGO.AppJogo.secaoConfig(); }, null);
+    if (secJogo) body.appendChild(secJogo);
 
     /* BARRAS DE OURO PELA GOOGLE PLAY (04/10): só no aplicativo — na web `JOGO.CompraPlay` não é carregado e
      * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */

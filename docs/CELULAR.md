@@ -124,8 +124,10 @@ aplicativo (é o comportamento padrão do Capacitor, `Bridge.launchIntent`). O
 `js/versao.js` e o manifesto dos modelos vão com `no-cache` (o WebView sempre
 confere com o servidor), e todo o resto é pedido com o hash do conteúdo no
 endereço — arquivo que mudou tem endereço novo. Os três arquivos de
-`vendor/capacitor/` entram pelo mesmo carimbo (`window.__url`). O jogo não
-registra service worker.
+`vendor/capacitor/` entram pelo mesmo carimbo (`window.__url`). Desde 06/10 o
+aplicativo (e só ele) registra um service worker que guarda os `.js` e `.css`
+no aparelho — pela mesma regra do hash no endereço, e sem nunca responder pela
+página: ver a seção 9.
 
 ### O endereço do servidor
 
@@ -328,6 +330,8 @@ node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa �
 # tests/app_casca.html             # botão voltar, segundo plano e tela acesa, com eventos simulados
 node tests/app_modelos.js         # o que baixar/apagar pelo manifesto · retomada · MB · a web não usa · a casca
 # tests/app_modelos.html           # a escolha, o progresso, a rede que cai, apagar, o Cache Storage de verdade
+node tests/app_jogo.js            # o jogo guardado: o que é interceptado, hash igual/diferente, apagar, as válvulas, a web não usa
+python tests/app_jogo_sw.py       # o mesmo com o service worker DE VERDADE num Chrome headless (precisa do Chrome)
 ```
 
 ### Trocar o identificador do aplicativo
@@ -392,3 +396,98 @@ os dois desvios caem no caminho de sempre.
 
 **O que muda se o domínio mudar:** o Cache Storage é da origem. Jogo em outro
 endereço = pacote baixado de novo.
+
+---
+
+## 9. O código do jogo no aparelho — e o jogo segue somente online (06/10)
+
+O pedido do dono: *"o jogador pode ter a opção de salvar o jogo no celular, mas
+só consegue conectar ao game com internet"*.
+
+**O que é guardado:** os **arquivos** do jogo — os `.js` e `.css` (o código, os
+dicionários de idioma, os ícones e tabelas que vão dentro deles): cerca de
+**12 MB** no aparelho (MEDIDO em 06/10: 12,3 MB em 128 arquivos, sem
+compressão; pela rede descem comprimidos, bem menos). Os modelos 3D continuam
+na seção 8. Imagem solta de interface o jogo não tem — as do `site/` não entram.
+
+**O que NÃO é guardado, nunca:** a página (`/`, `index.html`), o
+`js/versao.js`, o manifesto dos modelos, `/api/*`, o relé, a loja, o site,
+qualquer coisa de conta ou sessão, e nenhum progresso. **Sem internet o
+aplicativo mostra a tela "Sem conexão" de sempre** — com ou sem jogo guardado:
+a página não vem do aparelho, então não há como abrir o jogo sem o servidor.
+
+### Como funciona
+
+| peça | o que faz |
+|---|---|
+| `/sw.js` (na raiz do que é servido) | o service worker: responde do aparelho **só** por `GET` da própria origem de um `.js`/`.css` cujo endereço leva o hash do conteúdo (`?v=<12 hex>`); todo o resto ele nem toca |
+| `js/app_jogo.js` | só é escrito pelo `index.html` dentro do aplicativo; registra o `/sw.js`, manda a lista do que o servidor pede agora, e tem a seção das Configurações |
+| `window.__guardaJogo` no `index.html` | a válvula (abaixo) |
+| `peso` no `js/versao.js` | os bytes do que será guardado, gravados no build pelo `servidor/coolify/versao.py` — é o número que a tela mostra |
+
+**Por que nunca roda jogo velho.** Quem decide qual arquivo pedir é a página,
+e a página e o `js/versao.js` vêm **sempre da rede** (`no-cache`, e o service
+worker não responde por eles). Cada arquivo é pedido com o hash do conteúdo que
+o servidor tem **agora**. O guardado é achado pelo endereço inteiro, hash
+incluído: se o arquivo mudou, o endereço é outro, não está guardado, desce da
+rede. Além disso o service worker **só guarda o que conferiu** — o sha-256 do
+que chegou tem de começar pelo hash do endereço. Isso cobre o rolling update
+(um pedido com o hash novo que cai no contêiner velho recebe o arquivo antigo:
+esse não bate e não fica). A cada abertura a versão velha de cada arquivo é
+apagada (`acerta`).
+
+**Se algo falhar** — WebView sem service worker, cache cheio, erro no meio —,
+o pedido segue para a rede e o jogo abre como antes. Em casa (o `js/versao.js`
+'dev', sem hash) e no `--embutida` nada é registrado.
+
+**A web não muda.** O `index.html` só escreve o `js/app_jogo.js` dentro do
+aplicativo, e mesmo carregado ele só registra na casca de verdade (Capacitor
+nativo); o `?app=1` das provas só vale em `localhost`/`127.0.0.1`, para ninguém
+ganhar um service worker no navegador por um link.
+
+### A opção do jogador
+
+- **Na primeira abertura** (a tela das duas opções da seção 8): uma linha a
+  mais — *"O jogo também fica guardado no aparelho, para abrir mais rápido.
+  Mesmo assim, é preciso internet para entrar e jogar."* **Jogar agora** guarda
+  cada arquivo quando o jogo o usa (como já fazia com os modelos); **Baixar
+  tudo** guarda também o resto do código (os outros idiomas, o que só carrega
+  mais tarde), em pano de fundo, e o número do botão soma os ~12 MB.
+- **Nas Configurações** → *Jogo no aparelho*: quantos MB estão guardados e o
+  botão **Apagar o jogo guardado** (tira o service worker e o cache, e lembra a
+  vontade: a abertura seguinte não guarda de novo). Quem apagou vê **Guardar o
+  jogo** para voltar atrás. Não pergunta antes: são 12 MB que voltam sozinhos,
+  e a conta e o progresso moram no servidor — apagar não os toca.
+
+Guardar vem **ligado** no aplicativo porque é pequeno e é o que a tela dos
+modelos já prometia ("o que baixou fica guardado"); a opção é poder desligar.
+
+### Como tirar do ar (as válvulas)
+
+Service worker com defeito é difícil de tirar — por isso são três saídas, e
+nenhuma depende de arquivo guardado:
+
+1. **O jogador:** Configurações → *Apagar o jogo guardado*. Ou Android → Apps →
+   SOTERRA → Armazenamento → *Limpar dados* (apaga também os modelos).
+2. **Nós, pela página:** no `index.html`, troque `window.__guardaJogo = true`
+   por `false` e publique. A página vem sempre da rede; na abertura seguinte
+   ela mesma desregistra o service worker e apaga o cache, ali na linha, antes
+   de qualquer script do jogo. A seção das Configurações some.
+3. **Nós, pelo service worker:** no `/sw.js`, troque `DESLIGA = false` por
+   `true` e publique. O aplicativo manda conferir o `/sw.js` com o servidor a
+   cada abertura (`update()`, com `updateViaCache: 'none'`); a versão nova
+   assume, apaga o cache e se desregistra.
+
+Para desligar de vez, faça as duas (2 e 3) no mesmo commit.
+
+**Precisa de AAB novo?** Não. Tudo isto é servido pela web: publicou, o
+aplicativo instalado passa a guardar na abertura seguinte. A casca (`www/`,
+plugins, `capacitor.config.json`) não mudou.
+
+### O que só o aparelho prova
+
+Provado aqui: a regra em Node (`tests/app_jogo.js`) e o service worker de
+verdade num Chrome headless com uma página-sonda (`tests/app_jogo_sw.py`).
+**Não provado:** o WebView do Android com o Capacitor. Confira no telefone a
+lista do `docs/GOOGLE_PLAY.md` 8.4 (itens 11 a 15) — em especial o **modo
+avião depois de guardar**: tem de aparecer "Sem conexão", nunca o jogo.
