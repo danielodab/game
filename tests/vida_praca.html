@@ -298,17 +298,29 @@
       gl.appendChild(glEnche);
     }
     var faixaTinha = faixa && !faixa.classList.contains('is-off'), faixaHtml = faixa ? faixa.innerHTML : '';
+    var faixaCls = faixa ? faixa.className : '';
     if (faixa && !faixaTinha) {
+      // 06/10: a faixa como o jogo a mostra desde 04/10 — a PÍLULA no canto direito (aberta ela é um balão de
+      // passagem). O cartão de vida mora agora na linha do nome e não é mais empurrado para baixo dela
       faixa.classList.remove('is-off');
-      faixa.innerHTML = '<span>Evento da prova: <b>XP ×2</b> para todos até as 22 h de domingo</span>';
+      faixa.classList.add('is-mini');
+      faixa.innerHTML = '<button type="button" class="hub-evento-pilula">✦ <b>1</b> evento ▾</button>';
     }
     return passo(900).then(function () {
       var rb = caixa().getBoundingClientRect();
       var W = w.innerWidth, H = w.innerHeight;
-      check(nome + ': o cartão fica no canto de cima à esquerda, dentro da tela', rb.left >= 0 && rb.left < 40 && rb.top < H / 3 &&
-            rb.right <= W && rb.bottom < H / 2, rs(rb) + ' em ' + W + '×' + H);
+      // 06/10 (dono: "os personagens selecionados da conta devem ficar ao lado do nome"): na mesma linha do nome,
+      // logo à direita dele; só na tela estreita, sem lugar na linha, o cartão desce para a linha de baixo
+      var rn = tela.querySelector('.hub-top .hub-nome').getBoundingClientRect();
+      var naLinha = rb.left >= rn.right - 1 && rb.left - rn.right < 40 && rb.top < rn.bottom && rb.top >= rn.top - 6;
+      var embaixo = rb.left < 40 && rb.top >= rn.bottom - 1;
+      check(nome + ': o cartão fica no topo, na linha do nome e logo à direita dele' + (W < 700 ? ' (ou na linha de baixo, se não couber)' : '') +
+            ', dentro da tela', (naLinha || (W < 700 && embaixo)) && rb.left >= 0 && rb.top < H / 3 && rb.right <= W && rb.bottom < H / 2,
+            'nome ' + rs(rn) + ' · cartão ' + rs(rb) + ' em ' + W + '×' + H);
+      check(nome + ': os vinténs não aparecem mais no topo da praça', !tela.querySelector('.hub-top .hub-moedas') &&
+            !/vint[eé]/i.test(tela.querySelector('.hub-top').textContent), tela.querySelector('.hub-top').textContent.slice(0, 80));
       var alvos = [
-        ['nome e moedas', '.hub-top .hub-quem', tela], ['Menu / Mestre', '.hub-top .hub-acts', tela],
+        ['nome', '.hub-top .hub-nome', tela], ['Menu / Mestre', '.hub-top .hub-acts', tela],
         ['faixa dos eventos', '.hub-evento', tela], ['painel do grupo', '.grupo-lado.is-on', doc],
         ['cais', '.hub-dock', tela], ['chat', '.hub-chat', doc], ['tela cheia', '.tc-botao', doc]
       ];
@@ -320,7 +332,7 @@
       });
     }).then(function () {
       if (glEnche) { glEnche.remove(); gl.classList.remove('is-on'); }
-      if (faixa && !faixaTinha) { faixa.classList.add('is-off'); faixa.innerHTML = faixaHtml; }
+      if (faixa && !faixaTinha) { faixa.className = faixaCls; faixa.innerHTML = faixaHtml; }
       return passo(700);
     });
   }
@@ -331,8 +343,12 @@
     return ate(function () { return w.innerWidth === 400; }, 8000).then(function () { return passo(1500); }).then(function () {
       var ks = caixa().querySelectorAll('.vp-heroi'), rb = caixa().getBoundingClientRect();
       var larg = [].map.call(ks, function (k) { return Math.round(k.getBoundingClientRect().width); });
-      check('400 px: os dois cartões compactos (≤ 150 px cada) e a caixa deixa a coluna do grupo livre',
-            ks.length === 2 && larg.every(function (x) { return x <= 150; }) && rb.right <= 400 - 62, larg.join(',') + ' · ' + rs(rb));
+      // 06/10: a coluna do grupo saiu do canto direito (o grupo é a última fila do bloco da esquerda): o que a
+      // caixa não pode é passar por baixo do Menu nem sair da tela
+      var rmenu = doc.querySelector('.screen-hub.is-on .hub-top .hub-acts').getBoundingClientRect();
+      check('400 px: os dois cartões compactos (≤ 150 px cada), dentro da tela e sem passar por baixo do Menu',
+            ks.length === 2 && larg.every(function (x) { return x <= 150; }) && rb.right <= 400 && !cruza(rb, rmenu),
+            larg.join(',') + ' · ' + rs(rb) + ' · Menu ' + rs(rmenu));
       var bs = caixa().querySelectorAll('.vp-pocao, .vp-heroi');
       var baixos = [].filter.call(bs, function (b) { return b.getBoundingClientRect().height < 34; });
       check('400 px: cartões e poções tocáveis (≥ 34 px de altura)', !baixos.length, baixos.length + ' baixos');

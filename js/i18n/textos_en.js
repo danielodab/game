@@ -2525,4 +2525,10 @@ JOGO.I18n.registra('en', { textos: {
   "Avisos: {a} (novos: {b})": "Notices: {a} (new: {b})",
   // ---- 06/10: sem guilda, o botão da Guilda no cais só avisa (fundar e entrar é pela Sede)
   "Você ainda não tem guilda. Vá até a Sede das Guildas, na praça, para fundar ou entrar em uma.": "You don't have a guild yet. Go to the Guild Hall, in the plaza, to found or join one.",
+  // ---- 06/10: o balão do membro do grupo na praça (o cartão virou retratinho; o estado vem para o balão)
+  "lidera o grupo": "leads the group",
+  "voltando…": "coming back…",
+  "saiu": "left",
+  "caiu": "dropped",
+  "fora": "away",
 } });

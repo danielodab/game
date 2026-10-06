@@ -224,7 +224,10 @@
       var rb = cx.getBoundingClientRect(), dock = doc.querySelector('.screen-hub.is-on .hub-dock'), chat = doc.querySelector('.hub-chat');
       var rd = dock ? dock.getBoundingClientRect() : null, rc = (chat && chat.offsetParent) ? chat.getBoundingClientRect() : null;
       function cruza(a, b) { return !!b && b.width > 0 && !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top); }
-      check('o quadro fica no canto de cima, sem tapar o cais nem o chat', rb.top < 200 && rb.left < 60 && !cruza(rb, rd) && !cruza(rb, rc),
+      // 06/10: o quadro mora na linha do nome do jogador, logo à direita dele (antes: sozinho, encostado na esquerda)
+      var rnome = doc.querySelector('.screen-hub.is-on .hub-top .hub-nome').getBoundingClientRect();
+      check('o quadro fica no topo, ao lado do nome, sem tapar o cais nem o chat', rb.top < 200 && rb.left >= rnome.right - 1 &&
+            rb.left - rnome.right < 40 && !cruza(rb, rd) && !cruza(rb, rc),
             [Math.round(rb.left), Math.round(rb.top), Math.round(rb.right), Math.round(rb.bottom)].join(',') +
             (rd ? ' cais ' + Math.round(rd.top) : '') + (rc ? ' chat ' + Math.round(rc.top) : ''));
       relogio += 10000;

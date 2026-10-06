@@ -1948,7 +1948,6 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .rw-selo .selo-moeda-img { flex: none; display: block;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ec, #fff) 70%, transparent)); }
 .selo-inline, .moeda-inline { display: inline-block; vertical-align: -3px; margin-right: 5px; }
-.hub-moedas .moeda-inline { vertical-align: -4px; margin-right: 4px; }
 
 /* O TUTOR (25/08): um cartão de primeira visita por tela */
 .tutor-caixa {
@@ -2154,6 +2153,10 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
   font-size: 11.5px; color: var(--dim); padding: 2px 2px 0;
 }
 .inv-lotacao b { color: var(--text); }
+/* 06/10: os vinténs saíram do topo da praça e moram aqui, em destaque, no alto do saco */
+.inv-vintens { display: flex; align-items: center; min-height: 28px; padding: 0 2px; font: 400 14px/1 var(--ui-sans); color: #e8c25a; }
+.inv-vintens b { font: 700 19px/1 var(--ui-mono, monospace); color: #ffd36a; margin-right: 2px; font-variant-numeric: tabular-nums; }
+.inv-vintens .moeda-inline { vertical-align: 0; margin-right: 6px; }
 .inv-lotacao.is-quase b { color: var(--gold); }
 .inv-lotacao.is-cheio b { color: var(--bad, #ff6b5a); }
 .rw-perdidos {
@@ -2628,7 +2631,6 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
 .hub-top > * { pointer-events: auto; }
 .hub-quem { display: flex; align-items: baseline; gap: 12px; }
 .hub-nome { font: 600 15px/1 var(--ui-serif, Georgia); color: #f0ead8; }
-.hub-moedas { font: 400 12px/1 var(--ui-mono, monospace); color: #e8c25a; }
 .hub-acts { display: flex; gap: 6px; }
 .hub-mundo { position: absolute; inset: 0; }
 /* A ANTESSALA (03/09): a placa da sala no topo e a lista de quem espera */
@@ -2913,7 +2915,7 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
     padding: 6px 4px 5px; gap: 4px; }
   .gl-tx { width: 100%; flex: none; }
   .gl-nome, .gl-nv, .gl-selos { display: none; }
-  .gl-menu { position: fixed; left: 8px; right: 8px !important; top: auto !important;
+  .gl-menu { position: fixed; left: 8px !important; right: 8px !important; top: auto !important;
     bottom: calc(var(--sa-b, 0px) + 8px); width: auto; }
   .pn-duplo .btn { padding: 10px 8px; }
 }
@@ -3715,6 +3717,72 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .hub-chat { left: calc(var(--sa-l, 0px) + 8px); bottom: calc(var(--sa-b, 0px) + 100px); width: min(240px, 62vw); }
   .hub-chat-log { max-height: 96px; }
   .hub-painel { bottom: calc(var(--sa-b, 0px) + 140px); }
+}
+
+/* ==========================================================================
+   A PRAÇA ENXUTA (06/10). O dono, com a praça no aparelho (780×360): "veja se não está muito poluída: membros
+   do grupo em cima dos botões, isso no PC também; o ícone dos membros do grupo deve ser menor, no mobile ocupa
+   muito. Os vinténs devem mostrar somente dentro do inventário, e os personagens selecionados da conta devem
+   ficar ao lado do nome. Esse ajuste faça no mobile e PC."
+   O canto de cima à esquerda da PRAÇA vira um bloco em FLUXO (o .hub-quem): o nome e, na mesma linha, os
+   cartões de vida (as poções logo abaixo deles), os pergaminhos e, por último, a fila do grupo. Um vizinho
+   empurra o outro: nada fica por cima de nada e nada é medido em js. A coluna da direita (o Menu e, abaixo
+   dele, as pílulas no PC ou o sino e a moeda no toque) fica só com o que já era dela. Sem espaço na linha
+   (nome comprido em tela estreita), os cartões descem para a linha de baixo em vez de empurrar o Menu.
+   ========================================================================== */
+.screen-hub .hub-top { align-items: flex-start; background: none; padding-left: calc(12px + var(--sa-l, 0px)); }
+/* a sombra do topo tem a altura FIXA da barra de antes: o bloco da esquerda ficou mais alto e ela não desce junto */
+.screen-hub .hub-top::before { content: ''; position: absolute; left: 0; right: 0; top: 0; z-index: -1; pointer-events: none;
+  height: calc(var(--sa-t, 0px) + 60px); background: linear-gradient(rgba(8,10,8,.82), rgba(8,10,8,0)); }
+/* o bloco não segura o toque nos vãos (a praça de baixo é de andar): só os controles dele respondem */
+.screen-hub .hub-top > .hub-quem { --vp-alt: 48px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; align-items: flex-start;
+  gap: 6px 10px; pointer-events: none; }
+.screen-hub .hub-quem > * { pointer-events: auto; }
+.screen-hub .hub-nome { flex: none; max-width: min(42vw, 260px); line-height: var(--vp-alt); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+.screen-hub .hub-quem > .vida-praca { position: static; z-index: auto; flex: 0 1 auto; min-width: 0; max-width: 100%; pointer-events: none; }
+.screen-hub .hub-quem > .vida-praca > * { pointer-events: auto; }
+.screen-hub .hub-quem > .hub-perg { align-self: flex-start; min-height: var(--vp-alt); flex-wrap: wrap; }
+/* as filas de baixo (as poções e o grupo) param antes da coluna da direita: as pílulas do PC têm ~170 px; no
+   toque, a moeda "Prêmio Grátis!" com o rótulo tem ~100 px */
+.screen-hub .hub-quem > .vida-praca .vp-pocoes, .hub-quem > .grupo-lado {
+  max-width: calc(100vw - 200px - var(--sa-l, 0px) - var(--sa-r, 0px)); }
+/* O GRUPO NA PRAÇA: o painel do canto direito (que ficava por cima das pílulas, ou do sino, e encostado na moeda)
+   vem para cá como a última fila do bloco — o js só o muda de casa (pintaGrupoLado). Compacto: por membro, o
+   retratinho redondo com a coroa de quem lidera e o ponto de online, e o nome curto; as classes, os níveis, o
+   estado e as ações abrem no toque (.gl-menu). Fora da praça (antessala, batalha) o painel segue como era. */
+.hub-quem > .grupo-lado { position: static; z-index: auto; width: auto; flex: 0 0 100%; flex-direction: row; flex-wrap: wrap;
+  align-items: center; gap: 8px 6px; pointer-events: none; }
+.hub-quem > .grupo-lado .gl-membro { pointer-events: auto; flex: none; flex-direction: row; align-items: center; width: auto;
+  min-height: 44px; padding: 3px 11px 3px 4px; gap: 6px; border-radius: 999px; }
+.hub-quem > .grupo-lado .gl-pic, .hub-quem > .grupo-lado .gl-pic.tem-dois { width: 38px; height: 38px; }
+.hub-quem > .grupo-lado .gl-pic > canvas, .hub-quem > .grupo-lado .gl-pic > .art-missing {
+  width: 38px !important; height: 38px !important; border-radius: 50%; }
+.hub-quem > .grupo-lado .gl-pic2, .hub-quem > .grupo-lado .gl-nv, .hub-quem > .grupo-lado .gl-vida,
+.hub-quem > .grupo-lado .gl-selos { display: none; }
+.hub-quem > .grupo-lado .gl-tx { width: auto; flex: none; }
+.hub-quem > .grupo-lado .gl-nome { display: block; max-width: 84px; }
+.hub-quem > .grupo-lado .gl-coroa { top: -7px; left: -3px; }
+.gl-menu-det { margin: 0 0 2px; font: 400 12px/1.45 var(--ui-sans); color: var(--dim); }
+@media (max-width: 480px) {
+  .screen-hub .hub-top > .hub-quem { --vp-alt: 44px; }
+}
+/* no dedo: o cartão de vida é o baixo (32 px), o retrato do grupo tem 34 px e a coluna da direita é a do sino */
+@media (pointer: coarse) {
+  .screen-hub .hub-quem > .vida-praca .vp-pocoes, .hub-quem > .grupo-lado {
+    max-width: calc(100vw - 126px - var(--sa-l, 0px) - var(--sa-r, 0px)); }
+  .hub-quem > .grupo-lado .gl-pic, .hub-quem > .grupo-lado .gl-pic.tem-dois { width: 34px; height: 34px; }
+  .hub-quem > .grupo-lado .gl-pic > canvas, .hub-quem > .grupo-lado .gl-pic > .art-missing { width: 34px !important; height: 34px !important; }
+  .hub-quem > .grupo-lado .gl-membro { padding: 4px 10px 4px 5px; }
+  .hub-quem > .grupo-lado .gl-nome { max-width: 64px; }
+}
+@media (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 480px) {
+  .screen-hub .hub-top > .hub-quem { --vp-alt: 32px; gap: 4px 8px; }
+  .screen-hub .hub-quem > .hub-perg { min-height: 0; }
+}
+/* em pé no celular a foto do cartão tem 36 px (a regra de ≤ 480 px): o nome acompanha a altura dele */
+@media (pointer: coarse) and (max-width: 480px) and (min-height: 501px) {
+  .screen-hub .hub-top > .hub-quem { --vp-alt: 42px; }
 }
 
 /* A BATALHA NO CELULAR (04/10, revisão das telas no telefone). Só para o dedo (pointer: coarse).

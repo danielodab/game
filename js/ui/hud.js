@@ -1236,8 +1236,8 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   /* O ACAMPAMENTO — a tela do mapa aberto.
    *
-   * O 3D é do JOGO.Hub; aqui mora só a camada de interface: a barra com nome e
-   * vinténs, o pedido de nome na primeira visita, e o painel que aparece quando
+   * O 3D é do JOGO.Hub; aqui mora só a camada de interface: a barra com o nome,
+   * os heróis escolhidos e o grupo, o pedido de nome na primeira visita, e o painel que aparece quando
    * o herói se APROXIMA de um lugar. A regra do painel é a do mundo: nada abre
    * por menu — o corpo anda até o portal, e a porta aparece quando se chega.
    */
@@ -1268,11 +1268,21 @@ var JOGO = (typeof window !== 'undefined')
     var top = el('div', 'hub-top');
     var quem = el('div', 'hub-quem');
     var nomeEl = el('span', 'hub-nome', '…');
-    var moedasEl = el('span', 'hub-moedas', '');
     quem.appendChild(nomeEl);
-    quem.appendChild(moedasEl);
-    // os pergaminhos da loja (Fase C): no Acampamento, onde se lê o da Sabedoria
-    if (!sala) quem.appendChild(hubPergaminhos());
+    /* A PRAÇA ENXUTA (06/10). O dono, com a praça no aparelho: "veja se não está muito poluída: membros do
+     * grupo em cima dos botões, isso no PC também; o ícone dos membros do grupo deve ser menor... Os vinténs
+     * devem mostrar somente dentro do inventário, e os personagens selecionados da conta devem ficar ao lado
+     * do nome." O canto de cima à esquerda vira UM bloco em fluxo (css .screen-hub .hub-quem), de cima para
+     * baixo: o nome e, na mesma linha, os cartões de vida dos heróis escolhidos (as poções logo abaixo deles);
+     * os pergaminhos; e a fila do grupo (pintaGrupoLado muda o painel do grupo para cá enquanto a tela é a
+     * praça). Como é fluxo, um vizinho empurra o outro: nada fica por cima de nada, e não há topo medido.
+     * Os vinténs saíram do topo (praça e antessala): o saldo mora no Inventário e nas telas de compra. */
+    if (!sala) {
+      quem.appendChild(vidaPraca());
+      // os pergaminhos da loja (Fase C): no Acampamento, onde se lê o da Sabedoria
+      quem.appendChild(hubPergaminhos());
+      grupoCasaPraca = quem;
+    }
     top.appendChild(quem);
     var acts = el('div', 'hub-acts');
     if (sala) {
@@ -1317,7 +1327,8 @@ var JOGO = (typeof window !== 'undefined')
      * 14/09 (a vida única): na PRAÇA, o cartão de cada herói escolhido SEMPRE à vista (a foto, o
      * coração com o PV e o %, as poções para quem tem o anel — vidaPraca) — e a vida se acerta
      * com o servidor a cada chegada à praça */
-    s.appendChild(sala ? vidaBloco('antessala') : vidaPraca());
+    if (sala) s.appendChild(vidaBloco('antessala'));
+    else pintaGrupoLado();                 // 06/10: a fila do grupo entra no bloco novo da praça já nesta montagem
     if (!sala) safe(function () { return JOGO.Vida.sincroniza(); }, null);
 
     var painel = el('div', 'hub-painel is-off');
@@ -1466,12 +1477,6 @@ var JOGO = (typeof window !== 'undefined')
         // A AURA do Traje do Colecionador fechado (25/08)
         // 04/10: e a aura COMPRADA na loja, que tem a cor do elemento e vale mais que a branca
         aplicaAuraPraca();
-      });
-      JOGO.DB.moedas().then(function (m) {
-        // a moeda desenhada antes do número (arte do dono, 03/09)
-        clear(moedasEl);
-        moedasEl.appendChild(art('vintemIcon', [16], 16, 'moeda-inline'));
-        moedasEl.appendChild(document.createTextNode(m + (m === 1 ? tr(' vintém') : tr(' vinténs'))));
       });
     }
 
@@ -7375,6 +7380,21 @@ var JOGO = (typeof window !== 'undefined')
       ladoHeroi.appendChild(trj);
     }
     var ladoSaco = el('div', 'pt-mmo-saco');
+    /* OS VINTÉNS (06/10): saíram do topo da praça (o dono: "os vinténs devem mostrar somente dentro do
+     * inventário") e passam a aparecer aqui, em destaque, no alto do saco. É o saldo do SACO, o mesmo número
+     * que o topo mostrava; o banco e as telas de compra seguem mostrando o deles. */
+    if (JOGO.DB && JOGO.DB.moedas) {
+      var saldoV = el('div', 'inv-vintens', '');
+      ladoSaco.appendChild(saldoV);
+      safe(function () {
+        return JOGO.DB.moedas().then(function (m) {
+          if (!saldoV.isConnected) return;
+          saldoV.appendChild(art('vintemIcon', [20], 20, 'moeda-inline'));
+          saldoV.appendChild(el('b', null, String(m)));
+          saldoV.appendChild(document.createTextNode(m === 1 ? tr(' vintém') : tr(' vinténs')));
+        });
+      }, null);
+    }
     ladoSaco.appendChild(pickBar(hid));
     // as abas e os filtros redondos (a fileira dos elementos mora lá dentro
     // desde 22/09: some nas abas sem elemento — Consumíveis e Pets)
@@ -12570,7 +12590,8 @@ var JOGO = (typeof window !== 'undefined')
    * O PV cheio é o do Game.vidaNaEspera: o máximo do registro da Vida, ou — cheio, sem registro —
    * o hp do Progress.battleParty, o mesmo número com que a batalha o poria em campo.
    * O DOM só se refaz quando muda a dupla ou as poções; o tique (vidaTique) troca números, alturas
-   * e classes, e mede o topo da praça para o cartão nunca ficar por baixo dele. */
+   * e classes. 06/10: o cartão fica na MESMA LINHA do nome do jogador, logo à direita dele, e as poções
+   * logo abaixo (buildHub o põe dentro do .hub-quem) — o lugar é do fluxo, nada é medido. */
   var vidaAlvoPraca = null;
   var CORACAO_SVG = '<svg viewBox="0 0 32 29" aria-hidden="true"><path d="M16 28 13.8 26C5.9 18.9 1 14.5 1 9 ' +
     '1 4.5 4.5 1 9 1c2.5 0 5 1.2 7 3.1C18 2.2 20.5 1 23 1c4.5 0 8 3.5 8 8 0 5.5-4.9 9.9-12.8 17z"/></svg>';
@@ -12580,7 +12601,7 @@ var JOGO = (typeof window !== 'undefined')
     box.appendChild(cartoes);
     box.appendChild(pocoesEl);
     var q = { box: box, cartoes: cartoes, pocoesEl: pocoesEl, para: null, sig: '', rows: {}, modo: 'praca',
-              pinta: pintaVidaPraca, top: -1 };
+              pinta: pintaVidaPraca };
     vidaQuadros.push(q);
     pintaVidaPraca(q);
     ligaVidaTique();
@@ -12674,29 +12695,8 @@ var JOGO = (typeof window !== 'undefined')
       var m = safe(function () { return G().podeBeberEspera(vidaAlvoPraca, b.getAttribute('data-pocao')); }, 'batalha');
       b.classList.toggle('is-dim', !!m);
     });
-    posicionaVidaPraca(q);
-  }
-  /* o topo do cartão: logo abaixo do nome/moedas/Menu da praça (no celular os chips descem uma
-   * linha) e, quando a faixa dos eventos está no ar e cruza a coluna do cartão, abaixo dela */
-  function posicionaVidaPraca(q) {
-    var tela = q.box.parentNode;
-    if (!tela || !tela.getBoundingClientRect) return;
-    var rt = tela.getBoundingClientRect();
-    if (!rt.width) return;
-    var fundo = 0, rb = q.box.getBoundingClientRect();
-    ['.hub-top .hub-quem', '.hub-top .hub-acts', '.hub-evento:not(.is-off)'].forEach(function (sel) {
-      var e = tela.querySelector(sel);
-      if (!e) return;
-      var r = e.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      if (r.left >= rb.left + Math.max(rb.width, 1) || r.right <= rb.left) return;   // não cruza a coluna
-      fundo = Math.max(fundo, r.bottom - rt.top);
-    });
-    var top = Math.max(0, Math.round(fundo + 8));
-    if (!fundo) top = -1;
-    if (top === q.top) return;
-    q.top = top;
-    q.box.style.top = top < 0 ? '' : top + 'px';
+    // 06/10: o cartão mora na linha do nome (o bloco em fluxo de buildHub): o topo não é mais medido, e por
+    // isso nem o tique mexe em posição — só em número, altura do coração e classe
   }
   function ligaVidaTique() {
     if (!vidaTimer) vidaTimer = setTimeout(vidaTique, 250);
@@ -12809,6 +12809,13 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------ o painel do grupo (P4)
   var grupoLadoEl = null, glMenuEl = null, glSig = '', tickSocial = 0, ultConexao = null;
+  /* 06/10: NA PRAÇA o painel do grupo deixa o canto direito — onde ficava por cima das pílulas dos eventos e
+   * da loja (o sino, no toque) e encostado na moeda "Prêmio Grátis!" — e entra, como a última fila, no bloco
+   * do canto de cima à esquerda (grupoCasaPraca = o .hub-quem da praça, posto por buildHub). É o MESMO
+   * elemento, só mudado de casa: fora da praça (antessala, batalha, recompensa) volta para a raiz, como era.
+   * Lá ele é compacto (css .hub-quem > .grupo-lado): por membro, o retratinho com a coroa de quem lidera e o
+   * ponto de online, e o nome curto; classes, níveis, o estado e as ações abrem no toque (abreGlMenu). */
+  var grupoCasaPraca = null;
   var GL_TELAS = ['hub', 'antessala', 'battle', 'roomClear', 'dungeonComplete', 'defeat'];
   /* AS UNIDADES DE UM MEMBRO (12/09): agora sao ATE DUAS, porque cada lado
    * desce com os dois selecionados. Vem na ordem da lista do motor, as de pe
@@ -12843,6 +12850,10 @@ var JOGO = (typeof window !== 'undefined')
   }
   function pintaGrupoLado() {
     if (!grupoLadoEl) return;
+    var naPraca = current === 'hub' && !!grupoCasaPraca && grupoCasaPraca.isConnected;
+    var casa = naPraca ? grupoCasaPraca : root;
+    if (casa && grupoLadoEl.parentNode !== casa) { fechaGlMenu(); casa.appendChild(grupoLadoEl); }
+    grupoLadoEl.classList.toggle('is-praca', naPraca);
     var est = grupoEstado();
     var vis = !!(est && est.fase === 'formado' && est.membros && est.membros.length === 2) &&
               GL_TELAS.indexOf(current) >= 0;
@@ -12896,7 +12907,7 @@ var JOGO = (typeof window !== 'undefined')
         semRede: !!m.eu && conexao === 'religando'
       };
     });
-    var sig = current + '#' + cartas.map(function (c) {
+    var sig = current + (naPraca ? '@praca' : '') + '#' + cartas.map(function (c) {
       return [c.m.id, c.m.nome, c.fora, c.voltando, c.lider, c.ia, c.vez, c.semRede,
               c.linhas.map(function (l) {
                 return [l.h.classId, l.h.element, l.h.level, l.pv, l.vez ? 1 : 0].join('.');
@@ -12948,7 +12959,7 @@ var JOGO = (typeof window !== 'undefined')
     if (selos.childNodes.length) tx.appendChild(selos);
     card.appendChild(tx);
     card.title = nome + (c.lider ? ' — lidera' : '');
-    tap(card, function () { abreGlMenu(m, card); });
+    tap(card, function () { abreGlMenu(m, card, c); });
     return card;
   }
   function fechaGlMenu() {
@@ -12963,7 +12974,7 @@ var JOGO = (typeof window !== 'undefined')
       });
   }
   /* o menu de um cartão do painel do grupo (4.3) */
-  function abreGlMenu(m, card) {
+  function abreGlMenu(m, card, c) {
     if (!glMenuEl) return;
     if (glMenuEl.classList.contains('is-on') && glMenuEl.getAttribute('data-de') === m.id) { fechaGlMenu(); return; }
     clear(glMenuEl);
@@ -12971,6 +12982,20 @@ var JOGO = (typeof window !== 'undefined')
     var est = grupoEstado() || {};
     var naLuta = current === 'battle' || current === 'roomClear' || current === 'dungeonComplete';
     glMenuEl.appendChild(el('h4', null, esc(m.nome || '') + (m.id === est.lider ? ' <span class="gl-coroa-t">♛</span>' : '')));
+    // 06/10: o que o cartão grande dizia — as classes com o nível e o estado — vem para cá: na praça o cartão
+    // é só o retratinho e o nome
+    if (c) {
+      var det = (c.linhas || []).map(function (l) {
+        var hh = l.h || {};
+        return hh.classId ? esc(className(hh.classId)) + ' · nv ' + (hh.level || 1) : '';
+      }).filter(function (x) { return !!x; });
+      if (c.lider) det.push(tr('lidera o grupo'));
+      if (c.voltando) det.push(tr('voltando…'));
+      else if (c.fora) det.push(m.saiu ? tr('saiu') : tr('caiu'));
+      else if (c.ia) det.push(tr('fora'));
+      if (c.semRede) det.push(tr('sem conexão'));
+      if (det.length) glMenuEl.appendChild(el('p', 'gl-menu-det', det.join('<br>')));
+    }
     function op(rot, cls, fn) {
       glMenuEl.appendChild(btn(rot, 'btn-mini ' + (cls || 'btn-ghost'), function () { fechaGlMenu(); fn(); }));
     }
@@ -12993,9 +13018,28 @@ var JOGO = (typeof window !== 'undefined')
     }
     op(tr('Fechar'), 'btn-ghost', function () {});
     var r = card.getBoundingClientRect(), rr = root.getBoundingClientRect();
-    glMenuEl.style.top = Math.max(8, Math.min(rr.height - 250, r.top - rr.top)) + 'px';
-    glMenuEl.style.right = Math.max(8, rr.right - r.left + 8) + 'px';
+    var naFila = grupoLadoEl.classList.contains('is-praca');
+    glMenuEl.classList.toggle('is-praca', naFila);
     glMenuEl.classList.add('is-on');
+    if (naFila) {
+      /* na praça a fila mora no canto de cima à esquerda e o balão não a tapa: com altura (PC, celular em pé
+       * largo) abre logo ABAIXO do retrato tocado; deitado no celular (pouca altura) abre à DIREITA da fila, na
+       * altura dela. A altura é a medida do balão, para ele não sair por baixo. (≤ 480 px de largura o css faz
+       * dele a folha de baixo, como já era.) */
+      var alt = glMenuEl.offsetHeight || 250, larg = glMenuEl.offsetWidth || 214;
+      var baixo = rr.height >= 520, fimDaFila = r.right, topoDaFila = r.top;
+      [].forEach.call(grupoLadoEl.children, function (k) {
+        var rk = k.getBoundingClientRect();
+        if (rk.width) { fimDaFila = Math.max(fimDaFila, rk.right); topoDaFila = Math.min(topoDaFila, rk.top); }
+      });
+      glMenuEl.style.top = Math.max(8, Math.min(rr.height - alt - 8, (baixo ? r.bottom + 6 : topoDaFila) - rr.top)) + 'px';
+      glMenuEl.style.left = Math.max(8, Math.min(rr.width - larg - 8, (baixo ? r.left : fimDaFila + 8) - rr.left)) + 'px';
+      glMenuEl.style.right = 'auto';
+    } else {
+      glMenuEl.style.top = Math.max(8, Math.min(rr.height - 250, r.top - rr.top)) + 'px';
+      glMenuEl.style.left = '';
+      glMenuEl.style.right = Math.max(8, rr.right - r.left + 8) + 'px';
+    }
   }
 
   // ------------------------------------------- a mensagem particular (4.4)
