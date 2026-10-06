@@ -1371,6 +1371,7 @@ var JOGO = (typeof window !== 'undefined')
       dockBotoes[d.abre] = b;
     });
     s.appendChild(dock);
+    pintaDockGuilda();           // 06/10: sem guilda, o botão da Guilda nasce apagado (o que já se sabe da conta)
 
     function pintaConta() {
       if (!JOGO.DB) { nomeEl.textContent = ''; return; }
@@ -1673,7 +1674,7 @@ var JOGO = (typeof window !== 'undefined')
           painel.appendChild(el('p', 'hub-nota',
             tr('O estandarte dos clãs. Você ainda não é de uma guilda: funde a sua ou entre numa que esteja de porta aberta.')));
           painel.appendChild(btn(tr('Fundar ou entrar numa guilda'), 'btn-primary btn-block sede-fundar', function () {
-            openSheet('guilda');
+            openSheet('guilda', 'sede');      // 06/10: só a Sede abre a ficha de fundar/entrar (guildaPelaSede)
           }));
         }
       } else if (/^sede-/.test(lugar.tipo)) {
@@ -1742,12 +1743,15 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (JOGO.Guilda) {
         JOGO.DB.jogador().then(function (j2) {
+          // 06/10: outra conta — o que se sabia da guilda era da de antes; o cais volta a "não se sabe"
+          if (guildaLidaDe !== j2.id) { guildaLidaDe = j2.id; guildaLida = false; pintaDockGuilda(); }
           JOGO.Guilda.contaAtiva(j2.id, j2.nome || tr('Sem Nome'));
           return JOGO.Guilda.minha();
         }).then(function (mg) {
           // 04/10: a leitura que FALHOU (servidor fora) não é "sem guilda": fica o que a tela já sabia
           if (!mg && JOGO.Guilda.falhaDaFicha && JOGO.Guilda.falhaDaFicha()) return;
           resumoGuilda = mg ? { nome: mg.nome, emblema: mg.emblema } : null;
+          guildaSoube();
           // a plaquinha pode ter sido pendurada ANTES desta resposta — a
           // corrida de sempre. Os undefined preservam nome/título/coroa.
           if (resumoGuilda && JOGO.Hub && JOGO.Hub.nomeia) {
@@ -2001,6 +2005,7 @@ var JOGO = (typeof window !== 'undefined')
                         res.ok ? 'good' : undefined);
                   if (res.ok && res.guilda) {               // a placa da guilda sobe na hora
                     resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                    guildaSoube();
                     reanunciaPerfil();          // o clã novo aparece para todos
                     if (JOGO.Hub && JOGO.Hub.nomeia) {
                       try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
@@ -6714,6 +6719,17 @@ var JOGO = (typeof window !== 'undefined')
   var GM_FICHA_ABA = { gm: 'grimorio', gmcaixa: 'caixa', gmagenda: 'eventos' };
   function openSheet(name, arg) {
     if (GM_FICHA_ABA.hasOwnProperty(name)) { gmAbre(GM_FICHA_ABA[name]); return; }
+    /* 06/10: a conta SEM guilda (lido do servidor) não abre a ficha da guilda pelo cais, por atalho nem por
+     * outra ficha — só avisa aonde ir; fundar e entrar é pela Sede da praça, que abre com 'sede'. Enquanto
+     * não se sabe, abre: a própria ficha lê o servidor e decide (sheetGuilda). */
+    if (name === 'guilda') {
+      if (arg !== 'sede' && semGuildaSabido()) {
+        if (sheetName === 'guilda') closeSheet();     // a ficha que ficou aberta de quando havia guilda
+        toast(avisoSemGuilda());
+        return;
+      }
+      guildaPelaSede = arg === 'sede';
+    }
     sheetName = name;
     lastSheetArg = arg;          // guardado para UI.repaint() saber o que reabrir
     marcaDock(name);             // o cais acende a aba aberta (30/08)
@@ -10779,9 +10795,38 @@ var JOGO = (typeof window !== 'undefined')
    * tinha o pedido aceito ou saía ficava com a praça dizendo o contrário da ficha: a Sede oferecia
    * "fundar ou entrar" a quem já era membro, e "Entrar no salão" a quem já tinha saído. Toda vez
    * que a ficha chega do servidor, a praça acompanha. */
+  /* O CAIS E A GUILDA (06/10, o dono: "se o jogador não tem guilda, o ícone dele no menu não deve ser
+   * clicável; ele só pode criar uma guilda na sede da guilda"). São TRÊS estados — o do meio existe por causa
+   * do defeito de 04/10, em que a leitura que falhava virava "sem guilda":
+   *   - TEM guilda (resumoGuilda): o botão do cais abre a ficha, como sempre;
+   *   - NÃO SE SABE (nenhuma leitura boa desta conta ainda, ou a leitura falhou): o botão fica ACESO — não se
+   *     apaga o botão de quem pode ter guilda. O toque abre a ficha, que lê o servidor: com guilda é a porta
+   *     do salão; sem guilda ela só diz aonde ir (nada de fundar por ali) e o botão se apaga;
+   *   - SEM guilda, respondido pelo servidor (guildaLida): o botão fica apagado (aria-disabled, não `disabled`:
+   *     o toque ainda precisa chegar para dar o aviso) e não abre ficha nenhuma.
+   * Fundar e entrar é só pela Sede das Guildas da praça: é ela que abre a ficha com 'sede' (guildaPelaSede).
+   * A conta do Mestre nunca apaga. Quem muda o `resumoGuilda` chama guildaSoube() e o botão acompanha na hora:
+   * fundou, entrou, saiu, foi tirado, a guilda foi desfeita. */
+  var guildaLida = false, guildaLidaDe = null, guildaPelaSede = false;
+  function avisoSemGuilda() {
+    return tr('Você ainda não tem guilda. Vá até a Sede das Guildas, na praça, para fundar ou entrar em uma.');
+  }
+  function semGuildaSabido() { return guildaLida && !resumoGuilda && !mestreAtivo(); }
+  function pintaDockGuilda() {
+    var b = dockBotoes && dockBotoes.guilda;
+    if (!b) return;
+    var apaga = semGuildaSabido();
+    b.classList.toggle('is-apagada', apaga);
+    if (apaga) { b.setAttribute('aria-disabled', 'true'); b.title = avisoSemGuilda(); }
+    else { b.removeAttribute('aria-disabled'); b.removeAttribute('title'); }
+  }
+  // chegou uma resposta BOA sobre a guilda desta conta (tem ou não tem): o cais acende ou apaga
+  function guildaSoube() { guildaLida = true; pintaDockGuilda(); }
+  UI._guildaEsquece = function () { guildaLida = false; pintaDockGuilda(); };   // só as provas: volta a "não se sabe"
   function anotaGuilda(g) {
     var era = resumoGuilda ? resumoGuilda.nome + '|' + resumoGuilda.emblema : '';
     resumoGuilda = g ? { nome: g.nome, emblema: g.emblema } : null;
+    guildaSoube();
     var eh = resumoGuilda ? resumoGuilda.nome + '|' + resumoGuilda.emblema : '';
     if (era === eh) return;
     if (JOGO.Hub && JOGO.Hub.nomeia) {
@@ -10818,6 +10863,12 @@ var JOGO = (typeof window !== 'undefined')
       }
       anotaGuilda(g);
 
+      // 06/10: fundar e entrar é só pela Sede da praça. Aberta por outro caminho (o cais antes de se saber, a
+      // ficha que ficou aberta depois de sair da guilda), a ficha de quem não tem guilda só diz aonde ir
+      if (!g && !guildaPelaSede && !mestreAtivo()) {
+        caixa.appendChild(el('p', 'empty guilda-so-na-sede', avisoSemGuilda()));
+        return;
+      }
       if (!g) {
         // ---- SEM GUILDA: fundar uma, ou esperar convite na praça
         caixa.appendChild(el('p', 'inv-dica',
@@ -10832,6 +10883,7 @@ var JOGO = (typeof window !== 'undefined')
               Gd.migrarLocal().then(function (res) {
                 if (!res.ok) { toast(res.erro || tr('não deu')); return; }
                 resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+                guildaSoube();
                     reanunciaPerfil();          // o clã novo aparece para todos
                 if (JOGO.Hub && JOGO.Hub.nomeia) {
                   try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
@@ -10897,6 +10949,7 @@ var JOGO = (typeof window !== 'undefined')
             // a plaquinha da praça ganha a placa da guilda na hora — os
             // undefined preservam nome/título/coroa que já estão pendurados
             resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+            guildaSoube();
                     reanunciaPerfil();          // o clã novo aparece para todos
             if (JOGO.Hub && JOGO.Hub.nomeia) {
               try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
@@ -14136,8 +14189,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   // provas (tests/sede_visita.html): o estado, e o `guilda` que finge a resposta da ficha
   UI._sede = function (guilda) {
-    if (guilda !== undefined) resumoGuilda = guilda ? { nome: guilda.nome, emblema: guilda.emblema } : null;
-    return { dentro: sedeHud.dentro, g: sedeHud.g, temGuilda: !!resumoGuilda, foco: guildaFoco };
+    if (guilda !== undefined) { resumoGuilda = guilda ? { nome: guilda.nome, emblema: guilda.emblema } : null; guildaSoube(); }
+    return { dentro: sedeHud.dentro, g: sedeHud.g, temGuilda: !!resumoGuilda, foco: guildaFoco, sabe: guildaLida };
   };
   function reentraCampo() {
     var H = JOGO.Hub;

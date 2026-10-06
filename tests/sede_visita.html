@@ -71,6 +71,14 @@
       return [].filter.call(d.querySelectorAll('button'), function (b) { return re.test(b.textContent); })[0] || null;
     }
     function chega(tipo) { H.aoAproximar(null); H.aoAproximar({ id: tipo, tipo: tipo, nome: tipo }); }
+    // 06/10: o botão da Guilda no cais, e a ficha aberta (ou não) por ele
+    function bGuilda() {
+      return [].filter.call(d.querySelectorAll('.screen-hub .hub-dock .hub-dock-b'), function (b) { return /Guilda/.test(b.textContent); })[0] || null;
+    }
+    function apagado() { var b = bGuilda(); return !!b && b.classList.contains('is-apagada') && b.getAttribute('aria-disabled') === 'true'; }
+    function aceso() { var b = bGuilda(); return !!b && !b.classList.contains('is-apagada') && !b.hasAttribute('aria-disabled'); }
+    function fichaAberta() { var e = d.querySelector('.ui-sheet'); return !!e && e.classList.contains('is-on'); }
+    function aviso() { var e = d.querySelector('.ui-toast'); return e ? e.textContent : ''; }
     function fala(texto) {
       var ci = d.querySelector('.hub-chat-input');
       if (!ci) return false;
@@ -115,6 +123,13 @@
         chega('sede');
         check('sem guilda: o painel da Sede leva a fundar ou entrar numa guilda', !!d.querySelector('.hub-painel .sede-fundar') && !!botao(/Fundar ou entrar numa guilda/));
         check('sem guilda: NÃO há o botão de entrar no salão nem a fila da guerra', !d.querySelector('.sede-entrar') && !d.querySelector('.hub-painel .guerra-bloco'));
+        // 06/10 (dono: "se o jogador não tem guilda, o ícone dele no menu não deve ser clicável; ele só pode
+        // criar uma guilda na sede da guilda")
+        check('sem guilda: o botão da Guilda no cais fica apagado (aria-disabled)', apagado(), bGuilda() ? bGuilda().className : 'sem botão');
+        if (bGuilda()) bGuilda().click();
+        check('…o toque nele não abre ficha: só avisa que é na Sede', !fichaAberta() && /Sede das Guildas/.test(aviso()), aviso());
+        UI.openSheet('guilda');
+        check('…e nenhum outro caminho abre a ficha da guilda fora da Sede', !fichaAberta());
         check('a API da cena existe (entraSede, saiSede, naSede)', typeof H.entraSede === 'function' &&
               typeof H.saiSede === 'function' && H.naSede() === null);
 
@@ -151,6 +166,24 @@
           check('sem guilda: a ficha abre no fundar/entrar', !!ok && !!botao(/^Fundar a guilda/));
           check('na tela de quem procura guilda a da equipe não aparece', !/Staff/.test(t), t.slice(-160));
           UI.closeSheet();
+          // 06/10: enquanto NÃO se sabe se a conta tem guilda, o botão fica aceso; o toque abre a ficha, que lê o
+          // servidor — e, sem guilda, só diz aonde ir (nada de fundar pelo cais) e apaga o botão
+          UI._guildaEsquece();
+          check('não se sabe ainda: o botão da Guilda fica ACESO (não se apaga o de quem pode ter guilda)', aceso() && UI._sede().sabe === false);
+          bGuilda().click();
+          return quieto(espera(function () { return !!d.querySelector('.ms-caixa .guilda-so-na-sede'); }, 40, 150));
+        }).then(function (ok) {
+          check('…a ficha lê, não oferece fundar pelo cais e manda à Sede', !!ok && !d.querySelector('.brasao-ed') && !botao(/^Fundar a guilda/) &&
+                !d.querySelector('.ms-caixa .guilda-rank'), ((d.querySelector('.ms-caixa') || {}).textContent || '').slice(0, 120));
+          check('…e o botão se apaga: agora se sabe', apagado() && UI._sede().sabe === true);
+          UI.closeSheet();
+          var eraM = w.JOGO.GM.ativo;
+          w.JOGO.GM.ativo = function () { return true; };
+          UI._sede(null);
+          var mestreAceso = aceso();
+          w.JOGO.GM.ativo = eraM;
+          UI._sede(null);
+          check('a conta do Mestre nunca apaga; a comum, sim', mestreAceso && apagado());
           return G.criar('Casa da Prova', 'P');
         });
       })
@@ -164,6 +197,7 @@
         chega('sede');
         var b = d.querySelector('.sede-entrar');
         check('com guilda: o botão "Entrar no salão" aparece', !!b && /Entrar no salão/.test(b.textContent));
+        check('com guilda: o botão da Guilda no cais acende sem recarregar', aceso(), bGuilda() ? bGuilda().className : 'sem botão');
         // 04/10 (dono: "quando chegar na sede só deve perguntar de entrar no salão ou se inscrever para batalha")
         var bsP = [].map.call(d.querySelectorAll('.hub-painel button'), function (x) { return x.textContent; });
         check('a praça só tem as duas ações: o salão e a guerra de guilda', !!d.querySelector('.hub-painel .guerra-bloco') &&
@@ -306,6 +340,7 @@
           check('o servidor não respondeu: a ficha avisa que não leu, em vez de mandar fundar uma guilda',
                 !!ok && !!botao(/^Tentar de novo$/) && !d.querySelector('.brasao-ed') && UI._sede().temGuilda === true,
                 ((d.querySelector('.ms-caixa') || {}).textContent || '').slice(0, 120));
+          check('…e a leitura que falhou não apaga o botão da Guilda de quem tem guilda', aceso());
           G._servidor = null;
           if (S0) S0.api = api0; else delete w.JOGO.Sessao;
           UI.closeSheet();
@@ -331,6 +366,7 @@
         check('a guilda acabou com o jogador dentro do salão: ele volta à praça sem travar',
               saiu === true && e.sede === null && e.zona === 'praca' && !UI._sede().dentro, e.zona);
         check('e a praça já sabe que ele não tem guilda', UI._sede().temGuilda === false);
+        check('e o botão da Guilda no cais se apaga sem recarregar', apagado(), bGuilda() ? bGuilda().className : 'sem botão');
         chega('sede');
         check('a Sede volta a oferecer fundar ou entrar, sem o botão do salão',
               !!d.querySelector('.hub-painel .sede-fundar') && !d.querySelector('.sede-entrar'));

@@ -2523,4 +2523,6 @@ JOGO.I18n.registra('en', { textos: {
   "Fechar os avisos": "Close notices",
   "Avisos: {a}": "Notices: {a}",
   "Avisos: {a} (novos: {b})": "Notices: {a} (new: {b})",
+  // ---- 06/10: sem guilda, o botão da Guilda no cais só avisa (fundar e entrar é pela Sede)
+  "Você ainda não tem guilda. Vá até a Sede das Guildas, na praça, para fundar ou entrar em uma.": "You don't have a guild yet. Go to the Guild Hall, in the plaza, to found or join one.",
 } });

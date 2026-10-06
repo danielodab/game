@@ -2523,4 +2523,6 @@ JOGO.I18n.registra('es', { textos: {
   "Fechar os avisos": "Cerrar los avisos",
   "Avisos: {a}": "Avisos: {a}",
   "Avisos: {a} (novos: {b})": "Avisos: {a} (nuevos: {b})",
+  // ---- 06/10: sem guilda, o botão da Guilda no cais só avisa (fundar e entrar é pela Sede)
+  "Você ainda não tem guilda. Vá até a Sede das Guildas, na praça, para fundar ou entrar em uma.": "Aún no tienes gremio. Ve a la Sede de los Gremios, en la plaza, para fundar uno o unirte a uno.",
 } });

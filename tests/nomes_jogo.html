@@ -294,7 +294,7 @@ iframe{width:1000px;height:700px;border:0;display:block;margin-top:10px}</style>
       foto.jogador.nome = 'Joana';
       J.DB.importar(foto);
       try { w.localStorage.removeItem('soterra-guilda-v1'); } catch (e) {}
-      J.UI.openSheet('guilda');
+      J.UI.openSheet('guilda', 'sede');     // 06/10: fundar é só pela Sede da praça — é assim que ela abre a ficha
       return tentativas(function () { return d.querySelector('input.hub-input[placeholder="nome da guilda"]'); }, 40, 200);
     }).then(function (inp) {
       var b = null;

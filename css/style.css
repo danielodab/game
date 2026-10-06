@@ -2715,6 +2715,11 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
 }
 .hub-dock-b .hd-ic { font-size: 19px; line-height: 1; }
+/* 06/10: a Guilda no cais de quem NÃO tem guilda — apagada (aria-disabled): o toque só avisa que fundar e entrar é
+   na Sede das Guildas da praça. Enquanto não se sabe se a conta tem guilda, o botão fica aceso (js/ui/hud.js). */
+.hub-dock-b.is-apagada, .hub-dock-b.is-apagada:hover { opacity: .4; filter: grayscale(1); cursor: default;
+  background: rgba(255,255,255,.03); color: #cfd8e2; }
+.hub-dock-b.is-apagada:active { transform: none; }
 @media (max-width: 480px) {
   .hub-dock { gap: 0; padding: 5px 4px; }
   .hub-dock-b { min-width: 46px; padding: 5px 4px 4px; font-size: 9.5px; }
