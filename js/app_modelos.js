@@ -394,9 +394,19 @@ var JOGO = (typeof window !== 'undefined')
       txt.textContent = Tx('{a} de {b} MB · faltam {c} MB{d}', { a: A.mb(a.feitos), b: A.mb(a.total), c: A.mb(a.faltam), d: r ? ' · ' + r : '' });
     }
     pinta({ feitos: p.feitos, total: p.total, faltam: p.faltam, porSegundo: 0 });
+    // 06/10 (o dono, no aparelho: "preciso clicar diversas vezes"): a pausa só fechava a tela quando os
+    // arquivos em voo terminavam — segundos sem resposta nenhuma ao toque. Agora o toque fecha NA HORA;
+    // o que estava a caminho termina de descer e fica guardado, e nada novo é pedido.
+    var saiu = false;
     botao(cx, 'am-pausa', Tx('Pausar e jogar agora'), Tx('O que já baixou fica guardado. O resto continua na próxima abertura.'), '#2a3038',
-          function () { if (st.baixando) st.baixando.para('pausa'); });
+          function () {
+            if (saiu) return;
+            saiu = true;
+            if (st.baixando) st.baixando.para('pausa');
+            fecha(); segue();
+          });
     baixa(p, pinta).then(function (r) {
+      if (saiu) return;                    // a pausa já fechou a tela e seguiu para o jogo
       if (r.ok || r.motivo === 'pausa') { fecha(); segue(); return; }
       // refaz a conta pelo que está guardado DE VERDADE e oferece continuar dali
       function deNovo() { sincroniza().then(function (p2) { telaProgresso(p2, segue); }, function () { fecha(); segue(); }); }
