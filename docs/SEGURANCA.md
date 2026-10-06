@@ -1022,7 +1022,7 @@ cada entrega mora em `GM.cru`, a mesma na Caixa do Mestre e no juiz.
 Provas: `tests/moderacao_api.py` (API + juiz, 16), `tests/entregas_cliente.js` (o jogo do jogador online, 11) e
 `tests/moderacao_rele_prova.py` (relé de verdade, 19).
 
-## 11. A sessão: sair é sair (04/10)
+## 11. A sessão: sair é sair (04/10) e o jogo exige conta (06/10)
 
 O relato do dono: "eu tava na conta admin, saí dela, cliquei em jogar e já logou na minha outra conta...
 várias vezes com conta deslogada coloquei para jogar e ele abriu uma sessão".
@@ -1046,9 +1046,10 @@ via o save de contas que já tinham jogado NAQUELE navegador; nenhum token valia
   joga na conta local `visitante`. Quando a mesma conta entra, a Nuvem o encontra e sobe; se entra outra, ela
   o troca pelo dela (como já fazia). É a rede de proteção de todo caminho em que a sessão acaba sem um sair:
   o token vencido, a queda por outro aparelho, o "sair de todas as sessões".
-- **O jogo sem conta continua existindo** (é de propósito: `file://`, as provas, quem quer experimentar):
-  começa do zero, sem nome e sem save de ninguém, e o progresso dele fica só naquele navegador. Save que
-  nunca subiu para conta nenhuma (registro sem `conta`) não é tocado.
+- **O jogo sem conta só existe EM CASA** (`file://`, `localhost`, `127.0.0.1`, `[::1]` — o desenvolvimento e
+  as provas): começa do zero, sem nome e sem save de ninguém, e o progresso dele fica só naquele navegador.
+  Save que nunca subiu para conta nenhuma (registro sem `conta`) não é tocado. **No ar não existe** — ver
+  "O porteiro", abaixo.
 - **Outra aba**: a sessão é do navegador inteiro. Sair numa aba (ou outra conta entrar) derruba o jogo
   aberto nas outras — o evento `storage` da chave —, com a capa "Você saiu desta conta" e o disco congelado.
 - **Não há "lembrar várias contas"**: o navegador guarda no máximo uma sessão, e nenhuma depois de sair. As
@@ -1057,12 +1058,51 @@ via o save de contas que já tinham jogado NAQUELE navegador; nenhum token valia
 - **Um aparelho só** (13/09) segue igual: o aparelho derrubado para numa tela que diz por quê e NÃO retoma
   sozinho — entrar de novo pede a senha. Trocar a senha encerra as outras sessões; redefinir pelo e-mail, todas.
 
-**As provas.** `tests/sessao_navegador.py` (a API de verdade + o site + o jogo num perfil de Chrome: o
-relato refeito passo a passo), `tests/sessao_sair_cliente.js` (a decisão do `contas.js` em cada estado do
+**O porteiro (06/10).** O dono: o jogo é somente online e "tem que exigir conta sempre!!". Até aqui, sem
+sessão, o jogo no ar abria "do zero" na conta local `visitante` — jogar sem conta, com progresso que servidor
+nenhum conferia.
+
+- **No ar, sem sessão válida o jogo não abre.** O `<script id="porteiro">` do `index.html` roda no `<head>`,
+  antes de qualquer arquivo do jogo (nem o carregador de modelos é pedido): sem sessão no navegador, a página
+  vai para `site/conta.html#entrar` — a tela de ENTRAR / CRIAR CONTA, na mesma origem (no aplicativo, dentro
+  do mesmo WebView) — e deixa uma marca NA ABA (`sessionStorage['soterra-volta-jogo']`, nunca no endereço).
+  Com a marca, entrar ou criar a conta devolve o jogador ao jogo sozinho (`site/conta.js`); quem abre a página
+  da conta por conta própria segue parando nela.
+- **A regra de quem abre sem conta é pelo ENDEREÇO** (`JOGO.Porteiro.exigeEm`): protocolo `file:`, ou
+  hostname exatamente `localhost`, `127.0.0.1` ou `[::1]` → não exige. Todo o resto exige: qualquer domínio,
+  qualquer IP de rede (o celular na rede de casa também), e o aplicativo (Capacitor nativo), mesmo servido do
+  `https://localhost` do pacote. **Nenhum parâmetro de URL entra na conta** (`?conta=`, `?sandbox=1`, `?app=1`,
+  `?api=`…). O único outro sinal é `exigeConta: true` no `js/versao.js` que o SERVIDOR entrega, e ele só
+  APERTA a regra: é como `tests/sessao_navegador.py` faz 127.0.0.1 se comportar como "no ar" (o servidor de
+  arquivos da prova troca esse arquivo na resposta). Não há valor dele que afrouxe a regra num domínio.
+- **Sessão guardada que já morreu no servidor.** Ao abrir, o porteiro pergunta `/api/eu` em paralelo; no 401
+  a sessão sai do navegador e a página larga a carga e vai para a tela de entrar. Servidor fora do ar não
+  derruba ninguém ali. Com o jogo ABERTO, o 401 (na Nuvem ou na olhada de 30 s) agora derruba o jogo com a
+  capa "Sua sessão acabou" (`Sessao.vencida`) — antes a Nuvem só esquecia o token e o jogo seguia, sem conta.
+  As outras quedas (outro aparelho, sair em outra aba, banimento, inatividade) já tinham capa; o "Entrar de
+  novo" delas agora também volta ao jogo depois do login.
+- **A `visitante` e as contas locais** (`?conta=<id>`, "Criar conta nova", a conta local do Mestre) são de casa
+  e das provas. No ar o `js/core/contas.js` põe a janela sempre na Principal (a conta do servidor), o
+  `Contas.trocar` não navega, a ficha Contas mostra só a conta do servidor e a abertura segura não oferece
+  "Abrir numa conta local vazia". **Save de visitante (ou de conta local) que já exista num navegador fica
+  onde está, sem leitor no ar: não sobe para conta nenhuma sozinho** — seria lavar progresso que ninguém
+  conferiu. O dono pode apagá-lo limpando os dados do site; nada no jogo o lê.
+- **O "sair é sair" continua no porteiro**: como o `contas.js` não chega a rodar sem sessão, é o porteiro quem
+  tira do disco o save em dia de uma conta que saiu (o pendente fica guardado para a dona, como antes).
+- A conta do Mestre no servidor (`contas.gm`) e o painel seguem iguais.
+
+**As provas.** `tests/porteiro.js` (a regra do endereço, lida do próprio `index.html`: produção exige,
+casa não, parâmetro nenhum burla, o `exigeConta` só aperta; e o `contas.js` no ar),
+`tests/sessao_navegador.py` (a API de verdade + o site + o jogo num perfil de Chrome, servido como "no ar": o
+relato refeito passo a passo, o deslogado que cai na tela de entrar sem baixar o jogo, o login que volta ao
+jogo, a sessão que morre aberta e fechada, o save de visitante intocado), `tests/sessao_sair_cliente.js` (a decisão do `contas.js` em cada estado do
 disco), `tests/conta_api.py` (`test_sair_mata_o_token`) e `tests/um_aparelho_navegador.py` (dois perfis de
 Chrome na mesma conta, com o juiz e o Relé: contam-se logins, recargas, reconexões e praças refeitas).
 
 **Limites conhecidos.** O save com gravação pendente fica no disco (escondido) até a conta voltar ou outra
-entrar. As cópias `:bak-<instante>` que a abertura segura faz a pedido ("Abrir sem o save deste navegador",
+entrar. Quem tem uma sessão válida guardada e fica SEM REDE segue vendo a carga travar (o jogo é somente
+online; o porteiro não inventa tela para isso). As páginas de `tests/` não passam pelo porteiro — ele mora no
+`index.html` — e não fazem parte do que se joga. As cópias `:bak-<instante>` que a abertura segura faz a pedido ("Abrir sem o save deste navegador",
 `index.html`) não são apagadas pelo sair. Com sessão e uma conta local que não é a Principal, a Nuvem não
-roda mas o resto do jogo ainda fala com o servidor com o token da sessão (comportamento de antes).
+roda mas o resto do jogo ainda fala com o servidor com o token da sessão (comportamento de antes; desde
+06/10 só em casa — no ar a janela é sempre a Principal).

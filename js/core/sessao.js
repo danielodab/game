@@ -328,7 +328,14 @@
   S.MOTIVO_SAIU = 'saiu';
   S.MOTIVO_OUTRA_CONTA = 'outra-conta';
   S.FRASE_SAIU = Tx('Você saiu desta conta neste navegador.');
+  /* 06/10 (somente online, "tem que exigir conta sempre"): a sessão que VENCEU ou foi encerrada no
+   * servidor com o jogo aberto. Antes a Nuvem só esquecia o token e o jogo seguia — sem conta. No ar
+   * (JOGO.Porteiro, o porteiro do index.html) isso agora é uma queda como as outras: S.vencida. */
+  S.MOTIVO_VENCIDA = 'vencida';
+  S.FRASE_VENCIDA = Tx('Sua sessão acabou. Entre de novo para continuar.');
   var TEXTOS_QUEDA = {
+    'vencida': [Tx('Sua sessão acabou.'), Tx('Este jogo foi encerrado aqui.'),
+                Tx('O progresso está guardado no servidor. Entre de novo para continuar.')],
     'saiu': [Tx('Você saiu desta conta.'), Tx('A conta saiu em outra aba deste navegador, e este jogo foi encerrado aqui.'),
              Tx('O progresso está guardado no servidor. Entre de novo para continuar.')],
     'outra-conta': [Tx('Outra conta entrou neste navegador.'), Tx('Este jogo era da conta de antes e foi encerrado aqui.'),
@@ -364,6 +371,16 @@
     avisaPagina('soterra:sessao', { tipo: 'derrubada', motivo: motivoQueda });
     S.mostraDerrubada();
     return true;
+  };
+
+  /* No ar o jogo não fica de pé sem conta (06/10). Em casa e nas provas (o porteiro não exige, ou a
+   * página nem o tem) nada muda: devolve false e quem chamou segue como antes. */
+  S.exigeConta = function () {
+    try { return !!(JOGO.Porteiro && JOGO.Porteiro.exige && JOGO.Porteiro.exige()); } catch (e) { return false; }
+  };
+  S.vencida = function (tokenUsado) {
+    if (!S.exigeConta()) return false;
+    return S.derrubada(S.MOTIVO_VENCIDA, tokenUsado);
   };
 
   /* SAIR EM OUTRA ABA (04/10, "sair é sair"): a sessão é do navegador inteiro — uma chave só no
@@ -481,7 +498,12 @@
     var novo = !!(atual && daPagina && atual.token !== daPagina.token);
     if (!novo) {
       S.esquece();
-      try { window.sessionStorage.setItem(S.CHAVE_AVISO, motivoQueda === S.MOTIVO_SAIU ? S.FRASE_SAIU : S.FRASE_DERRUBADA); } catch (e) {}
+      try {
+        window.sessionStorage.setItem(S.CHAVE_AVISO, motivoQueda === S.MOTIVO_SAIU ? S.FRASE_SAIU
+          : motivoQueda === S.MOTIVO_VENCIDA ? S.FRASE_VENCIDA : S.FRASE_DERRUBADA);
+      } catch (e) {}
+      // 06/10: no ar, quem entrar de novo VOLTA para o jogo sozinho (a marca do porteiro; site/conta.js)
+      S.marcaVolta();
     }
     if (S.semRecarga) return novo ? 'recarrega' : 'entrar';
     try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); } catch (eB) {}
@@ -502,8 +524,11 @@
   S.confereAparelho = function () {
     if (derrubadaJa || olhando || !S.ativa()) return Promise.resolve(null);
     olhando = true;
+    var tokenOlhado = S.token();
     return S.api('/api/eu').then(function (r) {
       olhando = false;
+      // 06/10: o token não vale mais (venceu, foi encerrado) — no ar o jogo cai aqui, com a capa
+      if (r && r.status === 401 && r.motivo !== S.MOTIVO_OUTRO_APARELHO) S.vencida(tokenOlhado);
       // 03/10: o servidor conta as entregas do Mestre que esta conta ainda não viu (moderacao.py); quem avisa e
       // adota o estado é o js/ui/moderacao.js (JOGO.EntregasMestre), que ouve este evento
       if (r && r.ok && r.entregas > 0) {
@@ -539,6 +564,12 @@
   function raizDoSite() {
     return String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
   }
+  /* A marca que faz a tela de entrar devolver o jogador ao jogo depois do login (só no ar; em casa
+   * entrar segue parando na página da conta, como o dono pediu em 11/09). */
+  S.marcaVolta = function () {
+    if (!S.exigeConta()) return false;
+    try { window.sessionStorage.setItem(JOGO.Porteiro.CHAVE_VOLTA || 'soterra-volta-jogo', '1'); return true; } catch (e) { return false; }
+  };
   /* A página de conta do site, relativa ao jogo (raiz/site/conta.html). */
   S.paginaConta = function () { return raizDoSite() + 'site/conta.html'; };
   /* A porta de SAÍDA do jogo (11/09): a capa do site, onde se cuida da conta,

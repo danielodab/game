@@ -651,7 +651,10 @@ var JOGO = (typeof window !== 'undefined')
       // abria o jogo sem conta (e, antes, com o save da conta que tinha acabado de sair)
       tap(b, function () {
         try {
-          if (info && info.tinhaConta && !Se.semRecarga) location.href = Se.paginaConta() + '#entrar';
+          if (info && info.tinhaConta && !Se.semRecarga) {
+            if (Se.marcaVolta) Se.marcaVolta();          // 06/10: no ar, entrar de novo volta ao jogo
+            location.href = Se.paginaConta() + '#entrar';
+          }
           else location.reload();
         } catch (e) {}
       });
@@ -9901,12 +9904,17 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function sheetContas() {
-    var body = sheetShell(tr('Contas'),
-      tr('Cada conta tem seu save e seu cofre. Trocar recarrega a página.'));
+    // 06/10 (somente online, "tem que exigir conta sempre"): NO AR não existe conta local — a lista, o
+    // "Criar conta nova" e a conta local do Mestre são de casa e das provas (JOGO.Contas.noAr)
+    var noAr = safe(function () { return !!(JOGO.Contas && JOGO.Contas.noAr && JOGO.Contas.noAr()); }, false);
+    var body = sheetShell(noAr ? tr('Conta') : tr('Contas'),
+      noAr ? tr('A sua conta e o save dela, guardado no servidor.')
+           : tr('Cada conta tem seu save e seu cofre. Trocar recarrega a página.'));
     sheetName = 'contas';
     var C = JOGO.Contas;
     if (!C) { body.appendChild(el('p', 'empty', tr('O Banco de Contas não carregou.'))); return; }
     var atual = C.ativa();
+    if (!noAr) {
     var caixa = el('div', 'contas-lista');
     C.lista().forEach(function (c) {
       var linha = el('button', 'conta-linha' + (c.id === atual ? ' is-on' : ''));
@@ -9936,6 +9944,7 @@ var JOGO = (typeof window !== 'undefined')
         var idM = safe(function () { return C.criaMestre(); }, null);
         if (idM) C.trocar(idM);
       }));
+    }
     }
     // A NUVEM (10/09): o save no cartório do servidor — logado pelo site, o
     // jogo puxa ao abrir e sobe a cada gravação; aqui só o estado e as portas.
@@ -9967,6 +9976,7 @@ var JOGO = (typeof window !== 'undefined')
             function () {
               Nx.sair().then(function () {
                 if (Sx.semRecarga) { sheetContas(); return; }
+                safe(function () { return Sx.marcaVolta && Sx.marcaVolta(); }, false);   // no ar: entrar de novo volta ao jogo
                 safe(function () { window.sessionStorage.setItem(Sx.CHAVE_AVISO, Sx.FRASE_SAIU); return true; }, false);
                 safe(function () { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); return true; }, false);
                 safe(function () { location.href = Sx.paginaConta() + '#entrar'; return true; }, false);
@@ -9992,7 +10002,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       body.appendChild(caixaN);
     }
-    body.appendChild(el('p', 'contas-nota',
+    if (!noAr) body.appendChild(el('p', 'contas-nota',
       tr('<b>Dois jogadores na mesma máquina:</b> deixe esta janela numa conta, abra OUTRA janela do mesmo navegador no mesmo endereço e troque lá para outra conta — os dois se veem no Acampamento (fantasma, chat, troca, arena). Atalho: abrir a segunda janela já com <b>?conta=2</b> no fim do endereço.')));
   }
 

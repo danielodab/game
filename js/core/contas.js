@@ -81,7 +81,14 @@ var JOGO = (typeof window !== 'undefined')
    *   - com gravação que não subiu (o servidor estava fora): fica guardado e ESCONDIDO,
    *     e esta janela joga na conta local 'visitante'. Quando a mesma conta entrar, a
    *     Nuvem o encontra e sobe; se entrar outra, ela o troca (js/core/nuvem.js).
-   * O jogo sem conta continua existindo — começa do zero, sem nome e sem save de ninguém. */
+   * O jogo sem conta continua existindo — começa do zero, sem nome e sem save de ninguém.
+   *
+   * 06/10 (o dono: somente online, "tem que exigir conta sempre!!"): isso tudo vale só EM CASA
+   * (file://, localhost, as provas). NO AR o porteiro do index.html (JOGO.Porteiro) nem deixa o
+   * jogo abrir sem sessão, e aqui a janela é SEMPRE a Principal — a conta do servidor: o
+   * `?conta=`, a última escolhida no registro e a `visitante` não valem lá. Save de visitante
+   * (ou de conta local) que já exista num navegador fica onde está, sem leitor: não sobe para
+   * conta nenhuma sozinho — seria progresso que servidor nenhum conferiu. */
   var VISITANTE = 'visitante';
   // o que o navegador guarda de uma conta do servidor (as chaves nuas, as da Principal)
   var DA_CONTA = ['soterra-save-v2', 'soterra-conta-v1', 'soterra-nuvem-v1', 'soterra-vida-v1',
@@ -116,10 +123,17 @@ var JOGO = (typeof window !== 'undefined')
   C.donoDoDisco = donoDoDisco;
   C.esqueceDaConta = esqueceDaConta;
 
+  /* No ar? Quem sabe é o porteiro do index.html (a regra é pelo endereço). Página que não o
+   * carrega (as de tests/, o Node das provas) é casa. */
+  function noAr() {
+    try { return !!(JOGO.Porteiro && JOGO.Porteiro.exige && JOGO.Porteiro.exige()); } catch (e) { return false; }
+  }
+  C.noAr = noAr;
+
   var reg = leReg();
-  var ativa = daUrl() || reg.ativa || 'principal';
+  var ativa = noAr() ? 'principal' : (daUrl() || reg.ativa || 'principal');
   // a escolha vale só para ESTA janela e não vai para o registro: com sessão, a Principal volta
-  if (!temSessao() && !esqueceDaConta() && ativa === 'principal') ativa = VISITANTE;
+  if (!noAr() && !temSessao() && !esqueceDaConta() && ativa === 'principal') ativa = VISITANTE;
   // conta pedida na URL que ainda não existe nasce NA HORA — "?conta=2" na
   // segunda janela é o suficiente para criar o segundo jogador
   if (!reg.lista.some(function (c) { return c.id === ativa; })) {
@@ -176,6 +190,7 @@ var JOGO = (typeof window !== 'undefined')
    * escolha no registro e recarrega a página com `?conta=` na URL — a URL é
    * a verdade DESTA janela; as outras janelas não mudam. */
   C.trocar = function (id) {
+    if (noAr()) return;                 // 06/10: no ar não há conta local para onde ir
     var r = leReg();
     r.ativa = id;
     gravaReg(r);

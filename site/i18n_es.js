@@ -1217,5 +1217,8 @@ JOGO.I18n.registra('es', { textos: {
   "{a}Wiki do SOTERRA": "{a}Wiki de SOTERRA",
   "<div class=\"estado fora\">Não deu para ler os dados do jogo (../js/core/data/).</div>": "<div class=\"estado fora\">No se pudieron leer los datos del juego (../js/core/data/).</div>",
   // ---- o extrato das barras: o anúncio premiado do aplicativo (06/10)
-  "anúncio assistido no aplicativo": "anuncio visto en la aplicación"
+  "anúncio assistido no aplicativo": "anuncio visto en la aplicación",
+  // ---- 06/10: o jogo no ar exige conta — quem veio do jogo sem sessão
+  "Para jogar, entre na sua conta — ou crie uma, é rápido.": "Para jugar, inicia sesión en tu cuenta — o crea una, es rápido.",
+  "Para jogar, crie a sua conta — ou entre, se já tem uma.": "Para jugar, crea tu cuenta — o inicia sesión si ya tienes una."
 } });

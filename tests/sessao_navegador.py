@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""A prova de navegador de que SAIR É SAIR (04/10).
+"""A prova de navegador de que SAIR É SAIR (04/10) e de que NO AR O JOGO EXIGE CONTA (06/10).
 
     python tests/sessao_navegador.py [--porta 8147] [--conta]
 
@@ -14,16 +14,25 @@ banco descartável), o site e o jogo servidos da raiz e UM perfil de Chrome para
 (as duas contas no mesmo navegador), dirigido pelo protocolo do DevTools — o site e o
 jogo são páginas diferentes, e é a NAVEGAÇÃO entre elas que se prova:
 
-  1. deslogado desde o começo, "Jogar" abre o jogo SEM CONTA (ele existe de propósito):
-     nenhuma sessão nasce, e o progresso de quem joga assim fica neste navegador;
-  2. a conta A entra, joga (o save sobe) e depois entra em outro aparelho;
+  1. deslogado desde o começo, "Jogar" NÃO abre o jogo: cai na tela de entrar / criar conta
+     sem baixar o jogo; a conta A entra ali mesmo e o jogo abre sozinho, na conta dela;
+  2. A joga (o save sobe) e depois entra em outro aparelho;
   3. O RELATO: o Mestre (B) entra só no site, sai e clica "Jogar" — antes o jogo abria
-     com os heróis e o nome de A; agora abre sem conta e sem nada dela;
+     com os heróis e o nome de A; agora nem abre: é a tela de entrar;
   4. A volta (o save vem do servidor), sai, "Jogar": nada dela fica no navegador, e o
      token morreu no servidor mesmo com o "Jogar" clicado no mesmo instante do "sair";
   5. B joga (nunca com o save de A), sai, "Jogar"; o endereço do jogo direto; `?conta=2`;
   6. duas abas: sair numa encerra o jogo aberto na outra, que não regrava o save;
-  7. o "Sair da conta" de dentro do jogo: sobe o que faltava, mata o token, limpa.
+  7. o "Sair da conta" de dentro do jogo: sobe o que faltava, mata o token, limpa;
+  8. a sessão que morre no servidor: com o jogo aberto, a capa e a volta ao jogo depois de
+     entrar; antes de abrir, a tela de entrar — nunca o jogo sem conta;
+  9. o save de VISITANTE que já existia neste navegador segue onde estava: ninguém o lê e
+     ele não sobe para conta nenhuma.
+
+"NO AR" EM 127.0.0.1: a regra do porteiro (index.html) é pelo endereço, e em casa não exige
+conta. Esta prova serve o jogo com o js/versao.js dizendo `exigeConta: true` (a classe NoAr,
+abaixo) — o campo que só o SERVIDOR manda e que só aperta a regra. Nenhum parâmetro de URL
+liga nem desliga isso. A regra em si: tests/porteiro.js.
 
 O Chrome roda em prioridade baixa e morre no fim (a árvore inteira), dê certo ou não.
 """
@@ -48,6 +57,9 @@ from servidor_api import API, Cliente, espera_api, porta_livre  # noqa: E402
 from santuario_navegador import CHROMES, Cdp, Fila, Servidor, mata, sobe_chrome  # noqa: E402
 
 SENHA = 'segredo-bom-8'
+# o save de um VISITANTE (o jogo sem conta de antes de 06/10), plantado no navegador
+VISITA_CONTA = json.dumps({'jogador': {'id': 'J-VISITA', 'nome': 'Sem Conta'}})
+VISITA_SAVE = json.dumps({'v': 2, 'visitante': True})
 # O que o navegador guarda. `nome`, `codigo`, `save` e `nuvem` são os da conta local que ESTA
 # página lê (no jogo, a do JOGO.Contas; no site, a Principal) — é o que o jogo mostra. `bruto` é
 # o que está nas chaves da Principal, lido ou não: o save de uma conta com gravação que não
@@ -57,7 +69,7 @@ GUARDADO = """(function () {
   function de(suf) {
     var c = le('soterra-conta-v1' + suf), n = le('soterra-nuvem-v1' + suf);
     return { save: !!localStorage.getItem('soterra-save-v2' + suf), nome: c && c.jogador ? (c.jogador.nome || null) : null,
-             codigo: c && c.jogador ? c.jogador.id : null, nuvem: n ? n.conta : null, sujo: !!(n && n.sujo) };
+             codigo: c && c.jogador ? c.jogador.id : null, nuvem: n ? n.conta : null, sujo: !!(n && n.sujo), versao: n ? n.versao : null };
   }
   var C = window.JOGO && window.JOGO.Contas, s = le('soterra-sessao'), chaves = [];
   for (var i = 0; i < localStorage.length; i++) chaves.push(localStorage.key(i));
@@ -79,6 +91,38 @@ JOGO_AGORA = """(function () {
            derrubada: !!(J.Sessao && J.Sessao.derrubadaJa && J.Sessao.derrubadaJa()),
            portao: !!document.querySelector('[data-portao-conta]') };
 })()"""
+
+
+class NoAr(Servidor):
+    """O servidor de arquivos desta prova: o mesmo de sempre, mas o js/versao.js que ele manda diz
+    ao porteiro do index.html que este endereço EXIGE conta (como um domínio de verdade). E anota o
+    que foi pedido, para se provar que quem não entrou não baixa o jogo."""
+    pedidos = []
+    VERSAO = (b"(typeof window !== 'undefined' ? window : globalThis).SOTERRA_VERSAO = "
+              b"{ versao: 'dev', arquivos: {}, exigeConta: true };\n")
+
+    def do_GET(self):
+        caminho = self.path.split('?')[0]
+        NoAr.pedidos.append(caminho)
+        if caminho == '/js/versao.js':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/javascript; charset=utf-8')
+            self.send_header('Content-Length', str(len(self.VERSAO)))
+            self.end_headers()
+            self.wfile.write(self.VERSAO)
+            return
+        super().do_GET()
+
+
+# o que só o JOGO pede: nada disto pode descer para quem não entrou
+# (só o que a ABERTURA pede: o site também lê tabelas de js/core/, e um jogo que acabou de ser fechado ainda
+# tem modelo sob demanda chegando — nada disso é o jogo abrindo)
+PESADO = ('/js/assets_bundle.js', '/js/main.js', '/vendor/three.min.js', '/js/ui/hud.js', '/js/core/contas.js',
+          '/js/core/nuvem.js', '/assets/models/bundle/manifest.json')
+
+
+def pesados(desde=0):
+    return [c for c in NoAr.pedidos[desde:] if c.startswith(PESADO)]
 
 
 class Nav(object):
@@ -158,7 +202,7 @@ def main():
         if args.conta:
             print('   [' + rotulo + '] ' + ' | '.join(json.dumps(c, ensure_ascii=False) for c in coisas), flush=True)
 
-    srv = Fila(('127.0.0.1', args.porta), functools.partial(Servidor, directory=RAIZ))
+    srv = Fila(('127.0.0.1', args.porta), functools.partial(NoAr, directory=RAIZ))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     pasta = tempfile.mkdtemp(prefix='soterra-sessao-nav-')
     banco = os.path.join(pasta, 'dados', 'soterra.db')
@@ -186,6 +230,7 @@ def main():
         def vale(token):
             return fora.pede('GET', '/api/eu', token=token)[0] == 200
 
+        marca = 0
         site = 'http://127.0.0.1:%d/site/' % args.porta
         jogo = 'http://127.0.0.1:%d/index.html' % args.porta
         com_api = '?api=' + urllib.parse.quote(base_api, safe='')
@@ -193,13 +238,20 @@ def main():
         porta_cdp = open(os.path.join(perfil, 'DevToolsActivePort')).read().split()[0]
         nav = Nav(cdp)
 
-        def entra(nome):
-            nav.vai(site + 'conta.html' + '#entrar')
+        def preenche(nome):
             nav.ate("document.getElementById('e-login') && window.SITE", 30)
             nav.js("document.getElementById('aba-entrar').click();"
                    "document.getElementById('e-login').value = %s;"
                    "document.getElementById('e-senha').value = %s;"
                    "document.getElementById('e-bt').click(); 1" % (json.dumps(nome), json.dumps(SENHA)))
+
+        def entra(nome):
+            """Entra pela página da conta, aberta por conta própria: fica nela (a marca de volta ao
+            jogo, que o porteiro deixa na aba, é de quem veio do jogo — aqui ela sai antes)."""
+            nav.js("sessionStorage.removeItem('soterra-volta-jogo'); 1")
+            nav.vai('about:blank')                        # da tela de entrar para ela mesma não recarregaria
+            nav.vai(site + 'conta.html' + '#entrar')
+            preenche(nome)
             ok = nav.ate("window.SITE && SITE.sessao() && SITE.sessao().conta.nome === %s" % json.dumps(nome), 30)
             return ok and nav.js("SITE.sessao().token")
 
@@ -209,46 +261,55 @@ def main():
 
         def sai_e_joga(antes=''):
             """O "sair" do topo e o "Jogar" no MESMO instante — o caminho do relato."""
+            nonlocal marca
             nav.vai(site + 'index.html')
             nav.ate("document.getElementById('bt-sair')", 30)
+            marca = len(NoAr.pedidos)
             nav.js(antes + "document.getElementById('bt-sair').click(); document.querySelector('header.topo a.jogar').click(); 1")
             return nav.assenta()
 
-        def nada_de(r, g, quem, nomes, codigos):
-            """Depois de sair: nenhuma sessão, e o jogo que abre é o SEM CONTA — do zero, sem o
-            save, o nome nem o código de jogador de conta nenhuma."""
+        def na_porta(r):
+            return bool(r) and not r['jogo'] and r['url'].split('#')[0].endswith('/site/conta.html')
+
+        def nada_de(r, g, quem, desde):
+            """Depois de sair: nenhuma sessão, e o jogo NÃO abre — é a tela de entrar, sem nada do
+            jogo baixado."""
             check(quem + ': o navegador não guarda sessão', bool(g) and g['sessao'] is None, g)
-            check(quem + ': "Jogar" não entra em conta nenhuma (abre o jogo sem conta)',
-                  bool(r) and r['jogo'] and not r['sessao'], r)
-            check(quem + ': o jogo que abre não traz o nome nem o código de jogador da conta',
-                  bool(r) and bool(g) and g.get('nome') not in nomes
-                  and g.get('codigo') not in codigos and g.get('nuvem') is None, (r, g))
+            check(quem + ': "Jogar" não abre o jogo — cai na tela de entrar', na_porta(r), r)
+            check(quem + ': nada do jogo desce para quem não entrou', not pesados(desde), pesados(desde)[:6])
 
         def sobe(nome):
             nav.js("JOGO.DB.batizar(%s); JOGO.Nuvem.empurrar(); 1" % json.dumps(nome))
             return nav.ate("JOGO.Nuvem.historico().filter(function (x) { return x.tipo === 'subiu'; }).length > 0 && "
                            "!JOGO.Nuvem.estado().pendente && JOGO.Nuvem.estado().erro === null", 60)
 
-        # ---- 1. deslogado desde o começo: o jogo sem conta, que continua existindo
+        # ---- 1. deslogado desde o começo: o jogo não abre — a tela de entrar, e de lá para o jogo
         nav.vai(site + 'index.html' + com_api)            # a API de casa fica lembrada (só em 127.0.0.1)
+        # um save de VISITANTE de antes da regra (o jogo sem conta que existia): fica onde está
+        nav.js("localStorage.setItem('soterra-conta-v1:visitante', %s);"
+               "localStorage.setItem('soterra-save-v2:visitante', %s); 1" % (json.dumps(VISITA_CONTA), json.dumps(VISITA_SAVE)))
+        marca = len(NoAr.pedidos)
         r = clica_jogar()
         g = nav.js(GUARDADO)
         conta('1 deslogado', r, g)
-        check('deslogado, "Jogar" não cria sessão', bool(g) and g['sessao'] is None and bool(r) and not r['sessao'], (r, g))
-        check('deslogado, o jogo abre sem conta e sem nome', bool(r) and r['jogo'] and g.get('nome') is None, (r, g))
-        nav.js("JOGO.DB.batizar('Sem Conta'); 1")
-        nav.vai(jogo)
+        check('deslogado, "Jogar" não abre o jogo: cai na tela de entrar / criar conta', na_porta(r) and r['url'].endswith('#entrar'), r)
+        check('deslogado, nenhuma sessão nasce', bool(g) and g['sessao'] is None, g)
+        check('deslogado, nada do jogo desce (nem o carregador de modelos, nem o código)', not pesados(marca), pesados(marca)[:6])
+        check('a tela diz por que está ali', 'Para jogar' in (nav.js("document.getElementById('e-aviso').textContent") or ''))
+        check('a marca de volta não foi para o endereço (fica na aba, lida uma vez pela página)',
+              'volta' not in r['url'] and nav.js("sessionStorage.getItem('soterra-volta-jogo')") is None)
+        preenche(nome_a)                                  # A entra ALI MESMO: o jogo abre sozinho
         r = nav.assenta()
         g = nav.js(GUARDADO)
-        check('o jogo sem conta guarda o progresso dele neste navegador (a limpeza não o toca)',
-              bool(r) and r['jogo'] and g.get('nome') == 'Sem Conta', (r, g))
+        conta('1 A entrou pela porta', r, g)
+        token_a = g and g['sessao'] and g['sessao']['token']
+        check('depois de entrar, o jogo abre sozinho na conta de A',
+              bool(r) and r['jogo'] and r['sessao'] and bool(g) and bool(g['sessao']) and g['sessao']['id'] == ida
+              and g['local'] == 'principal', (r, g))
+        check('A não recebe o save do visitante', bool(g) and g.get('nome') != 'Sem Conta', g)
 
-        # ---- 2. A entra e joga; depois a conta dela entra em OUTRO aparelho (o celular)
-        token_a = entra(nome_a)
-        check('A entra no site', bool(token_a))
-        r = clica_jogar()
-        conta('2 A joga', r, nav.js(GUARDADO))
-        check('A logada: "Jogar" abre o jogo com a sessão dela', bool(r) and r['jogo'] and r['sessao'], r)
+        # ---- 2. A joga; depois a conta dela entra em OUTRO aparelho (o celular)
+        check('A entrou', bool(token_a))
         check('o save de A sobe', sobe('Heroi de A'))
         g = nav.js(GUARDADO)
         codigo_a = g and g['codigo']
@@ -265,7 +326,7 @@ def main():
         r = sai_e_joga()
         g = nav.js(GUARDADO)
         conta('3 B saiu sem jogar e clicou Jogar', r, g)
-        nada_de(r, g, 'o Mestre saiu', ('Heroi de A',), (codigo_a,))
+        nada_de(r, g, 'o Mestre saiu', marca)
         time.sleep(1.5)
         check('o Mestre saiu: o token dele morreu no servidor (mesmo com o "Jogar" no mesmo clique)', not vale(token_b))
 
@@ -281,7 +342,7 @@ def main():
         r = sai_e_joga()
         g = nav.js(GUARDADO)
         conta('4 A saiu e clicou Jogar', r, g)
-        nada_de(r, g, 'A saiu', ('Heroi de A',), (codigo_a,))
+        nada_de(r, g, 'A saiu', marca)
         time.sleep(1.5)
         check('A saiu: o save dela (em dia com o servidor) saiu do disco',
               bool(g) and not g['bruto']['save'] and g['bruto']['nome'] is None and g['bruto']['nuvem'] is None, g)
@@ -298,33 +359,42 @@ def main():
               bool(g) and g['nome'] != 'Heroi de A' and g['codigo'] != codigo_a and g['nuvem'] == idb, g)
         check('o save de B sobe', sobe('Heroi de B'))
         codigo_b = nav.js(GUARDADO)['codigo']
+        # a Nuvem quieta antes de sair: uma subida no meio do caminho chegaria ao servidor sem o navegador
+        # saber (a página indo embora), e na volta o servidor mandaria — outro caminho, que não é o deste passo
+        nav.ate("(function () { var n = JSON.parse(localStorage.getItem('soterra-nuvem-v1') || 'null'), e = JOGO.Nuvem.estado();"
+                " return !!n && !n.sujo && !e.pendente && !e.subindo; })()", 30)
+        conta('5 B subiu', nav.js(GUARDADO), fora.pede('GET', '/api/save', token=token_b)[1].get('versao'))
         # B sai com gravação que NÃO subiu (o servidor estava fora na hora): o save fica guardado
-        # para ela, e o jogo sem sessão não o lê
+        # para ela, e ninguém sem sessão o lê (o jogo nem abre)
         r = sai_e_joga("var n = JSON.parse(localStorage.getItem('soterra-nuvem-v1')); n.sujo = true;"
                        "localStorage.setItem('soterra-nuvem-v1', JSON.stringify(n));")
         g = nav.js(GUARDADO)
         conta('5 B saiu e clicou Jogar', r, g)
-        nomes, codigos = ('Heroi de A', 'Heroi de B'), (codigo_a, codigo_b)
-        nada_de(r, g, 'A saiu, B entrou e saiu', nomes, codigos)
-        check('B saiu com gravação pendente: o save fica guardado, e o jogo abre em outra conta local',
-              bool(g) and g['local'] == 'visitante' and g['bruto']['nome'] == 'Heroi de B' and g['bruto']['nuvem'] == idb, g)
+        nada_de(r, g, 'A saiu, B entrou e saiu', marca)
+        check('B saiu com gravação pendente: o save fica guardado para ela',
+              bool(g) and g['bruto']['nome'] == 'Heroi de B' and g['bruto']['nuvem'] == idb and g['bruto']['sujo']
+              and g['bruto']['codigo'] == codigo_b, g)
         time.sleep(1.5)
         check('B saiu: o token dela morreu no servidor', not vale(token_b))
         nav.vai(jogo)
         r = nav.assenta()
         g = nav.js(GUARDADO)
         conta('5 jogo direto', r, g)
-        nada_de(r, g, 'deslogado, o endereço do jogo direto', nomes, codigos)
-        nav.vai(jogo + '?conta=2')
+        nada_de(r, g, 'deslogado, o endereço do jogo direto', marca)
+        nav.vai(jogo + '?conta=2&sandbox=1&app=1')
         r = nav.assenta()
         g = nav.js(GUARDADO)
         conta('5 ?conta=2', r, g)
-        nada_de(r, g, 'deslogado, `?conta=2`', nomes, codigos)
+        nada_de(r, g, 'deslogado, `?conta=2&sandbox=1&app=1` (parâmetro nenhum abre)', marca)
+        check('a conta local 2 nem nasceu', bool(g) and not any(c.endswith(':2') for c in g['chaves']), g and g['chaves'])
 
         # ---- 6. duas abas: o jogo aberto numa, o sair na outra
         token_b2 = entra(nome_b)
+        conta('6 B entrou no site', nav.js(GUARDADO), fora.pede('GET', '/api/save', token=token_b2)[1].get('versao'))
+        marca = len(NoAr.pedidos)
         r = clica_jogar()
         g = nav.js(GUARDADO)
+        conta('6 B de novo', r, g, [c for c in NoAr.pedidos[marca:] if c.endswith('.html')])
         check('B de novo: o jogo abre com o save dela, e o que estava pendente sobe',
               bool(r) and r['jogo'] and r['sessao'] and g.get('nome') == 'Heroi de B' and g['local'] == 'principal'
               and 'subiu' in r['hist'], (r, g))
@@ -364,6 +434,44 @@ def main():
         g = nav.js(GUARDADO)
         conta('7 A de volta', r, g)
         check('o que A jogou até o sair está no servidor', bool(g) and g['nome'] == 'Heroi de A2' and g['codigo'] == codigo_a, g)
+
+        # ---- 8. a sessão morre NO SERVIDOR (venceu, foi encerrada): o jogo não segue sem conta
+        token_a = nav.js(GUARDADO)['sessao']['token']
+        fora.pede('POST', '/api/logout', token=token_a)
+        check('o token de A morreu no servidor (com o jogo aberto)', not vale(token_a))
+        nav.js("JOGO.Sessao.confereAparelho(); 1")        # a olhada de 30 s, já
+        caiu = nav.ate("JOGO.Sessao.derrubadaJa() && !!document.querySelector('.sessao-derrubada')", 45)
+        check('com o jogo aberto, a sessão morta derruba o jogo com a capa (não se joga sem conta)',
+              bool(caiu) and 'sessão acabou' in (nav.js("document.querySelector('.sessao-derrubada').textContent") or ''))
+        nav.js("document.querySelector('.sessao-derrubada button').click(); 1")
+        r = nav.assenta()
+        check('"Entrar de novo" leva à tela de entrar, com a frase', na_porta(r)
+              and 'sessão acabou' in (nav.js("document.getElementById('e-aviso').textContent") or ''), r)
+        preenche(nome_a)
+        r = nav.assenta()
+        g = nav.js(GUARDADO)
+        conta('8 A entrou de novo', r, g)
+        check('e entrar devolve A ao jogo, com o save dela',
+              bool(r) and r['jogo'] and r['sessao'] and bool(g) and g['nome'] == 'Heroi de A2', (r, g))
+        token_a = g['sessao']['token']
+        nav.vai(site + 'index.html')
+        fora.pede('POST', '/api/logout', token=token_a)   # agora a sessão morre com o jogo FECHADO
+        r = clica_jogar()
+        g = nav.js(GUARDADO)
+        conta('8 token morto ao abrir', r, g)
+        check('sessão guardada que já morreu no servidor: "Jogar" cai na tela de entrar, e a sessão sai do navegador',
+              na_porta(r) and bool(g) and g['sessao'] is None, (r, g))
+
+        # ---- 9. o save de visitante de antes da regra: onde estava, sem leitor
+        check('o save de visitante segue no navegador, intocado',
+              nav.js("localStorage.getItem('soterra-conta-v1:visitante')") == VISITA_CONTA
+              and nav.js("localStorage.getItem('soterra-save-v2:visitante')") == VISITA_SAVE)
+        visto = Cliente(base_api)
+        entrou = visto.pede('POST', '/api/login', {'login': nome_a, 'senha': SENHA})[1]
+        salvo = visto.pede('GET', '/api/save', token=entrou.get('token'))
+        check('…e não subiu para a conta de A',
+              salvo[0] == 200 and 'Heroi de A2' in json.dumps(salvo, ensure_ascii=False)
+              and 'Sem Conta' not in json.dumps(salvo, ensure_ascii=False), salvo[0])
         check('em nenhum passo o token foi para o endereço', 'token' not in (r or {}).get('url', '') and token_a not in json.dumps(r or {}))
         for linha in cdp.console[:8]:
             print('   ' + linha)

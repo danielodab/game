@@ -191,10 +191,23 @@
    * agora PÁRA na conta: o painel "Minha conta" abre, com o botão Jogar à
    * mão. Só o CADASTRO segue direto para o jogo — o botão dele promete isso
    * na letra ("Criar conta e jogar") e quem acabou de nascer quer jogar. */
+  /* 06/10 (o dono: somente online, "tem que exigir conta sempre!!"): o jogo no ar não abre sem conta — o
+   * porteiro do index.html manda para cá e deixa uma marca NA ABA (sessionStorage; nunca no endereço). Quem
+   * chegou assim veio para JOGAR: entrar devolve ao jogo sozinho (no aplicativo, dentro do mesmo WebView).
+   * A marca é lida uma vez; quem abre a página da conta por conta própria segue parando nela. */
+  var CHAVE_VOLTA = 'soterra-volta-jogo';       // a mesma do porteiro (index.html) e do js/core/sessao.js
+  var voltaAoJogo = false;
+  function leVolta() {
+    try {
+      voltaAoJogo = sessionStorage.getItem(CHAVE_VOLTA) === '1';
+      if (voltaAoJogo) sessionStorage.removeItem(CHAVE_VOLTA);
+    } catch (e) { voltaAoJogo = false; }
+    return voltaAoJogo;
+  }
   function entrou(r, direto) {
     // o que o jogo vai ler: token + a conta enxuta
     SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
-    if (direto) { location.href = '../index.html'; return; }
+    if (direto || voltaAoJogo) { location.href = '../index.html'; return; }
     SITE.cabecalho();
     carregaConta();
   }
@@ -769,7 +782,8 @@
       if (r.ok) SITE.acertaRelogio(r.agora);
       ligaEsqueci(!!r.ok && r.correio === true);
     });
-    if (SITE.sessao()) carregaConta();
+    leVolta();
+    if (SITE.sessao()) { voltaAoJogo = false; carregaConta(); }
     else {
       mostra(telaFora());
       // 13/09 (um aparelho só): chegou aqui porque a conta entrou em outro
@@ -778,6 +792,10 @@
       if (queda) {
         mostra('entrar');
         aviso('e-aviso', queda, 'neutro');
+      } else if (voltaAoJogo) {
+        // veio do jogo sem conta: a tela diz por quê, e a aba "Criar conta" está ao lado
+        aviso('e-aviso', Tx('Para jogar, entre na sua conta — ou crie uma, é rápido.'), 'neutro');
+        aviso('c-aviso', Tx('Para jogar, crie a sua conta — ou entre, se já tem uma.'), 'neutro');
       }
     }
   }

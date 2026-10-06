@@ -2510,5 +2510,9 @@ JOGO.I18n.registra('es', { textos: {
   "Prêmio Grátis!": "¡Premio gratis!",
   "Restam {a} hoje.": "Quedan {a} hoy.",
   "Ganhar prêmios": "Ganar premios",
-  "Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.": "Opcional: mira un anuncio y gana vintenes o una barra de oro. Hasta 5 de cada uno al día. El juego no muestra anuncios en ningún otro lugar."
+  "Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.": "Opcional: mira un anuncio y gana vintenes o una barra de oro. Hasta 5 de cada uno al día. El juego no muestra anuncios en ningún otro lugar.",
+  // ---- 06/10: o jogo no ar exige conta (o porteiro do index.html)
+  "Sua sessão acabou. Entre de novo para continuar.": "Tu sesión terminó. Inicia sesión de nuevo para continuar.",
+  "Sua sessão acabou.": "Tu sesión terminó.",
+  "A sua conta e o save dela, guardado no servidor.": "Tu cuenta y su partida, guardada en el servidor.",
 } });

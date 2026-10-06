@@ -329,7 +329,10 @@
       var a = fileira();
       a.appendChild(botao(bt('Tentar de novo'), 'btn-primary boot-tentar', tentar));
       a.appendChild(botao(bt('Abrir sem o save deste navegador'), 'btn-ghost boot-sem-save', semSave));
-      a.appendChild(botao(bt('Abrir numa conta local vazia'), 'btn-ghost boot-vazia', vazia));
+      // 06/10: no ar não há conta local (o porteiro exige conta e o js/core/contas.js ignora o ?conta=)
+      var noAr = false;
+      try { noAr = !!(window.JOGO && window.JOGO.Porteiro && window.JOGO.Porteiro.exige()); } catch (eP) {}
+      if (!noAr) a.appendChild(botao(bt('Abrir numa conta local vazia'), 'btn-ghost boot-vazia', vazia));
       avisoEl.appendChild(a);
       c.appendChild(avisoEl);             // DEPOIS da barra e do texto: o progresso desta segue à vista
     }
@@ -497,6 +500,121 @@
     try { if (window.__boot) window.__boot.espera(['js/versao.js'], 'A'); } catch (eB) {}   // a marca de abertura
   }
 </script>
+<script id="porteiro">
+  /* O PORTEIRO (06/10, o dono: o jogo é SOMENTE ONLINE e "tem que exigir conta sempre!!").
+   *
+   * Antes, sem sessão, o jogo abria "do zero" numa conta local (a `visitante` do js/core/contas.js): no ar
+   * isso era jogar sem conta, com progresso que servidor nenhum conferia. Agora, NO AR, sem sessão o jogo
+   * NÃO ABRE: este bloco roda antes de qualquer arquivo pesado (nem o carregador de modelos é pedido) e
+   * manda para a tela de ENTRAR / CRIAR CONTA do site (site/conta.html, mesma origem — no aplicativo fica
+   * dentro do WebView), com uma marca na aba para o login VOLTAR SOZINHO ao jogo (site/conta.js).
+   *
+   * QUEM ABRE SEM CONTA — a regra é pelo ENDEREÇO, nunca por parâmetro de URL:
+   *   - file://                                  (os dois cliques no index.html, em casa)
+   *   - http(s)://localhost, 127.0.0.1 ou [::1]  (o servidor de casa e as centenas de provas)
+   * Todo o resto exige conta: qualquer domínio de verdade, qualquer IP de rede, e o aplicativo (o Capacitor
+   * nativo exige mesmo que a página venha do https://localhost do pacote).
+   *
+   * As provas rodam em 127.0.0.1 e precisam ver o jogo "no ar": o SERVIDOR pode mandar exigir, com
+   * `exigeConta: true` no js/versao.js que ele serve (tests/sessao_navegador.py troca esse arquivo na
+   * resposta). Esse campo só APERTA a regra — não existe valor dele, nem de coisa nenhuma que o jogador
+   * controle, que a afrouxe num domínio de verdade.
+   *
+   * Sessão que existe no navegador mas já morreu no servidor (venceu, foi encerrada): uma pergunta leve
+   * (/api/eu) sai em paralelo e, no 401, a página larga a carga e vai para a tela de entrar. O servidor
+   * fora do ar não derruba ninguém aqui. Sessão que morre com o jogo aberto: as capas do js/core/sessao.js.
+   *
+   * Prova: tests/porteiro.js (a regra, lida DESTE bloco) e tests/sessao_navegador.py (o caminho inteiro). */
+  (function () {
+    'use strict';
+    var J = window.JOGO = window.JOGO || {};
+    var P = J.Porteiro = {};
+    P.CHAVE_VOLTA = 'soterra-volta-jogo';       // sessionStorage: quem entrar volta para o jogo (site/conta.js)
+    P.PAGINA = 'site/conta.html#entrar';
+    P.ehLocal = function (proto, host) {
+      host = String(host || '').toLowerCase();
+      return proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+    };
+    /* A REGRA. `versao` é o window.SOTERRA_VERSAO (o js/versao.js que o servidor mandou); `nativo`, o
+     * Capacitor do aplicativo. Os dois só fazem EXIGIR. */
+    P.exigeEm = function (proto, host, versao, nativo) {
+      if (nativo === true) return true;
+      if (versao && versao.exigeConta === true) return true;
+      return !P.ehLocal(proto, host);
+    };
+    function nativo() {
+      try {
+        var C = window.Capacitor;
+        return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+      } catch (e) { return false; }
+    }
+    var exige = true;                            // na dúvida, exige
+    try { exige = P.exigeEm(location.protocol, location.hostname, window.SOTERRA_VERSAO, nativo()); } catch (e0) {}
+    P.exige = function () { return exige; };
+    function sessao() {
+      try {
+        var x = JSON.parse(window.localStorage.getItem('soterra-sessao') || 'null');
+        return (x && typeof x.token === 'string' && x.token && x.conta && typeof x.conta === 'object') ? x : null;
+      } catch (e) { return null; }
+    }
+    P.temSessao = function () { return !!sessao(); };
+    P._navega = function (u) { try { window.location.replace(u); } catch (e) {} };
+    /* "Sair é sair" (04/10): o save de uma conta do servidor não fica no navegador de quem saiu. Quem fazia
+     * esta limpeza ao abrir o jogo sem sessão era o js/core/contas.js, que agora nem chega a rodar — a regra
+     * é a mesma de lá: em dia com o servidor, sai do disco; com gravação que não subiu, fica guardado para a
+     * dona (a Nuvem o sobe quando ela entrar). Save sem dono (o de visitante, o das contas locais) não é tocado. */
+    P.esqueceDaConta = function () {
+      try {
+        var L = window.localStorage, r = JSON.parse(L.getItem('soterra-nuvem-v1') || 'null');
+        if (!r || typeof r !== 'object' || r.conta === null || r.conta === undefined || r.sujo) return;
+        var DA_CONTA = ['soterra-save-v2', 'soterra-conta-v1', 'soterra-nuvem-v1', 'soterra-vida-v1',
+                        'soterra-save-v2--antes-do-teste'];          // as mesmas do js/core/contas.js
+        for (var i = 0; i < DA_CONTA.length; i++) L.removeItem(DA_CONTA[i]);
+      } catch (e) {}
+    };
+    /* Para a tela de entrar. A marca de abertura some (não é uma abertura que travou) e o resto desta
+     * página não pede mais nada: os blocos de baixo olham window.__portao. */
+    P.manda = function () {
+      window.__portao = true;
+      P.esqueceDaConta();
+      try { window.sessionStorage.setItem(P.CHAVE_VOLTA, '1'); } catch (e) {}
+      try { document.documentElement.setAttribute('data-portao-conta', '1'); } catch (e1) {}
+      try { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); } catch (e2) {}
+      P._navega(P.PAGINA);
+    };
+    function base() {
+      try {
+        var A = window.SOTERRA_APP;
+        if (A && typeof A.servidor === 'string' && A.servidor) return A.servidor.replace(/\/+$/, '');
+        if (P.ehLocal(location.protocol, location.hostname)) return window.localStorage.getItem('soterra-api-base') || '';
+      } catch (e) {}
+      return '';
+    }
+    /* A sessão guardada ainda vale no servidor? Só o 401 manda embora; se nesse meio-tempo outro token
+     * entrou neste navegador (outra aba), a sessão nova fica. */
+    P.confirma = function () {
+      var s = sessao();
+      if (!s || typeof window.fetch !== 'function') return;
+      try {
+        window.fetch(base() + '/api/eu', { headers: { Authorization: 'Bearer ' + s.token } }).then(function (r) {
+          if (!r || r.status !== 401 || window.__portao) return;
+          var agora = sessao();
+          if (agora && agora.token !== s.token) return;
+          try { window.localStorage.removeItem('soterra-sessao'); } catch (e) {}
+          P.manda();
+        }, function () {});
+      } catch (e2) {}
+    };
+    /* true = o jogo pode abrir. */
+    P.confere = function () {
+      if (!exige) return true;
+      if (!sessao()) { P.manda(); return false; }
+      P.confirma();
+      return true;
+    };
+    P.confere();
+  })();
+</script>
 <script>
   (function () {
     var V = window.SOTERRA_VERSAO;
@@ -545,6 +663,9 @@
   logo antes de 'js/render3d/portraits3d.js' — ela tem prioridade sobre o retrato 3D.
 -->
 <script>
+  // 06/10, o PORTEIRO (o <script id="porteiro"> do <head>): no ar e sem sessão a página está indo para a tela
+  // de entrar — window.__portao — e nada daqui para baixo é pedido (nem o carregador de modelos, nem a lista).
+  if (!window.__portao) {
   // O carregador de modelos precisa existir antes da decisão abaixo.
   document.write('<scr' + 'ipt src="' + window.__url('js/assets_bundle.js') + '"><\/scr' + 'ipt>');
   try { if (window.__boot) window.__boot.espera(['js/assets_bundle.js'], 'A'); } catch (eB) {}   // a marca de abertura
@@ -552,12 +673,14 @@
   // dicionários descem (só os do idioma em uso; em português, nenhum). Ver docs/IDIOMAS.md.
   document.write('<scr' + 'ipt src="' + window.__url('js/core/i18n.js') + '"><\/scr' + 'ipt>');
   try { if (window.__boot) window.__boot.espera(['js/core/i18n.js'], 'A'); } catch (eI) {}
+  }
 </script>
 <script>
   /* Etapa 2 dos idiomas: fora do português, os TEXTOS DA INTERFACE descem já aqui — os dois arquivos do
    * aplicativo (logo abaixo: os modelos guardados e a compra pela Play) desenham telas ANTES da lista de
    * arquivos, e sem o dicionário elas sairiam em português. Os DADOS (dados_*.js) seguem na lista, depois do
    * último js/core/data/*.js. Em português não desce nada. */
+  if (!window.__portao) {
   try {
     var LG0 = (window.JOGO && window.JOGO.I18n && window.JOGO.I18n.idioma) || 'pt';
     if (LG0 !== 'pt') {
@@ -598,9 +721,11 @@
       document.write('<scr' + 'ipt src="' + window.__url('js/core/premio_anuncio.js') + '"><\/scr' + 'ipt>');
     }
   } catch (eApp) {}
+  }
 </script>
 <script>
   (function () {
+    if (window.__portao) return;       // o porteiro fechou: a página está indo para a tela de entrar
     // A ORDEM DESTA LISTA É A ÁRVORE DE DEPENDÊNCIAS. Não há bundler para avisar
     // se você errar: um arquivo que use JOGO.Engine tem de vir depois de engine.js.
     var arquivos = [

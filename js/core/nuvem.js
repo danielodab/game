@@ -328,6 +328,7 @@
         if (r.status === 401 || r.status === 403) {
           s.esquece(); ligada = false;
           guardaParaADona();
+          if (r.status === 401 && s.vencida) s.vencida();    // 06/10: no ar o jogo não segue sem conta (a capa)
           erro = r.erro || ('HTTP ' + r.status);
           avisa('erro', { erro: erro, status: r.status });
           return r;
@@ -417,7 +418,7 @@
       }
       if (r.status === 401 || r.status === 403) {
         erro = r.erro || Tx('a sessão não vale mais');
-        if (r.status === 401) { s.esquece(); ligada = false; guardaParaADona(); }
+        if (r.status === 401) { s.esquece(); ligada = false; guardaParaADona(); if (s.vencida) s.vencida(); }
         else parada = true;                         // instância de outra conta: o save local está errado
         avisa('erro', { erro: erro, status: r.status });
         return r;
