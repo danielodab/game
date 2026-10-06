@@ -673,14 +673,23 @@ class ProvaDoTexto(unittest.TestCase):
                 vistos.add(nome)
         self.assertEqual(vistos, set(esperado), 'toda constante conferida aparece em alguma página')
 
-    def test_o_que_nao_existe_no_codigo_fica_para_preencher(self):
-        for pagina in ('termos.html', 'privacidade.html'):
-            html = self.le('site', pagina)
-            for campo in ('razão social', 'CNPJ', 'e-mail de contato'):
-                self.assertIn('[PREENCHER: %s]' % campo, html, pagina)
-        self.assertIn('[PREENCHER: cidade do foro]', self.le('site', 'termos.html'))
-        self.assertIn('[PREENCHER: nome do encarregado (DPO)]', self.le('site', 'privacidade.html'))
-        self.assertTrue(os.path.exists(os.path.join(RAIZ, 'docs', 'REVISAO_JURIDICA.md')))
+    def test_o_que_nao_existe_no_codigo_foi_preenchido(self):
+        """06/10: as lacunas [PREENCHER: …] saíram com o que o dono decidiu (docs/REVISAO_JURIDICA.md,
+        "Preenchido em 06/10"). Nenhuma pode voltar — a Play abre a página —, nem nas traduções. O
+        responsável é pessoa física: não há CNPJ para citar."""
+        for pagina in ('termos.html', 'privacidade.html', 'i18n_juridico_en.js', 'i18n_juridico_es.js'):
+            texto = self.le('site', pagina)
+            self.assertNotIn('PREENCHER', texto, pagina)
+            self.assertNotIn('class="preencher"', texto, pagina)
+            self.assertNotIn('CNPJ', texto, pagina)
+            for dado in ('Oda Studio - DOB', 'system@viidoo.io'):
+                self.assertIn(dado, texto, pagina)
+        termos, politica = self.le('site', 'termos.html'), self.le('site', 'privacidade.html')
+        self.assertIn('pelo menos <b>13 anos</b>', termos)
+        self.assertIn('foro do domicílio do consumidor', termos)
+        for dado in ('Hostinger', 'Google Workspace', 'art. 33 da LGPD', '<b>5 anos</b>', '<b>2 anos</b>'):
+            self.assertIn(dado, politica)
+        self.assertIn('Preenchido em 06/10', self.le('docs', 'REVISAO_JURIDICA.md'))
 
     def test_rodape_de_toda_pagina_do_site_leva_aos_documentos(self):
         for nome in sorted(os.listdir(os.path.join(RAIZ, 'site'))):

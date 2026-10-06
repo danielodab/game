@@ -14,7 +14,7 @@
      mestre_erros.js) escritas num iframe com um window.fetch FALSO que anota cada
      pedido (o palco é o da tests/site_fase_c.html). Cobra:
        - os dois documentos: a versão da página é a do site.js, nenhum pedido à API,
-         todo [PREENCHER] marcado, o índice aponta para seções que existem, nada de
+         nenhum [PREENCHER] sobrando, o índice aponta para seções que existem, nada de
          undefined/NaN, o rodapé leva aos dois;
        - criar conta: sem a caixa do aceite marcada, nada sai e o aviso pede o aceite;
          marcada, o POST leva aceiteTermos = SITE.VERSAO_TERMOS; o 409 de termos
@@ -184,9 +184,10 @@
       check(pag + ': nenhum pedido à API (a página é texto)', c.pedidos.length === 0, c.pedidos.map(function (x) { return x.rota; }).join(' '));
       var corpo = texto(p.d.body);
       check(pag + ': nada de undefined, NaN ou null no texto', !/\bundefined\b|\bNaN\b|\bnull\b/.test(corpo));
-      var soltos = (p.d.body.innerHTML.match(/\[PREENCHER/g) || []).length,
-          marcados = p.qq('.preencher').filter(function (s) { return /^\[PREENCHER: [^\]]+\]$/.test(texto(s)); }).length;
-      check(pag + ': todo [PREENCHER] está marcado para saltar à vista (' + marcados + ')', soltos > 0 && soltos === marcados,
+      // 06/10: as lacunas foram preenchidas (docs/REVISAO_JURIDICA.md) — nenhuma pode voltar à página
+      var soltos = (p.d.body.innerHTML.match(/\[PREENCHER/g) || []).length, marcados = p.qq('.preencher').length;
+      check(pag + ': nenhuma lacuna [PREENCHER] sobrou, e o responsável e o contato estão escritos', soltos === 0 && marcados === 0 &&
+            corpo.indexOf('Oda Studio - DOB') >= 0 && corpo.indexOf('system@viidoo.io') >= 0,
             soltos + ' no HTML × ' + marcados + ' marcados');
       var furos = p.qq('.indice a').filter(function (a) { return !p.d.getElementById(a.getAttribute('href').slice(1)); });
       check(pag + ': o índice só aponta para seções que existem', p.qq('.indice a').length >= 10 && !furos.length,

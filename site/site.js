@@ -68,7 +68,7 @@
    * páginas mostram (site/termos.html e privacidade.html, data-versao). O
    * cadastro manda esta no `aceiteTermos`; o servidor (servidor/privacidade.py,
    * VERSAO_TERMOS) recusa outra. tests/privacidade_api.py pega a deriva. */
-  SITE.VERSAO_TERMOS = '2026-10-02';
+  SITE.VERSAO_TERMOS = '2026-10-06';
 
   function leLocal(chave) {
     try { return localStorage.getItem(chave); } catch (e) { return null; }

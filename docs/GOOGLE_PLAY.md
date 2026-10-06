@@ -234,7 +234,7 @@ nenhum de propósito, para não envelhecer.
 ## 4. Segurança dos dados (o formulário da Play)
 
 As respostas saem da [`site/privacidade.html`](../site/privacidade.html) (versão
-de 02/10/2026). Se a política mudar, este formulário muda junto.
+de 06/10/2026). Se a política mudar, este formulário muda junto.
 
 **As três primeiras perguntas**
 
@@ -276,9 +276,10 @@ aparelho ou de publicidade. Dados de cartão, Pix e CPF não passam pelo jogo.
 
 **Sobre "compartilhado":** a Play não conta como compartilhamento o que vai para
 um prestador que trabalha para você (a hospedagem, o provedor de e-mail). Por
-isso tudo está como "Não". **Confira com o advogado** junto com os
-`[PREENCHER]` que ainda estão na política — a Play lê a página, e ela não pode
-ir ao ar com esses campos em branco.
+isso tudo está como "Não". **Confira com o advogado** junto com o que foi
+preenchido na política em 06/10 (a Play lê a página; ela não tem mais campo em
+branco — a lista do que conferir está em
+[`REVISAO_JURIDICA.md`](REVISAO_JURIDICA.md), "Preenchido em 06/10").
 
 **O endereço IP:** o servidor o guarda nas sessões e nos freios contra abuso
 (seção 2). A Play não tem um tipo "IP"; ele não é usado para localizar ninguém,
@@ -368,8 +369,23 @@ mas é o melhor jeito de você mesmo instalar pela Play antes de chamar os outro
    no aplicativo diz "chega em breve" e nada mais quebra.
 5. **A arte:** ícone 1024×1024, tela de abertura, ícone da loja 512×512, imagem
    de destaque 1024×500 e as capturas de tela (seção 2).
-6. **Os `[PREENCHER]` da Política de Privacidade e dos Termos** (razão social,
-   CNPJ, e-mails, hospedagem, prazos). A Play abre o link.
+6. **Os `[PREENCHER]` da Política de Privacidade e dos Termos: preenchidos em
+   06/10** (responsável Oda Studio - DOB, pessoa física, sem CNPJ; contato e
+   encarregado em system@viidoo.io; Hostinger; Google Workspace; idade mínima de
+   13 anos; foro do domicílio do consumidor; prazos de guarda). A Play abre o
+   link e não acha mais campo em branco. **Resta conferir** (a lista inteira
+   está em [`REVISAO_JURIDICA.md`](REVISAO_JURIDICA.md), "Preenchido em 06/10"):
+   - o **país da hospedagem** — "Estados Unidos" saiu do registro público do
+     endereço IP; confirme no painel da Hostinger;
+   - o **encarregado** está pelo nome do estúdio, não de uma pessoa — a ANPD
+     costuma esperar a identidade;
+   - **sem CNPJ nem CPF** na página: o decreto do comércio eletrônico pede um
+     dos dois no site que vende;
+   - os prazos de **5 anos** (pagamentos) e **2 anos** (moderação) são
+     compromisso: o servidor ainda não apaga sozinho;
+   - o **e-mail de contato da ficha** (seção 3) e o do formulário de segurança
+     dos dados têm de ser o mesmo system@viidoo.io;
+   - a revisão do advogado, que continua valendo para os dois documentos.
 7. **A chave de assinatura** (seção 1.3) — e a cópia dela fora do computador.
 
 **Para decidir**

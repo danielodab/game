@@ -74,7 +74,7 @@ log = logging.getLogger('api')
 # deles de um jeito que muda direito ou dever de alguém: sobe aqui, em site/conta.js
 # (VERSAO_TERMOS) e no data-versao das duas páginas — tests/privacidade_api.py pega a
 # deriva entre os quatro.
-VERSAO_TERMOS = '2026-10-02'
+VERSAO_TERMOS = '2026-10-06'
 DOCUMENTOS = ('termos', 'privacidade')
 # 05/10, o e-mail da conta excluída em inglês e espanhol (docs/IDIOMAS.md); o português mora em _texto_excluida
 EXCLUIDA = {
