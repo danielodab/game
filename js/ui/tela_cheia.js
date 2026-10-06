@@ -24,6 +24,13 @@
 // O CANTO É RESERVADO pelo CSS: html.tem-canto liga `--canto`, e quem morava
 // ali (o som, o recentrar e o cadeado da batalha, o "Menu" do Acampamento, o
 // fim dos cabeçalhos, o botão de teste no celular) chega para a esquerda.
+//
+// NO APLICATIVO NÃO HÁ BOTÃO (06/10, o dono: "no app não precisa ter o botão de
+// tela cheia igual tem no chrome de pc e celular"): a casca de Android já ocupa
+// a tela inteira, não há barra de navegador para esconder. Lá o botão não é
+// criado, o canto não é reservado (`tem-canto` não entra: quem tinha chegado
+// para a esquerda volta ao canto) e a chave das Configurações some. Na web —
+// computador e navegador do celular — nada muda.
 
 var JOGO = (typeof window !== 'undefined')
   ? (window.JOGO = window.JOGO || {})
@@ -63,6 +70,18 @@ var JOGO = (typeof window !== 'undefined')
                                       window.matchMedia('(display-mode: fullscreen)').matches));
     } catch (e) { return false; }
   }
+
+  /* a casca de Android (o Capacitor põe window.Capacitor antes do primeiro script) ou o `?app=1` das provas —
+   * a mesma pergunta do JOGO.Mobile.app(), que é a preferida quando o mobile.js já carregou */
+  function noApp() {
+    try {
+      if (JOGO.Mobile && typeof JOGO.Mobile.app === 'function') return !!JOGO.Mobile.app();
+      var C = window.Capacitor;
+      if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) return true;
+      return /[?&]app=1(&|$)/.test(String(window.location.search || ''));
+    } catch (e) { return false; }
+  }
+  TC.noApp = noApp;
 
   TC.suporta = suporta;
   TC.cheia = function () { return !!cheia(); };
@@ -125,6 +144,7 @@ var JOGO = (typeof window !== 'undefined')
 
   function monta() {
     if (botao || !doc.body) return;
+    if (noApp()) return;                       // o aplicativo já é tela cheia: sem botão e sem canto reservado
     if (instalado() && !suporta()) return;     // aberto pelo ícone, sem API: não há barra para esconder
     botao = doc.createElement('button');
     botao.type = 'button';

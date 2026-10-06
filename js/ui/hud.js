@@ -9790,7 +9790,8 @@ var JOGO = (typeof window !== 'undefined')
     var tela = el('section', 'cfg-sec');
     tela.appendChild(el('h3', 'bk-tit', tr('Tela')));
     var TC = JOGO.TelaCheia;
-    if (TC && TC.suporta && TC.suporta()) {
+    // 06/10: no aplicativo não há chave (nem botão no canto): a casca já é tela cheia
+    if (TC && TC.suporta && TC.suporta() && !(TC.noApp && TC.noApp())) {
       /* 03/10 (revisão): a chave segue a tela, não o toque. Ela virava na hora
        * e ficava "ligada" quando o navegador recusava (quadro sem permissão)
        * e também depois do Esc, que sai da tela cheia sem passar por aqui — e o
