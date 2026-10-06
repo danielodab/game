@@ -42,12 +42,24 @@ jogo.exemplo.com.br {
 		}
 	}
 	@indice path / *.html /js/versao.js /assets/models/bundle/manifest.json
+	# A MÚSICA (assets/musica/, 06/10) não leva hash no endereço: o NOME do
+	# arquivo é a faixa, e faixa trocada entra com nome novo. Fica 30 dias no
+	# navegador — o <audio> pede por pedaços (Range), que o file_server atende.
+	@musica path /assets/musica/*
 	route {
 		header Cache-Control "no-cache"
 		header @marcado_v Cache-Control "public, max-age=31536000, immutable"
 		header @marcado_h Cache-Control "public, max-age=31536000, immutable"
+		header @musica Cache-Control "public, max-age=2592000"
 		header @indice Cache-Control "no-cache"
 	}
+
+	# O tipo da música vai escrito: a imagem do Caddy (Alpine) não traz a tabela
+	# de tipos do sistema, e sem ela .ogg e .mp3 sairiam sem Content-Type.
+	@ogg path *.ogg
+	header @ogg Content-Type audio/ogg
+	@mp3 path *.mp3
+	header @mp3 Content-Type audio/mpeg
 
 	# O APLICATIVO DE ANDROID abre de https://localhost (os arquivos do pacote)
 	# e baixa os modelos DAQUI, sob demanda, como a web. Buscar um .glb de outra

@@ -673,6 +673,8 @@ var JOGO = (typeof window !== 'undefined')
     hideTip();
     if (name !== 'battle') closeSheet();
     current = name;
+    // 06/10: a música segue a TELA — luta na batalha, a da praça em todo o resto (js/audio.js); ficha não é tela
+    safe(function () { if (JOGO.Audio && JOGO.Audio.musica) JOGO.Audio.musica.tela(name); }, null);
     // o laço de desenho do Acampamento não pode continuar rodando escondido
     if (name !== 'hub' && JOGO.Hub && JOGO.Hub.sair) JOGO.Hub.sair();
     for (var k in screens) {
@@ -9760,13 +9762,14 @@ var JOGO = (typeof window !== 'undefined')
     som.appendChild(el('h3', 'bk-tit', tr('Som')));
     if (Au && Au.isMudo) {
       var volume = document.createElement('input');
-      var lnVol = null;
+      var lnVol = null, pintaMus = null;
       som.appendChild(linhaConfig(tr('Som do jogo'), tr('Golpes, passos e a interface.'),
         chaveConfig(!Au.isMudo(), tr('Som do jogo'), function (on) {
           Au.setMudo(!on);
           pintaBotaoSom();
           volume.disabled = !on;
           if (lnVol) lnVol.classList.toggle('is-apagado', !on);
+          if (pintaMus) pintaMus();
         })));
       volume.type = 'range';
       volume.min = '0'; volume.max = '100'; volume.step = '5';
@@ -9787,6 +9790,40 @@ var JOGO = (typeof window !== 'undefined')
       lnVol = linhaConfig(tr('Volume'), null, vol);
       if (Au.isMudo()) lnVol.classList.add('is-apagado');
       som.appendChild(lnVol);
+      /* MÚSICA (06/10, o dono: "algumas músicas de ação (só sonoro de fundo nas lutas) e uma para a
+       * praça, mas bem de leve"). Canal próprio (JOGO.Audio.musica): a chave e a régua dela não mexem
+       * nos efeitos; a chave "Som do jogo" de cima — e o 🔊 da batalha — cala os dois, e por
+       * isso apaga estas linhas também. */
+      var Mu = Au.musica;
+      if (Mu && Mu.isLigada) {
+        var volM = document.createElement('input'), lnMus = null, lnVolM = null;
+        pintaMus = function () {
+          var mudo = Au.isMudo(), ligada = Mu.isLigada();
+          volM.disabled = mudo || !ligada;
+          if (lnMus) lnMus.classList.toggle('is-apagado', mudo);
+          if (lnVolM) lnVolM.classList.toggle('is-apagado', mudo || !ligada);
+        };
+        lnMus = linhaConfig(tr('Música'), tr('Fundo bem leve na praça e nas lutas. Cada faixa (cerca de 1 MB) só é baixada quando toca.'),
+          chaveConfig(Mu.isLigada(), tr('Música'), function (on) { Mu.setLigada(on); pintaMus(); }));
+        som.appendChild(lnMus);
+        volM.type = 'range';
+        volM.min = '0'; volM.max = '100'; volM.step = '5';
+        volM.className = 'cfg-volume';
+        volM.value = String(Math.round(Mu.getVolume() * 100));
+        volM.setAttribute('aria-label', tr('Volume da música'));
+        var mNum = el('output', 'cfg-num', volM.value + '%');
+        volM.addEventListener('input', function () {
+          mNum.textContent = volM.value + '%';
+          Mu.setVolume(Number(volM.value) / 100);
+        });
+        volM.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+        var volMx = el('div', 'cfg-vol');
+        volMx.appendChild(volM);
+        volMx.appendChild(mNum);
+        lnVolM = linhaConfig(tr('Volume da música'), null, volMx);
+        som.appendChild(lnVolM);
+        pintaMus();
+      }
     } else som.appendChild(el('p', 'empty', tr('O som não carregou neste aparelho.')));
     body.appendChild(som);
 

@@ -59,6 +59,7 @@ import pacote_servido as ps  # noqa: E402
 
 IMUTAVEL = 'public, max-age=31536000, immutable'
 NO_CACHE = 'no-cache'
+MUSICA = 'public, max-age=2592000'   # assets/musica/: sem hash, o nome do arquivo é a faixa
 MB = ps.MB
 
 H = '3fa2b1c9d0e1'          # o hash que a pasta de marcas de mentira dos CASOS tem
@@ -98,6 +99,10 @@ CASOS = [
     ('/js/versao.js?v=' + H, NO_CACHE),
     ('/assets/models/bundle/manifest.json?v=' + H, NO_CACHE),
     ('/site/', NO_CACHE),
+    # a música (06/10): 30 dias; o que está ao lado dela e não é dela segue perguntando
+    ('/assets/musica/praca-bards-tale.ogg', MUSICA),
+    ('/assets/musica/luta-heartfelt-battle.mp3', MUSICA),
+    ('/assets/embedded/sons.js', NO_CACHE),
     ('/site/ranking.html', NO_CACHE),
     ('/site/img/classe-sumo.webp', NO_CACHE),
     ('/js/main.js', NO_CACHE),

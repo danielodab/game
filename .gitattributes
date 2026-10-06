@@ -10,3 +10,6 @@ Dockerfile     text eol=lf
 # compara sem o fim de linha; isto as deixa iguais ao que o gerador escreve
 # também num clone novo com core.autocrlf=true.
 assets/models/bundle/tabelas/*.js  text eol=lf
+# A música (assets/musica/) é binária: nunca troca fim de linha.
+*.ogg  binary
+*.mp3  binary
