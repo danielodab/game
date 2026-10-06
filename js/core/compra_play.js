@@ -100,24 +100,29 @@
   }
   /* A ponte do plugin. No JOGO quem a carrega é o js/mobile.js (junto com as outras): aqui só se espera.
    * No SITE (a loja aberta dentro do aplicativo) ninguém a carregou: este arquivo busca as duas. */
+  /* 06/10, achado no primeiro aparelho (a area ficava em "carregando" para sempre): uma promessa NUNCA pode
+   * ser resolvida com o plugin do Capacitor. Ele e um Proxy que responde por qualquer nome, inclusive `then`;
+   * a promessa o toma por outra promessa, chama plugin.then(...) - que vira uma chamada nativa inexistente -
+   * e fica esperando uma resposta que nao vem. A ponte devolve so SE o plugin existe; quem precisa dele
+   * chama plugin() na hora. O plugin de mentira das provas e um objeto comum, e por isso elas nao viram. */
   var ponteP = null;
   function ponte() {
-    if (plugin() || !nativo()) return Promise.resolve(plugin());
+    if (plugin() || !nativo()) return Promise.resolve(!!plugin());
     if (ponteP) return ponteP;
     ponteP = new Promise(function (resolve) {
       if (noSite()) {
         var url = (typeof window.SITE_URL === 'function') ? window.SITE_URL : function (f) { return f; };
         var p = window.capacitorExports ? Promise.resolve() : carrega(url('../vendor/capacitor/capacitor.js'));
         p.then(function () { return carrega(url('../vendor/capacitor/native-purchases.js')); })
-          .then(function () { resolve(plugin()); });
+          .then(function () { resolve(!!plugin()); });
         return;
       }
       var voltas = 0;
       var t = setInterval(function () {
-        if (plugin() || ++voltas > 40) { clearInterval(t); resolve(plugin()); }    // até 10 s
+        if (plugin() || ++voltas > 40) { clearInterval(t); resolve(!!plugin()); }    // até 10 s
       }, 250);
     });
-    ponteP.then(function (pl) { if (!pl) ponteP = null; });       // não veio: a próxima tentativa busca de novo
+    ponteP.then(function (tem) { if (!tem) ponteP = null; });       // não veio: a próxima tentativa busca de novo
     return ponteP;
   }
 
@@ -145,7 +150,8 @@
       st.pacotes = r.pacotes.map(function (p) {
         return { id: p.id, produto: p.produto, nome: p.nome, barras: p.barras, cabe: p.cabe !== false, preco: null };
       });
-      return ponte().then(function (pl) {
+      return ponte().then(function (tem) {
+        var pl = tem ? plugin() : null;
         if (!pl) return fim('sem-loja');
         return pl.isBillingSupported().then(function (s) {
           if (!s || s.isBillingSupported !== true) return fim('sem-loja');
@@ -232,7 +238,8 @@
     if (!P.noApp() || !temSessao()) return Promise.resolve(vazio);
     if (!forcar && Date.now() - retomadaEm < RETOMA_A_CADA) return Promise.resolve(vazio);
     retomadaEm = Date.now();
-    retomando = ponte().then(function (pl) {
+    retomando = ponte().then(function (tem) {
+      var pl = tem ? plugin() : null;
       if (!pl) return vazio;
       return pl.getPurchases({ productType: 'inapp' }).then(function (g) {
         var lista = ((g && g.purchases) || []).filter(function (c) { return c && (c.purchaseToken || c.transactionId); });

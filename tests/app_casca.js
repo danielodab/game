@@ -162,8 +162,12 @@ const grad = fs.readFileSync(path.join(raiz, 'android', 'variables.gradle'), 'ut
 const alvo = Number((/targetSdkVersion\s*=\s*(\d+)/.exec(grad) || [])[1]);
 check('android: o targetSdk é o que a Play aceita hoje (35 ou mais)', alvo >= 35, String(alvo));
 const manif = fs.readFileSync(path.join(raiz, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
-check('android: orientação livre (nenhum screenOrientation preso) e sem cópia da sessão na nuvem',
-      !/screenOrientation/.test(manif) && /android:allowBackup="false"/.test(manif));
+// 06/10 (o dono, no aparelho): "no mobile precisa ser padrão em modo paisagem", e as barras do sistema somem
+check('android: o aplicativo fica deitado (sensorLandscape) e sem cópia da sessão na nuvem',
+      /android:screenOrientation="sensorLandscape"/.test(manif) && /android:allowBackup="false"/.test(manif));
+const ativ = fs.readFileSync(path.join(raiz, 'android', 'app', 'src', 'main', 'java', 'br', 'com', 'soterra', 'jogo', 'MainActivity.java'), 'utf8');
+check('android: a atividade esconde a barra de status e a de navegação (tela inteira), e de novo ao voltar o foco',
+      /hide\(WindowInsetsCompat\.Type\.systemBars\(\)\)/.test(ativ) && /onWindowFocusChanged/.test(ativ));
 const empacota = fs.readFileSync(path.join(raiz, 'tools', 'empacota_www.py'), 'utf8');
 check('o servidor do jogo está escrito num lugar só (SERVIDOR, no empacota_www.py), em https',
       /^SERVIDOR = 'https:\/\/[a-z0-9.-]+'\r?$/m.test(empacota) && !/https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.[a-z]/.test(MOBILE + SESSAO));

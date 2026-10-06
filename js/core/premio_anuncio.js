@@ -92,15 +92,20 @@
     });
   }
   /* A ponte do plugin: só é buscada AQUI, ao entrar na área. O js/mobile.js não a põe na lista dele. */
+  /* 06/10, achado no primeiro aparelho (a area ficava em "carregando" para sempre): uma promessa NUNCA pode
+   * ser resolvida com o plugin do Capacitor. Ele e um Proxy que responde por qualquer nome, inclusive `then`;
+   * a promessa o toma por outra promessa, chama plugin.then(...) - que vira uma chamada nativa inexistente -
+   * e fica esperando uma resposta que nao vem. A ponte devolve so SE o plugin existe; quem precisa dele
+   * chama plugin() na hora. O plugin de mentira das provas e um objeto comum, e por isso elas nao viram. */
   var ponteP = null;
   function ponte() {
-    if (plugin() || !nativo()) return Promise.resolve(plugin());
+    if (plugin() || !nativo()) return Promise.resolve(!!plugin());
     if (ponteP) return ponteP;
     var url = (typeof window.__url === 'function') ? window.__url : function (f) { return f; };
     ponteP = (window.capacitorExports ? Promise.resolve() : carrega(url('vendor/capacitor/capacitor.js')))
       .then(function () { return carrega(url('vendor/capacitor/admob.js')); })
-      .then(function () { return plugin(); });
-    ponteP.then(function (pl) { if (!pl) ponteP = null; });
+      .then(function () { return !!plugin(); });
+    ponteP.then(function (tem) { if (!tem) ponteP = null; });
     return ponteP;
   }
 
@@ -156,7 +161,8 @@
         if (r && r.status === 503) return fim('desligado');
         return fim(r && r.status === 0 ? 'sem-rede' : 'erro', (r && r.erro) || '');
       }
-      return ponte().then(function (pl) {
+      return ponte().then(function (tem) {
+        var pl = tem ? plugin() : null;
         if (!pl) return fim('sem-app');
         return ligaSdk(pl).then(function (pode) { return fim(pode ? 'ok' : 'sem-consentimento'); });
       });
