@@ -197,6 +197,20 @@ const ARQ = { 'luta-1': 'luta-heartfelt-battle', 'luta-2': 'luta-heavy-battle-2'
   j.anda(1500);
   check('o battleStart corrige a faixa quando o estado chegou depois da tela', j.M.estado().cena === 'chefe' && j.tocando().join() === 'chefe', j.tocando());
 
+  // ---------------------------------------------------------------- PvP e guerra de guilda: sempre a faixa pesada
+  j.M.tela('hub'); j.anda(1500);
+  j.G.state = null;
+  j.M.tela('battle'); j.anda(1500);
+  j.G.state = { phase: 'playing', pvp: true, units: [{ side: 'player' }, { side: 'enemy' }] };
+  j.A.handleEvent({ type: 'battleStart' }); j.anda(1500);
+  check('luta entre jogadores (state.pvp): toca a faixa pesada, só ela', j.M.estado().cena === 'luta' && j.tocando().join() === 'luta-2', j.tocando());
+  j.M.tela('hub'); j.anda(1500);
+  j.M.tela('battle'); j.A.handleEvent({ type: 'battleStart' }); j.anda(1500);
+  check('outra luta PvP em seguida: a pesada de novo, sem alternar', j.tocando().join() === 'luta-2', j.tocando());
+  j.M.tela('hub'); j.anda(1500);
+  j.G.state = { phase: 'playing', units: [{ side: 'enemy', boss: true }] };
+  j.M.tela('battle'); j.A.handleEvent({ type: 'battleStart' }); j.anda(1500);
+
   // ---------------------------------------------------------------- volumes, mudo, sem música
   j.M.setVolume(1);
   check('a régua da música vale na hora e para no teto (0,5); a dos efeitos não se mexe', perto(j.M.estado().canais.chefe.vol, 0.5) && j.A.getVolume() === 0.7);

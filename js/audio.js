@@ -398,7 +398,11 @@ var JOGO = (typeof window !== 'undefined')
     'luta-2': { arq: 'luta-heavy-battle-2',       ganho: 1 },
     'chefe':  { arq: 'chefe-heavy-boss-battle-1', ganho: 1 }
   };
-  var DA_CENA = { praca: ['praca'], luta: ['luta-1', 'luta-2'], chefe: ['chefe'] };
+  var DA_CENA = { praca: ['praca'], luta: ['luta-1', 'luta-2'], chefe: ['chefe'],
+                  // 06/10 (o dono: "mapa pvp deve ter uma música mais de batalha.. o mapa de guilda também"): luta
+                  // entre jogadores (Arena, Campo, duelo e guerra de guilda — todas nascem com state.pvp) toca
+                  // SEMPRE a faixa pesada, sem alternar com a mais lírica; se ela falhar, vale a outra
+                  pvp: ['luta-2', 'luta-1'] };
   var TETO_MUS = 0.5;        // a régua em 100% = metade do ganho cheio
   var FADE_MS = 1300;
   var PASSO_MUS = 50;        // o degrau do fade, em ms
@@ -530,11 +534,13 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) {}
     if (!falta && passoT != null) { try { clearInterval(passoT); } catch (e1) {} passoT = null; }
   }
+  function batalhaPvp() { try { var st = JOGO.Game && JOGO.Game.state; return !!(st && st.pvp); } catch (e) { return false; } }
   function faixaDaCena(cena) {
-    var l = DA_CENA[cena];
+    var pvp = (cena === 'luta' && batalhaPvp());
+    var l = pvp ? DA_CENA.pvp : DA_CENA[cena];
     if (!l) return null;
     for (var i = 0; i < l.length; i++) {              // a da vez; se ela falhou, a outra do mesmo papel
-      var id = l[(Math.max(vezLuta, 0) + i) % l.length];
+      var id = l[((pvp ? 0 : Math.max(vezLuta, 0)) + i) % l.length];
       if (!canais[id] || !canais[id].falhou) return id;
     }
     return null;
@@ -567,7 +573,8 @@ var JOGO = (typeof window !== 'undefined')
       // chefe FICA até a batalha acabar: o chefe morrer antes dos lacaios não troca a música.
       var cena = ((tipo === 'turnStart' && cenaQuer === 'chefe') || batalhaDeChefe()) ? 'chefe' : 'luta';
       var nivel = (tipo === 'turnStart') ? 1 : nivelCena;   // o primeiro turno: acabou a preparação
-      if (cena === cenaQuer && nivel === nivelCena) return;
+      // no battleStart confere sempre: o estado pode ter chegado depois da tela, e é ele que diz se é PvP
+      if (cena === cenaQuer && nivel === nivelCena && tipo !== 'battleStart') return;
       if (cena !== cenaQuer) novaLuta = true;
       cenaQuer = cena; nivelCena = nivel;
       acertaMusica(false);
