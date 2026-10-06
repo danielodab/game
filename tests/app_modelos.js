@@ -178,10 +178,10 @@ const nomes = (l) => l.map((x) => x.arquivo).sort().join(' ');
   // ------------------------------------------------------------ A CASCA: o jogo vem do servidor
   const cfg = JSON.parse(le('capacitor.config.json'));
   const servidor = (/^SERVIDOR = '(https:\/\/[a-z0-9.-]+)'\r?$/m.exec(le('tools', 'empacota_www.py')) || [])[1];
-  check('capacitor.config.json: o aplicativo abre o jogo do servidor (o mesmo SERVIDOR do empacota_www.py)',
-        !!servidor && cfg.server.url === servidor && cfg.server.androidScheme === 'https', cfg.server.url + ' x ' + servidor);
+  check('capacitor.config.json: o aplicativo abre o jogo do servidor (o SERVIDOR do empacota_www.py + /index.html: a raiz leva ao site)',
+        !!servidor && cfg.server.url === servidor + '/index.html' && cfg.server.androidScheme === 'https', cfg.server.url + ' x ' + servidor);
   check('capacitor.config.json: sem resposta do servidor, mostra a tela do pacote (errorPath), não a tela branca',
-        cfg.server.errorPath === 'index.html' && cfg.webDir === 'www');
+        cfg.server.errorPath === 'sem-conexao.html' && cfg.webDir === 'www');
   check('capacitor.config.json: nenhum outro domínio abre dentro do aplicativo (links de fora vão para o navegador)',
         !cfg.server.allowNavigation && cfg.server.cleartext !== true);
   const CASCA = le('app', 'index.html');

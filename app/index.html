@@ -48,7 +48,7 @@
   var botao = document.getElementById('tentar');
   var estado = document.getElementById('estado');
   // `window.__vai` só existe na prova (tests/app_modelos.html): no aparelho é a troca de página de verdade
-  function abre() { (window.__vai || function (u) { location.replace(u); })(SERVIDOR + '/'); }
+  function abre() { (window.__vai || function (u) { location.replace(u); })(SERVIDOR + '/index.html'); }   // 06/10: a raiz "/" leva ao site; o jogo mora em /index.html
   function tenta() {
     // sem rede o aparelho já sabe: não adianta trocar de página para cair aqui de novo
     if (navigator.onLine === false) { estado.textContent = 'Ainda sem conexão.'; return; }

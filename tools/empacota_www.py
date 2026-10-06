@@ -74,6 +74,11 @@ PASTAS = ['css', 'js', 'vendor', 'assets/models/bundle/tabelas', 'site']
 #  no fim. Se o dominio mudar: troque aqui, rode este script e gere outro AAB.
 # ============================================================================
 SERVIDOR = 'https://soterra.viidoo.io'
+# 06/10 (o primeiro aparelho de verdade): a raiz "/" do servidor redireciona para /site/ (a landing), e o
+# aplicativo abria o SITE. O jogo mora em /index.html — e por isso a tela "sem conexao" nao pode mais se
+# chamar index.html: o Capacitor entrega do pacote o endereco exato do errorPath, e taparia o jogo.
+PAGINA_DO_JOGO = '/index.html'
+SEM_CONEXAO = 'sem-conexao.html'
 
 # Os arquivos do Capacitor que o js/mobile.js carrega DENTRO do aplicativo
 # (botao voltar, segundo plano, tela acesa). Saem do node_modules e moram em
@@ -124,10 +129,10 @@ def casca(www, servidor):
     # o Capacitor le o endereco do capacitor.config.json: tem de ser o mesmo daqui
     with open(os.path.join(RAIZ, 'capacitor.config.json'), encoding='utf-8') as f:
         cfg = json.load(f).get('server') or {}
-    if cfg.get('url') != servidor or cfg.get('errorPath') != 'index.html':
+    if cfg.get('url') != servidor + PAGINA_DO_JOGO or cfg.get('errorPath') != SEM_CONEXAO:
         print('capacitor.config.json nao bate com este script:')
-        print('    server.url       = %r   (esperado %r)' % (cfg.get('url'), servidor))
-        print('    server.errorPath = %r   (esperado %r)' % (cfg.get('errorPath'), 'index.html'))
+        print('    server.url       = %r   (esperado %r)' % (cfg.get('url'), servidor + PAGINA_DO_JOGO))
+        print('    server.errorPath = %r   (esperado %r)' % (cfg.get('errorPath'), SEM_CONEXAO))
         return 1
     # a parte JS dos plugins (servida pelo servidor) tem de ser a do node_modules (a nativa)
     velhos = []
@@ -156,12 +161,15 @@ def casca(www, servidor):
         return 1
     if not apaga_www(www):
         return 1
-    with open(os.path.join(www, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write(pagina.replace("'__SERVIDOR__'", json.dumps(servidor)))
+    # a mesma pagina duas vezes: index.html porque o Capacitor exige um na www/, e SEM_CONEXAO, que e a
+    # que ele mostra quando o servidor nao responde (server.errorPath)
+    for nome in ('index.html', SEM_CONEXAO):
+        with open(os.path.join(www, nome), 'w', encoding='utf-8', newline='\n') as f:
+            f.write(pagina.replace("'__SERVIDOR__'", json.dumps(servidor)))
     print('')
     print('  www/ montada em %s' % www)
-    print('    index.html (a tela "sem conexao")  %7.1f KB' % (tamanho(www) / 1024.0))
-    print('    o jogo abre de:                    %s' % servidor)
+    print('    a tela "sem conexao" (2 copias)    %7.1f KB' % (tamanho(www) / 1024.0))
+    print('    o jogo abre de:                    %s' % (servidor + PAGINA_DO_JOGO))
     print('')
     print('  Proximo passo:  npx cap sync android')
     return 0
