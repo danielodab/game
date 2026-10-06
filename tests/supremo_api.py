@@ -349,7 +349,7 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(origens, {'eco-vintens': 'eco', 'eco-premio': 'eco'}, r['pedidos'])
         depois = self.save(contas[1])
         moedas = lambda s: ((s['db'] or {}).get('carteira') or {}).get('moedas', 0)  # noqa: E731
-        self.assertEqual(moedas(depois) - moedas(antes), 5000)
+        self.assertEqual(moedas(depois) - moedas(antes), S.FAIXAS[0]['vintens'])   # 06/10: o pódio caiu de 5.000 para 1.500
         self.assertEqual(depois['progress'].get('selos'), {'fogo': 5, 'agua': 5, 'terra': 5, 'ar': 5})
         self.assertEqual(depois['progress'].get('titulosEco'), [S.TITULO_ECO])
         estados = {p['estado'] for p in self.sql("SELECT estado FROM loja_pedidos WHERE conta_id = ? AND sku LIKE 'eco-%'",

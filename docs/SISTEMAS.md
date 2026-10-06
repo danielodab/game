@@ -441,8 +441,8 @@ as contas estão em docs/SEGURANCA.md §4.8.
 
 **A semana.** 3 tentativas por dia (o dia de Brasília); vale a melhor da semana, de segunda 00:00 a
 domingo 23:59 de Brasília. O ranking é por conta (empate: quem chegou primeiro); a equipe joga mas não
-entra. No fechamento, por faixa: 1º–3º 5.000 vinténs, 20 selos de chefe e o título **Voz do Eco** (para
-sempre, como o de chefe); 4º–10º 2.500 e 10 selos; 11º–100º 1.000 e 4 selos; participação 150 vinténs.
+entra. No fechamento, por faixa: 1º–3º 1.500 vinténs, 20 selos de chefe e o título **Voz do Eco** (para
+sempre, como o de chefe); 4º–10º 750 e 10 selos; 11º–100º 300 e 4 selos; participação 50 vinténs.
 Nada disso se compra. A semana aparece como evento do mundo (a faixa da praça e o site/eventos.html) com a
 contagem regressiva, e o ranking está na ficha do Eco (o cais da praça) e em site/ranking.html#eco.
 

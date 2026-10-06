@@ -88,14 +88,16 @@ RANKING_SITE = 100                # e as que o site mostra
 TITULO_ECO = 'Voz do Eco'         # o espelho mora em js/core/titulos.js (T.ECO); tests/supremo_api.py confere
 ELEMENTOS_SELO = ('fogo', 'agua', 'terra', 'ar')
 # AS FAIXAS DE PRÊMIO (o dono troca aqui). A régua de vinténs de loja.py: a semana típica rende ~1.316
-# vinténs; o pódio leva quase quatro semanas disso. Os selos são os de chefe (a roleta do Colecionador
+# vinténs. 06/10 (o dono: "muito alto o primeiro, 5k de vinténs; isso desequilibra o jogo"): o pódio levava
+# quase quatro semanas disso (5.000 / 2.500 / 1.000 / 150); passa a levar pouco mais de UMA, e as outras
+# faixas caem na mesma proporção. Os selos são os de chefe (a roleta do Colecionador
 # gira com 10 de qualquer elemento) — o Eco é chefe, e o selo dele é coerente com o que os chefes dão.
 # `ate` None = todo o resto que pontuou (a participação: pelo menos 1 de dano numa tentativa conferida).
 FAIXAS = (
-    {'id': 'podio', 'de': 1, 'ate': 3, 'nome': '1º ao 3º', 'vintens': 5000, 'selos': 20, 'titulo': TITULO_ECO},
-    {'id': 'elite', 'de': 4, 'ate': 10, 'nome': '4º ao 10º', 'vintens': 2500, 'selos': 10, 'titulo': None},
-    {'id': 'cem', 'de': 11, 'ate': 100, 'nome': '11º ao 100º', 'vintens': 1000, 'selos': 4, 'titulo': None},
-    {'id': 'participacao', 'de': 101, 'ate': None, 'nome': 'participação', 'vintens': 150, 'selos': 0, 'titulo': None},
+    {'id': 'podio', 'de': 1, 'ate': 3, 'nome': '1º ao 3º', 'vintens': 1500, 'selos': 20, 'titulo': TITULO_ECO},
+    {'id': 'elite', 'de': 4, 'ate': 10, 'nome': '4º ao 10º', 'vintens': 750, 'selos': 10, 'titulo': None},
+    {'id': 'cem', 'de': 11, 'ate': 100, 'nome': '11º ao 100º', 'vintens': 300, 'selos': 4, 'titulo': None},
+    {'id': 'participacao', 'de': 101, 'ate': None, 'nome': 'participação', 'vintens': 50, 'selos': 0, 'titulo': None},
 )
 SKU_VINTENS = 'eco-vintens'       # loja.py reconhece o prefixo 'eco-' (a origem 'eco' e o nome do pedido)
 SKU_PREMIO = 'eco-premio'
