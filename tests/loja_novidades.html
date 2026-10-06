@@ -170,6 +170,86 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
     check('semana vencida ou sem oferta: não há chamada', UI.chamadaLojaTexto(v2, v2.ofertas.fim + 1) === null &&
           UI.chamadaLojaTexto({ boasVindas: { disponivel: false }, ofertas: { fim: T0 + 99, itens: [] } }, T0) === null &&
           UI.chamadaLojaTexto(null, T0) === null);
+
+    /* 06/10: O SINO DOS AVISOS — no toque, as pílulas dos eventos e da loja viram um sino com a contagem.
+       Aqui a conta (funções puras) e o botão montado no palco, sem a praça; a posição é das fotos. */
+    secao('2b. o sino dos avisos (no toque, no lugar das pílulas)');
+    var evs = [{ id: 'e1', tipo: 'xp', titulo: 'Quinta do XP', fim: T0 + 3600 }, { id: 'e2', tipo: 'aviso', titulo: 'Manutenção às 3 h', fim: T0 + 7200 }];
+    var av = UI.sinoAvisos(evs, v2, T0);
+    check('o sino conta cada evento no ar e a chamada da loja', av.length === 3 && av[0].chave === 'ev:e1' && av[1].chave === 'ev:e2' &&
+          av[2].chave === 'loja:of:' + v2.ofertas.fim && /Ofertas/.test(av[2].loja.html), JSON.stringify(av.map(function (a) { return a.chave; })));
+    var soBv = UI.sinoAvisos([], v, T0);
+    check('com o pacote à venda, a linha da loja é a do Pacote de Boas-Vindas', soBv.length === 1 && soBv[0].chave === 'loja:bv');
+    check('sem evento e sem chamada não há aviso (o sino some)', UI.sinoAvisos([], null, T0).length === 0 &&
+          UI.sinoAvisos(null, v2, v2.ofertas.fim + 1).length === 0);
+    check('nada visto: todos são novos', UI.sinoNovos(av, []) === 3 && UI.sinoNovos(av, null) === 3);
+    var vistas = UI.sinoVistas([], av);
+    check('depois de abrir o painel nenhum é novo', vistas.length === 3 && UI.sinoNovos(av, vistas) === 0);
+    check('chega um evento depois: só ele é novo',
+          UI.sinoNovos(UI.sinoAvisos(evs.concat([{ id: 'e3', tipo: 'saque', titulo: 'x', fim: T0 + 60 }]), v2, T0), vistas) === 1);
+    var v3 = JSON.parse(JSON.stringify(v2));
+    v3.ofertas.fim += 7 * 86400;
+    check('as ofertas da semana seguinte são um aviso novo', UI.sinoNovos(UI.sinoAvisos(evs, v3, T0), vistas) === 1);
+    check('evento que sai do ar e volta não vira novo de novo', UI.sinoNovos(av, UI.sinoVistas(vistas, UI.sinoAvisos([], v2, T0))) === 0);
+    var muitas = [];
+    for (var iM = 0; iM < 60; iM++) muitas.push('ev:velho' + iM);
+    check('as vistas não crescem para sempre (40) e as de agora ficam', UI.sinoVistas(muitas, av).length === 40 &&
+          UI.sinoNovos(av, UI.sinoVistas(muitas, av)) === 0);
+
+    var agAntes = JOGO.Agenda, vaAntes = L.vitrineAtual;
+    JOGO.Agenda = { ativos: function () { return evs.slice(); }, agora: function () { return T0 * 1000; },
+                    falta: function (ms) { return Math.round(ms / 60000) + ' min'; }, rotulo: function () { return 'XP ×2'; },
+                    nomeCalabouco: function (id) { return id; } };
+    try { localStorage.removeItem('soterra-sino-visto'); } catch (eS) {}
+    UI._sino.esquece();
+    var cxS = document.createElement('div');
+    palco.appendChild(cxS);
+    UI._sino.monta(cxS);
+    var sino = cxS.querySelector('.hub-sino'), pnS = cxS.querySelector('.hub-sino-painel');
+    function conta() { return sino.querySelector('[data-sino-conta]').textContent; }
+    check('o botão mostra a contagem (2 eventos + a loja) com o selo de novo', !!sino && !sino.classList.contains('is-off') &&
+          sino.classList.contains('is-novo') && conta() === '3' && /3/.test(sino.getAttribute('aria-label')), sino && sino.outerHTML.slice(0, 120));
+    var seloEl = sino.querySelector('[data-sino-conta]');
+    UI._sino.pinta(); UI._sino.pinta();
+    check('painel fechado e nada mudou: repintar não toca no botão (o relógio da contagem não vira laço)',
+          sino.querySelector('[data-sino-conta]') === seloEl && pnS.childNodes.length === 0);
+    sino.click();
+    var linhas = pnS.querySelectorAll('a.hub-sino-linha');
+    check('tocar abre o painel com uma linha por aviso', UI._sino.aberto() && !pnS.classList.contains('is-off') && linhas.length === 3 &&
+          sino.getAttribute('aria-expanded') === 'true');
+    check('a linha do evento diz o que a faixa dizia e leva ao calendário', linhas.length === 3 && /XP ×2/.test(linhas[0].textContent) &&
+          /Quinta do XP/.test(linhas[0].textContent) && /termina em 60 min/.test(linhas[0].textContent) &&
+          /site\/eventos\.html$/.test(linhas[0].href), linhas[0] && (linhas[0].textContent + ' → ' + linhas[0].href));
+    check('a linha da loja é a chamada (o pacote) e leva à loja do site', linhas.length === 3 && /Boas-vindas/.test(linhas[2].textContent) &&
+          /site\/loja\.html$/.test(linhas[2].href) && linhas[2].target === '_blank', linhas[2] && (linhas[2].textContent + ' → ' + linhas[2].href));
+    check('aberto, o selo fica neutro e o "visto" vai para o navegador', !sino.classList.contains('is-novo') && conta() === '3' &&
+          /ev:e1/.test(String(localStorage.getItem('soterra-sino-visto'))) && /loja:bv/.test(String(localStorage.getItem('soterra-sino-visto'))));
+    check('o voltar do aparelho fecha o painel (e só ele)', UI.voltar() === true && !UI._sino.aberto() && pnS.classList.contains('is-off') &&
+          sino.getAttribute('aria-expanded') === 'false' && UI.voltar() === false);
+    sino.click();
+    pnS.querySelector('.hub-sino-x').click();
+    check('o ✕ fecha', !UI._sino.aberto() && pnS.classList.contains('is-off'));
+    sino.click();
+    pnS.querySelector('.hub-sino-cab').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    var seguiu = UI._sino.aberto();
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    check('tocar dentro não fecha; tocar fora fecha', seguiu && !UI._sino.aberto());
+    UI._sino.esquece();
+    UI._sino.pinta();
+    check('na volta (as vistas lidas do navegador) o selo segue neutro', !sino.classList.contains('is-novo') && !sino.classList.contains('is-off'));
+    evs.push({ id: 'e9', tipo: 'aviso', titulo: 'Aviso novo', fim: T0 + 99 });
+    UI._sino.pinta();
+    check('chega um aviso: a contagem sobe e o selo volta a destacar', sino.classList.contains('is-novo') && conta() === '4');
+    evs.length = 0;
+    L.vitrineAtual = function () { return null; };
+    sino.click();
+    UI._sino.pinta();
+    check('sem aviso nenhum o sino some (e o painel não abre)', sino.classList.contains('is-off') && !UI._sino.aberto() && conta() === '0');
+    L.vitrineAtual = vaAntes;
+    JOGO.Agenda = agAntes;
+    cxS.remove();
+    UI._sino.pinta();
+
     var n = srv.chamadas.length;
     return L.vitrine().then(function () {
       check('a vitrine fica guardada: pedir de novo logo em seguida não vai ao servidor', srv.chamadas.length === n);

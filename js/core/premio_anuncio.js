@@ -296,10 +296,13 @@
     '.pan-estado,.pan-recado{margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#22262c}' +
     '.pan-recado.bom{background:#16301e;color:#9be7a8}.pan-recado.erro{background:#3a1717;color:#ffb0b0}' +
     '.pan-nota{margin:0;font-size:12px;color:#a79c80}' +
-    /* o atalho da praça: a moeda fica na coluna da direita, abaixo das pílulas dos eventos e da loja */
+    /* o atalho da praça: a moeda fica na coluna da direita, abaixo das pílulas dos eventos e da loja.
+     * No TOQUE (06/10) as pílulas viram o sino dos avisos (.hub-sino, js/ui/hud.js): a moeda fica logo abaixo dele
+     * e, sem aviso nenhum (o sino some), sobe para o lugar dele — sem buraco na coluna. O sino é o irmão de antes. */
     '.pan-atalho{position:absolute;right:calc(var(--sa-r,0px) + 8px);top:calc(var(--sa-t,0px) + 128px);z-index:3;pointer-events:auto;' +
     'display:flex;flex-direction:column;align-items:center;gap:3px;min-width:48px;min-height:48px;margin:0;padding:2px;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
-    '@media (pointer:coarse){.pan-atalho{top:calc(var(--sa-t,0px) + 156px)}}' +
+    '@media (pointer:coarse){.pan-atalho{top:calc(var(--sa-t,0px) + 60px)}.hub-sino:not(.is-off)~.pan-atalho{top:calc(var(--sa-t,0px) + 110px)}}' +
+    'html.celular .pan-atalho{top:calc(var(--sa-t,0px) + 60px)}html.celular .hub-sino:not(.is-off)~.pan-atalho{top:calc(var(--sa-t,0px) + 110px)}' +
     '.pan-atalho.is-off{display:none}' +
     '.pan-moeda{position:relative;width:44px;height:44px;border-radius:50%;animation:pan-pulso 2.8s ease-out infinite}' +
     '.pan-moeda svg{display:block;width:44px;height:44px}' +

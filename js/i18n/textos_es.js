@@ -2518,4 +2518,9 @@ JOGO.I18n.registra('es', { textos: {
   "Sua sessão acabou. Entre de novo para continuar.": "Tu sesión terminó. Inicia sesión de nuevo para continuar.",
   "Sua sessão acabou.": "Tu sesión terminó.",
   "A sua conta e o save dela, guardado no servidor.": "Tu cuenta y su partida, guardada en el servidor.",
+  // ---- 06/10: o sino dos avisos da praça (no toque, no lugar das pílulas dos eventos e da loja)
+  "Avisos": "Avisos",
+  "Fechar os avisos": "Cerrar los avisos",
+  "Avisos: {a}": "Avisos: {a}",
+  "Avisos: {a} (novos: {b})": "Avisos: {a} (nuevos: {b})",
 } });

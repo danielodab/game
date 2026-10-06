@@ -1302,6 +1302,9 @@ var JOGO = (typeof window !== 'undefined')
      * Boas-Vindas para quem ainda não o comprou; senão, as ofertas da semana com o tempo que falta. */
     var chamaLj = sala ? null : el('a', 'hub-loja is-off');
     if (chamaLj) { s.appendChild(chamaLj); ligaChamadaLoja(chamaLj); }
+    /* O SINO DOS AVISOS (06/10): no toque, as duas pílulas acima viram um sino só, com o selo da contagem
+     * (montaSino). Entra antes da moeda de propósito: é pelo irmão que o css da moeda sabe onde ficar. */
+    if (!sala) montaSino(s);
     /* A MOEDA "PRÊMIO GRÁTIS!" (06/10): o atalho da área de prêmios, só no aplicativo (na web o
      * `JOGO.PremioAnuncio` nem existe) e só na praça. É um botão do jogo: quem o desenha, lê o que resta hoje e
      * o esconde é o js/core/premio_anuncio.js — nada de anúncio sai daqui, e a praça não é repintada por ele. */
@@ -2177,20 +2180,21 @@ var JOGO = (typeof window !== 'undefined')
     if (h > 0) return h + ' h' + (m ? ' ' + m + ' min' : '');
     return m > 0 ? m + ' min' : tr('menos de 1 min');
   }
-  /* O texto da chamada, função PURA (as provas a chamam sem a tela): {html, dica} ou null quando não
-   * há o que chamar. `v` é a vitrine (Loja.vitrineAtual) e `agoraS` os segundos do servidor. */
+  /* O texto da chamada, função PURA (as provas a chamam sem a tela): {chave, html, dica} ou null quando não
+   * há o que chamar. `v` é a vitrine (Loja.vitrineAtual) e `agoraS` os segundos do servidor. A `chave` diz
+   * QUAL chamada é (o pacote, ou as ofertas DESTA semana): é por ela que o sino sabe se o aviso é novo. */
   UI.chamadaLojaTexto = function (v, agoraS) {
     if (!v || typeof v !== 'object') return null;
     var bv = v.boasVindas || {};
     if (bv.disponivel && bv.preco > 0 && bv.precoCheio > bv.preco) {
       var menos = Math.round((1 - bv.preco / bv.precoCheio) * 100);
-      return { html: '🎁 <b>Boas-vindas</b> −' + menos + '%',
+      return { chave: 'bv', html: '🎁 <b>Boas-vindas</b> −' + menos + '%',
                dica: tr('Pacote de Boas-Vindas na loja do site: um personagem raro, pedras de forja e uma aura, uma vez por conta') };
     }
     var of = v.ofertas || {}, itens = of.itens || [];
     var falta = (of.fim || 0) - (agoraS || 0);
     if (!itens.length || !(falta > 0)) return null;
-    return { html: '🏷 <b>Ofertas</b> −' + (of.desconto || 0) + '% · ' + faltaCurta(falta),
+    return { chave: 'of:' + (of.fim || 0), html: '🏷 <b>Ofertas</b> −' + (of.desconto || 0) + '% · ' + faltaCurta(falta),
              dica: tr('Ofertas da semana na loja do site: {a} — terminam em {b}', { a: itens.map(function (i) { return i.nome; }).join(', '), b: faltaCurta(falta) }) };
   };
   var chamadaLojaEl = null, chamadaLojaTimer = null;
@@ -2217,9 +2221,187 @@ var JOGO = (typeof window !== 'undefined')
     chamadaLojaEl = a;
     pintaChamadaLoja();
     // a contagem regressiva anda de minuto em minuto; o relógio morre com a tela (pintaChamadaLoja)
-    if (!chamadaLojaTimer) chamadaLojaTimer = setInterval(pintaChamadaLoja, 60000);
+    if (!chamadaLojaTimer) chamadaLojaTimer = setInterval(function () { pintaChamadaLoja(); pintaSino(); }, 60000);
     Lj.vitrine();                       // a resposta chega pelo 'soterra:vitrine' (ouvinte abaixo)
   }
+  /* ------------------------------------------------ O SINO DOS AVISOS (06/10)
+   * O dono, olhando a praça no celular deitado: "essas ofertas e evento pode ficar um ícone, não acha? tipo a
+   * notificação fixa em um sino sem ficar ocupando a tela". NO TOQUE (o css decide: ponteiro grosso ou
+   * html.celular) as duas pílulas da coluna da direita — a dos eventos e a da loja — somem e fica UM sino com o
+   * selo da contagem; no PC o sino nem aparece e as pílulas seguem como eram. As pílulas continuam no DOM
+   * (escondidas): quem lê o texto delas, as provas da agenda e da loja, lê o mesmo de antes.
+   *   - o selo conta os avisos: cada evento no ar e a chamada da loja (o pacote ou as ofertas da semana);
+   *   - aviso que ainda não foi visto deixa o selo VERMELHO; abrir o painel marca tudo como visto e o selo fica
+   *     neutro. "Visto" é por navegador (localStorage; sem ele, vale até recarregar);
+   *   - sem aviso nenhum o sino SOME (e a moeda "Prêmio Grátis!" sobe para o lugar dele — o css do
+   *     js/core/premio_anuncio.js);
+   *   - o painel fecha no toque fora, no ✕ e no voltar do aparelho (UI.voltar).
+   * Quem mexe é só o botão: a praça não é repintada por causa dele, e com o painel fechado o relógio da
+   * contagem regressiva só toca no DOM quando a contagem ou o "novo" MUDAM (sinoAssin). */
+  // os avisos de agora, função PURA: [{chave, evento}] dos eventos no ar e, por último, {chave, loja}
+  UI.sinoAvisos = function (ativos, vitrine, agoraS) {
+    var l = [];
+    (ativos || []).forEach(function (e) { if (e && e.id != null && e.id !== '') l.push({ chave: 'ev:' + e.id, evento: e }); });
+    var t = UI.chamadaLojaTexto(vitrine, agoraS);
+    if (t) l.push({ chave: 'loja:' + t.chave, loja: t });
+    return l;
+  };
+  // quantos desses a conta ainda não viu (PURA): as chaves que não estão entre as vistas
+  UI.sinoNovos = function (avisos, vistas) {
+    vistas = vistas || [];
+    return (avisos || []).filter(function (a) { return vistas.indexOf(a.chave) < 0; }).length;
+  };
+  /* as vistas depois de abrir o painel (PURA): as de antes e as de agora, as mais novas no fim e no máximo
+   * SINO_GUARDA — evento que saiu do ar e voltou (o da semana) não vira "novo" de novo, e a lista não cresce
+   * para sempre */
+  var SINO_GUARDA = 40;
+  UI.sinoVistas = function (vistas, avisos) {
+    var l = (vistas || []).map(String);
+    (avisos || []).forEach(function (a) {
+      var i = l.indexOf(a.chave);
+      if (i >= 0) l.splice(i, 1);
+      l.push(a.chave);
+    });
+    return l.slice(-SINO_GUARDA);
+  };
+  var SINO_VISTO = 'soterra-sino-visto';
+  var SINO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.6L4.2 16.2c-.4.8.2 1.8 1.1 1.8h13.4c.9 0 1.5-1 1.1-1.8L18 12.6V9a6 6 0 0 0-6-6z" ' +
+    'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.8 20.2a2.3 2.3 0 0 0 4.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  var sinoEl = null, sinoPainelEl = null, sinoAberto = false, sinoAssin = null, sinoMem = null;
+  function sinoLeVistas() {
+    if (sinoMem) return sinoMem;
+    var l = [];
+    try { l = JSON.parse(localStorage.getItem(SINO_VISTO) || '[]'); } catch (e) { l = []; }
+    sinoMem = Array.isArray(l) ? l.map(String) : [];
+    return sinoMem;
+  }
+  function sinoMarcaVistas(avisos) {
+    if (!UI.sinoNovos(avisos, sinoLeVistas())) return;
+    sinoMem = UI.sinoVistas(sinoLeVistas(), avisos);
+    try { localStorage.setItem(SINO_VISTO, JSON.stringify(sinoMem)); } catch (e) {}
+  }
+  function sinoLista() {
+    var Ag = JOGO.Agenda, Lj = JOGO.Loja;
+    var ativos = (Ag && Ag.ativos) ? (safe(function () { return Ag.ativos(); }, []) || []) : [];
+    var v = (Lj && Lj.vitrineAtual) ? safe(function () { return Lj.vitrineAtual(); }, null) : null;
+    return UI.sinoAvisos(ativos, v, v ? safe(function () { return Lj.agoraServidor(); }, 0) : 0);
+  }
+  function pintaSinoPainel(avisos) {
+    var p = sinoPainelEl, Ag = JOGO.Agenda;
+    clear(p);
+    var cab = el('div', 'hub-sino-cab', '<b>' + tr('Avisos') + '</b>');
+    var x = el('button', 'hub-sino-x', '✕');
+    x.type = 'button';
+    x.setAttribute('aria-label', tr('Fechar os avisos'));
+    x.addEventListener('click', function (ev) { ev.stopPropagation(); fechaSino(); });
+    cab.appendChild(x);
+    p.appendChild(cab);
+    var agoraMs = safe(function () { return Ag.agora(); }, Date.now());
+    avisos.forEach(function (a) {
+      // cada linha leva aonde a pílula levava: o evento ao calendário do site, a chamada à loja do site
+      var l = el('a', 'hub-sino-linha' + (a.evento ? '' : ' is-loja'),
+        a.evento ? linhaEvento(a.evento, agoraMs, true) : a.loja.html + '<small>' + esc(a.loja.dica) + '</small>');
+      l.href = a.evento ? paginaEventos() : paginaLoja();
+      l.target = '_blank';
+      l.rel = 'noopener';
+      l.setAttribute('data-sino', a.chave);
+      l.addEventListener('click', function () { setTimeout(fechaSino, 0); });
+      p.appendChild(l);
+    });
+  }
+  function pintaSino() {
+    var b = sinoEl;
+    if (!b) return;
+    if (!b.isConnected) {                 // a praça foi desmontada: o sino morre com ela
+      if (sinoAberto) fechaSino();
+      sinoEl = null; sinoPainelEl = null;
+      return;
+    }
+    var avisos = sinoLista();
+    if (sinoAberto && !avisos.length) { fechaSino(); return; }
+    if (sinoAberto) sinoMarcaVistas(avisos);
+    var novos = UI.sinoNovos(avisos, sinoLeVistas());
+    var assin = avisos.map(function (a) { return a.chave; }).join('|') + '#' + novos;
+    if (assin !== sinoAssin) {
+      sinoAssin = assin;
+      b.className = 'hub-sino' + (avisos.length ? '' : ' is-off') + (novos ? ' is-novo' : '');
+      b.setAttribute('aria-label', novos ? tr('Avisos: {a} (novos: {b})', { a: avisos.length, b: novos })
+                                         : tr('Avisos: {a}', { a: avisos.length }));
+      b.innerHTML = SINO_SVG + '<span class="hub-sino-selo" data-sino-conta>' + avisos.length + '</span>';
+    }
+    if (sinoAberto) pintaSinoPainel(avisos);
+  }
+  /* onde o painel abre, medido na hora: sem tapar a COLUNA da direita (o sino e, abaixo dele, a moeda "Prêmio
+   * Grátis!" do aplicativo, quando ela existe) nem descer sobre o chat e o cais. Deitado, abre à esquerda da
+   * coluna, na altura do sino; em pé (não há largura para isso), logo abaixo da coluna. */
+  function sinoLugar() {
+    var b = sinoEl, p = sinoPainelEl, tela = b && b.parentNode;
+    if (!p || !tela || !tela.getBoundingClientRect) return;
+    var rt = tela.getBoundingClientRect(), rs = b.getBoundingClientRect();
+    if (!rt.width || !rs.width) return;
+    var m = tela.querySelector('.pan-atalho'), rm = m ? m.getBoundingClientRect() : null;
+    if (rm && !rm.width) rm = null;
+    var margem = Math.max(8, Math.round(rt.right - rs.right));
+    var emPe = rt.height > rt.width;
+    var topo = Math.round((emPe ? (rm ? Math.max(rs.bottom, rm.bottom) : rs.bottom) + 8 : rs.top) - rt.top);
+    var direita = emPe ? margem : Math.round(rt.right - (rm ? Math.min(rs.left, rm.left) : rs.left) + 8);
+    var chao = rt.bottom;
+    [tela.querySelector('.hub-dock'), document.querySelector('.hub-chat')].forEach(function (e) {
+      var r = e ? e.getBoundingClientRect() : null;
+      if (r && r.width && r.top > rt.top + topo) chao = Math.min(chao, r.top);
+    });
+    p.style.top = topo + 'px';
+    p.style.right = direita + 'px';
+    p.style.maxWidth = Math.max(160, Math.min(340, Math.round(rt.width - direita - margem))) + 'px';
+    p.style.maxHeight = Math.max(96, Math.round(chao - rt.top - topo - 8)) + 'px';
+  }
+  function sinoFora(ev) {
+    var t = ev.target;
+    if (sinoPainelEl && sinoPainelEl.isConnected && t && (sinoPainelEl.contains(t) || (sinoEl && sinoEl.contains(t)))) return;
+    fechaSino();
+  }
+  function abreSino() {
+    if (!sinoEl || !sinoPainelEl || sinoAberto) return;
+    sinoAberto = true;
+    sinoPainelEl.classList.remove('is-off');
+    sinoEl.setAttribute('aria-expanded', 'true');
+    pintaSino();
+    if (!sinoAberto) return;              // não havia aviso: o painel nem abriu
+    sinoLugar();
+    // os ouvintes só existem enquanto o painel está aberto (o toque na praça não vira `click`: por isso o
+    // pointerdown; o aparelho que gira muda a coluna de lugar: por isso o resize)
+    document.addEventListener('pointerdown', sinoFora, true);
+    window.addEventListener('resize', sinoLugar);
+  }
+  function fechaSino() {
+    if (!sinoAberto) return false;
+    sinoAberto = false;
+    document.removeEventListener('pointerdown', sinoFora, true);
+    window.removeEventListener('resize', sinoLugar);
+    if (sinoPainelEl) { sinoPainelEl.classList.add('is-off'); clear(sinoPainelEl); }
+    if (sinoEl) sinoEl.setAttribute('aria-expanded', 'false');
+    pintaSino();
+    return true;
+  }
+  // a praça chama isto UMA vez ao ser montada, depois das pílulas e ANTES da moeda (o css dela olha o irmão)
+  function montaSino(tela) {
+    if (sinoAberto) fechaSino();
+    var b = el('button', 'hub-sino is-off');
+    b.type = 'button';
+    b.setAttribute('aria-haspopup', 'dialog');
+    b.setAttribute('aria-expanded', 'false');
+    b.addEventListener('click', function (ev) { ev.stopPropagation(); if (sinoAberto) fechaSino(); else abreSino(); });
+    var p = el('div', 'hub-sino-painel is-off');
+    p.setAttribute('role', 'dialog');
+    p.setAttribute('aria-label', tr('Avisos'));
+    tela.appendChild(b);
+    tela.appendChild(p);
+    sinoEl = b; sinoPainelEl = p; sinoAssin = null;
+    pintaSino();
+  }
+  UI._sino = { monta: montaSino, abre: abreSino, fecha: fechaSino, pinta: pintaSino, aberto: function () { return sinoAberto; },
+               esquece: function () { sinoMem = null; sinoAssin = null; } };   // só as provas
+
   var reanuncioAura = null, auraAnunciada = null;
   try {
     window.addEventListener('soterra:vitrine', function () {
@@ -2228,6 +2410,7 @@ var JOGO = (typeof window !== 'undefined')
       var corV = auraDaLoja();
       if (corV !== auraAnunciada) { auraAnunciada = corV; safe(function () { reanunciaPerfil(); return true; }, false); }
       pintaChamadaLoja();
+      pintaSino();
     });
   } catch (eVit) {}
   /* a seção da ficha do Personagem: "Sem aura" e uma pastilha por aura. A que a conta não tem fica
@@ -2352,12 +2535,13 @@ var JOGO = (typeof window !== 'undefined')
     if (soltaFaixaEventos) { try { soltaFaixaEventos(); } catch (e) {} soltaFaixaEventos = null; }
     if (!faixa || !Ag || !Ag.aoMudar) return;
     pintaFaixaEventos(faixa);
-    soltaFaixaEventos = Ag.aoMudar(function () { if (faixa.isConnected) pintaFaixaEventos(faixa); });
+    soltaFaixaEventos = Ag.aoMudar(function () { if (faixa.isConnected) pintaFaixaEventos(faixa); pintaSino(); });
     // ao entrar, busca de novo se a última tentativa tiver mais de 60 s
     // (em casa, só com sessão ou API apontada — Agenda.refresca decide)
     if (Ag.refresca) {
       Ag.refresca(60000).then(function (r) {
         if (r && !r.pulou && faixa.isConnected) pintaFaixaEventos(faixa);
+        pintaSino();
       });
     }
   }
@@ -12039,6 +12223,7 @@ var JOGO = (typeof window !== 'undefined')
     if (JOGO.CompraPlay && JOGO.CompraPlay.aberto && JOGO.CompraPlay.aberto()) { JOGO.CompraPlay.fecha(); return true; }
     if (JOGO.PremioAnuncio && JOGO.PremioAnuncio.aberto && JOGO.PremioAnuncio.aberto()) { JOGO.PremioAnuncio.fecha(); return true; }
     if (sheetName) { closeSheet(); return true; }
+    if (fechaSino()) return true;       // o painel do sino dos avisos (só existe no toque)
     var p = painelVivo();
     if (p && !p.classList.contains('is-off')) { fechaPainel(); return true; }
     return false;
