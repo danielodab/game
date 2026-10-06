@@ -2093,6 +2093,14 @@ var JOGO = (typeof window !== 'undefined')
         ci.className = 'hub-chat-input';
         ci.maxLength = 240;
         ci.placeholder = tr('diga algo…  /g guilda · /Nome particular');
+        ci.setAttribute('enterkeyhint', 'send');
+        // 06/10 (o dono, no celular): mandada a mensagem, o campo seguia "selecionado" — o teclado fechava,
+        // o toque seguinte na praça só tirava o foco e o teclado reabria. No toque, mandar SOLTA o campo;
+        // no teclado de verdade ele segue no campo, para quem conversa em sequência.
+        var soltaNoToque = function () {
+          var toque = safe(function () { return window.matchMedia('(pointer: coarse)').matches; }, false);
+          if (toque) safe(function () { ci.blur(); return true; }, false);
+        };
         ci.addEventListener('keydown', function (evk) {
           if (evk.key === 'Enter') {
             var t = ci.value.trim();
@@ -2100,18 +2108,19 @@ var JOGO = (typeof window !== 'undefined')
             // 04/10: dentro da sede o padrão vira a guilda — sem barra é como se fosse "/g"
             if (t && t.charAt(0) !== '/' && !chatAlvo && sedeDentro()) t = '/g ' + t;
             if (t && t.charAt(0) === '/') {
-              if (comandoDoChat(t, j, chatLinha)) ci.value = '';
+              if (comandoDoChat(t, j, chatLinha)) { ci.value = ''; soltaNoToque(); }
               evk.stopPropagation();
               return;
             }
             if (t && chatAlvo) {
               var rs = safe(function () { return Su().manda(chatAlvo.id, t); }, null);
-              if (rs && rs.ok) ci.value = '';
+              if (rs && rs.ok) { ci.value = ''; soltaNoToque(); }
               else toast(textoMotivo(rs ? rs.motivo : 'privado', null));
             } else if (t && R.falar(t)) {
               chatLinha(j.nome || tr('você'), t, '#9bd06a');
               safe(function () { return JOGO.Hub.fala(null, t); }, null);   // 11/09: o meu balão também
               ci.value = '';
+              soltaNoToque();
             }
           } else if (evk.key === 'Escape') {
             if (chatAlvo) { chatAlvo = null; pintaChip(); } else ci.blur();
