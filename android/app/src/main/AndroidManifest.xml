@@ -12,12 +12,15 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- 06/10 (o dono): "no mobile precisa ser padrao em modo paisagem" - o aplicativo abre e fica deitado
+             (sensorLandscape: gira entre os dois lados deitados, nunca fica em pe). A web segue livre. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
             android:exported="true">
 
             <intent-filter>

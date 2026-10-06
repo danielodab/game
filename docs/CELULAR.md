@@ -68,10 +68,12 @@ que os entrega ao aplicativo, e só a ele — a web nunca os pede.
 
 ### Em pé e deitado
 
-A orientação é **livre**: o jogo tem desenho para as duas (em pé, a HUD
-empilhada; deitado, o cais vira ícones no canto), e o `AndroidManifest.xml` não
-prende nenhuma. Para prender, acrescente ao `<activity>`
-`android:screenOrientation="portrait"` (ou `"sensorLandscape"`).
+**No aplicativo, sempre deitado e em tela inteira (06/10, pedido do dono).** O
+`<activity>` do `AndroidManifest.xml` tem `android:screenOrientation="sensorLandscape"`
+(gira entre os dois lados deitados, nunca fica em pé), e a `MainActivity.java`
+esconde a barra de status e a de navegação — elas voltam por um instante quando
+o jogador desliza da borda. Na **web** a orientação continua livre: o jogo tem
+desenho para as duas (em pé, a HUD empilhada; deitado, o cais vira ícones no canto).
 
 ### Depurar o jogo rodando no telefone
 
