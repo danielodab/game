@@ -13,7 +13,9 @@
  *   · ENTRAR na área busca a ponte, faz a pergunta de privacidade e liga o SDK — e NENHUM anúncio é pedido;
  *   · só o TOQUE pede o bilhete e o anúncio (com o bilhete e o código da conta para a Google assinar);
  *   · o prêmio só é dado por "creditado" quando o SERVIDOR mostra o contador andando;
- *   · fechou antes do fim: nada; sem anúncio: avisa; limite: avisa; depuração: bloco de TESTE. */
+ *   · fechou antes do fim: nada; sem anúncio: avisa; limite: avisa; depuração: bloco de TESTE;
+ *   · A MOEDA DA PRAÇA ("Prêmio Grátis!") só existe no aplicativo, para a conta comum conectada; lê o que
+ *     resta no servidor do jogo, abre a área e mais nada; acabou o limite, some. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -28,6 +30,7 @@ const raiz = path.join(__dirname, '..');
 const le = (...p) => fs.readFileSync(path.join(raiz, ...p), 'utf8');
 const FONTE = le('js', 'core', 'premio_anuncio.js');
 const BLOCO = 'ca-app-pub-4989579635131748/7206484209';
+const ZERA = Math.floor(Date.now() / 1000) + 3600;      // o dia do servidor vira daqui a uma hora
 const BLOCO_TESTE = 'ca-app-pub-3940256099942544/5224354917';
 
 /* op: { busca, capacitor, debug, servidor:{...}, anuncio:'ok'|'sem'|'fecha' } */
@@ -37,7 +40,7 @@ function janela(op) {
   const reg = { scripts: [], api: [], plugin: [], relogios: 0, ouvintes: {}, nos: 0 };
   function no() {
     reg.nos++;
-    const e = { style: {}, innerHTML: '', classList: { add() {} }, setAttribute() {}, addEventListener() {},
+    const e = { style: {}, innerHTML: '', classList: { add() {} }, setAttribute() {}, addEventListener(n, f) { e['ao_' + n] = f; },
                 querySelector: () => e._corpo || (e._corpo = no()), parentNode: null,
                 appendChild(f) { f.parentNode = e; }, removeChild(f) { f.parentNode = null; } };
     return e;
@@ -67,7 +70,7 @@ function janela(op) {
   };
   const ctx = {
     console, Promise, JSON, Math, Number, String, Object, Date, Array, setImmediate,
-    setTimeout(f) { reg.relogios++; setImmediate(f); return 1; }, clearTimeout() {},
+    setTimeout(f, ms) { reg.relogios++; if (!(ms > 60000)) setImmediate(f); else reg.longo = ms; return 1; }, clearTimeout() {},   // o relógio longo (a virada do dia) só é contado
     setInterval() { reg.relogios++; return 1; }, clearInterval() {},
     location: { search: op.busca || '' },
     addEventListener() {},
@@ -86,15 +89,15 @@ function janela(op) {
       },
       head: { appendChild() {} }, body: { appendChild(f) { f.parentNode = ctx.document.body; }, removeChild() {} }
     },
-    JOGO: { Sessao: { api(rota, o) {
+    JOGO: { GM: { ativo: () => !!op.mestre }, Sessao: { ativa: () => !op.semSessao, contaId: () => 'conta-7', api(rota, o) {
       reg.api.push((o && o.method || 'GET') + ' ' + rota);
       const premios = ['vintens', 'barras'].map((t) => ({ tipo: t, qtd: t === 'vintens' ? 50 : 1, hoje: srv.hoje[t], limite: 5, faltam: 5 - srv.hoje[t] }));
       if (rota === '/api/anuncio') {
-        return Promise.resolve({ ok: true, status: 200, premios, limite: 5, zeraEm: 1800000000, bloco: BLOCO, aparelhosTeste: [], mestre: false });
+        return Promise.resolve({ ok: true, status: 200, premios, limite: 5, zeraEm: ZERA, bloco: BLOCO, aparelhosTeste: [], mestre: false });
       }
       if (rota === '/api/anuncio/bilhete') {
         reg.tipo = o.body.tipo;
-        if (srv.limite) return Promise.resolve({ ok: false, status: 409, limite: true, premios, zeraEm: 1800000000 });
+        if (srv.limite) return Promise.resolve({ ok: false, status: 409, limite: true, premios, zeraEm: ZERA });
         return Promise.resolve({ ok: true, status: 201, bilhete: 'bilhete-de-prova-0123456789', conta: 'codigo-da-conta', tipo: o.body.tipo, bloco: BLOCO });
       }
       return Promise.resolve({ ok: false, status: 404 });
@@ -105,6 +108,7 @@ function janela(op) {
   vm.createContext(ctx);
   vm.runInContext(FONTE, ctx);
   ctx._reg = reg;
+  ctx._no = no;
   return ctx;
 }
 const calma = () => new Promise((r) => setTimeout(r, 30));
@@ -207,6 +211,63 @@ const calma = () => new Promise((r) => setTimeout(r, 30));
   P = w.JOGO.PremioAnuncio; P.abre(); await calma();
   check('?app=1 no navegador (sem casca): a área abre, mas não há ponte nem SDK — e diz isso',
         P._st.fase === 'sem-app' && w._reg.scripts.length === 0 && w._reg.plugin.length === 0, P._st.fase);
+
+  // ------------------------------------------------- A MOEDA DA PRAÇA
+  check('moeda: a praça a pede UMA vez, só fora da antessala, e o hud.js não desenha nem consulta nada por conta própria',
+        HUD.split('PremioAnuncio.atalho(').length === 2 && /if \(!sala && JOGO\.PremioAnuncio && JOGO\.PremioAnuncio\.atalho\)/.test(HUD) &&
+        !/api\/anuncio/.test(HUD));
+  w = janela({});
+  P = w.JOGO.PremioAnuncio;
+  let moeda = P.atalho({ appendChild() { w._reg.pendurou = true; } });
+  await calma();
+  check('moeda na web: não existe e nada é pedido (nenhum elemento, pedido, script ou relógio)',
+        moeda === null && !w._reg.pendurou && w._reg.nos === 0 && w._reg.api.length === 0 && w._reg.scripts.length === 0 && w._reg.relogios === 0,
+        JSON.stringify(w._reg));
+
+  w = janela({ capacitor: true, servidor: { hoje: { vintens: 0, barras: 0 } } });
+  P = w.JOGO.PremioAnuncio;
+  let praca = w._no();
+  moeda = P.atalho(praca);
+  check('moeda no aplicativo: nasce escondida até o servidor responder', !!moeda && moeda.parentNode === praca && / is-off/.test(moeda.className));
+  await calma();
+  check('moeda no aplicativo, conta comum: aparece com "Prêmio Grátis!" e o selo 10 (5 + 5), com UM pedido ao servidor do jogo',
+        moeda.className === 'pan-atalho' && /Prêmio Grátis!/.test(moeda.innerHTML) && /data-pan-restam>10</.test(moeda.innerHTML) &&
+        w._reg.api.join() === 'GET /api/anuncio', moeda.className + ' ' + w._reg.api.join());
+  check('moeda: mostrar NÃO busca a ponte, não liga o SDK, não pergunta nada, não pede anúncio',
+        w._reg.scripts.length === 0 && w._reg.plugin.length === 0);
+  P.atalho(w._no()); P.atalho(w._no());
+  await calma();
+  check('moeda: a praça remontada em seguida não pede de novo (sem laço de pedidos) e há um relógio só, o da virada do dia',
+        w._reg.api.length === 1 && w._reg.relogios === 1 && w._reg.longo > 3500000 && w._reg.longo < 3700000, w._reg.api.length + ' ' + w._reg.relogios);
+  moeda = P.atalho(w._no());
+  moeda.ao_click();
+  await calma();
+  check('moeda: o toque ABRE a área (o mesmo caminho das Configurações) e nenhum anúncio é pedido',
+        P.aberto() && P._st.fase === 'ok' && w._reg.plugin.join() === 'requestConsentInfo,showConsentForm,initialize' &&
+        w._reg.api.indexOf('POST /api/anuncio/bilhete') < 0, w._reg.plugin.join());
+  await P._assiste('barras'); await P._assiste('vintens'); await P._assiste('vintens');
+  const antesDeFechar = w._reg.api.length;
+  P.fecha();
+  await calma();
+  check('moeda: fechar a área relê o estado UMA vez e o selo cai para 7',
+        /data-pan-restam>7</.test(moeda.innerHTML) && w._reg.api.length === antesDeFechar + 1 && w._reg.api[antesDeFechar] === 'GET /api/anuncio',
+        moeda.innerHTML.replace(/<svg[\s\S]*<\/svg>/, ''));
+
+  w = janela({ capacitor: true, servidor: { hoje: { vintens: 5, barras: 5 } } });
+  P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
+  check('moeda: os dois limites do dia acabaram → some (e fica o relógio da virada do dia para voltar sozinha)',
+        / is-off/.test(moeda.className) && w._reg.api.length === 1 && w._reg.relogios === 1, moeda.className);
+  w = janela({ capacitor: true, servidor: { hoje: { vintens: 5, barras: 2 } } });
+  P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
+  check('moeda: um limite acabou e o outro não → segue à vista com o que resta (3)',
+        moeda.className === 'pan-atalho' && /data-pan-restam>3</.test(moeda.innerHTML));
+
+  w = janela({ capacitor: true, mestre: true });
+  P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
+  check('moeda: o Mestre não a vê, e nada é pedido', / is-off/.test(moeda.className) && w._reg.api.length === 0);
+  w = janela({ capacitor: true, semSessao: true });
+  P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
+  check('moeda: sem conta conectada não aparece, e nada é pedido', / is-off/.test(moeda.className) && w._reg.api.length === 0);
 
   // ------------------------------------------------------------- A CASCA
   const manif = le('android', 'app', 'src', 'main', 'AndroidManifest.xml');

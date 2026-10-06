@@ -2507,6 +2507,8 @@ JOGO.I18n.registra('es', { textos: {
   "Limite de hoje atingido.": "Límite de hoy alcanzado.",
   "Quem entrega o prêmio é o servidor do jogo, quando a Google confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.": "El premio lo entrega el servidor del juego cuando Google confirma que el anuncio se vio hasta el final: puede tardar unos segundos. Cerrar el anuncio antes del final no da premio ni quita nada.",
   "Aplicativo de teste: o anúncio é de teste e não dá prêmio.": "Aplicación de prueba: el anuncio es de prueba y no da premio.",
+  "Prêmio Grátis!": "¡Premio gratis!",
+  "Restam {a} hoje.": "Quedan {a} hoy.",
   "Ganhar prêmios": "Ganar premios",
   "Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.": "Opcional: mira un anuncio y gana vintenes o una barra de oro. Hasta 5 de cada uno al día. El juego no muestra anuncios en ningún otro lugar."
 } });

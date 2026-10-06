@@ -1297,6 +1297,10 @@ var JOGO = (typeof window !== 'undefined')
      * Boas-Vindas para quem ainda não o comprou; senão, as ofertas da semana com o tempo que falta. */
     var chamaLj = sala ? null : el('a', 'hub-loja is-off');
     if (chamaLj) { s.appendChild(chamaLj); ligaChamadaLoja(chamaLj); }
+    /* A MOEDA "PRÊMIO GRÁTIS!" (06/10): o atalho da área de prêmios, só no aplicativo (na web o
+     * `JOGO.PremioAnuncio` nem existe) e só na praça. É um botão do jogo: quem o desenha, lê o que resta hoje e
+     * o esconde é o js/core/premio_anuncio.js — nada de anúncio sai daqui, e a praça não é repintada por ele. */
+    if (!sala && JOGO.PremioAnuncio && JOGO.PremioAnuncio.atalho) safe(function () { return JOGO.PremioAnuncio.atalho(s); }, null);
 
     var mundo = el('div', 'hub-mundo');
     s.appendChild(mundo);

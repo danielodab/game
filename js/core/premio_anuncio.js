@@ -16,6 +16,10 @@
  *   · o anúncio só é pedido e mostrado depois do TOQUE em "Assistir anúncio".
  * Não há banner, intersticial, anúncio de abertura nem pré-carregamento.
  *
+ * O ATALHO DA PRAÇA (06/10, o dono: "um ícone em destaque... uma bolinha de ouro com Prêmio Grátis!"): a
+ * moeda no canto da praça é um botão DO JOGO que só abre esta área (P.atalho, no fim do arquivo). Ela não
+ * busca a ponte, não liga o SDK e não pergunta nada; só lê do servidor do jogo quantos prêmios restam hoje.
+ *
  * DOIS PRÊMIOS, com contador próprio: vinténs e barra de ouro. O jogador escolhe
  * ANTES de assistir. Quem dá o prêmio é o SERVIDOR (servidor/anuncio.py), e só
  * quando a Google o avisa com a assinatura dela:
@@ -54,6 +58,7 @@
   var st = P._st = { fase: 'parado', erro: '', premios: {}, zeraEm: 0, bloco: null, aparelhos: [], mestre: false,
                      ocupado: null, passo: '', recado: null, sdk: false };
   var fundo = null, ouvindo = false, emCena = null;
+  var lidoEm = 0;                                                  // quando o estado do dia foi lido (o atalho da praça)
 
   /* ---- onde estou ---- */
   function nativo() {
@@ -135,6 +140,7 @@
     if (r.bloco) st.bloco = String(r.bloco);
     if (Array.isArray(r.aparelhosTeste)) st.aparelhos = r.aparelhosTeste.map(String);
     if (r.mestre != null) st.mestre = r.mestre === true;
+    lidoEm = Date.now();
     return true;
   }
   function consulta() { return api(ROTA).then(function (r) { return leEstado(r) ? r : null; }, function () { return null; }); }
@@ -283,7 +289,18 @@
     '.pan-bt[disabled]{background:#4a4334;color:#a79c80;cursor:default}' +
     '.pan-estado,.pan-recado{margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#22262c}' +
     '.pan-recado.bom{background:#16301e;color:#9be7a8}.pan-recado.erro{background:#3a1717;color:#ffb0b0}' +
-    '.pan-nota{margin:0;font-size:12px;color:#a79c80}';
+    '.pan-nota{margin:0;font-size:12px;color:#a79c80}' +
+    /* o atalho da praça: a moeda fica na coluna da direita, abaixo das pílulas dos eventos e da loja */
+    '.pan-atalho{position:absolute;right:calc(var(--sa-r,0px) + 8px);top:calc(var(--sa-t,0px) + 128px);z-index:3;pointer-events:auto;' +
+    'display:flex;flex-direction:column;align-items:center;gap:3px;min-width:48px;min-height:48px;margin:0;padding:2px;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
+    '@media (pointer:coarse){.pan-atalho{top:calc(var(--sa-t,0px) + 156px)}}' +
+    '.pan-atalho.is-off{display:none}' +
+    '.pan-moeda{position:relative;width:44px;height:44px;border-radius:50%;animation:pan-pulso 2.8s ease-out infinite}' +
+    '.pan-moeda svg{display:block;width:44px;height:44px}' +
+    '.pan-selo{position:absolute;top:-5px;left:-7px;min-width:19px;height:19px;padding:0 4px;box-sizing:border-box;border-radius:10px;background:#b3261e;border:1px solid #12100b;color:#fff;font:700 11px/17px system-ui,sans-serif;text-align:center}' +
+    '.pan-atalho-rot{font:700 11px/1.25 system-ui,sans-serif;color:#ffe9a8;background:rgba(40,30,12,.92);border:1px solid rgba(240,200,110,.6);border-radius:999px;padding:2px 7px;white-space:nowrap}' +
+    '@keyframes pan-pulso{0%{box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 0 rgba(255,211,106,.6)}60%,100%{box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 11px rgba(255,211,106,0)}}' +
+    '@media (prefers-reduced-motion:reduce){.pan-moeda{animation:none;box-shadow:0 2px 8px rgba(0,0,0,.5)}}';
   function estilo() {
     if (document.getElementById('pan-estilo')) return;
     var s = document.createElement('style');
@@ -329,6 +346,7 @@
     if (st.passo === 'assistindo') return true;        // com o anúncio na tela, o voltar é dele
     if (fundo.parentNode) fundo.parentNode.removeChild(fundo);
     fundo = null;
+    atualizaAtalho(true);                              // o selo da moeda da praça acompanha o que foi ganho
     return true;
   };
   /* ENTRAR NA ÁREA: o único lugar de onde sai qualquer coisa de anúncio. Fora do aplicativo, nada. */
@@ -351,5 +369,76 @@
     });
     document.body.appendChild(fundo);
     entra();
+  };
+
+  /* ---- O ATALHO DA PRAÇA: a moeda de ouro "Prêmio Grátis!" ----
+   * Um botão do jogo, só no aplicativo, só para a conta comum conectada. Tocar faz o mesmo que o botão das
+   * Configurações (P.abre) e mais nada: daqui não sai ponte, SDK, pergunta de privacidade nem anúncio.
+   * O selo é a soma do que ainda resta hoje nos dois prêmios, lida de GET /api/anuncio (o servidor do JOGO):
+   * uma leitura ao chegar à praça (no máximo uma a cada REFRESCO), uma ao fechar a área e uma na virada do
+   * dia. Acabaram os dois limites: a moeda SOME (a praça fica como era) e volta sozinha quando o dia vira.
+   * Quem mexe é só este botão: a praça não é repintada por causa dele. */
+  var REFRESCO = 10 * 60 * 1000;
+  var MOEDA = '<svg viewBox="0 0 44 44" aria-hidden="true"><defs><radialGradient id="pan-ouro" cx="35%" cy="30%" r="75%">' +
+    '<stop offset="0" stop-color="#fff3bf"/><stop offset=".45" stop-color="#f2c94c"/><stop offset="1" stop-color="#a8741a"/></radialGradient></defs>' +
+    '<circle cx="22" cy="22" r="21" fill="url(#pan-ouro)" stroke="#6b4a10" stroke-width="2"/>' +
+    '<circle cx="22" cy="22" r="15.5" fill="none" stroke="#7a5412" stroke-opacity=".55" stroke-width="1.5"/>' +
+    '<path d="M22 11l3.1 6.6 7.2.9-5.3 5 1.4 7.1L22 27.1l-6.4 3.5 1.4-7.1-5.3-5 7.2-.9z" fill="#7a4d08" fill-opacity=".85"/></svg>';
+  var atalho = null, atalhoIndo = false, atalhoRelogio = null, atalhoConta = null;
+  function contaDaVez() {
+    try {
+      var S = JOGO.Sessao;
+      if (!S || !S.ativa || !S.ativa()) return null;
+      if (JOGO.GM && JOGO.GM.ativo && JOGO.GM.ativo()) return null;      // o Mestre não participa
+      return String((S.contaId && S.contaId()) || 'conta');
+    } catch (e) { return null; }
+  }
+  function restam() {
+    var n = 0;
+    TIPOS.forEach(function (t) { var p = st.premios[t]; if (p) n += Math.max(0, Number(p.faltam) || 0); });
+    return n;
+  }
+  function pintaAtalho() {
+    if (!atalho) return;
+    var conta = contaDaVez();
+    var n = (conta && conta === atalhoConta && lidoEm && !st.mestre) ? restam() : 0;
+    atalho.className = 'pan-atalho' + (n > 0 ? '' : ' is-off');
+    atalho.setAttribute('aria-label', Tx('Prêmio Grátis!') + ' ' + Tx('Restam {a} hoje.', { a: n }));
+    atalho.innerHTML = '<span class="pan-moeda">' + MOEDA + '<span class="pan-selo" data-pan-restam>' + n + '</span></span>' +
+      '<span class="pan-atalho-rot">' + Tx('Prêmio Grátis!') + '</span>';
+  }
+  function atualizaAtalho(forca) {
+    if (!atalho) return;
+    var conta = contaDaVez(), agora = Date.now();
+    if (conta !== atalhoConta) { atalhoConta = conta; st.premios = {}; st.mestre = false; lidoEm = 0; }   // outra conta: nada do que foi lido vale
+    var virou = st.zeraEm > 0 && agora >= st.zeraEm * 1000;
+    if (!conta || atalhoIndo || (!forca && !virou && lidoEm && agora - lidoEm < REFRESCO)) { pintaAtalho(); return; }
+    atalhoIndo = true;
+    consulta().then(function () {
+      atalhoIndo = false;
+      pintaAtalho();
+      // UM relógio, para a virada do dia; se o botão já saiu da tela (a praça foi desmontada), ele morre aqui
+      if (atalhoRelogio) { clearTimeout(atalhoRelogio); atalhoRelogio = null; }
+      var falta = st.zeraEm * 1000 - Date.now();
+      if (falta > 0 && falta < 2147000000) {
+        atalhoRelogio = setTimeout(function () {
+          atalhoRelogio = null;
+          if (atalho && atalho.isConnected !== false) atualizaAtalho(true);
+        }, falta + 5000);
+      }
+    });
+  }
+  /* A praça chama isto UMA vez ao ser montada (js/ui/hud.js). Fora do aplicativo: nada, nem elemento. */
+  P.atalho = function (onde) {
+    if (!P.noApp() || !onde || !onde.appendChild) return null;
+    estilo();
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pan-atalho is-off';
+    b.addEventListener('click', function () { P.abre(); });
+    onde.appendChild(b);
+    atalho = b;
+    atualizaAtalho(false);
+    return b;
   };
 })();

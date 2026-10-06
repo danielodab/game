@@ -2507,6 +2507,8 @@ JOGO.I18n.registra('en', { textos: {
   "Limite de hoje atingido.": "Today's limit reached.",
   "Quem entrega o prêmio é o servidor do jogo, quando a Google confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.": "The reward is delivered by the game server once Google confirms the ad was watched to the end: it can take a few seconds. Closing the ad early gives no reward and takes nothing away.",
   "Aplicativo de teste: o anúncio é de teste e não dá prêmio.": "Test build: the ad is a test ad and gives no reward.",
+  "Prêmio Grátis!": "Free Reward!",
+  "Restam {a} hoje.": "{a} left today.",
   "Ganhar prêmios": "Earn rewards",
   "Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.": "Optional: watch an ad and earn coppers or a gold bar. Up to 5 of each per day. The game shows no ads anywhere else."
 } });
