@@ -609,5 +609,19 @@ JOGO.I18n.registra('es', { erros: {
   "o limite de hoje desse prêmio já foi atingido": "ya alcanzaste el límite de hoy para este premio",
   "anúncios demais nesta hora; tente de novo mais tarde": "demasiados anuncios en esta hora; inténtalo más tarde",
   "Anúncio assistido": "Anuncio visto",
-  "Vinténs do anúncio": "Vintenes del anuncio"
+  "Vinténs do anúncio": "Vintenes del anuncio",
+  "a Câmara do Eco tem uma sala só": "la Cámara del Eco tiene una sola sala",
+  "a tentativa do Eco é sempre na dificuldade normal": "el intento del Eco es siempre en dificultad normal",
+  "escuro precisa ser true ou false": "escuro debe ser true o false",
+  "afixo desconhecido": "afijo desconocido",
+  "a tentativa em dupla venceu ({a})": "el intento en pareja venció ({a})",
+  "tentativa em dupla não encontrada": "intento en pareja no encontrado",
+  "as regras do jogo mudaram no meio da tentativa — ela não conta, e a vez de hoje volta para vocês": "las reglas del juego cambiaron en medio del intento: no cuenta, y el turno de hoy vuelve a ustedes",
+  "uma das contas da dupla não existe mais": "una de las cuentas de la pareja ya no existe",
+  "na dupla o sorteio é pedido com a tentativa de quem lidera": "en pareja el sorteo se pide con el intento de quien lidera",
+  "degrau precisa ser um inteiro de 1 a {a}": "el peldaño debe ser un entero de 1 a {a}",
+  "faltam pontos: o degrau {a} pede {b} e você tem {c}": "faltan puntos: el peldaño {a} pide {b} y tienes {c}",
+  "esse degrau já foi resgatado": "ese peldaño ya fue reclamado",
+  "afixo inválido": "afijo inválido",
+  "a tentativa em grupo tem no máximo 4 heróis": "el intento en grupo tiene como máximo 4 héroes"
 } });

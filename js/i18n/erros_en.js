@@ -609,5 +609,19 @@ JOGO.I18n.registra('en', { erros: {
   "o limite de hoje desse prêmio já foi atingido": "today's limit for this reward has been reached",
   "anúncios demais nesta hora; tente de novo mais tarde": "too many ads this hour; try again later",
   "Anúncio assistido": "Ad watched",
-  "Vinténs do anúncio": "Coppers from the ad"
+  "Vinténs do anúncio": "Coppers from the ad",
+  "a Câmara do Eco tem uma sala só": "the Echo's Chamber has a single room",
+  "a tentativa do Eco é sempre na dificuldade normal": "the Echo attempt is always on normal difficulty",
+  "escuro precisa ser true ou false": "escuro must be true or false",
+  "afixo desconhecido": "unknown affix",
+  "a tentativa em dupla venceu ({a})": "the pair attempt expired ({a})",
+  "tentativa em dupla não encontrada": "pair attempt not found",
+  "as regras do jogo mudaram no meio da tentativa — ela não conta, e a vez de hoje volta para vocês": "the game rules changed during the attempt — it does not count, and today's try is given back to you both",
+  "uma das contas da dupla não existe mais": "one of the pair's accounts no longer exists",
+  "na dupla o sorteio é pedido com a tentativa de quem lidera": "in a pair the roll is requested with the leader's attempt",
+  "degrau precisa ser um inteiro de 1 a {a}": "step must be an integer from 1 to {a}",
+  "faltam pontos: o degrau {a} pede {b} e você tem {c}": "not enough points: step {a} needs {b} and you have {c}",
+  "esse degrau já foi resgatado": "that step was already claimed",
+  "afixo inválido": "invalid affix",
+  "a tentativa em grupo tem no máximo 4 heróis": "the group attempt has at most 4 heroes"
 } });
