@@ -118,13 +118,21 @@ var JOGO = (typeof window !== 'undefined')
    * telefone desenha a tela inteira com GPU de bolso —, e 'baixa' no aparelho fraco: até 2 GB de memória
    * (navigator.deviceMemory, que o WebView do Android informa) ou tela de lado curto até 360 px. A
    * escolha gravada nas Configurações (e o ?graficos=) continua mandando por cima, em qualquer lugar. */
+  /* A memória do aparelho em GB, como o navegador a conta (navigator.deviceMemory: 0,25 a 8, em potências
+   * de 2 — 6 GB vira 4, e 8 GB ou mais vira 8). 0 = o navegador não diz (o iPhone, por exemplo). */
+  M.memoriaGb = function () {
+    try { var mem = Number(navigator.deviceMemory); return mem > 0 ? mem : 0; } catch (e) { return 0; }
+  };
+  M.telefone = function () { try { return telaDeAparelho() || M.celular(); } catch (e) { return false; } };
   M.aparelhoFraco = function () {
     try {
-      var mem = Number(navigator.deviceMemory);
-      if (mem > 0 && mem <= 2) return true;
+      var mem = M.memoriaGb();
+      if (mem > 0) return mem <= 2;
+      // 06/10: sem a memória, só a tela bem pequena conta. O lado curto de 360 px que valia aqui é o de
+      // quase todo telefone de hoje (o Galaxy S22, topo de linha, tem 360): marcava aparelho forte como fraco.
       var t = window.screen || {};
       var curto = Math.min(t.width || window.innerWidth || 9999, t.height || window.innerHeight || 9999);
-      return curto <= 360;
+      return curto < 360;
     } catch (e) { return false; }
   };
   M.padraoGrafico = function () {
@@ -133,10 +141,17 @@ var JOGO = (typeof window !== 'undefined')
      * praça com ~700 MB de textura e a aba morria por falta de memória. Telefone (no navegador ou no app)
      * começa em 'baixa' — a tela pequena não mostra a diferença; o computador segue em 'alta', e a escolha
      * das Configurações continua vencendo. */
-    var telefone = false;
-    try { telefone = telaDeAparelho() || M.celular(); } catch (e) {}
+    /* 06/10, o dono, já com o jogo na Play e dois topos de linha na mão: "jogo deve iniciar na qualidade
+     * máxima nos celulares". O telefone deixa de começar sempre em 'baixa': começa no nível que a MEMÓRIA dele
+     * aguenta — 8 GB ou mais, 'alta' (o máximo); 4 a 6 GB, 'media'; até 2 GB, 'baixa'. Sem a medida (iPhone),
+     * 'media'. O que derrubava a aba em 04/10 era principalmente a pré-busca guardando os modelos na memória:
+     * ela agora fica desligada em TODO telefone, em qualquer qualidade (js/assets_bundle.js, economiaDeDados). */
+    var telefone = M.telefone();
     if (!M.app() && !telefone) return 'alta';
-    return (telefone || M.aparelhoFraco()) ? 'baixa' : 'media';
+    if (M.aparelhoFraco()) return 'baixa';
+    var mem = M.memoriaGb();
+    if (mem >= 8) return 'alta';
+    return 'media';
   };
   M.qualidade = function () {
     if (nivelGrafico) return nivelGrafico;

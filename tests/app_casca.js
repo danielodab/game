@@ -91,13 +91,19 @@ M.segundoPlano(true);
 check('web: o segundo plano não cala o som', calou === 0 && !M.fora);
 
 w = janela({ memoria: 1, tela: [320, 568] });
-// 04/10: o telefone no navegador caía por falta de memória com a conta cheia — telefone abre em 'baixa'
-check('web em TELEFONE: a qualidade padrão é baixa (o computador segue em alta)', w.JOGO.Mobile.qualidade() === 'baixa');
+// 04/10: o telefone no navegador caía por falta de memória com a conta cheia. 06/10 (o dono: "jogo deve
+// iniciar na qualidade máxima nos celulares"): o telefone começa no nível que a MEMÓRIA dele aguenta
+check('web em TELEFONE fraco (1 GB): a qualidade padrão é baixa', w.JOGO.Mobile.qualidade() === 'baixa');
+w = janela({ memoria: 8, tela: [360, 780] });
+check('web em TELEFONE forte (8 GB, mesmo com lado curto de 360 px): começa no máximo',
+      w.JOGO.Mobile.telefone() === true && w.JOGO.Mobile.qualidade() === 'alta', w.JOGO.Mobile.qualidade());
+w = janela({ memoria: 4, tela: [360, 780] });
+check('web em TELEFONE médio (4 a 6 GB): começa na média', w.JOGO.Mobile.qualidade() === 'media', w.JOGO.Mobile.qualidade());
 w = janela({ pref: { graficos: 'baixa' } });
 check('web: a escolha das Configurações segue valendo', w.JOGO.Mobile.qualidade() === 'baixa');
 w = janela({ busca: '?mobile=1' });
 check('web com ?mobile=1 (o perfil de celular no navegador) não é aplicativo',
-      w.JOGO.Mobile.app() === false && w.JOGO.Mobile.qualidade() === 'baixa' && !w._classes.has('app'));
+      w.JOGO.Mobile.app() === false && w.JOGO.Mobile.qualidade() === 'media' && !w._classes.has('app'));
 w = janela({ busca: '?app=10' });
 check('?app=10 não liga o aplicativo (só ?app=1)', w.JOGO.Mobile.app() === false);
 
@@ -106,7 +112,7 @@ w = janela({ capacitor: true, memoria: 8, tela: [412, 915] });
 M = w.JOGO.Mobile;
 check('aplicativo (Capacitor nativo): app() e nativo() são verdadeiros', M.app() === true && M.nativo() === true);
 check('aplicativo: o <html> ganha a classe app', w._classes.has('app'));
-check('aplicativo num telefone: quem não escolheu abre na qualidade baixa', M.qualidade() === 'baixa' && M.grafico().escala === 0.5);
+check('aplicativo num telefone forte (8 GB): quem não escolheu abre no MÁXIMO', M.qualidade() === 'alta' && M.grafico().escala === 1 && M.grafico().bloom === true, M.qualidade());
 check('aplicativo: o segundo plano e o relógio da tela acesa são ligados',
       w._ouvintes.doc.indexOf('visibilitychange') >= 0 && w.relogios === 1);
 
@@ -118,9 +124,13 @@ check('?app=1: qualidade média', M.qualidade() === 'media');
 w = janela({ capacitor: true, memoria: 2, tela: [412, 915] });
 check('aplicativo com 2 GB de memória: qualidade baixa', w.JOGO.Mobile.qualidade() === 'baixa' && w.JOGO.Mobile.grafico().bloom === false);
 w = janela({ capacitor: true, memoria: 8, tela: [360, 640] });
-check('aplicativo em tela de 360 px: qualidade baixa', w.JOGO.Mobile.qualidade() === 'baixa');
+check('aplicativo forte em tela de 360 px (o Galaxy S22): máximo — a memória decide, não a tela', w.JOGO.Mobile.qualidade() === 'alta');
+w = janela({ capacitor: true, memoria: 4, tela: [412, 915] });
+check('aplicativo com 4 a 6 GB: média', w.JOGO.Mobile.qualidade() === 'media');
 w = janela({ capacitor: true, tela: [412, 915] });
-check('aplicativo num telefone sem deviceMemory: baixa (a tela decide)', w.JOGO.Mobile.qualidade() === 'baixa');
+check('aplicativo num telefone sem deviceMemory: média', w.JOGO.Mobile.qualidade() === 'media');
+w = janela({ capacitor: true, tela: [320, 568] });
+check('aplicativo sem deviceMemory em tela bem pequena (320 px): baixa', w.JOGO.Mobile.qualidade() === 'baixa');
 
 w = janela({ capacitor: true, memoria: 2, tela: [360, 640], pref: { graficos: 'alta' } });
 check('aplicativo fraco: a escolha ALTA do jogador vence o padrão', w.JOGO.Mobile.qualidade() === 'alta');

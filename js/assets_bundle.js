@@ -974,8 +974,13 @@ var JOGO = (typeof window !== 'undefined')
             (navigator.connection || navigator.mozConnection || navigator.webkitConnection);
     // 04/10: o TELEFONE também não adianta nada — a pré-busca guarda os .glb baixados na memória da aba
     // (até ~250 MB com tudo liberado), e era parte do que derrubava o navegador do celular
+    // 06/10: valia só na qualidade 'baixa', que era a de todo telefone. Agora o telefone forte começa em 'alta'
+    // (js/mobile.js, padraoGrafico), e a pré-busca segue fora dele em QUALQUER qualidade: é memória, não gráfico
     var fone = false;
-    try { fone = !!(JOGO.Mobile && JOGO.Mobile.qualidade && JOGO.Mobile.qualidade() === 'baixa' && JOGO.Mobile.economico && JOGO.Mobile.economico()); } catch (eF) {}
+    try {
+      var Mb = JOGO.Mobile;
+      fone = !!(Mb && (Mb.telefone ? Mb.telefone() : (Mb.qualidade && Mb.qualidade() === 'baixa' && Mb.economico && Mb.economico())));
+    } catch (eF) {}
     return fone || !!(c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || '')));
   }
   B.economiaDeDados = economiaDeDados;

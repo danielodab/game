@@ -51,8 +51,9 @@ iframe{width:300px;height:200px;border:1px solid #333}</style>
 
   check('com ?app=1 o jogo se vê no aplicativo e o <html> ganha a classe app',
         M.app() === true && M.nativo() === false && document.documentElement.classList.contains('app'));
-  check('a qualidade padrão do aplicativo é média ou baixa, nunca alta',
-        M.qualidade() === (M.aparelhoFraco() ? 'baixa' : 'media'), M.qualidade());
+  // 06/10: o padrão segue a memória do aparelho (8 GB ou mais começa no máximo) — js/mobile.js, padraoGrafico
+  check('a qualidade padrão do aplicativo é a que a memória do aparelho aguenta',
+        M.qualidade() === M.padraoGrafico() && M.padraoGrafico() === (M.aparelhoFraco() ? 'baixa' : (M.memoriaGb() >= 8 ? 'alta' : 'media')), M.qualidade());
 
   // ---- VOLTAR ---------------------------------------------------------------
   var fichas = 2, pausas = [];
