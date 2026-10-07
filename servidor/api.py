@@ -81,6 +81,7 @@ from guerra import ESQUEMA_GUERRA, GuerraMixin   # 15/09: a guerra de guilda 2x2
 from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre contas, com propostas
 from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
 from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a tentativa, o placar e a semana)
+from supremo import FUSO_S as FUSO_S_BR, dia_de     # 07/10: o dia de Brasília do programa da semana
 # 02/10: os direitos do titular (aceite dos termos, excluir a conta, baixar os dados) e o registro de erros
 from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
 from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
@@ -115,6 +116,31 @@ RANKING_CACHE = 30               # segundos que o GET /api/ranking fica guardado
 # Mestre escolhe o número (mais de 1 até ×10); o ×10 só segura o zero a mais.
 # js/core/agenda.js tem a cópia destes números.
 AGENDA_TETOS = {'xp': 10.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0}
+# A SEMANA DO SOTERRA (07/10; o dono: "quero um jogo que o jogador tenha motivo para voltar"). Um programa FIXO:
+# cada dia da semana (Brasília) tem um bônus próprio, publicado como evento do mundo (`semanais`, como a semana
+# do Eco) e pago pelo servidor (_fatores_no_ar). Os números são modestos de propósito — a economia é dura por
+# desenho, e o que se quer é ritmo, não inflação: ×1,25 no XP e no saque; ×1,5 nas moedas baratas (pedras e
+# vinténs); a sexta dobra o saque SÓ do Calabouço do Dia (que já paga ×1,5: o evento não empilha com o Dia,
+# vale o maior — a sexta é +33% sobre ele). `dia` 0 = domingo, como o getDay do JS e as regras do Mestre.
+# PROGRAMA_SEMANAL=0 no ambiente desliga tudo (como LOJA_OFERTAS=0).
+PROGRAMA_LIGADO = os.environ.get('PROGRAMA_SEMANAL', '1').strip() != '0'
+PROGRAMA_SEMANAL = (
+    {'dia': 0, 'tipo': 'pedras', 'multiplicador': 1.5, 'calabouco': 'poco', 'titulo': 'Domingo do Poço',
+     'texto': 'As pedras do Poço sem Fundo ×1,5 — e o recorde da semana fecha à meia-noite.'},
+    {'dia': 1, 'tipo': 'vintem', 'multiplicador': 1.5, 'calabouco': None, 'titulo': 'Segunda dos Vinténs',
+     'texto': 'Toda sala paga vinténs ×1,5. O Eco Primordial abre a semana.'},
+    {'dia': 2, 'tipo': 'pedras', 'multiplicador': 1.5, 'calabouco': None, 'titulo': 'Terça das Pedras',
+     'texto': 'As pedras de forja de todo calabouço ×1,5.'},
+    {'dia': 3, 'tipo': 'xp', 'multiplicador': 1.25, 'calabouco': None, 'titulo': 'Quarta da Descida',
+     'texto': 'XP ×1,25 em toda sala.'},
+    {'dia': 4, 'tipo': 'saque', 'multiplicador': 1.25, 'calabouco': None, 'titulo': 'Quinta do Saque',
+     'texto': 'O saque de toda sala ×1,25.'},
+    {'dia': 5, 'tipo': 'saque', 'multiplicador': 2.0, 'calabouco': 'dia', 'titulo': 'Sexta do Dia',
+     'texto': 'O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).'},
+    {'dia': 6, 'tipo': 'xp', 'multiplicador': 1.5, 'calabouco': None, 'titulo': 'Sábado Cheio',
+     'texto': 'XP ×1,5 em toda sala — o dia de descer com a guilda.'},
+)
+PROGRAMA_POR_DIA = {p['dia']: p for p in PROGRAMA_SEMANAL}
 # os calabouços que um evento pode mirar (null = todos). O servidor não sabe
 # quais portais estão fechados — isso mora em dungeons.js, e uma terceira cópia
 # ficaria velha. Evento num portal fechado só não tem efeito: ninguém desce lá.
@@ -1656,6 +1682,34 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
             n = self.con.execute("SELECT COUNT(*) FROM contas").fetchone()[0]
         return 200, {'ok': True, 'contas': n, 'agora': agora(), 'correio': self.correio.ligado}
 
+    # -- A SEMANA DO SOTERRA (07/10) ------------------------------------------------------
+    def _programa_eventos(self, t, ate):
+        """O PROGRAMA FIXO DA SEMANA como eventos do mundo: um por dia de Brasília entre t e `ate`, o do dia da
+        semana (PROGRAMA_SEMANAL). Ninguém liga nem cancela (como a semana do Eco): a semana tem rosto — todo
+        dia tem um motivo próprio para entrar — e o Mestre o desliga inteiro com PROGRAMA_SEMANAL=0 no ambiente.
+        O `calabouco` 'dia' vira o Calabouço do Dia daquele dia (o juiz diz: salas.py _dia); sem juiz, o
+        evento daquele dia não sai (nada promete o que não pode pagar)."""
+        if not PROGRAMA_LIGADO:
+            return []
+        fora = []
+        d0, d1 = dia_de(t), dia_de(max(t, ate - 1))
+        for d in range(d0, d1 + 1):
+            ini = d * 86400 - FUSO_S_BR
+            fim = ini + 86400
+            entrada = PROGRAMA_POR_DIA.get((d + 4) % 7)       # o dia 0 da época foi uma quinta: (0 + 4) % 7 = 4
+            if entrada is None:
+                continue
+            calabouco = entrada['calabouco']
+            if calabouco == 'dia':
+                dia = self._dia(ini + 43200)
+                calabouco = dia.get('dungeonId') if dia else None
+                if not calabouco:
+                    continue
+            fora.append({'id': 'semana-%s-%d' % (entrada['tipo'], d), 'origem': 'programa', 'regra': None,
+                         'tipo': entrada['tipo'], 'multiplicador': entrada['multiplicador'], 'calabouco': calabouco,
+                         'titulo': entrada['titulo'], 'texto': entrada['texto'], 'inicio': ini, 'fim': fim})
+        return fora
+
     # -- os eventos do mundo (10/09) ------------------------------------------------------
     def _fatores_no_ar(self, t):
         """Os fatores dos eventos no ar no instante t, pela mesma resolução do GET
@@ -1671,6 +1725,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         lista = [evento_publico(r) for r in pontuais if _linha_valida(r)]
         for rg in (regra_da_linha(r) for r in linhas if _linha_valida(r)):
             lista.extend(expande_regra(rg, t, t + 1))
+        lista.extend(self._programa_eventos(t, t + 1))       # 07/10: o dia da semana também paga
         return resolve_fatores(lista, t)
 
     def eventos_ler(self, conta, corpo):
@@ -1705,10 +1760,14 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # num campo à parte: `ativos`/`proximos` continuam sendo a agenda do Mestre (o que ele liga e cancela),
         # e o jogo (agenda.js) e o site (site.js) juntam os dois para mostrar a contagem regressiva
         semanais = [e for e in self._supremo_eventos(t) if e['fim'] > t and e['inicio'] < ate]
+        # 07/10: e A SEMANA DO SOTERRA — o programa fixo, um evento por dia (o de hoje entra nos fatores)
+        semanais.extend(self._programa_eventos(t, ate))
+        no_ar = ativos + [e for e in semanais if e['inicio'] <= t < e['fim']]
         return 200, {'ok': True, 'agora': t, 'fusoMin': FUSO_MIN, 'janelaDias': JANELA_DIAS,
                      'tetos': dict(AGENDA_TETOS), 'ativos': ativos, 'proximos': proximos,
-                     'regras': [regra_publica(rg) for rg in regras], 'fatores': resolve_fatores(ativos, t),
-                     'semanais': semanais}
+                     'regras': [regra_publica(rg) for rg in regras], 'fatores': resolve_fatores(no_ar, t),
+                     'semanais': semanais,
+                     'programa': [dict(p) for p in PROGRAMA_SEMANAL] if PROGRAMA_LIGADO else []}
 
     def evento_criar(self, conta, corpo):
         """O Mestre liga um evento pontual: agora (sem `inicio`) ou agendado."""

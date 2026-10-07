@@ -61,6 +61,10 @@ from datetime import datetime, timedelta, timezone
 # provas da API contam barras com números fixos, então sobem a API com as ofertas DESLIGADAS. Quem prova as
 # ofertas (tests/loja_api.py, ProvaDasNovidades) liga de volta no ambiente do servidor dela
 os.environ.setdefault('LOJA_OFERTAS', '0')
+# 07/10: a semana do SOTERRA (servidor/api.py PROGRAMA_SEMANAL) põe um evento no ar TODO dia, e as provas da
+# agenda daqui contam um mundo sem evento nenhum — sobem a API com o programa DESLIGADO. Quem prova o
+# programa (tests/programa_api.py) liga de volta no ambiente do servidor dela
+os.environ.setdefault('PROGRAMA_SEMANAL', '0')
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 API = os.path.join(AQUI, '..', 'servidor', 'api.py')

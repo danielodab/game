@@ -2593,4 +2593,8 @@ JOGO.I18n.registra('en', { textos: {
   "Pedras do dia: {qtd}× {nome}": "Stones of the day: {qtd}× {nome}",
   "o elemento do Calabouço do Dia ({a}) · um lote por dia · você tem <b>{tem}</b>": "the Daily Dungeon's element ({a}) · one lot per day · you have <b>{tem}</b>",
   "−{pagou} vinténs — {qtd}× {nome} na prateleira da forja.": "−{pagou} pennies — {qtd}× {nome} on the forge shelf.",
+  // ---- a semana do SOTERRA (07/10, a ficha dos Eventos do mundo)
+  "A semana do SOTERRA": "The SOTERRA week",
+  "Todo dia da semana tem um bônus próprio, igual para todo mundo. O de hoje já está valendo nas salas.": "Every weekday has its own bonus, the same for everyone. Today's is already counting in the rooms.",
+  "Calabouço do Dia": "Daily Dungeon",
 } });

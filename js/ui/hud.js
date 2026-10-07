@@ -2501,6 +2501,22 @@ var JOGO = (typeof window !== 'undefined')
       faixa.appendChild(el('span', 'hub-evento-item', linhaEvento(e, agoraMs, true)));
     });
     if (ativos.length > 3) faixa.appendChild(el('span', 'hub-evento-item', '+' + (ativos.length - 3) + ' outros'));
+    /* A SEMANA DO SOTERRA (07/10): com a faixa aberta, os sete dias do programa fixo numa linha só, o de hoje
+     * aceso — o jogador comum vê o que vem amanhã sem abrir o site (a ficha dos eventos é do Mestre) */
+    var prog = safe(function () { return Ag.programa ? Ag.programa() : []; }, []) || [];
+    if (prog.length) {
+      var hojeDia = new Date(agoraMs + (Ag.FUSO_MIN || -180) * 60000).getUTCDay();
+      var sem = el('span', 'hub-evento-semana');
+      prog.slice().sort(function (x, y) { return x.dia - y.dia; }).forEach(function (p) {
+        var d = el('span', 'hub-evento-dia' + (p.dia === hojeDia ? ' is-hoje' : ''),
+          '<b>' + esc(Ag.DIA_CURTO[p.dia] || '') + '</b> ' + esc(p.titulo));
+        tipOn(d, esc(p.titulo), esc(Ag.rotulo({ tipo: p.tipo, multiplicador: p.multiplicador })) +
+          (p.calabouco ? ' · ' + esc(p.calabouco === 'dia' ? tr('Calabouço do Dia') : Ag.nomeCalabouco(p.calabouco)) : '') +
+          (p.texto ? '<br>' + esc(p.texto) : ''), p.dia === hojeDia ? '#ffc44d' : '#9fd3ff');
+        sem.appendChild(d);
+      });
+      faixa.appendChild(sem);
+    }
     var a = el('a', 'hub-evento-link', tr('ver o calendário'));
     a.href = paginaEventos();
     a.target = '_blank';
@@ -12136,6 +12152,25 @@ var JOGO = (typeof window !== 'undefined')
 
       listaEventos(tr('No ar agora'), Ag.ativos(), tr('Nenhum evento no ar.'));
       listaEventos(tr('Próximos 14 dias'), Ag.proximos(), tr('Nada nos próximos 14 dias.'));
+
+      /* A SEMANA DO SOTERRA (07/10, servidor/api.py PROGRAMA_SEMANAL): os sete dias do programa fixo, com o
+       * de hoje aceso — o jogador vê o ritmo da semana inteira e sabe o que vem amanhã */
+      var prog = safe(function () { return Ag.programa(); }, []) || [];
+      if (prog.length) {
+        body.appendChild(el('h3', 'hs-sec', tr('A semana do SOTERRA')));
+        body.appendChild(el('p', 'inv-dica', tr('Todo dia da semana tem um bônus próprio, igual para todo mundo. O de hoje já está valendo nas salas.')));
+        var hojeDia = new Date(Ag.agora() + (Ag.FUSO_MIN || -180) * 60000).getUTCDay();
+        var grSem = el('div', 'ag-semana');
+        prog.slice().sort(function (a, b) { return a.dia - b.dia; }).forEach(function (p) {
+          var ln = el('div', 'ag-semana-dia' + (p.dia === hojeDia ? ' is-hoje' : ''));
+          ln.appendChild(el('b', null, esc(Ag.DIA_CURTO[p.dia] || '')));
+          ln.appendChild(el('span', 'ag-semana-tit', esc(p.titulo) + ' <i>· ' + esc(Ag.rotulo({ tipo: p.tipo, multiplicador: p.multiplicador })) +
+            (p.calabouco ? ' · ' + esc(p.calabouco === 'dia' ? tr('Calabouço do Dia') : Ag.nomeCalabouco(p.calabouco)) : '') + '</i>'));
+          if (p.texto) ln.appendChild(el('span', 'ag-semana-tx', esc(p.texto)));
+          grSem.appendChild(ln);
+        });
+        body.appendChild(grSem);
+      }
 
       // os 14 dias pelo relógio LOCAL: é por ele que o Calabouço do Dia sorteia (diario.js)
       body.appendChild(el('h3', 'hs-sec', tr('Os próximos 14 dias')));

@@ -87,6 +87,7 @@ var JOGO = (typeof window !== 'undefined')
 
   var lista = [];        // ativos ∪ próximos, já normalizados (tempos em SEGUNDOS, como o servidor)
   var regras = [];
+  var programa = [];     // 07/10: a semana do SOTERRA — [{dia, tipo, multiplicador, calabouco, titulo, texto}]
   var desvio = 0;        // ms: relógio do servidor − relógio daqui
   var buscaOk = 0;       // relógio daqui na última resposta boa
   var tentativa = 0;     // relógio daqui na última tentativa
@@ -111,7 +112,7 @@ var JOGO = (typeof window !== 'undefined')
     var s = armazem();
     if (!s) return;
     try {
-      s.setItem(Ag.CHAVE, JSON.stringify({ v: 1, lista: lista, regras: regras, desvio: desvio, buscaEm: buscaOk }));
+      s.setItem(Ag.CHAVE, JSON.stringify({ v: 1, lista: lista, regras: regras, programa: programa, desvio: desvio, buscaEm: buscaOk }));
     } catch (e) { /* cheio ou negado: a memória segue valendo */ }
   }
   /* Lê o que a última sessão guardou. NÃO poda os vencidos aqui: a janela é
@@ -124,6 +125,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!d || typeof d !== 'object' || d.v !== 1) return false;
     lista = (isArr(d.lista) ? d.lista : []).map(normaliza).filter(Boolean);
     regras = (isArr(d.regras) ? d.regras : []).map(normalizaRegra).filter(Boolean);
+    programa = (isArr(d.programa) ? d.programa : []).filter(function (p) {
+      return p && typeof p === 'object' && has(Ag.TETOS, p.tipo) && typeof p.dia === 'number';
+    });
     desvio = numOu(d.desvio, 0);
     buscaOk = numOu(d.buscaEm, 0);
     assinatura = assina();
@@ -144,7 +148,8 @@ var JOGO = (typeof window !== 'undefined')
     var m = Number(e.multiplicador);
     return {
       id: String(e.id),
-      origem: e.origem === 'calendario' ? 'calendario' : 'pontual',
+      // 07/10: 'programa' = a semana do SOTERRA (fixa, do servidor); 'supremo' = a semana do Eco
+      origem: (e.origem === 'calendario' || e.origem === 'programa' || e.origem === 'supremo') ? e.origem : 'pontual',
       regra: (e.regra === undefined) ? null : e.regra,
       tipo: e.tipo,
       multiplicador: isFinite(m) ? m : 1,
@@ -226,6 +231,8 @@ var JOGO = (typeof window !== 'undefined')
       .sort(function (a, b) { return a.inicio - b.inicio; }).map(copia);
   };
   Ag.regras = function () { return regras.map(function (r) { var c = copia(r); delete c.fator; return c; }); };
+  /* 07/10: a semana do SOTERRA — os sete dias do programa fixo (vazio sem servidor ou com o programa desligado) */
+  Ag.programa = function () { return programa.map(copia); };
 
   /* A REGRA DE RESOLUÇÃO (a mesma no servidor, no jogo e no site):
    *   fator = min(TETO, max(1, maior multiplicador entre os eventos daquele
@@ -308,9 +315,19 @@ var JOGO = (typeof window !== 'undefined')
   function aplica(r) {
     if (!r || typeof r !== 'object' || r.ok === false) return false;
     // 02/10: `semanais` = os eventos FIXOS do mundo (a semana do Eco Primordial, servidor/supremo.py) — tipo
-    // 'aviso', fator 1: entram na faixa com a contagem regressiva e não mexem em recompensa nenhuma
+    // 'aviso', fator 1: entram na faixa com a contagem regressiva e não mexem em recompensa nenhuma.
+    // 07/10: e A SEMANA DO SOTERRA (servidor/api.py, PROGRAMA_SEMANAL) vem pelo mesmo campo, com fator > 1:
+    // o de hoje pesa na recompensa como qualquer evento (Ag.fator lê a lista inteira); `programa` é a
+    // tabela dos sete dias, para a ficha mostrar a semana
     var bruto = [].concat(isArr(r.ativos) ? r.ativos : [], isArr(r.proximos) ? r.proximos : [],
                           isArr(r.semanais) ? r.semanais : []);
+    programa = isArr(r.programa) ? r.programa.filter(function (p) {
+      return p && typeof p === 'object' && has(Ag.TETOS, p.tipo) && typeof p.dia === 'number' && p.dia >= 0 && p.dia <= 6;
+    }).map(function (p) {
+      return { dia: p.dia, tipo: p.tipo, multiplicador: Number(p.multiplicador) || 1,
+               calabouco: (typeof p.calabouco === 'string' && p.calabouco) ? p.calabouco : null,
+               titulo: String(p.titulo == null ? '' : p.titulo), texto: String(p.texto == null ? '' : p.texto) };
+    }) : [];
     var vistos = {}, nova = [];
     for (var i = 0; i < bruto.length; i++) {
       var n = normaliza(bruto[i]);

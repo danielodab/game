@@ -2593,4 +2593,8 @@ JOGO.I18n.registra('es', { textos: {
   "Pedras do dia: {qtd}× {nome}": "Piedras del día: {qtd}× {nome}",
   "o elemento do Calabouço do Dia ({a}) · um lote por dia · você tem <b>{tem}</b>": "el elemento de la Mazmorra del Día ({a}) · un lote por día · tienes <b>{tem}</b>",
   "−{pagou} vinténs — {qtd}× {nome} na prateleira da forja.": "−{pagou} vintenes — {qtd}× {nome} en el estante de la forja.",
+  // ---- a semana do SOTERRA (07/10, a ficha dos Eventos do mundo)
+  "A semana do SOTERRA": "La semana de SOTERRA",
+  "Todo dia da semana tem um bônus próprio, igual para todo mundo. O de hoje já está valendo nas salas.": "Cada día de la semana tiene un bono propio, igual para todos. El de hoy ya vale en las salas.",
+  "Calabouço do Dia": "Mazmorra del Día",
 } });

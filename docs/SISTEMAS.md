@@ -736,6 +736,37 @@ do desenho 2D antigo.
 
 ---
 
+## 9-A. A semana do SOTERRA (07/10)
+
+O dono: "quero um jogo que o jogador tenha motivo para voltar". O Eco, a Brasa e as ofertas já giravam
+por semana, mas o jogador não via um calendário com "hoje acontece X". Agora a semana tem rosto: um
+**programa fixo**, um bônus por dia de Brasília, igual para todo mundo (`servidor/api.py`,
+`PROGRAMA_SEMANAL`):
+
+| dia | nome | o que vale |
+|---|---|---|
+| domingo | Domingo do Poço | pedras ×1,5 no Poço — e o recorde da semana fecha |
+| segunda | Segunda dos Vinténs | vinténs ×1,5 em toda sala (o Eco abre a semana) |
+| terça | Terça das Pedras | pedras ×1,5 em todo calabouço |
+| quarta | Quarta da Descida | XP ×1,25 |
+| quinta | Quinta do Saque | saque ×1,25 |
+| sexta | Sexta do Dia | saque ×2 só no Calabouço do Dia (no lugar do ×1,5 de sempre: +33%) |
+| sábado | Sábado Cheio | XP ×1,5 |
+
+Os números são modestos de propósito — a economia é dura por desenho, e o que se quer é ritmo, não
+inflação. O programa viaja como **evento do mundo fixo** (`semanais`, como a semana do Eco; origem
+`programa`, id `semana-<tipo>-<dia>`), um por dia da janela de 14 dias, e o servidor **paga por ele**
+(`_fatores_no_ar`: a mesma lista do `GET /api/eventos`). Do mesmo tipo vale o maior (um evento do
+Mestre maior passa na frente), os tetos são os de sempre e o bônus de XP comprado segue preso aos ×2 com
+o evento. A sexta precisa do juiz (o Calabouço do Dia daquela sexta sai do `POST /dia`); sem ele o
+evento daquele dia não sai. Ninguém liga nem cancela; `PROGRAMA_SEMANAL=0` no ambiente desliga tudo.
+
+**Na tela:** a faixa de eventos da praça (a pílula "✦ N eventos") já mostra o de hoje; a ficha dos
+Eventos do mundo ganhou o bloco "A semana do SOTERRA" com os sete dias e o de hoje aceso, e os
+"próximos 14 dias" listam o de cada dia. O site (`eventos.html`) os mostra pelo mesmo campo.
+
+Provas: `python tests/programa_api.py` (API + juiz).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

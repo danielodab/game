@@ -656,9 +656,11 @@ class SalasMixin:
         diario.js e afixos.js da página, no dia de Brasília). Guardado por dia: a resposta não muda dentro dele.
         Sem juiz ou juiz de antes do afixo: None, e nenhuma sala ganha afixo."""
         chave = time.strftime('%Y%m%d', time.gmtime(t - 3 * 3600))
-        guardado = self.__dict__.get('_dia_guardado')
-        if guardado is not None and guardado[0] == chave:
-            return guardado[1]
+        guardados = self.__dict__.get('_dias_guardados')
+        if guardados is None:
+            guardados = self._dias_guardados = {}
+        if chave in guardados:
+            return guardados[chave]
         try:
             r = self.juiz.pede('POST', '/dia', {'ms': int(t * 1000)}, tempo=5.0)
         except Recusa:
@@ -667,7 +669,10 @@ class SalasMixin:
             return None
         dia = {'dungeonId': r.get('dungeonId') if isinstance(r.get('dungeonId'), str) else None,
                'afixo': r.get('afixo') if isinstance(r.get('afixo'), str) else None}
-        self._dia_guardado = (chave, dia)
+        # 07/10: o programa da semana pergunta os próximos 14 dias — guarda por dia, com teto
+        if len(guardados) > 40:
+            guardados.clear()
+        guardados[chave] = dia
         return dia
 
     def _afixo_da_abertura(self, corpo, dungeon, t, regras):
