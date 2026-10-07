@@ -165,7 +165,8 @@ async function cenaA() {
         sv.saves[9].db.jogador.id === novo && sv.saves[9].db.carteira.moedas === 777 && sv.saves[9].db.banco.itens[0].iid === 'i-abc-1', JSON.stringify(sv.puts));
   check('A: o código novo ficou registrado para a conta nova e o velho segue do Mestre', sv.donos[novo] === 9 && sv.donos[ID_VELHO] === 7);
   const j = await a.J.DB.jogador();
-  check('A: o jogo lê o código novo (é o que a praça vai usar)', j.id === novo && j.nome === null);
+  // 06/10: sem nome no save, o jogador nasce com o nome da CONTA dele (nunca com o copiado da outra)
+  check('A: o jogo lê o código novo e o nome da conta que entrou (é o que a praça vai usar)', j.id === novo && j.nome === 'Oda2', j.nome);
 }
 
 async function cenaB() {

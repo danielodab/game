@@ -218,8 +218,29 @@ var JOGO = (typeof window !== 'undefined')
   function responde(valor) { return Promise.resolve(valor); }
 
   // ------------------------------------------------------------- identidade
+  /* 06/10 (o dono: "o jogador é obrigado a colocar o nome no primeiro login.. tem um que ficou sem nome"):
+   * o nome do jogador era pedido por um painel da praça que dá para ignorar — e a pessoa andava, entrava em
+   * grupo e aparecia para os outros sem nome. A CONTA já tem nome (o do cadastro: único, dentro da lei dos
+   * nomes e o mesmo que o servidor conhece): sem nome no save, o jogador nasce com o da conta. Só sobra o
+   * pedido da praça para quem não tem sessão (em casa, nas provas) ou tem um nome de conta fora da régua. */
+  function nasceComONomeDaConta(d) {
+    if (d.jogador.nome) return;
+    var c = null;
+    try { c = JOGO.Sessao && JOGO.Sessao.conta ? JOGO.Sessao.conta() : null; } catch (e) {}
+    var nome = (c && typeof c.nome === 'string') ? c.nome.trim() : '';
+    if (!nome) return;
+    var Nm = JOGO.Nomes;
+    if (Nm && typeof Nm.valida === 'function' && !mestreAtivo()) {
+      var v = null;
+      try { v = Nm.valida(nome, NOME_MIN, NOME_MAX); } catch (e2) {}
+      if (!v || !v.ok) return;
+    }
+    d.jogador.nome = nome.slice(0, 24);
+    try { grava(); } catch (e3) {}
+  }
   DB.jogador = function () {
     var d = carrega();
+    nasceComONomeDaConta(d);
     // cópia campo a campo: TODO campo novo do jogador precisa entrar aqui —
     // o `titulo` ficou de fora um dia e sumiu sem erro nenhum (o teste pegou)
     // 04/10: a conta do Mestre (conferida pelo servidor) se chama "GM" para todo mundo, e para ela
