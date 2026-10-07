@@ -387,7 +387,10 @@ def _aura(cor, nome, efeito):
 
 
 # (elemento, pedra, nome, (da/de), preço de 10, preço de 50), em barras de ouro (13/09). Água e terra caem na
-# Cisterna; ar, fogo e a neutra valem mais (fogo e neutra não caem em portal aberto: só a loja as dá)
+# Cisterna; ar, fogo e a neutra valem mais. 07/10: a frase "fogo e neutra não caem em portal aberto: só a loja
+# as dá" era de antes do Fecho de Brasa abrir (19/09) — hoje TODA pedra cai de monstro em portal aberto
+# (fogo no Fecho e na Mina; a neutra no Fecho, nos Andaimes e no Coração: `stoneDrop` em monsters.js), e o
+# Poço mistura todos. A loja só adianta; quem farma chega a tudo. Os preços mais altos ficam pela raridade
 _PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de água'), 25, 110),
            ('terra', 'stone-root', 'Grãos de Rocha-Mãe', ('da terra', 'de terra'), 25, 110),
            ('ar', 'stone-breath', 'Sopros Engarrafados', ('do ar', 'de ar'), 40, 180),
