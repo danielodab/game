@@ -203,8 +203,8 @@ acompanham a dupla e um mercado entre jogadores.
 
 FEITO PARA O CELULAR
 Toque uma vez para mirar e ver a área do feitiço, toque de novo para confirmar.
-Joga-se em pé ou deitado, e a qualidade gráfica se ajusta ao aparelho — dá para
-trocar nas Configurações.
+Joga-se com o aparelho deitado, em tela inteira, e a qualidade gráfica se ajusta
+ao aparelho — dá para trocar nas Configurações.
 
 A MESMA CONTA NO CELULAR E NO COMPUTADOR
 O progresso fica guardado no servidor: comece no telefone e continue no
@@ -227,7 +227,7 @@ nenhum de propósito, para não envelhecer.
 | Tags | Tático, RPG por turnos, Multijogador |
 | E-mail de contato | o mesmo da Política de Privacidade (seção 12 dela) |
 | Política de privacidade | `https://soterra.viidoo.io/site/privacidade.html` |
-| Contém anúncios | Não |
+| Contém anúncios | **Sim** (06/10: o anúncio premiado opcional da área "Ganhar prêmios"; seção 10) |
 
 ---
 
@@ -248,8 +248,11 @@ de 06/10/2026). Se a política mudar, este formulário muda junto.
 
 - **Dentro do app:** ficha **Contas** → **Excluir conta** (pede o nome e a senha).
 - **Pela web:** `https://soterra.viidoo.io/site/conta.html` (o botão "Excluir
-  conta" da página da conta). É este o endereço que vai no campo "URL de
-  exclusão de conta".
+  conta" da página da conta).
+- **No campo "URL de exclusão de conta"** vai
+  `https://soterra.viidoo.io/site/privacidade.html#excluir`: a seção 9 da política,
+  pública, que desde 06/10 traz os passos, o que é apagado, o que fica e o e-mail
+  para quem não consegue entrar (é o que a Play exige da página).
 - O que fica depois da exclusão (a Play pergunta): o registro dos pagamentos,
   sem nome e sem e-mail, pelo prazo da lei; e o histórico da moderação, com o
   nome de jogador da época (seção 9 da política).

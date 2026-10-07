@@ -574,6 +574,15 @@ var JOGO = (typeof window !== 'undefined')
     root.appendChild(tipEl);
     toastEl = el('div', 'ui-toast');
     root.appendChild(toastEl);
+    // 06/10: o cartão dos PEDIDOS entre jogadores (grupo, desafio, troca, guilda) — fora das telas e por
+    // cima das fichas: a praça remontada e a ficha aberta não o tiram da frente (pintaPedido)
+    pedidoEl = el('div', 'ui-pedido');
+    pedidoEl.setAttribute('role', 'status');
+    pedidoEl.setAttribute('aria-live', 'polite');
+    root.appendChild(pedidoEl);
+    document.addEventListener('visibilitychange', voltaDoFundo);
+    window.addEventListener('focus', voltaDoFundo);
+    window.addEventListener('pageshow', voltaDoFundo);
     miraEl = el('div', 'ui-mira');
     root.appendChild(miraEl);
     // 11/09: o painel do grupo (canto direito) e o menu dos cartões — camadas
@@ -672,6 +681,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!screens[name]) name = 'menu';
     hideTip();
     if (name !== 'battle') closeSheet();
+    // 06/10: a batalha que começa encerra a troca que ficou pendurada (o pedido ou a mesa): na luta ela
+    // não tem tela, e ficava de pé recusando todo pedido seguinte. O outro lado é avisado (a voz `cancela`)
+    else if (current !== 'battle') safe(function () { if (JOGO.Troca.estado()) JOGO.Troca.cancelar(); return true; }, null);
     current = name;
     // 06/10: a música segue a TELA — luta na batalha, a da praça em todo o resto (js/audio.js); ficha não é tela
     safe(function () { if (JOGO.Audio && JOGO.Audio.musica) JOGO.Audio.musica.tela(name); }, null);
@@ -1250,9 +1262,10 @@ var JOGO = (typeof window !== 'undefined')
     if (sala && sedeHud) sedeHud.dentro = false;      // 04/10: e a sede da guilda também
     hubEhSala = !!sala;                                // a ficha da guilda só oferece o salão a quem está na praça
     function perguntaSair() {
-      // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
-      if (emGrupo()) {
-        confirmSheet(tr('Sair do calabouço?'), tr('A descida acaba para vocês dois — o grupo continua.'), function () {
+      // 06/10 (o dono: "essa decisão deve ser individual"): na descida de grupo sai só QUEM sai — o outro fica
+      // onde está e decide por si (antes, 11/09, a descida era dos dois e sair levava os dois)
+      if (descidaDeGrupo()) {
+        confirmSheet(tr('Sair do calabouço?'), tr('Só você sai: {a} fica e decide por si. O grupo continua.', { a: esc(nomeParceiro()) }), function () {
           safe(function () { Gp().subir('saiu'); return true; }, null);
         });
         return;
@@ -1587,7 +1600,7 @@ var JOGO = (typeof window !== 'undefined')
           });
           painel.appendChild(cxR);
         }
-        if (emGrupo()) painelPortaGrupo(painel);            // 11/09: a porta em grupo
+        if (descidaDeGrupo()) painelPortaGrupo(painel);     // 11/09: a porta em grupo (06/10: só na descida DE grupo)
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
@@ -1862,6 +1875,7 @@ var JOGO = (typeof window !== 'undefined')
               'btn-ghost' + ((cheio || soMestre) ? ' is-apagado' : ''), function () {
                 if (soMestre) { toast(textoMotivo('so-mestre-chama', null)); return; }
                 if (cheio) { toast(ehMeuPar ? tr('{nome} já está no seu grupo.', { nome: par.nome }) : textoMotivo('em-grupo', null)); return; }
+                retiraMeusPedidos();
                 var r = safe(function () { return Gp().convidar(id); }, null);
                 if (r && r.ok) { fecha(); toast(tr('Convite enviado a {nome}. Esperando a resposta…', { nome: par.nome })); }
                 else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
@@ -1869,6 +1883,7 @@ var JOGO = (typeof window !== 'undefined')
           }
           if (!sala && Dl()) {
             grade.appendChild(btn(tr('Desafio amistoso'), 'btn-ghost', function () {   // 14/09: o duelo na praça, sem coroa
+              retiraMeusPedidos();
               var r = safe(function () { return Dl().desafiar(id); }, null);
               if (r && r.ok) { fecha(); toast(tr('Desafio enviado a {nome}. Esperando a resposta…', { nome: par.nome })); }
               else toast(textoMotivo(r ? r.motivo : 'ocupado', null));
@@ -1877,10 +1892,11 @@ var JOGO = (typeof window !== 'undefined')
           if (JOGO.Troca) {
             grade.appendChild(btn(tr('Propor troca'), 'btn-ghost', function () {
               fecha();
-              if (JOGO.Troca.convidar(id)) {
-                toast(tr('Convite de troca enviado. Esperando o outro lado…'));
-                openSheet('troca');
-              } else toast(tr('já há uma troca aberta'));
+              retiraMeusPedidos();
+              // 06/10: a espera mora no cartão do pedido (com o tempo e o Cancelar), não mais numa ficha que,
+              // fechada, deixava a troca de pé sem tela; a mesa abre sozinha quando o outro aceita
+              if (JOGO.Troca.convidar(id)) toast(tr('Convite de troca enviado. Esperando o outro lado…'));
+              else toast(tr('já há uma troca aberta'));
             }));
           }
           // 13/09 (dono): amigos e inimigos — pela CONTA conferida na praça (o `nuvem`)
@@ -1936,59 +1952,6 @@ var JOGO = (typeof window !== 'undefined')
           }
         }
         painelJogadorFn = painelJogador;
-        if (JOGO.Troca) {
-          JOGO.Troca.aoConvite = function (c) {
-            // 13/09 (dono): inimigo não propõe troca — recusa calada (o relé novo nem entrega)
-            if (safe(function () { return JOGO.Amigos && JOGO.Amigos.inimigoPorHeroi(c.de); }, false)) {
-              safe(function () { JOGO.Troca.responder(false); return true; }, null);
-              return;
-            }
-            // 11/09 (revisão): um pedido de cada vez. Com um convite de grupo ou de
-            // duelo na tela, a troca é recusada (o grupo e o duelo já recusam quem
-            // está numa troca) — antes ela tomava o painel e o convite de 30 s sumia
-            // sem volta; e, se ficasse esperando, o "Aceitar" do grupo daria "troca"
-            if (painelModo === 'convite' && !painel.classList.contains('is-off')) {
-              safe(function () { JOGO.Troca.responder(false); return true; }, null);
-              toast(tr('{nome} quis trocar com você — recusado: responda antes o convite aberto.', { nome: c.nome }));
-              return;
-            }
-            clear(painel);
-            painel.classList.remove('is-off');
-            // o convite de troca também é CONVITE: o passo perto de um lugar e o toque
-            // noutra pessoa não o apagam, e o grupo/duelo que vence não o fecha
-            painelModo = 'convite';
-            painelConv = { tipo: 'troca', de: c.de };
-            painel.appendChild(el('h3', null, tr('Troca')));
-            painel.appendChild(el('p', 'hub-nota',
-              tr('{a} quer trocar com você.', { a: esc(c.nome) })));
-            painel.appendChild(btn(tr('Aceitar'), 'btn-primary btn-block', function () {
-              JOGO.Troca.responder(true);
-              fechaPainel();
-              openSheet('troca');
-            }));
-            painel.appendChild(btn(tr('Agora não'), 'btn-ghost btn-block', function () {
-              JOGO.Troca.responder(false);
-              fechaPainel();
-            }));
-          };
-          JOGO.Troca.aoMudar = function (est) {
-            // o convite de troca na tela sai quando a mesa dele acaba (aceita, recusada, cancelada)
-            if (painelModo === 'convite' && painelConv && painelConv.tipo === 'troca' &&
-                !(est && est.fase === 'convidado' && est.par === painelConv.de)) fechaPainel();
-            if (sheetName === 'troca') sheetTroca();
-            if (est && est.fase === 'cancelada' && est.motivo) {   // 10/09: a troca que o cartório não espelharia
-              closeSheet();
-              toast(est.motivo);
-              return;
-            }
-            if (est && est.fase === 'feita') {
-              closeSheet();
-              toast(est.resultado === 'mesma-conta'
-                ? tr('Troca encerrada — mesma conta nas duas abas: nada se move. Entre contas, tudo se move.')
-                : tr('Troca feita! O que veio já está no saco.'), 'good');
-            }
-          };
-        }
 
         R.aoEvento = function (ev) {
           if (ev.tipo === 'troca' && JOGO.Troca) {
@@ -1998,14 +1961,15 @@ var JOGO = (typeof window !== 'undefined')
           // O CONVITE DE GUILDA (25/08): chega pela praça, decide-se no painel
           if (ev.tipo === 'guilda') {
             if (ev.acao === 'convite' && ev.dados && JOGO.Guilda) {
-              clear(painel);
-              painel.classList.remove('is-off');
-              painel.appendChild(el('h3', null, tr('Convite de guilda')));
-              painel.appendChild(el('p', 'hub-nota', tr('{a} te chama para a <b>{b}</b>.', { a: esc(ev.nome), b: esc(txtGuilda(ev.dados.emblema, ev.dados.nome || '?')) })));
-              painel.appendChild(btn(tr('Aceitar'), 'btn-primary btn-block', function () {
+              // 06/10: o convite de guilda vai para o cartão dos pedidos — desenhado no painel da praça, ele
+              // sumia na primeira remontagem dela, como o de grupo. Vale 60 s na tela (o convite em si fica
+              // no servidor: quem perdeu o cartão ainda entra pela Sede)
+              conviteGuilda = { de: ev.de, nome: ev.nome, guilda: txtGuilda(ev.dados.emblema, ev.dados.nome || '?'),
+                                chave: String(ev.de) + ':' + String(ev.dados.gid), expira: Date.now() + 60000 };
+              conviteGuilda.recusa = function () { R.guildaManda(ev.de, 'resposta', { ok: false }); };
+              conviteGuilda.aceita = function () {
                 // 11/09: é o CONVITE que abre a porta (antes o entrar batia na porta fechada)
                 JOGO.Guilda.entrar(ev.dados.gid, { convite: true }).then(function (res) {
-                  painel.classList.add('is-off');
                   toast(res.ok ? tr('Bem-vindo à {nome}!', { nome: ev.dados.nome }) : (res.erro || tr('não deu')),
                         res.ok ? 'good' : undefined);
                   if (res.ok && res.guilda) {               // a placa da guilda sobe na hora
@@ -2018,11 +1982,8 @@ var JOGO = (typeof window !== 'undefined')
                   }
                   R.guildaManda(ev.de, 'resposta', { ok: !!res.ok });
                 });
-              }));
-              painel.appendChild(btn(tr('Agora não'), 'btn-ghost btn-block', function () {
-                painel.classList.add('is-off');
-                R.guildaManda(ev.de, 'resposta', { ok: false });
-              }));
+              };
+              pintaPedido();
             } else if (ev.acao === 'resposta') {
               toast(ev.dados && ev.dados.ok ? tr('{nome} entrou na guilda!', { nome: ev.nome })
                                             : tr('{nome} recusou o convite.', { nome: ev.nome }));
@@ -3707,6 +3668,7 @@ var JOGO = (typeof window !== 'undefined')
     sheetName = null;
     marcaDock(null);
     hideTip();
+    pintaPedido();                 // 06/10: a mesa de troca que ficou aberta ganha o caminho de volta
     // 02/10: o foco volta a quem abriu a ficha — só se ele estava DENTRO
     // dela (fechar por um clique lá fora não rouba o foco de ninguém)
     var volta = sheetDeQuem;
@@ -6774,6 +6736,7 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'arenaQuadro') sheetArenaQuadro();                   // 14/09: o quadro de inscritos da Arena
     else if (name === 'sussurro') sheetSussurro(arg && arg.id, arg && arg.nome);   // 11/09: a mensagem particular
     else closeSheet();
+    pintaPedido();                 // 06/10: o cartão da mesa de troca fechada sai quando uma ficha abre
   }
   UI.openSheet = openSheet;
   UI.closeSheet = closeSheet;
@@ -12206,6 +12169,9 @@ var JOGO = (typeof window !== 'undefined')
   function Su() { return JOGO.Sussurros || null; }
   function Cp() { return JOGO.Coop || null; }
   function emGrupo() { return !!safe(function () { return Gp().emGrupo(); }, false); }
+  /* 06/10: a descida em curso é DE GRUPO? Quem ficou depois que o parceiro voltou ao acampamento segue em grupo
+   * (o grupo continua), mas a descida dele é solo: a porta, a saída e a recompensa são as de quem desce sozinho */
+  function descidaDeGrupo() { return emGrupo() && modoRede() === 'grupo'; }
   function souLider() { return !!safe(function () { return Gp().souLider(); }, false); }
   function grupoEstado() { return safe(function () { return Gp().estado(); }, null); }
   function parceiroG() { return safe(function () { return Gp().parceiro(); }, null); }
@@ -12344,57 +12310,228 @@ var JOGO = (typeof window !== 'undefined')
     return b;
   }
 
-  /* O CONVITE DE GRUPO que chega (4.2): no mesmo painel da troca e da guilda */
-  function mostraConviteGrupo(c) {
-    var p = abrePainel('convite');
-    if (!p) { toast(tr('{nome} te chama para o grupo.', { nome: c.nome })); return; }
-    painelConv = { tipo: 'grupo', gid: c.gid };
-    var h = c.heroi || {};
-    cabecalhoPainel(p, h.classId, h.element, tr('<b>{a}</b> te chama para o grupo.', { a: esc(c.nome) }),
-      h.classId ? esc(className(h.classId)) + ' · nv ' + (h.level || 1) : '');
-    var meus = meusHeroisG();
-    var lista = meus.map(function (x) {
-      return esc(className(x.classId || '')) + tr(' nv ') + (x.level || 1);
-    }).join(tr(' e '));
-    p.appendChild(el('p', 'hub-nota', (meus.length > 1
-      ? tr('{a} lidera: escolhe o calabouço e abre as portas. Você leva os seus dois: <b>{lista}</b>.', { a: esc(c.nome), lista: lista })
-      : tr('{a} lidera: escolhe o calabouço e abre as portas. Você leva o seu herói: <b>{lista}</b>.', { a: esc(c.nome), lista: lista }))));
-    p.appendChild(barraPrazo(c.expira, function () { return Gp()._agora(); }));
-    var duo = el('div', 'pn-duplo');
-    duo.appendChild(btn(tr('Aceitar'), 'btn-primary', function () {
-      var r = safe(function () { return Gp().responder(true); }, null);
-      fechaPainel();
-      if (r && r.ok) toast(tr('Você entrou no grupo de {nome}.', { nome: c.nome }), 'good');
-      else toast(textoMotivo(r ? r.motivo : 'expirou', null));
-    }));
-    duo.appendChild(btn(tr('Agora não'), 'btn-ghost', function () {
-      safe(function () { return Gp().responder(false); }, null);
-      fechaPainel();
-    }));
-    p.appendChild(duo);
-    if (sheetName) toast(tr('{nome} te chama para o grupo — veja o painel', { nome: c.nome }));
+  /* O CARTÃO DOS PEDIDOS (06/10). O dono, com dois celulares no aplicativo e contas diferentes: "se eu dou troca ou
+   * qualquer comando com outro jogador, buga e não consigo de novo. Eu mandei grupo pro jogador e sumiu a solicitação
+   * e não consegui mandar de novo até expirar... troca acontece o mesmo."
+   *
+   * A CAUSA: o convite de grupo, o desafio, o pedido de troca e o convite de guilda eram desenhados UMA vez, quando
+   * chegavam, dentro do .hub-painel — e a praça é remontada do zero (buildHub: painel novo, vazio, painelConv = null) a
+   * cada UI.repaint: a adoção do estado do servidor (autoridade.js), a chegada dos modelos 3D (portraits3d.js), o
+   * painel do Mestre, a troca do herói que anda. O pedido seguia de pé no grupo.js/troca.js ('convidado') sem tela
+   * para responder; quem enviou só tinha um aviso de 2,4 s e nenhum cancelar, e ficava em 'convidei' — "ocupado" a
+   * cada nova tentativa — até o prazo. Na troca nem prazo havia: os dois lados ficavam presos até recarregar.
+   *
+   * O CONSERTO: o ESTADO é a fonte. pedidoAtual() lê o Grupo, o Duelo e a Troca (e o convite de guilda, guardado
+   * aqui) e pintaPedido() redesenha o cartão a partir dele — no que muda, a cada tique e na volta do segundo plano.
+   * O cartão mora numa camada própria, fora das telas e por cima das fichas: remontar a praça, abrir ou fechar uma
+   * ficha e tocar em outra coisa não o tiram da frente. Quem RECEBEU tem o Aceitar e o Agora não (44 px); quem
+   * ENVIOU vê o pedido pendente com o tempo que falta e o Cancelar — e pedir de novo troca o pedido anterior. */
+  var pedidoEl = null;             // a camada do cartão (UI.init)
+  var pedidoSig = null;            // o que está desenhado (para não redesenhar a cada tique)
+  var pedidoRel = null;            // { no, expira, agora }: o relógio do cartão
+  var conviteGuilda = null;        // { de, nome, guilda, chave, expira, aceita(), recusa() } — a guilda não tem estado no núcleo
+  var trocaFaseAntes = null;       // a fase da troca no último aviso (a mesa abre sozinha quando o outro aceita)
+  function agoraDe(fn) { var t = safe(fn, null); return (typeof t === 'number' && isFinite(t)) ? t : Date.now(); }
+  function agoraG() { return agoraDe(function () { return Gp()._agora(); }); }
+  function agoraD() { return agoraDe(function () { return Dl()._agora(); }); }
+  function agoraT() { return agoraDe(function () { return JOGO.Troca._agora(); }); }
+  /* o pedido que a tela tem de mostrar AGORA, lido do estado: primeiro o que espera a MINHA resposta */
+  function pedidoAtual() {
+    var g = grupoEstado(), p = g && g.pendente;
+    var d = safe(function () { return Dl().estado(); }, null);
+    var t = safe(function () { return JOGO.Troca.estado(); }, null);
+    if (conviteGuilda && Date.now() > conviteGuilda.expira) conviteGuilda = null;
+    if (p && !p.meu) return { tipo: 'grupo', meu: false, chave: p.gid, id: p.id, nome: p.nome, heroi: p.heroi, expira: p.expira, agora: agoraG };
+    if (d && d.fase === 'desafiado' && d.modo === 'desafio' && d.oponente) {
+      return { tipo: 'duelo', meu: false, chave: d.did, id: d.oponente.id, nome: d.oponente.nome, expira: d.prazo, agora: agoraD };
+    }
+    if (t && t.fase === 'convidado') return { tipo: 'troca', meu: false, chave: t.par, id: t.par, nome: t.nomePar, expira: t.expira, agora: agoraT };
+    if (conviteGuilda) {
+      return { tipo: 'guilda', meu: false, chave: conviteGuilda.chave, id: conviteGuilda.de, nome: conviteGuilda.nome,
+               expira: conviteGuilda.expira, agora: Date.now };
+    }
+    if (p && p.meu) return { tipo: 'grupo', meu: true, chave: p.gid, id: p.id, nome: p.nome, expira: p.expira, agora: agoraG };
+    if (d && d.fase === 'desafiei' && d.modo === 'desafio' && d.oponente) {
+      return { tipo: 'duelo', meu: true, chave: d.did, id: d.oponente.id, nome: d.oponente.nome, expira: d.prazo, agora: agoraD };
+    }
+    if (t && t.fase === 'convidei') return { tipo: 'troca', meu: true, chave: t.par, id: t.par, nome: t.nomePar, expira: t.expira, agora: agoraT };
+    // 06/10: o parceiro voltou ao acampamento e eu fiquei: a escolha fica na tela até eu decidir
+    if (g && g.ficouSo && !sheetName && (current === 'antessala' || current === 'roomClear' || current === 'elementChoice')) {
+      return { tipo: 'so', meu: true, chave: (g.ficouSo.nome || '') + (g.ficouSo.saiu ? ':saiu' : ''), id: (parceiroG() || {}).id || null, nome: g.ficouSo.nome,
+               saiu: g.ficouSo.saiu, expira: 0, agora: Date.now };
+    }
+    // a mesa de troca aberta com a ficha FECHADA (o ✕, o voltar do aparelho): o caminho de volta fica na tela
+    if (t && t.fase === 'aberta' && !sheetName) return { tipo: 'mesa', meu: true, chave: t.par, id: t.par, nome: t.nomePar, expira: 0, agora: Date.now };
+    return null;
   }
-  /* O DESAFIO que chega (4.2) */
-  function mostraDesafio(c) {
-    var p = abrePainel('convite');
-    if (!p) { toast(tr('{nome} te desafia para um duelo.', { nome: c.nome })); return; }
-    painelConv = { tipo: 'duelo', did: c.did };
-    cabecalhoPainel(p, classeDoPar(c.id), 'neutro', tr('<b>{a}</b> te chama para um desafio amistoso.', { a: esc(c.nome) }), '');
-    // 14/09: o desafio é na praça e não mexe na coroa
-    p.appendChild(el('p', 'hub-nota', tr('<b>Desafio amistoso — a coroa não muda.</b> Mapa: A Praça. Cada um leva 1 ou 2 heróis, escolhidos às cegas.')));
-    p.appendChild(barraPrazo(c.expira, function () { return Dl()._agora(); }));
-    var duo = el('div', 'pn-duplo');
-    duo.appendChild(btn(tr('Aceitar'), 'btn-primary', function () {
-      var r = safe(function () { return Dl().responder(true); }, null);
-      fechaPainel();
-      if (!r || !r.ok) toast(textoMotivo(r ? r.motivo : 'expirou', null));
-    }));
-    duo.appendChild(btn(tr('Agora não'), 'btn-ghost', function () {
-      safe(function () { return Dl().responder(false); }, null);
-      fechaPainel();
-    }));
-    p.appendChild(duo);
-    if (sheetName) toast(tr('{nome} te desafia para um duelo — veja o painel', { nome: c.nome }));
+  /* um pedido MEU que ainda espera resposta não segura o próximo: pedir outra coisa retira o que estava no ar */
+  function retiraMeusPedidos() {
+    var g = grupoEstado();
+    if (g && g.pendente && g.pendente.meu) safe(function () { return Gp().cancelar(); }, null);
+    var d = safe(function () { return Dl().estado(); }, null);
+    if (d && d.fase === 'desafiei' && d.modo === 'desafio') safe(function () { return Dl().cancelar('retirou'); }, null);
+    var t = safe(function () { return JOGO.Troca.estado(); }, null);
+    if (t && t.fase === 'convidei') safe(function () { JOGO.Troca.cancelar(); return true; }, null);
+  }
+  function pintaPedido() {
+    if (!pedidoEl) return;
+    var q = pedidoAtual();
+    var sig = q ? [q.tipo, q.meu ? 1 : 0, q.chave, q.expira || 0].join('|') : '';
+    if (sig !== pedidoSig) { pedidoSig = sig; desenhaPedido(q); }
+    if (pedidoRel && pedidoRel.no.isConnected) pedidoRel.no.textContent = relogioTxt(pedidoRel.expira - pedidoRel.agora());
+  }
+  function desenhaPedido(q) {
+    clear(pedidoEl);
+    pedidoRel = null;
+    if (!q) { pedidoEl.className = 'ui-pedido'; return; }
+    pedidoEl.className = 'ui-pedido is-on' + (q.meu ? ' is-meu' : '') + ' pd-' + q.tipo;
+    var nome = esc(q.nome || tr('Aventureiro'));
+    var h = q.heroi || {};
+    var titulo, sub = '', nota = '';
+    if (q.tipo === 'mesa') {
+      titulo = tr('Mesa de troca com <b>{a}</b>', { a: nome });
+      sub = tr('A mesa segue aberta.');
+    } else if (q.tipo === 'so') {
+      titulo = q.saiu ? tr('<b>{a}</b> saiu do grupo.', { a: nome }) : tr('<b>{a}</b> voltou ao acampamento.', { a: nome });
+      sub = tr('A descida segue só com os seus heróis.');
+    } else if (q.meu) {
+      titulo = q.tipo === 'grupo' ? tr('Convite de grupo para <b>{a}</b>', { a: nome })
+             : q.tipo === 'duelo' ? tr('Desafio amistoso para <b>{a}</b>', { a: nome })
+             : tr('Pedido de troca para <b>{a}</b>', { a: nome });
+      sub = tr('Esperando a resposta…');
+    } else if (q.tipo === 'grupo') {
+      titulo = tr('<b>{a}</b> te chama para o grupo.', { a: nome });
+      sub = h.classId ? esc(className(h.classId)) + ' · nv ' + (h.level || 1) : '';
+      var meus = meusHeroisG();
+      var lista = meus.map(function (x) { return esc(className(x.classId || '')) + tr(' nv ') + (x.level || 1); }).join(tr(' e '));
+      nota = meus.length > 1
+        ? tr('{a} lidera: escolhe o calabouço e abre as portas. Você leva os seus dois: <b>{lista}</b>.', { a: nome, lista: lista })
+        : tr('{a} lidera: escolhe o calabouço e abre as portas. Você leva o seu herói: <b>{lista}</b>.', { a: nome, lista: lista });
+    } else if (q.tipo === 'duelo') {
+      titulo = tr('<b>{a}</b> te chama para um desafio amistoso.', { a: nome });
+      // 14/09: o desafio é na praça e não mexe na coroa
+      nota = tr('<b>Desafio amistoso — a coroa não muda.</b> Mapa: A Praça. Cada um leva 1 ou 2 heróis, escolhidos às cegas.');
+    } else if (q.tipo === 'troca') {
+      titulo = tr('{a} quer trocar com você.', { a: nome });
+    } else {
+      titulo = tr('{a} te chama para a <b>{b}</b>.', { a: nome, b: esc(conviteGuilda ? conviteGuilda.guilda : '?') });
+    }
+    var cab = el('div', 'pd-cab');
+    cab.appendChild(art('portrait', [h.classId || classeDoPar(q.id) || 'sumo', { element: h.element || 'neutro', size: 48 }], 40));
+    var tx = el('div', 'pd-tx');
+    tx.appendChild(el('span', 'pd-tit', titulo));
+    if (sub) tx.appendChild(el('span', 'pd-sub', sub));
+    cab.appendChild(tx);
+    if (q.expira) {
+      var rel = el('span', 'pd-rel', relogioTxt(q.expira - q.agora()));
+      rel.title = tr('o tempo que falta para o pedido expirar');
+      cab.appendChild(rel);
+      pedidoRel = { no: rel, expira: q.expira, agora: q.agora };
+    }
+    pedidoEl.appendChild(cab);
+    if (nota) pedidoEl.appendChild(el('p', 'pd-nota', nota));
+    if (q.expira) pedidoEl.appendChild(barraPrazo(q.expira, q.agora));
+    var acts = el('div', 'pd-acts');
+    if (q.tipo === 'mesa') {
+      acts.appendChild(btn(tr('Abrir a mesa'), 'btn-primary', function () { openSheet('troca'); pintaPedido(); }));
+      acts.appendChild(btn(tr('Cancelar a troca'), 'btn-ghost', function () { safe(function () { JOGO.Troca.cancelar(); return true; }, null); }));
+    } else if (q.tipo === 'so') {
+      // 06/10: quem ficou decide por si — seguir sozinho (a porta e a próxima sala já são as de quem desce só) ou voltar também
+      acts.appendChild(btn(tr('Continuar sozinho'), 'btn-primary', function () {
+        safe(function () { return Gp().cienteSozinho(); }, null);
+        pintaPedido();
+      }));
+      acts.appendChild(btn(tr('Voltar ao acampamento'), 'btn-ghost', function () {
+        confirmSheet(tr('Sair do calabouço?'),
+          tr('O que você já limpou não fica guardado — a próxima descida começa da primeira sala.'),
+          function () {
+            safe(function () { return Gp().cienteSozinho(); }, null);
+            if (!safe(function () { return G().abandonar(); }, false)) safe(function () { G().restart('hub'); return true; }, null);
+            navTo('hub');
+          });
+      }));
+    } else if (q.meu) {
+      acts.appendChild(btn(tr('Cancelar'), 'btn-ghost', function () {
+        if (q.tipo === 'grupo') safe(function () { return Gp().cancelar(); }, null);
+        else if (q.tipo === 'duelo') safe(function () { return Dl().cancelar('retirou'); }, null);
+        else { safe(function () { JOGO.Troca.cancelar(); return true; }, null); if (sheetName === 'troca') closeSheet(); }
+        pintaPedido();
+        toast(tr('Pedido cancelado.'));
+      }));
+    } else {
+      acts.appendChild(btn(tr('Aceitar'), 'btn-primary', function () { respondePedido(q, true); }));
+      acts.appendChild(btn(tr('Agora não'), 'btn-ghost', function () { respondePedido(q, false); }));
+    }
+    pedidoEl.appendChild(acts);
+  }
+  function respondePedido(q, sim) {
+    var r;
+    if (q.tipo === 'grupo') {
+      r = safe(function () { return Gp().responder(sim); }, null);
+      if (sim) {
+        if (r && r.ok) toast(tr('Você entrou no grupo de {nome}.', { nome: q.nome }), 'good');
+        else toast(textoMotivo(r ? r.motivo : 'expirou', null));
+      }
+    } else if (q.tipo === 'duelo') {
+      r = safe(function () { return Dl().responder(sim); }, null);
+      if (sim && (!r || !r.ok)) toast(textoMotivo(r ? r.motivo : 'expirou', null));
+    } else if (q.tipo === 'troca') {
+      safe(function () { JOGO.Troca.responder(sim); return true; }, null);
+      if (sim && safe(function () { return JOGO.Troca.estado().fase; }, null) === 'aberta') openSheet('troca');
+    } else if (q.tipo === 'guilda' && conviteGuilda) {
+      var cg = conviteGuilda;
+      conviteGuilda = null;
+      safe(function () { if (sim) cg.aceita(); else cg.recusa(); return true; }, null);
+    }
+    pintaPedido();
+  }
+  /* a volta do segundo plano (o celular que apagou a tela, o aplicativo que ficou para trás): os relógios do
+   * núcleo andam já — o que venceu solta e avisa o outro lado — e o cartão se redesenha do estado */
+  function voltaDoFundo() {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    safe(function () { Gp()._tique(); return true; }, null);
+    safe(function () { JOGO.Troca._tique(); return true; }, null);
+    pedidoSig = null;
+    pintaPedido();
+  }
+  /* os ganchos da troca, pendurados UMA vez (ligaSocial): antes viviam no buildHub e desenhavam no painel dele */
+  function aoTrocaConvite(c) {
+    // 13/09 (dono): inimigo não propõe troca — recusa calada (o relé novo nem entrega)
+    if (safe(function () { return JOGO.Amigos && JOGO.Amigos.inimigoPorHeroi(c.de); }, false)) {
+      safe(function () { JOGO.Troca.responder(false); return true; }, null);
+      return;
+    }
+    // 11/09 (revisão): um pedido de cada vez. Com um convite de grupo ou de duelo esperando a minha resposta (ou
+    // o da Arena e o da guerra no painel), a troca é recusada — o grupo e o duelo já recusam quem está numa troca
+    var g = grupoEstado(), d = safe(function () { return Dl().estado(); }, null);
+    var outro = !!(g && g.pendente && !g.pendente.meu) || !!(d && d.fase === 'desafiado') || !!conviteGuilda ||
+                (painelModo === 'convite' && !!painelVivo() && !painelVivo().classList.contains('is-off'));
+    if (outro) {
+      safe(function () { JOGO.Troca.responder(false); return true; }, null);
+      toast(tr('{nome} quis trocar com você — recusado: responda antes o convite aberto.', { nome: c.nome }));
+      return;
+    }
+    pintaPedido();
+  }
+  function aoTrocaMudou(est) {
+    var antes = trocaFaseAntes;
+    trocaFaseAntes = est ? est.fase : null;
+    pintaPedido();
+    if (sheetName === 'troca') sheetTroca();
+    if (est && est.fase === 'cancelada' && est.motivo) {   // 10/09: a troca que o cartório não espelharia
+      if (sheetName === 'troca') closeSheet();              // 06/10: só a ficha da troca (o pedido recusado não fecha o saco aberto)
+      toast(est.motivo);
+      return;
+    }
+    if (est && est.fase === 'feita') {
+      closeSheet();
+      toast(est.resultado === 'mesma-conta'
+        ? tr('Troca encerrada — mesma conta nas duas abas: nada se move. Entre contas, tudo se move.')
+        : tr('Troca feita! O que veio já está no saco.'), 'good');
+      return;
+    }
+    // 06/10: o outro lado aceitou o MEU pedido: a mesa abre sozinha (com outra ficha aberta, fica o cartão)
+    if (est && est.fase === 'aberta' && antes === 'convidei' && !sheetName && (current === 'hub' || current === 'antessala')) openSheet('troca');
   }
 
   /* O PORTAL em grupo (4.5): quem lidera desce com o outro; quem segue espera */
@@ -13349,6 +13486,7 @@ var JOGO = (typeof window !== 'undefined')
    * 'fim', 'acabou', 'lider' ou 'parceiro'. */
   function rodapeGrupo(foot, fim) {
     var est = grupoEstado();
+    if (modoRede() !== 'grupo') return false;             // 06/10: a descida que virou só minha tem o rodapé de quem desce sozinho
     var rede = !!(lastRewards && lastRewards.rede) || !!(est && est.descidaGrupo);
     if (!rede) return false;
     var nome = emGrupo() ? nomeParceiro()
@@ -13368,7 +13506,8 @@ var JOGO = (typeof window !== 'undefined')
       return 'acabou';
     }
     foot.appendChild(btn(tr('Voltar ao acampamento'), 'btn-ghost', function () {
-      confirmSheet(tr('Voltar ao acampamento?'), tr('A descida acaba para vocês dois — o grupo continua.'), function () {
+      // 06/10: volta só quem volta (ver perguntaSair)
+      confirmSheet(tr('Voltar ao acampamento?'), tr('Só você volta: {a} fica e decide por si. O grupo continua.', { a: esc(nome) }), function () {
         safe(function () { Gp().subir('voltou'); return true; }, null);
       });
     }));
@@ -14254,9 +14393,7 @@ var JOGO = (typeof window !== 'undefined')
   UI._campo = function () { return { dentro: campoHud.dentro, dupla: campoHud.dupla.slice() }; };   // provas
 
   function aoDueloMudou(est) {
-    var p = painelVivo();
-    if (p && painelModo === 'convite' && painelConv && painelConv.tipo === 'duelo' &&
-        !(est && est.fase === 'desafiado' && est.did === painelConv.did)) fechaPainel();
+    pintaPedido();                 // 06/10: o desafio que chega, o meu que espera e o que acabou
     var f = est ? est.fase : 'livre';
     // 14/09: a Arena (duplas do quadro) e o Campo (a dupla do Campo) não têm ficha de escolha
     if (est && (est.modo === 'arena' || est.modo === 'campo')) { if (sheetName === 'dueloRede') closeSheet(); return; }
@@ -14325,11 +14462,19 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------ os ganchos, UMA vez
-  var grupoSigTela = '';
+  var grupoSigTela = '', ficouSoTela = false;
   function aoGrupoMudou(est) {
-    var p = painelVivo();
-    if (p && painelModo === 'convite' && painelConv && painelConv.tipo === 'grupo' &&
-        !(est && est.pendente && !est.pendente.meu && est.pendente.gid === painelConv.gid)) fechaPainel();
+    /* 06/10: o parceiro voltou ao acampamento e a minha descida virou solo (Grupo.ficaSozinho): a antessala se
+     * refaz inteira — o quadro da vida, a porta e a saída são montados para o grupo ou para quem desce sozinho — e a
+     * recompensa troca o rodapé. Ninguém é levado: a tela é a mesma, só deixa de esperar por ele. */
+    var soAgora = !!(est && est.ficouSo);
+    if (soAgora && !ficouSoTela) {
+      ficouSoTela = true;
+      if (current === 'antessala') safe(function () { UI.repaint(); return true; }, null);
+      else if (current === 'roomClear') { if (lastRewards) lastRewards.rede = false; buildRewards(current, lastRewards); }
+    }
+    ficouSoTela = soAgora;
+    pintaPedido();                 // 06/10: o convite que chega, o meu que espera e o que acabou
     pintaGrupoLado();
     var sig = est ? [est.fase, est.lider, (est.membros || []).map(function (m) {
       var hsS = (m.herois && m.herois.length) ? m.herois : (m.heroi ? [m.heroi] : []);
@@ -14346,7 +14491,7 @@ var JOGO = (typeof window !== 'undefined')
     var Gr = Gp(), Du = Dl(), S = Su(), C = Cp();
     if (Gr) {
       Gr.aoMudar = aoGrupoMudou;
-      Gr.aoConvite = mostraConviteGrupo;
+      Gr.aoConvite = function () { pintaPedido(); };          // 06/10: o cartão sai do estado (pintaPedido)
       Gr.aoAviso = function (t, k) { toast(t, k); };
       Gr.aoSubiu = function () {
         closeSheet();
@@ -14356,7 +14501,9 @@ var JOGO = (typeof window !== 'undefined')
         navTo('hub');
       };
     }
-    if (Du) { Du.aoMudar = aoDueloMudou; Du.aoDesafio = mostraDesafio; }
+    if (Du) { Du.aoMudar = aoDueloMudou; Du.aoDesafio = function () { pintaPedido(); }; }
+    // 06/10: a troca também (antes os ganchos dela eram refeitos a cada buildHub, presos ao painel daquela montagem)
+    if (JOGO.Troca) { JOGO.Troca.aoConvite = aoTrocaConvite; JOGO.Troca.aoMudar = aoTrocaMudou; }
     // 14/09: o quadro da Arena — o selo, o painel do adversário encontrado e os relógios
     var Aq = Ar();
     if (Aq) {
@@ -14475,6 +14622,7 @@ var JOGO = (typeof window !== 'undefined')
     if (tickSocial < 1) return;
     tickSocial = 0;
     pintaGrupoLado();
+    pintaPedido();                 // 06/10: o relógio do cartão — e o que mudou sem avisar
     // 11/09 (revisão): a ficha da escolha do duelo fechada sem querer (o ✕, o toque
     // no fundo escuro, outra ficha por cima) volta sozinha enquanto falta a minha
     // dupla — ela só abria quando o estado MUDAVA, e o duelo morria no prazo de 90 s.

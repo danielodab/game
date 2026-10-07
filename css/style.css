@@ -2809,6 +2809,38 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
 .btn.is-apagado { opacity: .45; filter: grayscale(.6); }
 .pn-duplo { display: flex; gap: 8px; }
 .pn-duplo .btn { flex: 1 1 0; min-height: 44px; }
+/* O CARTÃO DOS PEDIDOS entre jogadores (06/10): o convite de grupo, o desafio, o pedido de troca e o de guilda —
+ * e o MEU pedido que espera resposta, com o relógio e o Cancelar. Camada própria, fora das telas e POR CIMA das
+ * fichas (.ui-sheet é 60; o aviso, 95): a praça remontada e a ficha aberta não o tiram da frente. No celular
+ * deitado fica logo abaixo da faixa do nome; em pé, abaixo das duas linhas dela. */
+.ui-pedido {
+  position: absolute; left: 50%; top: calc(var(--sa-t, 0px) + 56px); transform: translateX(-50%);
+  width: min(400px, calc(100% - 24px)); z-index: 80;
+  display: none; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(14,18,14,.97); border: 1px solid rgba(255,196,77,.45);
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  pointer-events: auto;
+}
+.ui-pedido.is-on { display: flex; }
+.ui-pedido.is-meu { border-color: rgba(240,234,216,.22); }
+.pd-cab { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pd-cab > canvas, .pd-cab > .art-missing { flex: none; border-radius: 8px; border: 1px solid rgba(240,234,216,.18); }
+.pd-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pd-tit { font: 600 15px/1.25 var(--ui-serif, Georgia); color: #f0ead8; overflow-wrap: anywhere; }
+.pd-sub { font: 400 12px var(--ui-sans); color: var(--dim); }
+.pd-rel { flex: none; font: 700 14px var(--ui-sans); font-variant-numeric: tabular-nums; color: var(--gold); }
+.pd-nota { margin: 0; font: 400 12px/1.4 var(--ui-sans); color: var(--tx-2, #b9c0cb); }
+.pd-acts { display: flex; gap: 8px; }
+.pd-acts .btn { flex: 1 1 0; min-height: var(--tap, 44px); }
+@media (orientation: portrait) and (max-width: 600px) {
+  .ui-pedido { top: calc(var(--sa-t, 0px) + 112px); }
+}
+/* o celular deitado é baixo (360 a 430 px): a nota longa do convite sai, ficam o nome, o relógio e os botões */
+@media (orientation: landscape) and (max-height: 480px) {
+  .ui-pedido { top: calc(var(--sa-t, 0px) + 50px); padding: 8px 10px; gap: 6px; }
+  .ui-pedido .pd-nota { display: none; }
+}
 .conv-prazo { height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
 .conv-prazo i { display: block; height: 100%; width: 100%; transform-origin: left center;
   background: linear-gradient(90deg, var(--gold-dim, #8a6f2e), var(--gold, #ffc44d));

@@ -44,6 +44,7 @@
     'boot_seguro',  // 10/09: a marca de abertura — onde a última parou, as três saídas e o vigia
     'grupo', 'coop_motor',  // 11/09: o multijogador — o grupo/duelo/sussurro (dublê de Rede) e o motor da batalha em dupla
     'grupo_hud',  // 11/09: a HUD do multijogador no celular (achados 22 a 28), no index de verdade a 390x844
+    'pedidos_hud',  // 06/10: os pedidos entre DOIS jogadores na tela dos dois (dois index de verdade a 780x360): o cartão que não some, o cancelar, o prazo
     'guerra_motor',  // 15/09: a guerra de guilda 2×2 — o lockstep de QUATRO (hash nos quatro, quem cai é marcado pelo parceiro de guilda, W.O. do lado)
     'guerra_hud',  // 15/09: a guerra de guilda na HUD — o bloco da Sede (a fila, as duas duplas, os quatro confirmando), o topo e o fim
     'pvp_hud',  // 14/09: a Arena (o quadro, a inscrição com os dois, o adversário encontrado) e o Campo de PvP (a dupla em ordem, a coroa travada, o toque que ataca)
@@ -68,7 +69,7 @@
   ];
   /* o prazo por suíte: 120 s, e mais para quem abre o index inteiro
    * (essas se dão 110 s só para o jogo abrir) */
-  var PRAZO = { grupo_hud: 300000, pvp_hud: 300000, guerra_hud: 300000, guerra_motor: 900000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000, toque_jogador: 300000,
+  var PRAZO = { grupo_hud: 300000, pedidos_hud: 400000, pvp_hud: 300000, guerra_hud: 300000, guerra_motor: 900000, tempo_turno: 300000, tela_cheia: 300000, coroa_praca: 300000, toque_jogador: 300000,
                 balao_praca: 300000, pocoes_hud: 300000, vida_praca: 300000, prova_praca_tatica: 300000, prova_sede_tatica: 300000,campo_pvp: 300000 };
   var tab = document.getElementById('tab');
   var linhas = {};

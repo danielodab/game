@@ -410,6 +410,7 @@ var JOGO = (typeof window !== 'undefined')
   var st = null;
   var descidaG = null;              // { dungeonId }: a descida em curso é de grupo
   var ultimoPar = null;             // { id, nome }: quem estava no grupo que se desfez
+  var ficouSo = null;               // 06/10: { nome, saiu }: o par voltou ao acampamento e a descida segue só comigo
   function zera() {
     st = { fase: 'livre', gid: null, chave: null, v: 0, lider: null,
            par: null,               // { id, cx, nome, heroi, herois[], on, sumidoDesde, saiu }
@@ -418,6 +419,7 @@ var JOGO = (typeof window !== 'undefined')
            aguardaEstado: false,    // mandei 'volta': o próximo estado do par vale
            voltaProva: null,        // a prova da minha última 'volta' (o "sair expirou" de quem já não me conhece a devolve)
            dissolver: null,         // o par saiu no meio da batalha: desfaz quando a sala acabar
+           parSubiu: null,          // 06/10: { nome } — o par voltou ao acampamento com a minha sala ainda em curso
            descidaAcabou: false,
            descidaDif: null };      // 11/09 (revisão): a dificuldade de quem lidera (quem segue a vê)
   }
@@ -472,6 +474,8 @@ var JOGO = (typeof window !== 'undefined')
       descidaAcabou: !!st.descidaAcabou || !!(descidaG && !Grupo.emGrupo()),
       descidaDif: st.descidaDif || null,     // 11/09 (revisão): a de quem lidera, para quem segue
       graca: graca(),
+      // 06/10: o par voltou ao acampamento e eu fiquei — a HUD mostra a escolha (seguir sozinho ou voltar também)
+      ficouSo: ficouSo ? { nome: ficouSo.nome, saiu: !!ficouSo.saiu } : null,
       ultimoParceiro: ultimoPar ? { id: ultimoPar.id, nome: ultimoPar.nome } : null
     };
   };
@@ -544,15 +548,57 @@ var JOGO = (typeof window !== 'undefined')
     var par = st.par;
     if (par) { solta(par.id, par.cx); ultimoPar = { id: par.id, nome: par.nome }; }
     var naAntessala = tela() === 'antessala' && !!descidaG;
+    // 06/10: o par saiu do GRUPO com a descida em curso — quem fica não é levado: segue sozinho (ficaSozinho).
+    // Antes do muda(): o Coop ainda conhece a ata em aberto e a fecha no servidor (Coop.soltaDescida)
+    var sigoSo = !porMim && emDescidaDeGrupo();
     zera();
+    if (sigoSo && ficaSozinho(par ? par.nome : null, true)) {
+      aviso(Tx('{nome} saiu do grupo — a descida segue só com os seus heróis.', { nome: par ? par.nome : Tx('O outro lado') }), kind);
+      muda();
+      return;
+    }
     if (texto) aviso(texto, kind);
     muda();
     if (naAntessala) sobe('grupo-desfeito');
   }
   function sobe(motivo) {
     descidaG = null;
+    ficouSo = null;
     if (Grupo.aoSubiu) { try { Grupo.aoSubiu(motivo || 'saiu'); } catch (e) {} }
   }
+  /* estou numa descida DE GRUPO (a que começou junto)? Depois de ficar sozinho, não mais */
+  function emDescidaDeGrupo() {
+    if (descidaG) return true;
+    return descidaAtual() !== 'praca' && !!safe(function () { return G().modoRede() === 'grupo'; }, false);
+  }
+  /* VOLTAR AO ACAMPAMENTO É DE CADA UM (06/10; o dono: "se um dos membros do grupo volta ao acampamento, os
+   * outros voltam também.. essa decisão deve ser individual"). Até aqui a descida de grupo era dos dois (D16): o
+   * `subir` de um levava o outro para a praça. Agora quem escolhe voltar sobe SOZINHO, e quem fica permanece onde
+   * está — a antessala, a recompensa — com a descida seguindo só com os heróis DELE: o Game deixa o modo de grupo
+   * (Game.segueSozinho) e a porta passa a abrir pelo caminho de quem desce sozinho, que o servidor e o juiz já
+   * conferem (o bilhete da sala é da conta e dos heróis dela, em qualquer sala do calabouço). Nenhuma regra de
+   * batalha muda, e o `subir` no fio é o mesmo: o cliente de antes que o ouve ainda volta junto, como sempre.
+   *
+   * O que NÃO é isto: a QUEDA de conexão (12/09: quem ficou lidera, a sala nasce com os heróis de quem caiu e o
+   * turno deles passa — o servidor paga os dois) segue como estava; e sair no MEIO de uma batalha também (quem sai
+   * morre naquela sala e o grupo se desfaz no fim dela — Coop.sairDaBatalha). O GRUPO continua formado depois
+   * que um volta: só a descida dele acabou. Devolve se a descida virou só minha. */
+  function ficaSozinho(nome, saiu) {
+    if (!safe(function () { return G().segueSozinho(); }, false)) return false;
+    descidaG = null;
+    st.descidaAcabou = false;
+    st.descer = null;
+    st.parSubiu = null;
+    ficouSo = { nome: nome || null, saiu: !!saiu };
+    return true;
+  }
+  /* a HUD mostrou a escolha e o jogador ficou: o cartão sai */
+  Grupo.cienteSozinho = function () {
+    if (!ficouSo) return false;
+    ficouSo = null;
+    muda();
+    return true;
+  };
   function comecaDescida(dg) {
     descidaG = { dungeonId: dg };
     st.descidaAcabou = false;
@@ -590,16 +636,23 @@ var JOGO = (typeof window !== 'undefined')
   Grupo.convidar = function (id) {
     if (!id || id === eu()) return { ok: false, motivo: 'ocupado' };
     if (st.fase === 'formado') return { ok: false, motivo: 'em-grupo' };
-    if (st.fase !== 'livre' || dst.fase !== 'livre') return { ok: false, motivo: 'ocupado' };
+    /* 06/10 (o dono: "mandei grupo pro jogador e sumiu a solicitação e não consegui mandar de novo até
+     * expirar"): o MEU convite em aberto não me prende mais — chamar de novo (a mesma pessoa ou outra)
+     * retira o que estava no ar e manda o novo. Pelo fio são as vozes de sempre: o `sair` do convite
+     * velho e o `convite` novo, que o cliente de antes já entendia. */
+    var meuAberto = st.fase === 'convidei' && !!st.pendente && st.pendente.meu;
+    if ((st.fase !== 'livre' && !meuAberto) || dst.fase !== 'livre') return { ok: false, motivo: 'ocupado' };
     if (trocaAberta()) return { ok: false, motivo: 'troca' };
     if (tela() !== 'hub' || minhaSala()) return { ok: false, motivo: 'em-batalha' };
     if (!temHerois()) return { ok: false, motivo: 'sem-heroi' };
     // 11/09 (pedido do dono): o Mestre chama para o grupo; chamar o Mestre
     // conferido nem sai daqui — só ele pede grupo
     if (mestreConferido(id) && !algumMestre()) return { ok: false, motivo: 'so-mestre-chama' };
+    if (meuAberto) retiraConvite('retirou');
     var gid = eu() + '-' + aleat(4), chave = aleat(8);
     if (!manda('grupo', id, 'convite', { gid: gid, chave: chave, heroi: heroiResumo(principal()),
                                           herois: heroisResumo(meusHerois), versao: versao() })) {
+      if (meuAberto) muda();
       return { ok: false, motivo: ultimaRecusa };
     }
     st.fase = 'convidei';
@@ -658,14 +711,33 @@ var JOGO = (typeof window !== 'undefined')
     return { ok: true };
   };
 
+  /* o MEU convite em aberto sai do ar: o outro lado ouve o `sair` (o cx dele eu ainda não sei: vai ao id) */
+  function retiraConvite(motivo) {
+    var p = st.pendente;
+    if (!p || !p.meu || st.fase === 'formado') return false;
+    manda('grupo', p.id, 'sair', { gid: p.gid, motivo: motivo || 'retirou' });
+    st.pendente = null;
+    st.fase = 'livre';
+    return true;
+  }
+  /* 06/10: quem chamou CANCELA o convite que ainda espera resposta (o botão do cartão do pedido) —
+   * os dois lados soltam na hora, sem esperar os 30 s */
+  Grupo.cancelar = function () {
+    if (!retiraConvite('retirou')) return false;
+    muda();
+    return true;
+  };
+
   Grupo.sair = function (motivo) {
     var p = st.pendente;
     if (p && st.fase !== 'formado') {
       // o convite em aberto se retira
-      if (p.meu) manda('grupo', p.id, 'sair', { gid: p.gid, motivo: 'retirou' });
-      else manda('grupo', p.id, 'resposta', { gid: p.gid, ok: false, motivo: 'recusou' }, p.cx);
-      st.pendente = null;
-      st.fase = 'livre';
+      if (p.meu) retiraConvite('retirou');
+      else {
+        manda('grupo', p.id, 'resposta', { gid: p.gid, ok: false, motivo: 'recusou' }, p.cx);
+        st.pendente = null;
+        st.fase = 'livre';
+      }
       muda();
       return;
     }
@@ -703,6 +775,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     st.descidaAcabou = false;
     st.descer = null;
+    st.parSubiu = null;
     sobe(motivo || 'saiu');
     muda();
   };
@@ -727,6 +800,12 @@ var JOGO = (typeof window !== 'undefined')
       if (!d.gid || !d.chave) return;
       if (st.pendente && st.pendente.gid === d.gid) return;          // reenvio
       if (st.fase === 'formado' && st.gid === d.gid) return;
+      /* 06/10: quem já tinha me chamado chama DE NOVO (o `sair` do convite velho pode ter se perdido, e o
+       * cliente de antes nem o manda no prazo): o convite novo troca o que estava na tela — antes era
+       * recusado como "ocupado", e ele ficava sem conseguir chamar até o meu relógio soltar */
+      var trocou = st.fase === 'convidado' && !!st.pendente && !st.pendente.meu && st.pendente.id === de &&
+                   (!st.pendente.cx || ev.cx === st.pendente.cx);
+      if (trocou) { st.pendente = null; st.fase = 'livre'; }
       var mot = mutado(de) ? 'ocupado' : (String(d.versao || '') !== versao() ? 'versao' : motivoOcupado(true));
       // 11/09: convite com o herói do Mestre só do Mestre que o relé conferiu —
       // 12/09: conferido na LISTA inteira, não só no principal
@@ -736,6 +815,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!mot && temGm && !mestreConferido(de)) mot = 'mestre-falso';
       if (mot) {
         manda('grupo', de, 'resposta', { gid: String(d.gid).slice(0, 48), ok: false, motivo: mot }, ev.cx);
+        if (trocou) muda();
         return;
       }
       st.fase = 'convidado';
@@ -834,6 +914,9 @@ var JOGO = (typeof window !== 'undefined')
                  (!st.pendente.cx || ev.cx === st.pendente.cx)) {   // achado 18: só pela conexão que convidou
         st.pendente = null;
         st.fase = 'livre';
+        // 06/10: quem recebeu fica sabendo por que o pedido saiu da tela
+        aviso(d.motivo === 'expirou' ? Tx('O convite de {a} expirou.', { a: nomeDe(de) })
+                                     : Tx('{a} retirou o convite.', { a: nomeDe(de) }));
         muda();
       }
     } else if (a === 'descer') {
@@ -872,14 +955,27 @@ var JOGO = (typeof window !== 'undefined')
     } else if (a === 'subir') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
       st.descer = null;
-      var tx = d.motivo === 'expirou' ? Tx('Quem lidera não esperou: a descida foi cancelada.')
-             : (Tx('{nome} saiu da descida — vocês voltaram ao Acampamento.', { nome: st.par.nome }));
-      if (tela() === 'battle') {
-        st.descidaAcabou = true;
-        aviso(Tx('{nome} saiu da descida — ela acaba no fim desta sala.', { nome: st.par.nome }));
+      if (!emDescidaDeGrupo()) return;                    // estou na praça, ou numa descida que já é só minha
+      var nomeS = st.par.nome;
+      if (d.motivo === 'expirou' || d.motivo === 'falhou') {
+        // a descida nem começou do lado dele (o "desci" atrasado, o startRun que não abriu): não há onde ficar
+        aviso(d.motivo === 'expirou' ? Tx('Quem lidera não esperou: a descida foi cancelada.')
+                                     : Tx('{nome} não conseguiu começar a descida — ela foi cancelada.', { nome: nomeS }));
+        st.descidaAcabou = false;
+        sobe(d.motivo);
         muda();
-      } else if (descidaAtual() !== 'praca' || descidaG) {
-        aviso(tx);
+      } else if (tela() === 'battle') {
+        // 06/10: a sala em curso termina como está; ao sair dela a descida vira só minha (o tique)
+        st.parSubiu = { nome: nomeS };
+        aviso(Tx('{nome} voltou ao acampamento.', { nome: nomeS }));
+        muda();
+      } else if (ficaSozinho(nomeS)) {
+        // 06/10: ele voltou ao acampamento; eu fico onde estou e decido por mim (ver ficaSozinho)
+        aviso(Tx('{nome} voltou ao acampamento — a descida segue só com os seus heróis.', { nome: nomeS }));
+        muda();
+      } else {
+        // sem como seguir sozinho (uma tela fora da descida): o de antes
+        aviso(Tx('{nome} saiu da descida — vocês voltaram ao Acampamento.', { nome: nomeS }));
         st.descidaAcabou = false;
         sobe(d.motivo || 'parceiro');
         muda();
@@ -969,6 +1065,11 @@ var JOGO = (typeof window !== 'undefined')
     if (p && t > p.expira) {
       st.pendente = null;
       if (st.fase !== 'formado') st.fase = 'livre';
+      /* 06/10: o prazo AVISA o outro lado, que solta na hora — antes cada um esperava o próprio relógio, e o
+       * de uma aba em segundo plano (o celular com a tela apagada) não anda: o pedido ficava preso lá e o
+       * convite seguinte voltava "ocupado". São as vozes de sempre (`sair` e `resposta`), com o motivo. */
+      if (p.meu) manda('grupo', p.id, 'sair', { gid: p.gid, motivo: 'expirou' });
+      else manda('grupo', p.id, 'resposta', { gid: p.gid, ok: false, motivo: 'expirou' }, p.cx);
       aviso(p.meu ? Tx('O convite expirou.') : Tx('O convite de {a} expirou.', { a: nomeDe(p.id) }));
       muda();
     }
@@ -1001,6 +1102,20 @@ var JOGO = (typeof window !== 'undefined')
       st.dissolver = null;
       desfaz(null, null, true);
     }
+    // 06/10: o par voltou ao acampamento com a minha sala em curso — saí dela: a descida vira só minha
+    if (st.parSubiu && tela() !== 'battle') {
+      var ps = st.parSubiu;
+      st.parSubiu = null;
+      if (Grupo.emGrupo() && ficaSozinho(ps.nome)) {
+        aviso(Tx('{nome} voltou ao acampamento — a descida segue só com os seus heróis.', { nome: ps.nome }));
+      } else if (descidaG && tela() === 'roomClear') st.descidaAcabou = true;
+      muda();
+    }
+    // a escolha de quem ficou só vale na descida: de volta à praça, na batalha ou no fim, o cartão sai
+    if (ficouSo) {
+      var tf = tela();
+      if (tf !== 'antessala' && tf !== 'roomClear' && tf !== 'elementChoice') { ficouSo = null; muda(); }
+    }
     if (descidaG) {
       var tl = tela();
       if (tl === 'hub' || tl === 'menu' || tl === 'heroSelect') { descidaG = null; muda(); }
@@ -1015,6 +1130,7 @@ var JOGO = (typeof window !== 'undefined')
     respondi = {};
     descidaG = null;
     ultimoPar = null;
+    ficouSo = null;
     assinaturaCoop = '';
     marcado = { id: null, papel: null };
   };
@@ -1071,13 +1187,20 @@ var JOGO = (typeof window !== 'undefined')
 
   Duelo.desafiar = function (id) {
     if (!id || id === eu()) return { ok: false, motivo: 'ocupado' };
-    if (dst.fase !== 'livre' || st.fase === 'convidei' || st.fase === 'convidado') return { ok: false, motivo: 'ocupado' };
+    // 06/10: o MEU desafio amistoso em aberto se troca pelo novo (como o convite de grupo: Grupo.convidar)
+    var meuAberto = dst.fase === 'desafiei' && dst.modo === 'desafio';
+    if ((dst.fase !== 'livre' && !meuAberto) || st.fase === 'convidei' || st.fase === 'convidado') return { ok: false, motivo: 'ocupado' };
     if (trocaAberta()) return { ok: false, motivo: 'troca' };
     if (tela() !== 'hub' || minhaSala() || descidaG) return { ok: false, motivo: 'em-batalha' };
     if (!heroisDeDuelo().length) return { ok: false, motivo: 'sem-heroi' };
+    if (meuAberto) {
+      if (dst.op) manda('duelo', dst.op.id, 'cancela', { did: dst.did, motivo: 'retirou' }, dst.op.cx);
+      zeraDuelo();
+    }
     var did = eu() + '-' + aleat(6), chave = aleat(8);
     // 14/09: o desafio é sempre o AMISTOSO da praça (o modo vai junto; a versão já barra quem não o conhece)
     if (!manda('duelo', id, 'desafio', { did: did, versao: versao(), chave: chave, modo: 'desafio' })) {
+      if (meuAberto) mudaD();
       return { ok: false, motivo: ultimaRecusa };
     }
     dst.fase = 'desafiei'; dst.did = did; dst.eu = 'A'; dst.chave = chave; dst.modo = 'desafio';
@@ -1488,9 +1611,14 @@ var JOGO = (typeof window !== 'undefined')
     if (a === 'desafio') {
       if (!d.did || dst.did === d.did) return;
       if (d.modo !== undefined && d.modo !== 'desafio') return;     // 14/09: pelo desafio só vem o amistoso
+      // 06/10: quem já tinha me desafiado desafia de novo — o desafio novo troca o que estava na tela
+      var trocouD = dst.fase === 'desafiado' && dst.modo === 'desafio' && !!dst.op && dst.op.id === de &&
+                    (!dst.op.cx || ev.cx === dst.op.cx);
+      if (trocouD) zeraDuelo();
       var mot = mutado(de) ? 'ocupado' : (String(d.versao || '') !== versao() ? 'versao' : motivoOcupado(false));
       if (mot) {
         manda('duelo', de, 'resposta', { did: String(d.did).slice(0, 48), ok: false, motivo: mot }, ev.cx);
+        if (trocouD) mudaD();
         return;
       }
       dst.fase = 'desafiado'; dst.did = String(d.did).slice(0, 48); dst.eu = 'B'; dst.modo = 'desafio';
@@ -1652,6 +1780,9 @@ var JOGO = (typeof window !== 'undefined')
         var n = dst.op ? dst.op.nome : '';
         var meu = f === 'desafiei', modoT = dst.modo;
         if (!meu && dst.op) manda('duelo', dst.op.id, 'resposta', { did: dst.did, ok: false, motivo: 'expirou' }, dst.op.cx);
+        // 06/10: e o prazo de quem DESAFIOU avisa o desafiado (a voz `cancela` de sempre): ele solta sem depender
+        // do relógio dele. Só no amistoso — a Arena e o Campo têm o servidor e a repetição deles
+        else if (meu && dst.op && modoT === 'desafio') manda('duelo', dst.op.id, 'cancela', { did: dst.did, motivo: 'retirou' }, dst.op.cx);
         zeraDuelo();
         aviso(modoT === 'arena' ? Tx('O adversário da Arena não apareceu — a partida caiu.')
             : modoT === 'campo' ? Tx('O ataque não teve resposta.')

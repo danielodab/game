@@ -728,7 +728,9 @@ var JOGO = (typeof window !== 'undefined')
       if (Afl && Afl.fechaGrupo) Afl.fechaGrupo({ gid: S.ata.gid, lances: [], hashFinal: null, fotografada: false });
     }
     // o parceiro na antessala repete o `pronto` até a ata chegar
-    if (S.tipo === 'grupo' && !souLider() && g && g.screen === 'antessala' && !S.bid && ag >= S.prontoProx) mandaPronto();
+    // (06/10: só na descida DE GRUPO — quem ficou sozinho depois que o parceiro voltou ao acampamento não o chama mais)
+    if (S.tipo === 'grupo' && !souLider() && g && g.screen === 'antessala' && g.modoRede && g.modoRede() === 'grupo' &&
+        !S.bid && ag >= S.prontoProx) mandaPronto();
     // 21/09: e na PREPARAÇÃO o `prep` se repete a cada 2 s — o relé é burro e um
     // pacote perdido deixaria o parceiro esperando um PRONTO que já foi dado
     repetePrep(ag);
@@ -1170,6 +1172,13 @@ var JOGO = (typeof window !== 'undefined')
         }
         if (!r || !r.ok || typeof r.semente !== 'number' || typeof r.gid !== 'string') {
           avisa(Tx('O servidor não abriu a sala do grupo: {a}.', { a: (r && r.erro) || Tx('sem resposta') }), 'aviso');
+          muda();
+          return;
+        }
+        // 06/10: a descida deixou de ser de grupo enquanto o servidor respondia (o parceiro voltou ao acampamento e
+        // eu segui sozinho): a sala que ele abriu fecha sem lance — a vida de ninguém muda — e a ata não sai
+        if (!g.modoRede || g.modoRede() !== 'grupo' || g.screen !== 'antessala') {
+          if (Aut.fechaGrupo) Aut.fechaGrupo({ gid: r.gid, lances: [], hashFinal: null, fotografada: false });
           muda();
           return;
         }
@@ -1894,6 +1903,24 @@ var JOGO = (typeof window !== 'undefined')
     muda();
     if (piloto && piloto.segue) Coop.seguir();
   }
+  /* O PARCEIRO VOLTOU AO ACAMPAMENTO e eu sigo sozinho (06/10, Game.segueSozinho): daqui nada mais chama por ele —
+   * a ata que esperava o `dentro`, a `proxima` que se repetia, o `pronto` guardado. A sala em grupo que o servidor
+   * já tinha aberto para essa ata (o gid, sem batalha nenhuma) fecha SEM lance, como a ata que falha (15/09): a
+   * vida de ninguém muda, e a próxima luta dele ou minha não a "larga". O grupo segue configurado (cfg): só a
+   * descida deixou de ser dele. Fora da batalha, sempre. */
+  Coop.soltaDescida = function () {
+    if (S.tipo !== 'grupo' || emBatalha()) return false;
+    if (S.ata && S.ata.gid && !S.bid && !S.gidSemLuta) {
+      S.gidSemLuta = true;
+      var Afl = autoridadeLigada();
+      if (Afl && Afl.fechaGrupo) { try { Afl.fechaGrupo({ gid: S.ata.gid, lances: [], hashFinal: null, fotografada: false }); } catch (e) {} }
+    }
+    var n = S.n;
+    S = nova('grupo');
+    S.n = n;
+    muda();
+    return true;
+  };
   Coop.sairDaBatalha = function () {
     var g = G(), st = g && g.state, eu = meuId();
     if (st && S.bid && g.screen === 'battle' && S.tipo === 'grupo') {
