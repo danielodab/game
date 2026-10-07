@@ -285,6 +285,17 @@ var JOGO = (typeof window !== 'undefined')
     // o WebView avisa por visibilitychange quando o aplicativo sai da frente; o plugin App repete o
     // aviso (appStateChange) nos aparelhos em que a página não o recebe. Os dois caem no mesmo lugar.
     document.addEventListener('visibilitychange', function () { M.segundoPlano(!!document.hidden); });
+    /* 06/10 (o dono, no aparelho: "quando clico em sair do jogo ele buga"): o "Sair do jogo" do menu é um
+     * LINK para o site — na web é o certo (página nenhuma se fecha sozinha), mas no aplicativo ele levava o
+     * WebView para a landing do site, deitada e sem caminho de volta. Aqui o toque nele faz o que o botão
+     * voltar faz no fim da linha: pergunta e FECHA o aplicativo. A web não passa por este arquivo de casca. */
+    document.addEventListener('click', function (ev) {
+      var a = null;
+      try { a = ev.target && ev.target.closest ? ev.target.closest('.menu-sair') : null; } catch (e) {}
+      if (!a) return;
+      try { ev.preventDefault(); ev.stopPropagation(); } catch (e2) {}
+      pergunta(emBatalha() ? Tx('Sair no meio da batalha? Ela continua sem você.') : Tx('Sair do SOTERRA?'));
+    }, true);
     setInterval(vigia, 3000);
     if (!M.nativo()) return;            // `?app=1` no navegador: não há casca para ligar
     // Os plugins vêm de vendor/capacitor/, cópia do node_modules que o empacota_www.py confere. O aplicativo abre o

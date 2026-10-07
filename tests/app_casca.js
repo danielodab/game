@@ -115,6 +115,10 @@ check('aplicativo: o <html> ganha a classe app', w._classes.has('app'));
 check('aplicativo num telefone forte (8 GB): quem não escolheu abre no MÁXIMO', M.qualidade() === 'alta' && M.grafico().escala === 1 && M.grafico().bloom === true, M.qualidade());
 check('aplicativo: o segundo plano e o relógio da tela acesa são ligados',
       w._ouvintes.doc.indexOf('visibilitychange') >= 0 && w.relogios === 1);
+// 06/10: no aplicativo o "Sair do jogo" do menu (um link para o site, na web) pergunta e fecha o aplicativo
+check('aplicativo: o toque no "Sair do jogo" do menu é atendido pela casca', w._ouvintes.doc.indexOf('click') >= 0);
+check('web: ninguém escuta o clique do "Sair do jogo" — lá ele segue sendo o link para o site',
+      janela({})._ouvintes.doc.indexOf('click') < 0);
 
 w = janela({ busca: '?app=1', memoria: 4, tela: [1400, 900] });
 M = w.JOGO.Mobile;
