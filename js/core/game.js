@@ -754,6 +754,25 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* A DESCIDA QUE VIRA SÓ MINHA (06/10; o dono: "se um dos membros do grupo volta ao acampamento, os outros
+   * voltam também.. essa decisão deve ser individual"). O parceiro voltou ao acampamento (ou saiu do grupo) FORA
+   * de uma batalha: eu fico onde estou — a antessala, a recompensa — e a descida segue só com os MEUS heróis, pelo
+   * caminho de quem desce sozinho. Não há regra nova: `Game.party` já são só os meus (a ata é que juntava os do
+   * parceiro), a porta pede o bilhete da sala ao servidor (ele abre qualquer sala do calabouço para os heróis da
+   * conta, com a vida de agora — servidor/salas.py, _sala_abrir) e o juiz refaz a batalha solo de sempre. Na
+   * batalha em curso não vale (lá quem sai morre e o grupo se desfaz no fim da sala: Coop.sairDaBatalha). O Coop
+   * solta o que chamava pelo parceiro e fecha, sem lance, a sala em grupo que já estivesse aberta no servidor. */
+  Game.segueSozinho = function () {
+    if (!rede || rede.tipo !== 'grupo' || !Game.dungeonId) return false;
+    if (Game.screen !== 'antessala' && Game.screen !== 'roomClear' && Game.screen !== 'elementChoice') return false;
+    rede = null; ultimoTurno = null; timerTurno = null;
+    carryFimRede = null;
+    ataSolo = null;
+    var c = C();
+    if (c && c.soltaDescida) { try { c.soltaDescida(); } catch (e) {} }
+    return true;
+  };
+
   function dungeonDefDe(dungeonId) {
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });

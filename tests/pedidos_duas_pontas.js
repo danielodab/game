@@ -22,7 +22,9 @@
      - chamar de novo a mesma pessoa TROCA o pedido anterior nos dois lados;
      - recusar e expirar soltam os DOIS lados (a troca não tinha prazo nenhum);
      - o cliente de ANTES (que não troca o pedido nem avisa o prazo) segue
-       funcionando com o de agora: nada de voz nova no fio.
+       funcionando com o de agora: nada de voz nova no fio;
+     - quem volta ao acampamento sobe SOZINHO: o outro fica onde está e a
+       descida dele segue só com os heróis dele; o grupo continua.
    ========================================================================== */
 'use strict';
 var vm = require('vm'), fs = require('fs'), path = require('path');
@@ -244,15 +246,84 @@ check('quem está em batalha recusa o pedido de troca na hora (antes guardava um
       trocaLivre() && ana.avisou(/Bia está ocupad/), JSON.stringify([bia.T.estado() && bia.T.estado().fase, ana.avisos]));
 bia.tela = 'hub';
 
+// ============================================================ voltar ao acampamento
+console.log('\n== voltar ao acampamento é de cada um');
+/* O dono: "se um dos membros do grupo volta ao acampamento, os outros voltam também.. essa decisão deve ser
+ * individual." O Game de mentira guarda o modo da descida ('grupo' ou null) e conta o Game.segueSozinho. */
+function formaGrupo() {
+  ana.tela = 'hub'; bia.tela = 'hub'; ana.modo = null; bia.modo = null;
+  passa(1100);
+  ana.G.convidar('bia'); anda(); bia.G.responder(true); anda();
+  ana.avisos.length = 0; bia.avisos.length = 0; ana.subidas.length = 0; bia.subidas.length = 0;
+  return ana.G.emGrupo() && bia.G.emGrupo() && ana.G.souLider();
+}
+function descem() { var x = ana.G.descer('cisterna'); anda(); return x.ok && ana.tela === 'antessala' && bia.tela === 'antessala'; }
+check('(o grupo se forma e as duas descem juntas: antessala, descida de grupo)', formaGrupo() && descem() &&
+      ana.modo === 'grupo' && bia.modo === 'grupo' && ana.G.estado().descidaGrupo === 'cisterna');
+n0 = fio.length;
+var so0 = ana.sozinho;
+bia.G.subir('saiu'); anda();
+check('quem volta sobe SOZINHO: a Bia vai para a praça', bia.tela === 'hub' && bia.subidas.length === 1, bia.tela);
+check('a Ana NÃO é levada: segue na antessala (antes: "vocês voltaram ao Acampamento")', ana.tela === 'antessala' && ana.subidas.length === 0,
+      ana.tela + ' · ' + JSON.stringify(ana.avisos));
+check('a descida da Ana virou só dela (Game.segueSozinho) e deixou de contar como descida de grupo',
+      ana.sozinho === so0 + 1 && ana.modo === null && ana.G.estado().descidaGrupo === null && !ana.G.estado().descidaAcabou,
+      ana.sozinho + ' · ' + ana.modo + ' · ' + JSON.stringify(ana.G.estado().descidaGrupo));
+check('a Ana é avisada, e o estado guarda a escolha para a tela', ana.avisou(/Bia voltou ao acampamento/) &&
+      !!ana.G.estado().ficouSo && ana.G.estado().ficouSo.nome === 'Bia', JSON.stringify(ana.avisos));
+check('o GRUPO continua nos dois lados, a Ana liderando', ana.G.emGrupo() && bia.G.emGrupo() && ana.G.souLider());
+check('no fio foi o `subir` de sempre, uma vez', mandou('bia', 'grupo', 'subir', n0).length === 1 && fio.length === n0 + 1, JSON.stringify(fio.slice(n0)));
+check('decidir ficar tira a escolha do estado', ana.G.cienteSozinho() === true && !ana.G.estado().ficouSo);
+// a Ana, sozinha, sai quando quiser: não chama mais ninguém
+n0 = fio.length;
+ana.tela = 'hub'; ana.modo = null; passa(1100);
+check('quando ela volta depois, sozinha, ninguém mais é avisado nem levado', fio.length === n0 && bia.tela === 'hub' && ana.G.emGrupo());
+ana.G.sair(); anda();
+
+// o parceiro volta ao acampamento da recompensa, com a minha sala ainda em curso
+check('(outra descida de grupo)', formaGrupo() && descem());
+ana.tela = 'battle'; bia.tela = 'roomClear';
+so0 = ana.sozinho;
+bia.G.subir('voltou'); anda();
+check('com a minha sala em curso nada muda agora: fico na batalha, só avisada', ana.tela === 'battle' && ana.sozinho === so0 &&
+      ana.subidas.length === 0 && ana.avisou(/Bia voltou ao acampamento\./), JSON.stringify(ana.avisos));
+ana.tela = 'roomClear'; passa(1000);
+check('ao sair da sala a descida vira só minha, na recompensa', ana.tela === 'roomClear' && ana.sozinho === so0 + 1 && !!ana.G.estado().ficouSo &&
+      !ana.G.estado().descidaAcabou && ana.G.emGrupo());
+ana.tela = 'hub'; ana.modo = null; passa(1100);
+ana.G.sair(); anda();
+
+// a descida que nem começou do lado de quem lidera: aí quem desceu volta, como sempre
+check('(o grupo de novo)', formaGrupo());
+ana.G.descer('cisterna');
+var preso = fila.splice(0);                 // o "descer" demora no caminho
+relogio += 5001; ana.tique();               // quem lidera não espera mais de 5 s
+fila.push.apply(fila, preso); anda();
+check('o "desci" atrasado: a líder manda subir (expirou) e quem desceu volta à praça — não há descida onde ficar',
+      bia.tela === 'hub' && bia.subidas.length === 1 && ana.tela === 'hub' && bia.avisou(/não esperou/), bia.tela + ' · ' + JSON.stringify(bia.avisos));
+ana.G.sair(); anda();
+
+// o parceiro sai do GRUPO na antessala: eu também não sou levada
+check('(e mais uma descida de grupo)', formaGrupo() && descem());
+so0 = ana.sozinho;
+bia.G.sair(); anda();
+check('quem sai do grupo na antessala vai sozinho para a praça; quem fica segue a descida só com os heróis dela',
+      bia.tela === 'hub' && ana.tela === 'antessala' && ana.subidas.length === 0 && ana.sozinho === so0 + 1 && !ana.G.emGrupo() &&
+      ana.avisou(/Bia saiu do grupo — a descida segue/) && !!ana.G.estado().ficouSo && ana.G.estado().ficouSo.saiu === true,
+      bia.tela + '/' + ana.tela + ' · ' + JSON.stringify(ana.avisos));
+ana.tela = 'hub'; ana.modo = null; bia.tela = 'hub'; passa(1100);
+
 // ============================================================ o cliente de antes
 console.log('\n== o cliente de antes do conserto do outro lado');
 /* a Cris joga com o grupo.js e o troca.js do commit anterior? Não há como carregá-los aqui; o que se prova é o fio:
  * tudo o que o cliente de agora manda é voz que o de antes já entendia (git show 1d98b83:js/core/grupo.js):
- * grupo: convite · resposta · sair   duelo: desafio · resposta · cancela   troca: convite · aceite · recusa · cancela */
+ * grupo: convite · resposta · sair · estado · descer · desci · subir   duelo: desafio · resposta · cancela
+ * troca: convite · aceite · recusa · cancela. O `subir` de quem volta ao acampamento é o mesmo: o cliente de antes que
+ * o ouve ainda volta junto (era a regra dele); o de agora fica. */
 var vozes = {};
 fio.forEach(function (m) { vozes[m.tipo + ':' + m.acao] = 1; });
-var conhecidas = ['grupo:convite', 'grupo:resposta', 'grupo:sair', 'grupo:estado', 'duelo:desafio', 'duelo:resposta', 'duelo:cancela',
-                  'troca:convite', 'troca:aceite', 'troca:recusa', 'troca:cancela'];
+var conhecidas = ['grupo:convite', 'grupo:resposta', 'grupo:sair', 'grupo:estado', 'grupo:descer', 'grupo:desci', 'grupo:subir',
+                  'duelo:desafio', 'duelo:resposta', 'duelo:cancela', 'troca:convite', 'troca:aceite', 'troca:recusa', 'troca:cancela'];
 var novas = Object.keys(vozes).filter(function (v) { return conhecidas.indexOf(v) < 0; });
 check('nenhuma voz nova no fio: só as que o cliente de antes já entendia', novas.length === 0, novas.join(', '));
 

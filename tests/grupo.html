@@ -79,11 +79,19 @@ JOGO.Rede = {
   cala: function (id, solta) { calas.push(id + (solta ? ':solta' : ':cala')); return true; }
 };
 JOGO.Game = {
-  screen: 'hub', dificuldade: 'normal', dungeonId: null, state: null, runs: [],
+  screen: 'hub', dificuldade: 'normal', dungeonId: null, state: null, runs: [], modo: null, sozinho: 0,
   startRun: function (ids, dg, opts) {
     this.runs.push({ ids: ids.slice(), dg: dg, opts: opts || null });
     this.screen = 'antessala';
     this.dungeonId = dg;
+    this.modo = (opts && opts.grupo) ? 'grupo' : null;
+    return true;
+  },
+  // 06/10: a descida de grupo que vira só minha (o parceiro voltou ao acampamento) — fora da batalha
+  modoRede: function () { return this.modo; },
+  segueSozinho: function () {
+    if (this.modo !== 'grupo' || this.screen === 'battle') return false;
+    this.modo = null; this.sozinho++;
     return true;
   }
 };
@@ -192,7 +200,7 @@ JOGO.DATA = {
     saidas.length = 0; vigias.length = 0; soltas.length = 0; sussurros.length = 0; marcas.length = 0;
     avisos.length = 0; convites.length = 0; desafios.length = 0; subidas.length = 0; linhasSu.length = 0;
     Co.cfg.length = 0; Co.sumiu.length = 0; Co.voltou.length = 0; Co.duelos.length = 0;
-    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.state = null; Gm.runs.length = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.state = null; Gm.runs.length = 0; Gm.modo = null; Gm.sozinho = 0;
     R._id = 'ana'; R._cx = 'cxana01'; R._privado = true; R._falha = null; R._recusa = null; R._transporte = null; R._mestres = {};
     sala = null; trocaEstado = null;
     Gr.defineHeroi('sumo');
@@ -492,7 +500,27 @@ JOGO.DATA = {
     formaSeguindo();
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'subir', dados: { gid: 'bia-q1w2', motivo: 'saiu' } });
-    check('o "subir" da líder me leva ao Acampamento (a descida é dos dois)', subidas.length === 1 && Gm.screen === 'hub' && Gr.emGrupo());
+    // 06/10 (o dono: "se um dos membros do grupo volta ao acampamento, os outros voltam também.. essa decisão deve
+    // ser individual"): antes o "subir" da líder me levava junto (a descida era dos dois)
+    check('o "subir" da líder NÃO me leva: fico na antessala, a descida vira só minha e o grupo continua',
+          subidas.length === 0 && Gm.screen === 'antessala' && Gm.sozinho === 1 && Gm.modo === null && Gr.emGrupo() &&
+          !!Gr.estado().ficouSo && Gr.estado().ficouSo.nome === 'Bia' && Gr.estado().descidaGrupo === null &&
+          /Bia voltou ao acampamento/.test(ultAviso()), ultAviso() + ' · ' + JSON.stringify(subidas));
+    check('...e a escolha sai do estado quando eu decido ficar', Gr.cienteSozinho() === true && !Gr.estado().ficouSo);
+    reset();
+    formaSeguindo();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'subir', dados: { gid: 'bia-q1w2', motivo: 'expirou' } });
+    check('o "subir" de quem não esperou (a descida nem começou do lado dela) segue cancelando a minha',
+          subidas.length === 1 && Gm.screen === 'hub' && Gm.sozinho === 0 && Gr.emGrupo(), ultAviso());
+    reset();
+    formaSeguindo();
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });
+    Gm.screen = 'battle';
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'subir', dados: { gid: 'bia-q1w2', motivo: 'voltou' } });
+    check('com a minha sala em curso o "subir" não mexe em nada agora', Gm.screen === 'battle' && Gm.sozinho === 0 && subidas.length === 0);
+    Gm.screen = 'roomClear'; Gr._tique();
+    check('...e ao sair da sala a descida vira só minha', Gm.sozinho === 1 && !!Gr.estado().ficouSo && subidas.length === 0 && Gr.emGrupo());
 
     // ============================================================ a queda e a volta
     reset();

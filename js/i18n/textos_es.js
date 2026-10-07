@@ -2549,4 +2549,15 @@ JOGO.I18n.registra('es', { textos: {
   "Abrir a mesa": "Abrir la mesa",
   "Cancelar a troca": "Cancelar el intercambio",
   "Pedido cancelado.": "Solicitud cancelada.",
+  // ---- 06/10: voltar ao acampamento é de cada um — quem fica segue a descida sozinho
+  "{nome} voltou ao acampamento — a descida segue só com os seus heróis.": "{nome} volvió al campamento — el descenso sigue solo con tus héroes.",
+  "{nome} voltou ao acampamento.": "{nome} volvió al campamento.",
+  "{nome} saiu do grupo — a descida segue só com os seus heróis.": "{nome} salió del grupo — el descenso sigue solo con tus héroes.",
+  "{nome} não conseguiu começar a descida — ela foi cancelada.": "{nome} no pudo empezar el descenso — fue cancelado.",
+  "Só você sai: {a} fica e decide por si. O grupo continua.": "Solo sales tú: {a} se queda y decide por su cuenta. El grupo continúa.",
+  "Só você volta: {a} fica e decide por si. O grupo continua.": "Solo vuelves tú: {a} se queda y decide por su cuenta. El grupo continúa.",
+  "<b>{a}</b> voltou ao acampamento.": "<b>{a}</b> volvió al campamento.",
+  "<b>{a}</b> saiu do grupo.": "<b>{a}</b> salió del grupo.",
+  "A descida segue só com os seus heróis.": "El descenso sigue solo con tus héroes.",
+  "Continuar sozinho": "Seguir solo",
 } });

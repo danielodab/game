@@ -410,6 +410,7 @@ var JOGO = (typeof window !== 'undefined')
   var st = null;
   var descidaG = null;              // { dungeonId }: a descida em curso é de grupo
   var ultimoPar = null;             // { id, nome }: quem estava no grupo que se desfez
+  var ficouSo = null;               // 06/10: { nome, saiu }: o par voltou ao acampamento e a descida segue só comigo
   function zera() {
     st = { fase: 'livre', gid: null, chave: null, v: 0, lider: null,
            par: null,               // { id, cx, nome, heroi, herois[], on, sumidoDesde, saiu }
@@ -418,6 +419,7 @@ var JOGO = (typeof window !== 'undefined')
            aguardaEstado: false,    // mandei 'volta': o próximo estado do par vale
            voltaProva: null,        // a prova da minha última 'volta' (o "sair expirou" de quem já não me conhece a devolve)
            dissolver: null,         // o par saiu no meio da batalha: desfaz quando a sala acabar
+           parSubiu: null,          // 06/10: { nome } — o par voltou ao acampamento com a minha sala ainda em curso
            descidaAcabou: false,
            descidaDif: null };      // 11/09 (revisão): a dificuldade de quem lidera (quem segue a vê)
   }
@@ -472,6 +474,8 @@ var JOGO = (typeof window !== 'undefined')
       descidaAcabou: !!st.descidaAcabou || !!(descidaG && !Grupo.emGrupo()),
       descidaDif: st.descidaDif || null,     // 11/09 (revisão): a de quem lidera, para quem segue
       graca: graca(),
+      // 06/10: o par voltou ao acampamento e eu fiquei — a HUD mostra a escolha (seguir sozinho ou voltar também)
+      ficouSo: ficouSo ? { nome: ficouSo.nome, saiu: !!ficouSo.saiu } : null,
       ultimoParceiro: ultimoPar ? { id: ultimoPar.id, nome: ultimoPar.nome } : null
     };
   };
@@ -544,15 +548,57 @@ var JOGO = (typeof window !== 'undefined')
     var par = st.par;
     if (par) { solta(par.id, par.cx); ultimoPar = { id: par.id, nome: par.nome }; }
     var naAntessala = tela() === 'antessala' && !!descidaG;
+    // 06/10: o par saiu do GRUPO com a descida em curso — quem fica não é levado: segue sozinho (ficaSozinho).
+    // Antes do muda(): o Coop ainda conhece a ata em aberto e a fecha no servidor (Coop.soltaDescida)
+    var sigoSo = !porMim && emDescidaDeGrupo();
     zera();
+    if (sigoSo && ficaSozinho(par ? par.nome : null, true)) {
+      aviso(Tx('{nome} saiu do grupo — a descida segue só com os seus heróis.', { nome: par ? par.nome : Tx('O outro lado') }), kind);
+      muda();
+      return;
+    }
     if (texto) aviso(texto, kind);
     muda();
     if (naAntessala) sobe('grupo-desfeito');
   }
   function sobe(motivo) {
     descidaG = null;
+    ficouSo = null;
     if (Grupo.aoSubiu) { try { Grupo.aoSubiu(motivo || 'saiu'); } catch (e) {} }
   }
+  /* estou numa descida DE GRUPO (a que começou junto)? Depois de ficar sozinho, não mais */
+  function emDescidaDeGrupo() {
+    if (descidaG) return true;
+    return descidaAtual() !== 'praca' && !!safe(function () { return G().modoRede() === 'grupo'; }, false);
+  }
+  /* VOLTAR AO ACAMPAMENTO É DE CADA UM (06/10; o dono: "se um dos membros do grupo volta ao acampamento, os
+   * outros voltam também.. essa decisão deve ser individual"). Até aqui a descida de grupo era dos dois (D16): o
+   * `subir` de um levava o outro para a praça. Agora quem escolhe voltar sobe SOZINHO, e quem fica permanece onde
+   * está — a antessala, a recompensa — com a descida seguindo só com os heróis DELE: o Game deixa o modo de grupo
+   * (Game.segueSozinho) e a porta passa a abrir pelo caminho de quem desce sozinho, que o servidor e o juiz já
+   * conferem (o bilhete da sala é da conta e dos heróis dela, em qualquer sala do calabouço). Nenhuma regra de
+   * batalha muda, e o `subir` no fio é o mesmo: o cliente de antes que o ouve ainda volta junto, como sempre.
+   *
+   * O que NÃO é isto: a QUEDA de conexão (12/09: quem ficou lidera, a sala nasce com os heróis de quem caiu e o
+   * turno deles passa — o servidor paga os dois) segue como estava; e sair no MEIO de uma batalha também (quem sai
+   * morre naquela sala e o grupo se desfaz no fim dela — Coop.sairDaBatalha). O GRUPO continua formado depois
+   * que um volta: só a descida dele acabou. Devolve se a descida virou só minha. */
+  function ficaSozinho(nome, saiu) {
+    if (!safe(function () { return G().segueSozinho(); }, false)) return false;
+    descidaG = null;
+    st.descidaAcabou = false;
+    st.descer = null;
+    st.parSubiu = null;
+    ficouSo = { nome: nome || null, saiu: !!saiu };
+    return true;
+  }
+  /* a HUD mostrou a escolha e o jogador ficou: o cartão sai */
+  Grupo.cienteSozinho = function () {
+    if (!ficouSo) return false;
+    ficouSo = null;
+    muda();
+    return true;
+  };
   function comecaDescida(dg) {
     descidaG = { dungeonId: dg };
     st.descidaAcabou = false;
@@ -729,6 +775,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     st.descidaAcabou = false;
     st.descer = null;
+    st.parSubiu = null;
     sobe(motivo || 'saiu');
     muda();
   };
@@ -908,14 +955,27 @@ var JOGO = (typeof window !== 'undefined')
     } else if (a === 'subir') {
       if (!Grupo.emGrupo() || d.gid !== st.gid || !doPar(ev)) return;
       st.descer = null;
-      var tx = d.motivo === 'expirou' ? Tx('Quem lidera não esperou: a descida foi cancelada.')
-             : (Tx('{nome} saiu da descida — vocês voltaram ao Acampamento.', { nome: st.par.nome }));
-      if (tela() === 'battle') {
-        st.descidaAcabou = true;
-        aviso(Tx('{nome} saiu da descida — ela acaba no fim desta sala.', { nome: st.par.nome }));
+      if (!emDescidaDeGrupo()) return;                    // estou na praça, ou numa descida que já é só minha
+      var nomeS = st.par.nome;
+      if (d.motivo === 'expirou' || d.motivo === 'falhou') {
+        // a descida nem começou do lado dele (o "desci" atrasado, o startRun que não abriu): não há onde ficar
+        aviso(d.motivo === 'expirou' ? Tx('Quem lidera não esperou: a descida foi cancelada.')
+                                     : Tx('{nome} não conseguiu começar a descida — ela foi cancelada.', { nome: nomeS }));
+        st.descidaAcabou = false;
+        sobe(d.motivo);
         muda();
-      } else if (descidaAtual() !== 'praca' || descidaG) {
-        aviso(tx);
+      } else if (tela() === 'battle') {
+        // 06/10: a sala em curso termina como está; ao sair dela a descida vira só minha (o tique)
+        st.parSubiu = { nome: nomeS };
+        aviso(Tx('{nome} voltou ao acampamento.', { nome: nomeS }));
+        muda();
+      } else if (ficaSozinho(nomeS)) {
+        // 06/10: ele voltou ao acampamento; eu fico onde estou e decido por mim (ver ficaSozinho)
+        aviso(Tx('{nome} voltou ao acampamento — a descida segue só com os seus heróis.', { nome: nomeS }));
+        muda();
+      } else {
+        // sem como seguir sozinho (uma tela fora da descida): o de antes
+        aviso(Tx('{nome} saiu da descida — vocês voltaram ao Acampamento.', { nome: nomeS }));
         st.descidaAcabou = false;
         sobe(d.motivo || 'parceiro');
         muda();
@@ -1042,6 +1102,20 @@ var JOGO = (typeof window !== 'undefined')
       st.dissolver = null;
       desfaz(null, null, true);
     }
+    // 06/10: o par voltou ao acampamento com a minha sala em curso — saí dela: a descida vira só minha
+    if (st.parSubiu && tela() !== 'battle') {
+      var ps = st.parSubiu;
+      st.parSubiu = null;
+      if (Grupo.emGrupo() && ficaSozinho(ps.nome)) {
+        aviso(Tx('{nome} voltou ao acampamento — a descida segue só com os seus heróis.', { nome: ps.nome }));
+      } else if (descidaG && tela() === 'roomClear') st.descidaAcabou = true;
+      muda();
+    }
+    // a escolha de quem ficou só vale na descida: de volta à praça, na batalha ou no fim, o cartão sai
+    if (ficouSo) {
+      var tf = tela();
+      if (tf !== 'antessala' && tf !== 'roomClear' && tf !== 'elementChoice') { ficouSo = null; muda(); }
+    }
     if (descidaG) {
       var tl = tela();
       if (tl === 'hub' || tl === 'menu' || tl === 'heroSelect') { descidaG = null; muda(); }
@@ -1056,6 +1130,7 @@ var JOGO = (typeof window !== 'undefined')
     respondi = {};
     descidaG = null;
     ultimoPar = null;
+    ficouSo = null;
     assinaturaCoop = '';
     marcado = { id: null, papel: null };
   };

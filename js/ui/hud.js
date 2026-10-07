@@ -1262,9 +1262,10 @@ var JOGO = (typeof window !== 'undefined')
     if (sala && sedeHud) sedeHud.dentro = false;      // 04/10: e a sede da guilda também
     hubEhSala = !!sala;                                // a ficha da guilda só oferece o salão a quem está na praça
     function perguntaSair() {
-      // 11/09: a descida de grupo é dos dois (D16) — sair dela leva os dois
-      if (emGrupo()) {
-        confirmSheet(tr('Sair do calabouço?'), tr('A descida acaba para vocês dois — o grupo continua.'), function () {
+      // 06/10 (o dono: "essa decisão deve ser individual"): na descida de grupo sai só QUEM sai — o outro fica
+      // onde está e decide por si (antes, 11/09, a descida era dos dois e sair levava os dois)
+      if (descidaDeGrupo()) {
+        confirmSheet(tr('Sair do calabouço?'), tr('Só você sai: {a} fica e decide por si. O grupo continua.', { a: esc(nomeParceiro()) }), function () {
           safe(function () { Gp().subir('saiu'); return true; }, null);
         });
         return;
@@ -1599,7 +1600,7 @@ var JOGO = (typeof window !== 'undefined')
           });
           painel.appendChild(cxR);
         }
-        if (emGrupo()) painelPortaGrupo(painel);            // 11/09: a porta em grupo
+        if (descidaDeGrupo()) painelPortaGrupo(painel);     // 11/09: a porta em grupo (06/10: só na descida DE grupo)
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
@@ -12168,6 +12169,9 @@ var JOGO = (typeof window !== 'undefined')
   function Su() { return JOGO.Sussurros || null; }
   function Cp() { return JOGO.Coop || null; }
   function emGrupo() { return !!safe(function () { return Gp().emGrupo(); }, false); }
+  /* 06/10: a descida em curso é DE GRUPO? Quem ficou depois que o parceiro voltou ao acampamento segue em grupo
+   * (o grupo continua), mas a descida dele é solo: a porta, a saída e a recompensa são as de quem desce sozinho */
+  function descidaDeGrupo() { return emGrupo() && modoRede() === 'grupo'; }
   function souLider() { return !!safe(function () { return Gp().souLider(); }, false); }
   function grupoEstado() { return safe(function () { return Gp().estado(); }, null); }
   function parceiroG() { return safe(function () { return Gp().parceiro(); }, null); }
@@ -12351,6 +12355,11 @@ var JOGO = (typeof window !== 'undefined')
       return { tipo: 'duelo', meu: true, chave: d.did, id: d.oponente.id, nome: d.oponente.nome, expira: d.prazo, agora: agoraD };
     }
     if (t && t.fase === 'convidei') return { tipo: 'troca', meu: true, chave: t.par, id: t.par, nome: t.nomePar, expira: t.expira, agora: agoraT };
+    // 06/10: o parceiro voltou ao acampamento e eu fiquei: a escolha fica na tela até eu decidir
+    if (g && g.ficouSo && !sheetName && (current === 'antessala' || current === 'roomClear' || current === 'elementChoice')) {
+      return { tipo: 'so', meu: true, chave: (g.ficouSo.nome || '') + (g.ficouSo.saiu ? ':saiu' : ''), id: (parceiroG() || {}).id || null, nome: g.ficouSo.nome,
+               saiu: g.ficouSo.saiu, expira: 0, agora: Date.now };
+    }
     // a mesa de troca aberta com a ficha FECHADA (o ✕, o voltar do aparelho): o caminho de volta fica na tela
     if (t && t.fase === 'aberta' && !sheetName) return { tipo: 'mesa', meu: true, chave: t.par, id: t.par, nome: t.nomePar, expira: 0, agora: Date.now };
     return null;
@@ -12382,6 +12391,9 @@ var JOGO = (typeof window !== 'undefined')
     if (q.tipo === 'mesa') {
       titulo = tr('Mesa de troca com <b>{a}</b>', { a: nome });
       sub = tr('A mesa segue aberta.');
+    } else if (q.tipo === 'so') {
+      titulo = q.saiu ? tr('<b>{a}</b> saiu do grupo.', { a: nome }) : tr('<b>{a}</b> voltou ao acampamento.', { a: nome });
+      sub = tr('A descida segue só com os seus heróis.');
     } else if (q.meu) {
       titulo = q.tipo === 'grupo' ? tr('Convite de grupo para <b>{a}</b>', { a: nome })
              : q.tipo === 'duelo' ? tr('Desafio amistoso para <b>{a}</b>', { a: nome })
@@ -12423,6 +12435,21 @@ var JOGO = (typeof window !== 'undefined')
     if (q.tipo === 'mesa') {
       acts.appendChild(btn(tr('Abrir a mesa'), 'btn-primary', function () { openSheet('troca'); pintaPedido(); }));
       acts.appendChild(btn(tr('Cancelar a troca'), 'btn-ghost', function () { safe(function () { JOGO.Troca.cancelar(); return true; }, null); }));
+    } else if (q.tipo === 'so') {
+      // 06/10: quem ficou decide por si — seguir sozinho (a porta e a próxima sala já são as de quem desce só) ou voltar também
+      acts.appendChild(btn(tr('Continuar sozinho'), 'btn-primary', function () {
+        safe(function () { return Gp().cienteSozinho(); }, null);
+        pintaPedido();
+      }));
+      acts.appendChild(btn(tr('Voltar ao acampamento'), 'btn-ghost', function () {
+        confirmSheet(tr('Sair do calabouço?'),
+          tr('O que você já limpou não fica guardado — a próxima descida começa da primeira sala.'),
+          function () {
+            safe(function () { return Gp().cienteSozinho(); }, null);
+            if (!safe(function () { return G().abandonar(); }, false)) safe(function () { G().restart('hub'); return true; }, null);
+            navTo('hub');
+          });
+      }));
     } else if (q.meu) {
       acts.appendChild(btn(tr('Cancelar'), 'btn-ghost', function () {
         if (q.tipo === 'grupo') safe(function () { return Gp().cancelar(); }, null);
@@ -13459,6 +13486,7 @@ var JOGO = (typeof window !== 'undefined')
    * 'fim', 'acabou', 'lider' ou 'parceiro'. */
   function rodapeGrupo(foot, fim) {
     var est = grupoEstado();
+    if (modoRede() !== 'grupo') return false;             // 06/10: a descida que virou só minha tem o rodapé de quem desce sozinho
     var rede = !!(lastRewards && lastRewards.rede) || !!(est && est.descidaGrupo);
     if (!rede) return false;
     var nome = emGrupo() ? nomeParceiro()
@@ -13478,7 +13506,8 @@ var JOGO = (typeof window !== 'undefined')
       return 'acabou';
     }
     foot.appendChild(btn(tr('Voltar ao acampamento'), 'btn-ghost', function () {
-      confirmSheet(tr('Voltar ao acampamento?'), tr('A descida acaba para vocês dois — o grupo continua.'), function () {
+      // 06/10: volta só quem volta (ver perguntaSair)
+      confirmSheet(tr('Voltar ao acampamento?'), tr('Só você volta: {a} fica e decide por si. O grupo continua.', { a: esc(nome) }), function () {
         safe(function () { Gp().subir('voltou'); return true; }, null);
       });
     }));
@@ -14433,8 +14462,18 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   // ------------------------------------------------ os ganchos, UMA vez
-  var grupoSigTela = '';
+  var grupoSigTela = '', ficouSoTela = false;
   function aoGrupoMudou(est) {
+    /* 06/10: o parceiro voltou ao acampamento e a minha descida virou solo (Grupo.ficaSozinho): a antessala se
+     * refaz inteira — o quadro da vida, a porta e a saída são montados para o grupo ou para quem desce sozinho — e a
+     * recompensa troca o rodapé. Ninguém é levado: a tela é a mesma, só deixa de esperar por ele. */
+    var soAgora = !!(est && est.ficouSo);
+    if (soAgora && !ficouSoTela) {
+      ficouSoTela = true;
+      if (current === 'antessala') safe(function () { UI.repaint(); return true; }, null);
+      else if (current === 'roomClear') { if (lastRewards) lastRewards.rede = false; buildRewards(current, lastRewards); }
+    }
+    ficouSoTela = soAgora;
     pintaPedido();                 // 06/10: o convite que chega, o meu que espera e o que acabou
     pintaGrupoLado();
     var sig = est ? [est.fase, est.lider, (est.membros || []).map(function (m) {

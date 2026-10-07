@@ -16,7 +16,8 @@
 <!-- OS PEDIDOS ENTRE JOGADORES, NA TELA DOS DOIS (06/10). O dono, com dois celulares no aplicativo e contas
      diferentes: "se eu dou troca ou qualquer comando com outro jogador, buga e não consigo de novo. Eu mandei
      grupo pro jogador e sumiu a solicitação e não consegui mandar de novo até expirar... troca acontece o
-     mesmo."
+     mesmo." E: "se um dos membros do grupo volta ao acampamento, os outros voltam também.. essa decisão deve
+     ser individual."
 
      DOIS index.html de verdade, cada um num quadro de 780x360 (o celular deitado, com toque: ?mobile=1) e com
      o save na memória (?sandbox=1): a Ana em cima, a Bia embaixo. A Rede é um dublê por cima da de verdade (em
@@ -31,7 +32,9 @@
        3  recusar e expirar soltam os dois lados;
        4  a troca: o pedido que não some, a mesa que volta para quem fechou a ficha, o cancelar;
        5  o desafio amistoso: o mesmo cartão;
-       6  o cartão cabe e não fica atrás de nada em 780x360, 832x384 e 390x844. -->
+       6  o cartão cabe e não fica atrás de nada em 780x360, 832x384 e 390x844;
+       7  um volta ao acampamento e o outro NÃO é levado: fica na antessala, é avisado, a descida segue só
+          com os heróis dele (a porta abre a batalha sozinho) e o grupo continua. -->
 <iframe id="ta"></iframe>
 <iframe id="tb"></iframe>
 <div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
@@ -236,7 +239,7 @@
   Promise.all([abre(A), abre(B)]).then(function () {
     diz('os dois jogos abriram em ' + Math.round((Date.now() - T0) / 1000) + ' s · ' + A.w.innerWidth + 'x' + A.w.innerHeight);
     return passo(400);
-  }).then(grupo).then(troca).then(duelo).then(tamanhos).then(function () { fim(); })
+  }).then(grupo).then(troca).then(duelo).then(tamanhos).then(acampamento).then(function () { fim(); })
     .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
 
   // ====================================================================== 1 a 3: o grupo
@@ -441,6 +444,67 @@
     }).then(function (ok) {
       check('(a Bia aceita: o grupo se forma nos dois lados, a Ana liderando)', ok && A.J.Grupo.souLider() && !B.J.Grupo.souLider());
       return passo(300);
+    });
+  }
+
+  // ====================================================================== 7: voltar ao acampamento é de cada um
+  function acampamento() {
+    if (!A.J.Grupo.emGrupo()) {                       // sem o Aceitar na tela (o defeito): o grupo se forma pelo estado
+      B.J.Grupo.responder(true);
+    }
+    var avisosA = [], origA = A.J.Grupo.aoAviso;
+    A.J.Grupo.aoAviso = function (t, k) { avisosA.push(String(t)); if (origA) origA(t, k); };
+    return ate(function () { return A.J.Grupo.emGrupo() && B.J.Grupo.emGrupo(); }, 4000).then(function () {
+      var r = A.J.Grupo.descer('greenhouse');
+      check('(a Ana, que lidera, desce com a Bia)', r && r.ok, JSON.stringify(r));
+      return ate(function () { return A.U.telaAtual() === 'antessala' && B.U.telaAtual() === 'antessala'; }, 60000);
+    }).then(function (ok) {
+      check('(as duas chegaram à antessala, em descida de grupo)', ok && A.G.modoRede() === 'grupo' && B.G.modoRede() === 'grupo',
+            A.U.telaAtual() + '/' + B.U.telaAtual());
+      return passo(600);
+    }).then(function () {
+      // a Bia vai até a saída e sai
+      B.J.Hub.aoAproximar({ tipo: 'saida' });
+      var sair = null;
+      [].forEach.call(painel(B) ? painel(B).querySelectorAll('button') : [], function (x) { if (!sair && /^Sair$/.test(x.textContent.trim())) sair = x; });
+      check('(a Bia toca Sair na saída da antessala)', toca(sair));
+      return passo(250);
+    }).then(function () {
+      var f = B.doc.querySelector('.ui-sheet.is-on');
+      check('7: a pergunta diz que só ELA volta (antes: "A descida acaba para vocês dois")',
+            !!f && !/para vocês dois/.test(f.textContent) && /Só você/.test(f.textContent), f ? f.textContent.slice(0, 140) : '(sem ficha)');
+      var sim = null;
+      [].forEach.call(f ? f.querySelectorAll('button') : [], function (x) { if (!sim && /^(Confirmar|Sair|Voltar)/.test(x.textContent.trim())) sim = x; });
+      toca(sim);
+      return ate(function () { return B.U.telaAtual() === 'hub'; }, 8000);
+    }).then(function (ok) {
+      check('7: a Bia voltou ao acampamento', ok, B.U.telaAtual());
+      return passo(1500);
+    }).then(function () {
+      check('7: a Ana NÃO foi levada: segue na antessala', A.U.telaAtual() === 'antessala', A.U.telaAtual());
+      check('7: ...e foi avisada de que a Bia voltou ao acampamento', avisosA.some(function (t) { return /Bia voltou ao acampamento/.test(t); }),
+            avisosA.join(' | '));
+      check('7: o grupo CONTINUA nos dois lados', A.J.Grupo.emGrupo() && B.J.Grupo.emGrupo());
+      check('7: a descida da Ana segue só com os heróis dela (deixou de ser de grupo)', A.G.modoRede() === null && A.G.dungeonId === 'greenhouse',
+            String(A.G.modoRede()));
+      var fica = botao(A, /^Continuar sozinh[oa]$/), vai = botao(A, /^Voltar ao acampamento$/);
+      check('7: a escolha está na tela da Ana: Continuar sozinha ou Voltar ao acampamento (44 px)',
+            !!fica && !!vai && alt(fica) >= 44 && alt(vai) >= 44, comoEsta(A, /^Continuar sozinh/));
+      return foto('ficou-sozinha-780').then(function () { toca(fica); return passo(250); });
+    }).then(function () {
+      A.J.Hub.aoAproximar({ tipo: 'porta' });
+      var entra = null;
+      [].forEach.call(painel(A) ? painel(A).querySelectorAll('button') : [], function (x) { if (!entra && /^Entrar na batalha$/.test(x.textContent.trim())) entra = x; });
+      check('7: a porta da Ana abre a batalha sozinha ("Entrar na batalha", sem "com Bia")', !!entra,
+            painel(A) ? painel(A).textContent.slice(0, 160) : '(sem painel)');
+      toca(entra);
+      return ate(function () { return A.U.telaAtual() === 'battle' && !!A.G.state; }, 30000);
+    }).then(function (ok) {
+      var hs = ok ? A.G.state.units.filter(function (u) { return u.side === 'player' && (u.kind === 'hero' || u.kind === 'fusion'); }) : [];
+      check('7: a sala nasce só com os dois heróis da Ana (nenhum da Bia)', ok && hs.length === 2 && hs.every(function (u) { return !u.dono || u.dono === 'ana'; }),
+            A.U.telaAtual() + ' · heróis: ' + hs.length);
+      check('7: a Bia segue na praça, sem ser puxada para nada', B.U.telaAtual() === 'hub', B.U.telaAtual());
+      A.J.Grupo.aoAviso = origA;
     });
   }
 })();
