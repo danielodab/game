@@ -1555,6 +1555,9 @@ var JOGO = (typeof window !== 'undefined')
     investida: ['onda',    'bilhete', 3.0, 0.38, 0.20],
     aura:      ['chama',   'bilhete', 2.6, 0.80, 0.10],
     cura:      ['anel',    'chao',    3.2, 0.70, 0.30],
+    // 07/10: o GOLPE DE CONTATO ganha a batida da folha CC0 (o 'baque'), miúda e de frente — a meia-lua da
+    // família continua sendo a manchete; a folha é o estalo da lâmina chegando
+    corte:     ['baque',   'bilhete', 2.4, 0.34, 0.20],
     escudo:    ['escudo',  'bilhete', 3.0, 0.60, 0.15],
     cone:      ['tornado', 'bilhete', 4.0, 0.66, 0.25],
     invocacao: ['portal',  'chao',    3.4, 0.72, 0.30]
@@ -1638,6 +1641,188 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ========================================= A ASSINATURA DE CADA CLASSE (07/10)
+  /* O dono: "estou achando muito genérico". A família decide o desenho pelo nome do feitiço e o
+   * ELEMENTO decide a cor — então o corte do Bárbaro e o do Ladino eram a mesma meia-lua em outra
+   * cor, e a fusão era o desenho da classe anfitriã com dois tons. Aqui cada classe ganha uma
+   * ASSINATURA que entra POR CIMA da família, na cor da classe (não do elemento): o que a classe faz
+   * com as mãos antes do golpe (na origem) e a marca que ela deixa no alvo. A fusão mistura: a
+   * assinatura da anfitriã inteira, e a da convidada menor e um instante atrasada — a mesma leitura
+   * do "segundo elemento chegando" que o filme já usa.
+   *   sumo        golpe pesado: a poeira sobe dos pés e o chão RACHA sob o alvo
+   *   arqueiro    o tiro: farpas de risco na origem e lascas secas no alvo
+   *   bruxo       as runas giram no chão do conjurador e um resto de runa cai no alvo
+   *   espadachim  a sombra: fumaça escura nos pés e garras saindo do escuro no alvo (forro)
+   *   curandeiro  luz e pétalas que caem devagar em volta
+   *   invocador   espíritos em órbita e o aro no chão
+   *   minotauro   pedra: cascalho pesado e a cruz de poeira no alvo
+   * Monstro não tem assinatura (o elenco já é a cara de cada um). Orçamento: no máximo duas placas e
+   * ~30 partículas por assinatura — o celular ralo segue dentro do teto de MAXP. */
+  var ASSINATURA = {
+    sumo:       { acento: '#ffb347', tile: null, efeito: 'racha' },
+    arqueiro:   { acento: '#dff5a8', tile: null, efeito: 'rastro' },
+    bruxo:      { acento: '#c9a0ff', tile: null, efeito: 'runas' },
+    espadachim: { acento: '#b9a3ff', tile: null, efeito: 'sombra' },
+    curandeiro: { acento: '#fff1b8', tile: null, efeito: 'petalas' },
+    invocador:  { acento: '#86e8d2', tile: null, efeito: 'espiritos' },
+    minotauro:  { acento: '#d2ab7c', tile: null, efeito: 'pedra' }
+  };
+  FX.ASSINATURA = ASSINATURA;
+  var ASSINATURA_ON = true;
+  FX.setAssinatura = function (v) { ASSINATURA_ON = (v !== false); };
+
+  /* as classes de quem conjura: [classe] no herói, [anfitriã, convidada] na fusão */
+  function classesDe(u) {
+    if (!u) return [];
+    if (u.kind === 'hero') return u.classId ? [u.classId] : [];
+    if (u.kind !== 'fusion') return [];
+    var fonte = (Object.prototype.toString.call(u.heroIds) === '[object Array]') ? u.heroIds
+              : (Object.prototype.toString.call(u.from) === '[object Array]') ? u.from : [];
+    var out = [];
+    for (var i = 0; i < fonte.length && out.length < 2; i++) {
+      var v = fonte[i];
+      if (typeof v !== 'string') continue;
+      var alvo = unitOf(v);
+      var cid = alvo ? (alvo.classId || alvo.heroId) : v;
+      if (cid && out.indexOf(cid) < 0) out.push(cid);
+    }
+    return out;
+  }
+  FX.classesDe = classesDe;
+
+  /* a assinatura de UMA classe: `peso` (1 = inteira; a convidada da fusão entra a 0,7) e `atraso` em ms */
+  function assinatura(cid, from, dest, peso, atraso) {
+    var a = ASSINATURA[cid];
+    if (!a || !ASSINATURA_ON || !attached || !from) return false;
+    peso = peso || 1;
+    var cor = a.acento;
+    var alvo = dest || from;
+    var k = peso;
+    setTimeout(function () {
+      switch (a.efeito) {
+        case 'racha':
+          // a poeira dos pés na arrancada, e o chão rachando sob o alvo quando o golpe chega
+          burst(from.x, 0.15, from.z, Math.round(12 * k), { color: cor, speed: 2.2, life: 0.5, size: 0.3, flat: true, up: 0.5,
+                                                               tile: TILE.cascalho });
+          if (dest) {
+            var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+            placa({ tile: PL.raio, color: cor, modo: 'chao', ang: Math.random() * Math.PI,
+                    pos: v3(dest.x, 0.08, dest.z), de: [2.2 * k, 0.5 * k], ate: [7.5 * k, 1.3 * k],
+                    dur: 0.5, atraso: hd, op: 1, saida: 1.2, forro: 0.5 });
+            setTimeout(function () {
+              burst(dest.x, 0.2, dest.z, Math.round(18 * k), { color: cor, speed: 4.2, life: 0.5, size: 0.34, flat: true,
+                                                                 up: 0.9, tile: TILE.cascalho, grav: -5 });
+              addShake(2.5 * k);
+            }, hd * 1000);
+          }
+          break;
+        case 'rastro':
+          // farpas na origem (o arco solta) e lascas secas no alvo
+          burst(from.x, from.y, from.z, Math.round(8 * k), { color: cor, speed: 2.6, life: 0.3, size: 0.26, tile: TILE.risco, grav: 0 });
+          if (dest) {
+            setTimeout(function () {
+              burst(dest.x, dest.y, dest.z, Math.round(12 * k), { color: cor, speed: 6.0, life: 0.32, size: 0.28, tile: TILE.risco,
+                                                                    grav: -4, drag: 2.5 });
+              placa({ tile: PL.estrela, color: cor, modo: 'bilhete', pos: v3(dest.x, dest.y + 0.3, dest.z),
+                      de: [0.8 * k, 0.8 * k], ate: [3.0 * k, 3.0 * k], dur: 0.22, op: 1, saida: 2.0 });
+            }, 180);
+          }
+          break;
+        case 'runas':
+          // as runas giram no chão do conjurador; um resto de runa cai sobre o alvo
+          placa({ tile: PL.runas, color: cor, modo: 'chao', pos: v3(from.x, 0.09, from.z),
+                  de: [2.4 * k, 2.4 * k], ate: [4.6 * k, 4.6 * k], dur: 0.9, op: 1, saida: 0.8, patamar: 0.5, giro: 2.2 });
+          burst(from.x, 0.3, from.z, Math.round(10 * k), { color: cor, speed: 0.8, life: 0.8, size: 0.3, up: 2.2, grav: 0.4,
+                                                             tile: TILE.runa, spread: 1.2 });
+          if (dest) {
+            setTimeout(function () {
+              burst(dest.x, dest.y + 1.2, dest.z, Math.round(8 * k), { color: cor, speed: 0.6, life: 0.7, size: 0.3, up: -1.5,
+                                                                         grav: -2.5, tile: TILE.runa, spread: 0.8 });
+            }, 220);
+          }
+          break;
+        case 'sombra':
+          // a sombra: fumaça escura nos pés (forro escuro), e as garras saindo do escuro no alvo
+          placa({ tile: PL.fumaca, color: cor, modo: 'bilhete', pos: v3(from.x, from.y * 0.5, from.z),
+                  de: [2.2 * k, 2.2 * k], ate: [3.6 * k, 3.6 * k], dur: 0.45, op: 0.55, saida: 1.0, forro: 0.9 });
+          burst(from.x, 0.2, from.z, Math.round(10 * k), { color: '#5a4a86', speed: 1.6, life: 0.5, size: 0.4, flat: true,
+                                                             tile: TILE.fumaca, grav: 0.4 });
+          if (dest) {
+            setTimeout(function () {
+              placa({ tile: PL.garras, color: cor, modo: 'bilhete', pos: v3(dest.x, dest.y + 0.5, dest.z),
+                      de: [1.6 * k, 1.6 * k], ate: [5.4 * k, 5.4 * k], dur: 0.36, op: 0.9, saida: 1.6,
+                      ang: Math.random() * 1.2 - 0.6, forro: 0.85 });
+              burst(dest.x, dest.y, dest.z, Math.round(10 * k), { color: '#6a5a9a', speed: 2.0, life: 0.5, size: 0.38,
+                                                                    tile: TILE.fumaca, grav: 0.2 });
+            }, 120);
+          }
+          break;
+        case 'petalas':
+          // luz e pétalas que caem devagar em volta de quem conjura e de quem recebe
+          [from, dest].forEach(function (p, i) {
+            if (!p || (i === 1 && p === from)) return;
+            placa({ tile: PL.halo, color: cor, modo: 'bilhete', pos: v3(p.x, p.y + 0.4, p.z),
+                    de: [1.8 * k, 1.8 * k], ate: [3.6 * k, 3.6 * k], dur: 0.8, atraso: i * 0.15, op: 0.9, saida: 0.9, patamar: 0.5 });
+            for (var n = 0; n < Math.round(12 * k); n++) {
+              var ang = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 1.2;
+              spawn({ x: p.x + Math.cos(ang) * r, y: p.y + 1.6 + Math.random() * 0.8, z: p.z + Math.sin(ang) * r,
+                      vx: (Math.random() - 0.5) * 0.4, vy: -0.3, vz: (Math.random() - 0.5) * 0.4,
+                      life: 1.1 + Math.random() * 0.5, color: n % 3 ? cor : '#ffffff', size: 0.3, grav: -0.5, drag: 0.6,
+                      tile: n % 2 ? TILE.brilho : TILE.cintila });
+            }
+          });
+          break;
+        case 'espiritos':
+          // o aro no chão e os espíritos em órbita, que sobem
+          placa({ tile: PL.aro, color: cor, modo: 'chao', pos: v3(from.x, 0.09, from.z),
+                  de: [2.0 * k, 2.0 * k], ate: [4.0 * k, 4.0 * k], dur: 0.8, op: 1, saida: 0.9, patamar: 0.45, giro: -1.6 });
+          for (var e = 0; e < Math.round(10 * k); e++) {
+            var ae = (e / Math.round(10 * k)) * Math.PI * 2, re = 1.1;
+            spawn({ x: from.x + Math.cos(ae) * re, y: 0.4 + (e % 3) * 0.3, z: from.z + Math.sin(ae) * re,
+                    vx: -Math.sin(ae) * 2.4, vy: 1.4, vz: Math.cos(ae) * 2.4,
+                    life: 0.9, color: cor, size: 0.36, grav: 0.2, drag: 0.3, tile: TILE.redemoinho });
+          }
+          if (dest && dest !== from) {
+            setTimeout(function () {
+              burst(dest.x, dest.y + 0.3, dest.z, Math.round(8 * k), { color: cor, speed: 1.2, life: 0.6, size: 0.3, up: 1.8,
+                                                                         tile: TILE.redemoinho });
+            }, 200);
+          }
+          break;
+        case 'pedra':
+          // pedra: o cascalho pesado que cai perto, e a cruz de poeira sob o alvo
+          burst(from.x, 0.3, from.z, Math.round(14 * k), { color: cor, speed: 3.0, life: 0.6, size: 0.36, up: 1.2,
+                                                             tile: TILE.cascalho, grav: -6 });
+          if (dest) {
+            var hd2 = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+            placa({ tile: PL.cruz, color: cor, modo: 'chao', pos: v3(dest.x, 0.08, dest.z),
+                    de: [2.0 * k, 2.0 * k], ate: [6.0 * k, 6.0 * k], dur: 0.5, atraso: hd2, op: 0.95, saida: 1.3, forro: 0.45 });
+            setTimeout(function () {
+              burst(dest.x, 0.15, dest.z, Math.round(16 * k), { color: cor, speed: 3.2, life: 0.6, size: 0.4, flat: true, up: 0.7,
+                                                                  tile: TILE.cascalho, grav: -5 });
+              burst(dest.x, 0.1, dest.z, Math.round(10 * k), { color: '#e8d8c0', speed: 1.4, life: 0.8, size: 0.5, flat: true,
+                                                                 tile: TILE.fumaca, grav: 0.1 });
+              addShake(3 * k);
+            }, hd2 * 1000);
+          }
+          break;
+      }
+    }, atraso || 0);
+    return true;
+  }
+  /* a assinatura de quem conjura: o herói inteira; a fusão com a MISTURA (anfitriã inteira, convidada a 0,7 e
+   * 120 ms depois). `from`/`dest` são posições do mundo. */
+  function assinaturaDe(uid, from, dest) {
+    var cls = classesDe(unitOf(uid));
+    if (!cls.length) return false;
+    assinatura(cls[0], from, dest, 1, 0);
+    if (cls[1] && cls[1] !== cls[0]) assinatura(cls[1], from, dest, 0.7, 120);
+    return true;
+  }
+  FX.debugAssinatura = function (cid, gx, gy, tx, ty) {
+    assinatura(cid, cellPos(gx, gy, 0.9), (tx != null) ? cellPos(tx, ty, 0.7) : null, 1, 0);
+  };
+
   // ================================================================ EVENTOS
   FX.handleEvent = function (ev) {
     if (!ev) return;
@@ -1677,9 +1862,11 @@ var JOGO = (typeof window !== 'undefined')
           var famSo = familiaDe(fk);
           if (famSo === 'aura' || famSo === 'cura') tocaFamilia(famSo, u, u, el, el2, sp);
           else aura(u, el, el2);
+          assinaturaDe(ev.uid, u, null);          // 07/10: a assinatura da classe, só na origem
           break;
         }
         tocaFamilia(familiaDe(fk), u, dest, el, el2, sp);
+        assinaturaDe(ev.uid, u, dest);            // 07/10: a assinatura da classe (e a mistura da fusão) por cima
         break;
       }
 

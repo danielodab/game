@@ -243,6 +243,28 @@ As partículas usam um **atlas de 16 formas** (meia-lua de corte, cascalho,
 círculo de runas, brasa, fumaça, redemoinho, halo, risco…), com o quadro escolhido
 por partícula — as 16 convivem numa **única chamada de desenho**.
 
+**A assinatura de cada classe (07/10).** O dono: "estou achando muito genérico". A família decide
+o desenho e o elemento decide a cor, então o corte do Bárbaro e o do Ladino eram a mesma meia-lua
+em outro tom. Agora cada classe tem uma **assinatura** que entra **por cima** da família, na cor da
+classe e não do elemento (`fx3d_v2.js`, `ASSINATURA`/`assinaturaDe`): o que ela faz na origem e a
+marca que deixa no alvo.
+
+| classe | na origem | no alvo |
+|---|---|---|
+| Bárbaro | poeira dos pés na arrancada | o chão **racha** (placa de raio) e o cascalho voa, com tremida |
+| Caçador | farpas de risco (o arco solta) | lascas secas e uma estrela de impacto |
+| Bruxo | runas girando no chão, runas subindo | um resto de runa cai sobre o alvo |
+| Ladino | fumaça escura nos pés (forro escuro) | garras saindo do escuro |
+| Curandeiro | halo e pétalas caindo devagar | o mesmo, um instante depois |
+| Xamã | o aro no chão e espíritos em órbita | espíritos sobem do alvo |
+| Minotauro | cascalho pesado | a cruz de poeira sob o alvo, com tremida |
+
+**A fusão mistura:** a assinatura da anfitriã inteira e a da convidada a 0,7 e 120 ms depois — a mesma
+leitura do "segundo elemento chegando" do filme. Monstro não tem assinatura. Orçamento: até duas placas
+e ~30 partículas por assinatura. O golpe de contato (família `corte`) ganhou a batida da folha CC0
+(`baque`), miúda e de frente. `FX.setAssinatura(false)` desliga; `FX.debugAssinatura(classe, x, y, tx, ty)`
+dispara uma à mão.
+
 ---
 
 ## 5. Fusão
