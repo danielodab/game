@@ -3827,12 +3827,9 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .bt-placing { top: calc(var(--sa-t, 0px) + 96px); max-width: calc(100% - 24px); padding: 6px 12px; font-size: 12.5px; }
   .bt-prep-tx { margin-bottom: 4px; }
 }
-/* deitado: a faixa da preparação vira uma linha no canto direito, e o cartão da unidade ativa fica menor
-   para não tapar um terço do tabuleiro; a fita do fim do turno perde altura */
+/* deitado: a fita do fim do turno perde altura (a faixa da preparação e o cartão da unidade ativa, que
+   também encolhiam aqui, passaram em 06/10 para "A LUTA NO CELULAR DEITADO", no fim do arquivo) */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
-  .bt-placing { left: auto; right: calc(var(--sa-r, 0px) + 8px); transform: none; top: calc(var(--sa-t, 0px) + 44px);
-                max-width: 300px; text-align: left; }
-  .bt-left { top: calc(var(--sa-t, 0px) + 84px); max-width: 190px; }
   .bt-log { top: calc(var(--sa-t, 0px) + 84px); width: min(34vw, 220px); }
   .bt-log-list { max-height: 34px; }
   .pt-moldura canvas, .pt-moldura .art-missing { width: 96px !important; height: 96px !important; }
@@ -3843,5 +3840,154 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
 @media (pointer: coarse) and (orientation: portrait) and (max-width: 480px) {
   .bt-left { max-width: calc(54vw - 54px); }
   .bt-log { width: calc(46vw - 14px); }
-  .bt-placing { top: calc(var(--sa-t, 0px) + 128px); }
+  /* 06/10: em pé a linha da sala quebra em duas e a fila de turnos descia para baixo do cartão da vez, do
+     relógio e do diário, que tinham o topo fixo (9 px de um por cima do outro). O topo deles passa a ser a
+     altura MEDIDA da barra de cima (--bt-topo, posta pelo avisaMoldura do hud.js a cada pintura da batalha).
+     E os quadradinhos de PA/PP encolhem em vez de vazar do cartão para cima do diário. */
+  .screen-battle .bt-left, .screen-battle .bt-log, .screen-battle .bt-timer,
+  .screen-battle .bt-placing { top: calc(var(--sa-t, 0px) + var(--bt-topo, 124px) + 4px); }
+  .bt-active .res, .bt-active .pips { min-width: 0; }
+  .bt-active .pips { flex: 0 1 auto; }
+  .bt-active .pip { flex: 0 1 auto; min-width: 3px; }
+}
+
+/* ==========================================================================
+   A LUTA NO CELULAR DEITADO (06/10). O dono, com a luta no aparelho (o aplicativo é sempre deitado: 780×360):
+   "veja a poluição da tela em luta"; "botão de encerrar turno deve ser pequeno no canto esquerdo e os feitiços
+   entre ele e o menu". O cartão da vez tapava a fila de turnos e o relógio, a barra do tempo ficava solta na
+   borda, o "Encerrar turno" ia de ponta a ponta e a faixa "Turno de Fulano…" escurecia o terço de baixo do
+   tabuleiro. Só para o dedo, deitado e com pouca altura: o PC não muda, e em pé a HUD segue empilhada
+   (lá só o topo do cartão, do relógio e do diário passou a ser medido — o bloco logo acima).
+     - O TOPO: uma linha (22 px) com o nome da sala e as etiquetas menores; sem espaço, quem encolhe é o nome
+       (até sumir) e, se ainda assim não couber — o Santuário e o Eco têm várias —, a linha rola de lado.
+     - A FILA: retratos de 34 px numa faixa só. O primeiro é o de quem joga (a moldura dourada), e logo depois
+       dele a fila abre um vão para o CARTÃO DA VEZ, que vira uma linha da altura dela: nome, vida, PA e PP, e
+       o RELÓGIO no canto (a barra do tempo, que era de pé na borda, deita no alto do cartão). Tocar no cartão
+       abre o resto (as fichas de estado inteiras, o motivo do PP zerado) — hud.js, buildBattle.
+     - A BARRA DE BAIXO: uma fileira só — "Encerrar turno" pequeno à esquerda, com folga; os feitiços no meio
+       (a faixa rola de lado quando não cabem: hud.js marca .is-rola e a ponta esmaece); a fusão e o ☰ à
+       direita. Na vez de outro, "Turno de Fulano…" é uma etiqueta nessa fileira, sem fundo escuro.
+     - A PREPARAÇÃO ocupa a fileira de baixo (a barra está apagada nessa fase): o tabuleiro fica inteiro.
+     - O GRUPO (antessala, batalha, fim de sala): só os retratinhos, com a vida embaixo; o resto abre no toque.
+   ========================================================================== */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  /* ---- o topo: a linha da sala */
+  .bt-top { padding: 4px 8px 0; gap: 3px; }
+  .bt-room { display: flex; align-items: center; gap: 4px; height: 22px; overflow-x: auto; overflow-y: hidden;
+             scrollbar-width: none; white-space: nowrap; font-size: 12.5px; line-height: 20px;
+             margin-right: calc(150px + var(--canto, 0px)); }
+  .bt-room::-webkit-scrollbar { display: none; }
+  .bt-room::before { display: none; }
+  .bt-room > * { flex: none; margin: 0; }
+  .bt-room > b, .bt-top:has(.bt-gm) .bt-room > b { flex: 0 1 auto; min-width: 0; max-width: none; }
+  .bt-room > span { padding: 1px 7px; margin-left: 0; font-size: 10.5px; line-height: 16px; }
+  .bt-top:has(.bt-gm) .bt-room, .bt-top:has(.bt-gm) .bt-timeline { margin-right: calc(196px + var(--canto, 0px)); }
+  /* os botões do canto: alvo de 44 px cada um (tinham 37 de largura), lado a lado sem se encostar */
+  .bt-top .bt-som, .bt-top .bt-cam, .bt-top .bt-trava, .bt-top .bt-gm { top: 4px; width: 44px; padding: 2px 0; }
+  .bt-top .bt-som { right: calc(8px + var(--canto, 0px)); }
+  .bt-top .bt-cam { right: calc(54px + var(--canto, 0px)); }
+  .bt-top .bt-trava { right: calc(100px + var(--canto, 0px)); }
+  .bt-top .bt-gm { right: calc(146px + var(--canto, 0px)); }
+  .bt-guerra { top: calc(var(--sa-t, 0px) + 80px); }
+
+  /* ---- a fila de turnos: 34 px, e o vão do cartão da vez depois do primeiro retrato */
+  .bt-timeline { gap: 4px; padding: 2px; margin-right: calc(150px + var(--canto, 0px)); }
+  .tl-unit { padding: 1px 1px 0; border-radius: 8px; }
+  .tl-unit canvas, .tl-unit .art-missing { width: 34px !important; height: 34px !important; }
+  .tl-unit.is-now { box-shadow: 0 0 0 1px var(--gold), 0 0 7px rgba(255,196,77,.55); }
+  .tl-unit:first-child { margin-right: 180px; }
+  .screen-battle.is-placing .tl-unit:first-child { margin-right: 0; }
+
+  /* ---- o cartão da vez: uma linha no vão da fila (a foto é o primeiro retrato da fila) */
+  .bt-left { left: calc(var(--sa-l) + 54px); top: calc(var(--sa-t) + 31px); width: 176px; max-width: none;
+             display: block; z-index: 3; }
+  .bt-active { display: block; min-height: 43px; box-sizing: border-box; padding: 5px 46px 1px 6px;
+               border-radius: 8px; box-shadow: none; cursor: pointer; }
+  .bt-active .ba-pic { display: none; }
+  .bt-active .ba-info * { pointer-events: none; }
+  .bt-active .ba-name { font-size: 11.5px; line-height: 13px; }
+  .bt-active .ba-name .elem-dot { flex: none; width: 7px; height: 7px; margin-left: 4px; }
+  .bt-active .ba-hp .bar { height: 10px; margin: 1px 0 2px; border-radius: 5px; }
+  .bt-active .ba-hp .bar-txt, .bt-active .shield-chip { font-size: 8.5px; }
+  .bt-active .ba-res { flex-direction: row; gap: 7px; margin-top: 0; }
+  .bt-active .res { flex: 0 1 auto; min-width: 0; min-height: 0; gap: 3px; }
+  .bt-active .res-lb { font-size: 9px; line-height: 9px; }
+  .bt-active .pips { flex: 0 1 auto; min-width: 0; gap: 2px; }
+  .bt-active .pip { flex: 0 1 auto; width: 7px; min-width: 2px; height: 7px; border-radius: 2px; }
+  .bt-active .res-why { display: none; }
+  .bt-active .ba-status { flex-wrap: nowrap !important; overflow: hidden; margin: 2px -40px 2px 0 !important; }
+  /* aberto no toque: o que a linha esconde */
+  .bt-left.is-aberto .bt-active { padding-bottom: 6px; background: rgba(10,13,17,.96); box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  .bt-left.is-aberto .ba-info * { pointer-events: auto; }
+  .bt-left.is-aberto .ba-res { flex-direction: column; gap: 3px; margin: 3px -40px 0 0; }
+  .bt-left.is-aberto .res { min-height: 20px; gap: 5px; }
+  .bt-left.is-aberto .res-lb { font-size: 10.5px; }
+  .bt-left.is-aberto .pips { gap: 3px; }
+  .bt-left.is-aberto .pip { flex: none; width: 10px; height: 10px; }
+  .bt-left.is-aberto .res-why { display: inline; }
+  .bt-left.is-aberto .ba-status { flex-wrap: wrap !important; overflow: visible; }
+
+  /* ---- o relógio do turno: o número no canto do cartão e a barra deitada no alto dele (era de pé, na borda) */
+  .bt-timer { left: calc(var(--sa-l) + 54px); top: calc(var(--sa-t) + 31px); width: 176px; height: 43px;
+              display: block; z-index: 4; }
+  .bt-timer.is-idle { opacity: 1; }
+  .bt-timer.is-idle .tm-num { color: #aeb7c4; }
+  .bt-timer.is-idle .tm-track { opacity: .4; }
+  .tm-num { position: absolute; right: 4px; top: 8px; width: 38px; padding: 0; border-radius: 6px;
+            font-size: 12px; line-height: 16px; box-shadow: none; }
+  .tm-track { position: absolute; left: 4px; right: 4px; top: 2px; width: auto; height: 3px; min-height: 0;
+              border: 0; border-radius: 2px; box-shadow: none; background: rgba(255,255,255,.14); }
+  .tm-track i { transform-origin: 0 50%; transform: scaleX(var(--tm-p, 1)) !important; box-shadow: none; }
+  .tm-bank { position: absolute; right: 4px; top: 26px; width: 38px; text-align: center; font-size: 9.5px; line-height: 12px; }
+  .screen-battle.is-placing .bt-timer { display: none; }
+
+  /* ---- a barra de baixo: Encerrar (pequeno, à esquerda, com folga) · feitiços · fusão · ☰ */
+  .bt-bottom { flex-direction: row; align-items: center; gap: 6px; padding: 4px 8px calc(5px + var(--sa-b));
+               background: linear-gradient(180deg, rgba(11,13,16,0), rgba(11,13,16,.45)); }
+  .bt-acts { display: contents; }
+  .bt-bottom .btn-end { order: 0; flex: 0 0 auto; width: 80px; min-height: 48px; margin-right: 14px; padding: 4px 6px;
+                        font-size: 12px; line-height: 1.15; white-space: normal; }
+  /* apagado (a vez é de outro) continua legível: escuro e sem brilho, em vez de transparente sobre o tabuleiro */
+  .bt-bottom .btn-end.is-off { opacity: 1; filter: none; color: #97a1ae; background: rgba(16,21,27,.88);
+                               border-color: var(--line2); box-shadow: none; }
+  .bt-spells { order: 1; flex: 1 1 0; min-width: 0; gap: 5px; padding: 1px; align-items: center; }
+  .bt-spells.is-rola { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 30px), transparent);
+                       mask-image: linear-gradient(90deg, #000 calc(100% - 30px), transparent); }
+  .bt-fusion.is-on { order: 2; flex: 0 0 auto; }
+  .bt-acts .btn-icon { order: 3; flex: 0 0 auto; }
+  .spell { width: 50px; height: 50px; min-height: 50px; padding: 2px; border-radius: 10px; justify-content: center; }
+  .spell canvas, .spell .art-missing { width: 44px !important; height: 44px !important; }
+  .sp-cd { inset: 2px; border-radius: 8px; font-size: 20px; }
+  .sp-cost { top: 1px; left: 2px; min-width: 14px; padding: 0 2px; font-size: 10px; }
+  .sp-info { top: 1px; right: 1px; width: 16px; height: 16px; font-size: 10px; }
+  .fusion-btn { width: auto; height: 50px; min-height: 50px; padding: 2px 10px 2px 2px; gap: 6px; border-radius: 10px; }
+  .fusion-btn canvas, .fusion-btn .art-missing { width: 44px !important; height: 44px !important; }
+  .fu-txt b { font-size: 12px; letter-spacing: .06em; }
+  .fu-txt span { display: block; max-width: 104px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* "Turno de Fulano…": uma etiqueta na fileira, sem a faixa escura por cima do tabuleiro */
+  .bt-wait { flex: 0 1 auto; padding: 5px 12px; border-radius: 14px; text-align: left; font-size: 12px; line-height: 1.25;
+             color: #c9d1dc; background: rgba(10,13,17,.8); border: 1px solid var(--line2); }
+
+  /* ---- a preparação: na fileira de baixo, no lugar da barra apagada */
+  .screen-battle.is-placing .bt-bottom { opacity: 0; }
+  .bt-placing { left: calc(var(--sa-l, 0px) + 8px); right: calc(var(--sa-r, 0px) + 8px); top: auto;
+                bottom: calc(var(--sa-b, 0px) + 5px); transform: none; max-width: none; min-height: 48px; box-sizing: border-box;
+                display: flex; align-items: center; gap: 10px; padding: 2px 4px 2px 12px; text-align: left; font-size: 11.5px; line-height: 1.25; }
+  .bt-prep-tx { flex: 1 1 auto; min-width: 0; margin: 0; }
+  .bt-prep-relogio { flex: none; font-size: 13px; white-space: nowrap; }
+  .bt-prep-ele { flex: 0 1 auto; max-width: 130px; margin: 0; font-size: 11px; }
+  .bt-prep-pronto { flex: none; min-height: 44px; margin: 0; padding: 6px 20px; }
+
+  /* ---- o grupo fora da praça (antessala, batalha, fim de sala): só os retratinhos, com a vida embaixo */
+  .grupo-lado:not(.is-praca) { width: 48px; gap: 6px; right: calc(6px + var(--sa-r, 0px)); top: calc(var(--sa-t, 0px) + 58px); }
+  .in-battle .grupo-lado:not(.is-praca) { top: auto; }
+  .grupo-lado:not(.is-praca) .gl-membro { flex-direction: column; align-items: center; width: 48px; min-height: 44px;
+    padding: 4px 3px; gap: 3px; }
+  .grupo-lado:not(.is-praca) .gl-pic, .grupo-lado:not(.is-praca) .gl-pic.tem-dois { width: 34px; height: 34px; }
+  .grupo-lado:not(.is-praca) .gl-pic > canvas, .grupo-lado:not(.is-praca) .gl-pic > .art-missing {
+    width: 34px !important; height: 34px !important; }
+  .grupo-lado:not(.is-praca) .gl-pic2, .grupo-lado:not(.is-praca) .gl-nome, .grupo-lado:not(.is-praca) .gl-nv,
+  .grupo-lado:not(.is-praca) .gl-selos { display: none; }
+  .grupo-lado:not(.is-praca) .gl-tx { width: 100%; flex: none; gap: 2px; }
+  .grupo-lado:not(.is-praca) .gl-coroa { top: -7px; left: -3px; font-size: 12px; }
 }

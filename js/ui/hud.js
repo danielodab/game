@@ -3102,6 +3102,12 @@ var JOGO = (typeof window !== 'undefined')
     bt.active = el('div', 'bt-active');
     left.appendChild(bt.active);
     s.appendChild(left);
+    /* 06/10: no celular deitado o cartão é uma LINHA no vão da fila de turnos (css "A LUTA NO CELULAR
+     * DEITADO"): tocar nela abre o que a linha esconde — as fichas de estado inteiras e o motivo do PP
+     * zerado — e tocar de novo fecha; a vez seguinte fecha sozinha (paintActive). No PC e em pé a classe
+     * não tem regra nenhuma: o cartão já é o inteiro. */
+    bt.left = left;
+    tap(bt.active, function () { left.classList.toggle('is-aberto'); });
 
     // ---- o tempo do turno: a barra de pé na lateral esquerda (11/09, pedido do
     // dono). Montada uma vez; o paintTimer só mexe no número, na altura e na cor.
@@ -3283,6 +3289,10 @@ var JOGO = (typeof window !== 'undefined')
     var ht = topo ? Math.round(topo.getBoundingClientRect().height) : 0;
     var hb = base ? Math.round(base.getBoundingClientRect().height) : 0;
     R.setMoldura(ht, hb);
+    /* 06/10: no celular EM PÉ a linha da sala quebra em duas e a fila de turnos descia para baixo do cartão
+     * da vez, do relógio e do diário, que tinham o topo fixo. O css de em pé lê daqui a altura medida da
+     * barra de cima (--bt-topo); só escreve quando ela muda. */
+    if (ht && bt.topoPx !== ht) { bt.topoPx = ht; screens.battle.style.setProperty('--bt-topo', ht + 'px'); }
   }
 
   function paintRoom(s) {
@@ -3381,6 +3391,10 @@ var JOGO = (typeof window !== 'undefined')
     // iniciativa ainda não começou, e mostrar um monstro ali confundia
     var u = (s && s.phase === 'placing' && s.placement) ? unitByUid(s.placement.uid) : activeUnit();
     if (!u) return;
+    if (bt.ativaUid !== u.uid) {          // 06/10: outra unidade na vez — o cartão aberto no toque volta a ser a linha
+      bt.ativaUid = u.uid;
+      if (bt.left) bt.left.classList.remove('is-aberto');
+    }
     bt.active.className = 'bt-active ' + (u.side === 'hero' ? 's-hero' : 's-enemy');
     var pic = el('div', 'ba-pic');
     pic.appendChild(art('portrait', [u.defId, { element: u.element, size: 64 }], 56));
@@ -3518,7 +3532,10 @@ var JOGO = (typeof window !== 'undefined')
     if (bt.timer.className !== cls) bt.timer.className = cls;
     var txt = Math.ceil(left) + 's';
     if (bt.tmNum.textContent !== txt) bt.tmNum.textContent = txt;
-    bt.tmFill.style.transform = 'scaleY(' + pct.toFixed(4) + ')';
+    var fr = pct.toFixed(4);
+    bt.tmFill.style.transform = 'scaleY(' + fr + ')';
+    // 06/10: no celular deitado a barra é DEITADA, no alto do cartão da vez — o css lê a mesma fração daqui
+    if (bt.tmFr !== fr) { bt.tmFr = fr; bt.tmFill.style.setProperty('--tm-p', fr); }
     var bk = (banked > 0 && !noBanco) ? '+' + Math.round(banked) + 's' : '';
     if (bt.tmBank.textContent !== bk) { bt.tmBank.textContent = bk; bt.tmBank.hidden = !bk; }
     // o pé da barra fica logo acima da barra de baixo, pela altura MEDIDA dela
@@ -3535,6 +3552,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!u || !mine) {
       bt.spells.appendChild(esperaNaBarra(u));      // 11/09: "Vez de Bia — esperando o lance…"
       bt.endBtn.classList.add('is-off');
+      marcaRolagemFeiticos();
       return;
     }
     bt.endBtn.classList.remove('is-off');
@@ -3570,6 +3588,21 @@ var JOGO = (typeof window !== 'undefined')
       bt.spells.appendChild(cell);
     });
     // 13/09: a barra da batalha não tem mais poção — ela se bebe fora da luta (vidaBloco, 14/09)
+    marcaRolagemFeiticos();
+  }
+  /* 06/10: no celular deitado os feitiços moram numa fileira só, entre o "Encerrar turno" e o ☰. Quando não
+   * cabem, a faixa rola de lado — e a ponta da direita esmaece (css .bt-spells.is-rola) para dizer que há
+   * mais; chegando ao fim, o esmaecido sai. Medido aqui, a cada pintura dos feitiços e a cada rolagem do
+   * dedo: nada de relógio. */
+  function marcaRolagemFeiticos() {
+    var c = bt.spells;
+    if (!c) return;
+    if (!c._rola) {
+      c._rola = true;
+      c.addEventListener('scroll', marcaRolagemFeiticos, { passive: true });
+    }
+    var sobra = c.scrollWidth - c.clientWidth - c.scrollLeft;
+    c.classList.toggle('is-rola', c.scrollWidth > c.clientWidth + 2 && sobra > 4);
   }
 
   // `quem` (opcional): a unidade que vai lançar — só a barra da batalha o passa
