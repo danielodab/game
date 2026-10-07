@@ -1047,6 +1047,12 @@ var JOGO = (typeof window !== 'undefined')
     var pic = el('div', 'hero-pic');
     if (unlocked) {
       pic.appendChild(art('unit', [cid, { element: (h && h.element) || 'neutro', dir: 0, scale: 0.62 }], 100));
+      // 07/10 (o dono): as estrelas da classe em cima da imagem, com a quantidade — quem já tem estrela se vê na hora
+      if (info.stars) {
+        var selo = el('div', 'hero-estrelas', '★' + info.stars);
+        tipOn(selo, tr('★{a}', { a: info.stars }), tr('{a} estrela(s) desta classe — bônus permanente, já contado na ficha.', { a: info.stars }));
+        pic.appendChild(selo);
+      }
     } else {
       var sil = art('unit', [cid, { element: 'neutro', dir: 0, scale: 0.62 }], 100, 'silhouette');
       pic.appendChild(sil);
@@ -13073,6 +13079,9 @@ var JOGO = (typeof window !== 'undefined')
         var foto = el('span', 'vp-foto');
         foto.appendChild(art('portrait', [h.classId || String(v.heroId).split('#')[0],
           { element: h.element || 'neutro', size: 64 }], 40));
+        // 07/10 (o dono): a quantidade de estrelas da classe no retratinho da praça
+        var estrelasV = safe(function () { return cardInfo(h.classId || String(v.heroId).split('#')[0]).stars; }, 0);
+        if (estrelasV) foto.appendChild(el('i', 'vp-estrelas', '★' + estrelasV));
         card.appendChild(foto);
         var cor = el('span', 'vp-cor', '<span class="vp-cor-fundo">' + CORACAO_SVG + '</span>' +
                                         '<span class="vp-cor-enche">' + CORACAO_SVG + '</span>');

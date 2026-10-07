@@ -451,6 +451,16 @@ i, em { font-style: normal; color: var(--dim); }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: 30px; filter: drop-shadow(0 2px 6px #000);
 }
+/* 07/10: as estrelas da classe em cima do retrato (Quem desce) e no retratinho da praça */
+.hero-estrelas {
+  position: absolute; top: 4px; right: 6px; padding: 1px 6px; border-radius: 10px;
+  background: rgba(0,0,0,.62); border: 1px solid rgba(255,196,77,.55);
+  color: #ffc44d; font: 700 12px var(--ui-serif); letter-spacing: .02em; text-shadow: 0 1px 2px #000;
+}
+.vp-estrelas {
+  position: absolute; right: 1px; bottom: 1px; padding: 0 4px; border-radius: 8px; font-style: normal;
+  background: rgba(0,0,0,.72); border: 1px solid rgba(255,196,77,.55); color: #ffc44d; font: 700 10px var(--ui-serif);
+}
 .hero-name { font: 600 15px var(--ui-serif); color: var(--text); }
 .hero-role { font-size: 11.5px; color: var(--dim); min-height: 15px; }
 .hero-lv { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
@@ -906,7 +916,7 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
   border-radius: 12px; border: 1px solid rgba(240,234,216,.16); background: rgba(12,14,16,.84);
   color: var(--text); font: inherit; text-align: left; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .vp-heroi.is-alvo { border-color: var(--gold, #ffc44d); box-shadow: 0 0 0 1px var(--gold, #ffc44d), 0 0 14px rgba(255,196,77,.28); }
-.vp-foto { flex: none; width: 40px; height: 40px; border-radius: 9px; overflow: hidden; background: #0a0d11; }
+.vp-foto { position: relative; flex: none; width: 40px; height: 40px; border-radius: 9px; overflow: hidden; background: #0a0d11; }
 .vp-foto > canvas, .vp-foto > .art-missing { width: 40px !important; height: 40px !important; display: block; }
 .vp-cor { position: relative; flex: none; width: 24px; height: 22px; }
 .vp-cor svg { position: absolute; left: 0; bottom: 0; width: 24px; height: 22px; display: block; }
