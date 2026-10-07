@@ -4177,6 +4177,28 @@ var JOGO = (typeof window !== 'undefined')
     mesh.scale.setScalar(scale == null ? 0.92 : scale);
     return mesh;
   }
+  /* AS CORES DO DESTAQUE (07/10; o dono: "a depender da cor do chão do mapa não consigo ver direito a linha
+   * de ataque nem a de andar — uma cor diferente, destacada do chão, e a MESMA em todos os mapas"). Antes o
+   * passo era azul fraco (0,18) e o alcance saía na cor do ELEMENTO a 0,09: na Cisterna azul e na Estufa
+   * verde os dois sumiam. Agora é fixo, igual em todo mapa: o PASSO é ouro sobre uma borda escura; o
+   * ALCANCE é cinza escuro sobre uma borda clara. A borda é o que garante a leitura em qualquer chão — o
+   * ouro no piso claro da praça tem o escuro por baixo; o cinza no negro do Fecho de Brasa tem o claro. O
+   * risco de esquiva segue laranja e o espinho vermelho, com a mesma borda escura; os alvos de verdade
+   * continuam na cor do elemento, por cima. */
+  var DESTAQUE = {
+    passo:      { cor: '#ffd84d', op: 0.46, borda: '#0e1216', bordaOp: 0.58 },
+    passoRisco: { cor: '#ff7a1a', op: 0.52, borda: '#0e1216', bordaOp: 0.58 },
+    passoEspinho: { cor: '#ff3b4a', op: 0.55, borda: '#0e1216', bordaOp: 0.58 },
+    alcance:    { cor: '#2a2f36', op: 0.62, borda: '#e3e9f0', bordaOp: 0.72 },
+    caminho:    { cor: '#ffffff', op: 0.60 }
+  };
+  R.DESTAQUE = DESTAQUE;
+  /* uma casa de destaque com BORDA: a borda é a casa quase inteira, por baixo; o miolo, menor, por cima */
+  function ovCasa(x, y, d, yOff) {
+    ovTile(x, y, d.borda, d.bordaOp, yOff, 0.94);
+    return ovTile(x, y, d.cor, d.op, yOff + 0.004, 0.78);
+  }
+
   function overlaySignature(st) {
     var g = game(), en = engine();
     var active = safe(function () { return en && en.activeUnit ? en.activeUnit(st) : null; }, null);
@@ -4246,15 +4268,15 @@ var JOGO = (typeof window !== 'undefined')
           // mais que o âmbar da esquiva (o espinho é certo, a fixação é sorte)
           var espinho = temEspinho && safe(function () { return en.muroFerePrevisto(st, active, t.x, t.y); }, 0) > 0;
           // células de RISCO DE ESQUIVA em âmbar (§2)
-          if (espinho) ovTile(t.x, t.y, '#ff3b4a', 0.34, 0.09, 0.84);
-          else ovTile(t.x, t.y, risky ? '#ff8a24' : '#28c8ff', risky ? 0.30 : 0.18, 0.09, 0.84);
+          // 07/10: cores fixas com borda (DESTAQUE), as mesmas em todo mapa
+          ovCasa(t.x, t.y, espinho ? DESTAQUE.passoEspinho : (risky ? DESTAQUE.passoRisco : DESTAQUE.passo), 0.09);
         }
       }
       if (hv && hv.x >= 0) {
         var path = safe(function () { return en.path ? en.path(st, active.uid, hv.x, hv.y) : null; }, null);
         if (path && path.length) {
           for (var j = 0; j < path.length; j++) {
-            ovTile(path[j].x, path[j].y, '#fff2c8', j === path.length - 1 ? 0.66 : 0.34, 0.12, 0.50);
+            ovTile(path[j].x, path[j].y, DESTAQUE.caminho.cor, j === path.length - 1 ? 0.8 : DESTAQUE.caminho.op, 0.12, 0.50);
           }
         }
       }
@@ -4274,7 +4296,8 @@ var JOGO = (typeof window !== 'undefined')
       var noAlcance = false;
       if (range) {
         for (var rr = 0; rr < range.length; rr++) {
-          ovTile(range[rr].x, range[rr].y, elCol, 0.09, 0.05, 0.92);
+          // 07/10: o alcance é cinza escuro com borda clara em todo mapa (DESTAQUE), não a cor do elemento
+          ovCasa(range[rr].x, range[rr].y, DESTAQUE.alcance, 0.05);
           if (hv && range[rr].x === hv.x && range[rr].y === hv.y) noAlcance = true;
         }
       }
