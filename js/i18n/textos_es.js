@@ -2636,4 +2636,10 @@ JOGO.I18n.registra('es', { textos: {
   "Prêmio da trilha da temporada: {a}": "Premio de la senda de la temporada: {a}",
   "+{a} pontos na trilha da temporada ({b})": "+{a} puntos en la senda de la temporada ({b})",
   "Meta da semana da guilda cumprida! +15% de XP e de saque para todos até domingo.": "¡Meta semanal del gremio cumplida! +15% de XP y de botín para todos hasta el domingo.",
+  // ---- o caminho escuro (07/10, a porta da antessala)
+  "🕯 <b>Caminho escuro</b>: a sala abre com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Camino oscuro</b>: la sala abre con un afijo sorteado — vale +{pct}% de XP y botín.",
+  "🕯 <b>Caminho escuro</b>: quer a sala com um afixo sorteado? Vale +{pct}% de XP e saque, e o perigo que vier.": "🕯 <b>Camino oscuro</b>: ¿quieres la sala con un afijo sorteado? Vale +{pct}% de XP y botín, y el peligro que venga.",
+  "Voltar ao caminho de sempre": "Volver al camino de siempre",
+  "Descer pelo caminho escuro": "Bajar por el camino oscuro",
+  "{icone} <b>Caminho escuro: {nome}</b> — {texto} Vale +{pct}% de XP e saque.": "{icone} <b>Camino oscuro: {nome}</b> — {texto} Vale +{pct}% de XP y botín.",
 } });

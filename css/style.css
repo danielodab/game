@@ -2460,6 +2460,11 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
   color: #e8c25a; border: 1px solid rgba(232,194,90,.65);
   background: rgba(232,194,90,.10);
 }
+/* O CAMINHO ESCURO na porta (07/10): a escolha entre a sala de sempre e a sala com afixo sorteado */
+.porta-escuro { display: flex; flex-direction: column; gap: 6px; padding: 7px 10px; border-radius: 8px;
+  border: 1px dashed rgba(154,216,255,.45); background: rgba(154,216,255,.06); }
+.porta-escuro .hub-nota { margin: 0; }
+.porta-escuro.is-on { border-style: solid; border-color: rgba(154,216,255,.7); background: rgba(154,216,255,.12); }
 /* 07/10: o chip do afixo da sala, ao lado do desafio (mesma forma, azul-gelo) */
 .afixo-chip {
   display: inline-block; margin-left: 8px; padding: 2px 9px;

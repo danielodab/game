@@ -160,6 +160,48 @@ class ProvaDoAfixo(A.ProvaDaAutoridade):
         self.assertEqual(status, 200, r3)
         self.assertIsNone(r3.get('afixo'), r3)
 
+    def test_06_o_caminho_escuro_sorteia_um_afixo_da_segunda_sala_em_diante(self):
+        """07/10: `escuro: true` pede um afixo sorteado (do catálogo) num portal que não é o do dia — da sala 1 em
+        diante; a sala 0 ignora; torto cai 400; o afixo fica no bilhete e a sala em grupo segue a mesma regra."""
+        c = self.novo('Escuro')
+        self.poe_estado(c)
+        dia = self.dia()
+        outro = self.outro_portal(dia['dungeonId'])
+        lista = _juiz(self.juiz, '/regras')['afixos']
+        # a primeira sala nunca
+        status, r0 = c.pede('POST', '/api/sala/abrir', {'dungeonId': outro, 'roomIndex': 0, 'herois': ['sumo'], 'escuro': True})
+        self.assertEqual(status, 200, r0)
+        self.assertIsNone(r0.get('afixo'), r0)
+        self.fecha_lutas(c)
+        # da segunda em diante: um afixo do catálogo, guardado no bilhete
+        status, r1 = c.pede('POST', '/api/sala/abrir', {'dungeonId': outro, 'roomIndex': 1, 'herois': ['sumo'], 'escuro': True})
+        self.assertEqual(status, 200, r1)
+        self.assertIn(r1.get('afixo'), lista, r1)
+        self.assertEqual([x['afixo'] for x in self.sql("SELECT afixo FROM salas_afixo WHERE bilhete = ?", r1['bilhete'])], [r1['afixo']])
+        self.fecha_lutas(c)
+        # sem pedir: nada
+        status, r2 = c.pede('POST', '/api/sala/abrir', {'dungeonId': outro, 'roomIndex': 1, 'herois': ['sumo'], 'escuro': False})
+        self.assertEqual(status, 200, r2)
+        self.assertIsNone(r2.get('afixo'), r2)
+        self.fecha_lutas(c)
+        # torto
+        self.assertEqual(c.pede('POST', '/api/sala/abrir', {'dungeonId': outro, 'roomIndex': 1, 'herois': ['sumo'], 'escuro': 'sim'})[0], 400)
+        # no portal do dia o do dia manda, escuro ou não
+        status, r3 = c.pede('POST', '/api/sala/abrir', {'dungeonId': dia['dungeonId'], 'roomIndex': 1, 'herois': ['sumo'], 'escuro': True})
+        self.assertEqual(status, 200, r3)
+        self.assertEqual(r3.get('afixo'), dia['afixo'])
+        self.fecha_lutas(c)
+        # a sala em grupo
+        b = self.novo('Escuro Parceiro')
+        self.poe_estado(b)
+        corpo = {'dungeonId': outro, 'roomIndex': 1, 'dificuldade': 'normal', 'herois': ['sumo'], 'dono': 'L9',
+                 'parceiro': {'conta': b.conta['id'], 'dono': 'P9', 'herois': ['sumo']}, 'escuro': True}
+        status, r4 = c.pede('POST', '/api/grupo/abrir', corpo)
+        self.assertEqual(status, 200, r4)
+        self.assertIn(r4.get('afixo'), lista, r4)
+        self.assertEqual([x['afixo'] for x in self.sql("SELECT afixo FROM salas_grupo_afixo WHERE gid = ?", r4['gid'])], [r4['afixo']])
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

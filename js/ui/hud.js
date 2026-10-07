@@ -1597,9 +1597,10 @@ var JOGO = (typeof window !== 'undefined')
         });
         if (!lista.childNodes.length) lista.appendChild(el('p', 'hub-nota', tr('Ninguém à vista… ainda.')));
         painel.appendChild(lista);
-        // 07/10: a sala do Calabouço do Dia diz o afixo dela ANTES de a luta começar
-        var afxPorta = afixoDe(sala && sala.afixo);
-        if (afxPorta) painel.appendChild(linhaAfixo(afxPorta));
+        // 07/10: a sala do Calabouço do Dia (ou o caminho escuro pedido) diz o afixo dela ANTES de a luta começar —
+        // lido AO VIVO do Game: o `sala` daqui é a foto da chegada à antessala, e a escolha da porta muda depois
+        var afxPorta = afixoDe(safe(function () { return G().afixoDaSala ? G().afixoDaSala(sala && sala.dungeonId) : null; }, null) || (sala && sala.afixo));
+        if (afxPorta) painel.appendChild(linhaAfixo(afxPorta, safe(function () { return !!G().escuroDaSala(); }, false)));
         // 03/10: a sala do Santuário diz a regra dela ANTES de a luta começar
         if (sala && sala.regra) {
           var regrasPorta = sala.regra === 'altar' ? ['fogo', 'agua', 'terra', 'ar'] : [sala.regra];
@@ -1617,6 +1618,21 @@ var JOGO = (typeof window !== 'undefined')
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
+          /* O CAMINHO ESCURO (07/10, game.js Game.podeEscuro): da segunda sala em diante a porta oferece a
+           * escolha — a sala de sempre, ou a sala com um afixo sorteado que paga +25% de XP e saque */
+          if (safe(function () { return !!(G().podeEscuro && G().podeEscuro()); }, false)) {
+            var ligado = safe(function () { return !!G().escuroDaSala(); }, false);
+            var cxE = el('div', 'porta-escuro' + (ligado ? ' is-on' : ''));
+            cxE.appendChild(el('p', 'hub-nota', ligado
+              ? tr('🕯 <b>Caminho escuro</b>: a sala abre com um afixo sorteado — vale +{pct}% de XP e saque.', { pct: afixoBonusPct() })
+              : tr('🕯 <b>Caminho escuro</b>: quer a sala com um afixo sorteado? Vale +{pct}% de XP e saque, e o perigo que vier.', { pct: afixoBonusPct() })));
+            cxE.appendChild(btn(ligado ? tr('Voltar ao caminho de sempre') : tr('Descer pelo caminho escuro'),
+              'btn-mini ' + (ligado ? 'btn-ghost' : 'btn-gold'), function () {
+                safe(function () { return G().defineEscuro(!ligado); }, false);
+                repintaLugar();
+              }));
+            painel.appendChild(cxE);
+          }
           // 13/09: a vida na porta; herói a 0 PV apaga o botão e diz quanto falta (vidaTique)
           painel.appendChild(vidaBloco('porta'));
           var bEntrar = btn(tr('Entrar na batalha'), 'btn-primary btn-block vida-porta', function () {
@@ -3342,9 +3358,10 @@ var JOGO = (typeof window !== 'undefined')
   function afixoBonusPct() {
     return Math.round(safe(function () { return JOGO.Afixos.BONUS; }, 0.25) * 100);
   }
-  function linhaAfixo(a) {
+  function linhaAfixo(a, escuro) {
     return el('p', 'hub-afixo',
-      tr('{icone} <b>Afixo de hoje: {nome}</b> — {texto} Vale +{pct}% de XP e saque.',
+      tr(escuro ? '{icone} <b>Caminho escuro: {nome}</b> — {texto} Vale +{pct}% de XP e saque.'
+                : '{icone} <b>Afixo de hoje: {nome}</b> — {texto} Vale +{pct}% de XP e saque.',
          { icone: esc(a.icone || '✦'), nome: esc(a.nome), texto: esc(a.texto), pct: afixoBonusPct() }));
   }
   function chipAfixo(a) {

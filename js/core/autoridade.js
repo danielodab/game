@@ -200,7 +200,8 @@ var JOGO = (typeof window !== 'undefined')
       return api('/api/sala/abrir', { dungeonId: pedido.dungeonId, roomIndex: pedido.roomIndex,
                                       dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois,
                                       versaoRegras: versaoRegras(),      // 19/09: a versão das regras desta página
-                                      afixo: pedido.afixo || null });    // 07/10: a proposta; o servidor decide
+                                      afixo: pedido.afixo || null,       // 07/10: a proposta; o servidor decide
+                                      escuro: !!pedido.escuro });        // 07/10: o caminho escuro (um afixo sorteado)
     })
       .then(function (r) {
         A.notaLargada(r);                               // 15/09: o servidor largou uma luta de antes

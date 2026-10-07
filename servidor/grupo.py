@@ -278,7 +278,7 @@ class GrupoMixin:
         if sala >= n:
             raise Recusa(400, 'essa sala não existe nesse calabouço (são %d)' % n)
         t = agora()
-        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras)    # 07/10: o afixo do Calabouço do Dia (salas.py)
+        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras, sala)    # 07/10: o afixo do dia ou o caminho escuro (salas.py)
         with self._escrita():
             parceiro = self._conta_viva(pid)
             if parceiro is None:

@@ -677,20 +677,28 @@ class SalasMixin:
         guardados[chave] = dia
         return dia
 
-    def _afixo_da_abertura(self, corpo, dungeon, t, regras):
+    def _afixo_da_abertura(self, corpo, dungeon, t, regras, sala=0):
         """O afixo com que a sala abre. É o SERVIDOR quem decide: no Calabouço do Dia a sala leva o afixo do
         dia, em qualquer outro portal não leva nenhum — a página manda o que ACHA (`afixo`), só para que uma
         proposta fora do catálogo caia como 400 na porta (uma página mexida), e o que vale volta na resposta.
         A proposta de um portal que não é o do dia é ignorada de propósito: à meia-noite a página pode estar um
-        dia atrás do servidor, e recusá-la travaria a porta de quem não fez nada."""
+        dia atrás do servidor, e recusá-la travaria a porta de quem não fez nada.
+        07/10, O CAMINHO ESCURO (`escuro: true`): da segunda sala da descida em diante, o jogador pode PEDIR um
+        afixo — o servidor sorteia um do catálogo (e guarda no bilhete) e a sala paga os +25% de XP e saque.
+        A primeira sala nunca (é a porta de entrada); no portal do dia o do dia já manda."""
+        lista = regras.get('afixos') if isinstance(regras.get('afixos'), list) else []
         proposta = corpo.get('afixo')
         if proposta is not None:
-            lista = regras.get('afixos') if isinstance(regras.get('afixos'), list) else []
             if not isinstance(proposta, str) or proposta not in lista:
                 raise Recusa(400, 'afixo desconhecido')
+        escuro = corpo.get('escuro', False)
+        if escuro is not False and escuro is not True and escuro is not None:
+            raise Recusa(400, 'escuro precisa ser true ou false')
         dia = self._dia(t)
         if dia and dia.get('dungeonId') == dungeon and dia.get('afixo'):
             return dia['afixo']
+        if escuro is True and _inteiro_puro(sala) and sala >= 1 and lista:
+            return lista[secrets.randbelow(len(lista))]
         return None
 
     def _afixo_guardado(self, tabela, coluna, ref):
@@ -937,7 +945,7 @@ class SalasMixin:
         regras = self._confere_versao_cliente(corpo, regras)
         regras_juiz = regras.get('regras')
         t = agora()
-        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras)    # 07/10: fora da tranca (pode perguntar ao juiz)
+        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras, sala)    # 07/10: fora da tranca (pode perguntar ao juiz)
         with self._escrita():
             estado = self._estado_exige(cid)
             self._confere_herois(conta, estado['progress'], herois)

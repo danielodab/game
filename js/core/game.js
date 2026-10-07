@@ -380,7 +380,31 @@ var JOGO = (typeof window !== 'undefined')
   function pedidoDaSala() {
     return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex,
              dificuldade: Game.dificuldade || 'normal', herois: Game.party.slice(),
-             afixo: afixoProposto(Game.dungeonId) };     // 07/10: o que esta página acha; o servidor decide
+             afixo: afixoProposto(Game.dungeonId),       // 07/10: o que esta página acha; o servidor decide
+             escuro: Game.podeEscuro() && Game.escuro }; // 07/10: o caminho escuro, pedido na porta
+  }
+  /* O CAMINHO ESCURO (07/10): da segunda sala da descida em diante, o jogador pode pedir na porta um afixo
+   * sorteado (+25% de XP e saque) — a escolha entre a sala de sempre e a sala que muda. Com sessão o servidor
+   * sorteia e guarda no bilhete; sem servidor a proposta sorteia aqui, pela sala e pelo dia. No Calabouço do
+   * Dia não se oferece (o do dia já manda). A escolha é de cada porta: entrar na sala a apaga. */
+  Game.escuro = false;
+  Game.podeEscuro = function () {
+    var Af = JOGO.Afixos, Dd = JOGO.Diario;
+    if (!Af || !Af.LISTA || !Af.LISTA.length || !Game.dungeonId || !(Game.roomIndex >= 1)) return false;
+    // o Poço tem os perigos dele; a descida em grupo fica para depois (a porta é de quem lidera, pela ata)
+    if (Game.dungeonId === 'poco' || rede) return false;
+    try { if (Dd && Dd.ehHoje && Dd.ehHoje(Game.dungeonId)) return false; } catch (e) {}
+    return true;
+  };
+  Game.escuroDaSala = function () { return !!(Game.podeEscuro() && Game.escuro); };
+  Game.defineEscuro = function (liga) { Game.escuro = !!liga; return Game.escuroDaSala(); };
+  function afixoEscuro(dungeonId) {
+    var Af = JOGO.Afixos;
+    if (!Af || !Af.LISTA || !Af.LISTA.length) return null;
+    var txt = 'escuro:' + dungeonId + ':' + Game.roomIndex + ':' + Af.chaveDoDia(Date.now());
+    var h = 2166136261 >>> 0;
+    for (var i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return Af.LISTA[(h >>> 0) % Af.LISTA.length].id;
   }
   /* O AFIXO DA SALA (07/10, js/core/afixos.js): no Calabouço do Dia a sala abre com o afixo do dia. Esta é
    * a PROPOSTA da página (o relógio do servidor, pela Agenda, quando medido); com sessão o servidor decide e
@@ -390,7 +414,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!Af || !Af.doDia || !Dd || !Dd.ehHoje) return null;
     var ts = Date.now();
     try { if (JOGO.Agenda && JOGO.Agenda.agora) ts = JOGO.Agenda.agora(); } catch (e0) { ts = Date.now(); }
-    try { return Dd.ehHoje(dungeonId || Game.dungeonId, ts) ? Af.doDia(ts) : null; } catch (e) { return null; }
+    try { if (Dd.ehHoje(dungeonId || Game.dungeonId, ts)) return Af.doDia(ts); } catch (e) { return null; }
+    // 07/10: o caminho escuro sem servidor — a proposta é a regra (com sessão o servidor sorteia o dele)
+    if (Game.escuroDaSala() && (dungeonId || Game.dungeonId) === Game.dungeonId) return afixoEscuro(Game.dungeonId);
+    return null;
   }
   Game.afixoDaSala = afixoProposto;      // a HUD (o painel do portal, a porta) e o Coop (a ata) perguntam
   function preparaBilhete() {
@@ -737,6 +764,7 @@ var JOGO = (typeof window !== 'undefined')
     ataSolo = bil ? { bilhete: bil.bilhete, lances: [] } : null;
     // 07/10: o afixo é o do BILHETE (o servidor decidiu); sem bilhete, a proposta da página
     var afixoSala = bil ? (bil.afixo || null) : afixoProposto(Game.dungeonId);
+    Game.escuro = false;                 // 07/10: o caminho escuro é de cada porta — a próxima pergunta de novo
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
       bil ? { seed: bil.semente, dificuldade: Game.dificuldade, escolhePosicao: true, afixo: afixoSala }
           : { dificuldade: Game.dificuldade, escolhePosicao: true, afixo: afixoSala });
@@ -838,6 +866,8 @@ var JOGO = (typeof window !== 'undefined')
              regra: (room && room.santuario && room.santuario.regra) || null,
              // 07/10: o afixo com que a sala deve abrir (o do dia, no Calabouço do Dia) — a porta o diz
              afixo: afixoProposto(Game.dungeonId),
+             // 07/10: o caminho escuro: se a porta o oferece e se está pedido
+             podeEscuro: Game.podeEscuro(), escuro: Game.escuroDaSala(),
              monstros: Game.monstrosDaSala(Game.dungeonId, Game.roomIndex) };
   };
 

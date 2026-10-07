@@ -417,6 +417,13 @@ ele faz), o chip ao lado do desafio na linha da sala, o chip na recompensa e o n
 dia dos "próximos 14 dias" da agenda. Invocação e filhote que nascem no meio da luta **não** ganham
 os números do afixo (ele é aplicado a quem nasce com a sala) — aceito.
 
+**O caminho escuro (07/10, o mesmo bloco).** Da **segunda sala** da descida em diante, a porta da antessala
+oferece a escolha: a sala de sempre, ou "descer pelo caminho escuro" — a sala abre com um afixo **sorteado
+pelo servidor** (`escuro: true` no `POST /api/sala/abrir`; `salas.py`, `_afixo_da_abertura`) e paga os
+mesmos +25% de XP e saque. A primeira sala nunca (é a porta de entrada), o Poço não (tem os perigos dele),
+no portal do dia o do dia já manda, e a descida em grupo fica para depois. A escolha é de cada porta:
+entrar na sala a apaga. Sem servidor a proposta da página sorteia pela sala e pelo dia.
+
 **De quebra:** o Calabouço do Dia deixou de mudar quando a conta visita o Poço (`dungeonPoco` o
 empurra em `DATA.dungeons` e a lista de `diario.js` passava a ter sete entradas — a página marcava
 um portal e o servidor, que não visita o Poço, pagava outro).

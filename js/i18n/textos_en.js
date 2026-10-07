@@ -2636,4 +2636,10 @@ JOGO.I18n.registra('en', { textos: {
   "Prêmio da trilha da temporada: {a}": "Season track prize: {a}",
   "+{a} pontos na trilha da temporada ({b})": "+{a} season track points ({b})",
   "Meta da semana da guilda cumprida! +15% de XP e de saque para todos até domingo.": "Guild weekly goal met! +15% XP and loot for everyone until Sunday.",
+  // ---- o caminho escuro (07/10, a porta da antessala)
+  "🕯 <b>Caminho escuro</b>: a sala abre com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Dark path</b>: the room opens with a random affix — worth +{pct}% XP and loot.",
+  "🕯 <b>Caminho escuro</b>: quer a sala com um afixo sorteado? Vale +{pct}% de XP e saque, e o perigo que vier.": "🕯 <b>Dark path</b>: want the room with a random affix? Worth +{pct}% XP and loot, and whatever danger comes.",
+  "Voltar ao caminho de sempre": "Back to the usual path",
+  "Descer pelo caminho escuro": "Take the dark path",
+  "{icone} <b>Caminho escuro: {nome}</b> — {texto} Vale +{pct}% de XP e saque.": "{icone} <b>Dark path: {nome}</b> — {texto} Worth +{pct}% XP and loot.",
 } });

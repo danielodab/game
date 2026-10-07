@@ -1162,7 +1162,8 @@ var JOGO = (typeof window !== 'undefined')
       Aut.abreGrupo({ dungeonId: g.dungeonId, roomIndex: g.roomIndex, dificuldade: g.dificuldade || 'normal',
                       herois: idsDe(meus), dono: meuId(),
                       parceiro: { conta: contaPar, dono: p.id, herois: idsDe(pars) },
-                      afixo: afixoProposto(g) }).then(function (r) {     // 07/10: a proposta; o servidor decide
+                      afixo: afixoProposto(g),                            // 07/10: a proposta; o servidor decide
+                      escuro: !!(g.escuroDaSala && g.escuroDaSala()) }).then(function (r) {   // e o caminho escuro
         S.pedindoGrupo = false;
         // 14/09: um herói (meu ou do parceiro) está a 0 no relógio do servidor — a porta espera
         if (r && !r.ok && r.motivo === 'vida-zero') {
