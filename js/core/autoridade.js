@@ -199,7 +199,8 @@ var JOGO = (typeof window !== 'undefined')
     A.fechaPendente().then(function () {
       return api('/api/sala/abrir', { dungeonId: pedido.dungeonId, roomIndex: pedido.roomIndex,
                                       dificuldade: pedido.dificuldade || 'normal', herois: pedido.herois,
-                                      versaoRegras: versaoRegras() });   // 19/09: a versão das regras desta página
+                                      versaoRegras: versaoRegras(),      // 19/09: a versão das regras desta página
+                                      afixo: pedido.afixo || null });    // 07/10: a proposta; o servidor decide
     })
       .then(function (r) {
         A.notaLargada(r);                               // 15/09: o servidor largou uma luta de antes
@@ -209,6 +210,7 @@ var JOGO = (typeof window !== 'undefined')
           b.bilhete = r.bilhete;
           b.semente = r.semente;
           b.carry = r.carry || null;
+          b.afixo = (typeof r.afixo === 'string' && r.afixo) ? r.afixo : null;   // 07/10: o afixo do bilhete
           var fns = b.espera; b.espera = [];
           fns.forEach(function (fn) { try { fn(b); } catch (e) {} });
           return;
@@ -233,7 +235,7 @@ var JOGO = (typeof window !== 'undefined')
     var b = bilhetes[k];
     if (!b || b.estado !== 'pronto') return null;
     delete bilhetes[k];
-    return { bilhete: b.bilhete, semente: b.semente, carry: b.carry };
+    return { bilhete: b.bilhete, semente: b.semente, carry: b.carry, afixo: b.afixo || null };
   };
   A.esqueceBilhetes = function () { bilhetes = {}; };
 

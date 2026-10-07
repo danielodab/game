@@ -248,13 +248,20 @@ class ProvaDaAutoridade(unittest.TestCase):
             r['semente'] = semente
         return r
 
-    def joga(self, c, bilhete, sala=0, corta=None):
+    def joga(self, c, bilhete, sala=0, corta=None, afixo=None):
+        """07/10: a página honesta joga com o AFIXO do bilhete (salas_afixo) — `afixo=None` o lê de lá (no dia em
+        que o Calabouço do Dia é a Cisterna, toda prova daqui passa por ele); `afixo=False` joga sem (a página
+        que ignorasse o bilhete: tests/afixos_api.py prova que cai); um texto joga com aquele."""
         s = self.save(c)
         linha = self.sql("SELECT * FROM salas WHERE bilhete = ?", bilhete)[0]
         pedido = {'progress': s['progress'], 'db': s['db'], 'dungeonId': linha['dungeon'], 'roomIndex': linha['sala'],
                   'semente': linha['semente'], 'dificuldade': linha['dificuldade'],
                   'herois': json.loads(linha['herois']),
                   'carry': json.loads(linha['carry']) if linha['carry'] else None}
+        if afixo is None:
+            guardado = self.sql("SELECT afixo FROM salas_afixo WHERE bilhete = ?", bilhete)
+            afixo = guardado[0]['afixo'] if guardado else None
+        pedido['afixo'] = afixo or None
         if corta is not None:
             pedido['cortaEm'] = corta
         return roda_node([JOGADOR], pedido)

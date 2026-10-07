@@ -58,7 +58,8 @@ function fecha(corpo) {
     semente: b.semente, party, carry: b.carry || null,
     escolhePosicao: b.escolhePosicao !== false,
     lances: c.lances, hashFinal: c.hashFinal,
-    regras: b.regras            // 19/09: a versão das regras guardada no bilhete (sala.js confere)
+    regras: b.regras,           // 19/09: a versão das regras guardada no bilhete (sala.js confere)
+    afixo: b.afixo || null      // 07/10: o afixo do Calabouço do Dia guardado no bilhete
   });
 
   // 3. a recompensa pelo funil do jogo
@@ -167,7 +168,8 @@ function fechaGrupo(corpo) {
     dungeonId: ata.dungeonId, roomIndex: ata.roomIndex, dificuldade: ata.dificuldade || 'normal',
     semente: ata.semente, party: JSON.parse(JSON.stringify(party)), carry: ata.carry || null,
     carryRede: true, escolhePosicao: true, lances: c.lances, hashFinal: c.hashFinal,
-    regras: ata.regras          // 19/09: a versão das regras da ata, quando a API a guardar (sala.js confere)
+    regras: ata.regras,         // 19/09: a versão das regras da ata, quando a API a guardar (sala.js confere)
+    afixo: ata.afixo || null    // 07/10: o afixo do Calabouço do Dia guardado na ata do grupo
   });
   const final = JSON.stringify(r.estado);
   // 14/09, a vida única: o PV do fim (dono:heroId) e o máximo em qualquer fim refeito, não só na vitória

@@ -383,6 +383,46 @@ anda enxerga (vale para o jogador também — o clique não leva o herói por ci
 da placa se há outro caminho igual). Prova: `node tests/poco_perigos.js`; a tela,
 `tests/poco_chao_tela.html`.
 
+### Os afixos do Calabouço do Dia (07/10)
+
+O dono: "tô achando meio repetitivo". As dezoito salas dos seis portais são desenhadas à mão e não
+mudam; na terceira visita a jogada ótima de cada uma já é conhecida. Um **afixo** é uma regra posta
+**por cima** da sala que existe — mapa, elenco e chefe ficam iguais; a solução, não. Mora em
+`js/core/afixos.js`; o motor o aplica em `Engine.createBattle` com `opts.afixo` (decisão 22 do
+`engine.js`) e só a sala que nasce com o campo passa por ele.
+
+**Onde entra:** no **Calabouço do Dia** (`diario.js`). O portal em promoção abre as salas com o afixo
+do dia, além do +50% de saque, e a sala com afixo paga **+25% de XP e de saque** (`Afixos.BONUS`, a
+mesma régua do desafio de sala). Os outros cinco portais seguem o jogo de sempre, de propósito: quem
+está subindo tem um lugar previsível; quem já bateu o teto tem o lugar que muda todo dia.
+
+| id | nome | a regra |
+|---|---|---|
+| `ferozes` | Ferozes | o dano de quem é do lado inimigo ×1,2, no mesmo funil da dificuldade (`dealDamage`) |
+| `couracados` | Couraçados | o PV máximo de quem nasce do lado inimigo ×1,3 |
+| `ligeiros` | Ligeiros | +1 PP de quem nasce do lado inimigo |
+| `esquivos` | Esquivos | +15 de esquiva de quem nasce do lado inimigo |
+| `clima_virado` | Clima Virado | a sala abre com **outro** clima da roda dela, sorteado pela semente, e ele não gira (só o Coração Partido gira clima hoje; sem o sorteio o afixo seria um nada em cinco portais) |
+| `chao_traicoeiro` | Chão Traiçoeiro | os perigos do Poço (acima) nascem na sala, de um gerador semeado pela semente dela — 3 perigos, os quatro tipos abertos (`Afixos.ANDAR_DO_CHAO`); `Po.regras` cuida do resto |
+
+**Determinístico pelo dia de Brasília** (`Afixos.doDia(ts)`, hash próprio do AAAAMMDD): todo mundo
+vê o mesmo afixo o dia inteiro, e o servidor sabe qual é sem perguntar — o juiz responde `POST /dia`
+e a API **guarda o afixo no bilhete** (`salas_afixo`, `salas_grupo_afixo`; `docs/SEGURANCA.md`
+§4.1): a sala aberta às 23:59 fecha com o afixo com que abriu, e o juiz a refaz com ele. A página
+só **propõe** (`afixo` no `POST /api/sala/abrir`); o que vale volta na resposta. O id entra no hash
+da sala; `Engine.VERSAO_REGRAS` subiu para **8**.
+
+**Na tela:** a linha azul-gelo no painel do portal e na porta da antessala (o afixo de hoje e o que
+ele faz), o chip ao lado do desafio na linha da sala, o chip na recompensa e o nome do afixo em cada
+dia dos "próximos 14 dias" da agenda. Invocação e filhote que nascem no meio da luta **não** ganham
+os números do afixo (ele é aplicado a quem nasce com a sala) — aceito.
+
+**De quebra:** o Calabouço do Dia deixou de mudar quando a conta visita o Poço (`dungeonPoco` o
+empurra em `DATA.dungeons` e a lista de `diario.js` passava a ter sete entradas — a página marcava
+um portal e o servidor, que não visita o Poço, pagava outro).
+
+Provas: `node tests/afixos.js` (39) e `python tests/afixos_api.py` (API + juiz).
+
 ---
 
 ## 6-B. O Eco Primordial — o chefe supremo da semana (02/10)

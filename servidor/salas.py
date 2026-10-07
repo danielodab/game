@@ -136,6 +136,13 @@ CREATE TABLE IF NOT EXISTS salas_regras(
   regras    INTEGER NOT NULL,
   versao    TEXT
 );
+-- O AFIXO DO BILHETE (07/10, js/core/afixos.js): a regra a mais com que a sala do Calabouço do Dia
+-- abriu — o juiz a refaz com o mesmo afixo ao fechar. Só a sala com afixo tem linha; tabela nova,
+-- nunca ALTER
+CREATE TABLE IF NOT EXISTS salas_afixo(
+  bilhete   TEXT PRIMARY KEY REFERENCES salas(bilhete) ON DELETE CASCADE,
+  afixo     TEXT NOT NULL
+);
 -- A VIDA ENTRE AS SALAS (13/09, pedido do dono: "quando acaba a luta o jogador fica com a vida que
 -- terminou a última luta.. carrega 1 pv a cada 2 segundos"). Uma linha por herói da sala VENCIDA
 -- (a solo pelo bilhete, a em grupo pelo gid, em `ref`), com a chave do carry (heroId, ou dono:heroId
@@ -643,6 +650,47 @@ class SalasMixin:
         self._regras_guardadas = (time.monotonic() + REGRAS_CACHE, r)
         return r
 
+    # -- O DIA E O AFIXO (07/10, js/core/afixos.js) ------------------------------------------------
+    def _dia(self, t):
+        """O Calabouço do Dia e o afixo dele no instante `t` (segundos), pela régua do juiz (POST /dia: o mesmo
+        diario.js e afixos.js da página, no dia de Brasília). Guardado por dia: a resposta não muda dentro dele.
+        Sem juiz ou juiz de antes do afixo: None, e nenhuma sala ganha afixo."""
+        chave = time.strftime('%Y%m%d', time.gmtime(t - 3 * 3600))
+        guardado = self.__dict__.get('_dia_guardado')
+        if guardado is not None and guardado[0] == chave:
+            return guardado[1]
+        try:
+            r = self.juiz.pede('POST', '/dia', {'ms': int(t * 1000)}, tempo=5.0)
+        except Recusa:
+            return None
+        if not isinstance(r, dict) or r.get('ok') is not True:
+            return None
+        dia = {'dungeonId': r.get('dungeonId') if isinstance(r.get('dungeonId'), str) else None,
+               'afixo': r.get('afixo') if isinstance(r.get('afixo'), str) else None}
+        self._dia_guardado = (chave, dia)
+        return dia
+
+    def _afixo_da_abertura(self, corpo, dungeon, t, regras):
+        """O afixo com que a sala abre. É o SERVIDOR quem decide: no Calabouço do Dia a sala leva o afixo do
+        dia, em qualquer outro portal não leva nenhum — a página manda o que ACHA (`afixo`), só para que uma
+        proposta fora do catálogo caia como 400 na porta (uma página mexida), e o que vale volta na resposta.
+        A proposta de um portal que não é o do dia é ignorada de propósito: à meia-noite a página pode estar um
+        dia atrás do servidor, e recusá-la travaria a porta de quem não fez nada."""
+        proposta = corpo.get('afixo')
+        if proposta is not None:
+            lista = regras.get('afixos') if isinstance(regras.get('afixos'), list) else []
+            if not isinstance(proposta, str) or proposta not in lista:
+                raise Recusa(400, 'afixo desconhecido')
+        dia = self._dia(t)
+        if dia and dia.get('dungeonId') == dungeon and dia.get('afixo'):
+            return dia['afixo']
+        return None
+
+    def _afixo_guardado(self, tabela, coluna, ref):
+        """Dentro da tranca: o afixo guardado na abertura da luta, ou None (a sala de sempre)."""
+        r = self.con.execute("SELECT afixo FROM %s WHERE %s = ?" % (tabela, coluna), (ref,)).fetchone()
+        return r['afixo'] if r is not None and isinstance(r['afixo'], str) and r['afixo'] else None
+
     def _regras_esquece(self):
         """19/09 (a 2ª rodada de conserto): o GET /regras fica guardado REGRAS_CACHE s, e a API pode ter subido
         ANTES do juiz novo — o número guardado seria o velho por até 5 min: bilhetes abertos com ele venceriam ao
@@ -882,6 +930,7 @@ class SalasMixin:
         regras = self._confere_versao_cliente(corpo, regras)
         regras_juiz = regras.get('regras')
         t = agora()
+        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras)    # 07/10: fora da tranca (pode perguntar ao juiz)
         with self._escrita():
             estado = self._estado_exige(cid)
             self._confere_herois(conta, estado['progress'], herois)
@@ -905,11 +954,14 @@ class SalasMixin:
             if _inteiro_puro(regras_juiz):
                 self.con.execute("INSERT OR REPLACE INTO salas_regras(bilhete, regras, versao) VALUES (?, ?, ?)",
                                  (bilhete, regras_juiz, regras.get('versao') if isinstance(regras.get('versao'), str) else None))
+            # 07/10: o afixo com que a sala abriu (o juiz refaz com ele)
+            if afixo:
+                self.con.execute("INSERT OR REPLACE INTO salas_afixo(bilhete, afixo) VALUES (?, ?)", (bilhete, afixo))
             # 15/09: a luta aberta da conta — quem abrir outra sem fechar esta a larga (_larga_pendentes)
             self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
                              "VALUES ('sala', ?, ?, ?, ?, 'aberta')",
                              (bilhete, cid, json.dumps(herois), int(time.time() * 1000)))
-        return 200, {'ok': True, 'bilhete': bilhete, 'semente': semente, 'carry': carry}
+        return 200, {'ok': True, 'bilhete': bilhete, 'semente': semente, 'carry': carry, 'afixo': afixo}
 
     # -- POST /api/sala/fechar (§4.2) -----------------------------------------------------------
     def _sala_recusa(self, cid, bilhete, motivo, erro):
@@ -945,6 +997,7 @@ class SalasMixin:
                 # salas de antes caindo como 'divergiu' (fraude) quando o juiz novo as refazia sem conferir nada
                 rg = self.con.execute("SELECT regras FROM salas_regras WHERE bilhete = ?", (bilhete,)).fetchone()
                 regras_bilhete = rg['regras'] if rg is not None and _inteiro_puro(rg['regras']) else 1
+                afixo_bilhete = self._afixo_guardado('salas_afixo', 'bilhete', bilhete)   # 07/10
                 if s['estado'] == 'vencida':
                     raise Recusa(410, 'bilhete vencido: abra a sala de novo')
                 if s['estado'] != 'aberta':
@@ -968,7 +1021,8 @@ class SalasMixin:
                 'bilhete': {'dungeonId': s['dungeon'], 'roomIndex': s['sala'], 'dificuldade': s['dificuldade'],
                             'semente': s['semente'], 'herois': json.loads(s['herois']),
                             'carry': _objeto(s['carry']),
-                            'regras': regras_bilhete},           # 19/09: o juiz confere contra a versão dele
+                            'regras': regras_bilhete,            # 19/09: o juiz confere contra a versão dele
+                            'afixo': afixo_bilhete},             # 07/10: a sala se refaz com o afixo com que abriu
                 'lances': lances, 'hashFinal': hash_final,
                 'progress': estado['progress'], 'db': estado['db'],
                 'contexto': {'agoraMs': int(instante * 1000), 'fatores': fatores, 'guilda': guilda}}

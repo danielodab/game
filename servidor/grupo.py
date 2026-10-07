@@ -114,6 +114,11 @@ CREATE TABLE IF NOT EXISTS salas_grupo_regras(
   regras    INTEGER NOT NULL,
   versao    TEXT
 );
+-- 07/10: o afixo com que a sala em grupo abriu (o mesmo desenho de salas_afixo, salas.py)
+CREATE TABLE IF NOT EXISTS salas_grupo_afixo(
+  gid       TEXT PRIMARY KEY REFERENCES salas_grupo(gid) ON DELETE CASCADE,
+  afixo     TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS duelos_regras(
   did       TEXT PRIMARY KEY,
   regras    INTEGER NOT NULL,
@@ -271,6 +276,7 @@ class GrupoMixin:
         if sala >= n:
             raise Recusa(400, 'essa sala não existe nesse calabouço (são %d)' % n)
         t = agora()
+        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras)    # 07/10: o afixo do Calabouço do Dia (salas.py)
         with self._escrita():
             parceiro = self._conta_viva(pid)
             if parceiro is None:
@@ -307,11 +313,13 @@ class GrupoMixin:
             if _inteiro_puro(regras.get('regras')):
                 self.con.execute("INSERT OR REPLACE INTO salas_grupo_regras(gid, regras, versao) VALUES (?, ?, ?)",
                                  (gid, regras['regras'], regras.get('versao') if isinstance(regras.get('versao'), str) else None))
+            if afixo:       # 07/10: o afixo com que a sala abriu (o juiz refaz com ele; a ata o leva aos dois)
+                self.con.execute("INSERT OR REPLACE INTO salas_grupo_afixo(gid, afixo) VALUES (?, ?)", (gid, afixo))
             # 15/09: a luta aberta de CADA conta, com os heróis dela (a largada zera só os de quem largou)
             for conta_id, hs in ((cid, herois), (pid, herois_p)):
                 self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
                                  "VALUES ('grupo', ?, ?, ?, ?, 'aberta')", (gid, conta_id, json.dumps(hs), agora_ms))
-        return 200, {'ok': True, 'gid': gid, 'semente': semente, 'carry': carry}
+        return 200, {'ok': True, 'gid': gid, 'semente': semente, 'carry': carry, 'afixo': afixo}
 
     # -- POST /api/grupo/fechar ------------------------------------------------------------------
     def _regras_da_luta(self, tabela, coluna, ref):
@@ -405,6 +413,7 @@ class GrupoMixin:
                                         'guilda': self._guilda_contexto(p['conta'], t)})
                     fatores = self._fatores_no_ar(t)
                     regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
+                    afixo_ata = self._afixo_guardado('salas_grupo_afixo', 'gid', gid)     # 07/10
                     acao = 'juiz'
             if acao == 'fechada':
                 return self._grupo_fechada(cid, gid)
@@ -423,7 +432,8 @@ class GrupoMixin:
                              'guilda': m['guilda']} for m in membros],
                 'ata': {'dungeonId': g['dungeon'], 'roomIndex': g['sala'], 'dificuldade': g['dificuldade'],
                         'semente': g['semente'], 'carry': _objeto(g['carry']),
-                        'regras': regras_ata},                  # 19/09: o juiz confere contra a versão dele
+                        'regras': regras_ata,                   # 19/09: o juiz confere contra a versão dele
+                        'afixo': afixo_ata},                    # 07/10: a sala se refaz com o afixo com que abriu
                 'lances': lances, 'hashFinal': hash_final,
                 'contexto': {'agoraMs': int(instante * 1000), 'fatores': fatores}}
             try:
@@ -517,10 +527,12 @@ class GrupoMixin:
             return 200, {'ok': True, 'fase': 'largou', 'recompensa': None}
         with self.tranca:
             regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
+            afixo_ata = self._afixo_guardado('salas_grupo_afixo', 'gid', gid)     # 07/10
         pedido = {'membros': membros,
                   'ata': {'dungeonId': g['dungeon'], 'roomIndex': g['sala'], 'dificuldade': g['dificuldade'],
                           'semente': g['semente'], 'carry': _objeto(g['carry']),
-                          'regras': regras_ata},                # 19/09: o juiz confere contra a versão dele
+                          'regras': regras_ata,                 # 19/09: o juiz confere contra a versão dele
+                          'afixo': afixo_ata},                  # 07/10: a sala se refaz com o afixo com que abriu
                   'lances': lances, 'hashFinal': None,
                   'contexto': {'agoraMs': int(time.time() * 1000), 'fatores': {}}}
         try:

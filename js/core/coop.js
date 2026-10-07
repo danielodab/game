@@ -1161,7 +1161,8 @@ var JOGO = (typeof window !== 'undefined')
       var idsDe = function (lista) { return lista.map(function (h) { return h.heroId || h.classId; }); };
       Aut.abreGrupo({ dungeonId: g.dungeonId, roomIndex: g.roomIndex, dificuldade: g.dificuldade || 'normal',
                       herois: idsDe(meus), dono: meuId(),
-                      parceiro: { conta: contaPar, dono: p.id, herois: idsDe(pars) } }).then(function (r) {
+                      parceiro: { conta: contaPar, dono: p.id, herois: idsDe(pars) },
+                      afixo: afixoProposto(g) }).then(function (r) {     // 07/10: a proposta; o servidor decide
         S.pedindoGrupo = false;
         // 14/09: um herói (meu ou do parceiro) está a 0 no relógio do servidor — a porta espera
         if (r && !r.ok && r.motivo === 'vida-zero') {
@@ -1183,7 +1184,8 @@ var JOGO = (typeof window !== 'undefined')
           return;
         }
         if (Aut.abreLuta) Aut.abreLuta('grupo', r.gid);      // 15/09: a luta aberta de quem lidera, desde o gid
-        mandaAta(g, p, meus, pars, r.semente >>> 0, r.carry || null, r.gid);
+        mandaAta(g, p, meus, pars, r.semente >>> 0, r.carry || null, r.gid,
+                 (typeof r.afixo === 'string' && r.afixo) ? r.afixo : null);   // 07/10: o afixo que o servidor decidiu
       });
       muda();
       return true;
@@ -1191,10 +1193,15 @@ var JOGO = (typeof window !== 'undefined')
     // 13/09: sem servidor, o PV da PORTA de quem lidera vai na ata (14/09: a vida única dos dois)
     mandaAta(g, p, meus, pars,
              (Coop._sementeFixa != null) ? (Coop._sementeFixa >>> 0) : novaSemente(),
-             (g._carryPorta ? g._carryPorta() : (g._carry && g._carry())) || null, null);
+             (g._carryPorta ? g._carryPorta() : (g._carry && g._carry())) || null, null,
+             afixoProposto(g));                                 // 07/10: sem servidor, a proposta de quem lidera
     return true;
   };
-  function mandaAta(g, p, meus, pars, semente, carry, gid) {
+  /* 07/10: o afixo que quem lidera acha que a sala tem (o do dia, no Calabouço do Dia — game.js) */
+  function afixoProposto(g) {
+    try { return (g && g.afixoDaSala) ? (g.afixoDaSala(g.dungeonId) || null) : null; } catch (e) { return null; }
+  }
+  function mandaAta(g, p, meus, pars, semente, carry, gid, afixo) {
     lembraParceiro(p.id, pars);
     S.n++;
     // a ata passa pelo JSON também do lado do líder: os dois motores montam a
@@ -1207,7 +1214,8 @@ var JOGO = (typeof window !== 'undefined')
       versao: Coop.versao(),
       party: meus.concat(pars),
       carry: carry,
-      gid: gid                        // 13/09: a sala do grupo no servidor (null sem sessão)
+      gid: gid,                       // 13/09: a sala do grupo no servidor (null sem sessão)
+      afixo: afixo || null            // 07/10: o afixo da sala (o do bilhete do grupo), igual nos dois motores
     });
     S.chamando = true; S.ataFalhou = false;
     S.ataEnvios = 1; S.ataProx = agora() + Coop.ATA_MS;

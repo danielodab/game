@@ -36,6 +36,11 @@ var JOGO = (typeof window !== 'undefined')
       var id = (d && d.id) ? d.id : k;
       // 08/09: portal fechado não vira Calabouço do Dia
       if (JOGO.DATA.portalFechado && JOGO.DATA.portalFechado(id)) return;
+      /* 07/10: o Poço sem Fundo também não — ele entra em DATA.dungeons quando a conta o visita
+       * (poco.js, dungeonPoco), e a lista com sete trocava o portal do dia nesta página enquanto o
+       * servidor, que não visita o Poço, sorteava entre seis: a praça marcava um portal e o juiz
+       * pagava outro. Agora os dois lados sorteiam sempre entre os mesmos. */
+      if (id === 'poco' || (JOGO.Poco && JOGO.Poco.ID === id)) return;
       fora.push(id);
     });
     return fora;

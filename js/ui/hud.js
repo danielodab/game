@@ -1561,6 +1561,9 @@ var JOGO = (typeof window !== 'undefined')
           // 10/09: o número vem do Diario — era um "+50%" escrito à mão
           painel.appendChild(el('p', 'hub-dia',
             tr('☀ <b>Calabouço do dia</b> — +{a}% de saque até a meia-noite', { a: Math.round((JOGO.Diario.BONUS_DROP - 1) * 100) })));
+          // 07/10: o AFIXO do dia — a regra a mais com que as salas de hoje abrem (js/core/afixos.js)
+          var afxP = afixoDe(safe(function () { return G().afixoDaSala ? G().afixoDaSala(lugar.id) : null; }, null));
+          if (afxP) painel.appendChild(linhaAfixo(afxP));
         }
         // OS EVENTOS DO MUNDO que valem AQUI (10/09): os gerais e os deste portal
         linhasEventoPortal(lugar.id, ehDia).forEach(function (p) { painel.appendChild(p); });
@@ -1587,6 +1590,9 @@ var JOGO = (typeof window !== 'undefined')
         });
         if (!lista.childNodes.length) lista.appendChild(el('p', 'hub-nota', tr('Ninguém à vista… ainda.')));
         painel.appendChild(lista);
+        // 07/10: a sala do Calabouço do Dia diz o afixo dela ANTES de a luta começar
+        var afxPorta = afixoDe(sala && sala.afixo);
+        if (afxPorta) painel.appendChild(linhaAfixo(afxPorta));
         // 03/10: a sala do Santuário diz a regra dela ANTES de a luta começar
         if (sala && sala.regra) {
           var regrasPorta = sala.regra === 'altar' ? ['fogo', 'agua', 'terra', 'ar'] : [sala.regra];
@@ -2686,6 +2692,12 @@ var JOGO = (typeof window !== 'undefined')
             dsf.cumprido ? tr('☆ {a} cumprido · +25%', { a: esc(dsf.nome) })
                          : tr('☆ {a} se perdeu', { a: esc(dsf.nome) })));
         }
+        // 07/10: o afixo com que a sala foi jogada pagou junto
+        if (lastRewards.afixo) {
+          w.appendChild(el('span', 'rw-desafio is-cumprido rw-afixo',
+            tr('{icone} {nome} · +{pct}%', { icone: esc(lastRewards.afixo.icone || '✦'), nome: esc(lastRewards.afixo.nome),
+                                             pct: Math.round(((lastRewards.afixo.bonus || 1.25) - 1) * 100) })));
+        }
         var chV = chipsEvento('vintem');     // 10/09: o evento do mundo de vinténs
         if (chV) w.appendChild(chV);
         var g = lastRewards.moedas || 0;
@@ -3296,6 +3308,30 @@ var JOGO = (typeof window !== 'undefined')
     if (ht && bt.topoPx !== ht) { bt.topoPx = ht; screens.battle.style.setProperty('--bt-topo', ht + 'px'); }
   }
 
+  /* O AFIXO DE SALA na tela (07/10, js/core/afixos.js): a entrada do catálogo pelo id (ou o próprio
+   * objeto do estado), a linha do painel e o chip da batalha — um desenho só para o portal, a porta,
+   * a linha da sala e a recompensa. */
+  function afixoDe(ref) {
+    if (!ref) return null;
+    if (typeof ref === 'object') return ref;
+    return safe(function () { return JOGO.Afixos ? JOGO.Afixos.porId(ref) : null; }, null);
+  }
+  function afixoBonusPct() {
+    return Math.round(safe(function () { return JOGO.Afixos.BONUS; }, 0.25) * 100);
+  }
+  function linhaAfixo(a) {
+    return el('p', 'hub-afixo',
+      tr('{icone} <b>Afixo de hoje: {nome}</b> — {texto} Vale +{pct}% de XP e saque.',
+         { icone: esc(a.icone || '✦'), nome: esc(a.nome), texto: esc(a.texto), pct: afixoBonusPct() }));
+  }
+  function chipAfixo(a) {
+    var ch = el('span', 'afixo-chip', esc(a.icone || '✦') + ' ' + esc(a.nome));
+    tipOn(ch, tr('Afixo: {nome}', { nome: a.nome }),
+      tr('{a}<br>Valendo: +{pct}% de XP e saque na vitória.', { a: esc(a.texto), pct: afixoBonusPct() }),
+      '#9ad8ff');
+    return ch;
+  }
+
   function paintRoom(s) {
     clear(bt.room);
     var dg = null, ds = dungeons();
@@ -3331,6 +3367,8 @@ var JOGO = (typeof window !== 'undefined')
         s.desafio.vivo ? '#e8c25a' : '#8895a6');
       bt.room.appendChild(dch);
     }
+    // 07/10: o afixo da sala, ao lado do desafio (a regra a mais com que ela abriu)
+    if (s.afixo) bt.room.appendChild(chipAfixo(s.afixo));
   }
 
   function paintTimeline(s) {
@@ -12036,11 +12074,15 @@ var JOGO = (typeof window !== 'undefined')
         var fim0 = ini0.getTime() + 86400000;
         var ts14 = meio.getTime();
         var doDia = safe(function () { return JOGO.Diario.hoje(ts14); }, null);
+        // 07/10: e o afixo daquele dia (js/core/afixos.js), para planejar a semana
+        var afx14 = afixoDe(safe(function () { return JOGO.Afixos.doDia(ts14); }, null));
         var evs14 = todos.filter(function (e) { return e.inicio * 1000 < fim0 && e.fim * 1000 > ini0.getTime(); });
         var linha14 = el('div', 'ag-dia14' + (d14 === 0 ? ' is-hoje' : ''));
         linha14.appendChild(el('b', null, Ag.DIA_CURTO[meio.getDay()] + ' ' + dois(meio.getDate()) + '/' + dois(meio.getMonth() + 1)));
         linha14.appendChild(el('span', 'ag-dia14-dia',
-          doDia ? tr('☀ {a} — Calabouço do Dia', { a: esc(Ag.nomeCalabouco(doDia.dungeonId)) }) : '—'));
+          doDia ? tr('☀ {a} — Calabouço do Dia', { a: esc(Ag.nomeCalabouco(doDia.dungeonId)) }) +
+                  (afx14 ? ' · ' + esc(afx14.icone || '✦') + ' ' + esc(afx14.nome) : '')
+                : '—'));
         if (evs14.length) {
           linha14.appendChild(el('span', 'ag-dia14-ev', evs14.map(function (e) {
             return esc(Ag.rotulo(e)) + ' · ' + esc(e.titulo);

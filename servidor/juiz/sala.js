@@ -137,6 +137,9 @@ function refazEm(J, entrada) {
   }
   const lances = Array.isArray(c.lances) ? c.lances : [];
   if (lances.length > LANCES_MAX) throw recusa('lances demais', 'entrada');
+  // 07/10: o AFIXO do bilhete (js/core/afixos.js) — null é a sala de sempre; um id fora do catálogo é entrada torta
+  const afixo = (c.afixo === undefined || c.afixo === null) ? null : c.afixo;
+  if (afixo !== null && (typeof afixo !== 'string' || !afixo || afixo.length > 40)) throw recusa('afixo inválido', 'entrada');
 
   const E = J.Engine;
   /* A VERSÃO DAS REGRAS DO BILHETE (19/09). A API guarda, ao abrir, o número que
@@ -171,7 +174,8 @@ function refazEm(J, entrada) {
         { seed: c.semente, vidaA: objetoOuNull(c.vidaA), vidaB: objetoOuNull(c.vidaB) });
     } else {
       st = E.createBattle(c.dungeonId, c.roomIndex, c.party,
-        { seed: c.semente, dificuldade: c.dificuldade || 'normal', escolhePosicao: c.escolhePosicao !== false });
+        { seed: c.semente, dificuldade: c.dificuldade || 'normal', escolhePosicao: c.escolhePosicao !== false,
+          afixo: afixo });          // 07/10: a sala nasce com o afixo com que abriu
     }
   } catch (e) {
     throw recusa('a sala não existe nestas regras', 'entrada');

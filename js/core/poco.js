@@ -375,6 +375,11 @@ var JOGO = (typeof window !== 'undefined')
     return fora;
   }
 
+  /* 07/10: o gerador de perigos à mão para quem põe o chão do Poço numa sala que não é dele
+   * (o afixo Chão Traiçoeiro, js/core/afixos.js). `grade` é o layout em linhas de caracteres
+   * e `andar` só decide quantos e quais tipos (Po.TIPOS, Po.perigosNoAndar). */
+  Po.geraPerigos = function (andar, grade, rnd) { return geraPerigos(andar, grade, rnd || Math.random); };
+
   /* Garante chão: o poço existe e tem salas até o andar `n` — Game chama
    * antes de descer (a sala seguinte SEMPRE já existe quando o botão vem). */
   Po.preparar = function (n) {

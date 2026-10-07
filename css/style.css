@@ -1987,6 +1987,13 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   color: #ffe9a8; background: rgba(230,181,60,.12);
   border: 1px solid rgba(230,181,60,.4);
 }
+/* O AFIXO DE SALA (07/10, js/core/afixos.js): a linha do portal e da porta, azul-gelo para não se
+   confundir com o dourado do Calabouço do Dia nem com o azul-céu dos eventos do Mestre */
+.hub-afixo {
+  margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 1.35;
+  color: #d6efff; background: rgba(120,190,255,.10);
+  border: 1px solid rgba(120,190,255,.42);
+}
 /* OS EVENTOS DO MUNDO (10/09): a faixa do Acampamento com o que o Mestre
    ligou (some quando não há nada no ar), a linha do evento no painel do
    portal e a ficha do Mestre (gmagenda). Azul-céu para não confundir com o
@@ -2404,6 +2411,15 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
   color: #e8c25a; border: 1px solid rgba(232,194,90,.65);
   background: rgba(232,194,90,.10);
 }
+/* 07/10: o chip do afixo da sala, ao lado do desafio (mesma forma, azul-gelo) */
+.afixo-chip {
+  display: inline-block; margin-left: 8px; padding: 2px 9px;
+  font: 700 11px var(--ui-sans, system-ui); letter-spacing: .04em;
+  border-radius: 9px; cursor: default;
+  color: #9ad8ff; border: 1px solid rgba(154,216,255,.6);
+  background: rgba(154,216,255,.10);
+}
+.rw-afixo { color: #9ad8ff; }
 .desafio-chip.is-perdido {
   color: #77808d; border: 1px solid #333b46;
   text-decoration: line-through; opacity: .8;

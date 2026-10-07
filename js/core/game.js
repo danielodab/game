@@ -379,8 +379,20 @@ var JOGO = (typeof window !== 'undefined')
   }
   function pedidoDaSala() {
     return { dungeonId: Game.dungeonId, roomIndex: Game.roomIndex,
-             dificuldade: Game.dificuldade || 'normal', herois: Game.party.slice() };
+             dificuldade: Game.dificuldade || 'normal', herois: Game.party.slice(),
+             afixo: afixoProposto(Game.dungeonId) };     // 07/10: o que esta página acha; o servidor decide
   }
+  /* O AFIXO DA SALA (07/10, js/core/afixos.js): no Calabouço do Dia a sala abre com o afixo do dia. Esta é
+   * a PROPOSTA da página (o relógio do servidor, pela Agenda, quando medido); com sessão o servidor decide e
+   * devolve no bilhete (o que vale é o de lá); sem servidor, em casa, a proposta é a regra. */
+  function afixoProposto(dungeonId) {
+    var Af = JOGO.Afixos, Dd = JOGO.Diario;
+    if (!Af || !Af.doDia || !Dd || !Dd.ehHoje) return null;
+    var ts = Date.now();
+    try { if (JOGO.Agenda && JOGO.Agenda.agora) ts = JOGO.Agenda.agora(); } catch (e0) { ts = Date.now(); }
+    try { return Dd.ehHoje(dungeonId || Game.dungeonId, ts) ? Af.doDia(ts) : null; } catch (e) { return null; }
+  }
+  Game.afixoDaSala = afixoProposto;      // a HUD (o painel do portal, a porta) e o Coop (a ata) perguntam
   function preparaBilhete() {
     /* 13/09: com a vida subindo o bilhete NÃO é pedido de antemão — o servidor soma a vida
      * que voltou até o instante em que o bilhete abre, e um bilhete pedido na chegada à
@@ -723,9 +735,11 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     ataSolo = bil ? { bilhete: bil.bilhete, lances: [] } : null;
+    // 07/10: o afixo é o do BILHETE (o servidor decidiu); sem bilhete, a proposta da página
+    var afixoSala = bil ? (bil.afixo || null) : afixoProposto(Game.dungeonId);
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
-      bil ? { seed: bil.semente, dificuldade: Game.dificuldade, escolhePosicao: true }
-          : { dificuldade: Game.dificuldade, escolhePosicao: true });
+      bil ? { seed: bil.semente, dificuldade: Game.dificuldade, escolhePosicao: true, afixo: afixoSala }
+          : { dificuldade: Game.dificuldade, escolhePosicao: true, afixo: afixoSala });
     if (Game.dungeonId === 'poco' && JOGO.Poco) {
       JOGO.Poco.escalaEstado(Game.state, Game.roomIndex + 1);
     }
@@ -822,6 +836,8 @@ var JOGO = (typeof window !== 'undefined')
              // 03/10: a regra de terreno da sala do Santuário ('fogo' | 'agua' | 'terra' | 'ar' | 'altar'):
              // a porta da antessala a diz ANTES de a luta começar
              regra: (room && room.santuario && room.santuario.regra) || null,
+             // 07/10: o afixo com que a sala deve abrir (o do dia, no Calabouço do Dia) — a porta o diz
+             afixo: afixoProposto(Game.dungeonId),
              monstros: Game.monstrosDaSala(Game.dungeonId, Game.roomIndex) };
   };
 
@@ -1508,7 +1524,8 @@ var JOGO = (typeof window !== 'undefined')
     var st;
     try {
       st = E().createBattle(ata.dungeonId, ata.roomIndex, JSON.parse(JSON.stringify(ata.party)),
-                            { seed: ata.semente, dificuldade: ata.dificuldade || 'normal', escolhePosicao: true });
+                            { seed: ata.semente, dificuldade: ata.dificuldade || 'normal', escolhePosicao: true,
+                              afixo: ata.afixo || null });     // 07/10: o afixo da ata, igual nos dois clientes
     } catch (e) { return false; }
     Game.selectedSpellId = null;
     Game.hoverTile = null;
@@ -2580,6 +2597,11 @@ var JOGO = (typeof window !== 'undefined')
     var desafioSala = st.desafio || null;
     var bonusDesafio = (desafioSala && desafioSala.cumprido)
       ? (1 + (E().DESAFIO_BONUS || 0.25)) : 1;
+    /* O AFIXO DA SALA (07/10, js/core/afixos.js) paga +25% de XP e de saque, ao lado do desafio e pela
+     * mesma razão: a economia base não é tocada, muda só o que ESTA sala pagou. O número mora em Af.BONUS. */
+    var afixoSala = st.afixo || null;
+    var bonusAfixo = (afixoSala && JOGO.Afixos) ? (1 + num(JOGO.Afixos.BONUS, 0.25)) : 1;
+    bonusDesafio *= bonusAfixo;
     /* O POÇO paga na moeda da escalada (25/08): o mesmo fator que engordou
      * os inimigos multiplica o XP — andar 11 rende o dobro do andar 1. */
     var fatorPoco = (Game.dungeonId === 'poco' && JOGO.Poco)
@@ -2847,6 +2869,9 @@ var JOGO = (typeof window !== 'undefined')
       desafio: desafioSala ? { id: desafioSala.id, nome: desafioSala.nome,
                                texto: desafioSala.texto,
                                cumprido: !!desafioSala.cumprido } : null,
+      // 07/10: o afixo com que a sala foi jogada (pagou +25% de XP e saque), para a tela dizer
+      afixo: afixoSala ? { id: afixoSala.id, nome: afixoSala.nome, texto: afixoSala.texto,
+                           icone: afixoSala.icone || '', bonus: bonusAfixo } : null,
       drops: drops,
       pets: pets,
       petCards: petCards,        // 03/09: as cartas de bicho do chefe

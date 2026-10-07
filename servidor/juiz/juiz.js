@@ -56,8 +56,23 @@ registra('GET', '/regras', () => {
   // o Poço não tem fim: cada andar nasce da semente do bilhete
   if (J.Poco && J.Poco.salaSemeada) calaboucos.poco = 9999;
   regrasCache = { ok: true, versao: versaoDosDados(), regras: versaoDasRegras(),
-                  calaboucos, classes: Object.keys(J.DATA.classes || {}) };
+                  calaboucos, classes: Object.keys(J.DATA.classes || {}),
+                  // 07/10: os afixos de sala que a API pode aceitar num bilhete (js/core/afixos.js)
+                  afixos: (J.Afixos && J.Afixos.ids) ? J.Afixos.ids() : [] };
   return regrasCache;
+});
+
+/* O DIA (07/10): o Calabouço do Dia e o afixo dele no instante `ms` (o relógio da API), pela MESMA
+ * regra da página (diario.js e afixos.js, o dia de Brasília). A API guarda a resposta por dia e grava
+ * o afixo no bilhete ao abrir a sala: é o que o /sala/fecha recebe de volta para refazer. POST e não
+ * GET porque o juiz não lê a query da URL — o corpo leva {ms}. */
+registra('POST', '/dia', (corpo) => {
+  const ms = (corpo && typeof corpo.ms === 'number' && isFinite(corpo.ms)) ? corpo.ms : Date.now();
+  const J = motor.mundo(['js/core/diario.js']).JOGO;
+  const dia = (J.Diario && J.Diario.hoje) ? J.Diario.hoje(ms) : null;
+  return { ok: true, chave: J.Afixos ? J.Afixos.chaveDoDia(ms) : null,
+           dungeonId: dia ? dia.dungeonId : null,
+           afixo: (J.Afixos && J.Afixos.doDia) ? J.Afixos.doDia(ms) : null };
 });
 
 /* A VERSÃO DOS DADOS: um hash dos arquivos que o juiz carrega. O cálculo não

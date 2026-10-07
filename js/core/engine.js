@@ -176,6 +176,18 @@ var JOGO = (typeof window !== 'undefined')
  *       - no FIM de cada rodada a correnteza e a rajada deslocam, e no COMEÇO
  *         da seguinte os pilares trocam — a casa do pilar vira muro e volta.
  *     Nada disso sorteia. Sobe Engine.VERSAO_REGRAS para 7.
+ * 22. OS AFIXOS DE SALA (07/10): a regra posta por cima da sala de sempre —
+ *     o Calabouço do Dia abre com o afixo do dia (js/core/afixos.js). A sala
+ *     nasce com `opts.afixo` (o id que o bilhete guarda) e `state.afixo`; o
+ *     motor chama por `Ax()` e só com o campo presente:
+ *       - vida, passo e esquiva a mais de quem nasce do lado inimigo (números,
+ *         aplicados na criação); dano a mais de quem é do lado inimigo, no
+ *         mesmo funil da dificuldade (dealDamage);
+ *       - o clima preso: a virada de clima da sala não acontece;
+ *       - o chão traiçoeiro: os perigos do Poço nascem na sala, de um gerador
+ *         semeado pela semente dela (Po.regras monta e cuida do resto).
+ *     Uma sala sem afixo não passa por nada disso. O id entra no hash. Sobe
+ *     Engine.VERSAO_REGRAS para 8.
  * ==========================================================================*/
 
 (function () {
@@ -286,7 +298,7 @@ var JOGO = (typeof window !== 'undefined')
    *       novos e oito monstros no bestiário: a página de antes não conhece o
    *       calabouço 'elementsanctum' nem refaz uma sala dele, e o número diz
    *       ao servidor qual das duas páginas está falando. */
-  Engine.VERSAO_REGRAS = 7;
+  Engine.VERSAO_REGRAS = 8;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -319,6 +331,8 @@ var JOGO = (typeof window !== 'undefined')
    * nenhuma delas. `INTERNO` (lá embaixo) entrega a Poco.regras as funções
    * privadas do motor de que a regra precisa — dano, empurrão, cura. */
   function Pg() { var p = JOGO.Poco; return (p && p.regras) || null; }
+  // 07/10: os afixos de sala (js/core/afixos.js) — só com `opts.afixo` na criação da sala
+  function Ax() { var a = JOGO.Afixos; return (a && a.aplica) ? a : null; }
   /* O SANTUÁRIO DOS ELEMENTOS (03/10, decisão de design 21). O mesmo desenho:
    * a regra dos quatro quadrantes mora em js/core/santuario.js
    * (Santuario.regras) e o motor só a chama por `Sg()`, com `state.santuario`
@@ -1035,6 +1049,15 @@ var JOGO = (typeof window !== 'undefined')
     if (room.perigos && Pg()) Pg().monta(state, room, INTERNO);
     // 03/10: a regra do quadrante do Santuário (braseiros, pilares e os avisos da rodada 1)
     if (room.santuario && Sg()) Sg().monta(state, room, INTERNO);
+    /* 07/10: o AFIXO da sala (decisão 22). Sem o módulo carregado uma sala com afixo não pode nascer:
+     * nascer sem a regra e fechar no juiz com ela seria 'divergiu' para um jogador honesto. O chão
+     * traiçoeiro é semeado pela MESMA chave da semente da sala — a mesma sala nos dois lados. */
+    if (opts.afixo) {
+      if (!Ax()) throw new Error('Engine.createBattle: sala com afixo sem js/core/afixos.js');
+      var chaveAfixo = dungeonId + ':' + roomIndex + ':' + ((opts.seed != null) ? String(opts.seed) : seedIds.join(','));
+      Ax().aplica(state, opts.afixo, room, chaveAfixo, INTERNO);
+      log(Tx('Afixo da sala: {a} — {b}', { a: state.afixo.nome, b: state.afixo.texto }));
+    }
 
     // A ESCOLHA DA POSIÇÃO (03/09, pedido do dono): "a posição no início da
     // batalha o usuário que escolhe. O jogo dá 4 opções aleatórias… quando
@@ -1973,6 +1996,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!st || !st.units) return 0;
     var p = [nh(st._rng), nh(st.round), nh(st.turno || 0), nh(st.activeIdx), st.phase, st.weather,
              nh(st._uidCounter), (st.order || []).join(',')];
+    if (st.afixo && st.afixo.id) p.push('A' + st.afixo.id);     // 07/10: só a sala com afixo muda de hash
     var i, j, u, ks, e, t;
     for (i = 0; i < st.units.length; i++) {
       u = st.units[i];
@@ -2482,7 +2506,9 @@ var JOGO = (typeof window !== 'undefined')
     if (sourceUid && amount > 0) {
       var quem = Engine.findUnit(state, sourceUid);
       if (quem && quem.side === 'enemy') {
-        amount = Math.max(1, Math.round(amount * (Engine.dif(state).dano || 1)));
+        // 07/10: o afixo Ferozes entra no MESMO produto da dificuldade (decisão 22) — um arredondamento só
+        var fAfixo = (state.afixo && state.afixo.dano) || 1;
+        amount = Math.max(1, Math.round(amount * (Engine.dif(state).dano || 1) * fAfixo));
       }
     }
     var cobertura = null;                       // 19/09: a cobertura baixa, sobre o dano já escalado
@@ -4292,6 +4318,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     var dungeon = getDungeon(state.dungeonId);
     var every = (dungeon && dungeon.weatherShiftEveryRounds) || 0;
+    // 07/10: o afixo Clima Preso segura a virada (decisão 22)
+    if (state.afixo && state.afixo.climaPreso) every = 0;
     if (every > 0 && state.round > 1 && (state.round - 1) % every === 0) {
       var cyc = weatherCycle(state);
       if (cyc.length > 1) {
@@ -4536,6 +4564,10 @@ var JOGO = (typeof window !== 'undefined')
   var INTERNO = {
     dano: dealDamage, empurra: forcedMove, cura: applyHeal,
     tileAt: tileAt, isFloor: isFloor, isWalkable: isWalkable,
-    getTrait: getTrait, manhattan: manhattan, log: log, emit: emit
+    getTrait: getTrait, manhattan: manhattan, log: log, emit: emit,
+    // 07/10: o afixo Clima Virado sorteia outro clima da roda da sala e o prende (afixos.js)
+    setWeather: setWeather, weatherCycle: weatherCycle
   };
+  // só para as provas (tests/afixos.js): a porta interna, para medir um golpe sem jogar uma sala inteira
+  Engine._interno = function () { return INTERNO; };
 })();

@@ -118,7 +118,16 @@ Corpo: `{dungeonId, roomIndex, dificuldade, herois: [heroId, heroId?], versaoReg
 - O `carry` (HP com que cada herói entra) é a **vida de agora** do herói (§5.2.1, 14/09: a vida
   única), em QUALQUER sala — a 0 da descida, o Poço, outro calabouço. Só entram os heróis que
   não estão cheios; todos cheios, `carry = null`. Herói a 0 PV: 409 `vida-zero`.
-- Resposta: `{ok, bilhete, semente, carry}`.
+- **O afixo** (07/10, `js/core/afixos.js`; `docs/SISTEMAS.md` §6, "Os afixos do Calabouço do Dia"). A
+  API pergunta ao juiz o dia (`POST /dia` → `{dungeonId, afixo}`, guardado por dia de Brasília) e, no
+  portal **do dia**, abre a sala com o afixo do dia e o guarda em `salas_afixo(bilhete, afixo)` (tabela
+  nova); em qualquer outro portal a sala não leva afixo. O campo `afixo` do pedido é só a PROPOSTA da
+  página: fora do catálogo que o juiz anuncia (`GET /regras`, `afixos`) cai 400; num portal que não é o
+  do dia é ignorado (à meia-noite a página pode estar um dia atrás do servidor). O que vale volta na
+  resposta. Ao fechar, o `bilhete` enviado ao juiz leva `afixo`, e a sala é refeita com ele — a página
+  que jogasse sem o afixo do bilhete cai como `divergiu`. A sala em grupo segue o mesmo desenho
+  (`salas_grupo_afixo(gid, afixo)`, a ata com `afixo`). Prova: `tests/afixos_api.py`.
+- Resposta: `{ok, bilhete, semente, carry, afixo}`.
 
 ### 4.2 `POST /api/sala/fechar`
 Corpo: `{bilhete, lances: [...], hashFinal}`.

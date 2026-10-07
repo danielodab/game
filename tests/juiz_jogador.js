@@ -34,7 +34,8 @@ function* partida(p) {
   const andarPoco = p.dungeonId === 'poco' ? p.roomIndex + 1 : 0;
   if (andarPoco) J.Poco.poeSala(andarPoco, J.Poco.salaSemeada(andarPoco, p.semente));
   const st = E.createBattle(p.dungeonId, p.roomIndex, party,
-    { seed: p.semente, dificuldade: p.dificuldade || 'normal', escolhePosicao: true });
+    { seed: p.semente, dificuldade: p.dificuldade || 'normal', escolhePosicao: true,
+      afixo: p.afixo || null });            // 07/10: o afixo do bilhete, como o Game faz ao entrar
   if (andarPoco) J.Poco.escalaEstado(st, andarPoco);
   aplicaCarry(st, p.carry || null);
   E.events.length = 0;
