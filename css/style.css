@@ -3746,7 +3746,7 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
 @media (pointer: coarse) and (orientation: portrait) and (max-width: 480px) {
   .hub-dock { padding: 3px 4px; bottom: calc(var(--sa-b, 0px) + 6px); }
   .hub-dock-b { min-height: 44px; padding: 4px 2px 3px; gap: 2px; }
-  .hub-chat { left: calc(var(--sa-l, 0px) + 8px); bottom: calc(var(--sa-b, 0px) + 100px); width: min(240px, 62vw); }
+  .hub-chat { left: calc(var(--sa-l, 0px) + 8px); bottom: calc(var(--sa-b, 0px) + 106px); width: min(240px, 62vw); }   /* 06/10: 100 → 106, o cais de duas fileiras tem 102 px e o chat pisava 2 px nele */
   .hub-chat-log { max-height: 96px; }
   .hub-painel { bottom: calc(var(--sa-b, 0px) + 140px); }
 }
@@ -3991,3 +3991,26 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .grupo-lado:not(.is-praca) .gl-tx { width: 100%; flex: none; gap: 2px; }
   .grupo-lado:not(.is-praca) .gl-coroa { top: -7px; left: -3px; font-size: 12px; }
 }
+
+/* A ETIQUETA DE ZONA DA PRAÇA E O SINO (06/10). No toque a etiqueta "☠ Campo de PvP" (e a da fila da Arena)
+   nascia no mesmo canto do sino dos avisos e ficava POR CIMA dele. A coluna da direita passa a ser uma pilha:
+   o Menu, a etiqueta, o sino e a moeda "Prêmio Grátis!" — com a etiqueta na tela, o sino e a moeda descem um
+   degrau (o painel do sino já é posto pela medida do sino: sinoLugar). A etiqueta fica na largura da coluna
+   (os 126 px que as filas do bloco da esquerda deixam livres) e é presa pelo PÉ: o texto comprido — a fila da
+   Arena junto com o Campo, ou em inglês — quebra em até três linhas e cresce para CIMA (o pé fica a 106 px
+   do alto: três linhas ainda param abaixo do Menu), sem descer para o sino nem entrar nos cartões de vida.
+   No PC as pílulas e a etiqueta seguem onde estavam. */
+@media (pointer: coarse) {
+  .screen-hub .arena-selo { right: calc(var(--sa-r, 0px) + 8px); top: auto; bottom: calc(100% - var(--sa-t, 0px) - 106px);
+    z-index: 4; box-sizing: border-box; min-height: 26px; max-height: 50px; max-width: 118px; padding: 4px 9px; border-radius: 13px;
+    white-space: normal; text-align: center; line-height: 1.2; }
+  .screen-hub:has(.arena-selo) .hub-sino { top: calc(var(--sa-t, 0px) + 112px); }
+  .screen-hub:has(.arena-selo) .pan-atalho { top: calc(var(--sa-t, 0px) + 114px); }
+  .screen-hub:has(.arena-selo) .hub-sino:not(.is-off) ~ .pan-atalho { top: calc(var(--sa-t, 0px) + 164px); }
+}
+html.celular .screen-hub .arena-selo { right: calc(var(--sa-r, 0px) + 8px); top: auto; bottom: calc(100% - var(--sa-t, 0px) - 106px);
+  z-index: 4; box-sizing: border-box; min-height: 26px; max-height: 50px; max-width: 118px; padding: 4px 9px; border-radius: 13px;
+  white-space: normal; text-align: center; line-height: 1.2; }
+html.celular .screen-hub:has(.arena-selo) .hub-sino { top: calc(var(--sa-t, 0px) + 112px); }
+html.celular .screen-hub:has(.arena-selo) .pan-atalho { top: calc(var(--sa-t, 0px) + 114px); }
+html.celular .screen-hub:has(.arena-selo) .hub-sino:not(.is-off) ~ .pan-atalho { top: calc(var(--sa-t, 0px) + 164px); }
