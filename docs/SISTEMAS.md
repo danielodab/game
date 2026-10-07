@@ -736,6 +736,28 @@ do desenho 2D antigo.
 
 ---
 
+## 9-B. O balcão de vinténs (07/10)
+
+O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
+das salas comprava pouco — poção, e barras a 80 por 1 (a Reescrita da loja, 250 barras, ficava a
+20.000 vinténs). O mercador passou a vender, **só por vintém**, na aba das poções do Mercadinho
+(`js/core/mercado.js`, `M.BALCAO`):
+
+| o quê | preço | a trava |
+|---|---|---|
+| **Pergaminho da Reescrita** | 8.000 vinténs | um a cada **30 dias** (a mesma janela da loja: "um caminho por mês" é desenho, não preço) |
+| **Pedras do dia** — 10 pedras do elemento do **chefe** do Calabouço do Dia | 1.500 vinténs | **um lote por dia** (o dia de Brasília) |
+
+As travas moram no `Progress.state.balcao` (`reescritaEm` em segundos do relógio do servidor;
+`pedrasDia` em AAAAMMDD) e entram no hash da economia; o relógio é o do **servidor**
+(`JOGO.Agenda.agora`; no juiz, o instante do pedido — a op não aceita relógio do cliente). Paga com os
+vinténs do saco, tudo ou nada, como a banca das poções; com a autoridade ligada a mesma função roda
+no juiz (ops `comprarReescrita` e `comprarPedrasDoDia`). O lote de pedras fica abaixo do preço da loja
+(25–40 barras = 2.000–3.200 vinténs) só porque é um lote, de um elemento, por dia: quem farma chega às
+pedras; quem paga adianta. Prova: `node tests/juiz_balcao.js` (18).
+
+---
+
 ## 10. Progressão
 
 Nível por experiência, com tabela em `progression.js`. A cada nível o herói

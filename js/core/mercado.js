@@ -189,6 +189,93 @@ var JOGO = (typeof window !== 'undefined')
     });
   };
 
+  /* O BALCÃO DE VINTÉNS (07/10). O dono: "quero que o jogador comum tenha direito a crescer igual quem
+   * paga". O vintém das diárias e das salas comprava pouco: poção, e barras a 80 por 1 — a Reescrita da loja
+   * (250 barras) ficava a 20.000 vinténs. O mercador passa a vender, SÓ por vintém, duas coisas que importam:
+   *   reescrita   o Pergaminho da Reescrita por 8.000 vinténs, UM a cada 30 dias (a mesma janela da loja:
+   *               "um caminho por mês" é regra de desenho, não de preço) — 2,5× mais barato que pela loja,
+   *               e ainda assim um mês inteiro de diárias;
+   *   pedrasDia   10 pedras do ELEMENTO do Calabouço do Dia (o elemento do chefe dele) por 1.500 vinténs, UM
+   *               lote por dia — abaixo do preço da loja (25–40 barras = 2.000–3.200 vinténs) só porque é
+   *               um lote, de um elemento, por dia: quem farma chega às pedras; quem paga adianta.
+   * As travas moram no Progress (`state.balcao`: `reescritaEm` em segundos do servidor, `pedrasDia` em
+   * AAAAMMDD de Brasília) e entram no hash da economia; o relógio é o do SERVIDOR (JOGO.Agenda.agora — no
+   * juiz, o instante do pedido). Paga com os vinténs do SACO, tudo ou nada, como a banca das poções; com a
+   * autoridade ligada a MESMA função roda no juiz (ops comprarReescrita e comprarPedrasDoDia). */
+  M.BALCAO = {
+    reescrita: { preco: 8000, diasEntre: 30 },
+    pedrasDia: { preco: 1500, qtd: 10 }
+  };
+  function relogioMs() {
+    try { if (JOGO.Agenda && JOGO.Agenda.agora) { var t = +JOGO.Agenda.agora(); if (isFinite(t) && t > 0) return t; } } catch (e) {}
+    return Date.now();
+  }
+  function chaveDoDia(ts) {
+    var d = new Date(ts - 3 * 3600 * 1000);
+    return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  }
+  /* o elemento do portal = o elemento do CHEFE dele (o dado do calabouço não declara elemento) */
+  function elementoDoPortal(dungeonId) {
+    var ms = DATA().monsters || {}, k;
+    for (k in ms) if (ms.hasOwnProperty(k) && ms[k] && ms[k].boss && ms[k].dungeonId === dungeonId && ms[k].element) return ms[k].element;
+    return null;
+  }
+  function pedraDoElemento(el) {
+    var ps = DATA().stones || {}, k;
+    for (k in ps) if (ps.hasOwnProperty(k) && ps[k] && ps[k].element === el) return k;
+    return null;
+  }
+  /* o que o balcão vende AGORA e por quê não (para a vitrine e para as duas compras) */
+  M.balcao = function (ts) {
+    var P = JOGO.Progress, Dd = JOGO.Diario;
+    var t = (typeof ts === 'number' && isFinite(ts)) ? ts : relogioMs();
+    var travas = (P && P.balcao) ? P.balcao() : { reescritaEm: 0, pedrasDia: 0 };
+    var cfgR = M.BALCAO.reescrita, cfgP = M.BALCAO.pedrasDia;
+    var liberaEm = travas.reescritaEm ? travas.reescritaEm + cfgR.diasEntre * 86400 : 0;
+    var reescrita = { preco: cfgR.preco, diasEntre: cfgR.diasEntre, liberaEm: liberaEm,
+                      pode: !liberaEm || t / 1000 >= liberaEm };
+    var dia = (Dd && Dd.hoje) ? Dd.hoje(t) : null;
+    var el = dia ? elementoDoPortal(dia.dungeonId) : null;
+    var stoneId = el ? pedraDoElemento(el) : null;
+    var hoje = chaveDoDia(t);
+    var pedras = { preco: cfgP.preco, qtd: cfgP.qtd, dungeonId: dia ? dia.dungeonId : null, elemento: el, stoneId: stoneId,
+                   compradoHoje: travas.pedrasDia === hoje, pode: !!stoneId && travas.pedrasDia !== hoje, dia: hoje };
+    return { reescrita: reescrita, pedrasDia: pedras, agoraMs: t };
+  };
+  M.comprarReescrita = function () {
+    var db = DB(), P = JOGO.Progress;
+    if (!db || !P || !P.addPergaminho || !P.balcaoMarca) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
+    var b = M.balcao();
+    if (!b.reescrita.pode) {
+      return Promise.resolve({ ok: false, espera: true, liberaEm: b.reescrita.liberaEm,
+                               erro: Tx('O mercador vende uma Reescrita a cada {dias} dias — a próxima só depois.', { dias: b.reescrita.diasEntre }) });
+    }
+    var preco = b.reescrita.preco;
+    return db.gastarMoedas(preco).then(function (pg) {
+      if (!pg || !pg.ok) return { ok: false, semVintem: true, erro: Tx('Faltam vinténs no saco: a Reescrita custa {preco}.', { preco: preco }) };
+      if (!P.addPergaminho('elemento', 1)) {
+        return db.ganharMoedas(preco).then(function () { return { ok: false, cheio: true, erro: Tx('Não cabe mais Pergaminho da Reescrita na conta.') }; });
+      }
+      P.balcaoMarca('reescritaEm', Math.floor(b.agoraMs / 1000));
+      return { ok: true, pagou: preco, liberaEm: Math.floor(b.agoraMs / 1000) + b.reescrita.diasEntre * 86400 };
+    });
+  };
+  M.comprarPedrasDoDia = function () {
+    var db = DB(), P = JOGO.Progress;
+    if (!db || !P || !P.addStones || !P.balcaoMarca) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
+    var b = M.balcao(), pd = b.pedrasDia;
+    if (!pd.stoneId) return Promise.resolve({ ok: false, erro: Tx('O mercador não tem as pedras do dia hoje.') });
+    if (pd.compradoHoje) return Promise.resolve({ ok: false, espera: true, erro: Tx('O lote de pedras do dia é um por dia — volte amanhã.') });
+    return db.gastarMoedas(pd.preco).then(function (pg) {
+      if (!pg || !pg.ok) return { ok: false, semVintem: true, erro: Tx('Faltam vinténs no saco: o lote custa {preco}.', { preco: pd.preco }) };
+      if (!P.addStones(pd.stoneId, pd.qtd)) {
+        return db.ganharMoedas(pd.preco).then(function () { return { ok: false, erro: Tx('não deu') }; });
+      }
+      P.balcaoMarca('pedrasDia', pd.dia);
+      return { ok: true, pagou: pd.preco, stoneId: pd.stoneId, qtd: pd.qtd, total: P.stoneCount ? P.stoneCount(pd.stoneId) : null };
+    });
+  };
+
   /* Abre o balcão. Ele NÃO se reconstrói: a data é só um carimbo (o resto do
    * jogo ainda a lê), e a lista de ofertas é preservada como está. A única
    * coisa que sai é a banca VELHA do mercador-fantasma, que ficou nos saves

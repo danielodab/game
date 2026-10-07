@@ -749,6 +749,9 @@ var JOGO = (typeof window !== 'undefined')
       var q = Math.floor(Number(qtd));
       return (typeof id === 'string' && q >= 1 && q <= 1000) ? { id: id, qtd: q } : null;
     });
+    // 07/10: o balcão de vinténs (a Reescrita e as pedras do dia) sobe como op sem argumento
+    em(JOGO.Mercado, 'comprarReescrita', 'comprarReescrita', function () { return {}; });
+    em(JOGO.Mercado, 'comprarPedrasDoDia', 'comprarPedrasDoDia', function () { return {}; });
     if (G) {
       em(G, 'aparelha', 'gmAparelha', function () { return {}; });
       em(G, 'pegaItem', 'gmPegaItem', function (itemId) { return { itemId: itemId }; });

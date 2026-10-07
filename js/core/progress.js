@@ -940,6 +940,18 @@ var JOGO = (typeof window !== 'undefined')
     // relógio do servidor na hora da recompensa, nunca o da máquina no load.
     var bxa = num(raw.bonusXpAte, 0);
     if (bxa > 0 && bxa < BONUS_TETO_S) st.bonusXpAte = Math.floor(bxa);
+    // ---- O BALCÃO DE VINTÉNS (07/10, js/core/mercado.js): as travas do que se compra por vintém —
+    // `reescritaEm` (segundos do relógio do servidor da última Reescrita comprada: uma a cada 30 dias) e
+    // `pedrasDia` (AAAAMMDD de Brasília do último lote de pedras do dia: um por dia). Sem esta linha o
+    // load apagaria a trava calado e o balcão venderia de novo.
+    if (isObj(raw.balcao)) {
+      var bl = {};
+      var rEm = num(raw.balcao.reescritaEm, 0);
+      if (rEm > 0 && rEm < BONUS_TETO_S) bl.reescritaEm = Math.floor(rEm);
+      var pDia = Math.floor(num(raw.balcao.pedrasDia, 0));
+      if (pDia >= 20250101 && pDia <= 21001231) bl.pedrasDia = pDia;
+      if (keys(bl).length) st.balcao = bl;
+    }
 
     // ---- NÍVEL DE USO [D19]: peça vestida acima do nível do herói volta ao
     // saco (MESMA série, mesmo level/stars) e pet acima volta à lista. É
@@ -2276,6 +2288,24 @@ var JOGO = (typeof window !== 'undefined')
   };
   Progress.pergaminhos = function () {
     return { xp: pergSaldo('xp'), elemento: pergSaldo('elemento'), salasXp: salasXp() };
+  };
+  /* O BALCÃO DE VINTÉNS (07/10): as travas que o Mercado consulta e marca (a regra e os preços
+   * moram em js/core/mercado.js, M.BALCAO). `balcao()` devolve uma cópia; `balcaoMarca` grava
+   * um campo (só os dois conhecidos — o sanitize apaga qualquer outro). */
+  Progress.balcao = function () {
+    var st = Progress.state;
+    var b = (st && isObj(st.balcao)) ? st.balcao : {};
+    return { reescritaEm: Math.max(0, Math.floor(num(b.reescritaEm, 0))), pedrasDia: Math.max(0, Math.floor(num(b.pedrasDia, 0))) };
+  };
+  Progress.balcaoMarca = function (campo, valor) {
+    var st = Progress.state;
+    if (!st || (campo !== 'reescritaEm' && campo !== 'pedrasDia')) return false;
+    var v = Math.floor(num(valor, 0));
+    if (!(v > 0)) return false;
+    if (!isObj(st.balcao)) st.balcao = {};
+    st.balcao[campo] = v;
+    Progress.save();
+    return true;
   };
   /* LER o da Sabedoria: gasta 1 e soma as salas. Recusa com motivo:
    * 'sem' (nenhum guardado) ou 'cheio' (passaria do teto de cargas). */

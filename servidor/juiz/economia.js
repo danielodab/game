@@ -161,6 +161,10 @@ const OPS = {
   // ---- a banca do mercador (13/09): as poções de vida pelo preço de DATA.consumiveis, com os
   // vinténs do saco. A regra (teto por tipo, vintém que falta) é a do jogo: recusa sem erro
   comprarPocao: (J, a) => J.Mercado.comprarPocao(txt(a, 'id'), int(a, 'qtd', 1, 1000)),
+  // 07/10: o balcão de vinténs — a Reescrita (uma a cada 30 dias) e as pedras do dia (um lote por dia); o
+  // relógio e o dia são os do servidor (Agenda.agora do mundo econômico), nunca um argumento do cliente
+  comprarReescrita: (J) => J.Mercado.comprarReescrita(),
+  comprarPedrasDoDia: (J) => J.Mercado.comprarPedrasDoDia(),
 
   // ---- o título: só o que a régua dá (o pódio vem do ranking do servidor)
   definirTitulo: (J, a, x) => {

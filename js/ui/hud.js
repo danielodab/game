@@ -4740,10 +4740,85 @@ var JOGO = (typeof window !== 'undefined')
    * a regra (teto por tipo, vintém que falta) é a de JOGO.Mercado.comprarPocao, que com a
    * autoridade ligada sobe como a op comprarPocao. `sacoDe()` = os vinténs no saco agora. */
   var mcPocaoQtd = {};
+  /* O BALCÃO DE VINTÉNS (07/10, js/core/mercado.js M.BALCAO): a Reescrita a cada 30 dias e o lote de
+   * pedras do dia — as duas coisas que o vintém compra sem passar pela loja do site. Mora na aba das
+   * poções, acima da banca, com a mesma linha. */
+  function mcBalcaoVintens(lista, sacoDe) {
+    var Mc = JOGO.Mercado;
+    var b = safe(function () { return Mc.balcao(); }, null);
+    if (!b) return;
+    lista.appendChild(el('p', 'mc-resumo', tr('<b>O balcão de vinténs</b>: o que o mercador vende só por vintém — o preço é o mesmo para todo mundo, e a espera também.')));
+    function linha(opts) {
+      var row = el('div', 'mc-linha mc-balcao');
+      var ic = el('span', 'mc-ic');
+      ic.appendChild(opts.icone);
+      row.appendChild(ic);
+      var tx = el('div', 'ms-tx');
+      tx.appendChild(el('div', 'ms-nome', opts.nome));
+      tx.appendChild(el('div', 'ms-prog', opts.sub));
+      row.appendChild(tx);
+      row.appendChild(el('span', 'mc-preco', opts.preco + 'v'));
+      var bC = btn(tr('Comprar'), 'btn-mini btn-gold', function () {
+        var motivo = opts.porque();
+        if (motivo) { toast(motivo); return; }
+        bC.classList.add('is-off');
+        opts.compra().then(function (res) {
+          if (!res || !res.ok) toast((res && res.erro) || tr('não deu'));
+          else toast(opts.feito(res), 'good');
+          if (sheetName === 'mercado') sheetMercado();
+        });
+      });
+      var motivo0 = opts.porque();
+      bC.classList.toggle('mc-falta', !!motivo0);
+      bC.title = motivo0;
+      row.appendChild(bC);
+      lista.appendChild(row);
+    }
+    // a Reescrita
+    var r = b.reescrita;
+    var icoR = el('span', 'perg-glifo', '↺');
+    var esperaR = (!r.pode && r.liberaEm) ? tr('a próxima em {a}', { a: esc(dataCurta(r.liberaEm * 1000)) }) : tr('uma a cada {dias} dias', { dias: r.diasEntre });
+    linha({ icone: icoR, nome: tr('Pergaminho da Reescrita'), preco: r.preco,
+            sub: tr('troca um caminho elemental de um herói · {a}', { a: esperaR }),
+            porque: function () {
+              if (!r.pode) return tr('O mercador vende uma Reescrita a cada {dias} dias — a próxima só depois.', { dias: r.diasEntre });
+              if (sacoDe() < r.preco) return tr('Faltam vinténs no saco: a Reescrita custa {preco}.', { preco: r.preco });
+              return '';
+            },
+            compra: function () { return Mc.comprarReescrita(); },
+            feito: function (res) { return tr('−{pagou} vinténs — um Pergaminho da Reescrita guardado na conta.', { pagou: res.pagou }); } });
+    // as pedras do dia
+    var p = b.pedrasDia;
+    if (p.stoneId) {
+      var sd = (D().stones || {})[p.stoneId] || {};
+      linha({ icone: art('stoneIcon', [p.stoneId, 34], 34), nome: tr('Pedras do dia: {qtd}× {nome}', { qtd: p.qtd, nome: esc(sd.name || p.stoneId) }),
+              preco: p.preco,
+              sub: tr('o elemento do Calabouço do Dia ({a}) · um lote por dia · você tem <b>{tem}</b>',
+                      { a: esc(nomeCalabouco(p.dungeonId)), tem: safe(function () { return P().stoneCount(p.stoneId); }, 0) || 0 }),
+              porque: function () {
+                if (p.compradoHoje) return tr('O lote de pedras do dia é um por dia — volte amanhã.');
+                if (sacoDe() < p.preco) return tr('Faltam vinténs no saco: o lote custa {preco}.', { preco: p.preco });
+                return '';
+              },
+              compra: function () { return Mc.comprarPedrasDoDia(); },
+              feito: function (res) { return tr('−{pagou} vinténs — {qtd}× {nome} na prateleira da forja.', { pagou: res.pagou, qtd: res.qtd, nome: esc(sd.name || res.stoneId) }); } });
+    }
+  }
+  function dataCurta(ms) {
+    var d = new Date(ms);
+    function d2(n) { return (n < 10 ? '0' : '') + n; }
+    return d2(d.getDate()) + '/' + d2(d.getMonth() + 1);
+  }
+  function nomeCalabouco(id) {
+    var ds = dungeons();
+    for (var i = 0; i < ds.length; i++) if (ds[i].id === id) return ds[i].name || id;
+    return id || '';
+  }
   function mcBancaPocoes(caixa, sacoDe) {
     var Mc = JOGO.Mercado;
     var lista = el('div', 'mc-lista mc-banca');
     caixa.appendChild(lista);
+    mcBalcaoVintens(lista, sacoDe);        // 07/10: a Reescrita e as pedras do dia, só por vintém
     var pocoes = safe(function () { return Mc.pocoesDaBanca(); }, []) || [];
     var teto = safe(function () { return P().consumivelTeto(); }, 20) || 20;
     lista.appendChild(el('p', 'mc-resumo', tr('A banca do mercador: estoque sem fim, preço fixo e sem taxa. Paga com os vinténs do <b>saco</b>; cabem <b>{teto}</b> de cada poção.', { teto: teto })));
