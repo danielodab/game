@@ -246,7 +246,17 @@ JOGO.DATA = {
           JSON.stringify(cv && cv.dados));
     check('estado: convidei, com o convite pendente', Gr.estado().fase === 'convidei' && Gr.estado().pendente.id === 'bia' &&
           Gr.estado().pendente.meu === true);
-    check('um segundo convite com o primeiro em aberto é recusado', Gr.convidar('cris').motivo === 'ocupado');
+    // 06/10 (o dono: "não consegui mandar de novo até expirar"): o MEU convite em aberto não me prende —
+    // chamar outra pessoa retira o que estava no ar (a voz `sair` de sempre) e o convite novo sai
+    var r1b = Gr.convidar('cris');
+    var sr1 = ult('grupo', 'sair'), cv1b = ult('grupo', 'convite');
+    check('um segundo convite com o primeiro em aberto RETIRA o primeiro e sai (antes: "ocupado" até o prazo)',
+          r1b.ok && sr1 && sr1.para === 'bia' && sr1.dados.gid === cv.dados.gid && sr1.dados.motivo === 'retirou' &&
+          cv1b.para === 'cris' && Gr.estado().pendente.id === 'cris', JSON.stringify([r1b, sr1 && sr1.dados]));
+    check('cancelar o convite em aberto solta na hora e avisa o outro lado', Gr.cancelar() === true && Gr.estado().fase === 'livre' &&
+          !Gr.estado().pendente && ult('grupo', 'sair').para === 'cris' && Gr.cancelar() === false);
+    r1 = Gr.convidar('bia');
+    cv = ult('grupo', 'convite');
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'resposta',
                      dados: { gid: cv.dados.gid, ok: true, heroi: { classId: 'arqueiro', element: 'ar', level: 9 } } });
     check('a resposta SIM forma o grupo e quem convidou lidera', Gr.emGrupo() && Gr.souLider() && Gr.lider() === 'ana' &&

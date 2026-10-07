@@ -59,6 +59,29 @@ var JOGO = (typeof window !== 'undefined')
   var st = null;
   T.aoMudar = null;                 // a HUD pendura UM ouvinte: redesenha
   T.aoConvite = null;               // { de, nome } — a HUD pergunta ao jogador
+  /* O PRAZO DO PEDIDO (06/10; o dono: "se eu dou troca ou qualquer comando com outro jogador, buga e não
+   * consigo de novo"). O pedido de troca não tinha prazo NENHUM: quem propôs e fechou a ficha, e quem recebeu
+   * e perdeu o cartão numa remontagem da praça, ficavam em 'convidei'/'convidado' para sempre — sem tela para
+   * responder ou cancelar, recusando toda troca seguinte ("ocupado") e todo convite de grupo e de duelo ("está
+   * numa troca"). Agora o pedido vale 30 s, como o convite de grupo, e quem vê o prazo acabar AVISA o outro
+   * lado pelas vozes de sempre (`cancela` e `recusa`, com o motivo): o cliente de antes solta do mesmo jeito.
+   * A mesa ABERTA (os dois aceitaram) segue sem prazo. Relógio injetável nas provas, como o do grupo. */
+  T.PRAZO_MS = 30000;
+  T._agora = function () { return Date.now(); };
+  function agora() { var t; try { t = +T._agora(); } catch (e) { t = NaN; } return isFinite(t) ? t : Date.now(); }
+  /* onde um pedido de troca tem tela para aparecer: a praça e a antessala (sem HUD — provas —, em toda parte) */
+  function telaDeTroca() {
+    var t = null;
+    try { t = (JOGO.UI && JOGO.UI.telaAtual) ? JOGO.UI.telaAtual() : null; } catch (e) { t = null; }
+    return !t || t === 'hub' || t === 'antessala';
+  }
+  /* a mesa acaba dizendo o porquê: a HUD mostra (fase 'cancelada' + motivo) e depois some */
+  function acabaCom(motivo) {
+    st.fase = 'cancelada';
+    st.motivo = motivo;
+    avisa();
+    st = null;
+  }
 
   function R() { return JOGO.Rede || null; }
   function P() { return JOGO.Progress || null; }
@@ -82,6 +105,8 @@ var JOGO = (typeof window !== 'undefined')
     return {
       fase: st.fase, par: st.par, nomePar: st.nomePar,
       mesmaConta: st.mesmaConta, motivo: st.motivo || null,
+      // 06/10: até quando o PEDIDO vale (a mesa aberta não tem prazo)
+      expira: (st.fase === 'convidei' || st.fase === 'convidado') ? st.expira : null,
       minha: { itens: st.minha.itens.slice(), moedas: st.minha.moedas, pets: st.minha.pets.slice(),
                travada: st.minha.travada, confirmada: st.minha.confirmada },
       dele: { itens: st.dele.itens.slice(), moedas: st.dele.moedas, pets: st.dele.pets.slice(),
@@ -143,6 +168,7 @@ var JOGO = (typeof window !== 'undefined')
     st = {
       fase: fase, par: parId, nomePar: nomeDoPar(parId),
       mesmaConta: !!(r && r.meuId() === parId),
+      expira: agora() + T.PRAZO_MS,
       minha: { itens: [], moedas: 0, pets: [], travada: false, confirmada: false },
       dele: { itens: [], moedas: 0, pets: [], travada: false, confirmada: false }
     };
@@ -199,6 +225,9 @@ var JOGO = (typeof window !== 'undefined')
 
   // ------------------------------------------------------------- o fluxo meu
   T.convidar = function (parId) {
+    // 06/10: o MEU pedido que ainda espera resposta se troca pelo novo (à mesma pessoa ou a outra) —
+    // antes era "já há uma troca aberta" até recarregar a página
+    if (st && st.fase === 'convidei') { manda('cancela', { motivo: 'retirou' }); st = null; }
     if (st) return false;                       // uma mesa por vez
     novaMesa('convidei', parId);
     manda('convite', {});
@@ -208,6 +237,7 @@ var JOGO = (typeof window !== 'undefined')
 
   T.responder = function (sim) {
     if (!st || st.fase !== 'convidado') return;
+    if (agora() > st.expira) { T._tique(); return; }     // o prazo acabou com o cartão na tela
     if (sim) {
       st.fase = 'aberta';
       manda('aceite', {});
@@ -310,10 +340,27 @@ var JOGO = (typeof window !== 'undefined')
 
   T.cancelar = function () {
     if (!st) return;
-    manda('cancela', {});
+    manda('cancela', st.fase === 'convidei' ? { motivo: 'retirou' } : {});
     st = null;
     avisa();
   };
+
+  /* 06/10: o prazo do pedido. Quem vê acabar avisa o outro lado, que solta na hora — o relógio de uma aba
+   * em segundo plano (o celular com a tela apagada) não anda. */
+  T._tique = function () {
+    if (!st || (st.fase !== 'convidei' && st.fase !== 'convidado') || !(agora() > st.expira)) return;
+    if (st.fase === 'convidei') {
+      manda('cancela', { motivo: 'expirou' });
+      acabaCom(Tx('O pedido de troca expirou.'));
+    } else {
+      manda('recusa', { motivo: 'expirou' });
+      acabaCom(Tx('O pedido de troca de {a} expirou.', { a: st.nomePar }));
+    }
+    avisa();
+  };
+  if (typeof setInterval === 'function') {
+    setInterval(function () { try { T._tique(); } catch (e) {} }, 1000);
+  }
 
   // ------------------------------------------------------- o fluxo do outro
   /* A HUD encaminha para cá os eventos { tipo:'troca' } da Rede. */
@@ -321,9 +368,16 @@ var JOGO = (typeof window !== 'undefined')
     if (!ev || ev.tipo !== 'troca') return;
 
     if (ev.acao === 'convite') {
-      if (st) {                                  // ocupado: recusa educada
+      // 06/10: quem já tinha proposto propõe DE NOVO (o `cancela` do pedido velho pode ter se perdido): o
+      // pedido novo troca o que estava na tela, com o prazo cheio
+      var trocou = !!st && st.fase === 'convidado' && st.par === ev.de;
+      if (trocou) st = null;
+      // ocupado — ou numa tela onde o pedido não apareceria (a batalha, a recompensa): recusa educada.
+      // Antes o pedido que chegava na batalha ficava guardado sem tela nenhuma
+      if (st || !telaDeTroca()) {
         var r = R();
         if (r) r.trocaManda(ev.de, 'recusa', { motivo: 'ocupado' });
+        if (trocou) avisa();
         return;
       }
       novaMesa('convidado', ev.de);
@@ -337,6 +391,13 @@ var JOGO = (typeof window !== 'undefined')
     if (ev.acao === 'aceite' && st.fase === 'convidei') {
       st.fase = 'aberta';
     } else if (ev.acao === 'recusa') {
+      // 06/10: quem propôs fica sabendo por quê — antes a mesa só sumia
+      if (st.fase === 'convidei') {
+        var cr = ev.dados && ev.dados.motivo;
+        acabaCom(cr === 'ocupado' ? Tx('{a} está ocupado(a) agora.', { a: st.nomePar })
+               : cr === 'expirou' ? Tx('O pedido de troca expirou.')
+               : Tx('{a} recusou a troca.', { a: st.nomePar }));
+      }
       st = null;
     } else if (ev.acao === 'oferta' && st.fase === 'aberta') {
       st.dele.itens = (ev.dados && ev.dados.itens || []).slice(0, 24);
@@ -363,6 +424,11 @@ var JOGO = (typeof window !== 'undefined')
         st.fase = 'cancelada';
         st.motivo = MOTIVOS_DE_LA[cod];
         avisa();
+      } else if (st.fase === 'convidado') {              // 06/10: o pedido que sai da tela diz por quê
+        acabaCom(cod === 'expirou' ? Tx('O pedido de troca de {a} expirou.', { a: st.nomePar })
+                                   : Tx('{a} retirou o pedido de troca.', { a: st.nomePar }));
+      } else if (st.fase === 'aberta') {                 // 06/10: e a mesa que o outro fechou, também
+        acabaCom(Tx('{a} cancelou a troca.', { a: st.nomePar }));
       }
       st = null;
     }

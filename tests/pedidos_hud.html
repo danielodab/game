@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — os pedidos entre dois jogadores, na tela dos dois (780x360)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  iframe{position:fixed;left:0;border:0;background:#000;width:780px;height:360px}
+  #ta{top:0} #tb{top:364px}
+  #saida{position:fixed;left:836px;top:0;right:0;bottom:0;overflow:auto;border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+</style>
+</head>
+<body>
+<!-- OS PEDIDOS ENTRE JOGADORES, NA TELA DOS DOIS (06/10). O dono, com dois celulares no aplicativo e contas
+     diferentes: "se eu dou troca ou qualquer comando com outro jogador, buga e não consigo de novo. Eu mandei
+     grupo pro jogador e sumiu a solicitação e não consegui mandar de novo até expirar... troca acontece o
+     mesmo."
+
+     DOIS index.html de verdade, cada um num quadro de 780x360 (o celular deitado, com toque: ?mobile=1) e com
+     o save na memória (?sandbox=1): a Ana em cima, a Bia embaixo. A Rede é um dublê por cima da de verdade (em
+     file:// e sem relé ela é no-op) que ENTREGA ao outro quadro o que cada um manda — o grupo.js, o troca.js,
+     o coop.js e a HUD são os do jogo. A página é "a mão" das duas: toca nos botões que estão na tela.
+
+     Cobra, com o dedo (o botão tem de estar na tela, por cima de tudo, com 44 px):
+       1  o pedido de grupo que chega fica na tela de quem recebe depois de a praça ser remontada (UI.repaint:
+          é o que a adoção do estado do servidor e a chegada dos modelos 3D fazem), com uma ficha aberta por
+          cima, depois de fechá-la e na volta do segundo plano;
+       2  quem chamou vê o pedido pendente com o tempo que falta e o Cancelar; cancela e chama de novo na hora;
+       3  recusar e expirar soltam os dois lados;
+       4  a troca: o pedido que não some, a mesa que volta para quem fechou a ficha, o cancelar;
+       5  o desafio amistoso: o mesmo cartão;
+       6  o cartão cabe e não fica atrás de nada em 780x360, 832x384 e 390x844. -->
+<iframe id="ta"></iframe>
+<iframe id="tb"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhou = [], falhas = 0, total = 0, T0 = Date.now();
+  window.__linhas = linhas;
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++;
+    var l = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra !== undefined && extra !== '' ? '   [' + extra + ']' : '');
+    if (!ok) { falhas++; falhou.push(l); }
+    linhas.push(l); pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; falhou.push('FALHOU · ' + motivo); linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    // as linhas de falha também como <li> (o portão das suítes da casa lê #lista quando o __fim não chega a tempo)
+    var ul = document.createElement('ul');
+    ul.id = 'lista';
+    falhou.forEach(function (l) { var li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
+    document.getElementById('saida').appendChild(ul);
+    window.__fail = falhas;
+    window.__pronto = true;
+    window.__fim = { ok: !falhas, total: total, falhas: falhas, linhas: [s.textContent].concat(falhou) };
+  }
+  function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 60); }); }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 20000)) return r(false);
+        setTimeout(volta, 100);
+      })();
+    });
+  }
+  var comFotos = /[?&]fotos=1/.test(location.search);
+  function foto(nome) {
+    if (!comFotos) return Promise.resolve();
+    window.__fotoFeita = null; window.__foto = nome;
+    return ate(function () { return window.__fotoFeita === nome; }, 8000);
+  }
+
+  // ---------------------------------------------------------------- os dois lados
+  function lado(quadro, id, nome, classe) {
+    return { quadro: document.getElementById(quadro), id: id, nome: nome, cx: 'cx' + id, classe: classe, ouv: {}, salto: 0,
+             outro: null, corta: false, w: null, doc: null, J: null, U: null, G: null };
+  }
+  var A = lado('ta', 'ana', 'Ana', 'sumo'), B = lado('tb', 'bia', 'Bia', 'arqueiro');
+  A.outro = B; B.outro = A;
+  var fio = [];
+  function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+  function salaDe(L) {
+    return (L.U && L.U.telaAtual() === 'antessala') ? (L.G.dungeonId + ':' + L.G.roomIndex) : null;
+  }
+  /* o dublê da Rede de um lado: o que ele manda chega ao outro quadro no instante seguinte (o relé) */
+  function dubleRede(L) {
+    var R = L.J.Rede, O = L.outro;
+    function entrega(ev) {
+      fio.push({ de: L.id, tipo: ev.tipo, acao: ev.acao, dados: ev.dados });
+      if (L.corta) return true;
+      setTimeout(function () {
+        try {
+          if (ev.tipo === 'troca' || ev.tipo === 'guilda') { if (O.J.Rede.aoEvento) O.J.Rede.aoEvento(ev); return; }
+          (O.ouv[ev.tipo] || []).slice().forEach(function (fn) { fn(clone(ev)); });
+        } catch (e) { diz('entrega ' + ev.tipo + ':' + ev.acao + ' estourou: ' + (e && e.message)); }
+      }, 0);
+      return true;
+    }
+    R.entrar = function () { return true; };
+    R.meuId = function () { return L.id; };
+    R.meuCx = function () { return L.cx; };
+    R.minhaSala = function () { return salaDe(L); };
+    R.pares = function () {
+      return [{ id: O.id, nome: O.nome, titulo: '', classe: O.classe, sala: salaDe(O), x: 1.2, z: 6.4 }];
+    };
+    R.nomeDe = function (x) { return x === O.id ? O.nome : 'Aventureiro'; };
+    R.privado = function () { return true; };
+    R.ouvir = function (tipo, fn) { (L.ouv[tipo] = L.ouv[tipo] || []).push(fn); return function () {}; };
+    R.dirige = function (tipo, para, acao, dados) {
+      if (para !== O.id) return true;
+      return entrega({ tipo: tipo, para: para, de: L.id, cx: L.cx, nome: L.nome, acao: acao, dados: clone(dados || {}) });
+    };
+    R.trocaManda = function (para, acao, dados) {
+      if (para !== O.id) return true;
+      return entrega({ tipo: 'troca', para: para, de: L.id, cx: L.cx, nome: L.nome, acao: acao, dados: clone(dados || null) });
+    };
+    R.sussurrar = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.guildaManda = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+    L.J.Grupo._liga();
+    L.J.Coop._liga();
+    L.J.Grupo._agora = L.J.Duelo._agora = function () { return Date.now() + L.salto; };
+    if ('_agora' in L.J.Troca) L.J.Troca._agora = function () { return Date.now() + L.salto; };
+  }
+
+  // ------------------------------------------------------------------ o que se vê
+  function telaAberta(L) { return L.doc.querySelector('#ui-root .ui-screen.is-on'); }
+  function painel(L) { var s = telaAberta(L); return s ? s.querySelector('.hub-painel') : null; }
+  function toastTxt(L) { var t = L.doc.querySelector('.ui-toast'); return (t && t.classList.contains('is-on')) ? t.textContent : ''; }
+  /* o elemento está NA TELA: dentro do quadro e sem nada por cima no meio dele (o dedo o alcança) */
+  function alcanca(L, e) {
+    if (!e || !e.isConnected) return false;
+    var r = e.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    if (r.left < -0.5 || r.top < -0.5 || r.right > L.w.innerWidth + 0.5 || r.bottom > L.w.innerHeight + 0.5) return false;
+    var topo = L.doc.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+    return !!topo && (topo === e || e.contains(topo));
+  }
+  function botoes(L, re) {
+    return [].filter.call(L.doc.querySelectorAll('button'), function (b) { return re.test((b.textContent || '').trim()); });
+  }
+  /* o botão do PEDIDO que o dedo alcança (null se não há, se está fora da tela ou atrás de alguma coisa) */
+  function botao(L, re) {
+    var bs = botoes(L, re);
+    for (var i = 0; i < bs.length; i++) if (alcanca(L, bs[i])) return bs[i];
+    return null;
+  }
+  function caixaDe(b) { return b ? (b.closest('.ui-pedido') || b.closest('.hub-painel') || b.parentNode) : null; }
+  function textoDe(b) { var c = caixaDe(b); return c ? (c.textContent || '') : ''; }
+  function alt(b) { return b ? Math.round(b.getBoundingClientRect().height) : 0; }
+  /* o pedido que CHEGOU, na tela: o Aceitar e o Agora não ao alcance do dedo, com 44 px, e o texto dele */
+  function pedidoChegou(L, re) {
+    var sim = botao(L, /^Aceitar$/), nao = botao(L, /^Agora não$/);
+    return !!sim && !!nao && re.test(textoDe(sim)) && alt(sim) >= 44 && alt(nao) >= 44;
+  }
+  function comoEsta(L, reBotao) {
+    var bs = botoes(L, reBotao || /^Aceitar$/);
+    if (!bs.length) return 'sem botão no DOM';
+    var b = bs[0], r = b.getBoundingClientRect();
+    var topo = L.doc.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+    return 'botão ' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+           ' · por cima: ' + (topo ? (topo.className || topo.tagName) : 'nada') + ' · ' + textoDe(b).slice(0, 70);
+  }
+  /* o pedido PENDENTE de quem enviou: o texto, o relógio (m:ss) e o Cancelar ao alcance do dedo */
+  function pendente(L, re) {
+    var c = botao(L, /^Cancelar( o pedido)?$/);
+    var t = textoDe(c);
+    return !!c && re.test(t) && /\d:\d\d/.test(t) && alt(c) >= 44;
+  }
+  function toca(b) { if (b) b.click(); return !!b; }
+  /* a mão: toca o outro jogador na praça e depois o botão do painel dele */
+  function pedeNoPainel(L, re) {
+    L.J.Hub.aoTocarFantasma(L.outro.id);
+    var p = painel(L), b = null;
+    [].forEach.call(p ? p.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    if (b) b.click();
+    return !!b;
+  }
+  function livresG() {
+    return A.J.Grupo.estado().fase === 'livre' && B.J.Grupo.estado().fase === 'livre';
+  }
+
+  // ------------------------------------------------------------------ o arranque
+  function abre(L) {
+    L.quadro.src = '../index.html?mobile=1&sandbox=1&snap=1&pedidos=' + L.id;
+    var t0 = Date.now();
+    return new Promise(function (res, rej) {
+      (function espera() {
+        var J = null, pronto = false;
+        try {
+          J = L.quadro.contentWindow.JOGO;
+          pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                      J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Grupo && J.Duelo && J.Hub && J.Troca && J.DB && J.Coop);
+        } catch (e) {}
+        if (!pronto) {
+          if (Date.now() - t0 > 150000) return rej(new Error('o jogo de ' + L.nome + ' não abriu em 150 s'));
+          return setTimeout(espera, 250);
+        }
+        L.w = L.quadro.contentWindow; L.doc = L.quadro.contentDocument; L.J = J; L.U = J.UI; L.G = J.Game;
+        try {
+          var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+          L.w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+        } catch (e2) {}
+        var P = J.Progress;
+        var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+        while (ids.length < 2) { P.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = P.heroIds().filter(function (h) { return h !== 'gm'; }); }
+        L.U.selection(ids.slice(0, 2));
+        dubleRede(L);
+        J.DB.batizar(L.nome).then(function () { L.U.showScreen('hub'); res(); }, rej);
+      })();
+    });
+  }
+
+  Promise.all([abre(A), abre(B)]).then(function () {
+    diz('os dois jogos abriram em ' + Math.round((Date.now() - T0) / 1000) + ' s · ' + A.w.innerWidth + 'x' + A.w.innerHeight);
+    return passo(400);
+  }).then(grupo).then(troca).then(duelo).then(tamanhos).then(function () { fim(); })
+    .catch(function (e) { fim('o roteiro estourou: ' + (e && (e.stack || e.message) || e)); });
+
+  // ====================================================================== 1 a 3: o grupo
+  function grupo() {
+    check('(os dois na praça, quadro de 780x360 com toque, save blindado)', A.U.telaAtual() === 'hub' && B.U.telaAtual() === 'hub' &&
+          A.w.innerWidth === 780 && A.w.innerHeight === 360 && !!(A.J.SaveSandbox && A.J.SaveSandbox.check().ok) &&
+          A.doc.documentElement.className.indexOf('toque') >= 0 || A.w.innerWidth === 780, A.w.innerWidth + 'x' + A.w.innerHeight);
+    check('(a Ana toca a Bia e chama para o grupo)', pedeNoPainel(A, /Chamar para o grupo/));
+    return ate(function () { return B.J.Grupo.estado().fase === 'convidado'; }, 4000).then(function () {
+      return passo(150);
+    }).then(function () {
+      check('1: o pedido de grupo chega à tela da Bia, com Aceitar e Agora não de 44 px ao alcance do dedo',
+            pedidoChegou(B, /Ana.*te chama para o grupo/), comoEsta(B));
+      return foto('pedido-grupo-780');
+    }).then(function () {
+      // a praça é remontada (o que a adoção do estado do servidor e a chegada dos modelos 3D fazem)
+      B.U.repaint();
+      return passo(350);
+    }).then(function () {
+      check('1: a praça da Bia foi remontada (UI.repaint) e o pedido CONTINUA na tela', pedidoChegou(B, /te chama para o grupo/),
+            comoEsta(B) + ' · estado: ' + B.J.Grupo.estado().fase);
+      B.U.openSheet('missoes');
+      return passo(250);
+    }).then(function () {
+      check('1: com uma ficha aberta por cima, o pedido segue ao alcance do dedo (não fica por baixo)',
+            !!B.doc.querySelector('.ui-sheet.is-on') && pedidoChegou(B, /te chama para o grupo/), comoEsta(B));
+      B.U.closeSheet();
+      return passo(200);
+    }).then(function () {
+      check('1: a ficha fechou e o pedido continua', pedidoChegou(B, /te chama para o grupo/), comoEsta(B));
+      // a volta do segundo plano: o navegador avisa a página
+      B.doc.dispatchEvent(new B.w.Event('visibilitychange'));
+      B.w.dispatchEvent(new B.w.Event('focus'));
+      return passo(200);
+    }).then(function () {
+      check('1: na volta do segundo plano o pedido continua', pedidoChegou(B, /te chama para o grupo/), comoEsta(B));
+      // ---- 2: quem enviou
+      check('2: quem chamou VÊ o pedido pendente, com o tempo que falta e o Cancelar de 44 px',
+            pendente(A, /Bia/), comoEsta(A, /^Cancelar/) + ' · toast: ' + toastTxt(A));
+      A.U.repaint();
+      return passo(350);
+    }).then(function () {
+      check('2: ...e ele sobrevive à remontagem da praça de quem chamou', pendente(A, /Bia/), comoEsta(A, /^Cancelar/));
+      toca(botao(A, /^Cancelar( o pedido)?$/));
+      return ate(function () { return livresG(); }, 3000);
+    }).then(function (ok) {
+      check('2: o Cancelar de quem chamou solta os DOIS lados na hora', ok && livresG(),
+            A.J.Grupo.estado().fase + '/' + B.J.Grupo.estado().fase);
+      return passo(200);
+    }).then(function () {
+      check('2: ...e o cartão sai da tela da Bia', !botao(B, /^Aceitar$/) && !botao(A, /^Cancelar( o pedido)?$/), comoEsta(B));
+      check('(a Ana chama de novo, sem esperar prazo nenhum)', pedeNoPainel(A, /Chamar para o grupo/));
+      return ate(function () { return B.J.Grupo.estado().fase === 'convidado'; }, 3000);
+    }).then(function (ok) {
+      return passo(150).then(function () {
+        check('2: o segundo convite chega e aparece', ok && pedidoChegou(B, /te chama para o grupo/), comoEsta(B) + ' · toast A: ' + toastTxt(A));
+        // ---- 3: recusar
+        toca(botao(B, /^Agora não$/));
+        return ate(function () { return livresG(); }, 3000);
+      });
+    }).then(function (ok) {
+      return passo(200).then(function () {
+        check('3: RECUSAR solta os dois lados e quem chamou é avisado', ok && !botao(B, /^Aceitar$/) && !botao(A, /^Cancelar( o pedido)?$/) &&
+              /Bia recusou o convite/.test(toastTxt(A)), toastTxt(A));
+        pedeNoPainel(A, /Chamar para o grupo/);
+        return ate(function () { return B.J.Grupo.estado().fase === 'convidado'; }, 3000);
+      });
+    }).then(function () {
+      // ---- 3: expirar (o relógio dos dois pula 31 s)
+      A.salto += 31000; B.salto += 31000;
+      A.J.Grupo._tique(); B.J.Grupo._tique();
+      return ate(function () { return livresG(); }, 3000);
+    }).then(function (ok) {
+      return passo(250).then(function () {
+        check('3: EXPIRAR solta os dois lados e os dois cartões saem', ok && !botao(B, /^Aceitar$/) && !botao(A, /^Cancelar( o pedido)?$/),
+              A.J.Grupo.estado().fase + '/' + B.J.Grupo.estado().fase);
+      });
+    });
+  }
+
+  // ====================================================================== 4: a troca
+  function trocaLivre() { return A.J.Troca.estado() === null && B.J.Troca.estado() === null; }
+  function ficha(L) { var f = L.doc.querySelector('.ui-sheet.is-on'); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function troca() {
+    check('(a Ana propõe uma troca à Bia)', pedeNoPainel(A, /Propor troca/));
+    return ate(function () { return (B.J.Troca.estado() || {}).fase === 'convidado'; }, 3000).then(function () {
+      return passo(150);
+    }).then(function () {
+      check('4: o pedido de troca chega à tela da Bia', pedidoChegou(B, /Ana quer trocar com você/), comoEsta(B));
+      B.U.repaint();
+      return passo(350);
+    }).then(function () {
+      check('4: a praça da Bia foi remontada e o pedido de troca CONTINUA na tela', pedidoChegou(B, /quer trocar com você/),
+            comoEsta(B) + ' · estado: ' + JSON.stringify((B.J.Troca.estado() || {}).fase));
+      // quem propôs fecha a ficha (o ✕, o voltar do aparelho): o pedido segue à vista, com o Cancelar
+      A.U.closeSheet();
+      return passo(200);
+    }).then(function () {
+      check('4: quem propôs fechou a ficha e ainda VÊ o pedido pendente, com o tempo e o Cancelar',
+            pendente(A, /Bia/), comoEsta(A, /^Cancelar/) + ' · ficha: ' + ficha(A));
+      toca(botao(B, /^Aceitar$/));
+      return ate(function () { return (A.J.Troca.estado() || {}).fase === 'aberta' && (B.J.Troca.estado() || {}).fase === 'aberta'; }, 3000);
+    }).then(function () {
+      return passo(250);
+    }).then(function () {
+      check('4: a Bia aceitou: a mesa abre NOS DOIS (quem propôs tinha fechado a ficha e ficava sem mesa)',
+            /Mesa de Troca/.test(ficha(A)) && /Mesa de Troca/.test(ficha(B)), 'A: ' + (ficha(A) || '(fechada)') + ' · B: ' + (ficha(B) || '(fechada)'));
+      A.U.closeSheet();
+      return passo(250);
+    }).then(function () {
+      var volta = botao(A, /^Abrir a mesa$/);
+      check('4: fechar a ficha com a mesa aberta deixa o caminho de volta na tela ("Abrir a mesa")', !!volta && alt(volta) >= 44,
+            'ficha: ' + (ficha(A) || '(fechada)') + ' · estado: ' + (A.J.Troca.estado() || {}).fase);
+      toca(volta);
+      return passo(250);
+    }).then(function () {
+      check('4: ...e ele reabre a mesa', /Mesa de Troca/.test(ficha(A)), ficha(A) || '(fechada)');
+      A.J.Troca.cancelar(); A.U.closeSheet();
+      return ate(trocaLivre, 3000);
+    }).then(function (ok) {
+      return passo(250).then(function () {
+        check('4: cancelar a mesa solta os dois lados e fecha a ficha da Bia', ok && !/Mesa de Troca/.test(ficha(B)), ficha(B));
+        B.U.closeSheet();
+        // propor, cancelar pelo cartão e propor de novo
+        pedeNoPainel(A, /Propor troca/);
+        return ate(function () { return (B.J.Troca.estado() || {}).fase === 'convidado'; }, 3000);
+      });
+    }).then(function () {
+      A.U.closeSheet();
+      return passo(200);
+    }).then(function () {
+      toca(botao(A, /^Cancelar( o pedido)?$/));
+      return ate(trocaLivre, 3000);
+    }).then(function (ok) {
+      check('4: o Cancelar do cartão de quem propôs solta os dois lados', ok, JSON.stringify([A.J.Troca.estado(), B.J.Troca.estado()]).slice(0, 120));
+      pedeNoPainel(A, /Propor troca/);
+      return ate(function () { return (B.J.Troca.estado() || {}).fase === 'convidado'; }, 3000);
+    }).then(function (ok) {
+      check('4: ...e propor de novo é na hora', ok);
+      A.U.closeSheet();
+      // o prazo: 31 s no relógio dos dois
+      A.salto += 31000; B.salto += 31000;
+      if (A.J.Troca._tique) { A.J.Troca._tique(); B.J.Troca._tique(); }
+      return ate(trocaLivre, 3000);
+    }).then(function (ok) {
+      return passo(250).then(function () {
+        check('4: o pedido de troca EXPIRA e solta os dois (antes ficava para sempre)', ok && !botao(B, /^Aceitar$/),
+              JSON.stringify([(A.J.Troca.estado() || {}).fase, (B.J.Troca.estado() || {}).fase]));
+        if (!ok) { A.J.Troca.cancelar(); B.J.Troca.cancelar(); }
+        A.U.closeSheet(); B.U.closeSheet();
+        return passo(200);
+      });
+    });
+  }
+
+  // ====================================================================== 5: o desafio
+  function dueloLivre() { return A.J.Duelo.estado().fase === 'livre' && B.J.Duelo.estado().fase === 'livre'; }
+  function duelo() {
+    check('(a Ana desafia a Bia)', pedeNoPainel(A, /Desafio amistoso/));
+    return ate(function () { return B.J.Duelo.estado().fase === 'desafiado'; }, 3000).then(function () {
+      return passo(150);
+    }).then(function () {
+      check('5: o desafio chega à tela da Bia', pedidoChegou(B, /Ana.*desafio amistoso/), comoEsta(B) + ' · toast A: ' + toastTxt(A));
+      B.U.repaint();
+      return passo(350);
+    }).then(function () {
+      check('5: remontada a praça, o desafio CONTINUA na tela', pedidoChegou(B, /desafio amistoso/), comoEsta(B));
+      check('5: quem desafiou vê o pedido pendente com o Cancelar', pendente(A, /Bia/), comoEsta(A, /^Cancelar/));
+      toca(botao(A, /^Cancelar( o pedido)?$/));
+      return ate(dueloLivre, 3000);
+    }).then(function (ok) {
+      check('5: cancelar o desafio solta os dois lados', ok, A.J.Duelo.estado().fase + '/' + B.J.Duelo.estado().fase);
+      if (!ok) { A.J.Duelo.cancelar('retirou'); B.J.Duelo._reset(); A.J.Duelo._reset(); }
+      return passo(250);
+    });
+  }
+
+  // ====================================================================== 6: os tamanhos de tela
+  function tamanhos() {
+    pedeNoPainel(A, /Chamar para o grupo/);
+    return ate(function () { return B.J.Grupo.estado().fase === 'convidado'; }, 3000).then(function () {
+      var medidas = [[832, 384], [390, 844], [780, 360]];
+      var p = Promise.resolve();
+      medidas.forEach(function (m) {
+        p = p.then(function () {
+          B.quadro.style.width = m[0] + 'px'; B.quadro.style.height = m[1] + 'px';
+          B.quadro.style.top = (m[1] > 400 ? 0 : 364) + 'px';
+          B.quadro.style.left = (m[1] > 400 ? 840 : 0) + 'px';
+          B.quadro.style.zIndex = m[1] > 400 ? 5 : 0;
+          return passo(500);
+        }).then(function () {
+          check('6: em ' + m[0] + 'x' + m[1] + ' o pedido cabe na tela e nada fica por cima dos botões (44 px)',
+                B.w.innerWidth === m[0] && B.w.innerHeight === m[1] && pedidoChegou(B, /te chama para o grupo/),
+                B.w.innerWidth + 'x' + B.w.innerHeight + ' · ' + comoEsta(B));
+          return foto('pedido-' + m[0] + 'x' + m[1]);
+        });
+      });
+      return p;
+    }).then(function () {
+      toca(botao(B, /^Aceitar$/));
+      return ate(function () { return A.J.Grupo.emGrupo() && B.J.Grupo.emGrupo(); }, 4000);
+    }).then(function (ok) {
+      check('(a Bia aceita: o grupo se forma nos dois lados, a Ana liderando)', ok && A.J.Grupo.souLider() && !B.J.Grupo.souLider());
+      return passo(300);
+    });
+  }
+})();
+</script>
+</body>
+</html>

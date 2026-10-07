@@ -51,8 +51,15 @@
     var s = document.getElementById('summary');
     s.className = falhas ? 'fail' : 'allpass';
     s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    // as linhas de falha também como <li> (o portão das suítes da casa lê #lista quando o __fim não chega a tempo)
+    var ul = document.createElement('ul');
+    ul.id = 'lista';
+    linhas.filter(function (l) { return l.indexOf('FALHOU') === 0; }).forEach(function (l) { var li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
+    document.getElementById('saida').appendChild(ul);
     window.__fail = falhas;
     window.__pronto = true;
+    window.__fim = { ok: !falhas, total: total, falhas: falhas,
+                     linhas: [s.textContent].concat(linhas.filter(function (l) { return l.indexOf('FALHOU') === 0; })) };
   }
   function passo(ms) { return new Promise(function (r) { setTimeout(r, ms || 50); }); }
   function ate(cond, ms) {
@@ -312,32 +319,41 @@
     // ---- 25: o convite de grupo e o toque noutra pessoa
     J.Grupo._ev({ tipo: 'grupo', de: 'cris', cx: 'cxcris', acao: 'convite',
                   dados: { gid: 'cris-ab12', chave: 'k1234567', heroi: { classId: 'sumo', element: 'fogo', level: 5 }, versao: J.Grupo.versao() } });
+    /* 06/10: o convite saiu do painel da praça e mora no CARTÃO DOS PEDIDOS (.ui-pedido), uma camada própria por
+     * cima das telas e das fichas, redesenhada do estado — o painel renascia vazio a cada remontagem da praça e o
+     * pedido ficava de pé sem tela. Então o toque noutra pessoa abre o painel DELA e o convite segue à vista. */
     var p = painelAberto();
-    var conv = !!p && !p.classList.contains('is-off') && /te chama para o grupo/.test(p.textContent);
-    check('(o convite de grupo da Cris aparece no painel)', conv, p ? p.textContent.slice(0, 80) : '');
+    var cart = doc.querySelector('.ui-pedido');
+    function noCartao(re) { return !!cart && cart.classList.contains('is-on') && visivel(cart) && re.test(cart.textContent); }
+    check('(o convite de grupo da Cris aparece no cartão dos pedidos)', noCartao(/te chama para o grupo/), cart ? cart.textContent.slice(0, 80) : '(sem cartão)');
     J.Hub.aoTocarFantasma('bia');
-    check('25: tocar noutra pessoa com o convite aberto NÃO o apaga — e avisa',
-          !p.classList.contains('is-off') && /te chama para o grupo/.test(p.textContent) && toastTxt() === 'Responda o convite antes.',
-          p.textContent.slice(0, 60) + ' · toast: ' + toastTxt());
+    check('25: tocar noutra pessoa com o convite aberto NÃO o apaga — e o painel dela abre',
+          noCartao(/te chama para o grupo/) && !p.classList.contains('is-off') && /Bia/.test(p.textContent),
+          cart.textContent.slice(0, 60) + ' · painel: ' + p.textContent.slice(0, 40));
     J.Troca.aoEvento({ tipo: 'troca', acao: 'convite', de: 'bia', nome: 'Bia' });
     check('25: a troca que chega com o convite na tela é recusada (um pedido de cada vez) e o convite fica',
-          /te chama para o grupo/.test(p.textContent) && J.Troca.estado() === null &&
+          noCartao(/te chama para o grupo/) && J.Troca.estado() === null &&
           trocas.some(function (t) { return t.par === 'bia' && t.acao === 'recusa'; }) && /quis trocar com você/.test(toastTxt()),
           JSON.stringify(trocas) + ' · toast: ' + toastTxt());
-    var nao = botao(p, /Agora não/);
+    U.repaint();
+    cart = doc.querySelector('.ui-pedido');
+    p = painelAberto();
+    check('06/10: a praça remontada (UI.repaint) NÃO tira o convite da tela — era assim que ele sumia',
+          noCartao(/te chama para o grupo/) && !!botao(cart, /^Aceitar$/), cart ? cart.textContent.slice(0, 60) : '(sem cartão)');
+    var nao = botao(cart, /Agora não/);
     if (nao) nao.click();
-    check('(Agora não: o convite de grupo sai e a resposta vai à Cris)', p.classList.contains('is-off') &&
+    check('(Agora não: o convite de grupo sai e a resposta vai à Cris)', !cart.classList.contains('is-on') &&
           saidas.some(function (s) { return s.tipo === 'grupo' && s.acao === 'resposta' && s.para === 'cris' && s.dados.ok === false; }));
     // ---- 25: o convite de TROCA também é convite
     trocas.length = 0;
     J.Troca.aoEvento({ tipo: 'troca', acao: 'convite', de: 'bia', nome: 'Bia' });
-    check('(sem convite na tela, a troca da Bia aparece no painel)', !p.classList.contains('is-off') && /quer trocar com você/.test(p.textContent));
+    check('(sem convite na tela, a troca da Bia aparece no cartão)', noCartao(/quer trocar com você/));
     J.Hub.aoTocarFantasma('cris');
-    check('25: o convite de troca também não some por um toque noutra pessoa', /quer trocar com você/.test(p.textContent), p.textContent.slice(0, 60));
+    check('25: o convite de troca também não some por um toque noutra pessoa', noCartao(/quer trocar com você/), cart.textContent.slice(0, 60));
     J.Hub.aoAproximar({ tipo: 'banco' });
-    check('25: ...nem por um passo perto de um lugar', /quer trocar com você/.test(p.textContent));
+    check('25: ...nem por um passo perto de um lugar', noCartao(/quer trocar com você/));
     J.Troca.aoEvento({ tipo: 'troca', acao: 'cancela', de: 'bia', dados: {} });
-    check('25: a mesa acabou do outro lado: o convite de troca sai da tela', p.classList.contains('is-off') && J.Troca.estado() === null);
+    check('25: a mesa acabou do outro lado: o convite de troca sai da tela', !cart.classList.contains('is-on') && J.Troca.estado() === null);
     // ---- 23: a ficha da escolha do duelo fechada sem querer
     var d = J.Duelo._st();
     d.fase = 'escolhendo'; d.did = 'ana-hudd1'; d.eu = 'A'; d.chave = 'kkkkkkkk:kbkbkbkb';

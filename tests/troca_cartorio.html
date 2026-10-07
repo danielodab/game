@@ -130,8 +130,12 @@
     T.responder(true);
     estados = [];
     T.aoEvento({ tipo: 'troca', de: 'par1', acao: 'cancela', dados: {} });
-    check('o cancela comum (sem motivo do cartório) fecha a mesa calado, como antes',
-          T.estado() === null && !estados.some(function (e) { return e && e.fase === 'cancelada'; }));
+    // 06/10: o cancela comum deixou de ser calado — quem ficou na mesa lê quem a fechou (antes a ficha só dizia
+    // "Nenhuma troca aberta"); o motivo do cartório continua sendo só o do `cancela` que o traz
+    var comum = estados.filter(function (e) { return e && e.fase === 'cancelada'; })[0] || null;
+    check('o cancela comum (sem motivo do cartório) fecha a mesa dizendo quem cancelou — e não fala em cartório',
+          T.estado() === null && !!comum && /cancelou a troca/.test(comum.motivo || '') && !/cartório/.test(comum.motivo || ''),
+          JSON.stringify(comum));
   } catch (e) {
     check('a prova não estoura', false, e && (e.stack || e.message || e));
   }
