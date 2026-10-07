@@ -1618,21 +1618,7 @@ var JOGO = (typeof window !== 'undefined')
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
-          /* O CAMINHO ESCURO (07/10, game.js Game.podeEscuro): da segunda sala em diante a porta oferece a
-           * escolha — a sala de sempre, ou a sala com um afixo sorteado que paga +25% de XP e saque */
-          if (safe(function () { return !!(G().podeEscuro && G().podeEscuro()); }, false)) {
-            var ligado = safe(function () { return !!G().escuroDaSala(); }, false);
-            var cxE = el('div', 'porta-escuro' + (ligado ? ' is-on' : ''));
-            cxE.appendChild(el('p', 'hub-nota', ligado
-              ? tr('🕯 <b>Caminho escuro</b>: a sala abre com um afixo sorteado — vale +{pct}% de XP e saque.', { pct: afixoBonusPct() })
-              : tr('🕯 <b>Caminho escuro</b>: quer a sala com um afixo sorteado? Vale +{pct}% de XP e saque, e o perigo que vier.', { pct: afixoBonusPct() })));
-            cxE.appendChild(btn(ligado ? tr('Voltar ao caminho de sempre') : tr('Descer pelo caminho escuro'),
-              'btn-mini ' + (ligado ? 'btn-ghost' : 'btn-gold'), function () {
-                safe(function () { return G().defineEscuro(!ligado); }, false);
-                repintaLugar();
-              }));
-            painel.appendChild(cxE);
-          }
+          blocoEscuro(painel);               // 07/10: o caminho escuro, da segunda sala em diante
           // 13/09: a vida na porta; herói a 0 PV apaga o botão e diz quanto falta (vidaTique)
           painel.appendChild(vidaBloco('porta'));
           var bEntrar = btn(tr('Entrar na batalha'), 'btn-primary btn-block vida-porta', function () {
@@ -13201,6 +13187,24 @@ var JOGO = (typeof window !== 'undefined')
 
   /* A PORTA DA ANTESSALA em grupo (4.6): quem lidera abre quando o outro está
    * pronto na porta; quem segue só espera */
+  /* O CAMINHO ESCURO NA PORTA (07/10, game.js Game.podeEscuro): da segunda sala em diante a porta oferece a
+   * escolha — a sala de sempre, ou a sala com um afixo sorteado que paga +25% de XP e saque. Sozinho e, desde
+   * 07/10 à noite, em grupo: quem lidera escolhe (a escolha vai no abrir da sala do grupo) e quem segue vê. */
+  function blocoEscuro(painel) {
+    if (!safe(function () { return !!(G().podeEscuro && G().podeEscuro()); }, false)) return;
+    var ligado = safe(function () { return !!G().escuroDaSala(); }, false);
+    var cxE = el('div', 'porta-escuro' + (ligado ? ' is-on' : ''));
+    cxE.appendChild(el('p', 'hub-nota', ligado
+      ? tr('🕯 <b>Caminho escuro</b>: a sala abre com um afixo sorteado — vale +{pct}% de XP e saque.', { pct: afixoBonusPct() })
+      : tr('🕯 <b>Caminho escuro</b>: quer a sala com um afixo sorteado? Vale +{pct}% de XP e saque, e o perigo que vier.', { pct: afixoBonusPct() })));
+    cxE.appendChild(btn(ligado ? tr('Voltar ao caminho de sempre') : tr('Descer pelo caminho escuro'),
+      'btn-mini ' + (ligado ? 'btn-ghost' : 'btn-gold'), function () {
+        safe(function () { return G().defineEscuro(!ligado); }, false);
+        safe(function () { return Gp().avisaDificuldade(); }, false);   // em grupo, quem segue fica sabendo
+        repintaLugar();
+      }));
+    painel.appendChild(cxE);
+  }
   function painelPortaGrupo(p) {
     var nome = nomeParceiro();
     // 13/09: a vida dos heróis do grupo (os meus com as poções; os do parceiro, sem)
@@ -13209,6 +13213,11 @@ var JOGO = (typeof window !== 'undefined')
       // 11/09 (revisão): quem segue vê a dificuldade que vale (a da ata é a de quem lidera)
       var lnDif = linhaDifGrupo();
       if (lnDif) p.appendChild(lnDif);
+      // 07/10: e o caminho escuro, se quem lidera o pediu nesta porta (o afixo sorteado vem na ata)
+      if (safe(function () { return !!(G().podeEscuro() && (grupoEstado() || {}).descidaEscuro); }, false)) {
+        p.appendChild(el('p', 'hub-nota porta-escuro is-on',
+          tr('🕯 <b>Caminho escuro</b>: {a} pediu a sala com um afixo sorteado — vale +{pct}% de XP e saque.', { a: esc(nome), pct: afixoBonusPct() })));
+      }
       if (vidaG) p.appendChild(vidaG);
       p.appendChild(el('p', 'hub-nota', (meusHeroisG().length > 1
         ? tr('Quem abre a porta é quem lidera (<b>{a}</b>). Seus dois heróis estão prontos. <b style="color:#7fe08a">✓</b>', { a: esc(nome) })
@@ -13217,6 +13226,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var sd = seletorDif();
     if (sd) p.appendChild(sd);
+    blocoEscuro(p);                       // 07/10: quem lidera escolhe o caminho escuro
     if (vidaG) p.appendChild(vidaG);
     var pe = safe(function () { return Cp().podeEntrar(); }, null) || { ok: false, motivo: 'sem-pronto' };
     var chamando = chamandoPorta && (Date.now() - chamandoPorta < 20000);

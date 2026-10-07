@@ -443,8 +443,15 @@ os números do afixo (ele é aplicado a quem nasce com a sala) — aceito.
 oferece a escolha: a sala de sempre, ou "descer pelo caminho escuro" — a sala abre com um afixo **sorteado
 pelo servidor** (`escuro: true` no `POST /api/sala/abrir`; `salas.py`, `_afixo_da_abertura`) e paga os
 mesmos +25% de XP e saque. A primeira sala nunca (é a porta de entrada), o Poço não (tem os perigos dele),
-no portal do dia o do dia já manda, e a descida em grupo fica para depois. A escolha é de cada porta:
-entrar na sala a apaga. Sem servidor a proposta da página sorteia pela sala e pelo dia.
+e no portal do dia o do dia já manda. A escolha é de cada porta: entrar na sala a apaga. Sem servidor a
+proposta da página sorteia pela sala e pelo dia.
+
+**Em grupo (07/10 à noite, "descida em grupo com tudo que o solo tem").** Quem lidera vê o mesmo botão na
+porta; a escolha vai no `POST /api/grupo/abrir` (`escuro: true`, `grupo.py` → `_afixo_da_abertura`), o
+servidor sorteia e guarda em `salas_grupo_afixo`, e o afixo volta na **ata** (`coop.js`, `mandaAta`) — os
+dois motores nascem iguais e o juiz refaz com ele. Quem segue vê na porta que o líder pediu o caminho
+escuro (o estado do grupo leva `escuro`, `grupo.js` `mandaEstado`) e, na sala, o chip do afixo. A trilha
+da temporada conta o ponto do afixo para os dois (`soma_trilha`, `'afixo'`).
 
 **De quebra:** o Calabouço do Dia deixou de mudar quando a conta visita o Poço (`dungeonPoco` o
 empurra em `DATA.dungeons` e a lista de `diario.js` passava a ter sete entradas — a página marcava

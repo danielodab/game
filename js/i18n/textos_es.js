@@ -2650,4 +2650,5 @@ JOGO.I18n.registra('es', { textos: {
   "As 21 fusões vencedoras": "Las 21 fusiones ganadoras",
   "+{a}% de saque lá": "+{a}% de botín allí",
   "+{a}% de XP": "+{a}% de XP",
+  "🕯 <b>Caminho escuro</b>: {a} pediu a sala com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Camino oscuro</b>: {a} pidió la sala con un afijo sorteado — vale +{pct}% de XP y botín.",
 } });

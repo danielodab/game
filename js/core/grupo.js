@@ -473,6 +473,7 @@ var JOGO = (typeof window !== 'undefined')
       descidaGrupo: descidaG ? descidaG.dungeonId : null,
       descidaAcabou: !!st.descidaAcabou || !!(descidaG && !Grupo.emGrupo()),
       descidaDif: st.descidaDif || null,     // 11/09 (revisão): a de quem lidera, para quem segue
+      descidaEscuro: !!st.descidaEscuro,     // 07/10: quem lidera pediu o caminho escuro nesta porta
       graca: graca(),
       // 06/10: o par voltou ao acampamento e eu fiquei — a HUD mostra a escolha (seguir sozinho ou voltar também)
       ficouSo: ficouSo ? { nome: ficouSo.nome, saiu: !!ficouSo.saiu } : null,
@@ -518,6 +519,7 @@ var JOGO = (typeof window !== 'undefined')
     return manda('grupo', st.par.id, 'estado', {
       gid: st.gid, v: st.v, lider: st.lider, fase: descidaAtual(),
       dif: safe(function () { return G().dificuldade; }, null) || 'normal',   // 11/09 (revisão): quem segue vê a dificuldade
+      escuro: safe(function () { return !!G().escuroDaSala(); }, false),     // 07/10: e o caminho escuro pedido na porta
       membros: [{ id: eu(), cx: meuCx(), heroi: heroiResumo(principal()),
                   herois: heroisResumo(meusHerois) },
                 { id: st.par.id, cx: st.par.cx, heroi: st.par.heroi,
@@ -879,6 +881,7 @@ var JOGO = (typeof window !== 'undefined')
       st.lider = (d.lider === eu()) ? eu() : de;
       // 11/09 (revisão): a dificuldade que quem lidera escolheu (quem segue a vê no portal e na porta)
       if (st.lider === de && d.dif) st.descidaDif = difValida(d.dif) || st.descidaDif;
+      if (st.lider === de) st.descidaEscuro = d.escuro === true;      // 07/10: o caminho escuro de quem lidera
       (Array.isArray(d.membros) ? d.membros : []).forEach(function (m) {
         if (m && m.id === de) {
           var hh = limpaHerois(m.herois, m.heroi);

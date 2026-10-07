@@ -391,8 +391,9 @@ var JOGO = (typeof window !== 'undefined')
   Game.podeEscuro = function () {
     var Af = JOGO.Afixos, Dd = JOGO.Diario;
     if (!Af || !Af.LISTA || !Af.LISTA.length || !Game.dungeonId || !(Game.roomIndex >= 1)) return false;
-    // o Poço tem os perigos dele; a descida em grupo fica para depois (a porta é de quem lidera, pela ata)
-    if (Game.dungeonId === 'poco' || rede) return false;
+    // o Poço tem os perigos dele. Em grupo (07/10 à noite) a porta é de quem lidera: a escolha vai no
+    // abrir da sala do grupo (coop.js, Aut.abreGrupo `escuro`) e o afixo que o servidor sorteou volta na ata
+    if (Game.dungeonId === 'poco') return false;
     try { if (Dd && Dd.ehHoje && Dd.ehHoje(Game.dungeonId)) return false; } catch (e) {}
     return true;
   };
@@ -1566,6 +1567,7 @@ var JOGO = (typeof window !== 'undefined')
     timerTurno = null;
     aplicaCarry(st, ata.carry, true);
     Game.state = st;
+    Game.escuro = false;                 // 07/10: o caminho escuro é de cada porta — a próxima pergunta de novo
     rede.colocador = !!(ata.party && ata.party[0] && ata.party[0].dono === rede.eu);
     ultimoTurno = st.turno || 0;
     zeraPrep();                                    // 21/09: o PRONTO é DESTA sala
