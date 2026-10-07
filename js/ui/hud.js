@@ -3107,7 +3107,8 @@ var JOGO = (typeof window !== 'undefined')
      * zerado — e tocar de novo fecha; a vez seguinte fecha sozinha (paintActive). No PC e em pé a classe
      * não tem regra nenhuma: o cartão já é o inteiro. */
     bt.left = left;
-    tap(bt.active, function () { left.classList.toggle('is-aberto'); });
+    // ouvinte simples, e não o tap(): o toque segue subindo (quem fecha balão ao tocar fora continua ouvindo)
+    bt.active.addEventListener('click', function () { left.classList.toggle('is-aberto'); });
 
     // ---- o tempo do turno: a barra de pé na lateral esquerda (11/09, pedido do
     // dono). Montada uma vez; o paintTimer só mexe no número, na altura e na cor.
@@ -3535,7 +3536,8 @@ var JOGO = (typeof window !== 'undefined')
     var fr = pct.toFixed(4);
     bt.tmFill.style.transform = 'scaleY(' + fr + ')';
     // 06/10: no celular deitado a barra é DEITADA, no alto do cartão da vez — o css lê a mesma fração daqui
-    if (bt.tmFr !== fr) { bt.tmFr = fr; bt.tmFill.style.setProperty('--tm-p', fr); }
+    // (só no toque: no PC esta linha não escreve nada)
+    if (bt.tmFr !== fr && JOGO.Mobile && JOGO.Mobile.toque && JOGO.Mobile.toque()) { bt.tmFr = fr; bt.tmFill.style.setProperty('--tm-p', fr); }
     var bk = (banked > 0 && !noBanco) ? '+' + Math.round(banked) + 's' : '';
     if (bt.tmBank.textContent !== bk) { bt.tmBank.textContent = bk; bt.tmBank.hidden = !bk; }
     // o pé da barra fica logo acima da barra de baixo, pela altura MEDIDA dela
