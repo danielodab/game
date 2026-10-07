@@ -456,7 +456,8 @@ JOGO.DATA = {
     // ============================================================ a descida junta
     reset();
     formaLiderando();
-    check('descer no Poço: "poco"', Gr.descer('poco').motivo === 'poco');
+    // 07/10: o Poço desce em grupo quando JOGO.Poco existe; nesta página ele não existe, e o motivo segue 'poco'
+    check('descer no Poço sem JOGO.Poco na página: "poco"', Gr.descer('poco').motivo === 'poco');
     check('descer num portal fechado: "portal"', Gr.descer('emberlock').motivo === 'portal');
     var rd = Gr.descer('greenhouse');
     var dm = ult('grupo', 'descer');
@@ -495,7 +496,7 @@ JOGO.DATA = {
           ult('grupo', 'desci').dados.motivo === 'troca' && Gm.runs.length === 0);
     trocaEstado = null;
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'poco' } });
-    check('o Poço é recusado também do lado de quem segue', ult('grupo', 'desci').dados.motivo === 'poco' && Gm.runs.length === 0);
+    check('o Poço sem JOGO.Poco é recusado também do lado de quem segue', ult('grupo', 'desci').dados.motivo === 'poco' && Gm.runs.length === 0);
     reset();
     formaSeguindo();
     chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'descer', dados: { gid: 'bia-q1w2', dungeonId: 'greenhouse' } });

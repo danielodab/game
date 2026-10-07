@@ -63,5 +63,43 @@ if (pago) {
         JSON.stringify(pago.r && [pago.r.recompensa && pago.r.recompensa.xpGanho, pago.r.db.jogador.poco]));
 }
 
+// ---- 07/10: o Poço EM GRUPO — o andar nasce da semente da ata nos dois motores, e o juiz refaz e paga os dois
+{
+  const { fechaGrupo } = require(path.join(__dirname, '..', 'servidor', 'juiz', 'recompensa.js'));
+  const { jogaGrupo } = require(path.join(__dirname, 'juiz_grupo_jogador.js'));
+  function contaDe(heroi, nivel, dono) {
+    const wc = mundo(), Jc = wc.J;
+    Jc.Progress.state.heroes[heroi].level = nivel;
+    Jc.Progress.state.heroes[heroi].xp = Jc.DATA.leveling.xpTable[nivel - 1];
+    Jc.Progress.save();
+    const t = est.tiraEstado(wc);
+    return { progress: t.progress, db: t.db, dono, herois: [heroi] };
+  }
+  const ana = contaDe('sumo', 26, 'ana'), bia = contaDe('curandeiro', 26, 'bia');
+  let venc = null, tentadas = 0;
+  for (let s = 11; s < 200 && !venc; s += 13) {
+    tentadas++;
+    const j = jogaGrupo({ membros: [ana, bia], dungeonId: 'poco', roomIndex: 2, semente: s });
+    if (j.fase === 'won') venc = { j, s };
+  }
+  check('a dupla vence o andar 3 do Poço em grupo (' + tentadas + ' sementes tentadas)', !!venc);
+  if (venc) {
+    let r;
+    try {
+      r = fechaGrupo({ membros: [{ conta: { id: 1 }, dono: 'ana', herois: ['sumo'], progress: ana.progress, db: ana.db },
+                                 { conta: { id: 2 }, dono: 'bia', herois: ['curandeiro'], progress: bia.progress, db: bia.db }],
+                       ata: { dungeonId: 'poco', roomIndex: 2, dificuldade: 'normal', semente: venc.s, carry: null },
+                       lances: venc.j.lances, hashFinal: venc.j.hash, contexto: { agoraMs: Date.now(), fatores: {} } });
+    } catch (e) { r = { erro: e.message, motivo: e.motivo }; }
+    check('o juiz refaz o andar do Poço em grupo da semente da ata e vê a vitória', r && r.ok && r.fase === 'won',
+          JSON.stringify(r && (r.erro || r.fase)));
+    if (r && r.ok) {
+      check('os dois membros são pagos e o andar 3 fica anotado como recorde dos dois',
+            r.membros.length === 2 && r.membros.every((m) => m.recompensa && m.recompensa.xpGanho > 0 && m.db.jogador.poco.recorde === 3),
+            JSON.stringify(r.membros.map((m) => [m.dono, m.recompensa && m.recompensa.xpGanho, m.db.jogador.poco])));
+    }
+  }
+}
+
 console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
 process.exit(falhas ? 1 : 0);

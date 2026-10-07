@@ -1675,11 +1675,8 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(el('p', 'hub-nota',
           tr('A torre infinita: cada andar é uma sala emprestada dos calabouços, e cada andar a mais deixa os monstros mais duros.')));
         if (emGrupo()) {
-          // 11/09 (D10): o Poço sorteia fora da semente — em grupo, só sozinho
-          painel.appendChild(btn(tr('Descer ao Poço sem Fundo'), 'btn-warn btn-block is-apagado', function () {
-            toast(tr('O Poço é só para quem desce sozinho — por enquanto.'));
-          }));
-          painel.appendChild(el('p', 'hub-nota', tr('O Poço é só para quem desce sozinho — por enquanto.')));
+          // 07/10: o Poço desce em grupo como os seis portais — o andar nasce da semente da ata
+          painelPortalGrupo(painel, { id: 'poco' });
         } else painel.appendChild(btn(tr('Descer ao Poço sem Fundo'), 'btn-warn btn-block', function () {
           if (!selHeroes.length) { toast(tr('Escolha sua dupla primeiro.')); return; }
           if (!safe(function () { return G().startPoco(selHeroes.slice()); }, false)) {

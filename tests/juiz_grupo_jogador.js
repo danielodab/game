@@ -34,8 +34,11 @@ function jogaGrupo(p) {
   est.poeEstado(w, lider.progress, lider.db);
   const J = w.J, E = J.Engine;
   const party = [].concat(...p.membros.map(partyDe));
+  // 07/10: o Poço em grupo — o andar nasce da semente da ata (como o Game e o juiz fazem)
+  if (p.dungeonId === 'poco') J.Poco.poeSala(p.roomIndex + 1, J.Poco.salaSemeada(p.roomIndex + 1, p.semente));
   const st = E.createBattle(p.dungeonId, p.roomIndex, JSON.parse(JSON.stringify(party)),
     { seed: p.semente, dificuldade: p.dificuldade || 'normal', escolhePosicao: true });
+  if (p.dungeonId === 'poco') J.Poco.escalaEstado(st, p.roomIndex + 1);
   E.events.length = 0;
   const log = [];
   const op = E.placementOptions(st)[0];

@@ -333,7 +333,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   function validaDescida(dg) {
     if (!dg) return 'portal';
-    if (dg === 'poco') return 'poco';
+    // 07/10: o Poço desce em grupo — o calabouço sintético precisa existir na página (JOGO.Poco)
+    if (dg === 'poco' && !safe(function () { return !!JOGO.Poco.preparar(2); }, false)) return 'poco';
     if (safe(function () { return D().portalFechado(dg); }, false)) return 'portal';
     var d = acharDungeon(dg);
     if (!d || !d.rooms || !d.rooms.length) return 'portal';
@@ -354,7 +355,7 @@ var JOGO = (typeof window !== 'undefined')
     'mestre-falso': Tx('Esse Mestre do Fundo não foi conferido pelo servidor.'),
     'sem-heroi': Tx('{n} não tem herói escolhido.'),
     'portal': Tx('Esse calabouço não abre agora.'),
-    'poco': Tx('O Poço é só para quem desce sozinho — por enquanto.'),
+    'poco': Tx('O Poço não abriu nesta página.'),
     'expirou': Tx('O convite expirou.'),
     'recusou': '{n} recusou.',
     'rele-antigo': Tx('Grupo e duelo precisam do servidor novo da Rede.'),

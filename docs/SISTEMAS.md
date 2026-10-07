@@ -351,12 +351,20 @@ eram o mesmo T-Rex, e o triceratops da Mina declarava 3,84 m mas de pé media
 
 ### O Poço sem Fundo (`js/core/poco.js`)
 
-A torre infinita, só para quem desce sozinho. Cada andar empresta o **palco** de
+A torre infinita. Cada andar empresta o **palco** de
 uma sala real (layout, clima, cenário) e troca o elenco por uma mistura dos
 comuns de todos os calabouços abertos; os inimigos ganham **+10% de PV por
 andar** e o XP paga no mesmo fator. Com sessão do site o andar sai da **semente
 do bilhete** (`Poco.salaSemeada`) e o juiz refaz a mesma sala para pagar. O
 recorde é semanal.
+
+**Em grupo (07/10 à noite, "descida em grupo com tudo que o solo tem").** Era só de quem descia sozinho
+(o andar saía do `Math.random` da página). Agora quem lidera desce ao Poço pela Rede como aos seis portais
+(`Grupo.descer('poco')` → `startRun` com `grupo`): o andar nasce da **semente da ata** nos dois motores
+(`Game._criaDaAta`: `Poco.poeSala(andar, Poco.salaSemeada(andar, ata.semente))` e a escalada antes do PV),
+o `POST /api/grupo/abrir` aceita `'poco'` (o juiz anuncia 9999 andares) e `/grupo/fecha` refaz o andar da
+mesma semente (`sala.js`) e paga cada um no mundo dele, com o recorde do Poço anotado nas duas contas.
+Provas: `node tests/juiz_poco.js` (o bloco do grupo) e `tests/grupo_duelo_api.py` (`test_06`).
 
 **Andar múltiplo de 5 (02/10):** **um** chefe e **um** Colosso. O chefe toma
 **uma** casa de monstro com letra própria — antes tomava uma letra do palco, e

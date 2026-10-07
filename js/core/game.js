@@ -332,6 +332,8 @@ var JOGO = (typeof window !== 'undefined')
     // de Poço nem de Mestre; os modelos do herói do parceiro vêm junto
     var emGrupo = !!(opts && opts.grupo);
     if (emGrupo && !podeDescerEmGrupo(heroIds, dungeonId)) return false;
+    // 07/10: o Poço em grupo entra por aqui (Grupo.descer('poco')) — o calabouço sintético tem de existir
+    if (dungeonId === 'poco' && (!JOGO.Poco || !JOGO.Poco.preparar(2))) return false;
     if (!validParty(heroIds) || !validDungeon(dungeonId)) return false;
     var pedidoModelos = { dungeonId: dungeonId, party: emGrupo ? comParceiro(heroIds) : heroIds,
                           duplas: emGrupo ? duplasDaDescida(heroIds) : null, sala: 0 };
@@ -437,8 +439,8 @@ var JOGO = (typeof window !== 'undefined')
    * sintético e as salas (sempre uma à frente); daqui é um startRun normal
    * no id 'poco', com a escalada aplicada no estado logo depois. */
   Game.startPoco = function (heroIds) {
-    // [G11] o Poço é só para quem desce sozinho — por enquanto (sorteia com
-    // Math.random e mexe em DATA.dungeons: não cabe no lockstep)
+    // o caminho SOLO. Em grupo a descida ao Poço é Grupo.descer('poco') → startRun com `grupo` (07/10):
+    // o andar sai da semente da ata, e não do Math.random daqui
     var cp = C();
     try { if (cp && cp.emGrupo && cp.emGrupo()) return false; } catch (e) {}
     if (!JOGO.Poco || !JOGO.Poco.preparar(2)) return false;
@@ -913,9 +915,11 @@ var JOGO = (typeof window !== 'undefined')
     /* 12/09 (pedido do dono): "quando forem para um calabouco podem ir com os
      * dois personagens selecionados... no caso 4 personagens no maximo". Antes
      * a descida em grupo exigia UM heroi; agora aceita os selecionados (um ou
-     * dois), e a sala nasce com ate quatro. O Poco segue sendo de quem desce
-     * sozinho. */
-    if (!heroIds || heroIds.length < 1 || heroIds.length > 2 || dungeonId === 'poco') return false;
+     * dois), e a sala nasce com ate quatro. 07/10 à noite: o Poço desce em
+     * grupo também — o andar nasce da semente da ata (Poco.salaSemeada), igual
+     * nos dois motores, e o juiz o refaz do mesmo jeito (sala.js). */
+    if (!heroIds || heroIds.length < 1 || heroIds.length > 2) return false;
+    if (dungeonId === 'poco' && !JOGO.Poco) return false;
     var prog = P(), temGm = false;
     for (var i = 0; i < heroIds.length; i++) {
       var h = null;
@@ -1554,9 +1558,14 @@ var JOGO = (typeof window !== 'undefined')
     if (ata.dungeonId !== Game.dungeonId || ata.roomIndex !== Game.roomIndex) return false;
     var st;
     try {
+      // 07/10: o Poço em grupo — o andar nasce da semente da ata nos dois motores (e no juiz: sala.js)
+      if (ata.dungeonId === 'poco') {
+        if (!JOGO.Poco || !JOGO.Poco.poeSala(ata.roomIndex + 1, JOGO.Poco.salaSemeada(ata.roomIndex + 1, ata.semente >>> 0))) return false;
+      }
       st = E().createBattle(ata.dungeonId, ata.roomIndex, JSON.parse(JSON.stringify(ata.party)),
                             { seed: ata.semente, dificuldade: ata.dificuldade || 'normal', escolhePosicao: true,
                               afixo: ata.afixo || null });     // 07/10: o afixo da ata, igual nos dois clientes
+      if (ata.dungeonId === 'poco') JOGO.Poco.escalaEstado(st, ata.roomIndex + 1);   // a escalada antes do PV, como no solo
     } catch (e) { return false; }
     Game.selectedSpellId = null;
     Game.hoverTile = null;

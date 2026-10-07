@@ -309,6 +309,24 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
     def duplas_de_duelo(self):
         return self.com_estado('Ana Duelo', 'sumo', 20), self.com_estado('Bia Duelo', 'curandeiro', 20)
 
+    def test_06_grupo_no_poco(self):
+        """07/10: o Poço desce em grupo — a sala do grupo abre no 'poco' (o juiz anuncia 9999 andares), o andar nasce
+        da semente da ata e o fechar paga os dois com o recorde do Poço anotado em cada conta."""
+        self.precisa('grupo')
+        ana, bia = self.dupla(26)
+        achada = roda_node([JOGADORES], {'modo': 'procura-grupo', 'membros': self.membros(ana, bia),
+                                         'candidatos': [['poco', 1, s] for s in (11, 24, 37, 50, 63, 76, 89, 102)]})
+        self.assertEqual(achada['fase'], 'won', 'a dupla não venceu o andar 2 do Poço com nenhuma semente candidata')
+        status, r = ana.pede('POST', '/api/grupo/abrir', self.corpo_abrir(bia, 'poco', 1))
+        self.assertEqual(status, 200, r)
+        self.sql("UPDATE salas_grupo SET semente = ? WHERE gid = ?", achada['semente'], r['gid'])
+        status, rf = self.fecha_grupo(ana, r['gid'], achada)
+        self.assertEqual(status, 200, rf)
+        self.assertEqual(rf['fase'], 'won')
+        for c in (ana, bia):
+            poco = self.save(c)['db']['jogador']['poco']
+            self.assertEqual(poco['recorde'], 2, (c.conta['id'], poco))
+
     def test_10_duelo_ranqueado_nos_dois(self):
         self.precisa('duelo')
         a, b = self.duplas_de_duelo()

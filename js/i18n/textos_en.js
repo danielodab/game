@@ -2651,4 +2651,5 @@ JOGO.I18n.registra('en', { textos: {
   "+{a}% de saque lá": "+{a}% loot there",
   "+{a}% de XP": "+{a}% XP",
   "🕯 <b>Caminho escuro</b>: {a} pediu a sala com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Dark path</b>: {a} asked for the room with a random affix — worth +{pct}% XP and loot.",
+  "O Poço não abriu nesta página.": "The Pit did not open on this page.",
 } });
