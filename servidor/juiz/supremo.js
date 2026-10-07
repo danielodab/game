@@ -27,7 +27,9 @@
  * rodada derruba a tentativa (422, a API não pontua).
  *
  * corpo = { conta: {id, gm}, tentativa: {semente, herois, regras, chaveSal, sais: [{rodada, caminho, sal}]},
- *           lances, hashFinal, progress, db, contexto: {agoraMs} } */
+ *           lances, hashFinal, progress, db, contexto: {agoraMs} }
+ * ou, EM GRUPO (07/10): { membros: [{conta: {id, gm}, dono, herois, progress, db}] (quem lidera primeiro),
+ *           tentativa: {semente, regras, chaveSal, sais}, lances, hashFinal, contexto } — um placar só para os dois */
 const nodeCrypto = require('crypto');
 const { mundoEconomico, poeEstado, sementeDe } = require('./estado');
 const { refazEm, recusa } = require('./sala');
@@ -45,24 +47,54 @@ function fecha(corpo) {
   const c = corpo || {};
   const t = c.tentativa || {};
   if (!inteiro(t.semente)) throw recusa('tentativa inválida', 'entrada');
-  if (!Array.isArray(t.herois) || !t.herois.length || t.herois.length > 2 || t.herois.some((h) => typeof h !== 'string')) {
-    throw recusa('heróis da tentativa inválidos', 'entrada');
-  }
-  const conta = c.conta || {};
   const ctxo = c.contexto || {};
-  const w = mundoEconomico({
-    gm: !!conta.gm, contaId: conta.id, agoraMs: ctxo.agoraMs,
-    // o mundo econômico pede um sorteio; a tentativa não sorteia recompensa nenhuma
-    semente: sementeDe(t.semente + ':eco')
-  });
-  poeEstado(w, c.progress, c.db);
-  const J = w.J;
+  /* A TENTATIVA EM GRUPO (07/10, "descida em grupo com tudo que o solo tem"): `membros` em vez de `conta` —
+   * dois a quatro heróis de DUAS contas, cada um com o `dono` (a chave do lockstep), o grupo montado no mundo de
+   * cada conta com o estado que a API guardou na abertura; a Câmara é refeita UMA vez, no modo da sala em grupo
+   * (sala.js: a vez pelo dono, as marcas de queda e volta, a colocação de quem lidera), e o placar é um só. */
+  const emGrupo = Array.isArray(c.membros);
+  let J, party, colocador = null;
+  if (emGrupo) {
+    const membros = c.membros;
+    if (membros.length < 2 || membros.length > 4) throw recusa('o grupo precisa de 2 a 4 membros', 'entrada');
+    const donos = new Set();
+    const mundos = membros.map((m, i) => {
+      if (!m || typeof m.dono !== 'string' || !m.dono || !Array.isArray(m.herois) || !m.herois.length || m.herois.length > 2) {
+        throw recusa('membro ' + i + ' inválido', 'entrada');
+      }
+      if (donos.has(m.dono)) throw recusa('dois membros com o mesmo dono', 'entrada');
+      donos.add(m.dono);
+      const w = mundoEconomico({ gm: !!(m.conta && m.conta.gm), contaId: m.conta && m.conta.id, agoraMs: ctxo.agoraMs,
+                                 semente: sementeDe(t.semente + ':eco:' + m.dono) });
+      poeEstado(w, m.progress, m.db);
+      for (const hid of m.herois) {
+        if (!w.J.Progress.hero(hid)) throw recusa('o herói ' + hid + ' não é da conta do membro ' + i, 'herois');
+      }
+      return { m, w, party: w.J.Progress.battleParty(m.herois).map((p) => Object.assign(p, { dono: m.dono })) };
+    });
+    J = mundos[0].w.J;
+    colocador = mundos[0].m.dono;
+    party = [].concat(...mundos.map((x) => x.party));
+    if (party.length > 4) throw recusa('a tentativa em grupo tem no máximo 4 heróis', 'entrada');
+  } else {
+    if (!Array.isArray(t.herois) || !t.herois.length || t.herois.length > 2 || t.herois.some((h) => typeof h !== 'string')) {
+      throw recusa('heróis da tentativa inválidos', 'entrada');
+    }
+    const conta = c.conta || {};
+    const w = mundoEconomico({
+      gm: !!conta.gm, contaId: conta.id, agoraMs: ctxo.agoraMs,
+      // o mundo econômico pede um sorteio; a tentativa não sorteia recompensa nenhuma
+      semente: sementeDe(t.semente + ':eco')
+    });
+    poeEstado(w, c.progress, c.db);
+    J = w.J;
+    for (const hid of t.herois) {
+      if (!J.Progress.hero(hid)) throw recusa('o herói ' + hid + ' não é desta conta', 'herois');
+    }
+    party = J.Progress.battleParty(t.herois);
+  }
   const cfg = J.DATA && J.DATA.eco;
   if (!cfg || !cfg.arena) throw recusa('o Eco não existe nestas regras', 'entrada');
-  for (const hid of t.herois) {
-    if (!J.Progress.hero(hid)) throw recusa('o herói ' + hid + ' não é desta conta', 'herois');
-  }
-  const party = J.Progress.battleParty(t.herois);
   if (!party || !party.length) throw recusa('grupo vazio', 'herois');
   // a chave da tentativa e os caminhos que a API travou, rodada a rodada
   if (typeof t.chaveSal !== 'string' || !/^[0-9a-f]{64}$/.test(t.chaveSal)) {
@@ -90,10 +122,12 @@ function fecha(corpo) {
    * e um herói ferido de outra luta desigualaria a disputa. Por isso o carry é nulo aqui. */
   const r = refazEm(J, {
     dungeonId: cfg.arena, roomIndex: 0, dificuldade: 'normal',
-    semente: t.semente, party, carry: null, escolhePosicao: true,
+    semente: t.semente, party: JSON.parse(JSON.stringify(party)), carry: null, escolhePosicao: true,
     lances: c.lances, hashFinal: c.hashFinal,
     regras: t.regras,           // a versão das regras guardada na abertura (sala.js confere)
-    confereSal
+    confereSal,
+    // 07/10: em grupo, a sala refeita como a sala em grupo (a vez pelo dono; a colocação de quem lidera)
+    modo: emGrupo ? 'grupo' : undefined, colocador, carryRede: emGrupo
   });
   if (!r.estado || !r.estado.eco) throw recusa('a sala refeita não é a do Eco', 'entrada');
   const placar = J.Engine.ecoPlacar(r.estado);

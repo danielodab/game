@@ -265,5 +265,55 @@ try {
 } catch (e) { r18 = { motivo: e.motivo, juiz: !!e.juiz }; }
 check('o lance de sal numa sala de calabouço é recusado', r18 && r18.juiz && r18.motivo === 'lance', JSON.stringify(r18).slice(0, 200));
 
+// ---- 07/10: A TENTATIVA EM DUPLA — duas contas, a Câmara refeita como a sala em grupo, UM placar
+{
+  const { partidaEco } = require(path.join(__dirname, 'juiz_grupo_jogador.js'));
+  function membro(nivel, dono, heroi) {
+    const w = est.mundoEconomico({ agoraMs: AGORA, semente: 1 });
+    est.poeEstado(w, null, null);
+    const J = w.J, h = J.Progress.state.heroes[heroi];
+    h.level = nivel; h.xp = J.DATA.leveling.xpTable[nivel - 1];
+    const t = est.tiraEstado(w);
+    return { progress: t.progress, db: t.db, dono, herois: [heroi] };
+  }
+  const ana = membro(24, 'ana', 'sumo'), bia = membro(24, 'bia', 'curandeiro');
+  const srvD = servidorDeSal();
+  const g = partidaEco({ membros: [ana, bia], semente: 777 });
+  let passo = g.next();
+  while (!passo.done) passo = g.next(srvD.pede(passo.value.rodada, passo.value.caminho));
+  const jogoD = passo.value;
+  console.log('   em dupla: ' + jogoD.lances.length + ' lances · ' + jogoD.fase + ' · dano ' + jogoD.placar.dano);
+  check('a dupla joga a Câmara até o fim e tira dano do Eco', jogoD.fase !== 'playing' && jogoD.placar.dano > 0);
+  check('os lances da dupla têm os dois donos (o sal é de quem lidera)',
+        jogoD.lances.some((l) => l.de === 'bia') && jogoD.lances.filter((l) => l.a === 'r').every((l) => l.de === 'ana'));
+  function pedidoD(lances, hashFinal, extra) {
+    return Object.assign({
+      membros: [{ conta: { id: 1, gm: false }, dono: 'ana', herois: ['sumo'], progress: ana.progress, db: ana.db },
+                { conta: { id: 2, gm: false }, dono: 'bia', herois: ['curandeiro'], progress: bia.progress, db: bia.db }],
+      tentativa: { semente: 777, chaveSal: srvD.chaveHex, sais: JSON.parse(JSON.stringify(srvD.sais)) },
+      lances, hashFinal, contexto: { agoraMs: AGORA }
+    }, extra || {});
+  }
+  const rD = tenta(pedidoD(jogoD.lances, jogoD.hash));
+  check('o juiz refaz a tentativa em dupla sem recusar', rD && rD.ok === true, JSON.stringify(rD).slice(0, 300));
+  check('o placar da dupla é o do replay (um só para as duas contas)', rD && rD.placar && rD.placar.dano === jogoD.placar.dano &&
+        rD.placar.pontos === jogoD.placar.pontos, rD && rD.placar && rD.placar.dano + ' / ' + jogoD.placar.dano);
+  check('o hash do fim bate em dupla', rD && rD.hash === jogoD.hash);
+  // o lance da Bia com o herói da Ana cai (a vez pelo dono, como na sala em grupo)
+  const torto = JSON.parse(JSON.stringify(jogoD.lances));
+  const i = torto.findIndex((l) => l.de === 'ana' && (l.a === 'm' || l.a === 'c'));
+  if (i >= 0) torto[i].de = 'bia';
+  const rT = tenta(pedidoD(torto, jogoD.hash));
+  check('o lance de um com o herói do outro derruba a tentativa em dupla', rT && !rT.ok && rT.motivo === 'vez', JSON.stringify(rT).slice(0, 200));
+  // o registro é UM: trocar o dono anotado no lance do sal muda o caminho, e o juiz vê que não é o travado
+  const comBia = JSON.parse(JSON.stringify(jogoD.lances)).map((l) => (l.a === 'r' ? Object.assign(l, { de: 'bia' }) : l));
+  const rB = tenta(pedidoD(comBia, jogoD.hash));
+  check('o registro com outro dono no lance do sal não é o caminho travado (cai)', rB && !rB.ok && rB.motivo === 'caminho-trocado',
+        JSON.stringify(rB).slice(0, 200));
+  check('três membros com o mesmo dono caem', !tenta(pedidoD(jogoD.lances, jogoD.hash, { membros: [
+    { conta: { id: 1 }, dono: 'ana', herois: ['sumo'], progress: ana.progress, db: ana.db },
+    { conta: { id: 2 }, dono: 'ana', herois: ['curandeiro'], progress: bia.progress, db: bia.db }] })).ok);
+}
+
 console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
 process.exit(falhas ? 1 : 0);

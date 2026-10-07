@@ -2652,4 +2652,13 @@ JOGO.I18n.registra('en', { textos: {
   "+{a}% de XP": "+{a}% XP",
   "🕯 <b>Caminho escuro</b>: {a} pediu a sala com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Dark path</b>: {a} asked for the room with a random affix — worth +{pct}% XP and loot.",
   "O Poço não abriu nesta página.": "The Pit did not open on this page.",
+  "Enfrentar o Eco com {a}": "Face the Echo with {a}",
+  "Só quem lidera ({a}) abre a Câmara": "Only the leader ({a}) opens the Chamber",
+  "Só quem lidera ({nome}) abre a Câmara do Eco.": "Only the leader ({nome}) opens the Echo's Chamber.",
+  "Essa dupla não enfrenta o Eco: o Mestre fica de fora.": "That pair cannot face the Echo: the Master stays out.",
+  "Em grupo pela Rede os dois entram com os seus heróis (até quatro): o placar é o mesmo para as duas contas e cada uma gasta uma tentativa do dia.": "In a group over the Network both players bring their heroes (up to four): the score is the same for both accounts and each one spends one attempt of the day.",
+  "Tentativa em dupla com <b>{a}</b>: o placar vale para as duas contas.": "Attempt as a pair with <b>{a}</b>: the score counts for both accounts.",
+  "a sala do grupo não tem registro no servidor": "the group room has no record on the server",
+  "a tentativa segue com {a}: o placar sai quando ela fechar a dela": "the attempt goes on with {a}: the score comes when they close theirs",
+  "o parceiro": "your partner",
 } });

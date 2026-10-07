@@ -223,6 +223,7 @@ var JOGO = (typeof window !== 'undefined')
     if (S.tipo === 'duelo') return S.tomouAutoridade || !!(S.duelo && S.duelo.eu === 'A');
     return souLider();
   }
+  Coop.souAutoridade = souAutoridade;      // 07/10: o Game pergunta (o sal da rodada do Eco em dupla)
   function autoridadeId() {
     if (S.tipo === 'guerra') return autoridadeGuerra();
     if (souAutoridade()) return meuId();
@@ -265,6 +266,7 @@ var JOGO = (typeof window !== 'undefined')
     if (l.x != null) o.x = l.x;
     if (l.y != null) o.y = l.y;
     if (l.s != null) o.s = l.s;
+    if (l.r != null) o.r = l.r;          // 07/10: a rodada do sal do Eco em dupla (o sal vai no `s`)
     // 21/09: as casas marcadas na preparação viajam DENTRO do `p` — é delas que
     // o outro cliente (e o juíz do servidor) refaz a colocação
     if (l.e != null) o.e = l.e;
@@ -1186,7 +1188,8 @@ var JOGO = (typeof window !== 'undefined')
         }
         if (Aut.abreLuta) Aut.abreLuta('grupo', r.gid);      // 15/09: a luta aberta de quem lidera, desde o gid
         mandaAta(g, p, meus, pars, r.semente >>> 0, r.carry || null, r.gid,
-                 (typeof r.afixo === 'string' && r.afixo) ? r.afixo : null);   // 07/10: o afixo que o servidor decidiu
+                 (typeof r.afixo === 'string' && r.afixo) ? r.afixo : null,    // 07/10: o afixo que o servidor decidiu
+                 (r.eco && typeof r.eco.tentativa === 'string') ? r.eco : null);   // 07/10: a tentativa do Eco em dupla
       });
       muda();
       return true;
@@ -1202,7 +1205,7 @@ var JOGO = (typeof window !== 'undefined')
   function afixoProposto(g) {
     try { return (g && g.afixoDaSala) ? (g.afixoDaSala(g.dungeonId) || null) : null; } catch (e) { return null; }
   }
-  function mandaAta(g, p, meus, pars, semente, carry, gid, afixo) {
+  function mandaAta(g, p, meus, pars, semente, carry, gid, afixo, eco) {
     lembraParceiro(p.id, pars);
     S.n++;
     // a ata passa pelo JSON também do lado do líder: os dois motores montam a
@@ -1216,7 +1219,9 @@ var JOGO = (typeof window !== 'undefined')
       party: meus.concat(pars),
       carry: carry,
       gid: gid,                       // 13/09: a sala do grupo no servidor (null sem sessão)
-      afixo: afixo || null            // 07/10: o afixo da sala (o do bilhete do grupo), igual nos dois motores
+      afixo: afixo || null,           // 07/10: o afixo da sala (o do bilhete do grupo), igual nos dois motores
+      eco: eco ? eco.tentativa : null,            // 07/10: a tentativa do Eco em dupla (a de quem lidera)
+      restantes: eco ? eco.restantes : undefined  // e as vezes que restam a quem lidera (a tela do fim diz)
     });
     S.chamando = true; S.ataFalhou = false;
     S.ataEnvios = 1; S.ataProx = agora() + Coop.ATA_MS;
@@ -1356,6 +1361,7 @@ var JOGO = (typeof window !== 'undefined')
     if (l.x != null) c.x = l.x;
     if (l.y != null) c.y = l.y;
     if (l.s != null) c.s = l.s;
+    if (l.r != null) c.r = l.r;          // 07/10: o sal da rodada do Eco em dupla
     // 21/09: sem o `e` o juiz refaria a colocação com todo mundo ao acaso
     if (l.e != null) c.e = l.e;
     if (l.eu != null) c.eu = l.eu;
@@ -1400,7 +1406,7 @@ var JOGO = (typeof window !== 'undefined')
   Coop.registra = function (l, ok) {
     var g = G(), st = g && g.state;
     if (!st || !S.bid || !l) return;
-    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo, ok: !!ok, de: meuId() });
+    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, r: l.r, alvo: l.alvo, ok: !!ok, de: meuId() });
     var T = (typeof l.T === 'number') ? l.T : 0;
     var lista = S.log[T] || (S.log[T] = []);
     l.T = T; l.k = lista.length; l.b = S.bid; l.ok = !!ok; l.de = meuId();
@@ -1458,6 +1464,8 @@ var JOGO = (typeof window !== 'undefined')
   function donoCerto(l, st) {
     var g = G();
     if (!l || !st || !g) return false;
+    // 07/10: o sal da rodada do Eco em dupla só vale da AUTORIDADE do lockstep, com a rodada parada nele
+    if (l.a === 'r') return st.phase === 'playing' && !!l.de && l.de === autoridadeId() && !!E().ecoEsperaSal && E().ecoEsperaSal(st) === l.r;
     if (st.phase === 'placing') {
       var quem = (g.podeColocar && g.podeColocar()) ? meuId() : (parceiro() || {}).id;
       return l.a === 'p' && !!l.de && l.de === quem;
@@ -1512,7 +1520,7 @@ var JOGO = (typeof window !== 'undefined')
    * meu reaplicado depois da foto). Confere o que o motor devolveu e o hash. */
   Coop.aplicado = function (l, ok, semConferir) {
     if (!l) return;
-    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, alvo: l.alvo, ok: !!ok, de: l.de });
+    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, r: l.r, alvo: l.alvo, ok: !!ok, de: l.de });
     var T = l.T || 0;
     var lista = S.log[T] || (S.log[T] = []);
     lista.push(l);

@@ -424,6 +424,15 @@ dono ("placar de quem tirou mais dano") com a regra da casa (nunca número do cl
   `aviso`, fator 1, id `eco-<semana>`), num campo à parte — `ativos`/`proximos` seguem sendo a agenda do
   Mestre, que ele liga e cancela. O jogo (`agenda.js`) e o site (`site.js`) juntam os dois.
 
+- **A tentativa em dupla (07/10).** `POST /api/grupo/abrir` no `dungeonId` da Câmara abre a sala do grupo E
+  duas tentativas (`supremo_grupos`, uma por conta, a mesma semente); `POST /api/supremo/sal` aceita qualquer
+  dos dois, sempre com a tentativa de quem lidera (a do parceiro dá 409 `tentativa-da-dupla` — os sais moram
+  numa só); o fechar é o `POST /api/grupo/fechar` de sempre, e o servidor desvia para o juiz do Eco
+  (`/supremo/fecha` com `membros`), que refaz a Câmara no modo da sala em grupo (a vez pelo dono, a colocação
+  de quem lidera, o sal conferido contra o caminho do registro dos dois). Um placar para as duas contas; as
+  duas gastam a vez do dia; nada de vida única. A largada de um não fecha nada (só a marca do registro); a
+  outra tentativa aberta de qualquer dos dois vence a dupla (`outra-aberta`), como sempre.
+
 ### 4.9 Os direitos do titular e o registro de erros (02/10, `servidor/privacidade.py`, `servidor/registros.py`)
 Antes do lançamento: os Termos de Uso e a Política de Privacidade (`site/termos.html`,
 `site/privacidade.html`, escritos lendo este servidor), o aceite, excluir a conta, baixar os

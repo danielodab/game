@@ -108,8 +108,84 @@ function jogaDuelo(p) {
            vidaFimA: E.vidaDoLado(st, 'player'), vidaFimB: E.vidaDoLado(st, 'enemy') };
 }
 
+/* A CÂMARA DO ECO EM DUPLA (07/10) como gerador: a sala em grupo de sempre, e em cada virada de rodada cede
+ * {rodada, caminho} (o caminho do REGISTRO dos dois, como o Game em dupla pede) e recebe o sal — que entra como o
+ * lance {a:'r'} de quem lidera (a autoridade do lockstep). `sais` ({rodada: sal}) joga sem servidor. */
+function* partidaEco(p) {
+  const lider = p.membros[0];
+  const w = est.mundoEconomico({ semente: 5 });
+  est.poeEstado(w, lider.progress, lider.db);
+  const J = w.J, E = J.Engine;
+  const party = [].concat(...p.membros.map(partyDe));
+  const st = E.createBattle(J.DATA.eco.arena, 0, JSON.parse(JSON.stringify(party)),
+    { seed: p.semente, dificuldade: 'normal', escolhePosicao: true });
+  E.events.length = 0;
+  const log = [], pedidos = [];
+  const ops = E.placementOptions(st);
+  const op = ops[(typeof p.opcao === 'number' && ops[p.opcao]) ? p.opcao : 0];
+  log.push({ a: 'p', x: op.x, y: op.y, ok: !!E.place(st, op.x, op.y), de: lider.dono });
+  E.events.length = 0;
+  let voltas = 0;
+  while (st.phase === 'playing' && voltas++ < 3000) {
+    const espera = E.ecoEsperaSal ? E.ecoEsperaSal(st) : 0;
+    if (espera) {
+      const caminho = E.ecoCaminho(log);
+      const sal = yield { rodada: espera, caminho };
+      pedidos.push({ rodada: espera, caminho, sal: (typeof sal === 'number') ? sal : null });
+      if (typeof sal !== 'number') break;
+      log.push({ a: 'r', r: espera, s: sal, ok: !!E.ecoSal(st, espera, sal), de: lider.dono });
+      E.events.length = 0;
+      continue;
+    }
+    const u = E.activeUnit(st);
+    if (!u) break;
+    const gente = ehDeGente(u);
+    const plano = J.AI.planTurn(st, u.uid) || [];
+    let acabou = false;
+    for (const x of (plano.length ? plano : [{ action: 'end' }])) {
+      if (st.phase !== 'playing') break;
+      if (x.action === 'move') { const ok = !!E.move(st, u.uid, x.x, x.y); if (gente) log.push({ a: 'm', u: u.uid, x: x.x, y: x.y, ok, de: u.dono }); }
+      else if (x.action === 'cast') { const ok = !!E.cast(st, u.uid, x.spellId, x.x, x.y); if (gente) log.push({ a: 'c', u: u.uid, s: x.spellId, x: x.x, y: x.y, ok, de: u.dono }); }
+      else if (x.action === 'end') { E.endTurn(st); if (gente) log.push({ a: 'e', ok: true, de: u.dono }); acabou = true; break; }
+      E.events.length = 0;
+    }
+    if (!acabou && st.phase === 'playing' && !(E.ecoEsperaSal && E.ecoEsperaSal(st))) {
+      E.endTurn(st);
+      if (gente) log.push({ a: 'e', ok: true, de: u.dono });
+    }
+    E.events.length = 0;
+  }
+  return { lances: log, fase: st.phase, hash: E.hash(st), placar: E.ecoPlacar(st), pedidos };
+}
+function jogaEco(p) {
+  const g = partidaEco(p);
+  const sais = (p && p.sais && typeof p.sais === 'object') ? p.sais : {};
+  let passo = g.next();
+  while (!passo.done) passo = g.next(Object.prototype.hasOwnProperty.call(sais, passo.value.rodada) ? sais[passo.value.rodada] : null);
+  return passo.value;
+}
+/* ao vivo (a prova em Python): a primeira linha é o pedido; a cada virada sai {"pede": {rodada, caminho}} e entra
+ * {"sal": N | null}; no fim sai {"fim": {...}} */
+function aoVivo() {
+  const rl = require('readline').createInterface({ input: process.stdin });
+  let g = null;
+  function manda(obj) { process.stdout.write(JSON.stringify(obj) + '\n'); }
+  function anda(valor) {
+    const passo = g.next(valor);
+    if (passo.done) { manda({ fim: passo.value }); rl.close(); return; }
+    manda({ pede: passo.value });
+  }
+  rl.on('line', (linha) => {
+    if (!linha.trim()) return;
+    const m = JSON.parse(linha);
+    if (!g) { g = partidaEco(m); anda(undefined); return; }
+    anda(m.sal);
+  });
+}
+
 function executa(p) {
   if (p.modo === 'duelo') return jogaDuelo(p);
+  if (p.modo === 'eco-grupo') return jogaEco(p);
   if (p.modo === 'procura-grupo') {
     for (const [dungeonId, roomIndex, semente] of p.candidatos || []) {
       const j = jogaGrupo(Object.assign({}, p, { dungeonId, roomIndex, semente }));
@@ -120,7 +196,8 @@ function executa(p) {
   return jogaGrupo(p);
 }
 
-if (require.main === module) {
+if (require.main === module && process.argv.indexOf('--ao-vivo') >= 0) aoVivo();
+else if (require.main === module) {
   const pedacos = [];
   process.stdin.on('data', (c) => pedacos.push(c));
   process.stdin.on('end', () => {
@@ -128,4 +205,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { jogaGrupo, jogaDuelo };
+module.exports = { jogaGrupo, jogaDuelo, jogaEco, partidaEco };

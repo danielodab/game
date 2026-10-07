@@ -272,13 +272,26 @@ class GrupoMixin:
         # 19/09 (a 2ª rodada de conserto): a versão das regras da página de quem lidera contra a do juiz — a página
         # de antes do deploy não abre a sala em grupo para os dois caírem como fraude no fim (salas.py)
         regras = self._confere_versao_cliente(corpo, regras)
-        n = regras['calaboucos'].get(dungeon)
-        if not _inteiro_puro(n):
-            raise Recusa(400, 'calabouço desconhecido ou fechado')
-        if sala >= n:
-            raise Recusa(400, 'essa sala não existe nesse calabouço (são %d)' % n)
-        t = agora()
-        afixo = self._afixo_da_abertura(corpo, dungeon, t, regras, sala)    # 07/10: o afixo do dia ou o caminho escuro (salas.py)
+        # 07/10: A CÂMARA DO ECO EM DUPLA ("descida em grupo com tudo que o solo tem"): o dungeonId é a arena do Eco
+        # (o juiz a anuncia em /regras `eco`); a sala do grupo nasce como sempre e, na MESMA transação, as duas
+        # tentativas do Eco (supremo.py, _supremo_abre_dupla). Sem vida única (todos entram cheios), sem afixo, só a
+        # sala 0 e a dificuldade normal — a tentativa é placar
+        eco = isinstance(regras.get('eco'), str) and dungeon == regras.get('eco')
+        if eco:
+            if sala != 0:
+                raise Recusa(400, 'a Câmara do Eco tem uma sala só')
+            if dificuldade != 'normal':
+                raise Recusa(400, 'a tentativa do Eco é sempre na dificuldade normal')
+            self._supremo_fecha_vencidas()
+        else:
+            n = regras['calaboucos'].get(dungeon)
+            if not _inteiro_puro(n):
+                raise Recusa(400, 'calabouço desconhecido ou fechado')
+            if sala >= n:
+                raise Recusa(400, 'essa sala não existe nesse calabouço (são %d)' % n)
+        instante = time.time()
+        t = int(instante)
+        afixo = None if eco else self._afixo_da_abertura(corpo, dungeon, t, regras, sala)    # 07/10: o afixo do dia ou o caminho escuro (salas.py)
         with self._escrita():
             parceiro = self._conta_viva(pid)
             if parceiro is None:
@@ -295,10 +308,11 @@ class GrupoMixin:
             # botão de quem lidera espera o mesmo
             agora_ms = int(time.time() * 1000)
             vidas = {}
-            for conta_id, d, hs in ((cid, dono, herois), (pid, dono_p, herois_p)):
-                for h, v in self._vida_ferida(conta_id, hs, agora_ms).items():
-                    vidas[d + ':' + h] = v
-            self._vida_recusa_zero(vidas)
+            if not eco:                      # 07/10: a tentativa do Eco não usa a vida única (todos entram cheios)
+                for conta_id, d, hs in ((cid, dono, herois), (pid, dono_p, herois_p)):
+                    for h, v in self._vida_ferida(conta_id, hs, agora_ms).items():
+                        vidas[d + ':' + h] = v
+                self._vida_recusa_zero(vidas)
             carry = {k: v['hp'] for k, v in vidas.items()} or None
             # uma sala em grupo aberta por dupla: abrir outra vence a anterior
             self.con.execute("UPDATE salas_grupo SET estado = 'vencida', fechada_em = ? WHERE estado = 'aberta' "
@@ -321,7 +335,12 @@ class GrupoMixin:
             for conta_id, hs in ((cid, herois), (pid, herois_p)):
                 self.con.execute("INSERT OR REPLACE INTO luta_aberta(tipo, ref, conta_id, herois, aberta_ms, estado) "
                                  "VALUES ('grupo', ?, ?, ?, ?, 'aberta')", (gid, conta_id, json.dumps(hs), agora_ms))
-        return 200, {'ok': True, 'gid': gid, 'semente': semente, 'carry': carry, 'afixo': afixo}
+            # 07/10: as duas tentativas do Eco, presas ao gid (a mesma semente da sala do grupo)
+            eco_info = None
+            if eco:
+                eco_info = self._supremo_abre_dupla(gid, conta, parceiro, herois, herois_p, semente, regras.get('regras'),
+                                                    instante, {cid: meu, pid: dele})
+        return 200, {'ok': True, 'gid': gid, 'semente': semente, 'carry': carry, 'afixo': afixo, 'eco': eco_info}
 
     # -- POST /api/grupo/fechar ------------------------------------------------------------------
     def _regras_da_luta(self, tabela, coluna, ref):
@@ -358,8 +377,11 @@ class GrupoMixin:
         if g['estado'] == 'vencida':
             raise Recusa(410, 'sala em grupo vencida: abram de novo')
         if g['estado'] == 'paga':
+            rec = json.loads(pago['recompensa']) if pago else None
+            if isinstance(rec, dict) and rec.get('eco') is True:
+                return 200, rec                              # 07/10: o recibo da tentativa do Eco em dupla
             pub = self._estado_publico(cid)
-            return 200, dict({'ok': True, 'fase': 'won', 'recompensa': json.loads(pago['recompensa']) if pago else None,
+            return 200, dict({'ok': True, 'fase': 'won', 'recompensa': rec,
                               'carry': _objeto(g['carry_saida'])}, **pub)
         resposta = {'ok': True, 'fase': g['estado'], 'recompensa': None, 'motivo': g['motivo']}
         if g['estado'] == 'nao-conferida':
@@ -405,20 +427,30 @@ class GrupoMixin:
                 else:
                     if g['primeiro_fecho'] is None:
                         self.con.execute("UPDATE salas_grupo SET primeiro_fecho = ? WHERE gid = ?", (t, gid))
-                    party = json.loads(g['party'])
-                    membros = []
-                    for p in party:
-                        linha = self.con.execute("SELECT * FROM contas WHERE id = ?", (p['conta'],)).fetchone()
-                        if linha is None:
-                            raise Recusa(409, 'uma das contas do grupo não existe mais')
-                        membros.append({'p': p, 'conta': dict(linha), 'estado': self._estado_exige(p['conta']),
-                                        'guilda': self._guilda_contexto(p['conta'], t)})
-                    fatores = self._fatores_no_ar(t)
-                    regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
-                    afixo_ata = self._afixo_guardado('salas_grupo_afixo', 'gid', gid)     # 07/10
-                    acao = 'juiz'
+                    dupla_eco = self._supremo_dupla_por_gid(gid)      # 07/10: a Câmara do Eco em dupla
+                    if dupla_eco:
+                        acao = 'eco'
+                        continue_eco = (dict(g), dupla_eco)
+                    else:
+                        party = json.loads(g['party'])
+                        membros = []
+                        for p in party:
+                            linha = self.con.execute("SELECT * FROM contas WHERE id = ?", (p['conta'],)).fetchone()
+                            if linha is None:
+                                raise Recusa(409, 'uma das contas do grupo não existe mais')
+                            membros.append({'p': p, 'conta': dict(linha), 'estado': self._estado_exige(p['conta']),
+                                            'guilda': self._guilda_contexto(p['conta'], t)})
+                        fatores = self._fatores_no_ar(t)
+                        regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09
+                        afixo_ata = self._afixo_guardado('salas_grupo_afixo', 'gid', gid)     # 07/10
+                        acao = 'juiz'
             if acao == 'fechada':
                 return self._grupo_fechada(cid, gid)
+            if acao == 'eco':
+                if instante - g['aberta_em'] < SALA_MIN_S:
+                    self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
+                    raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
+                return self._grupo_fecha_eco(cid, continue_eco[0], gid, continue_eco[1], lances, hash_final, instante, t)
             if acao == 'nao-conferida':
                 self._grupo_marca(gid, 'nao-conferida', 'fotografada', t, 'grupo-nao-conferida')
                 return self._grupo_fechada(cid, gid)
@@ -518,6 +550,10 @@ class GrupoMixin:
                 saiu = self.con.execute("SELECT estado FROM luta_aberta WHERE tipo = 'grupo' AND ref = ? AND conta_id = ?",
                                         (gid, cid)).fetchone()
                 acao = 'ja' if saiu is not None and saiu['estado'] in ('registro', 'largada') else 'juiz'
+                # 07/10: a dupla do Eco largada por um — sem vida para gravar e sem replay: fica a marca do registro,
+                # e o parceiro (que segue na Câmara com os heróis de quem saiu pela IA) ainda fecha com o registro dele
+                if acao == 'juiz' and self._supremo_dupla_por_gid(gid):
+                    acao = 'eco'
             if acao == 'juiz':
                 party = json.loads(g['party'])
                 membros = []
@@ -532,6 +568,12 @@ class GrupoMixin:
         if acao == 'fechada':
             return self._grupo_fechada(cid, gid)
         if acao == 'ja':
+            return 200, {'ok': True, 'fase': 'largou', 'recompensa': None}
+        if acao == 'eco':
+            with self._escrita():
+                self.con.execute("UPDATE luta_aberta SET estado = 'registro' WHERE tipo = 'grupo' AND ref = ? "
+                                 "AND conta_id = ? AND estado = 'aberta'", (gid, cid))
+                self._evento(cid, 'grupo-largou', {'gid': gid, 'eco': True})
             return 200, {'ok': True, 'fase': 'largou', 'recompensa': None}
         with self.tranca:
             regras_ata = self._regras_da_luta('salas_grupo_regras', 'gid', gid)   # 19/09

@@ -2652,4 +2652,13 @@ JOGO.I18n.registra('es', { textos: {
   "+{a}% de XP": "+{a}% de XP",
   "🕯 <b>Caminho escuro</b>: {a} pediu a sala com um afixo sorteado — vale +{pct}% de XP e saque.": "🕯 <b>Camino oscuro</b>: {a} pidió la sala con un afijo sorteado — vale +{pct}% de XP y botín.",
   "O Poço não abriu nesta página.": "El Pozo no abrió en esta página.",
+  "Enfrentar o Eco com {a}": "Enfrentar al Eco con {a}",
+  "Só quem lidera ({a}) abre a Câmara": "Solo quien lidera ({a}) abre la Cámara",
+  "Só quem lidera ({nome}) abre a Câmara do Eco.": "Solo quien lidera ({nome}) abre la Cámara del Eco.",
+  "Essa dupla não enfrenta o Eco: o Mestre fica de fora.": "Esa pareja no enfrenta al Eco: el Maestro queda fuera.",
+  "Em grupo pela Rede os dois entram com os seus heróis (até quatro): o placar é o mesmo para as duas contas e cada uma gasta uma tentativa do dia.": "En grupo por la Red los dos entran con sus héroes (hasta cuatro): el marcador es el mismo para las dos cuentas y cada una gasta un intento del día.",
+  "Tentativa em dupla com <b>{a}</b>: o placar vale para as duas contas.": "Intento en pareja con <b>{a}</b>: el marcador vale para las dos cuentas.",
+  "a sala do grupo não tem registro no servidor": "la sala del grupo no tiene registro en el servidor",
+  "a tentativa segue com {a}: o placar sai quando ela fechar a dela": "el intento sigue con {a}: el marcador sale cuando cierre el suyo",
+  "o parceiro": "tu compañero",
 } });

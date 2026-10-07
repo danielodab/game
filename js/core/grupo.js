@@ -321,7 +321,15 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < lista.length; i++) if (lista[i] && lista[i].id === id) return lista[i];
     // 03/10: o calabouço especial (o Santuário dos Elementos) desce em grupo como os seis — a regra dele
     // não sorteia e mora no estado da batalha, então os dois motores a refazem igual
-    return safe(function () { return D().especial(id); }, null) || null;
+    var esp = safe(function () { return D().especial(id); }, null) || null;
+    if (esp) return esp;
+    // 07/10: a Câmara do Eco desce em grupo (a tentativa em dupla): a arena mora em DATA.arenas
+    return safe(function () {
+      if (!D().eco || id !== D().eco.arena) return null;
+      var ar = D().arenas || [];
+      for (var i = 0; i < ar.length; i++) if (ar[i] && ar[i].id === id) return ar[i];
+      return null;
+    }, null) || null;
   }
   /* 11/09 (revisão): a dificuldade que vem do outro lado — um id conhecido (sem a
    * tabela na página, só a forma) */

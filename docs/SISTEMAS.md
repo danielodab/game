@@ -550,6 +550,22 @@ recusar de vez (a tentativa venceu, a semana fechou), a tentativa acaba na virad
 conferência. O treino sem conta passa pela mesma parada com um sal local e não conta no placar. O porquê e
 as contas estão em docs/SEGURANCA.md §4.8.
 
+**Em dupla (07/10 à noite, "descida em grupo com tudo que o solo tem").** A Câmara abre também pela
+descida em grupo: na ficha do Eco quem lidera toca "Enfrentar o Eco com {parceiro}" (`Grupo.descer(arena)`),
+os dois vão à antessala da Câmara e a porta abre a sala do grupo no `dungeonId` da arena (`grupo.py`,
+`_grupo_abrir`: o juiz anuncia a arena em `/regras` `eco`). Na mesma transação nascem **duas tentativas**,
+uma por conta, com a semente da sala do grupo, presas ao gid (`supremo_grupos`); cada conta gasta a vez do
+dia, e sem vez numa delas a porta não abre (429 `sem-tentativas`, `quem`). A ata leva a tentativa de quem
+lidera; o **sal** de cada rodada é pedido pela autoridade do lockstep (qualquer dos dois pode, sempre com
+essa tentativa) e viaja como lance `{a:'r'}` — quem segue só o tira da fila (`updateRede`). O fim é o da
+sala em grupo (os dois conferem o hash) e o fechar vai pelo `POST /api/grupo/fechar` com o registro do
+lockstep: o juiz refaz a Câmara no modo da sala em grupo (`supremo.js`, `membros`) e o placar é **um** para
+as duas contas — as duas entram no ranking, a trilha conta o Eco para as duas. Não usa a vida única (todos
+entram cheios), é sempre na normal, e quem larga no meio só deixa a marca do registro: o parceiro segue
+(os heróis de quem saiu pela IA) e fecha com o registro dele. Treino em dupla sem servidor existe (o sal
+local), e não pontua. Provas: `node tests/juiz_supremo.js` (o bloco da dupla) e `tests/supremo_api.py`
+(`test_15`, `test_16`).
+
 **A semana.** 3 tentativas por dia (o dia de Brasília); vale a melhor da semana, de segunda 00:00 a
 domingo 23:59 de Brasília. O ranking é por conta (empate: quem chegou primeiro); a equipe joga mas não
 entra. No fechamento, por faixa: 1º–3º 1.500 vinténs, 20 selos de chefe e o título **Voz do Eco** (para

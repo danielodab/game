@@ -151,6 +151,19 @@ CREATE TABLE IF NOT EXISTS supremo_semanas(
   fechada_em INTEGER NOT NULL,
   contas     INTEGER NOT NULL
 );
+-- 07/10: A TENTATIVA EM DUPLA ("descida em grupo com tudo que o solo tem"). A Câmara do Eco abre pela sala do grupo
+-- (grupo.py, POST /api/grupo/abrir no dungeonId da arena): o gid liga DUAS tentativas, uma por conta, com a MESMA
+-- semente (a da sala do grupo); o sal é pedido com a tentativa de quem lidera (a que vai na ata) por qualquer
+-- dos dois; o fechar vem pelo /api/grupo/fechar com o registro do lockstep, o juiz refaz a Câmara como a sala em
+-- grupo e o placar é UM para as duas contas (as duas entram no ranking, cada uma gasta a vez do dia)
+CREATE TABLE IF NOT EXISTS supremo_grupos(
+  gid            TEXT PRIMARY KEY,
+  tentativa      TEXT NOT NULL REFERENCES supremo_tentativas(id) ON DELETE CASCADE,
+  tentativa_par  TEXT NOT NULL REFERENCES supremo_tentativas(id) ON DELETE CASCADE,
+  lider_id       INTEGER NOT NULL,
+  membro_id      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS supremo_grupos_tentativa ON supremo_grupos(tentativa);
 CREATE TABLE IF NOT EXISTS supremo_premios(
   semana     INTEGER NOT NULL,
   conta_id   INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
@@ -452,6 +465,180 @@ class SupremoMixin:
         return 200, {'ok': True, 'tentativa': tid, 'semente': semente, 'restantes': TENTATIVAS_POR_DIA - usadas - 1,
                      'semana': semana_publica(semana)}
 
+    # -- A TENTATIVA EM DUPLA (07/10) -----------------------------------------------------------------
+    def _supremo_dupla_por_gid(self, gid):
+        """Dentro da tranca: a linha de supremo_grupos do gid (dict), ou None (uma sala em grupo de sempre)."""
+        try:
+            r = self.con.execute("SELECT * FROM supremo_grupos WHERE gid = ?", (gid,)).fetchone()
+        except Exception:
+            return None
+        return dict(r) if r is not None else None
+
+    def _supremo_dupla_por_tentativa(self, tid):
+        """Dentro da tranca: a dupla de que a tentativa faz parte (a de quem lidera OU a do parceiro), ou None."""
+        r = self.con.execute("SELECT * FROM supremo_grupos WHERE tentativa = ? OR tentativa_par = ?", (tid, tid)).fetchone()
+        return dict(r) if r is not None else None
+
+    def _supremo_abre_dupla(self, gid, lider, membro, herois_l, herois_m, semente, regras_juiz, instante, estados):
+        """Dentro da _escrita de _grupo_abrir (grupo.py), com a sala do grupo já inserida: as DUAS tentativas (uma por
+        conta, a mesma semente da sala do grupo), o estado de cada conta na abertura e a linha da dupla. As duas
+        contas gastam a vez do dia; sem vez numa delas, 429 com `quem` (a porta diz quem precisa esperar amanhã).
+        `estados` = {conta_id: estado} já lidos pelo chamador. Devolve {tentativa, restantes, restantesPar}."""
+        t = int(instante)
+        semana, dia = semana_de(t), dia_de(t)
+        for conta, hs in ((lider, herois_l), (membro, herois_m)):
+            prog = estados[conta['id']]['progress']
+            fichas = prog.get('heroes') if isinstance(prog, dict) else {}
+            for hid in hs:
+                if classe_do_heroi(hid, (fichas or {}).get(hid) or {}) is None:
+                    raise Recusa(400, 'o Mestre do Fundo não enfrenta o Eco: ele leva qualquer feitiço do jogo', motivo='mestre')
+        # a aberta de antes de CADA um vence (já contou como usada ao abrir)
+        for conta in (lider, membro):
+            self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'outra-aberta' "
+                             "WHERE conta_id = ? AND estado = 'aberta'", (t, conta['id']))
+        usadas, fora = {}, []
+        for conta in (lider, membro):
+            usadas[conta['id']] = self.con.execute(USADAS_HOJE, (conta['id'], dia)).fetchone()[0]
+            if usadas[conta['id']] >= TENTATIVAS_POR_DIA:
+                fora.append(conta['id'])
+        if fora:
+            raise Recusa(429, 'as %d tentativas de hoje acabaram — o Eco volta a ouvir amanhã' % TENTATIVAS_POR_DIA,
+                         motivo='sem-tentativas', liberaEm=(dia + 1) * 86400 - FUSO_S,
+                         quem='os-dois' if len(fora) == 2 else ('parceiro' if fora == [membro['id']] else 'eu'))
+        tids = {}
+        for conta, hs in ((lider, herois_l), (membro, herois_m)):
+            tid = secrets.token_urlsafe(18)
+            tids[conta['id']] = tid
+            self.con.execute(
+                "INSERT INTO supremo_tentativas(id, conta_id, semana, dia, semente, herois, regras, aberta_ms, estado) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'aberta')",
+                (tid, conta['id'], semana, dia, semente, json.dumps(hs),
+                 regras_juiz if _inteiro_puro(regras_juiz) else None, int(instante * 1000)))
+            self.con.execute("DELETE FROM supremo_estados WHERE tentativa IN (SELECT id FROM supremo_tentativas "
+                             "WHERE conta_id = ? AND estado != 'aberta')", (conta['id'],))
+            self.con.execute("INSERT INTO supremo_estados(tentativa, progress, db) VALUES (?, ?, ?)",
+                             (tid, estados[conta['id']]['progress_txt'], json.dumps(estados[conta['id']]['db'])))
+            self._evento(conta['id'], 'supremo-abre', {'tentativa': tid, 'semana': semana, 'herois': hs, 'gid': gid,
+                                                        'dupla': True})
+        self.con.execute("INSERT INTO supremo_grupos(gid, tentativa, tentativa_par, lider_id, membro_id) VALUES (?, ?, ?, ?, ?)",
+                         (gid, tids[lider['id']], tids[membro['id']], lider['id'], membro['id']))
+        return {'tentativa': tids[lider['id']], 'restantes': TENTATIVAS_POR_DIA - usadas[lider['id']] - 1,
+                'restantesPar': TENTATIVAS_POR_DIA - usadas[membro['id']] - 1}
+
+    def _supremo_dupla_vence(self, dupla, gid, motivo, t):
+        """Dentro da _escrita: as duas tentativas e a sala do grupo vencem (o deploy no meio, o prazo, a semana)."""
+        for tid in (dupla['tentativa'], dupla['tentativa_par']):
+            self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', motivo = ?, fechada_em = ? "
+                             "WHERE id = ? AND estado = 'aberta'", (motivo, t, tid))
+            self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
+        self.con.execute("UPDATE salas_grupo SET estado = 'vencida', motivo = ?, fechada_em = ? WHERE gid = ? "
+                         "AND estado = 'aberta'", (motivo, t, gid))
+
+    def _supremo_marca_dentro(self, tid, estado, motivo, t):
+        """Dentro da _escrita: a tentativa aberta muda de estado (o mesmo que _supremo_marca, sem abrir transação)."""
+        n = self.con.execute("UPDATE supremo_tentativas SET estado = ?, motivo = ?, fechada_em = ? "
+                             "WHERE id = ? AND estado = 'aberta'", (estado, motivo, t, tid)).rowcount
+        self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
+        if n:
+            r = self.con.execute("SELECT conta_id FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
+            self._evento(r['conta_id'], 'supremo-' + estado, {'tentativa': tid, 'motivo': motivo})
+        return n
+
+    def _grupo_fecha_eco(self, cid, g, gid, dupla, lances, hash_final, instante, t):
+        """O fechar da TENTATIVA EM DUPLA, chamado por grupo_fechar (grupo.py) quando o gid é de uma dupla do Eco —
+        depois das réguas de sempre da sala em grupo (a fotografada espera o registro limpo; rápido demais recusa).
+        O juiz refaz a Câmara no modo da sala em grupo (servidor/juiz/supremo.js, `membros`) com o estado de cada
+        conta NA ABERTURA e os sais travados; o placar é um só e as duas tentativas fecham conferidas. O recibo de
+        cada conta fica em salas_grupo_pago (o outro membro que fechar depois recebe o dele por _grupo_fechada)."""
+        vencida, membros, sais, regras_t = None, [], [], 1
+        with self._escrita():
+            s = self.con.execute("SELECT * FROM supremo_tentativas WHERE id = ?", (dupla['tentativa'],)).fetchone()
+            s2 = self.con.execute("SELECT * FROM supremo_tentativas WHERE id = ?", (dupla['tentativa_par'],)).fetchone()
+            if s is None or s2 is None:
+                raise Recusa(404, 'tentativa em dupla não encontrada')
+            if s['estado'] != 'aberta' or s2['estado'] != 'aberta':
+                vencida = 'outra-aberta'          # um dos dois abriu outra tentativa: a dupla venceu
+            else:
+                vencida = self._supremo_venceu(s, instante)
+            if vencida:
+                self._supremo_dupla_vence(dupla, gid, vencida, t)
+            else:
+                for p in json.loads(g['party']):
+                    linha = self.con.execute("SELECT id, gm FROM contas WHERE id = ?", (p['conta'],)).fetchone()
+                    tid_m = dupla['tentativa'] if p['conta'] == dupla['lider_id'] else dupla['tentativa_par']
+                    foto = self.con.execute("SELECT progress, db FROM supremo_estados WHERE tentativa = ?", (tid_m,)).fetchone()
+                    if linha is None or foto is None:
+                        raise Recusa(409, 'uma das contas da dupla não existe mais')
+                    membros.append({'conta': {'id': linha['id'], 'gm': bool(linha['gm'])}, 'dono': p['dono'], 'herois': p['herois'],
+                                    'progress': json.loads(foto['progress']), 'db': json.loads(foto['db'] or '{}')})
+                sais = [{'rodada': r['rodada'], 'caminho': r['caminho'], 'sal': r['sal']} for r in self.con.execute(
+                    "SELECT rodada, caminho, sal FROM supremo_sais WHERE tentativa = ? ORDER BY rodada", (dupla['tentativa'],))]
+                regras_t = s['regras'] if _inteiro_puro(s['regras']) else 1
+        if vencida:
+            raise Recusa(410, 'a tentativa em dupla venceu (%s)' % vencida, motivo='vencida')
+        pedido = {'membros': membros,
+                  'tentativa': {'semente': g['semente'], 'regras': regras_t,
+                                'chaveSal': chave_da_tentativa(self.segredo, dupla['tentativa']).hex(), 'sais': sais},
+                  'lances': lances, 'hashFinal': hash_final, 'contexto': {'agoraMs': int(instante * 1000)}}
+        try:
+            saida = self.juiz.pede('POST', '/supremo/fecha', pedido)
+        except Recusa as e:
+            if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
+                self._regras_esquece()
+                with self._escrita():
+                    self._supremo_dupla_vence(dupla, gid, 'regras-mudaram', t)
+                raise Recusa(410, 'as regras do jogo mudaram no meio da tentativa — ela não conta, e a vez de hoje '
+                                  'volta para vocês', motivo='regras-mudaram')
+            if e.status == 422:
+                motivo = e.extra.get('motivo') or 'juiz'
+                with self._escrita():
+                    for tid in (dupla['tentativa'], dupla['tentativa_par']):
+                        self._supremo_marca_dentro(tid, 'recusada', motivo, t)
+                self._grupo_marca(gid, 'recusada', motivo, t, 'grupo-recusada')
+            raise
+        placar = saida.get('placar') if isinstance(saida, dict) else None
+        if (not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(placar, dict)
+                or not all(_inteiro_puro(placar.get(k)) and placar.get(k) >= 0 for k in ('dano', 'pontos', 'rodada'))):
+            raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
+        turnos = saida.get('turnosJogador') if _inteiro_puro(saida.get('turnosJogador')) else 0
+        minimo = max(SALA_MIN_S, SALA_S_POR_TURNO * turnos)
+        if instante - g['aberta_em'] < minimo:
+            with self._escrita():
+                for tid in (dupla['tentativa'], dupla['tentativa_par']):
+                    self._supremo_marca_dentro(tid, 'recusada', 'rapido-demais', t)
+            self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
+            raise Recusa(422, 'a tentativa fechou rápido demais para ser de verdade', motivo='rapido-demais')
+        meu = None
+        with self._escrita():
+            agora_g = self.con.execute("SELECT estado FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
+            if agora_g is None or agora_g['estado'] != 'aberta':
+                return self._grupo_fechada(cid, gid)             # o outro membro fechou junto: o recibo dele
+            for conta_id, tid in ((dupla['lider_id'], dupla['tentativa']), (dupla['membro_id'], dupla['tentativa_par'])):
+                n = self.con.execute(
+                    "UPDATE supremo_tentativas SET estado = 'conferida', fechada_em = ?, dano = ?, pontos = ?, derrubou = ?, "
+                    "rodada = ?, turnos = ? WHERE id = ? AND estado = 'aberta'",
+                    (t, placar['dano'], placar['pontos'], 1 if placar.get('derrubou') else 0, placar['rodada'], turnos,
+                     tid)).rowcount
+                if not n:
+                    raise Recusa(409, 'essa tentativa já foi fechada')
+                self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
+                self._evento(conta_id, 'supremo-conferida', {'tentativa': tid, 'dano': placar['dano'], 'pontos': placar['pontos'],
+                                                              'derrubou': bool(placar.get('derrubou')), 'turnos': turnos,
+                                                              'gid': gid, 'dupla': True})
+                soma_trilha(self.con, conta_id, t, 'eco')        # a tentativa conferida dá pontos na trilha dos dois
+                recibo = {'ok': True, 'fase': 'eco', 'eco': True, 'dupla': True, 'gid': gid, 'tentativa': tid,
+                          'dano': placar['dano'], 'pontos': placar['pontos'], 'derrubou': bool(placar.get('derrubou')),
+                          'bonus': placar.get('bonus') or 0, 'rodada': placar['rodada'],
+                          'eu': self._supremo_minha(conta_id, t), 'semana': semana_publica(semana_de(t))}
+                self.con.execute("INSERT INTO salas_grupo_pago(gid, conta_id, recompensa) VALUES (?, ?, ?)",
+                                 (gid, conta_id, json.dumps(recibo, ensure_ascii=False)))
+                if conta_id == cid:
+                    meu = recibo
+            self.con.execute("UPDATE salas_grupo SET estado = 'paga', fechada_em = ? WHERE gid = ?", (t, gid))
+        log.info("supremo em dupla: #%d e #%d tiraram %d do Eco (%d pontos)", dupla['lider_id'], dupla['membro_id'],
+                 placar['dano'], placar['pontos'])
+        return 200, meu
+
     # -- POST /api/supremo/sal ------------------------------------------------------------------
     def _supremo_venceu(self, s, instante):
         """Dentro da _escrita: o motivo de a tentativa aberta `s` já ter vencido (a semana dela fechou, o prazo
@@ -480,7 +667,18 @@ class SupremoMixin:
         recusa = None
         with self._escrita():
             s = self.con.execute("SELECT * FROM supremo_tentativas WHERE id = ?", (tid,)).fetchone()
-            if s is None or s['conta_id'] != cid:            # a de outra conta: a mesma resposta
+            if s is not None:
+                # 07/10: a tentativa em dupla — qualquer dos dois pede (a autoridade do lockstep pode ser o parceiro),
+                # mas SEMPRE com a tentativa de quem lidera (a que vai na ata): os sais moram nela
+                dupla = self._supremo_dupla_por_tentativa(tid)
+                if dupla is not None:
+                    if cid not in (dupla['lider_id'], dupla['membro_id']):
+                        s = None
+                    elif tid != dupla['tentativa']:
+                        raise Recusa(409, 'na dupla o sorteio é pedido com a tentativa de quem lidera', motivo='tentativa-da-dupla')
+                elif s['conta_id'] != cid:
+                    s = None
+            if s is None:                                     # a de outra conta: a mesma resposta
                 raise Recusa(404, 'tentativa não encontrada')
             if s['estado'] == 'vencida':
                 raise Recusa(410, 'essa tentativa venceu (%s)' % (s['motivo'] or 'prazo'), motivo='vencida')

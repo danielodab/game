@@ -278,7 +278,9 @@ var JOGO = (typeof window !== 'undefined')
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     for (var i = 0; i < ds.length; i++) if (ds[i] && ds[i].id === dungeonId) return true;
     // 03/10: o calabouço ESPECIAL (js/core/data/santuario.js — o Santuário dos Elementos) desce como os seis
-    return !!(JOGO.DATA && JOGO.DATA.especial && JOGO.DATA.especial(dungeonId));
+    if (JOGO.DATA && JOGO.DATA.especial && JOGO.DATA.especial(dungeonId)) return true;
+    // 07/10: a Câmara do Eco desce em GRUPO pela Rede (Grupo.descer(arena)) — sozinho é Game.startEco
+    return !!(JOGO.DATA && JOGO.DATA.eco && dungeonId === JOGO.DATA.eco.arena && E().calabouco(dungeonId));
   }
 
   // grupo no formato do Engine (contrato §9); sem Progress, cai nos ids crus
@@ -508,7 +510,7 @@ var JOGO = (typeof window !== 'undefined')
   var salEco = null;           // 03/10: { rodada, pedindo, dormindo, semRede, tentativas } do sal pedido agora
   Game.SAL_PRAZO_MS = 10000;   // o pedido do sal sem resposta nenhuma em 10 s conta como sem rede (pedeSalEco)
   Game.ecoTentativa = function () {
-    return ataEco ? { tentativa: ataEco.tentativa, treino: !!ataEco.treino, restantes: ataEco.restantes } : null;
+    return ataEco ? { tentativa: ataEco.tentativa, treino: !!ataEco.treino, restantes: ataEco.restantes, grupo: !!ataEco.grupo } : null;
   };
   Game.ecoFim = function () { return fimEco; };
   Game.ecoAbrindo = function () { return abrindoEco; };
@@ -587,6 +589,31 @@ var JOGO = (typeof window !== 'undefined')
     try { placar = st ? E().ecoPlacar(st) : null; } catch (e) { placar = null; }
     fimEco = { placar: placar, treino: eco.treino, conferindo: !eco.treino && !!ata, oficial: null, erro: null,
                fase: st ? st.phase : null, largou: !!largou, restantes: eco.restantes };
+    /* EM DUPLA (07/10): o fechar é o da sala em grupo — o gid e o registro do lockstep (os lances dos dois) pelo
+     * POST /api/grupo/fechar; o servidor vê que o gid é de uma dupla do Eco e refaz a Câmara (grupo.py →
+     * supremo.py). A resposta tem o placar conferido, como a solo. Quem larga no meio manda `largou`: só a marca. */
+    if (!eco.treino && eco.grupo && JOGO.Autoridade && JOGO.Autoridade.fechaGrupo) {
+      var cg = C(), regG = null;
+      try { regG = (cg && cg.logServidor) ? cg.logServidor() : null; } catch (eG) { regG = null; }
+      var gidG = regG && regG.ata && regG.ata.gid;
+      if (!gidG) { fimEco.conferindo = false; fimEco.erro = Tx('a sala do grupo não tem registro no servidor'); return fimEco; }
+      fimEco.conferindo = true;
+      fimEco.dupla = true;
+      var hashG = null;
+      try { hashG = largou ? null : E().hash(st); } catch (eH) { hashG = null; }
+      var meuG = fimEco;
+      try { if (JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(gidG, regG.lances, !largou); } catch (eA2) {}
+      JOGO.Autoridade.fechaGrupo({ gid: gidG, lances: regG.lances, hashFinal: hashG, fotografada: !!regG.fotografada,
+                                   autoridade: !!regG.autoridade, largou: !!largou })
+        .then(function (r) {
+          meuG.conferindo = false;
+          if (r && r.ok && typeof r.pontos === 'number') meuG.oficial = r;
+          else if (r && r.ok && r.fase === 'largou') meuG.erro = Tx('a tentativa segue com {a}: o placar sai quando ela fechar a dela', { a: Tx('o parceiro') });
+          else meuG.erro = (r && r.erro) || Tx('o servidor não conferiu a tentativa');
+          if (Game.screen === 'ecoFim' && fimEco === meuG) setScreen('ecoFim', meuG);
+        });
+      return fimEco;
+    }
     if (!eco.treino && ata && JOGO.Autoridade && JOGO.Autoridade.fechaEco) {
       var hashFinal = null;
       try { hashFinal = largou ? null : E().hash(st); } catch (e2) { hashFinal = null; }
@@ -628,7 +655,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!r) return;
     if (salEco && salEco.rodada === r && (salEco.pedindo || salEco.dormindo)) return;
     // treino (ou uma Câmara sem tentativa nenhuma, como nas bancadas): o sal daqui, sem servidor e sem placar
-    if (!ataEco || ataEco.treino || !ataSolo) {
+    var emDupla = !!(ataEco && ataEco.grupo && rede);
+    if (!ataEco || ataEco.treino || (!ataSolo && !emDupla)) {
       aplicaSalEco(r, Math.floor(Math.random() * (eng.SAL_MAX || 0x7fffffff)));
       return;
     }
@@ -640,7 +668,8 @@ var JOGO = (typeof window !== 'undefined')
                    tentativas: (antes ? antes.tentativas : 0) + 1 };
     salEco = pedido;
     // o caminho dos lances ATÉ AQUI: o juiz recalcula o mesmo, com o lance do sal logo depois deles
-    var caminho = eng.ecoCaminho(ataSolo.lances);
+    // (07/10: em dupla, o registro do lockstep — os lances dos dois e as marcas, como o Coop os manda ao servidor)
+    var caminho = eng.ecoCaminho(emDupla ? lancesDaDupla() : ataSolo.lances);
     /* O PEDIDO PENDURADO (revisão de 03/10). O fetch não tem prazo: a conexão que morreu calada (o celular que
      * trocou de antena, o túnel, o Wi-Fi que caiu sem avisar) deixa o pedido sem resposta e sem erro por minutos,
      * e a rodada ficava parada dizendo "vem do servidor…" sem pedir de novo — provado em tests/eco_sal_cliente.js.
@@ -673,9 +702,25 @@ var JOGO = (typeof window !== 'undefined')
     });
   }
   function aplicaSalEco(r, sal) {
+    // 07/10: em dupla o sal é um LANCE do lockstep — aplicado aqui e mandado ao outro (Coop.registra), e o juiz
+    // o refaz na mesma posição do registro dos dois
+    if (rede && rede.tipo === 'grupo') {
+      var l = { a: 'r', r: r, s: sal, T: Game.state.turno || 0 };
+      var okR = executa(l);
+      var cR = C();
+      if (cR && cR.registra) { try { cR.registra(l, okR); } catch (e) {} }
+      posMotor();
+      if (Game.state && Game.state.phase !== 'playing' && !travadoRede()) handleBattleOver();
+      return;
+    }
     var ok = !!E().ecoSal(Game.state, r, sal);
     anotaSolo({ a: 'r', r: r, s: sal, ok: ok });
     if (Game.state.phase !== 'playing') handleBattleOver();
+  }
+  function lancesDaDupla() {
+    var c = C(), reg = null;
+    try { reg = (c && c.logServidor) ? c.logServidor() : null; } catch (e) { reg = null; }
+    return (reg && reg.lances) ? reg.lances : [];
   }
   function encerraEcoSemSal(resp) {
     var rodada = (Game.state && E().ecoEsperaSal) ? E().ecoEsperaSal(Game.state) : 0;
@@ -823,7 +868,11 @@ var JOGO = (typeof window !== 'undefined')
     var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });
     for (var k = 0; k < lista.length; k++) if (lista[k] && lista[k].id === dungeonId) return lista[k];
     // 03/10: os calabouços especiais moram fora de DATA.dungeons (o porquê está em js/core/data/santuario.js)
-    return (JOGO.DATA && JOGO.DATA.especial) ? JOGO.DATA.especial(dungeonId) : null;
+    var esp = (JOGO.DATA && JOGO.DATA.especial) ? JOGO.DATA.especial(dungeonId) : null;
+    if (esp) return esp;
+    // 07/10: a Câmara do Eco, na descida em grupo (a antessala a chama pelo nome e conta uma sala)
+    if (JOGO.DATA && JOGO.DATA.eco && dungeonId === JOGO.DATA.eco.arena) { try { return E().calabouco(dungeonId); } catch (e) {} }
+    return null;
   }
   /* A ÚLTIMA SALA da descida (a que fecha o calabouço): 2 nos seis portais, 4 no Santuário. Era a
    * mesma busca em DATA.dungeons escrita três vezes — e as três davam "2" para um calabouço que não
@@ -1291,6 +1340,8 @@ var JOGO = (typeof window !== 'undefined')
       else if (l.a === 'm') ok = !!E().move(st, l.u, l.x, l.y);
       else if (l.a === 'c') ok = !!E().cast(st, l.u, l.s, l.x, l.y);
       else if (l.a === 'e') { if (st.phase === 'playing') E().endTurn(st); ok = true; }
+      // 07/10: o sal da rodada do Eco em dupla — a autoridade o pediu ao servidor e mandou pelo lockstep
+      else if (l.a === 'r') ok = !!E().ecoSal(st, l.r, l.s);
       // 13/09: a poção saiu da batalha (é da sala de espera): o gole de uma página velha não cura
       else if (l.a === 'po') ok = false;
       else if (l.a === 'f') {
@@ -1413,6 +1464,19 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
     if (st.phase !== 'playing') { handleBattleOver(); return; }
+    /* O SAL DA RODADA EM DUPLA (07/10): a rodada nova do Eco parou esperando o sal — a vez é de ninguém. Quem
+     * tem a AUTORIDADE do lockstep pede ao servidor (pedeSalEco) e aplica como lance {a:'r'}, que vai ao outro;
+     * quem segue só tira da fila o lance que chegar. Um lance meu devolvido à fila pela foto sai antes. */
+    if (st.eco && E().ecoEsperaSal && E().ecoEsperaSal(st)) {
+      resetAiState();
+      timerUid = null;
+      var lr = (c && c.proximoLance) ? c.proximoLance(null) : null;
+      if (lr) { aplicaRemoto(lr); return; }
+      var souAut = false;
+      try { souAut = !!(c && c.souAutoridade && c.souAutoridade()); } catch (eA) { souAut = false; }
+      if (souAut) pedeSalEco();
+      return;
+    }
     var u = E().activeUnit(st);
     if (!u) return;
     var dono = Game.donoDe(u);
@@ -1577,6 +1641,16 @@ var JOGO = (typeof window !== 'undefined')
     aplicaCarry(st, ata.carry, true);
     Game.state = st;
     Game.escuro = false;                 // 07/10: o caminho escuro é de cada porta — a próxima pergunta de novo
+    /* A TENTATIVA DO ECO EM DUPLA (07/10): a ata traz a tentativa que o servidor abriu junto com a sala do grupo
+     * (grupo.py → supremo.py). Os dois clientes a guardam; o sal de cada rodada é pedido pela AUTORIDADE do
+     * lockstep e viaja como lance {a:'r'} (updateRede); o fechar vai pelo gid (fechaEco). Sem `eco` na ata — a
+     * Câmara aberta sem servidor — é treino em dupla: o sal sai daqui e nada pontua. */
+    if (st.eco) {
+      ataEco = { tentativa: (typeof ata.eco === 'string' && ata.eco) ? ata.eco : null, treino: !ata.eco,
+                 restantes: ata.restantes, grupo: true };
+      fimEco = null;
+      salEco = null;
+    } else ataEco = null;
     rede.colocador = !!(ata.party && ata.party[0] && ata.party[0].dono === rede.eu);
     ultimoTurno = st.turno || 0;
     zeraPrep();                                    // 21/09: o PRONTO é DESTA sala
@@ -3076,6 +3150,11 @@ var JOGO = (typeof window !== 'undefined')
     if (conferindoSala) return;          // o recibo da vitória ainda está vindo do servidor
     // 02/10: o fim da tentativa do Eco não é vitória nem derrota de sala: sem recompensa, sem vida gravada
     if (Game.state.eco && ataEco) {
+      // 07/10: em dupla, quem não é a autoridade confere o fim com ela (o hash do estado final) antes de fechar
+      if (rede && rede.tipo === 'grupo') {
+        var cfe = C();
+        try { if (cfe && cfe.fimGrupo && !cfe.fimGrupo(Game.state)) return; } catch (efe) {}
+      }
       resetAiState();
       resetTimer(true);
       Game.selectedSpellId = null;

@@ -529,6 +529,160 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         with open(os.path.join(RAIZ, 'js', 'core', 'data', 'eco.js'), encoding='utf-8') as f:
             self.assertEqual(int(re.search(r'rodadas:\s*(\d+)', f.read()).group(1)), S.RODADAS)
 
+    # -- 07/10: A TENTATIVA EM DUPLA ("descida em grupo com tudo que o solo tem") ---------------------------------
+    def joga_dupla(self, a, b, gid, tentativa):
+        """A Câmara em dupla jogada AO VIVO (tests/juiz_grupo_jogador.js --ao-vivo): a cada virada o sal vem do servidor
+        de verdade, pedido ORA por quem lidera, ORA pelo parceiro — os dois podem (a autoridade do lockstep pode ser
+        qualquer um), sempre com a tentativa de quem lidera (a que vai na ata)."""
+        sa, sb = self.save(a), self.save(b)
+        semente = self.sql("SELECT semente FROM salas_grupo WHERE gid = ?", gid)[0]['semente']
+        pedido = {'modo': 'eco-grupo', 'semente': semente,
+                  'membros': [{'progress': sa['progress'], 'db': sa['db'], 'dono': 'ana', 'herois': list(HEROIS)},
+                              {'progress': sb['progress'], 'db': sb['db'], 'dono': 'bia', 'herois': list(HEROIS)}]}
+        jogador = os.path.join(os.path.dirname(A.JOGADOR), 'juiz_grupo_jogador.js')
+        proc = subprocess.Popen([A.NODE, jogador, '--ao-vivo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, creationflags=A.BAIXA)
+        respostas = []
+        try:
+            proc.stdin.write((json.dumps(pedido) + '\n').encode('utf-8'))
+            proc.stdin.flush()
+            while True:
+                ln = proc.stdout.readline()
+                if not ln:
+                    raise RuntimeError('o jogador da dupla parou: ' + proc.stderr.read().decode('utf-8', 'replace')[-2000:])
+                m = json.loads(ln.decode('utf-8'))
+                if 'fim' in m:
+                    jogo = m['fim']
+                    jogo['respostas'] = respostas
+                    return jogo
+                pede = m['pede']
+                quem = a if pede['rodada'] % 2 == 0 else b
+                st, r = quem.pede('POST', '/api/supremo/sal', {'tentativa': tentativa, 'rodada': pede['rodada'],
+                                                               'caminho': pede['caminho']})
+                respostas.append({'rodada': pede['rodada'], 'status': st, 'resposta': r})
+                proc.stdin.write((json.dumps({'sal': r.get('sal') if st == 200 else None}) + '\n').encode('utf-8'))
+                proc.stdin.flush()
+        finally:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                proc.wait(30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            for f in (proc.stdout, proc.stderr):
+                try:
+                    f.close()
+                except Exception:
+                    pass
+
+    def test_15_a_tentativa_em_dupla(self):
+        a, b = self.conta_pronta('Dupla Lider'), self.conta_pronta('Dupla Par')
+        regras = self.sql("SELECT 1")  # noqa: F841 (o banco está vivo)
+        arena = 'camara_eco'
+        def corpo(**kw):
+            c = {'dungeonId': arena, 'roomIndex': 0, 'dificuldade': 'normal', 'herois': list(HEROIS), 'dono': 'ana',
+                 'parceiro': {'conta': b.conta['id'], 'dono': 'bia', 'herois': list(HEROIS)}}
+            c.update(kw)
+            return c
+        # a Câmara tem uma sala só e é sempre na normal
+        self.assertEqual(a.pede('POST', '/api/grupo/abrir', corpo(roomIndex=1))[0], 400)
+        self.assertEqual(a.pede('POST', '/api/grupo/abrir', corpo(dificuldade='dificil'))[0], 400)
+        st, r = a.pede('POST', '/api/grupo/abrir', corpo())
+        self.assertEqual(st, 200, r)
+        gid, eco = r['gid'], r['eco']
+        self.assertIsNone(r['carry'])                       # a tentativa não usa a vida única
+        self.assertTrue(isinstance(eco, dict) and isinstance(eco['tentativa'], str), r)
+        self.assertEqual((eco['restantes'], eco['restantesPar']), (S.TENTATIVAS_POR_DIA - 1, S.TENTATIVAS_POR_DIA - 1))
+        dupla = self.sql("SELECT * FROM supremo_grupos WHERE gid = ?", gid)[0]
+        self.assertEqual((dupla['tentativa'], dupla['lider_id'], dupla['membro_id']), (eco['tentativa'], a.conta['id'], b.conta['id']))
+        linhas = {x['conta_id']: x for x in self.sql("SELECT * FROM supremo_tentativas WHERE id IN (?, ?)",
+                                                     dupla['tentativa'], dupla['tentativa_par'])}
+        self.assertEqual(sorted(linhas), sorted([a.conta['id'], b.conta['id']]))
+        for x in linhas.values():
+            self.assertEqual((x['estado'], x['semente']), ('aberta', r['semente']))
+        # o sal: só os dois da dupla, e só com a tentativa de quem lidera
+        outro = self.conta_pronta('Curioso Dupla')
+        cam = '0' * 64
+        self.assertEqual(outro.pede('POST', '/api/supremo/sal', {'tentativa': eco['tentativa'], 'rodada': 2, 'caminho': cam})[0], 404)
+        self.assertEqual(b.pede('POST', '/api/supremo/sal', {'tentativa': dupla['tentativa_par'], 'rodada': 2, 'caminho': cam})[0], 409)
+        # a dupla joga ao vivo (o sal ora de um, ora do outro) e quem NÃO lidera fecha primeiro, pelo gid
+        jogo = self.joga_dupla(a, b, gid, eco['tentativa'])
+        self.assertNotEqual(jogo['fase'], 'playing')
+        self.assertTrue(jogo['respostas'] and all(x['status'] == 200 for x in jogo['respostas']), jogo['respostas'])
+        st, rf = b.pede('POST', '/api/grupo/fechar', {'gid': gid, 'lances': jogo['lances'], 'hashFinal': jogo['hash'],
+                                                     'fotografada': False, 'autoridade': False})
+        self.assertEqual(st, 200, rf)
+        self.assertTrue(rf.get('eco') is True and rf.get('dupla') is True, rf)
+        self.assertEqual((rf['pontos'], rf['dano']), (jogo['placar']['pontos'], jogo['placar']['dano']))
+        self.assertGreater(rf['dano'], 0)
+        self.assertEqual(rf['tentativa'], dupla['tentativa_par'])
+        self.assertEqual(rf['eu']['restantes'], S.TENTATIVAS_POR_DIA - 1)
+        # as DUAS tentativas conferidas com o mesmo placar; a sala do grupo paga
+        for x in self.sql("SELECT * FROM supremo_tentativas WHERE id IN (?, ?)", dupla['tentativa'], dupla['tentativa_par']):
+            self.assertEqual((x['estado'], x['pontos'], x['dano']), ('conferida', rf['pontos'], rf['dano']))
+        self.assertEqual(self.sql("SELECT estado FROM salas_grupo WHERE gid = ?", gid)[0]['estado'], 'paga')
+        # quem lidera fecha depois: o recibo DELE, sem pontuar duas vezes
+        st, ra = a.pede('POST', '/api/grupo/fechar', {'gid': gid, 'lances': jogo['lances'], 'hashFinal': jogo['hash'],
+                                                     'fotografada': False, 'autoridade': True})
+        self.assertEqual(st, 200, ra)
+        self.assertEqual((ra.get('eco'), ra['pontos'], ra['tentativa']), (True, rf['pontos'], dupla['tentativa']))
+        self.assertEqual(len(self.sql("SELECT 1 FROM supremo_tentativas WHERE conta_id IN (?, ?) AND estado = 'conferida'",
+                                      a.conta['id'], b.conta['id'])), 2)
+        # as duas contas no ranking, com o mesmo placar; cada uma gastou a vez do dia
+        st, rk = Cliente(self.base).pede('GET', '/api/supremo', token=None)
+        nomes = {}
+        for c in (a, b):
+            nomes[c.conta['id']] = self.sql("SELECT COALESCE(r.nome, c.nome) AS nome FROM contas c LEFT JOIN resumos r "
+                                            "ON r.conta_id = c.id WHERE c.id = ?", c.conta['id'])[0]['nome']
+        minhas = [l for l in rk['ranking'] if l['nome'] in nomes.values()]
+        self.assertEqual(len(minhas), 2, rk['ranking'])
+        self.assertTrue(all(l['pontos'] == rf['pontos'] for l in minhas), minhas)
+        for c in (a, b):
+            st, r2 = c.pede('GET', '/api/supremo')
+            self.assertEqual(r2['eu']['tentativasHoje'], 1, r2['eu'])
+        # a trilha da temporada contou o Eco para os dois
+        for c in (a, b):
+            st, tr = c.pede('GET', '/api/trilha')
+            self.assertEqual(st, 200, tr)
+            self.assertGreater(tr.get('pontos', 0), 0, tr)
+
+    def test_16_a_dupla_sem_vez_e_a_largada(self):
+        """A dupla só abre com vez do dia nos DOIS; a largada de um não fecha a tentativa (o parceiro ainda fecha)."""
+        a, b = self.conta_pronta('Dupla Sem Vez A'), self.conta_pronta('Dupla Sem Vez B')
+        def corpo():
+            return {'dungeonId': 'camara_eco', 'roomIndex': 0, 'dificuldade': 'normal', 'herois': list(HEROIS), 'dono': 'ana',
+                    'parceiro': {'conta': b.conta['id'], 'dono': 'bia', 'herois': list(HEROIS)}}
+        # o parceiro gasta as três vezes dele sozinho
+        for _ in range(S.TENTATIVAS_POR_DIA):
+            self.assertEqual(self.abre_eco(b)[0], 200)
+        st, r = a.pede('POST', '/api/grupo/abrir', corpo())
+        self.assertEqual(st, 429, r)
+        self.assertEqual((r.get('motivo'), r.get('quem')), ('sem-tentativas', 'parceiro'))
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM salas_grupo WHERE lider_id = ?", a.conta['id'])[0]['n'], 0,
+                         'a sala do grupo não fica aberta quando a dupla não abre')
+        # a vez de volta (a prova mexe no dia das tentativas do parceiro)
+        self.sql("UPDATE supremo_tentativas SET dia = dia - 1 WHERE conta_id = ?", b.conta['id'])
+        st, r = a.pede('POST', '/api/grupo/abrir', corpo())
+        self.assertEqual(st, 200, r)
+        gid = r['gid']
+        # quem lidera larga (a aba fechada): só a marca do registro — nada de vida, nada de juiz
+        st, rl = a.pede('POST', '/api/grupo/fechar', {'gid': gid, 'lances': [], 'hashFinal': None, 'fotografada': False,
+                                                     'largou': True})
+        self.assertEqual(st, 200, rl)
+        self.assertEqual(rl['fase'], 'largou')
+        self.assertEqual(self.sql("SELECT estado FROM luta_aberta WHERE tipo = 'grupo' AND ref = ? AND conta_id = ?",
+                                  gid, a.conta['id'])[0]['estado'], 'registro')
+        self.assertEqual(self.sql("SELECT estado FROM salas_grupo WHERE gid = ?", gid)[0]['estado'], 'aberta')
+        self.assertEqual(len(self.sql("SELECT 1 FROM vida_heroi WHERE conta_id = ? AND hp_fim = 0", a.conta['id'])), 0)
+        # o parceiro ainda fecha a dele
+        jogo = self.joga_dupla(a, b, gid, r['eco']['tentativa'])
+        st, rf = b.pede('POST', '/api/grupo/fechar', {'gid': gid, 'lances': jogo['lances'], 'hashFinal': jogo['hash'],
+                                                     'fotografada': False, 'autoridade': True})
+        self.assertEqual(st, 200, rf)
+        self.assertTrue(rf.get('eco') is True and rf['pontos'] > 0, rf)
+
     def test_11_banimento_vencido_nao_tira_do_ranking(self):
         """03/10 (revisão): o 0/1 de contas.banido só volta a 0 no próximo pedido da própria conta. O
         banimento com prazo que já venceu (a conta não pediu nada depois) não tira a conta do ranking nem

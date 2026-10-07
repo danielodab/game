@@ -814,6 +814,8 @@ class SalasMixin:
                     s = self.con.execute("SELECT * FROM salas_grupo WHERE gid = ?", (r['ref'],)).fetchone()
                 if s is None or s['estado'] != 'aberta' or agora_ms - r['aberta_ms'] > LARGADA_JANELA_MS:
                     velhas.append(r)
+                elif r['tipo'] == 'grupo' and getattr(self, '_supremo_dupla_por_gid', lambda g: None)(r['ref']):
+                    velhas.append(r)       # 07/10: a dupla do Eco não usa a vida única — só a marca fecha
                 else:
                     largar.append((r, dict(s)))
         if not largar and not velhas:

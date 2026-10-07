@@ -55,8 +55,10 @@ registra('GET', '/regras', () => {
   });
   // o Poço não tem fim: cada andar nasce da semente do bilhete
   if (J.Poco && J.Poco.salaSemeada) calaboucos.poco = 9999;
+  // 07/10: a Câmara do Eco desce em GRUPO pela sala do grupo (grupo.py abre a tentativa dos dois junto com o gid)
+  const eco = (J.DATA.eco && typeof J.DATA.eco.arena === 'string') ? J.DATA.eco.arena : null;
   regrasCache = { ok: true, versao: versaoDosDados(), regras: versaoDasRegras(),
-                  calaboucos, classes: Object.keys(J.DATA.classes || {}),
+                  calaboucos, classes: Object.keys(J.DATA.classes || {}), eco,
                   // 07/10: os afixos de sala que a API pode aceitar num bilhete (js/core/afixos.js)
                   afixos: (J.Afixos && J.Afixos.ids) ? J.Afixos.ids() : [] };
   return regrasCache;

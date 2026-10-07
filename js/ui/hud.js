@@ -6475,9 +6475,19 @@ var JOGO = (typeof window !== 'undefined')
     var dupla = el('p', 'eco-dupla', '');
     body.appendChild(dupla);
     var rotulo = ecoOficial() ? tr('Enfrentar o Eco') : tr('Treinar contra o Eco (não conta no placar)');
-    var bEnt = btn(rotulo, 'btn-warn btn-block eco-entra', function () { entra(); });
+    if (emGrupo()) rotulo = souLider() ? tr('Enfrentar o Eco com {a}', { a: esc(nomeParceiro()) }) : tr('Só quem lidera ({a}) abre a Câmara', { a: esc(nomeParceiro()) });
+    var bEnt = btn(rotulo, 'btn-warn btn-block eco-entra' + (emGrupo() && !souLider() ? ' is-apagado' : ''), function () { entra(); });
     body.appendChild(bEnt);
     function entra() {
+      /* EM DUPLA (07/10): a Câmara abre pela descida em grupo — quem lidera chama, os dois vão à antessala e a porta
+       * abre a sala do grupo com a tentativa dos dois (grupo.py). Cada conta gasta a vez do dia; o placar é um só. */
+      if (emGrupo()) {
+        if (!souLider()) { toast(tr('Só quem lidera ({nome}) abre a Câmara do Eco.', { nome: nomeParceiro() })); return; }
+        var rG = safe(function () { return Gp().descer(cfg.arena); }, null);
+        if (!rG || !rG.ok) toast(textoMotivo(rG ? rG.motivo : 'ocupado', rG && rG.motivo === 'sumido' ? nomeParceiro() : null));
+        else { toast(tr('Chamando {nome}', { nome: nomeParceiro() }) + '…'); if (sheetName === 'eco') closeSheet(); }
+        return;
+      }
       if (!selHeroes.length) { toast(tr('Escolha a sua dupla em "Quem desce" primeiro.')); return; }
       var r = safe(function () {
         return G().startEco(selHeroes.slice(), function (res) {
@@ -6489,7 +6499,7 @@ var JOGO = (typeof window !== 'undefined')
         });
       }, false);
       if (r === 'esperando') { bEnt.disabled = true; bEnt.textContent = tr('Abrindo a Câmara…'); return; }
-      if (!r) { toast(tr('Essa dupla não enfrenta o Eco: o Mestre fica de fora, e em grupo pela Rede ainda não.')); return; }
+      if (!r) { toast(tr('Essa dupla não enfrenta o Eco: o Mestre fica de fora.')); return; }
       if (sheetName === 'eco') closeSheet();
     }
     function pintaDupla() {
@@ -6508,7 +6518,9 @@ var JOGO = (typeof window !== 'undefined')
      tr('O golpe grande é AVISADO: as casas marcadas no chão explodem no começo da vez seguinte dele. Os pilares abrigam.'),
      // 03/10: o sal de cada rodada (engine.js, "O SORTEIO RODADA A RODADA") — quem joga precisa saber que a rede conta
      tr('A sorte de cada rodada vem do servidor quando ela começa: a tentativa precisa de internet do começo ao fim (sem rede ela espera, não acaba).'),
-     tr('Vale a melhor tentativa da semana (de segunda a domingo, 23:59). Derrubá-lo soma {a}% da vida dele aos pontos.', { a: Math.round((cfg.bonusDerrubada || 0) * 100) })
+     tr('Vale a melhor tentativa da semana (de segunda a domingo, 23:59). Derrubá-lo soma {a}% da vida dele aos pontos.', { a: Math.round((cfg.bonusDerrubada || 0) * 100) }),
+     // 07/10: a tentativa em dupla pela Rede
+     tr('Em grupo pela Rede os dois entram com os seus heróis (até quatro): o placar é o mesmo para as duas contas e cada uma gasta uma tentativa do dia.')
     ].forEach(function (t) { regras.appendChild(el('li', null, esc(t))); });
     body.appendChild(regras);
 
@@ -6620,8 +6632,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     box.appendChild(linha);
     var acts = el('div', 'menu-acts');
+    if (data.dupla) box.appendChild(el('p', 'eco-fim-linha', tr('Tentativa em dupla com <b>{a}</b>: o placar vale para as duas contas.', { a: esc(nomeParceiro()) })));
     var restam = data.treino ? 1 : (of && of.eu && typeof of.eu.restantes === 'number' ? of.eu.restantes : 0);
-    if (restam > 0 && selHeroes.length) {
+    if (restam > 0 && selHeroes.length && !data.dupla && !emGrupo()) {
       acts.appendChild(btn(tr('Tentar de novo'), 'btn-primary', function () {
         var r = safe(function () {
           return G().startEco(selHeroes.slice(), function (res) {
