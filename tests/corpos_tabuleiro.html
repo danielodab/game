@@ -71,23 +71,23 @@ Quando a ficha existir, vale a dela.</div>
     window.__done = true; window.__fail = mau;
   }
 
-  // [id do monstro, chave do modelo, elemento, altura do briefing (m), nome] — a mesma tabela da página irmã
+  // [id do monstro, chave do modelo, elemento, altura do briefing (m) x 2,20/1,80 (07/10: o comum subiu de 1,80 para 2,20 m — models3d_v2.js, targetH; a razao vale para todos, o colosso inclusive), nome] — a mesma tabela da página irmã
   var CORPOS = [
-    ['colosso_fogo',   'colosso-fogo',   'fogo',  2.88, 'Colosso de Brasa'],
-    ['colosso_agua',   'colosso-agua',   'agua',  2.88, 'Colosso da Maré'],
-    ['colosso_terra',  'colosso-terra',  'terra', 2.88, 'Colosso de Rocha'],
-    ['colosso_ar',     'colosso-ar',     'ar',    2.88, 'Colosso da Ventania'],
-    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  1.80, 'Eco Menor de Brasa'],
-    ['eco_menor_agua', 'eco-menor-agua', 'agua',  1.80, 'Eco Menor de Coral'],
-    ['eco_menor_terra','eco-menor-terra','terra', 2.00, 'Eco Menor de Rocha'],
-    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.10, 'Vigia de Pavio'],
-    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.50, 'Mariposa de Cinza'],
-    ['el_agua_1',  'el-agua-1',  'agua',  1.90, 'Caramujo-Comporta'],
-    ['el_agua_2',  'el-agua-2',  'agua',  2.00, 'Garça de Galeria'],
-    ['el_terra_1', 'el-terra-1', 'terra', 2.20, 'Pilarete'],
-    ['el_terra_2', 'el-terra-2', 'terra', 1.60, 'Toupeira-Sentinela'],
-    ['el_ar_1',    'el-ar-1',    'ar',    2.30, 'Cata-Vento'],
-    ['el_ar_2',    'el-ar-2',    'ar',    1.80, 'Arraia de Rajada']
+    ['colosso_fogo',   'colosso-fogo',   'fogo',  3.52, 'Colosso de Brasa'],
+    ['colosso_agua',   'colosso-agua',   'agua',  3.52, 'Colosso da Maré'],
+    ['colosso_terra',  'colosso-terra',  'terra', 3.52, 'Colosso de Rocha'],
+    ['colosso_ar',     'colosso-ar',     'ar',    3.52, 'Colosso da Ventania'],
+    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  2.20, 'Eco Menor de Brasa'],
+    ['eco_menor_agua', 'eco-menor-agua', 'agua',  2.20, 'Eco Menor de Coral'],
+    ['eco_menor_terra','eco-menor-terra','terra', 2.44, 'Eco Menor de Rocha'],
+    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.57, 'Vigia de Pavio'],
+    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.83, 'Mariposa de Cinza'],
+    ['el_agua_1',  'el-agua-1',  'agua',  2.32, 'Caramujo-Comporta'],
+    ['el_agua_2',  'el-agua-2',  'agua',  2.44, 'Garça de Galeria'],
+    ['el_terra_1', 'el-terra-1', 'terra', 2.69, 'Pilarete'],
+    ['el_terra_2', 'el-terra-2', 'terra', 1.96, 'Toupeira-Sentinela'],
+    ['el_ar_1',    'el-ar-1',    'ar',    2.81, 'Cata-Vento'],
+    ['el_ar_2',    'el-ar-2',    'ar',    2.20, 'Arraia de Rajada']
   ];
   var TW = 960, TH = 600;
 

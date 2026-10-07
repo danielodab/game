@@ -373,7 +373,7 @@ cinco chefes). O colosso toma outra casa, girando por andar:
 Os colossos **não** entram no sorteio comum (`colosso: true`), **não** são
 chefes (selo, insígnia e roleta seguem só de chefe), pagam mais que qualquer
 comum (XP 45; pedras sempre, 4 a 6 — o teto do não-chefe) e sobem de vida com o
-andar como todo o resto. Porte: **1,6×** um monstro comum (2,88 m). Desde
+andar como todo o resto. Porte: **1,6×** um monstro comum (~3,5 m desde 07/10, quando o comum subiu de 1,80 para 2,20 m e a invocação para 2,00 m — a pedido do dono; chefe, herói e bicho ficaram). Desde
 03/10 os quatro vestem a **arte do dono** (`assets/embedded/models-meshy-colossos.js`,
 chaves `colosso-fogo`…`colosso-ar`, grupo `poco:colossos` no jogo servido — só
 desce com o andar que os tem). A arte veio cinza de propósito: são irmãos de

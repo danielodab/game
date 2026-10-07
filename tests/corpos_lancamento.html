@@ -82,21 +82,21 @@ corpo provisório, sem erro.</div>
    * O elemento vem daqui e não de DATA.monsters porque os oito do Santuário ainda não têm ficha
    * (quem a escreve é a frente do mapa); quando tiverem, a página cobra que as duas batam. */
   var CORPOS = [
-    ['colosso_fogo',   'colosso-fogo',   'fogo',  2.88, 'Colosso de Brasa'],
-    ['colosso_agua',   'colosso-agua',   'agua',  2.88, 'Colosso da Maré'],
-    ['colosso_terra',  'colosso-terra',  'terra', 2.88, 'Colosso de Rocha'],
-    ['colosso_ar',     'colosso-ar',     'ar',    2.88, 'Colosso da Ventania'],
-    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  1.80, 'Eco Menor de Brasa'],
-    ['eco_menor_agua', 'eco-menor-agua', 'agua',  1.80, 'Eco Menor de Coral'],
-    ['eco_menor_terra','eco-menor-terra','terra', 2.00, 'Eco Menor de Rocha'],
-    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.10, 'Vigia de Pavio'],
-    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.50, 'Mariposa de Cinza'],
-    ['el_agua_1',  'el-agua-1',  'agua',  1.90, 'Caramujo-Comporta'],
-    ['el_agua_2',  'el-agua-2',  'agua',  2.00, 'Garça de Galeria'],
-    ['el_terra_1', 'el-terra-1', 'terra', 2.20, 'Pilarete'],
-    ['el_terra_2', 'el-terra-2', 'terra', 1.60, 'Toupeira-Sentinela'],
-    ['el_ar_1',    'el-ar-1',    'ar',    2.30, 'Cata-Vento'],
-    ['el_ar_2',    'el-ar-2',    'ar',    1.80, 'Arraia de Rajada']
+    ['colosso_fogo',   'colosso-fogo',   'fogo',  3.52, 'Colosso de Brasa'],
+    ['colosso_agua',   'colosso-agua',   'agua',  3.52, 'Colosso da Maré'],
+    ['colosso_terra',  'colosso-terra',  'terra', 3.52, 'Colosso de Rocha'],
+    ['colosso_ar',     'colosso-ar',     'ar',    3.52, 'Colosso da Ventania'],
+    ['eco_menor_fogo', 'eco-menor-fogo', 'fogo',  2.20, 'Eco Menor de Brasa'],
+    ['eco_menor_agua', 'eco-menor-agua', 'agua',  2.20, 'Eco Menor de Coral'],
+    ['eco_menor_terra','eco-menor-terra','terra', 2.44, 'Eco Menor de Rocha'],
+    ['el_fogo_1',  'el-fogo-1',  'fogo',  2.57, 'Vigia de Pavio'],
+    ['el_fogo_2',  'el-fogo-2',  'fogo',  1.83, 'Mariposa de Cinza'],
+    ['el_agua_1',  'el-agua-1',  'agua',  2.32, 'Caramujo-Comporta'],
+    ['el_agua_2',  'el-agua-2',  'agua',  2.44, 'Garça de Galeria'],
+    ['el_terra_1', 'el-terra-1', 'terra', 2.69, 'Pilarete'],
+    ['el_terra_2', 'el-terra-2', 'terra', 1.96, 'Toupeira-Sentinela'],
+    ['el_ar_1',    'el-ar-1',    'ar',    2.81, 'Cata-Vento'],
+    ['el_ar_2',    'el-ar-2',    'ar',    2.20, 'Arraia de Rajada']
   ];
   // os dois lentos vieram SEM o clipe de correr, de propósito (são os tanques); só eles
   var SEM_CORRER = ['eco_menor_terra', 'el_agua_1'];
@@ -266,7 +266,9 @@ corpo provisório, sem erro.</div>
         // a sola no clipe que o tabuleiro toca, em três pontos do ciclo: o corpo não afunda no chão
         var solaLoco = 9;
         [0.1, 0.5, 0.85].forEach(function (f) { toca(obj, loco.action, f); solaLoco = Math.min(solaLoco, caixaPosada(obj).min.y); });
-        if (solaLoco < -0.15) erros.desliza.push(id + ' afunda ' + (-solaLoco).toFixed(2) + ' m no chão ao se deslocar');
+        // 07/10: a régua de 0,15 m era da base de 1,80 m; o corpo subiu para 2,20 m e a raiz do clipe afunda na
+        // mesma proporção (o colosso_terra passou de 0,14 a 0,17) — a régua escala junto, e só ela
+        if (solaLoco < -0.15 * (2.20 / 1.80)) erros.desliza.push(id + ' afunda ' + (-solaLoco).toFixed(2) + ' m no chão ao se deslocar');
         toca(obj, 'walk', 0.5);
         var cw = caixaPosada(obj); hAndando = cw.max.y - cw.min.y;
         var plana = PLANA.indexOf(id) >= 0;
@@ -310,8 +312,9 @@ corpo provisório, sem erro.</div>
             !!aj && Object.keys(aj).length === 1 && aj['el-ar-2.walk'] === 'preso+subiu', JSON.stringify(aj));
       // os Colossos: irmãos de porte, 1,6× um comum, e abaixo de todo chefe (2,95 m)
       var col = linhas.filter(function (l) { return /^colosso_/.test(l.id); });
-      check('os 4 Colossos medem ~2,88 m (1,6× um comum) e ficam abaixo de um chefe',
-            col.length === 4 && col.every(function (l) { return l.h > 2.70 && l.h < 2.95; }),
+      // 07/10: o comum subiu de 1,80 para 2,20 m (models3d_v2.js, targetH) e o colosso, 1,6× dele, foi de 2,88 a 3,52
+      check('os 4 Colossos medem ~3,52 m (1,6× um comum) e ficam abaixo de um chefe (5 m)',
+            col.length === 4 && col.every(function (l) { return l.h > 3.30 && l.h < 3.62; }),
             col.map(function (l) { return l.h.toFixed(2); }).join(' '));
       var rocha = linhas.filter(function (l) { return l.id === 'eco_menor_terra'; })[0];
       var brasa = linhas.filter(function (l) { return l.id === 'eco_menor_fogo'; })[0];

@@ -1731,7 +1731,12 @@ var JOGO = (typeof window !== 'undefined')
     // qualquer um dos dois sozinho — e essa era a regra que estava a ponto de
     // quebrar. Chefe nao muda: 2,95 m vezes a escala propria dele (1,7 a 1,85)
     // ja poe os chefes em 5,0 a 5,5 m, muito acima de tudo isto.
-    var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 3.00 : 1.80));
+    /* 07/10, o dono: "não tá achando os monstros e invocações muito pequenos?". O monstro comum subiu de 1,80
+     * para 2,20 m e a invocação (a do Xamã e os filhotes dos monstros, kind 'summon') para 2,00 m: a câmera do
+     * calabouço mostra a sala inteira e cada casa tem 40 px no celular — a 1,80 o monstro lia como bicho de
+     * estimação do herói de 2,05. Chefe (2,95 × escala própria), herói, fusão e pet ficam como estavam; o
+     * colosso segue 1,6× o comum (agora ~3,5 m), ainda bem abaixo dos chefes de 5 m. */
+    var targetH = look.classId ? 2.05 : (look.pet ? 1.20 : (look.fusion ? 3.00 : (opts.kind === 'summon' ? 2.00 : 2.20)));
     if (opts.boss || look.boss) targetH = 2.95;
     var natural = src.natural || 1.8;
     var scale = (targetH / natural) * (look.scale || 1) * (opts.scale || 1);
