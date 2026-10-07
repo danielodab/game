@@ -2612,4 +2612,8 @@ JOGO.I18n.registra('es', { textos: {
   "{name} se regenera (+{a}).": "{name} se regenera (+{a}).",
   "Elite {a}": "Élite {a}",
   "(couraça: {a})": "(coraza: {a})",
+  // ---- a meta da semana da guilda (07/10, servidor/guilda.py)
+  "Meta da semana cumprida — <b>+15% de XP e de saque</b> para todos até domingo": "Meta de la semana cumplida — <b>+15% de XP y de botín</b> para todos hasta el domingo",
+  "Meta da semana — <b>{a}</b> de <b>{b}</b> salas vencidas": "Meta de la semana — <b>{a}</b> de <b>{b}</b> salas ganadas",
+  "Toda sala que um membro vence (sozinho ou em grupo) conta. Cheia, a guilda ganha XP e o bônus de +15% de XP e de saque para todos até o fim da semana. Zera na segunda.": "Cada sala que un miembro gana (solo o en grupo) cuenta. Llena, el gremio gana XP y el bono de +15% de XP y de botín para todos hasta el fin de la semana. Se reinicia el lunes.",
 } });

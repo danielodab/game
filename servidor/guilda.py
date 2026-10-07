@@ -63,8 +63,10 @@ dará mais XP para guild; somente % de XP doada de batalha OU guerra de guild"):
 a oferenda em vinténs acabou — POST /api/guilda/doar só aceita o dízimo
 (`origem: 'dizimo'`) e recusa o resto.
 """
+import calendar
 import json
 import logging
+import os
 import re
 import sqlite3
 
@@ -79,6 +81,33 @@ DIZIMO_MAX = 25                   # espelha JOGO.Guilda.DIZIMO_MAX
 CUSTO_BONUS = 25                  # espelha JOGO.Guilda.CUSTO_BONUS
 BONUS_S = 24 * 3600               # espelha JOGO.Guilda.BONUS_MS (em segundos)
 XP_TREINO = 6                     # espelha JOGO.Guilda.XP_TREINO
+# A META DA SEMANA (07/10; o dono: "quero um jogo que o jogador tenha motivo para voltar"). As salas que os
+# membros vencem (solo ou em grupo) enchem uma barra da guilda, por semana de Brasília (segunda a domingo, a
+# mesma semana do Eco). Cheia, a guilda ganha XP e o bônus de +15% de XP E de saque para todos até o fim da
+# semana (o mesmo bonus_xp/bonus_drop que o cofre compra — estende o que houver). GUILDA_META_SALAS no
+# ambiente troca o alvo (as provas o baixam)
+def _meta_do_ambiente():
+    v = os.environ.get('GUILDA_META_SALAS')
+    try:
+        n = int(v) if v is not None and v.strip() else 60
+    except ValueError:
+        n = 60
+    return n if n >= 1 else 60
+META_SALAS = _meta_do_ambiente()
+XP_META = 150                     # o XP de guilda ao cumprir (a guerra dá 120)
+# a semana de Brasília: espelha supremo.py (que importa salas.py, que importa este arquivo — por isso a cópia)
+META_FUSO_S = -3 * 3600
+META_SEMANA_S = 7 * 86400
+META_EPOCA = calendar.timegm((2026, 1, 5, 0, 0, 0))   # uma SEGUNDA-feira, 00:00 de Brasília
+
+
+def semana_da_meta(t):
+    return (int(t) + META_FUSO_S - META_EPOCA) // META_SEMANA_S
+
+
+def fim_da_semana(semana):
+    """O instante (epoch) em que a semana `semana` acaba: a segunda seguinte, 00:00 de Brasília."""
+    return META_EPOCA + (int(semana) + 1) * META_SEMANA_S - META_FUSO_S
 MOEDA_TREINO = 1                  # espelha JOGO.Guilda.MOEDA_TREINO
 TREINO_INTERVALO = 20             # segundos entre dois treinos que pagam, por conta
 DOAR_MAX = 50000                  # XP num dízimo só (o de uma sala é bem menos)
@@ -210,6 +239,15 @@ CREATE TABLE IF NOT EXISTS guilda_contrib(
   xp          INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (guilda_id, conta_id)
 );
+-- 07/10: A META DA SEMANA — as salas vencidas pelos membros, por semana de Brasília; `cumprida_em` marca a
+-- semana em que a barra encheu (o prêmio sai uma vez). Tabela nova, nunca ALTER
+CREATE TABLE IF NOT EXISTS guilda_meta(
+  guilda_id   INTEGER NOT NULL REFERENCES guildas(id) ON DELETE CASCADE,
+  semana      INTEGER NOT NULL,
+  salas       INTEGER NOT NULL DEFAULT 0,
+  cumprida_em INTEGER,
+  PRIMARY KEY (guilda_id, semana)
+);
 CREATE TABLE IF NOT EXISTS guilda_dizimo_membro(
   conta_id    INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
   guilda_id   INTEGER NOT NULL REFERENCES guildas(id) ON DELETE CASCADE,
@@ -244,6 +282,42 @@ def soma_contrib(con, cid, xp):
         con.execute("INSERT INTO guilda_contrib(guilda_id, conta_id, xp) "
                     "SELECT guilda_id, conta_id, ? FROM guilda_membros WHERE conta_id = ? "
                     "ON CONFLICT(guilda_id, conta_id) DO UPDATE SET xp = xp + excluded.xp", (xp, cid))
+
+
+def meta_de(con, gid, t):
+    """A META DA SEMANA da guilda `gid` no instante t: {semana, salas, alvo, cumprida, fim} (fim em ms)."""
+    semana = semana_da_meta(t)
+    r = con.execute("SELECT salas, cumprida_em FROM guilda_meta WHERE guilda_id = ? AND semana = ?",
+                    (gid, semana)).fetchone()
+    salas = r['salas'] if r is not None else 0
+    return {'semana': semana, 'salas': salas, 'alvo': META_SALAS,
+            'cumprida': bool(r is not None and r['cumprida_em']), 'fim': fim_da_semana(semana) * 1000}
+
+
+def soma_meta(con, cid, t):
+    """07/10: uma sala vencida pela conta `cid` (solo ou em grupo) entra na meta da semana da guilda em que ela
+    está AGORA. Dentro da tranca de quem chama; sem guilda, None. Ao encher pela primeira vez na semana: XP_META
+    para a guilda e os dois bônus (+15% de XP e de saque) estendidos até o fim da semana. Devolve a meta de
+    depois, com `cumpriuAgora` quando foi esta sala que a encheu."""
+    m = con.execute("SELECT guilda_id FROM guilda_membros WHERE conta_id = ?", (cid,)).fetchone()
+    if m is None:
+        return None
+    gid, semana = m['guilda_id'], semana_da_meta(t)
+    con.execute("INSERT INTO guilda_meta(guilda_id, semana, salas) VALUES (?, ?, 1) "
+                "ON CONFLICT(guilda_id, semana) DO UPDATE SET salas = salas + 1", (gid, semana))
+    r = con.execute("SELECT salas, cumprida_em FROM guilda_meta WHERE guilda_id = ? AND semana = ?",
+                    (gid, semana)).fetchone()
+    cumpriu_agora = False
+    if r['salas'] >= META_SALAS and not r['cumprida_em']:
+        fim = fim_da_semana(semana)
+        con.execute("UPDATE guilda_meta SET cumprida_em = ? WHERE guilda_id = ? AND semana = ?", (int(t), gid, semana))
+        con.execute("UPDATE guildas SET xp = xp + ?, bonus_xp = MAX(bonus_xp, ?), bonus_drop = MAX(bonus_drop, ?) "
+                    "WHERE id = ?", (XP_META, fim, fim, gid))
+        cumpriu_agora = True
+        log.info("meta da semana cumprida: guilda #%d, semana %d (%d salas)", gid, semana, r['salas'])
+    meta = meta_de(con, gid, t)
+    meta['cumpriuAgora'] = cumpriu_agora
+    return meta
 
 
 def nivel_de(xp):
@@ -332,6 +406,7 @@ class GuildaMixin:
                        'em': mu['em'] * 1000} if mu is not None else None),
             'pedidos': [{'id': p['conta_id'], 'nome': nm.get(p['conta_id'], '?'), 'em': p['em'] * 1000} for p in ps],
             'souLider': g['lider_id'] == eu, 'meuCargo': cargo, 'eu': eu,
+            'meta': meta_de(self.con, gid, agora()),      # 07/10: a meta da semana (salas vencidas pelos membros)
         }
 
     def _g_existe(self, gid):

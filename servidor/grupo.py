@@ -35,6 +35,7 @@ import time
 
 import presenca                   # 15/09: a queda e a volta de cada conta, que o Relé grava (a prova do W.O.)
 from comum import EstadoMudou, Recusa, agora, inteiro
+from guilda import soma_meta      # 07/10: a sala em grupo vencida entra na meta da semana da guilda de cada membro
 from salas import (DIFICULDADES, LANCES_MAX, RE_BILHETE, RE_CALABOUCO, SALA_MIN_S, SALA_S_POR_TURNO, SALA_VALIDADE,
                    SEM_ESTADO, TENTATIVAS, _inteiro_puro, _lista, _objeto)
 
@@ -476,6 +477,7 @@ class GrupoMixin:
                         raise EstadoMudou()                 # o outro membro fechou junto: a volta seguinte lê o recibo
                     for m, s in pagos:
                         nova, _ = self._estado_grava(m['conta'], m['estado'], s, t)
+                        soma_meta(self.con, m['conta']['id'], t)      # 07/10: a meta da semana da guilda de cada um
                         self.con.execute("INSERT INTO salas_grupo_pago(gid, conta_id, recompensa) VALUES (?, ?, ?)",
                                          (gid, m['conta']['id'], json.dumps(s.get('recompensa'), ensure_ascii=False)))
                         self._evento(m['conta']['id'], 'grupo-paga', {

@@ -40,6 +40,7 @@ import sqlite3                    # 14/09: o _juiz_op pega sqlite3.Error e o nom
 import time
 
 from guilda import soma_contrib   # 13/09: o XP doado por membro (a grade da guilda)
+from guilda import soma_meta      # 07/10: a sala vencida entra na meta da semana da guilda
 
 from comum import (ORIGENS, EstadoMudou, Recusa, agora, classe_do_heroi, iid_valido, inteiro, liberadas,
                    limita)
@@ -1086,6 +1087,7 @@ class SalasMixin:
                     self.con.execute("UPDATE salas SET estado = 'paga', fechada_em = ?, turnos = ?, carry_saida = ? "
                                      "WHERE bilhete = ?", (t, turnos, json.dumps(carry) if carry is not None else None,
                                                            bilhete))
+                    meta = soma_meta(self.con, cid, t)          # 07/10: a meta da semana da guilda (sala vencida)
                     # a espera começa AGORA — o PV do fim e o máximo de cada herói (14/09: na linha do herói)
                     self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                     self._evento(cid, 'sala-paga', {'bilhete': bilhete, 'dungeon': s['dungeon'], 'sala': s['sala'],
@@ -1095,7 +1097,8 @@ class SalasMixin:
             except EstadoMudou:
                 continue                                        # a mesma semente refaz a mesma sala no estado novo
             resp = {'ok': True, 'fase': 'won', 'recompensa': saida.get('recompensa'), 'versao': nova,
-                    'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry}
+                    'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry,
+                    'guildaMeta': meta}                          # 07/10: a meta da semana depois desta sala (ou None)
             # 04/10: a compra feita no meio da sala e segurada por ela (loja.py, TIPOS_DA_LUTA) entra no fecho,
             # e a resposta já leva o estado com ela dentro
             feito = self._loja_depois_da_luta(conta)

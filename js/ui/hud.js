@@ -11357,6 +11357,22 @@ var JOGO = (typeof window !== 'undefined')
           caixa.appendChild(fp);
         }
 
+        /* A META DA SEMANA (07/10, servidor/guilda.py soma_meta): as salas que os membros vencem enchem a
+         * barra; cheia, +15% de XP e de saque para todos até domingo e XP para a guilda. Só vem do servidor. */
+        if (g.meta && typeof g.meta.alvo === 'number') {
+          var mt = g.meta, pct = Math.max(0, Math.min(100, Math.round(100 * (mt.salas || 0) / Math.max(1, mt.alvo))));
+          var caixaMeta = el('div', 'guilda-meta' + (mt.cumprida ? ' is-cumprida' : ''));
+          caixaMeta.appendChild(el('h3', 'bk-tit', mt.cumprida
+            ? tr('Meta da semana cumprida — <b>+15% de XP e de saque</b> para todos até domingo')
+            : tr('Meta da semana — <b>{a}</b> de <b>{b}</b> salas vencidas', { a: mt.salas || 0, b: mt.alvo })));
+          var barra = el('div', 'guilda-meta-barra');
+          var cheio = el('i'); cheio.style.width = pct + '%';
+          barra.appendChild(cheio);
+          caixaMeta.appendChild(barra);
+          caixaMeta.appendChild(el('p', 'inv-dica', tr('Toda sala que um membro vence (sozinho ou em grupo) conta. Cheia, a guilda ganha XP e o bônus de +15% de XP e de saque para todos até o fim da semana. Zera na segunda.')));
+          caixa.appendChild(caixaMeta);
+        }
+
         // ---- O COFRE: a moeda da guilda — líder e oficiais gastam
         var cofre = el('div', 'guilda-cofre');
         cofre.appendChild(el('h3', 'bk-tit', tr('Cofre da guilda — <b>{moedas}</b> marcas', { moedas: g.moedas })));

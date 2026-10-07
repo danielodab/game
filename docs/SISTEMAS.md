@@ -794,6 +794,20 @@ Eventos do mundo ganhou o bloco "A semana do SOTERRA" com os sete dias e o de ho
 
 Provas: `python tests/programa_api.py` (API + juiz).
 
+## 9-A.1 A meta da semana da guilda (07/10)
+
+A guilda tinha gestão (cargos, cofre, banco, dízimo) e guerra, mas nada para fazer **junto todo dia**.
+Agora toda sala que um membro vence — sozinho ou em grupo — enche uma barra da guilda, por semana de
+Brasília (segunda a domingo, a mesma semana do Eco). Cheia (**60 salas**, `META_SALAS` em
+`servidor/guilda.py`; `GUILDA_META_SALAS` no ambiente troca), a guilda ganha **150 de XP** e o bônus
+de **+15% de XP e de saque para todos até o fim da semana** — o mesmo `bonus_xp`/`bonus_drop` que o
+cofre compra (estende o que houver). O prêmio sai uma vez por semana; as salas seguem contando.
+
+Mora em `guilda_meta(guilda_id, semana, salas, cumprida_em)`; `soma_meta` roda na mesma transação que
+paga a sala (`salas.py`, `grupo.py`), e a ficha da guilda (`/api/guilda/minha`, `meta`) e a resposta do
+fechar (`guildaMeta`) levam o estado. Na tela: a barra na ficha da guilda, acima do cofre. Só existe
+com o servidor (a guilda local-primeiro não tem meta). Prova: `python tests/guilda_meta_api.py`.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

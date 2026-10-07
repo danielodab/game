@@ -1788,6 +1788,17 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .guilda-bonus.is-vivo { border-color: rgba(127,224,138,.5); }
 .guilda-bonus.is-vivo b { color: #7fe08a; }
+/* A META DA SEMANA da guilda (07/10): a barra das salas vencidas pelos membros */
+.guilda-meta {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--rad-m);
+  border: 1px solid var(--line2);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  box-shadow: var(--relevo);
+}
+.guilda-meta.is-cumprida { border-color: rgba(127,224,138,.5); }
+.guilda-meta.is-cumprida .bk-tit b { color: #7fe08a; }
+.guilda-meta-barra { height: 10px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 6px 0; }
+.guilda-meta-barra i { display: block; height: 100%; background: linear-gradient(90deg, #9ad8ff, #7fe08a); border-radius: 999px; }
 .guilda-emblemas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .guilda-emblemas .btn { font-size: 18px; min-width: 46px; }
 
