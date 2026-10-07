@@ -1788,6 +1788,14 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .guilda-bonus.is-vivo { border-color: rgba(127,224,138,.5); }
 .guilda-bonus.is-vivo b { color: #7fe08a; }
+/* OS FEITOS DE COLEÇÃO (07/10, Progress.feitos): na aba Coleção, acima das cartas */
+.feitos { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 12px; }
+.feito { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 4px 10px; align-items: center;
+  padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2, #262d38); font-size: 12px; }
+.feito .ms-barra { margin: 0; }
+.feito-prog { color: var(--dim); white-space: nowrap; }
+.feito.is-feito { border-color: rgba(127,224,138,.5); }
+.feito.is-feito .feito-nome { color: #7fe08a; }
 /* A TRILHA DA TEMPORADA (07/10, js/core/trilha.js): no quadro de Missões, acima das diárias */
 .trilha { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--rad-m); border: 1px solid rgba(230,181,60,.35);
   background: linear-gradient(180deg, rgba(230,181,60,.08), rgba(255,255,255,.015)); box-shadow: var(--relevo); }

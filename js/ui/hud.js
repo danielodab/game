@@ -7249,6 +7249,29 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(el('p', 'inv-dica', tr('O que cada estrela dá, em qualquer classe:')));
     body.appendChild(legend);
 
+    /* OS FEITOS DE COLEÇÃO (07/10, Progress.feitos): o bestiário de cada portal (+10% de saque lá), os seis
+     * chefes e as 21 fusões (+5% de XP cada). A Coleção passa a pagar por ser completada. */
+    var feitos = safe(function () { return P().feitos(); }, []) || [];
+    if (feitos.length) {
+      body.appendChild(el('h3', 'hs-sec', tr('Feitos da coleção')));
+      body.appendChild(el('p', 'inv-dica', tr('Completar a coleção paga: o bestiário de um portal dá <b>+10% de saque</b> nele; os seis chefes e as 21 fusões vencedoras dão <b>+5% de XP</b> cada, em toda sala.')));
+      var grF = el('div', 'feitos');
+      feitos.forEach(function (f) {
+        var nome = f.tipo === 'bestiario' ? tr('Bestiário: {a}', { a: esc(f.nome) })
+                 : (f.tipo === 'chefes' ? tr('Os seis chefes derrubados') : tr('As 21 fusões vencedoras'));
+        var premio = f.tipo === 'bestiario' ? tr('+{a}% de saque lá', { a: Math.round(f.bonus * 100) }) : tr('+{a}% de XP', { a: Math.round(f.bonus * 100) });
+        var ln = el('div', 'feito' + (f.feito ? ' is-feito' : ''));
+        ln.appendChild(el('span', 'feito-nome', (f.feito ? '✓ ' : '') + nome));
+        var barra = el('div', 'ms-barra');
+        var cheio = el('i'); cheio.style.width = Math.min(100, Math.round(100 * f.prog / Math.max(1, f.alvo))) + '%';
+        barra.appendChild(cheio);
+        ln.appendChild(barra);
+        ln.appendChild(el('span', 'feito-prog', tr('{prog} de {alvo}', { prog: f.prog, alvo: f.alvo }) + ' · ' + premio));
+        grF.appendChild(ln);
+      });
+      body.appendChild(grF);
+    }
+
     var ids = Object.keys(classes());
     ids.sort(function (a, b) {
       var A = cardInfo(a), B = cardInfo(b);

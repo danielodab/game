@@ -2642,4 +2642,12 @@ JOGO.I18n.registra('en', { textos: {
   "Voltar ao caminho de sempre": "Back to the usual path",
   "Descer pelo caminho escuro": "Take the dark path",
   "{icone} <b>Caminho escuro: {nome}</b> — {texto} Vale +{pct}% de XP e saque.": "{icone} <b>Dark path: {nome}</b> — {texto} Worth +{pct}% XP and loot.",
+  // ---- os feitos da coleção (07/10, Progress.feitos)
+  "Feitos da coleção": "Collection feats",
+  "Completar a coleção paga: o bestiário de um portal dá <b>+10% de saque</b> nele; os seis chefes e as 21 fusões vencedoras dão <b>+5% de XP</b> cada, em toda sala.": "Completing the collection pays: a portal's bestiary gives <b>+10% loot</b> there; the six bosses and the 21 winning fusions give <b>+5% XP</b> each, in every room.",
+  "Bestiário: {a}": "Bestiary: {a}",
+  "Os seis chefes derrubados": "The six bosses felled",
+  "As 21 fusões vencedoras": "The 21 winning fusions",
+  "+{a}% de saque lá": "+{a}% loot there",
+  "+{a}% de XP": "+{a}% XP",
 } });

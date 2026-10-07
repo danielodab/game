@@ -2642,4 +2642,12 @@ JOGO.I18n.registra('es', { textos: {
   "Voltar ao caminho de sempre": "Volver al camino de siempre",
   "Descer pelo caminho escuro": "Bajar por el camino oscuro",
   "{icone} <b>Caminho escuro: {nome}</b> — {texto} Vale +{pct}% de XP e saque.": "{icone} <b>Camino oscuro: {nome}</b> — {texto} Vale +{pct}% de XP y botín.",
+  // ---- os feitos da coleção (07/10, Progress.feitos)
+  "Feitos da coleção": "Hazañas de la colección",
+  "Completar a coleção paga: o bestiário de um portal dá <b>+10% de saque</b> nele; os seis chefes e as 21 fusões vencedoras dão <b>+5% de XP</b> cada, em toda sala.": "Completar la colección paga: el bestiario de un portal da <b>+10% de botín</b> allí; los seis jefes y las 21 fusiones ganadoras dan <b>+5% de XP</b> cada uno, en toda sala.",
+  "Bestiário: {a}": "Bestiario: {a}",
+  "Os seis chefes derrubados": "Los seis jefes derribados",
+  "As 21 fusões vencedoras": "Las 21 fusiones ganadoras",
+  "+{a}% de saque lá": "+{a}% de botín allí",
+  "+{a}% de XP": "+{a}% de XP",
 } });

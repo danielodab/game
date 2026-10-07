@@ -2667,15 +2667,20 @@ var JOGO = (typeof window !== 'undefined')
     var fPerg = (fTempo > 1) ? 1 : pergaminhoXp(prog);
     var fBonus = Math.max(fTempo, fPerg);
     var fXp = (fBonus > 1) ? Math.max(fEvXp, Math.min(tetoXp(), fEvXp * fBonus)) : fEvXp;
+    /* OS FEITOS DE COLEÇÃO (07/10, Progress.feitos): os seis chefes e as 21 fusões dão +5% de XP cada, em toda
+     * sala; o bestiário completo de um portal dá +10% de saque LÁ (abaixo, no rollDrops). Fator 1 sem feito. */
+    var fFeitoXp = 1, fFeitoSaque = 1;
+    try { if (prog && prog.feitoXp) fFeitoXp = num(prog.feitoXp(), 1); } catch (eF1) { fFeitoXp = 1; }
+    try { if (prog && prog.feitoSaque) fFeitoSaque = num(prog.feitoSaque(Game.dungeonId), 1); } catch (eF2) { fFeitoSaque = 1; }
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                             fatorPoco * fatorGuildaXp * fXp);
+                             fatorPoco * fatorGuildaXp * fXp * fFeitoXp);
     /* a carga só se gasta quando o pergaminho ACRESCENTOU XP nesta sala
      * (o grupo ganhou mais do que ganharia sem ele); o bônus por tempo não
      * tem carga — quando ele pesou, só se anota, para a tela dizer */
     var pergaminhoSala = null, bonusTempoSala = null;
     if (fXp > fEvXp) {
       var xpSemPerg = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                                 fatorPoco * fatorGuildaXp * fEvXp);
+                                 fatorPoco * fatorGuildaXp * fEvXp * fFeitoXp);
       if (xpGanho > xpSemPerg && xpGanho > 0) {
         if (fPerg > 1) {
           var restamPerg = 0;
@@ -2826,8 +2831,25 @@ var JOGO = (typeof window !== 'undefined')
       var bonusGuilda = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('drop'))
         ? JOGO.Guilda.BONUS_FATOR : 1;
       try { drops = prog.rollDrops(Game.dungeonId, Game.roomIndex, partySize,
-                                   (difSala.drop || 1) * bonusDesafio * bonusSaque * bonusGuilda) || []; }
+                                   (difSala.drop || 1) * bonusDesafio * bonusSaque * bonusGuilda * fFeitoSaque) || []; }
       catch (err) { drops = []; }
+    }
+    /* OS CONTADORES DOS FEITOS (07/10): cada monstro caído entra no bestiário, e cada dupla fundida viva no fim
+     * conta uma sala vencida. Antes do save, no mesmo funil — o juiz anota o mesmo (o estado é do servidor). */
+    if (prog && prog.anotaBestiario) {
+      for (i = 0; i < st.units.length; i++) {
+        var ub2 = st.units[i];
+        if (ub2.side !== 'enemy' || ub2.alive || ub2.kind !== 'monster') continue;
+        try { prog.anotaBestiario(ub2.defId, 1); } catch (eB) {}
+      }
+    }
+    if (prog && prog.anotaFusaoVencida) {
+      for (i = 0; i < st.units.length; i++) {
+        var uf2 = st.units[i];
+        if (uf2.side !== 'player' || uf2.kind !== 'fusion' || !uf2.alive) continue;
+        var par2 = fusionHeroIds(uf2);
+        if (par2.length === 2) { try { prog.anotaFusaoVencida(par2[0], par2[1]); } catch (eU) {} }
+      }
     }
     /* CARTAS DE PET (03/09): o chefe não entrega mais o bicho inteiro — derruba
      * UMA carta do pet daquele calabouço, e com 5 o pet é seu (a gramática das

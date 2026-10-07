@@ -952,6 +952,30 @@ var JOGO = (typeof window !== 'undefined')
       if (pDia >= 20250101 && pDia <= 21001231) bl.pedrasDia = pDia;
       if (keys(bl).length) st.balcao = bl;
     }
+    // ---- OS FEITOS DE COLEÇÃO (07/10): quantas vezes cada monstro caiu (`bestiario`, por id do dado) e quantas
+    // salas cada dupla fundida venceu (`fusoes`, pela chave da dupla). Contadores que só crescem; o id que o
+    // dado não conhece sai (um save de outra versão), o número torto também.
+    var ms0 = D().monsters;
+    var temMs = isObj(ms0) && keys(ms0).length > 0;
+    if (isObj(raw.bestiario)) {
+      var bst = {};
+      for (var bid in raw.bestiario) {
+        if (!raw.bestiario.hasOwnProperty(bid) || typeof bid !== 'string' || bid.length > 64) continue;
+        if (temMs && !ms0.hasOwnProperty(bid)) continue;
+        var nb = Math.floor(num(raw.bestiario[bid], 0));
+        if (nb > 0) bst[bid] = nb;
+      }
+      if (keys(bst).length) st.bestiario = bst;
+    }
+    if (isObj(raw.fusoes)) {
+      var fz = {};
+      for (var fk in raw.fusoes) {
+        if (!raw.fusoes.hasOwnProperty(fk) || typeof fk !== 'string' || !/^[a-z]+\+[a-z]+$/.test(fk)) continue;
+        var nf = Math.floor(num(raw.fusoes[fk], 0));
+        if (nf > 0) fz[fk] = nf;
+      }
+      if (keys(fz).length) st.fusoes = fz;
+    }
 
     // ---- NÍVEL DE USO [D19]: peça vestida acima do nível do herói volta ao
     // saco (MESMA série, mesmo level/stars) e pet acima volta à lista. É
@@ -2296,6 +2320,93 @@ var JOGO = (typeof window !== 'undefined')
     var st = Progress.state;
     var b = (st && isObj(st.balcao)) ? st.balcao : {};
     return { reescritaEm: Math.max(0, Math.floor(num(b.reescritaEm, 0))), pedrasDia: Math.max(0, Math.floor(num(b.pedrasDia, 0))) };
+  };
+  /* OS FEITOS DE COLEÇÃO (07/10). A Coleção existia e não pagava nada. Agora três famílias de feito, todas
+   * lidas de contadores que o computeRewards anota (no jogo E no juiz — o estado é do servidor):
+   *   bestiario-<calabouço>  todo monstro do portal (fora filhote e colosso) caiu ao menos uma vez
+   *                          → +10% de saque NAQUELE portal (Progress.feitoSaque);
+   *   chefes                 os seis chefes caíram → +5% de XP em toda sala (Progress.feitoXp);
+   *   fusoes                 as 21 duplas venceram uma sala fundidas → +5% de XP em toda sala.
+   * Nada de título: os títulos são posição ou teimosia (titulos.js). Os números moram em FEITOS_BONUS. */
+  var FEITOS_BONUS = { saque: 0.10, xp: 0.05 };
+  Progress.FEITOS_BONUS = FEITOS_BONUS;
+  function contador(campo, chave) {
+    var st = Progress.state;
+    var o = (st && isObj(st[campo])) ? st[campo] : {};
+    return Math.max(0, Math.floor(num(o[chave], 0)));
+  }
+  Progress.anotaBestiario = function (defId, n) {
+    var st = Progress.state;
+    if (!st || typeof defId !== 'string' || !defId) return false;
+    var ms = D().monsters;
+    if (isObj(ms) && keys(ms).length && !ms.hasOwnProperty(defId)) return false;
+    if (!isObj(st.bestiario)) st.bestiario = {};
+    st.bestiario[defId] = contador('bestiario', defId) + Math.max(1, Math.floor(num(n, 1)));
+    return true;
+  };
+  Progress.anotaFusaoVencida = function (classA, classB) {
+    var st = Progress.state;
+    if (!st || typeof classA !== 'string' || typeof classB !== 'string' || !classA || !classB) return false;
+    var par = [classA, classB].sort();
+    var chave = par[0] + '+' + par[1];
+    if (!/^[a-z]+\+[a-z]+$/.test(chave)) return false;
+    if (!isObj(st.fusoes)) st.fusoes = {};
+    st.fusoes[chave] = contador('fusoes', chave) + 1;
+    return true;
+  };
+  /* a lista inteira, para a tela: [{id, tipo, nome, prog, alvo, feito, calabouco?}] */
+  Progress.feitos = function () {
+    var ms = isObj(D().monsters) ? D().monsters : {};
+    var ds = isArray(D().dungeons) ? D().dungeons : [];
+    var fora = [], i;
+    for (i = 0; i < ds.length; i++) {
+      var dg = ds[i];
+      if (!dg || !dg.id || dg.id === 'poco' || (D().portalFechado && D().portalFechado(dg.id))) continue;
+      var lista = [], feitos = 0;
+      for (var mid in ms) {
+        if (!ms.hasOwnProperty(mid)) continue;
+        var m = ms[mid];
+        if (!m || m.dungeonId !== dg.id || m.summonOnly || m.colosso) continue;
+        lista.push(mid);
+        if (contador('bestiario', mid) > 0) feitos++;
+      }
+      if (!lista.length) continue;
+      fora.push({ id: 'bestiario-' + dg.id, tipo: 'bestiario', calabouco: dg.id, nome: dg.name || dg.id,
+                  prog: feitos, alvo: lista.length, feito: feitos >= lista.length, bonus: FEITOS_BONUS.saque });
+    }
+    var chefes = [], chefesFeitos = 0;
+    for (var cid in ms) {
+      if (!ms.hasOwnProperty(cid) || !ms[cid] || !ms[cid].boss || !ms[cid].dungeonId) continue;
+      if (D().portalFechado && D().portalFechado(ms[cid].dungeonId)) continue;
+      if (D().especial && D().especial(ms[cid].dungeonId)) continue;
+      chefes.push(cid);
+      if (contador('bestiario', cid) > 0) chefesFeitos++;
+    }
+    if (chefes.length) fora.push({ id: 'chefes', tipo: 'chefes', prog: chefesFeitos, alvo: chefes.length,
+                                   feito: chefesFeitos >= chefes.length, bonus: FEITOS_BONUS.xp });
+    var cls = keys(classes()).filter(function (c) { return c !== 'gm'; }).sort();
+    var pares = 0, paresFeitos = 0;
+    for (i = 0; i < cls.length; i++) {
+      for (var j = i + 1; j < cls.length; j++) {
+        pares++;
+        if (contador('fusoes', cls[i] + '+' + cls[j]) > 0) paresFeitos++;
+      }
+    }
+    if (pares) fora.push({ id: 'fusoes', tipo: 'fusoes', prog: paresFeitos, alvo: pares, feito: paresFeitos >= pares,
+                           bonus: FEITOS_BONUS.xp });
+    return fora;
+  };
+  Progress.feitoSaque = function (dungeonId) {
+    var fs = Progress.feitos();
+    for (var i = 0; i < fs.length; i++) {
+      if (fs[i].tipo === 'bestiario' && fs[i].calabouco === dungeonId && fs[i].feito) return 1 + FEITOS_BONUS.saque;
+    }
+    return 1;
+  };
+  Progress.feitoXp = function () {
+    var fs = Progress.feitos(), f = 1;
+    for (var i = 0; i < fs.length; i++) if ((fs[i].tipo === 'chefes' || fs[i].tipo === 'fusoes') && fs[i].feito) f += FEITOS_BONUS.xp;
+    return f;
   };
   Progress.balcaoMarca = function (campo, valor) {
     var st = Progress.state;

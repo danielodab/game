@@ -801,6 +801,23 @@ Eventos do mundo ganhou o bloco "A semana do SOTERRA" com os sete dias e o de ho
 
 Provas: `python tests/programa_api.py` (API + juiz).
 
+## 9-A.3 Os feitos da coleção (07/10)
+
+A Coleção existia e não pagava nada por ser completada. Agora três famílias de **feito**, lidas de
+contadores que o `computeRewards` anota no jogo **e** no juiz (`Progress.state.bestiario` — quantas vezes
+cada monstro caiu, por id do dado; `Progress.state.fusoes` — quantas salas cada dupla fundida venceu,
+pela chave `a+b` ordenada; os dois entram no hash da economia):
+
+| feito | o que pede | o que paga |
+|---|---|---|
+| Bestiário de um portal | todo monstro do portal (fora filhote e colosso) caiu ao menos uma vez | **+10% de saque** naquele portal (`Progress.feitoSaque`) |
+| Os seis chefes | os seis chefes caíram | **+5% de XP** em toda sala (`Progress.feitoXp`) |
+| As 21 fusões | as 21 duplas venceram uma sala fundidas (a dupla viva no fim da sala conta) | **+5% de XP** em toda sala |
+
+Nada de título: os títulos continuam sendo posição ou teimosia (`titulos.js`). O sanitize descarta id
+que o dado não conhece e número torto. Na tela: o bloco "Feitos da coleção" no alto da aba Coleção, com a
+barra de cada um. Prova: `node tests/feitos.js` (12).
+
 ## 9-A.2 A trilha da temporada (07/10)
 
 A trilha **gratuita** de recompensas por jogar, presa às temporadas de 42 dias da Brasa
