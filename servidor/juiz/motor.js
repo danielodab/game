@@ -40,8 +40,10 @@ const DADOS = [
 // sem ele o juiz refaria a sala do Santuário sem regra nenhuma e acusaria o jogador honesto
 // 07/10: e o afixos.js — a regra do Calabouço do Dia que o bilhete guarda (o motor recusa nascer uma sala com
 // afixo sem ele: refazê-la sem a regra acusaria o jogador honesto de 'divergiu')
+// 07/10: e o elites.js — o elite da sala sai do rng da sala; sem ele o juiz refaria a sala sem o elite e acusaria
+// o jogador honesto de 'divergiu'
 const COMBATE = ['js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js', 'js/core/poco.js', 'js/core/santuario.js',
-                 'js/core/afixos.js'];
+                 'js/core/afixos.js', 'js/core/elites.js'];
 
 const cache = new Map();
 /* O texto de cada arquivo é lido UMA vez por processo e compilado uma vez: o

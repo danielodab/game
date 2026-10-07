@@ -27,6 +27,8 @@ const RAIZ = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const SEMENTES = +(process.argv[3] || 2);
 const { mundo } = require(path.join(RAIZ, 'servidor', 'juiz', 'motor.js'));
 const J = mundo(['js/core/progress.js']).JOGO;
+// 07/10: a bancada mede o jogo BASE — o elite de sala (js/core/elites.js) é sorte por cima e não entra na régua
+if (J.Elites) J.Elites.CHANCE = 0;
 const E = J.Engine, P = J.Progress, D = J.DATA, AI = J.AI;
 const CLASSES = Object.keys(D.classes).filter((c) => c !== 'gm').sort();
 const ELEMS = ['fogo', 'agua', 'terra', 'ar'];

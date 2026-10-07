@@ -708,6 +708,7 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
 .tl-hp { height: 4px; background: #0a0d11; }
 .tl-hp i { display: block; height: 100%; background: var(--hp); transition: width .25s ease; }
 .tl-boss { position: absolute; top: 0; right: 2px; font-size: 11px; color: var(--gold); }
+.tl-elite { position: absolute; top: 0; right: 2px; font-size: 11px; color: #9ad8ff; text-shadow: 0 0 4px rgba(154,216,255,.8); }   /* 07/10: o elite da sala */
 
 .bt-left {
   /* 11/09: 54 px da borda — a faixa da esquerda é da barra do tempo do turno */

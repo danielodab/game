@@ -2473,10 +2473,15 @@ var JOGO = (typeof window !== 'undefined')
       var def = monsters[u.defId];
       var sd = def && def.stoneDrop;
       if (!sd) continue;
-      if (Math.random() >= num(sd.chance, 0)) continue;
+      // 07/10: o elite deixa pedra SEMPRE, uma a mais (js/core/elites.js). O sorteio da chance é
+      // tirado do mesmo jeito (o gerador semeado do juiz anda igual nos dois lados)
+      var ehElite = !!(u.elite && JOGO.Elites);
+      var tirada = Math.random();
+      if (!ehElite && tirada >= num(sd.chance, 0)) continue;
       var min = Math.max(0, Math.floor(num(sd.min, 1)));
       var max = Math.max(min, Math.floor(num(sd.max, min)));
       var qtd = min + Math.floor(Math.random() * (max - min + 1));
+      if (ehElite) qtd = Math.max(1, qtd) + Math.max(0, Math.floor(num(JOGO.Elites.PEDRAS_A_MAIS, 1)));
       if (fPedras > 1 && qtd > 0) {
         qtd = Math.floor(qtd * fPedras + Math.random());
         pedrasComEvento = true;
@@ -2581,7 +2586,9 @@ var JOGO = (typeof window !== 'undefined')
       var u = st.units[i];
       if (u.side !== 'enemy' || u.alive) continue;
       var def = monsters[u.defId];
-      if (def && typeof def.xp === 'number') xpTotal += def.xp;
+      // 07/10: o elite da sala paga ×1,5 (js/core/elites.js, Elx.XP) — e os vinténs, que derivam daqui
+      var fElite = (u.elite && JOGO.Elites) ? num(JOGO.Elites.XP, 1.5) : 1;
+      if (def && typeof def.xp === 'number') xpTotal += def.xp * fElite;
     }
     /* A DIFICULDADE ENTRA AQUI, sobre o total ja somado.
      *

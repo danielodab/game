@@ -425,6 +425,33 @@ Provas: `node tests/afixos.js` (39) e `python tests/afixos_api.py` (API + juiz).
 
 ---
 
+### Os elites de sala (07/10)
+
+A segunda camada contra o "repetitivo", abaixo dos afixos: em **40% das salas** dos calabouços (os
+seis portais e o Poço) **um** monstro comum nasce **elite** — +50% de vida e um traço a mais,
+sorteado pelo rng semeado da própria sala (`js/core/elites.js`, chamado por `Engine.createBattle`
+via `Ex()`, decisão 23 do `engine.js`; a mesma `VERSAO_REGRAS` 8 dos afixos). O juiz chega ao mesmo
+elite com a mesma semente. Nunca na primeira sala da Estufa (o tutorial), nunca no PvP, no Eco nem no
+Santuário; nunca o chefe, o colosso nem um filhote.
+
+| traço | o que faz |
+|---|---|
+| Couraçado | couraça de 3 placas: cada golpe entra pela metade até ela cair (golpe de ar arranca duas) — a mesma regra do Colosso de Rocha |
+| Explosivo | ao cair, explode nas casas vizinhas com o próprio elemento (25% do PV máximo dele) |
+| Enfurecido | com metade da vida, +30 de poder até o fim |
+| Veloz | +1 PP e +1 PA |
+| Regenerador | recupera 6% da vida máxima no começo de cada vez dele (traço `regen`, novo no `runStartTicks`) |
+
+**O que paga:** o elite derrubado vale **×1,5 de XP** (e os vinténs, que derivam da XP) e deixa
+**pedra do elemento dele sempre, uma a mais** (`game.js`, `computeRewards`/`collectStones`). Na tela:
+o corpo sai 20% maior, a fila dos turnos marca ★ e a dica do monstro diz o traço (e as placas da
+couraça). As bancadas de equilíbrio (`tests/equilibrio.js`, `equilibrio_pve.js`) rodam com a chance a
+zero: medem o jogo base.
+
+Prova: `node tests/elites.js` (21).
+
+---
+
 ## 6-B. O Eco Primordial — o chefe supremo da semana (02/10)
 
 O pedido do dono: "um mapa BEM difícil com chefe supremo e placar de quem tirou mais dano". O dado

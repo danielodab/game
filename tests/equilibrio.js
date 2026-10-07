@@ -163,6 +163,8 @@ if (!isMainThread) {
   baixa();
   const { mundo } = require(path.join(RAIZ, 'servidor', 'juiz', 'motor.js'));
   const J = mundo(['js/core/progress.js']).JOGO;
+// 07/10: a bancada mede o jogo BASE — o elite de sala (js/core/elites.js) é sorte por cima e não entra na régua
+if (J.Elites) J.Elites.CHANCE = 0;
   if (workerData && workerData.ajuste) aplicaAjuste(J, workerData.ajuste);
   const B = require(path.join(__dirname, 'equilibrio_bancada.js')).cria(J);
   parentPort.on('message', (job) => {
@@ -195,6 +197,8 @@ const AJUSTE = opt('ajuste', null) ? JSON.parse(fs.readFileSync(opt('ajuste'), '
 
 const { mundo } = require(path.join(RAIZ, 'servidor', 'juiz', 'motor.js'));
 const J = mundo(['js/core/progress.js']).JOGO;
+// 07/10: a bancada mede o jogo BASE — o elite de sala (js/core/elites.js) é sorte por cima e não entra na régua
+if (J.Elites) J.Elites.CHANCE = 0;
 const BA = require(path.join(__dirname, 'equilibrio_bancada.js'));
 const B = BA.cria(J);
 const D = J.DATA;

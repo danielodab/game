@@ -3413,7 +3413,9 @@ var JOGO = (typeof window !== 'undefined')
       cell.appendChild(hb);
       if (some) cell.style.opacity = '0.55';
       if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
-      tipOn(cell, u.name || u.defId, unitTipBody(u), lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
+      else if (u.elite) cell.appendChild(el('span', 'tl-elite', '★'));     // 07/10: o elite da sala
+      tipOn(cell, (u.name || u.defId) + (u.elite ? ' ★ ' + esc(u.elite.nome) : ''), unitTipBody(u),
+            lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
       bt.timeline.appendChild(cell);
     }
   }
@@ -3428,6 +3430,9 @@ var JOGO = (typeof window !== 'undefined')
   function unitTipBody(u) {
     if (oculto(u)) return tr('<i>Sumiu nas sombras — não dá para ver onde está.</i>');
     var out = '<i>' + (u.hp + ' / ' + u.hpMax + tr(' PV · ') + u.pa + tr(' PA · ') + u.pp + tr(' PP')) + '</i>';
+    // 07/10: o elite da sala diz o traço dele (js/core/elites.js)
+    if (u.elite) out += '<br><b>' + esc(u.elite.icone || '★') + ' ' + tr('Elite {a}', { a: esc(u.elite.nome) }) + '</b> — ' + esc(u.elite.texto) +
+                        (u.couraca > 0 ? ' ' + tr('(couraça: {a})', { a: u.couraca }) : '');
     if (u.shield) out += '<br>' + tr('Escudo: {shield}', { shield: u.shield });
     if (u.element && u.element !== 'neutro') out += '<br>' + tr('Elemento: {a}', { a: ELEM_PT[u.element] || u.element });
     if (u.elemPower) out += ' ' + tr('(+{elemPower} de dano)', { elemPower: u.elemPower });

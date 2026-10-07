@@ -177,8 +177,11 @@ inflado.progress.heroes.sumo.xp = 0;
 let r5;
 try { r5 = fecha(pedido(inflado, dg, ri, s, 'normal', jogo.lances, jogo.hash)); }
 catch (e) { r5 = { motivo: e.motivo }; }
-check('os lances do herói forte não valem no herói fraco que o servidor tem (divergiu ou perdeu)',
-      (r5 && r5.motivo === 'divergiu') || (r5 && r5.ok && r5.fase !== 'won'), JSON.stringify(r5 && (r5.motivo || r5.fase)));
+// 07/10: 'depois-do-fim' também é a recusa certa — o herói fraco cai antes de os lances do forte acabarem (com o
+// elite da sala, que tem mais vida, a sala do fraco termina mais cedo ainda)
+check('os lances do herói forte não valem no herói fraco que o servidor tem (divergiu, depois do fim ou perdeu)',
+      (r5 && (r5.motivo === 'divergiu' || r5.motivo === 'depois-do-fim')) || (r5 && r5.ok && r5.fase !== 'won'),
+      JSON.stringify(r5 && (r5.motivo || r5.fase)));
 
 // ---- o evento do mundo e o dízimo
 const r6 = fecha(pedido(conta, dg, ri, s, 'normal', jogo.lances, jogo.hash,

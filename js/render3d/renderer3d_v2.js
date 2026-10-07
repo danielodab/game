@@ -3767,7 +3767,8 @@ var JOGO = (typeof window !== 'undefined')
       // 11/09: o pet cresce 12% por estrela — o mesmo porte que ele tem na
       // praça (hub3d). Entra como escala da unidade, então barra de vida,
       // sombra e anel de lado saem no tamanho do corpo que apareceu.
-      scale: (u.kind === 'pet' && u.petStars) ? 1 + 0.12 * u.petStars : 1
+      // 07/10: o ELITE da sala (js/core/elites.js) sai 20% maior — a tela diz quem é o perigo antes do toque
+      scale: (u.kind === 'pet' && u.petStars) ? 1 + 0.12 * u.petStars : (u.elite ? 1.2 : 1)
     });
     if (!node) return null;
     node.userData.uid = u.uid;

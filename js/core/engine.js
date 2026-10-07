@@ -188,6 +188,13 @@ var JOGO = (typeof window !== 'undefined')
  *         semeado pela semente dela (Po.regras monta e cuida do resto).
  *     Uma sala sem afixo não passa por nada disso. O id entra no hash. Sobe
  *     Engine.VERSAO_REGRAS para 8.
+ * 23. OS ELITES DE SALA (07/10, js/core/elites.js): em 40% das salas dos
+ *     calabouços (nunca a 1ª da Estufa, o PvP, o Eco, o Santuário) UM monstro
+ *     comum nasce com +50% de vida e um traço — couraça, explosão ao cair,
+ *     fúria, pressa ou regeneração (o traço `regen` é novo: runStartTicks).
+ *     Sorteado pelo rng da sala (`Ex()`, depois do afixo), marcado em
+ *     `unit.elite` (entra no hash); paga ×1,5 de XP e pedra garantida
+ *     (game.js). Mesma VERSAO_REGRAS 8 dos afixos.
  * ==========================================================================*/
 
 (function () {
@@ -333,6 +340,8 @@ var JOGO = (typeof window !== 'undefined')
   function Pg() { var p = JOGO.Poco; return (p && p.regras) || null; }
   // 07/10: os afixos de sala (js/core/afixos.js) — só com `opts.afixo` na criação da sala
   function Ax() { var a = JOGO.Afixos; return (a && a.aplica) ? a : null; }
+  // 07/10: os elites de sala (js/core/elites.js) — sorteados pelo rng da sala na criação (decisão 23)
+  function Ex() { var e = JOGO.Elites; return (e && e.sorteia) ? e : null; }
   /* O SANTUÁRIO DOS ELEMENTOS (03/10, decisão de design 21). O mesmo desenho:
    * a regra dos quatro quadrantes mora em js/core/santuario.js
    * (Santuario.regras) e o motor só a chama por `Sg()`, com `state.santuario`
@@ -1058,6 +1067,10 @@ var JOGO = (typeof window !== 'undefined')
       Ax().aplica(state, opts.afixo, room, chaveAfixo, INTERNO);
       log(Tx('Afixo da sala: {a} — {b}', { a: state.afixo.nome, b: state.afixo.texto }));
     }
+    /* 07/10: o ELITE da sala (decisão 23) — um monstro comum com um traço a mais, sorteado pelo rng da
+     * sala DEPOIS do afixo (o Couraçados já engordou a vida; o elite engorda por cima) e antes da
+     * colocação. A sala que não cabe (PvP, Eco, Santuário, a 1ª da Estufa) não gasta tirada nenhuma. */
+    if (Ex()) Ex().sorteia(state, room, INTERNO, function () { return nextRand(state); });
 
     // A ESCOLHA DA POSIÇÃO (03/09, pedido do dono): "a posição no início da
     // batalha o usuário que escolhe. O jogo dá 4 opções aleatórias… quando
@@ -2009,6 +2022,7 @@ var JOGO = (typeof window !== 'undefined')
         if (e.lancadoNoTurno != null) p.push('n' + nh(e.lancadoNoTurno));   // 22/09: só quando existe
       }
       if (u.couraca != null) p.push('k' + nh(u.couraca));                   // 02/10: a couraça do Colosso de Rocha
+      if (u.elite && u.elite.id) p.push('e' + u.elite.id);                   // 07/10: o elite da sala
       ks = Object.keys(u.cooldowns || {}).sort();
       for (j = 0; j < ks.length; j++) p.push(ks[j] + '=' + nh(u.cooldowns[ks[j]]));
       ks = Object.keys(u.castsThisTurn || {}).sort();
@@ -4167,6 +4181,13 @@ var JOGO = (typeof window !== 'undefined')
   function runStartTicks(state, u) {
     weatherTick(state, u);                        // v2
     if (!u.alive) return;
+
+    // 07/10: o elite Regenerador (js/core/elites.js) — uma fração da vida máxima no começo de cada vez dele
+    var regen = getTrait(u, 'regen');
+    if (regen && u.hp < u.hpMax) {
+      var curou = applyHeal(state, u, Math.max(1, Math.round(u.hpMax * (regen.pct || 0.06))));
+      if (curou > 0) log(Tx('{name} se regenera (+{a}).', { name: u.name, a: curou }), u.uid);
+    }
 
     var aura = getTrait(u, 'regenAura');
     if (aura) {
