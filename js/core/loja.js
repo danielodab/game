@@ -243,8 +243,8 @@
    * de um pacote pago) ou 'loja' (a compra de sempre — e qualquer outra coisa) */
   function origemDe(p) {
     var o = (p && typeof p === 'object') ? p.origem : null;
-    // 02/10: 'eco', o prêmio da semana; 04/10: 'amigo', o presente de outro jogador
-    return (o === 'presente' || o === 'pagamento' || o === 'eco' || o === 'amigo') ? o : 'loja';
+    // 02/10: 'eco', o prêmio da semana; 04/10: 'amigo', o presente de outro jogador; 07/10: 'trilha', o degrau resgatado
+    return (o === 'presente' || o === 'pagamento' || o === 'eco' || o === 'amigo' || o === 'trilha') ? o : 'loja';
   }
   function registra(p, tipo, motivo) {
     historico.push({ id: p && p.id, sku: (p && p.sku) || null, nome: (p && p.nome) || null,

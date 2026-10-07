@@ -2938,6 +2938,15 @@ var JOGO = (typeof window !== 'undefined')
     try { hashFinal = E().hash(Game.state); } catch (e) { hashFinal = 0; }
     var promessa = JOGO.Autoridade.fecha(ata.bilhete, ata.lances, hashFinal);
     promessa.then(sincronizaVida);                     // 14/09: o servidor gravou a vida do fim (vitória e derrota)
+    // 07/10: os pontos da trilha da temporada e a meta da semana da guilda que esta sala rendeu (a HUD avisa)
+    promessa.then(function (r) {
+      try { if (r && r.ok && r.trilha && JOGO.Trilha && JOGO.Trilha.anota) JOGO.Trilha.anota(r.trilha); } catch (e1) {}
+      try {
+        if (r && r.ok && r.guildaMeta && r.guildaMeta.cumpriuAgora) {
+          window.dispatchEvent(new CustomEvent('soterra:guilda-meta', { detail: r.guildaMeta }));
+        }
+      } catch (e2) {}
+    });
     if (fase !== 'won') return;
     conferindoSala = true;
     var lastRoom = ultimaSalaDe(Game.dungeonId);

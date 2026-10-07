@@ -36,6 +36,7 @@ import time
 import presenca                   # 15/09: a queda e a volta de cada conta, que o Relé grava (a prova do W.O.)
 from comum import EstadoMudou, Recusa, agora, inteiro
 from guilda import soma_meta      # 07/10: a sala em grupo vencida entra na meta da semana da guilda de cada membro
+from trilha import soma_trilha    # 07/10: e dá pontos na trilha da temporada (a sala e o duelo ranqueado)
 from salas import (DIFICULDADES, LANCES_MAX, RE_BILHETE, RE_CALABOUCO, SALA_MIN_S, SALA_S_POR_TURNO, SALA_VALIDADE,
                    SEM_ESTADO, TENTATIVAS, _inteiro_puro, _lista, _objeto)
 
@@ -475,9 +476,14 @@ class GrupoMixin:
                     agora_g = self.con.execute("SELECT estado FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
                     if agora_g['estado'] != 'aberta':
                         raise EstadoMudou()                 # o outro membro fechou junto: a volta seguinte lê o recibo
+                    refeito = saida.get('refeito') if isinstance(saida.get('refeito'), dict) else {}
+                    desafio = refeito.get('desafio') if isinstance(refeito.get('desafio'), dict) else {}
                     for m, s in pagos:
                         nova, _ = self._estado_grava(m['conta'], m['estado'], s, t)
                         soma_meta(self.con, m['conta']['id'], t)      # 07/10: a meta da semana da guilda de cada um
+                        soma_trilha(self.con, m['conta']['id'], t, 'sala', {      # 07/10: e a trilha da temporada
+                            'desafio': bool(desafio.get('cumprido')), 'dificil': g['dificuldade'] == 'dificil',
+                            'afixo': bool(afixo_ata)})
                         self.con.execute("INSERT INTO salas_grupo_pago(gid, conta_id, recompensa) VALUES (?, ?, ?)",
                                          (gid, m['conta']['id'], json.dumps(s.get('recompensa'), ensure_ascii=False)))
                         self._evento(m['conta']['id'], 'grupo-paga', {
@@ -990,6 +996,7 @@ class GrupoMixin:
                             self._arena_jogada(did)          # 14/09: a partida da fila foi jogada
                         for k in lados:
                             nova, _ = self._estado_grava(contas[k], estados[k], lado_saida[k], t)
+                            soma_trilha(self.con, lados[k]['conta'], t, 'duelo', {'venceu': venc == k})   # 07/10
                             self._evento(lados[k]['conta'], 'duelo-ranqueado', {
                                 'did': did, 'venc': venc, 'lado': k, 'versao': nova,
                                 'delta': resultado['delta'][str(lados[k]['conta'])],

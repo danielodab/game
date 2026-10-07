@@ -82,6 +82,7 @@ from mercado import ESQUEMA_MERCADO, MercadoMixin   # 13/09: o mercadinho entre 
 from presenca import ESQUEMA_PRESENCA   # 15/09: a queda e a volta de cada conta, contadas pelo Relé (a prova do W.O.)
 from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a tentativa, o placar e a semana)
 from supremo import FUSO_S as FUSO_S_BR, dia_de     # 07/10: o dia de Brasília do programa da semana
+from trilha import ESQUEMA_TRILHA, ROTAS_TRILHA, TrilhaMixin   # 07/10: a trilha da temporada (trilha.py)
 # 02/10: os direitos do titular (aceite dos termos, excluir a conta, baixar os dados) e o registro de erros
 from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
 from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
@@ -462,6 +463,7 @@ ROTAS = {
 }
 ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a conta, baixar os dados
 ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
+ROTAS.update(ROTAS_TRILHA)        # 07/10: trilha.py — a trilha da temporada (ler e resgatar)
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
@@ -816,7 +818,8 @@ def versao_da_regra():
 
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
-          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin):
+          AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin,
+          TrilhaMixin):          # 07/10: a trilha da temporada
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -838,6 +841,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
         self.con.executescript(ESQUEMA_PLAY)     # 04/10: a compra pela Google Play (pagamento_play.py) — só tabela nova
         self.con.executescript(ESQUEMA_ANUNCIO)  # 06/10: o anúncio premiado do aplicativo (anuncio.py) — idem
+        self.con.executescript(ESQUEMA_TRILHA)   # 07/10: a trilha da temporada (trilha.py) — idem
         self.con.executescript(ESQUEMA_GUILDA)   # 11/09: a guilda (guilda.py) — só tabelas novas, como a Fase C
         self.con.executescript(ESQUEMA_SALAS)    # 13/09: a autoridade (salas.py) — só tabelas novas, nunca ALTER
         self.con.executescript(ESQUEMA_GRUPO)    # 13/09: sala em grupo e duelo ranqueado (grupo.py) — idem

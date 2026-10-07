@@ -41,6 +41,7 @@ import time
 
 from guilda import soma_contrib   # 13/09: o XP doado por membro (a grade da guilda)
 from guilda import soma_meta      # 07/10: a sala vencida entra na meta da semana da guilda
+from trilha import soma_trilha    # 07/10: e dá pontos na trilha da temporada (e a missão reivindicada também)
 
 from comum import (ORIGENS, EstadoMudou, Recusa, agora, classe_do_heroi, iid_valido, inteiro, liberadas,
                    limita)
@@ -1088,6 +1089,11 @@ class SalasMixin:
                                      "WHERE bilhete = ?", (t, turnos, json.dumps(carry) if carry is not None else None,
                                                            bilhete))
                     meta = soma_meta(self.con, cid, t)          # 07/10: a meta da semana da guilda (sala vencida)
+                    refeito = saida.get('refeito') if isinstance(saida.get('refeito'), dict) else {}
+                    desafio = refeito.get('desafio') if isinstance(refeito.get('desafio'), dict) else {}
+                    trilha = soma_trilha(self.con, cid, t, 'sala', {   # 07/10: os pontos da trilha da temporada
+                        'desafio': bool(desafio.get('cumprido')), 'dificil': s['dificuldade'] == 'dificil',
+                        'afixo': bool(afixo_bilhete)})
                     # a espera começa AGORA — o PV do fim e o máximo de cada herói (14/09: na linha do herói)
                     self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                     self._evento(cid, 'sala-paga', {'bilhete': bilhete, 'dungeon': s['dungeon'], 'sala': s['sala'],
@@ -1098,7 +1104,8 @@ class SalasMixin:
                 continue                                        # a mesma semente refaz a mesma sala no estado novo
             resp = {'ok': True, 'fase': 'won', 'recompensa': saida.get('recompensa'), 'versao': nova,
                     'hash': saida['hash'], 'progress': saida['progress'], 'db': db, 'carry': carry,
-                    'guildaMeta': meta}                          # 07/10: a meta da semana depois desta sala (ou None)
+                    'guildaMeta': meta,                          # 07/10: a meta da semana depois desta sala (ou None)
+                    'trilha': trilha}                            # 07/10: e os pontos da trilha ({pontos, ganhou})
             # 04/10: a compra feita no meio da sala e segurada por ela (loja.py, TIPOS_DA_LUTA) entra no fecho,
             # e a resposta já leva o estado com ela dentro
             feito = self._loja_depois_da_luta(conta)
@@ -1178,6 +1185,12 @@ class SalasMixin:
                 nova, db = self._estado_grava(conta, estado, saida, t)
                 self._evento(cid, 'op', {'versao': nova, 'ops': nomes_ops,
                                          'novos': [n['iid'] for n in saida['iids']['novos']]})
+                # 07/10: a missão diária reivindicada (a op que o juiz aceitou e pagou) dá pontos na trilha
+                resultados = saida.get('resultados') if isinstance(saida.get('resultados'), list) else []
+                for i, op in enumerate(limpas):
+                    res = resultados[i] if i < len(resultados) else None
+                    if op['nome'] == 'reivindicarMissao' and isinstance(res, dict) and res.get('ok') is True:
+                        soma_trilha(self.con, cid, t, 'missao')
                 # 02/10: a Caixa e as ferramentas do Mestre (as ops gm*) também vão à auditoria (moderacao.py)
                 if conta['gm'] and any(n.startswith('gm') for n in nomes_ops) and hasattr(self, '_audita'):
                     self._audita(conta, 'op', cid, {'ops': limpas, 'versao': nova}, t=t)

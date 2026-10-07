@@ -1788,6 +1788,26 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .guilda-bonus.is-vivo { border-color: rgba(127,224,138,.5); }
 .guilda-bonus.is-vivo b { color: #7fe08a; }
+/* A TRILHA DA TEMPORADA (07/10, js/core/trilha.js): no quadro de Missões, acima das diárias */
+.trilha { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--rad-m); border: 1px solid rgba(230,181,60,.35);
+  background: linear-gradient(180deg, rgba(230,181,60,.08), rgba(255,255,255,.015)); box-shadow: var(--relevo); }
+.trilha-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.trilha-cab .hs-sec { margin: 0; }
+.trilha-pts { font-size: 12px; color: var(--dim); }
+.trilha-pts b { color: var(--gold, #ffc44d); }
+.trilha-barra { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 8px 0; }
+.trilha-barra i { display: block; height: 100%; background: linear-gradient(90deg, #ffc44d, #7fe08a); border-radius: 999px; }
+.trilha-degraus { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.trilha-degrau { width: 44px; height: 44px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-radius: 9px; border: 1px solid var(--line2, #262d38); background: rgba(255,255,255,.04); color: var(--dim); cursor: default;
+  font: 700 12px var(--ui-sans, system-ui); }
+.trilha-degrau span { font-size: 9px; font-weight: 400; letter-spacing: .02em; }
+.trilha-degrau.is-grande { border-color: rgba(230,181,60,.45); }
+.trilha-degrau.is-pronto { border-color: var(--gold, #ffc44d); background: rgba(230,181,60,.18); color: #ffe9a8; cursor: pointer; }
+.trilha-degrau.is-pronto span { color: var(--gold, #ffc44d); font-size: 12px; }
+.trilha-degrau.is-resgatado { border-color: rgba(127,224,138,.5); color: #7fe08a; }
+.trilha-degrau.is-off { opacity: .5; pointer-events: none; }
+.trilha-regra { margin: 4px 0 0; font-size: 11px; color: var(--dim); }
 /* A META DA SEMANA da guilda (07/10): a barra das salas vencidas pelos membros */
 .guilda-meta {
   margin-top: 10px; padding: 10px 12px; border-radius: var(--rad-m);

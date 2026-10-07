@@ -794,6 +794,37 @@ Eventos do mundo ganhou o bloco "A semana do SOTERRA" com os sete dias e o de ho
 
 Provas: `python tests/programa_api.py` (API + juiz).
 
+## 9-A.2 A trilha da temporada (07/10)
+
+A trilha **gratuita** de recompensas por jogar, presa às temporadas de 42 dias da Brasa
+(`js/core/brasa.js`, `B.EPOCA` = 24/08/2026 UTC; o servidor espelha em `servidor/trilha.py`). É o gancho
+de retorno mais comprovado do gênero e aqui **não vende poder**: é uma só, para todo mundo; uma trilha
+paga, se vier, é só aparência (`docs/LOJA_SUGESTOES.md`).
+
+**Os pontos são do servidor** — nascem onde ele já confere o que aconteceu:
+
+| acontecimento | pontos |
+|---|---|
+| sala vencida (solo ou em grupo) | 10 (+5 desafio cumprido, +5 no difícil, +5 com afixo) |
+| duelo ranqueado fechado (Arena, Campo) | 15 (+10 para quem venceu) |
+| tentativa do Eco conferida | 20 |
+| missão diária reivindicada (a op que o juiz aceitou) | 5 |
+
+A guerra de guilda fica de fora por ora. **Os degraus:** 20, a cada 150 pontos (3.000 na temporada: quem
+desce três salas por dia chega perto do 9; quem joga muito fecha em três semanas). **Os prêmios** são a
+economia de sempre, pela **mesma fila da loja** que o Eco usa (`loja_pedidos`, preço 0, origem
+`trilha`; `_loja_na_hora` aplica na hora): vinténs em todo degrau (100 + 25·n), 5 pedras do elemento da
+temporada (fogo → água → terra → ar, girando) nos pares, Pergaminho da Sabedoria no 5 e no 15, uma
+Insígnia de Fundação no 10, e no 20 a Reescrita, 2.000 vinténs e 20 pedras. **Nunca** selo, título,
+estrela ou peça: o que se ganha de chefe continua só de chefe.
+
+Rotas: `GET /api/trilha` (pontos, degraus, resgatados) e `POST /api/trilha/resgatar {degrau}` (409
+`faltam-pontos` / `ja-resgatado`; um `idem` por prêmio: nada entra duas vezes). O fechar da sala devolve
+`trilha: {pontos, ganhou}`. Na tela: o bloco no alto do **Quadro de Missões** (`js/core/trilha.js`,
+`trilhaBloco` no `hud.js`) — a barra, os 20 degraus (★ pronto, ✓ resgatado), o que falta para o próximo e
+a régua dos pontos; o prêmio resgatado entra pelo caminho das entregas ("Prêmio da trilha da temporada: …").
+Sem sessão do site não há trilha. Prova: `python tests/trilha_api.py`.
+
 ## 9-A.1 A meta da semana da guilda (07/10)
 
 A guilda tinha gestão (cargos, cofre, banco, dízimo) e guerra, mas nada para fazer **junto todo dia**.

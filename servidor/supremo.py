@@ -67,6 +67,7 @@ import time
 from comum import Recusa, agora, classe_do_heroi
 import moderacao
 from salas import LANCES_MAX, RE_BILHETE, SALA_MIN_S, SALA_S_POR_TURNO, _inteiro_puro
+from trilha import soma_trilha    # 07/10: a tentativa conferida dá pontos na trilha da temporada
 
 log = logging.getLogger('api')
 
@@ -610,6 +611,7 @@ class SupremoMixin:
             self.con.execute("DELETE FROM supremo_estados WHERE tentativa = ?", (tid,))
             self._evento(cid, 'supremo-conferida', {'tentativa': tid, 'dano': placar['dano'], 'pontos': placar['pontos'],
                                                     'derrubou': bool(placar.get('derrubou')), 'turnos': turnos})
+            soma_trilha(self.con, cid, t, 'eco')               # 07/10: a tentativa conferida dá pontos na trilha
             minha = self._supremo_minha(cid, t)
         log.info("supremo: #%d tirou %d do Eco (%d pontos)", cid, placar['dano'], placar['pontos'])
         return 200, {'ok': True, 'dano': placar['dano'], 'pontos': placar['pontos'],

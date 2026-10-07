@@ -615,6 +615,9 @@ def origem_do_pedido(r):
     # 02/10: o prêmio da semana do Eco Primordial (supremo.py) — o jogo avisa "Prêmio do Eco"
     if 'sku' in chaves and isinstance(r['sku'], str) and r['sku'].startswith('eco-'):
         return 'eco'
+    # 07/10: o resgate de um degrau da trilha da temporada (trilha.py) — o jogo avisa "Prêmio da trilha"
+    if 'sku' in chaves and r['sku'] == 'trilha':
+        return 'trilha'
     if 'presente' in chaves and r['presente']:
         return 'presente'
     if 'amigo' in chaves and r['amigo']:              # 04/10: o presente de um amigo (loja_amigos)

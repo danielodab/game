@@ -385,9 +385,16 @@ var JOGO = (typeof window !== 'undefined')
     var origem = (d.origem === 'presente' || ped.origem === 'presente') ? 'presente'
       : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento'
       : ((d.origem === 'eco' || ped.origem === 'eco') ? 'eco'
-      : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja')));
+      : ((d.origem === 'trilha' || ped.origem === 'trilha' || ent.origem === 'trilha') ? 'trilha'
+      : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja'))));
     // 04/10: o presente de um amigo (servidor/loja.py, loja_presentear) — o pedido traz quem mandou
     var deQuem = (origem === 'amigo' && ped.de) ? String(ped.de) : '';
+    // 07/10: o prêmio de um degrau da trilha da temporada (servidor/trilha.py)
+    if (origem === 'trilha') {
+      if (d.tipo !== 'entregue') return { texto: tr('O prêmio da trilha não entrou aqui: ele volta na próxima abertura'), tipo: null };
+      var nomeT = safe(function () { return JOGO.Trilha.nomeDoPremio(ent); }, '') || nome;
+      return { texto: tr('Prêmio da trilha da temporada: {a}', { a: esc(nomeT) }), tipo: 'good' };
+    }
     // 02/10: o prêmio da semana do Eco Primordial (servidor/supremo.py) — vinténs, selos e o título
     if (origem === 'eco') {
       if (d.tipo !== 'entregue') return { texto: tr('O prêmio do Eco não entrou aqui: ele volta na próxima abertura'), tipo: null };
@@ -4088,6 +4095,67 @@ var JOGO = (typeof window !== 'undefined')
   /* O QUADRO DE MISSÕES — diárias em cima, conquistas embaixo, e o seletor
    * de título no pé. Toda leitura vem de JOGO.Missoes por Promise e a ficha
    * redesenha quando a resposta chega, como o banco. */
+  /* A TRILHA DA TEMPORADA (07/10, js/core/trilha.js ↔ servidor/trilha.py): a trilha gratuita de recompensas
+   * por jogar — os pontos nascem no servidor (sala vencida, duelo ranqueado, tentativa do Eco, missão
+   * reivindicada) e cada degrau de 150 se resgata aqui. Mora no quadro de Missões, acima das diárias: é o
+   * mesmo "o que eu vim fazer hoje". Sem sessão do site, nada aparece. */
+  function trilhaBloco(caixa) {
+    var T = JOGO.Trilha;
+    if (!T || !T.ler) return;
+    var bloco = el('div', 'trilha');
+    caixa.appendChild(bloco);
+    function pinta(t) {
+      clear(bloco);
+      if (!t || !Array.isArray(t.degraus)) { bloco.remove(); return; }
+      var alcancados = t.degraus.filter(function (d) { return d.alcancado; }).length;
+      var proximo = t.degraus.filter(function (d) { return !d.alcancado; })[0] || null;
+      var prontos = t.degraus.filter(function (d) { return d.alcancado && !d.resgatado; });
+      var cab = el('div', 'trilha-cab');
+      cab.appendChild(el('h3', 'hs-sec', tr('Trilha da temporada {n}', { n: t.temporada })));
+      cab.appendChild(el('span', 'trilha-pts', tr('<b>{a}</b> pontos · {b} de {c} degraus', { a: t.pontos, b: alcancados, c: t.degraus.length })));
+      bloco.appendChild(cab);
+      var barra = el('div', 'trilha-barra');
+      var topo = t.degraus[t.degraus.length - 1].pontos;
+      var cheio = el('i'); cheio.style.width = Math.max(0, Math.min(100, 100 * t.pontos / Math.max(1, topo))) + '%';
+      barra.appendChild(cheio);
+      bloco.appendChild(barra);
+      var fila = el('div', 'trilha-degraus');
+      t.degraus.forEach(function (d) {
+        var cel = el('button', 'trilha-degrau' + (d.resgatado ? ' is-resgatado' : (d.alcancado ? ' is-pronto' : '')) +
+                                (d.n % 5 === 0 ? ' is-grande' : ''));
+        cel.type = 'button';
+        cel.innerHTML = '<b>' + d.n + '</b>' + (d.resgatado ? '<span>✓</span>' : (d.alcancado ? '<span>★</span>' : '<span>' + d.pontos + '</span>'));
+        var premios = (d.premios || []).map(function (p) { return esc(T.nomeDoPremio(p)); }).join(' · ');
+        tipOn(cel, tr('Degrau {n} — {p} pontos', { n: d.n, p: d.pontos }), premios + (d.resgatado ? '<br>' + tr('Já resgatado.') : (d.alcancado ? '<br>' + tr('Toque para resgatar.') : '')),
+              d.resgatado ? '#7fe08a' : (d.alcancado ? '#ffc44d' : '#9fd3ff'));
+        if (d.alcancado && !d.resgatado) {
+          cel.addEventListener('click', function () {
+            cel.classList.add('is-off');
+            T.resgatar(d.n).then(function (r) {
+              if (!r || !r.ok) { toast((r && r.erro) || tr('não deu')); cel.classList.remove('is-off'); return; }
+              toast(tr('Degrau {n} resgatado: {p}', { n: d.n, p: premios }), 'good');
+              pinta(r);
+            });
+          });
+        }
+        fila.appendChild(cel);
+      });
+      bloco.appendChild(fila);
+      var v = t.valores || {};
+      var sub = proximo
+        ? tr('Faltam <b>{a}</b> pontos para o degrau {n}: {p}', { a: proximo.pontos - t.pontos, n: proximo.n,
+            p: (proximo.premios || []).map(function (p) { return esc(T.nomeDoPremio(p)); }).join(' · ') })
+        : tr('Trilha completa nesta temporada!');
+      if (prontos.length) sub = tr('<b>{a}</b> {b} para resgatar — toque na estrela. ', { a: prontos.length, b: prontos.length === 1 ? tr('degrau') : tr('degraus') }) + sub;
+      bloco.appendChild(el('p', 'inv-dica', sub));
+      bloco.appendChild(el('p', 'trilha-regra', tr('Sala vencida +{s} (desafio, difícil e afixo: +{x} cada) · duelo ranqueado +{d} (+{dv} se vencer) · tentativa do Eco +{e} · missão diária +{m}. A temporada vira em {dias} dias.',
+        { s: v.sala || 10, x: v.desafio || 5, d: v.duelo || 15, dv: v['duelo-venceu'] || 10, e: v.eco || 20, m: v.missao || 5,
+          dias: Math.max(0, Math.ceil((t.fim - Date.now()) / 86400000)) })));
+    }
+    bloco.appendChild(el('p', 'inv-dica', tr('Lendo a trilha…')));
+    T.ler().then(pinta, function () { bloco.remove(); });
+  }
+
   function sheetMissoes() {
     sheetName = 'missoes';
     var body = sheetShell(tr('Quadro de Missões'),
@@ -4103,6 +4171,7 @@ var JOGO = (typeof window !== 'undefined')
       .then(function (r) {
         var quadro = r[0], jog = r[1] || {};
         clear(caixa);
+        trilhaBloco(caixa);           // 07/10: a trilha da temporada, acima das diárias (só com o servidor)
         if (!quadro) { caixa.appendChild(el('p', 'inv-dica', tr('A conta local não carregou.'))); return; }
 
         function linha(id, def, st2) {
@@ -14989,6 +15058,19 @@ var JOGO = (typeof window !== 'undefined')
     return selHeroes.slice();
   };
   UI.toast = toast;
-  UI.titExibe = titExibe;   // 05/10: a plaquinha dos outros jogadores (hub3d) mostra o título no idioma de quem olha
+  UI.titExibe = titExibe;   // 05/10: a plaquinha dos outros jogadores (hud3d) mostra o título no idioma de quem olha
+  /* 07/10: os avisos da trilha da temporada e da meta da semana da guilda (game.js dispara ao fechar a sala
+   * no servidor). O toast só, fora da batalha; a ficha das Missões e a da guilda mostram o resto. */
+  try {
+    window.addEventListener('soterra:trilha', function (ev) {
+      var t = ev && ev.detail;
+      if (!t || !(t.ganhou > 0)) return;
+      var motivo = { sala: tr('sala vencida'), duelo: tr('duelo ranqueado'), eco: tr('tentativa do Eco'), missao: tr('missão diária') }[t.motivo] || t.motivo || '';
+      toast(tr('+{a} pontos na trilha da temporada ({b})', { a: t.ganhou, b: motivo }), 'good');
+    });
+    window.addEventListener('soterra:guilda-meta', function () {
+      toast(tr('Meta da semana da guilda cumprida! +15% de XP e de saque para todos até domingo.'), 'good');
+    });
+  } catch (eTr) {}
   UI.version = '2.2';
 })();
