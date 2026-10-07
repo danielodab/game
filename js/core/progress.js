@@ -2335,6 +2335,8 @@ var JOGO = (typeof window !== 'undefined')
     var o = (st && isObj(st[campo])) ? st[campo] : {};
     return Math.max(0, Math.floor(num(o[chave], 0)));
   }
+  // 07/10: quantas vezes um corpo caiu nas salas desta conta (as crônicas de chefe, js/core/cronicas.js)
+  Progress.bestiarioConta = function (defId) { return (typeof defId === 'string' && defId) ? contador('bestiario', defId) : 0; };
   Progress.anotaBestiario = function (defId, n) {
     var st = Progress.state;
     if (!st || typeof defId !== 'string' || !defId) return false;

@@ -32,6 +32,8 @@ const DADOS = [
   'js/core/data/consumiveis.js',
   // 02/10: o Eco Primordial (o elenco, os feitiços e as fases): o juiz refaz a tentativa com eles
   'js/core/data/eco.js',
+  // 07/10: as crônicas do mundo enterrado (só texto e ganchos — o juiz não as usa; as provas em Node sim)
+  'js/core/data/cronicas.js',
   // 03/10: o Santuário dos Elementos (o calabouço especial: as cinco salas e os números das quatro regras)
   'js/core/data/santuario.js'
 ];

@@ -1101,6 +1101,47 @@ var JOGO = (typeof window !== 'undefined')
     return card;
   }
 
+  /* AS CRÔNICAS DO MUNDO ENTERRADO (07/10, js/core/cronicas.js; o dono: "quase nada do mundo chega ao jogador").
+   * Na Coleção: todas, na ordem do dado — a aberta se lê no toque (e deixa de ser "nova"); a fechada mostra o
+   * título e o que falta para abrir. `focusId` = a crônica que a recompensa mandou abrir. */
+  function cronicasComo(c) {
+    var k = c.como;
+    if (!k) return '';
+    if (k.tipo === 'bestiario') return tr('Complete o bestiário de {a}.', { a: esc(k.nome) });
+    if (k.tipo === 'chefe') return tr('Derrube {a}.', { a: esc(k.nome) });
+    if (k.tipo === 'fusoes') return tr('Vença com as 21 fusões.');
+    return '';
+  }
+  function cronicasBloco(body, focusId) {
+    var lista = safe(function () { return JOGO.Cronicas.lista(); }, []) || [];
+    if (!lista.length) return;
+    var abertas = lista.filter(function (c) { return c.aberta; }).length;
+    body.appendChild(el('h3', 'hs-sec', tr('Crônicas do mundo enterrado') + ' <small>' + abertas + '/' + lista.length + '</small>'));
+    body.appendChild(el('p', 'inv-dica', tr('A história de cada Fecho, de cada chefe e das duplas — uma crônica por feito. Toque numa aberta para ler.')));
+    var gr = el('div', 'cronicas');
+    lista.forEach(function (c) {
+      var ln = el('div', 'cronica' + (c.aberta ? ' is-aberta' : ' is-fechada') + (c.nova ? ' is-nova' : '') + (c.id === focusId ? ' is-lendo' : ''));
+      var cab = el('div', 'cronica-cab');
+      cab.appendChild(el('span', 'cronica-tit', (c.aberta ? '📜 ' : '🔒 ') + esc(tr(c.titulo))));
+      if (c.nova) cab.appendChild(el('span', 'chip chip-ok cronica-nova', tr('nova')));
+      ln.appendChild(cab);
+      if (c.aberta) {
+        var tx = el('p', 'cronica-texto', esc(tr(c.texto)));
+        tx.hidden = c.id !== focusId;
+        ln.appendChild(tx);
+        tap(cab, function () {
+          tx.hidden = !tx.hidden;
+          ln.classList.toggle('is-lendo', !tx.hidden);
+          if (!tx.hidden && c.nova) { safe(function () { return JOGO.Cronicas.marcaVista(c.id); }, false); ln.classList.remove('is-nova'); var nv = cab.querySelector('.cronica-nova'); if (nv) nv.remove(); }
+        });
+        if (c.id === focusId) safe(function () { return JOGO.Cronicas.marcaVista(c.id); }, false);
+      } else {
+        ln.appendChild(el('p', 'cronica-como', cronicasComo(c)));
+      }
+      gr.appendChild(ln);
+    });
+    body.appendChild(gr);
+  }
   function starRow(n, size) {
     var max = starsCfg().max || 5;
     var w = el('span', 'star-row');
@@ -2866,6 +2907,23 @@ var JOGO = (typeof window !== 'undefined')
           if (c.starUp) t.appendChild(el('span', 'rw-starup', tr('★ Nova estrela!')));
           else if (ci.unlocked && ci.next) t.appendChild(el('span', 'rw-card-prox', tr('faltam {faltam} para a ★{star}', { faltam: ci.next.faltam, star: ci.next.star })));
           cell.appendChild(t);
+          w.appendChild(cell);
+        });
+        return w;
+      })()));
+    }
+
+    // 07/10: A CRÔNICA QUE ACABOU DE ABRIR (js/core/cronicas.js) — o chefe derrubado, o bestiário completo, as
+    // fusões: a recompensa avisa e leva à Coleção, onde ela se lê (e deixa de ser nova)
+    var novasCr = safe(function () { return JOGO.Cronicas.novas(); }, []) || [];
+    if (novasCr.length) {
+      box.appendChild(rwBlock(tr('Crônica desbloqueada'), (function () {
+        var w = el('div', 'rw-cronicas');
+        novasCr.forEach(function (c) {
+          var cell = el('div', 'rw-cronica');
+          cell.appendChild(el('b', null, '📜 ' + esc(tr(c.titulo))));
+          cell.appendChild(el('span', null, tr('Uma página do mundo enterrado abriu na Coleção.')));
+          cell.appendChild(btn(tr('Ler agora'), 'btn-mini btn-gold', function () { openSheet('collection', c.id); }));
           w.appendChild(cell);
         });
         return w;
@@ -7273,6 +7331,7 @@ var JOGO = (typeof window !== 'undefined')
       });
       body.appendChild(grF);
     }
+    cronicasBloco(body, focusId);     // 07/10: as crônicas do mundo enterrado, abaixo dos feitos
 
     var ids = Object.keys(classes());
     ids.sort(function (a, b) {

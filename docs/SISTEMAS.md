@@ -871,6 +871,30 @@ Nada de título: os títulos continuam sendo posição ou teimosia (`titulos.js`
 que o dado não conhece e número torto. Na tela: o bloco "Feitos da coleção" no alto da aba Coleção, com a
 barra de cada um. Prova: `node tests/feitos.js` (12).
 
+## 9-A.4 As crônicas do mundo enterrado (07/10 à noite)
+
+O pedido do dono: "o GDD tem um mundo forte, a Grande Lousa, os Fechos, os Corações falhando. Quase nada
+disso chega ao jogador. Crônicas curtas, uma por feito da coleção e por chefe derrubado, custam texto e dão
+motivo para completar." O dado é `js/core/data/cronicas.js` (14 crônicas na voz do mundo, tiradas de
+`docs/GDD.md` §1 e §4 e das descrições dos portais e dos chefes); a leitura dos ganchos é
+`js/core/cronicas.js` (`JOGO.Cronicas`).
+
+| crônica | abre com |
+|---|---|
+| O dia da Grande Lousa (o prólogo) | sempre aberta |
+| uma por portal (6): o jardim que aprendeu a caçar, a corte que a água bebeu, a prole da fornalha, os que nunca entregaram a obra, o turno que não subiu, o que vive no Coração | o feito do bestiário daquele portal (`Progress.feitos`) |
+| uma por chefe (6): a Jardineira-Viúva, a Baronesa Salmoura, Magno, Cambota, Batepedra, o Coração Partido | o chefe no bestiário da conta (`Progress.bestiarioConta` > 0: ele caiu ao menos uma vez) |
+| Dois que viram um | o feito das 21 fusões vencedoras |
+
+**Na tela:** a aba **Coleção** lista todas abaixo dos feitos (`cronicasBloco`): a aberta se lê no toque; a
+fechada mostra o título e o que falta ("Derrube Magno, o Acendedor."). A tela da **recompensa** avisa a que
+acabou de abrir ("Crônica desbloqueada", com "Ler agora", que abre a Coleção naquela crônica). Nada entra na
+economia: o que está aberto sai dos contadores do Progress (os do servidor); a página só guarda, em
+`localStorage` (`soterra-cronicas-vistas`), quais o jogador já leu — para avisar a nova. Os títulos e os
+textos são chaves de tradução (en/es em `js/i18n/textos_*.js`).
+
+Prova: `node tests/cronicas.js` (16).
+
 ## 9-A.2 A trilha da temporada (07/10)
 
 A trilha **gratuita** de recompensas por jogar, presa às temporadas de 42 dias da Brasa

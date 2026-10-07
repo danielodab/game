@@ -1806,6 +1806,23 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .feito-prog { color: var(--dim); white-space: nowrap; }
 .feito.is-feito { border-color: rgba(127,224,138,.5); }
 .feito.is-feito .feito-nome { color: #7fe08a; }
+/* AS CRÔNICAS DO MUNDO ENTERRADO (07/10, js/core/cronicas.js): na Coleção, abaixo dos feitos; e o aviso na recompensa */
+.cronicas { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 14px; }
+.cronica { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line2, #262d38); background: rgba(255,255,255,.02); }
+.cronica.is-fechada { opacity: .72; }
+.cronica.is-aberta .cronica-cab { cursor: pointer; }
+.cronica.is-nova { border-color: rgba(255,196,77,.55); box-shadow: 0 0 0 1px rgba(255,196,77,.18); }
+.cronica.is-lendo { border-color: rgba(255,215,107,.45); background: rgba(255,215,107,.04); }
+.cronica-cab { display: flex; align-items: center; gap: 8px; }
+.cronica-tit { font: 600 14px var(--ui-serif); color: var(--text); flex: 1; min-width: 0; }
+.cronica-nova { font-size: 10px; }
+.cronica-texto { margin: 8px 0 2px; font: 13.5px/1.55 var(--ui-serif); color: #d8dde6; white-space: pre-line; }
+.cronica-como { margin: 4px 0 0; font-size: 12px; color: var(--dim); }
+.rw-cronicas { display: flex; flex-direction: column; gap: 6px; }
+.rw-cronica { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid rgba(255,196,77,.45); background: rgba(255,196,77,.06); font-size: 12.5px; }
+.rw-cronica b { color: #ffd76b; }
+.rw-cronica span { color: var(--dim); flex: 1; min-width: 160px; }
 /* A TRILHA DA TEMPORADA (07/10, js/core/trilha.js): no quadro de Missões, acima das diárias */
 .trilha { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--rad-m); border: 1px solid rgba(230,181,60,.35);
   background: linear-gradient(180deg, rgba(230,181,60,.08), rgba(255,255,255,.015)); box-shadow: var(--relevo); }
