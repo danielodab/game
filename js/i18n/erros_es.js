@@ -674,5 +674,7 @@ JOGO.I18n.registra('es', { erros: {
   "Pergaminho do Novo Nome": "Pergamino del Nuevo Nombre",
   "Pergaminho do Brasão": "Pergamino del Blasón",
   "Rebatiza a sua guilda — vale uma troca de nome, feita pelo líder na ficha da guilda, dentro da Sede. O nome novo segue a mesma lei dos nomes.": "Rebautiza tu gremio — vale un cambio de nombre, hecho por el líder en la ficha del gremio, dentro de la Sede. El nombre nuevo sigue la misma ley de los nombres.",
-  "Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha da guilda dentro da Sede: forma, campo, símbolo e cores.": "Cambia el blasón de tu gremio — vale un cambio, hecho por el líder en el taller del blasón, en la ficha del gremio dentro de la Sede: forma, campo, símbolo y colores."
+  "Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha da guilda dentro da Sede: forma, campo, símbolo e cores.": "Cambia el blasón de tu gremio — vale un cambio, hecho por el líder en el taller del blasón, en la ficha del gremio dentro de la Sede: forma, campo, símbolo y colores.",
+  // ---- 08/10 à noite: o Mestre no Eco (supremo.py)
+  "essa ficha não tem classe que enfrente o Eco": "esa ficha no tiene una clase que enfrente al Eco"
 } });
