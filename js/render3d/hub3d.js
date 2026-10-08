@@ -455,79 +455,124 @@ var JOGO = (typeof window !== 'undefined')
   };
   var MOLDURAS_PREMIUM = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];
   var MOLDURA_FOLGA = 26;            // px a mais em volta da placa, para as formas saírem do retângulo
+  /* 08/10 à noite (o dono: "melhore as molduras"): a borda é METAL, não tinta chapada — um degradê de cima
+   * para baixo (claro, a cor, escuro, a cor, claro), o fundo com um verniz (claro no alto, escuro embaixo),
+   * um fio fino por dentro na cor escurecida, rebites nos cantos e gemas lapidadas (a faceta clara) nos
+   * losangos. Continua SEM brilho: é forma e metal, nada de luz. */
+  function tomDe(hex, k) {   // k > 0 mistura com branco, k < 0 com preto
+    var n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+    var alvo = k > 0 ? 255 : 0, f = Math.abs(k);
+    r = Math.round(r + (alvo - r) * f); g = Math.round(g + (alvo - g) * f); b = Math.round(b + (alvo - b) * f);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
   /* desenha a PLACA com a forma da moldura: `r` = {x, y, w, h} do retângulo de sempre */
   function desenhaMoldura(g, mol, r) {
     var cor = mol.borda, t = mol.traco || 8, x = r.x, y = r.y, w = r.w, h = r.h;
-    function retangulo() {
-      g.fillStyle = mol.fundo; g.fillRect(x, y, w, h);
-      g.strokeStyle = cor; g.lineWidth = t; g.strokeRect(x + t / 2, y + t / 2, w - t, h - t);
+    var metal = g.createLinearGradient(0, y - 30, 0, y + h + 30);
+    metal.addColorStop(0, tomDe(cor, 0.55)); metal.addColorStop(0.35, cor); metal.addColorStop(0.62, tomDe(cor, -0.38));
+    metal.addColorStop(0.85, cor); metal.addColorStop(1, tomDe(cor, 0.3));
+    var escuro = tomDe(cor, -0.45);
+    var verniz = g.createLinearGradient(0, y, 0, y + h);
+    verniz.addColorStop(0, 'rgba(255,255,255,0.13)'); verniz.addColorStop(0.5, 'rgba(255,255,255,0.02)'); verniz.addColorStop(1, 'rgba(0,0,0,0.2)');
+    /* o fundo com verniz dentro de um caminho (o retângulo ou o polígono da forma) e a borda de metal por cima */
+    function placa(caminho) {
+      g.beginPath(); caminho(); g.closePath();
+      g.fillStyle = mol.fundo; g.fill();
+      g.save(); g.clip(); g.fillStyle = verniz; g.fillRect(x - 40, y - 40, w + 80, h + 80); g.restore();
+      g.strokeStyle = metal; g.lineWidth = t; g.stroke();
+    }
+    function retangulo() { placa(function () { g.rect(x + t / 2, y + t / 2, w - t, h - t); }); }
+    function fio(d) {   // o fio fino por dentro
+      g.lineWidth = 2; g.strokeStyle = escuro; g.strokeRect(x + t + d, y + t + d, w - t * 2 - d * 2, h - t * 2 - d * 2);
+    }
+    function rebites() {
+      [[x + t + 8, y + t + 8], [x + w - t - 8, y + t + 8], [x + t + 8, y + h - t - 8], [x + w - t - 8, y + h - t - 8]].forEach(function (c) {
+        g.beginPath(); g.arc(c[0], c[1], 4.5, 0, Math.PI * 2);
+        g.fillStyle = metal; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
+      });
     }
     function losango(cx, cy, rr) {
       g.beginPath(); g.moveTo(cx, cy - rr); g.lineTo(cx + rr, cy); g.lineTo(cx, cy + rr); g.lineTo(cx - rr, cy); g.closePath();
-      g.fillStyle = cor; g.fill();
-      g.strokeStyle = mol.fundo; g.lineWidth = 3; g.stroke();
+      g.fillStyle = metal; g.fill();
+      g.strokeStyle = escuro; g.lineWidth = 3; g.stroke();
+      // a faceta clara de cima: a gema lapidada
+      g.beginPath(); g.moveTo(cx, cy - rr + 5); g.lineTo(cx + rr - 5, cy); g.lineTo(cx, cy); g.closePath();
+      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fill();
     }
     g.save();
     g.shadowBlur = 0;                               // sem brilho: a forma é que chama
     if (mol.forma === 'losangos') {
-      retangulo();
-      g.lineWidth = 2; g.strokeStyle = cor; g.strokeRect(x + t + 5, y + t + 5, w - t * 2 - 10, h - t * 2 - 10);
+      retangulo(); fio(5);
       [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 24); });
       losango(x + w / 2, y, 14); losango(x + w / 2, y + h, 14);
     } else if (mol.forma === 'espinhos') {
-      retangulo();
-      g.fillStyle = cor;
+      retangulo(); fio(5);
       var passo = 34, alt = 20;
+      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
       for (var sx = x + 10; sx + passo <= x + w - 8; sx += passo) {
-        g.beginPath(); g.moveTo(sx, y + 2); g.lineTo(sx + passo / 2, y - alt); g.lineTo(sx + passo, y + 2); g.closePath(); g.fill();
-        g.beginPath(); g.moveTo(sx, y + h - 2); g.lineTo(sx + passo / 2, y + h + alt); g.lineTo(sx + passo, y + h - 2); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(sx, y + 2); g.lineTo(sx + passo / 2, y - alt); g.lineTo(sx + passo, y + 2); g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.moveTo(sx, y + h - 2); g.lineTo(sx + passo / 2, y + h + alt); g.lineTo(sx + passo, y + h - 2); g.closePath(); g.fill(); g.stroke();
       }
+      [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 13); });   // os rubis dos cantos
     } else if (mol.forma === 'folhas') {
-      retangulo();
-      g.fillStyle = cor;
+      retangulo(); fio(5);
       var L = 42, e = 12;
       [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(function (c) {
         var cx = c[0], cy = c[1], dx = c[2], dy = c[3];
+        g.fillStyle = metal;
         g.fillRect(Math.min(cx, cx + dx * L), Math.min(cy, cy + dy * e), L, e);     // a cantoneira em L
         g.fillRect(Math.min(cx, cx + dx * e), Math.min(cy, cy + dy * L), e, L);
         g.beginPath();                                                               // a folha, apontando para fora
         g.moveTo(cx, cy); g.quadraticCurveTo(cx - dx * 30, cy - dy * 4, cx - dx * 26, cy - dy * 26);
         g.quadraticCurveTo(cx - dx * 4, cy - dy * 30, cx, cy); g.closePath(); g.fill();
+        g.strokeStyle = escuro; g.lineWidth = 2; g.stroke();
+        g.beginPath(); g.moveTo(cx - dx * 3, cy - dy * 3); g.lineTo(cx - dx * 22, cy - dy * 22); g.stroke();   // a nervura
       });
     } else if (mol.forma === 'chanfro') {
       var c8 = 28;
-      g.beginPath();
-      g.moveTo(x + c8, y); g.lineTo(x + w - c8, y); g.lineTo(x + w, y + c8); g.lineTo(x + w, y + h - c8);
-      g.lineTo(x + w - c8, y + h); g.lineTo(x + c8, y + h); g.lineTo(x, y + h - c8); g.lineTo(x, y + c8); g.closePath();
-      g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = cor; g.lineWidth = t; g.stroke();
-      g.fillStyle = cor;                                                             // as pontas dos lados
-      g.beginPath(); g.moveTo(x, y + h / 2 - 18); g.lineTo(x - 22, y + h / 2); g.lineTo(x, y + h / 2 + 18); g.closePath(); g.fill();
-      g.beginPath(); g.moveTo(x + w, y + h / 2 - 18); g.lineTo(x + w + 22, y + h / 2); g.lineTo(x + w, y + h / 2 + 18); g.closePath(); g.fill();
+      placa(function () {
+        g.moveTo(x + c8, y); g.lineTo(x + w - c8, y); g.lineTo(x + w, y + c8); g.lineTo(x + w, y + h - c8);
+        g.lineTo(x + w - c8, y + h); g.lineTo(x + c8, y + h); g.lineTo(x, y + h - c8); g.lineTo(x, y + c8);
+      });
+      var d8 = t + 5, c9 = c8 - 4;                                                   // o fio, chanfrado também
+      g.strokeStyle = escuro; g.lineWidth = 2; g.beginPath();
+      g.moveTo(x + d8 + c9, y + d8); g.lineTo(x + w - d8 - c9, y + d8); g.lineTo(x + w - d8, y + d8 + c9); g.lineTo(x + w - d8, y + h - d8 - c9);
+      g.lineTo(x + w - d8 - c9, y + h - d8); g.lineTo(x + d8 + c9, y + h - d8); g.lineTo(x + d8, y + h - d8 - c9); g.lineTo(x + d8, y + d8 + c9);
+      g.closePath(); g.stroke();
+      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;                  // as pontas dos lados
+      g.beginPath(); g.moveTo(x, y + h / 2 - 18); g.lineTo(x - 22, y + h / 2); g.lineTo(x, y + h / 2 + 18); g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(x + w, y + h / 2 - 18); g.lineTo(x + w + 22, y + h / 2); g.lineTo(x + w, y + h / 2 + 18); g.closePath(); g.fill(); g.stroke();
     } else if (mol.forma === 'pontas') {
       var p = 26;
-      g.beginPath();
-      g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w + p, y + h / 2); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.lineTo(x - p, y + h / 2); g.closePath();
-      g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = cor; g.lineWidth = t; g.stroke();
-      g.lineWidth = 3; g.beginPath(); g.moveTo(x + 12, y + 10); g.lineTo(x + w - 12, y + 10); g.stroke();     // o fio de cima
+      placa(function () {
+        g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w + p, y + h / 2); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.lineTo(x - p, y + h / 2);
+      });
+      g.lineWidth = 2; g.strokeStyle = escuro;                                       // os fios de cima e de baixo
+      g.beginPath(); g.moveTo(x + 12, y + t + 5); g.lineTo(x + w - 12, y + t + 5); g.moveTo(x + 12, y + h - t - 5); g.lineTo(x + w - 12, y + h - t - 5); g.stroke();
+      losango(x - p + 4, y + h / 2, 10); losango(x + w + p - 4, y + h / 2, 10);     // as pontas levam uma gema
     } else if (mol.forma === 'arcos') {
-      retangulo();
-      g.fillStyle = mol.fundo; g.strokeStyle = cor; g.lineWidth = t;
+      retangulo(); fio(5); rebites();
       var ra = 22;
       [x + w * 0.22, x + w * 0.5, x + w * 0.78].forEach(function (cx) {
-        g.beginPath(); g.arc(cx, y + 2, ra, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.arc(cx, y + 2, ra, Math.PI, 0); g.closePath();
+        g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = metal; g.lineWidth = t; g.stroke();
+        g.beginPath(); g.arc(cx, y - ra + 3, 4, 0, Math.PI * 2); g.fillStyle = escuro; g.fill();   // a pedra de fecho
       });
-      g.fillRect(x + t, y + 1, w - t * 2, 6);                                      // emenda os arcos à placa
+      g.fillStyle = mol.fundo; g.fillRect(x + t, y + 1, w - t * 2, 6);              // emenda os arcos à placa
     } else if (mol.forma === 'ameias') {
-      retangulo();
-      g.fillStyle = cor;
+      retangulo(); fio(5); rebites();
       var am = 24;
-      for (var ax = x; ax + am <= x + w + 1; ax += am * 2) g.fillRect(ax, y - 16, am, 18);
+      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
+      for (var ax = x; ax + am <= x + w + 1; ax += am * 2) { g.fillRect(ax, y - 16, am, 18); g.strokeRect(ax, y - 16, am, 18); }
       g.fillRect(x - 10, y - 2, 10, h + 4); g.fillRect(x + w, y - 2, 10, h + 4);  // as torres dos lados
+      g.strokeRect(x - 10, y - 2, 10, h + 4); g.strokeRect(x + w, y - 2, 10, h + 4);
     } else if (mol.forma === 'barras') {
-      retangulo();
-      g.fillStyle = cor;
-      g.fillRect(x - 14, y + 8, 7, h - 16); g.fillRect(x - 26, y + 18, 7, h - 36);
-      g.fillRect(x + w + 7, y + 8, 7, h - 16); g.fillRect(x + w + 19, y + 18, 7, h - 36);
+      retangulo(); fio(5); rebites();
+      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 1.5;
+      [[x - 14, y + 8, 7, h - 16], [x - 26, y + 18, 7, h - 36], [x + w + 7, y + 8, 7, h - 16], [x + w + 19, y + 18, 7, h - 36]].forEach(function (b) {
+        g.fillRect(b[0], b[1], b[2], b[3]); g.strokeRect(b[0], b[1], b[2], b[3]);
+        g.fillRect(b[0] - 2, b[1] - 3, b[2] + 4, 4); g.fillRect(b[0] - 2, b[1] + b[3] - 1, b[2] + 4, 4);   // os capitéis
+      });
     } else if (mol.forma === 'chamas') {
       retangulo();
       g.lineWidth = 3; g.strokeStyle = mol.miolo || cor; g.strokeRect(x + t + 4, y + t + 4, w - t * 2 - 8, h - t * 2 - 8);
@@ -538,13 +583,13 @@ var JOGO = (typeof window !== 'undefined')
         g.fillStyle = '#060406';
         g.beginPath(); g.moveTo(fx, y + 2); g.quadraticCurveTo(fx + pf * 0.2, y - altF * 0.5, fx + pf / 2, y - altF);
         g.quadraticCurveTo(fx + pf * 0.8, y - altF * 0.5, fx + pf, y + 2); g.closePath(); g.fill();
-        g.fillStyle = cor;
+        g.fillStyle = metal;
         g.beginPath(); g.moveTo(fx + pf * 0.3, y + 1); g.quadraticCurveTo(fx + pf * 0.4, y - altF * 0.45, fx + pf / 2, y - altF * 0.72);
         g.quadraticCurveTo(fx + pf * 0.6, y - altF * 0.45, fx + pf * 0.7, y + 1); g.closePath(); g.fill();
       }
       [[x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 20); });
     } else {
-      retangulo();
+      retangulo(); fio(5); rebites();
     }
     g.restore();
   }
@@ -599,14 +644,18 @@ var JOGO = (typeof window !== 'undefined')
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = ALT;
     var g = cv.getContext('2d');
-    g.font = '600 44px Georgia, serif';
+    // 08/10 à noite (o dono: "aumente um pouco o nome"): a placa do jogador leva o nome em 50 px e o título em 34;
+    // as placas da praça (Mercadinho, Banco…) e a da guilda (com o escudo ao lado) ficam nos 44/32 de sempre
+    var placaDoJogador = !!(op && op.placa && !temEscudo);
+    var fNome = '600 ' + (placaDoJogador ? 50 : 44) + 'px Georgia, serif', fTit = 'italic 600 ' + (placaDoJogador ? 34 : 32) + 'px Georgia, serif';
+    g.font = fNome;
     
     var paddingShield = temEscudo ? ESCUDO_PX + 6 : 0;
     var textW = Math.ceil(g.measureText(texto).width);
     if (subtexto) {
-      g.font = 'italic 600 32px Georgia, serif';
+      g.font = fTit;
       textW = Math.max(textW, Math.ceil(g.measureText(subtexto).width));
-      g.font = '600 44px Georgia, serif';
+      g.font = fNome;
     }
     var larg = Math.min(492 - folga * 2, textW + 56 + paddingShield);
     var x0 = (512 - larg) / 2;
@@ -649,15 +698,15 @@ var JOGO = (typeof window !== 'undefined')
     
     var tx = temEscudo ? (x0 + 10 + paddingShield) : 256;
     // com título, o nome sobe para abrir espaço à linha de baixo
-    var ty = ALT / 2 + (subtexto ? -2 : 16);
+    var ty = ALT / 2 + (subtexto ? (placaDoJogador ? -4 : -2) : (placaDoJogador ? 18 : 16));
     g.textAlign = temEscudo ? 'left' : 'center';
     g.fillText(texto, tx, ty);
     if (bri) { g.fillText(texto, tx, ty); g.fillText(texto, tx, ty); }
     if (subtexto) {
-      g.font = 'italic 600 32px Georgia, serif';
+      g.font = fTit;
       g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 8;
       g.fillStyle = bri ? bri.cor : (mol ? mol.borda : '#e8c25a');
-      g.fillText(subtexto, tx, ty + 42);
+      g.fillText(subtexto, tx, ty + (placaDoJogador ? 44 : 42));
     }
 
     var tex = new THREE.Texture(cv);

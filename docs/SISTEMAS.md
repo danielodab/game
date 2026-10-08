@@ -934,7 +934,10 @@ não pode ser fixo — quem perde o Top 1 PvP perde o título". Entrou:
   espiral sobre uma coroa de sol (`solAura`) e brilhos que piscam. 3 chamadas
   cada. `tests/foto_auras.html?auras=gelo,ouro` fotografa as auras na praça.
 - **Molduras da plaquinha** (`hub3d.js MOLDURAS`, `desenhaMoldura`: cada uma com
-  a sua FORMA, sem brilho — lâmina da Arena, arcos do Eco, ameias dos Chefes,
+  a sua FORMA, sem brilho; desde 08/10 à noite a borda é METAL (degradê claro/cor/escuro,
+  `tomDe`), o fundo leva verniz, um fio escuro por dentro, rebites nos cantos e gemas
+  lapidadas nos losangos; o nome da placa do jogador foi a 50 px e o título a 34, só nela —
+  as placas da praça e a da guilda seguem em 44/32 — lâmina da Arena, arcos do Eco, ameias dos Chefes,
   barras do pódio de classe, losangos grandes da Dourada, espinhos da Rubi,
   folhas da Esmeralda, cantos cortados da Obsidiana, e as chamas pretas de ponta
   vermelha da **Moldura do Mestre**, que só a conta marcada tem e que é a

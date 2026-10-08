@@ -8,7 +8,7 @@
 <body>
 <!-- PÁGINA DE FOTO (08/10): as auras lado a lado na praça, do jeito que o jogador as vê — para olhar
      as formas antes de julgar (`?auras=sombra,gelo,ouro,neutra`, `?dist=`, `?tilt=`, `?t=` segundos de
-     animação antes da foto). O boot é o de tests/auras_formas.html. -->
+     animação antes da foto; `?titulos=` e `?molduras=` dão a plaquinha de cada um, na ordem). O boot é o de tests/auras_formas.html. -->
 <iframe id="tela"></iframe>
 <script>
 (function () {
@@ -16,6 +16,7 @@
   var Q = {};
   location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
   var CORES = (Q.auras || 'sombra,gelo,ouro,neutra').split(',');
+  var TIT = (Q.titulos || '').split(','), MOL = (Q.molduras || '').split(',');   // `?titulos=Top 1 Pvp,…&molduras=ouro,…`: a plaquinha de cada um
   var NOME = { fogo: 'Brasa', agua: 'Maré', terra: 'Raiz', ar: 'Vento', neutra: 'Lousa', sombra: 'Sombra', gelo: 'Geada', ouro: 'Dourada', mestre: 'Mestre' };
   var quadro = document.getElementById('tela');
   quadro.src = '../index.html?sandbox=1&snap=1&graficos=alta&foto-auras';
@@ -53,7 +54,7 @@
         H.aura(false);
         CORES.forEach(function (cor, i) {
           var id = 'a' + i;
-          H.fantasmaEntra(id, { id: id, nome: NOME[cor] || cor, titulo: '', classe: 'sumo', sala: null, aura: false,
+          H.fantasmaEntra(id, { id: id, nome: NOME[cor] || cor, titulo: TIT[i] || '', moldura: MOL[i] || 'auto', classe: 'sumo', sala: null, aura: false,
                                 auraCor: R._corAura(cor), x: hp.x + (i - (CORES.length - 1) / 2) * 3.2, z: hp.z - 3 });
         });
         try { H._cam({ dist: Number(Q.dist) || 11, tilt: Number(Q.tilt) || 0.55 }); } catch (e2) {}
