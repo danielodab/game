@@ -676,5 +676,7 @@ JOGO.I18n.registra('en', { erros: {
   "Rebatiza a sua guilda — vale uma troca de nome, feita pelo líder na ficha da guilda, dentro da Sede. O nome novo segue a mesma lei dos nomes.": "Renames your guild — good for one name change, done by the leader in the guild panel, inside the Hall. The new name follows the same law of names.",
   "Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha da guilda dentro da Sede: forma, campo, símbolo e cores.": "Changes your guild's crest — good for one change, done by the leader in the crest workshop, in the guild panel inside the Hall: shape, field, symbol and colors.",
   // ---- 08/10 à noite: o Mestre no Eco (supremo.py)
-  "essa ficha não tem classe que enfrente o Eco": "that hero sheet has no class that can face the Echo"
+  "essa ficha não tem classe que enfrente o Eco": "that hero sheet has no class that can face the Echo",
+  // ---- 08/10 à noite: o dízimo de um membro pelos oficiais
+  "só o líder e os oficiais mudam o dízimo de um membro": "only the leader and the officers change a member's tithe"
 } });

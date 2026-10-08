@@ -209,8 +209,11 @@
       .then(function (ok) {
         var cx = d.querySelector('.ms-caixa'), t = cx ? cx.textContent : '';
         check('cais fora do salão: a ficha é só a porta (nome da guilda e "Entrar no salão")', !!ok && /Casa da Prova/.test(t) && !!cx.querySelector('.sede-entrar'));
-        check('…sem a gestão: nada de membros, mural, cofre, banco, governo nem ranking',
-              !!cx && !cx.querySelector('.guilda-grade, .guilda-mural, .guilda-cofre, .guilda-banco, .guilda-governo, .guilda-rank') && !botao(/Sair da guilda/));
+        // 08/10 à noite: a grade dos MEMBROS aparece fora do salão (o líder muda o dízimo ali); o resto, só lá dentro
+        check('…com a grade dos membros (e o campo do dízimo, que esta conta lidera)',
+              !!cx && !!cx.querySelector('.guilda-grade .gg-linha:not(.is-cab)') && !!cx.querySelector('.guilda-grade .gg-dz-inp'));
+        check('…sem a gestão: nada de mural, cofre, banco, governo nem ranking',
+              !!cx && !cx.querySelector('.guilda-mural, .guilda-cofre, .guilda-banco, .guilda-governo, .guilda-rank') && !botao(/Sair da guilda/));
         UI.closeSheet();
         chega('sede');
         var b = d.querySelector('.hub-painel .sede-entrar');

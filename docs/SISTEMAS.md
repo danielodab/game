@@ -1204,6 +1204,23 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
 - Provas: `node tests/palavroes.js` 12, `tests/rede.html` 17, `tests/titulos.html` 34,
   `node tests/juiz_economia.js` 53 (o Mestre passa, a conta comum cai).
 
+## 9-A.14 A grade dos membros fora do salão e a pergunta antes do ataque no Campo (08/10 à noite)
+
+- **A grade dos membros fora do salão** (o dono: "no menu da guilda, fora dela, os membros podem
+  ver os outros membros, e o chefe e o vice-líder podem mexer nos XP doados"): a ficha da guilda
+  fora do salão passa a ser a porta + a grade dos membros (`gradeDosMembros`, a mesma de dentro);
+  o dízimo de cada um (a parte do XP que ele doa) é do líder E dos oficiais — no servidor
+  (`guilda_dizimo` com `conta`) e no espelho local; o dízimo padrão e o "aplicar a todos" seguem
+  do líder; promover/rebaixar segue do líder. O mural, o cofre, o banco, a porta e o governo
+  continuam só no salão.
+- **A pergunta antes do ataque no Campo** (o dono: "só clicando em cima agride? não deveria
+  aparecer uma mensagem para confirmar?"): o toque num jogador do Campo abre "Atacar {nome}?"
+  (`confirmSheet`, botão Atacar em vermelho); o ataque só sai no Atacar, e a recusa (paridade,
+  fora do Campo, sem vida) continua curta, depois da confirmação.
+- Provas: `guilda_api` test_05b (o oficial muda o dízimo de um membro; o padrão, só o líder),
+  `pvp_hud` (a pergunta, o Cancelar e o Atacar; as duas falhas do quadro já existiam no HEAD),
+  `sede_visita` (a grade fora do salão).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

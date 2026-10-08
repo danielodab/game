@@ -2927,5 +2927,12 @@ JOGO.I18n.registra('es', { textos: {
   "título à sua escolha (até 23 letras)": "un título a tu gusto (hasta 23 letras)",
   "Usar": "Usar",
   "Escreva o título.": "Escribe el título.",
-  "O Mestre escolhe": "El Maestro elige"
+  "O Mestre escolhe": "El Maestro elige",
+  // ---- 08/10 à noite: a grade dos membros fora do salão
+  "Os membros estão aqui embaixo (o líder e os oficiais mudam o dízimo de cada um). O resto se resolve <b>dentro do salão</b>: os cargos, o mural, o cofre, o banco de empréstimos e a porta ficam no trono e nos pontos de lá.": "Los miembros están aquí abajo (el líder y los oficiales cambian el diezmo de cada uno). El resto se resuelve <b>dentro del salón</b>: los cargos, el mural, la caja fuerte, el banco de préstamos y la puerta están en el trono y en los puntos de allí.",
+  "só o líder e os oficiais mudam o dízimo de um membro": "solo el líder y los oficiales cambian el diezmo de un miembro",
+  // ---- 08/10 à noite: a pergunta antes do ataque no Campo
+  "Atacar {nome}?": "¿Atacar a {nome}?",
+  "A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.": "La pelea empieza al instante y <b>{nome}</b> no puede negarse. Los dos deben estar en el Campo, con la pareja viva y dentro de la paridad.",
+  "Atacar": "Atacar"
 } });

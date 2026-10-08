@@ -2927,5 +2927,12 @@ JOGO.I18n.registra('en', { textos: {
   "título à sua escolha (até 23 letras)": "a title of your choice (up to 23 letters)",
   "Usar": "Use",
   "Escreva o título.": "Write the title.",
-  "O Mestre escolhe": "The Master chooses"
+  "O Mestre escolhe": "The Master chooses",
+  // ---- 08/10 à noite: a grade dos membros fora do salão
+  "Os membros estão aqui embaixo (o líder e os oficiais mudam o dízimo de cada um). O resto se resolve <b>dentro do salão</b>: os cargos, o mural, o cofre, o banco de empréstimos e a porta ficam no trono e nos pontos de lá.": "The members are right below (the leader and the officers change each one's tithe). The rest is settled <b>inside the hall</b>: ranks, the board, the vault, the loan bank and the door live at the throne and the spots there.",
+  "só o líder e os oficiais mudam o dízimo de um membro": "only the leader and the officers change a member's tithe",
+  // ---- 08/10 à noite: a pergunta antes do ataque no Campo
+  "Atacar {nome}?": "Attack {nome}?",
+  "A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.": "The fight starts right away and <b>{nome}</b> cannot refuse. You both need to be in the Field, with your pair alive and within parity.",
+  "Atacar": "Attack"
 } });

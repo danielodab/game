@@ -334,19 +334,32 @@
             !botao(fc, /Esconder a coroa/));
       U.closeSheet();
       // o toque: a Bia no Campo, fora da paridade (20 acima) — recusa curta, sem menu
+      // 08/10 à noite (o dono: "não deveria aparecer uma mensagem para confirmar?"): o toque abre a pergunta
+      // "Atacar {nome}?" e o ataque só sai no botão Atacar; Cancelar não ataca
+      function confirmaAtaque(nomeRe) {
+        var fc = fichaAberta();
+        var ok = !!fc && nomeRe.test(fc.textContent) && !!botao(fc, /^Atacar$/) && !!botao(fc, /^Cancelar$/);
+        if (ok) botao(fc, /^Atacar$/).click();
+        return ok;
+      }
       saidas.length = 0;
       perfilBia.resumo = { forte: forteDe(ids) + 20, brasa: 1210 };
       J.Hub.aoTocarFantasma('bia');
-      check('campo · tocar em quem está fora da paridade: aviso curto do porquê, sem menu e sem ataque',
-            /diferença de nível passa de 10/.test(toastTxt()) && !ultSaida('ataque') && !/Ver perfil/.test(painelTxt()), toastTxt());
+      var perguntou = !!fichaAberta() && /Atacar Bia\?/.test(fichaAberta().textContent) && !ultSaida('ataque');
+      botao(fichaAberta(), /^Cancelar$/).click();
+      check('campo · tocar abre a pergunta "Atacar Bia?" e Cancelar não ataca', perguntou && !ultSaida('ataque') && !fichaAberta());
+      J.Hub.aoTocarFantasma('bia');
+      check('campo · tocar em quem está fora da paridade: depois do Atacar, aviso curto do porquê, sem menu e sem ataque',
+            confirmaAtaque(/Bia/) && /diferença de nível passa de 10/.test(toastTxt()) && !ultSaida('ataque') && !/Ver perfil/.test(painelTxt()), toastTxt());
       perfilCris.zona = 'praca';
       J.Hub.aoTocarFantasma('cris');
-      check('campo · tocar em quem não está no Campo: "não está no Campo de PvP"', /Cris não está no Campo de PvP/.test(toastTxt()) && !ultSaida('ataque'), toastTxt());
+      check('campo · tocar em quem não está no Campo: "não está no Campo de PvP"', confirmaAtaque(/Cris/) && /Cris não está no Campo de PvP/.test(toastTxt()) && !ultSaida('ataque'), toastTxt());
       perfilBia.resumo = { forte: forteDe(ids) + 3, brasa: 1210 };
       J.Hub.aoTocarFantasma('bia');
+      var confirmou = confirmaAtaque(/Bia/);
       var at = ultSaida('ataque');
-      check('campo · tocar na Bia no Campo ATACA na hora (sem menu): o ataque sai com o modo campo',
-            !!at && at.para === 'bia' && at.dados.modo === 'campo' && J.Duelo.estado().modo === 'campo' && !/Ver perfil/.test(painelTxt()) &&
+      check('campo · tocar na Bia no Campo e confirmar ATACA (sem menu): o ataque sai com o modo campo',
+            confirmou && !!at && at.para === 'bia' && at.dados.modo === 'campo' && J.Duelo.estado().modo === 'campo' && !/Ver perfil/.test(painelTxt()) &&
             /Você atacou Bia/.test(toastTxt()), JSON.stringify(at && at.dados) + ' · ' + toastTxt());
       J.Duelo.cancelar('x'); J.Duelo._reset();
       J.Duelo.defineDuplaCampo([ids[1], ids[0]]);

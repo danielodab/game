@@ -2058,7 +2058,7 @@ var JOGO = (typeof window !== 'undefined')
           R.pares().forEach(function (p2) { if (p2.id === id) par = p2; });
           if (!par) return;
           // 14/09 (o dono): no Campo de PvP "ao clicar em cima o jogador pode atacar sem aviso prévio" — sem menu
-          if (campoDentro()) { ataqueNoCampo(par); return; }
+          if (campoDentro()) { ataqueNoCampo(par); return; }        // 08/10 à noite: com a pergunta "Atacar?"
           painelJogador(par);
         };
         /* O PAINEL DO JOGADOR (11/09, pedido do dono): retrato, nome e título,
@@ -12415,7 +12415,7 @@ var JOGO = (typeof window !== 'undefined')
     cab.appendChild(ct);
     caixa.appendChild(cab);
     caixa.appendChild(el('p', 'inv-dica',
-      tr('A guilda se resolve <b>dentro do salão</b>: membros e cargos, o mural, o cofre, o banco de empréstimos, a porta e o dízimo ficam no trono e nos pontos de lá.')));
+      tr('Os membros estão aqui embaixo (o líder e os oficiais mudam o dízimo de cada um). O resto se resolve <b>dentro do salão</b>: os cargos, o mural, o cofre, o banco de empréstimos e a porta ficam no trono e nos pontos de lá.')));
     var naPraca = !hubEhSala && !campoDentro() && !!(JOGO.Hub && typeof JOGO.Hub.entraSede === 'function');
     if (naPraca) {
       caixa.appendChild(btn(tr('Entrar no salão'), 'btn-primary btn-block sede-entrar', pedeEntrarNaSede));
@@ -12481,6 +12481,114 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(caixa);
 
     var contaJ = null;               // sobrevive ao primeiro .then (o banco usa)
+    /* 08/10 à noite (o dono: "no menu da guilda, fora dela, os membros podem ver os outros membros, e o chefe e o
+ * vice-líder podem mexer nos XP doados"): a grade dos membros aparece também FORA do salão (a porta + a grade);
+ * o dízimo de cada um (a parte do XP que ele doa) é do líder E dos oficiais; promover/rebaixar segue do líder. */
+    function gradeDosMembros(caixa, g, euId) {
+      var podeDizimo = g.meuCargo === 'lider' || g.meuCargo === 'oficial' || !!g.souLider;
+        /* ---- OS MEMBROS EM GRADE (13/09, dono: "deve aparecer como se fosse uma
+         * grid, ordenado pela classificação do cargo de cada um e depois pela xp
+         * doada para a guild"). Colunas: posição, membro, cargo, XP doado e o
+         * dízimo — que o LÍDER muda ali mesmo, membro a membro (quem não tem um
+         * próprio segue o padrão, com o campo apagado). O líder promove e rebaixa
+         * na última coluna; oficial ganha a chave do cofre. */
+        var ORDEM_CARGO = { lider: 0, oficial: 1, membro: 2 };
+        var dizimoPadrao = Math.floor(g.dizimo || 0);
+        var membrosOrd = g.membros.slice().sort(function (a, b) {
+          var ca = ORDEM_CARGO[a.cargo] != null ? ORDEM_CARGO[a.cargo] : 2;
+          var cb = ORDEM_CARGO[b.cargo] != null ? ORDEM_CARGO[b.cargo] : 2;
+          if (ca !== cb) return ca - cb;
+          var xa = a.xpDoado || 0, xb = b.xpDoado || 0;
+          if (xa !== xb) return xb - xa;
+          return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+        });
+        var rolo = el('div', 'guilda-grade-rolo');
+        var grade = el('div', 'guilda-grade' + (g.souLider ? ' com-acao' : ''));
+        var cabG = el('div', 'gg-linha is-cab');
+        ['#', tr('Membro'), tr('Cargo'), tr('XP doado'), tr('Dízimo')].concat(g.souLider ? [''] : []).forEach(function (t, i) {
+          cabG.appendChild(el('span', ['gg-pos', 'gg-membro', 'gg-cargo-col', 'gg-xp', 'gg-dz', 'gg-acao-col'][i], t));
+        });
+        grade.appendChild(cabG);
+        membrosOrd.forEach(function (m, i) {
+          var ehLider = m.cargo === 'lider';
+          var ehOficial = m.cargo === 'oficial';
+          var ehEu = m.id === euId;
+          var linha = el('div', 'gg-linha' + (ehEu ? ' is-eu' : ''));
+          linha.appendChild(el('span', 'gg-pos', String(i + 1)));
+          var cel = el('span', 'gg-membro');
+          cel.appendChild(el('i', 'gg-marca', ehLider ? '⚑' : ehOficial ? '★' : '·'));
+          cel.appendChild(el('span', 'gg-nome', esc(m.nome)));
+          if (ehEu) cel.appendChild(el('span', 'gg-eu', tr('você')));
+          cel.title = m.nome;
+          linha.appendChild(cel);
+          var celC = el('span', 'gg-cargo-col');
+          celC.appendChild(el('span', 'gg-cargo' + (ehLider ? ' is-lider' : ehOficial ? ' is-oficial' : ''),
+            ehLider ? tr('Líder') : ehOficial ? tr('Oficial') : tr('Membro')));
+          linha.appendChild(celC);
+          linha.appendChild(el('span', 'gg-xp', Math.floor(m.xpDoado || 0).toLocaleString('pt-BR')));
+          var dzM = typeof m.dizimo === 'number' ? Math.floor(m.dizimo) : dizimoPadrao;
+          var celD = el('span', 'gg-dz');
+          if (podeDizimo) {
+            var dz = document.createElement('input');
+            dz.type = 'number'; dz.min = '0'; dz.max = String(Gd.DIZIMO_MAX || 25); dz.step = '1';
+            dz.value = String(dzM);
+            dz.className = 'hub-input gg-dz-inp' + (m.dizimoProprio ? ' is-proprio' : '');
+            dz.title = m.dizimoProprio ? tr('Dízimo próprio de {nome} (vazio volta ao padrão)', { nome: m.nome })
+                                       : tr('Segue o padrão da guilda ({dizimoPadrao}%)', { dizimoPadrao: dizimoPadrao });
+            dz.setAttribute('aria-label', tr('Dízimo de {nome}', { nome: m.nome }));
+            dz.addEventListener('keydown', function (ev) {
+              ev.stopPropagation();                         // a letra não abre atalho
+              if (ev.key === 'Enter') dz.blur();
+            });
+            dz.addEventListener('change', function () {
+              var bruto = String(dz.value).trim();
+              var novo = bruto === '' ? null : Math.floor(Number(bruto));
+              if (novo !== null && !(novo >= 0 && novo <= (Gd.DIZIMO_MAX || 25))) {
+                toast(tr('o dízimo vai de 0 a {a}%', { a: Gd.DIZIMO_MAX || 25 }));
+                dz.value = String(dzM);
+                return;
+              }
+              Gd.definirDizimo(novo, m.id).then(function (res) {
+                toast(res.ok ? (novo === null ? tr('{nome} volta ao dízimo padrão.', { nome: m.nome })
+                                              : tr('Dízimo de {nome}: {novo}%.', { nome: m.nome, novo: novo }))
+                             : (res.erro || tr('não deu')), res.ok ? 'good' : undefined);
+                sheetGuilda();
+              });
+            });
+            celD.appendChild(dz);
+            celD.appendChild(el('span', 'gg-pct', '%'));
+          } else {
+            celD.textContent = dzM + '%';
+          }
+          linha.appendChild(celD);
+          if (g.souLider) {
+            var celA = el('span', 'gg-acao-col');
+            if (!ehLider) {
+              var bAcao = btn(ehOficial ? '▾' : '▴', 'btn-mini btn-ghost gg-acao', function () {
+                var op = ehOficial ? Gd.rebaixar(m.id) : Gd.promover(m.id);
+                op.then(function (res) {
+                  toast(res.ok
+                    ? (res.cargo === 'oficial'
+                        ? tr('{a} agora é oficial — ganhou a chave do cofre.', { a: esc(m.nome) })
+                        : tr('{a} voltou a membro.', { a: esc(m.nome) }))
+                    : (res.erro || tr('não deu')), res.ok ? 'good' : undefined);
+                  sheetGuilda();
+                });
+              });
+              bAcao.title = ehOficial ? tr('Rebaixar a membro') : tr('Promover a oficial');
+              celA.appendChild(bAcao);
+            }
+            linha.appendChild(celA);
+          }
+          grade.appendChild(linha);
+        });
+        rolo.appendChild(grade);
+        caixa.appendChild(rolo);
+        caixa.appendChild(el('p', 'inv-dica', (podeDizimo
+          ? tr('Ordem: cargo, depois o XP que cada um rendeu à guilda (dízimo, guerra e treino). Mude o dízimo de cada um direto na grade — campo vazio volta ao padrão.')
+          : tr('Ordem: cargo, depois o XP que cada um rendeu à guilda (dízimo, guerra e treino).'))));
+
+    }
     JOGO.DB.jogador().then(function (j) {
       contaJ = j;
       Gd.contaAtiva(j.id, j.nome || tr('Sem Nome'));
@@ -12593,8 +12701,10 @@ var JOGO = (typeof window !== 'undefined')
           });
         }));
       } else if (!sedeDentro()) {
-        // 04/10: fora do salão, só a porta — a ficha de gestão abre nos pontos de dentro
+        // 04/10: fora do salão, a porta — a ficha de gestão abre nos pontos de dentro.
+        // 08/10 à noite: e a grade dos membros (o líder e os oficiais mudam o dízimo ali mesmo)
         portaDaGuilda(caixa, g);
+        gradeDosMembros(caixa, g, (g.eu != null) ? g.eu : contaJ.id);
       } else {
         // 11/09: quem sou eu na ficha — no servidor, a CONTA (g.eu); em casa, o jogador local
         var euId = (g.eu != null) ? g.eu : contaJ.id;
@@ -12739,107 +12849,7 @@ var JOGO = (typeof window !== 'undefined')
         pintaMural();
         caixa.appendChild(mural);
 
-        /* ---- OS MEMBROS EM GRADE (13/09, dono: "deve aparecer como se fosse uma
-         * grid, ordenado pela classificação do cargo de cada um e depois pela xp
-         * doada para a guild"). Colunas: posição, membro, cargo, XP doado e o
-         * dízimo — que o LÍDER muda ali mesmo, membro a membro (quem não tem um
-         * próprio segue o padrão, com o campo apagado). O líder promove e rebaixa
-         * na última coluna; oficial ganha a chave do cofre. */
-        var ORDEM_CARGO = { lider: 0, oficial: 1, membro: 2 };
-        var dizimoPadrao = Math.floor(g.dizimo || 0);
-        var membrosOrd = g.membros.slice().sort(function (a, b) {
-          var ca = ORDEM_CARGO[a.cargo] != null ? ORDEM_CARGO[a.cargo] : 2;
-          var cb = ORDEM_CARGO[b.cargo] != null ? ORDEM_CARGO[b.cargo] : 2;
-          if (ca !== cb) return ca - cb;
-          var xa = a.xpDoado || 0, xb = b.xpDoado || 0;
-          if (xa !== xb) return xb - xa;
-          return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
-        });
-        var rolo = el('div', 'guilda-grade-rolo');
-        var grade = el('div', 'guilda-grade' + (g.souLider ? ' com-acao' : ''));
-        var cabG = el('div', 'gg-linha is-cab');
-        ['#', tr('Membro'), tr('Cargo'), tr('XP doado'), tr('Dízimo')].concat(g.souLider ? [''] : []).forEach(function (t, i) {
-          cabG.appendChild(el('span', ['gg-pos', 'gg-membro', 'gg-cargo-col', 'gg-xp', 'gg-dz', 'gg-acao-col'][i], t));
-        });
-        grade.appendChild(cabG);
-        membrosOrd.forEach(function (m, i) {
-          var ehLider = m.cargo === 'lider';
-          var ehOficial = m.cargo === 'oficial';
-          var ehEu = m.id === euId;
-          var linha = el('div', 'gg-linha' + (ehEu ? ' is-eu' : ''));
-          linha.appendChild(el('span', 'gg-pos', String(i + 1)));
-          var cel = el('span', 'gg-membro');
-          cel.appendChild(el('i', 'gg-marca', ehLider ? '⚑' : ehOficial ? '★' : '·'));
-          cel.appendChild(el('span', 'gg-nome', esc(m.nome)));
-          if (ehEu) cel.appendChild(el('span', 'gg-eu', tr('você')));
-          cel.title = m.nome;
-          linha.appendChild(cel);
-          var celC = el('span', 'gg-cargo-col');
-          celC.appendChild(el('span', 'gg-cargo' + (ehLider ? ' is-lider' : ehOficial ? ' is-oficial' : ''),
-            ehLider ? tr('Líder') : ehOficial ? tr('Oficial') : tr('Membro')));
-          linha.appendChild(celC);
-          linha.appendChild(el('span', 'gg-xp', Math.floor(m.xpDoado || 0).toLocaleString('pt-BR')));
-          var dzM = typeof m.dizimo === 'number' ? Math.floor(m.dizimo) : dizimoPadrao;
-          var celD = el('span', 'gg-dz');
-          if (g.souLider) {
-            var dz = document.createElement('input');
-            dz.type = 'number'; dz.min = '0'; dz.max = String(Gd.DIZIMO_MAX || 25); dz.step = '1';
-            dz.value = String(dzM);
-            dz.className = 'hub-input gg-dz-inp' + (m.dizimoProprio ? ' is-proprio' : '');
-            dz.title = m.dizimoProprio ? tr('Dízimo próprio de {nome} (vazio volta ao padrão)', { nome: m.nome })
-                                       : tr('Segue o padrão da guilda ({dizimoPadrao}%)', { dizimoPadrao: dizimoPadrao });
-            dz.setAttribute('aria-label', tr('Dízimo de {nome}', { nome: m.nome }));
-            dz.addEventListener('keydown', function (ev) {
-              ev.stopPropagation();                         // a letra não abre atalho
-              if (ev.key === 'Enter') dz.blur();
-            });
-            dz.addEventListener('change', function () {
-              var bruto = String(dz.value).trim();
-              var novo = bruto === '' ? null : Math.floor(Number(bruto));
-              if (novo !== null && !(novo >= 0 && novo <= (Gd.DIZIMO_MAX || 25))) {
-                toast(tr('o dízimo vai de 0 a {a}%', { a: Gd.DIZIMO_MAX || 25 }));
-                dz.value = String(dzM);
-                return;
-              }
-              Gd.definirDizimo(novo, m.id).then(function (res) {
-                toast(res.ok ? (novo === null ? tr('{nome} volta ao dízimo padrão.', { nome: m.nome })
-                                              : tr('Dízimo de {nome}: {novo}%.', { nome: m.nome, novo: novo }))
-                             : (res.erro || tr('não deu')), res.ok ? 'good' : undefined);
-                sheetGuilda();
-              });
-            });
-            celD.appendChild(dz);
-            celD.appendChild(el('span', 'gg-pct', '%'));
-          } else {
-            celD.textContent = dzM + '%';
-          }
-          linha.appendChild(celD);
-          if (g.souLider) {
-            var celA = el('span', 'gg-acao-col');
-            if (!ehLider) {
-              var bAcao = btn(ehOficial ? '▾' : '▴', 'btn-mini btn-ghost gg-acao', function () {
-                var op = ehOficial ? Gd.rebaixar(m.id) : Gd.promover(m.id);
-                op.then(function (res) {
-                  toast(res.ok
-                    ? (res.cargo === 'oficial'
-                        ? tr('{a} agora é oficial — ganhou a chave do cofre.', { a: esc(m.nome) })
-                        : tr('{a} voltou a membro.', { a: esc(m.nome) }))
-                    : (res.erro || tr('não deu')), res.ok ? 'good' : undefined);
-                  sheetGuilda();
-                });
-              });
-              bAcao.title = ehOficial ? tr('Rebaixar a membro') : tr('Promover a oficial');
-              celA.appendChild(bAcao);
-            }
-            linha.appendChild(celA);
-          }
-          grade.appendChild(linha);
-        });
-        rolo.appendChild(grade);
-        caixa.appendChild(rolo);
-        caixa.appendChild(el('p', 'inv-dica', (g.souLider
-          ? tr('Ordem: cargo, depois o XP que cada um rendeu à guilda (dízimo, guerra e treino). Mude o dízimo de cada um direto na grade — campo vazio volta ao padrão.')
-          : tr('Ordem: cargo, depois o XP que cada um rendeu à guilda (dízimo, guerra e treino).'))));
+        gradeDosMembros(caixa, g, euId);
 
         // A OFERENDA (30/08: vinténs viravam XP da guilda, 2 por 1) morou aqui até 04/10. Dono:
         // "dinheiro não dará mais XP para guild; somente % de XP doada de batalha OU guerra de
@@ -16189,7 +16199,15 @@ var JOGO = (typeof window !== 'undefined')
     safe(function () { H.entraCampo({ aparencia: aparenciaDe(campoHud.dupla[0]) }); return true; }, null);
     safe(function () { return JOGO.Rede._tique(); }, null);
   }
+  /* 08/10 à noite (o dono: "no Campo de PvP só clicando em cima agride? não deveria aparecer uma mensagem para
+   * confirmar?"): o toque abre a pergunta — o ataque só sai no "Atacar". A recusa (paridade, fora do Campo, sem
+   * vida) continua curta, depois da confirmação. */
   function ataqueNoCampo(par) {
+    confirmSheet(tr('Atacar {nome}?', { nome: esc(par.nome) }),
+      tr('A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.', { nome: esc(par.nome) }),
+      function () { disparaAtaqueNoCampo(par); }, { sim: tr('Atacar'), simCls: 'btn-warn' });
+  }
+  function disparaAtaqueNoCampo(par) {
     var r = safe(function () { return Dl().atacar(par.id); }, null);
     if (r && r.ok) { toast(tr('Você atacou {nome}!', { nome: par.nome }), 'bad'); return; }
     var m = r ? r.motivo : 'ocupado';

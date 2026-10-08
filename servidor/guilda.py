@@ -964,8 +964,12 @@ class GuildaMixin:
                 raise Recusa(400, 'o dízimo vai de 0 a %d%%' % DIZIMO_MAX)
         with self.tranca:
             g, cargo = self._g_da_conta(conta)
-            if cargo != 'lider':
+            # 08/10 à noite (o dono: "o chefe e o vice-líder podem mexer nos XP doados"): o dízimo de UM membro é do
+            # líder e dos oficiais; o padrão (e o "aplicar a todos") segue do líder
+            if alvo is None and cargo != 'lider':
                 raise Recusa(403, 'só o líder define o dízimo')
+            if alvo is not None and cargo not in ('lider', 'oficial'):
+                raise Recusa(403, 'só o líder e os oficiais mudam o dízimo de um membro')
             if alvo is None:
                 self.con.execute("UPDATE guildas SET dizimo = ? WHERE id = ?", (pct, g['id']))
                 if todos:

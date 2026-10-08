@@ -307,7 +307,13 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertEqual((ms[b.conta['id']]['xpDoado'], ms[c.conta['id']]['xpDoado']), (40, 0))
         self.assertEqual([m['cargo'] for m in r['guilda']['membros']], ['lider', 'oficial', 'membro'],
                          'o cargo vem antes do XP doado')
-        self.g(c, 'dizimo', {'pct': 5, 'conta': b.conta['id']}, 403)          # oficial não mexe no dízimo
+        # 08/10 à noite: o oficial muda o dízimo de UM membro; o padrão segue do líder; o membro raso não mexe
+        r = self.g(c, 'dizimo', {'pct': 5, 'conta': b.conta['id']})
+        self.assertEqual({m['id']: m for m in r['guilda']['membros']}[b.conta['id']]['dizimo'], 5)
+        self.g(c, 'dizimo', {'pct': 5}, 403)
+        self.g(c, 'dizimo', {'pct': 5, 'todos': True}, 403)
+        self.g(b, 'dizimo', {'pct': 5, 'conta': c.conta['id']}, 403)
+        self.g(a, 'dizimo', {'pct': 20, 'conta': b.conta['id']})
         self.g(a, 'dizimo', {'pct': 5, 'conta': self.novo('Fora').conta['id']}, 404)
         self.g(a, 'dizimo', {'pct': guilda_mod.DIZIMO_MAX + 1, 'conta': b.conta['id']}, 400)
         r = self.g(a, 'dizimo', {'pct': None, 'conta': b.conta['id']})       # volta ao padrão

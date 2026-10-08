@@ -486,7 +486,9 @@ var JOGO = (typeof window !== 'undefined')
     var d = le();
     var g = minhaG(d);
     if (!g) return responde({ ok: false, erro: Tx('sem guilda') });
-    if (g.liderId !== conta.id) return responde({ ok: false, erro: Tx('só o líder define o dízimo') });
+    var meuC = cargoDe(g, conta.id);     // 08/10 à noite: o dízimo de UM membro é do líder e dos oficiais
+    if (idAlvo == null && meuC !== 'lider') return responde({ ok: false, erro: Tx('só o líder define o dízimo') });
+    if (idAlvo != null && meuC !== 'lider' && meuC !== 'oficial') return responde({ ok: false, erro: Tx('só o líder e os oficiais mudam o dízimo de um membro') });
     if (!g.dizimoMembros || typeof g.dizimoMembros !== 'object') g.dizimoMembros = {};
     if (idAlvo == null) {
       g.dizimo = pct;
