@@ -489,8 +489,8 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
     _aura('neutra', 'Aura da Lousa', 'Lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida no chão.'),
     # 08/10: as três auras novas e as quatro molduras premium
     _aura('sombra', 'Aura de Sombra', 'Fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão.'),
-    _aura('gelo', 'Aura de Geada', 'Anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo.'),
-    _aura('ouro', 'Aura Dourada', 'Fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa.'),
+    _aura('gelo', 'Aura de Geada', 'Estacas de gelo que nascem do chão em volta dos pés, cristais em órbita, um floco de neve de luz pálida no chão e neve caindo devagar.'),
+    _aura('ouro', 'Aura Dourada', 'Moedas de ouro girando em espiral em volta do corpo, uma coroa de sol dourada no chão e brilhos de estrela que piscam.'),
     _moldura('ouro', 'Filete dourado duplo com losangos nas quinas.'),
     _moldura('rubi', 'Filete vermelho-rubi duplo com losangos nas quinas, sobre fundo vinho.'),
     _moldura('esmeralda', 'Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata.'),

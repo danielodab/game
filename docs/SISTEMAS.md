@@ -927,7 +927,12 @@ não pode ser fixo — quem perde o Top 1 PvP perde o título". Entrou:
   "A sua plaquinha"): o menu do título (o de sempre), a aura e a moldura.
 - **Auras:** três novas na loja (Sombra 250, Geada 250, Dourada 400 barras;
   `hub3d.js AURA_FORMA.sombra/gelo/ouro`). Na ficha **só aparecem as que a conta
-  tem**; as outras ficam na loja (um aviso com o link).
+  tem**; as outras ficam na loja (um aviso com o link). A Geada e a Dourada foram
+  refeitas em 08/10 à noite (o dono: "dá para melhorar"): peças SÓLIDAS como as
+  lascas da Lousa — estacas e cristais de gelo (InstancedMesh) sobre um floco de
+  neve riscado em código (`flocoAura`) e neve caindo; moedas de ouro girando em
+  espiral sobre uma coroa de sol (`solAura`) e brilhos que piscam. 3 chamadas
+  cada. `tests/foto_auras.html?auras=gelo,ouro` fotografa as auras na praça.
 - **Molduras da plaquinha** (`hub3d.js MOLDURAS`, `desenhaMoldura`: cada uma com
   a sua FORMA, sem brilho — lâmina da Arena, arcos do Eco, ameias dos Chefes,
   barras do pódio de classe, losangos grandes da Dourada, espinhos da Rubi,

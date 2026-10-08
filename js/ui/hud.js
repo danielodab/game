@@ -2338,8 +2338,8 @@ var JOGO = (typeof window !== 'undefined')
     neutra: tr('lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida'),
     mestre: tr('labaredas negras com miolo carmesim, um selo de runas vermelho-sangue no chão, lâminas em órbita e brasas em espiral'),
     sombra: tr('fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão'),
-    gelo: tr('anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita'),
-    ouro: tr('fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa')
+    gelo: tr('estacas de gelo que nascem do chão, cristais em órbita, um floco de neve de luz no chão e neve caindo'),
+    ouro: tr('moedas de ouro girando em espiral, uma coroa de sol no chão e brilhos que piscam em volta do corpo')
   };
   // 08/10: as molduras da plaquinha — as dos títulos (automáticas) e as premium (da loja)
   var MOLDURA_PT = { auto: tr('Automática (a do título)'), arena: tr('da Arena'), eco: tr('do Eco'), chefe: tr('dos Chefes'), classe: tr('do pódio de classe'),

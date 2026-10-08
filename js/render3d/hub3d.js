@@ -4596,6 +4596,55 @@ var JOGO = (typeof window !== 'undefined')
     return texRunasAura;
   }
 
+  /* o FLOCO DE NEVE da Geada e a COROA DE SOL da Dourada (08/10 à noite), riscados em código como as runas
+   * da Lousa: de traço grosso, para se verem deitados no chão a 10 m. */
+  var texFlocoAura = null, texSolAura = null;
+  function flocoAura() {
+    if (texFlocoAura) return texFlocoAura;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var c = cv.getContext('2d');
+    c.strokeStyle = '#fff'; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.lineWidth = 2; c.beginPath(); c.arc(64, 64, 60, 0, Math.PI * 2); c.stroke();
+    for (var i = 0; i < 6; i++) {
+      c.save();
+      c.translate(64, 64); c.rotate(i * Math.PI / 3);
+      c.lineWidth = 4; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -54); c.stroke();
+      // dois pares de galhos a 60° e uma ponta em V — o braço clássico do floco
+      c.lineWidth = 3;
+      for (var k = 0; k < 2; k++) {
+        var d = k ? 38 : 22, l = k ? 10 : 14;
+        c.beginPath(); c.moveTo(0, -d); c.lineTo(l * 0.87, -d - l * 0.5); c.moveTo(0, -d); c.lineTo(-l * 0.87, -d - l * 0.5); c.stroke();
+      }
+      c.beginPath(); c.moveTo(0, -54); c.lineTo(6, -47); c.moveTo(0, -54); c.lineTo(-6, -47); c.stroke();
+      c.restore();
+    }
+    c.lineWidth = 3; c.beginPath();
+    for (var q = 0; q < 6; q++) { var a = q * Math.PI / 3 - Math.PI / 2; c[q ? 'lineTo' : 'moveTo'](64 + Math.cos(a) * 9, 64 + Math.sin(a) * 9); }
+    c.closePath(); c.stroke();
+    texFlocoAura = new THREE.CanvasTexture(cv);
+    return texFlocoAura;
+  }
+  function solAura() {
+    if (texSolAura) return texSolAura;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var c = cv.getContext('2d');
+    c.strokeStyle = '#fff'; c.fillStyle = '#fff'; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.lineWidth = 5; c.beginPath(); c.arc(64, 64, 58, 0, Math.PI * 2); c.stroke();
+    c.lineWidth = 3; c.beginPath(); c.arc(64, 64, 33, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.arc(64, 64, 6, 0, Math.PI * 2); c.fill();
+    // doze raios em triângulo entre os aros, um longo e um curto alternados
+    for (var i = 0; i < 12; i++) {
+      c.save();
+      c.translate(64, 64); c.rotate(i * Math.PI / 6);
+      c.beginPath(); c.moveTo(-6, -35); c.lineTo(6, -35); c.lineTo(0, (i % 2) ? -47 : -55); c.closePath(); c.fill();
+      c.restore();
+    }
+    texSolAura = new THREE.CanvasTexture(cv);
+    return texSolAura;
+  }
+
   /* cada montador devolve { pecas: {nome: objeto}, anima: function (t, corpo) } e pendura as peças em g */
   var AURA_FORMA = {
     /* A CHAMA DO MESTRE (04/10, o dono: "quero uma aura preta com vermelho escuro e chamas, especial para o gm,
@@ -4988,44 +5037,102 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
       sujaPlacas(mancha);
     } };
   };
-  /* GEADA: anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo. */
+  /* GEADA (refeita em 08/10 à noite — o dono: "aura dourada e geada dá para melhorar": a primeira era um aro
+   * pálido e meia dúzia de pontos que não se viam). Agora é gelo SÓLIDO: estacas que nascem do chão em volta
+   * dos pés, crescem inclinadas para fora e somem, cristais em pé orbitando na altura do peito, um floco de
+   * neve de luz pálida deitado no chão (riscado em código, como o círculo da Lousa) e neve caindo devagar.
+   * 3 chamadas de desenho, como a Lousa. */
   AURA_FORMA.gelo = function (g, leve) {
-    var nA = leve ? 2 : 3, nC = leve ? 4 : 8;
-    var aneis = placasAura(nA, 9, 'geada');
-    var cristais = pontosAura(nC, 0, 0.45, 'cristal');
-    g.add(aneis); g.add(cristais);
-    return { pecas: { aneis: aneis, cristais: cristais }, anima: function (t) {
-      var i, f;
-      for (i = 0; i < nA; i++) {
-        f = fracao(t * 0.2 + i / nA);
-        poePlaca(aneis, i, 0.5 + f * 2.2, i * 0.9 - t * 0.15, 0.07 + i * 0.004, 0.72, 0.92, 1, Math.min(1, Math.pow(1 - f, 1.4) * 1.1));
+    var nE = leve ? 4 : 8, nN = leve ? 6 : 12, nF = leve ? 1 : 2;
+    var floco = placasAura(nF, flocoAura(), 'floco');
+    var geoE = new THREE.OctahedronGeometry(0.2, 0);
+    var estacas = new THREE.InstancedMesh(geoE, matAura('estaca-gelo', function () {
+      return new THREE.MeshPhongMaterial({ color: 0xcdf3ff, emissive: 0x2e7fa6, specular: 0xffffff, shininess: 90,
+        flatShading: true, transparent: true, opacity: 0.9 });
+    }), nE);
+    estacas.frustumCulled = false;
+    estacas.userData.n = nE;
+    var neve = pontosAura(nN, 5, 0.42, 'neve');
+    g.add(floco); g.add(estacas); g.add(neve);
+    var aux = new THREE.Object3D();
+    return { pecas: { floco: floco, estacas: estacas, neve: neve }, anima: function (t) {
+      var pulso = 0.5 + 0.5 * Math.sin(t * 0.9);
+      poePlaca(floco, 0, 1.9 + pulso * 0.1, t * 0.12, 0.09, 0.78, 0.94, 1, 0.8 + pulso * 0.2);
+      if (nF > 1) poePlaca(floco, 1, 1.0, -t * 0.3 + 0.5, 0.096, 0.9, 0.98, 1, 0.35 + pulso * 0.45);   // o de dentro gira ao contrário
+      sujaPlacas(floco);
+      var i, a, f, e;
+      for (i = 0; i < nE; i++) {
+        if (i % 2 === 0) {
+          // estaca do chão: nasce, cresce e some, cada uma no seu tempo, inclinada para fora
+          f = fracao(t * 0.16 + i / nE);
+          e = Math.sin(Math.PI * f);
+          a = i * (Math.PI * 2 / nE) + 0.3;
+          aux.position.set(Math.cos(a) * 0.95, 0.25 * e, Math.sin(a) * 0.95);
+          aux.rotation.set(-Math.sin(a) * 0.45, i * 0.7, Math.cos(a) * 0.45);
+          aux.scale.set(0.7, 2.2 * e + 0.001, 0.7);
+        } else {
+          // cristal em órbita, em pé, na altura do peito, balançando e girando no próprio eixo
+          a = -t * 0.5 + i * (Math.PI * 2 / nE);
+          e = 0.6 + (i % 3) * 0.2;
+          aux.position.set(Math.cos(a) * 1.15, 1.1 + (i % 3) * 0.35 + Math.sin(t * 0.9 + i) * 0.1, Math.sin(a) * 1.15);
+          aux.rotation.set(0.2, t * 1.2 + i, 0.15);
+          aux.scale.set(0.45 * e, 1.3 * e, 0.45 * e);
+        }
+        aux.updateMatrix();
+        estacas.setMatrixAt(i, aux.matrix);
       }
-      sujaPlacas(aneis);
-      for (i = 0; i < nC; i++) {
-        f = fracao(t * 0.18 + i / nC);
-        var a = -t * 0.8 + i * (Math.PI * 2 / nC);
-        poePonto(cristais, i, Math.cos(a) * 1.05, 0.3 + f * 1.9, Math.sin(a) * 1.05, 0.85, 0.96, 1, Math.sin(Math.PI * f) * 0.95);
+      estacas.instanceMatrix.needsUpdate = true;
+      for (i = 0; i < nN; i++) {
+        f = fracao(t * 0.14 + i / nN);                    // cai: de cima para baixo, balançando
+        a = i * 2.4 + t * 0.25;
+        var r = 0.5 + (i % 4) * 0.3;
+        poePonto(neve, i, Math.cos(a) * r + Math.sin(t * 1.3 + i) * 0.12, 2.7 - f * 2.6, Math.sin(a) * r,
+                 0.88, 0.97, 1, Math.sin(Math.PI * f) * 0.95);
       }
-      sujaPontos(cristais);
+      sujaPontos(neve);
     } };
   };
-  /* DOURADA: fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa — a
-   * aura "cara", para quem quer ser visto. */
+  /* DOURADA (refeita em 08/10 à noite, idem): a aura "cara", para quem quer ser visto — MOEDAS de ouro
+   * sólidas girando em espiral que sobe em volta do corpo, uma coroa de sol de luz dourada deitada no chão
+   * (dois aros com doze raios, riscada em código; o de dentro gira ao contrário) e brilhos de estrela que
+   * piscam em volta do corpo. 3 chamadas de desenho. */
   AURA_FORMA.ouro = function (g, leve) {
-    var nF = leve ? 7 : 14, nM = 1;
-    var fagulhas = pontosAura(nF, 0, 0.3, 'ouro');
-    var clarao = placasAura(nM, 14, 'clarao-ouro');
-    g.add(fagulhas); g.add(clarao);
-    return { pecas: { fagulhas: fagulhas, clarao: clarao }, anima: function (t) {
-      var i, f;
-      for (i = 0; i < nF; i++) {
-        f = fracao(t * 0.5 + i / nF);
-        var a = t * 2.4 + i * 0.9, r = 0.35 + f * 0.75;
-        poePonto(fagulhas, i, Math.cos(a) * r, 0.1 + f * 2.4, Math.sin(a) * r, 1, 0.84 + f * 0.1, 0.35, Math.min(1, (1 - f) * 1.4));
+    var nM = leve ? 5 : 10, nB = leve ? 6 : 12, nS = leve ? 1 : 2;
+    var coroa = placasAura(nS, solAura(), 'coroa-sol');
+    var geoM = new THREE.CylinderGeometry(0.17, 0.17, 0.045, 14);
+    var moedas = new THREE.InstancedMesh(geoM, matAura('moeda', function () {
+      return new THREE.MeshPhongMaterial({ color: 0xffc83c, emissive: 0x8a5a08, specular: 0xfff4c8, shininess: 140 });
+    }), nM);
+    moedas.frustumCulled = false;
+    moedas.userData.n = nM;
+    var brilhos = pontosAura(nB, 15, 0.85, 'brilho-ouro');
+    g.add(coroa); g.add(moedas); g.add(brilhos);
+    var aux = new THREE.Object3D();
+    return { pecas: { coroa: coroa, moedas: moedas, brilhos: brilhos }, anima: function (t) {
+      var pulso = 0.5 + 0.5 * Math.sin(t * 2);
+      poePlaca(coroa, 0, 1.95 + pulso * 0.1, t * 0.35, 0.09, 1, 0.72, 0.16, 0.95 + pulso * 0.05);
+      if (nS > 1) poePlaca(coroa, 1, 1.05, -t * 0.6, 0.096, 1, 0.84, 0.3, 0.6 + pulso * 0.4);   // o de dentro gira ao contrário
+      sujaPlacas(coroa);
+      var i, a, f, e;
+      for (i = 0; i < nM; i++) {
+        f = fracao(t * 0.2 + i / nM);                     // cada moeda sobe em espiral e recomeça do chão
+        a = t * 1.1 + i * (Math.PI * 2 / nM) + f * 2.5;
+        var r = 1.25 - f * 0.45;
+        e = (0.8 + (i % 3) * 0.15) * Math.min(1, Math.sin(Math.PI * f) * 2.5);   // nasce e some pequena, nas pontas
+        aux.position.set(Math.cos(a) * r, 0.2 + f * 2.4, Math.sin(a) * r);
+        aux.rotation.set(Math.PI / 2 + Math.sin(t * 2 + i) * 0.3, 0, t * 4 + i * 1.3);   // em pé, girando como moeda jogada
+        aux.scale.set(e, e, e);
+        aux.updateMatrix();
+        moedas.setMatrixAt(i, aux.matrix);
       }
-      sujaPontos(fagulhas);
-      poePlaca(clarao, 0, 1.5 + Math.sin(t * 2.2) * 0.2, t * 0.5, 0.06, 1, 0.82, 0.3, 0.55 + Math.sin(t * 2.2) * 0.2);
-      sujaPlacas(clarao);
+      moedas.instanceMatrix.needsUpdate = true;
+      for (i = 0; i < nB; i++) {
+        var p = fracao(t * 0.9 + i * 0.37);               // cada brilho pisca no seu tempo
+        a = i * 2.6 + t * 0.2;
+        var rr = 0.55 + (i % 3) * 0.35;
+        poePonto(brilhos, i, Math.cos(a) * rr, 0.3 + (i % 5) * 0.5, Math.sin(a) * rr, 1, 0.93, 0.6, Math.pow(Math.sin(Math.PI * p), 2));
+      }
+      sujaPontos(brilhos);
     } };
   };
 
