@@ -1649,6 +1649,27 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .inv2 .ig-cell .ig-lv { top: -6px; left: -3px; font-size: 10px; }
 .inv2 .ig-cell .item-stars { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
 .inv2 .ig-cell.is-vazia { min-height: 54px; }
+/* ---- a GRADE SÓ DE ÍCONES (08/10 à noite): o inventário, a grade da forja e as do banco */
+.grade-icones { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); padding: 2px 0 6px; }
+.grade-icones .ig-cell { width: auto; flex: none; min-height: 0; padding: 4px; gap: 0; border-radius: 10px; border-width: 2px; }
+.grade-icones .ig-cell .ig-nm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.grade-icones .ig-cell .ig-n { top: -6px; right: -4px; min-width: 20px; font-size: 11px; padding: 1px 4px; }
+.grade-icones .ig-cell .ig-lv { top: -6px; left: -3px; font-size: 10px; }
+.grade-icones .ig-cell .item-stars { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
+.grade-icones .ig-cell.is-vazia { min-height: 54px; }
+.grade-icones .fg-cel .fg-worn { top: auto; bottom: 3px; font-size: 9px; }
+.grade-icones .fg-cel .fg-rende { font-size: 10px; }
+.grade-icones .bk2-cel, .grade-icones .ig-cell.is-vazia.bk2-cel { min-height: 54px; }
+/* ---- a FORJA em duas colunas: a bancada à esquerda, o inventário à direita */
+.fg2 { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: 12px 14px; align-items: start; }
+.fg2-esq, .fg2-dir { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.fg2-dir { border: 1px solid var(--line2); border-radius: var(--rad-m); padding: 8px 10px;
+           background: linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.12)); box-shadow: var(--relevo); }
+.fg2-tit { margin: 0; }
+.fg2 .forge-banca2 { gap: 6px; padding: 8px; }
+.fg2 .fg-slot { width: 108px; min-height: 108px; }
+.fg2 .fg-grupo { margin: 4px 0 0; }
+@media (max-width: 760px) { .fg2 { grid-template-columns: 1fr; } }
 /* ---- a ficha do item */
 .inv-pick.inv2-ficha {
   position: static; top: auto; z-index: auto; display: flex; flex-direction: column; gap: 8px;
@@ -2146,6 +2167,17 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 }
 .colec-peca.is-on { border-color: var(--gold); color: var(--gold);
   box-shadow: 0 0 14px rgba(255,196,77,.5); }
+/* 08/10 à noite: os prêmios à vista — escuro = ainda em jogo; ✓ = o traje já tem; o anel de luz do giro */
+.colec-roleta { flex-wrap: wrap; }
+.colec-peca { position: relative; transition: border-color .08s, box-shadow .08s, opacity .12s, filter .12s, transform .08s; }
+.colec-peca.is-escura { opacity: .42; filter: grayscale(.55) brightness(.8); }
+.colec-peca.is-tem { border-color: rgba(127,224,138,.45); }
+.colec-tem { position: absolute; top: -7px; right: -6px; font: 800 11px var(--ui-sans); font-style: normal; color: #0d1116;
+             background: #7fe08a; border-radius: 999px; width: 18px; height: 18px; line-height: 18px; text-align: center; }
+.colec-peca.is-on { opacity: 1; filter: none; transform: scale(1.08);
+  box-shadow: 0 0 0 3px rgba(255,196,77,.4), 0 0 20px rgba(255,196,77,.75); }
+.colec-peca.is-ganhou { animation: colecGanhou .5s ease-in-out 3; }
+@keyframes colecGanhou { 50% { box-shadow: 0 0 0 5px rgba(255,196,77,.6), 0 0 30px rgba(255,255,255,.8); } }
 .rw-selo .selo-moeda { font-size: 26px; color: var(--ec, #fff); line-height: 1;
   text-shadow: 0 0 10px color-mix(in srgb, var(--ec, #fff) 70%, transparent); }
 /* AS MOEDAS DESENHADAS (03/09): selo, insígnia e vintém com a arte do dono

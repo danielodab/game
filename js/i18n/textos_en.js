@@ -2896,5 +2896,7 @@ JOGO.I18n.registra('en', { textos: {
   "Fusão pronta na forja: dá <b>★{a}</b>": "Fusion ready at the forge: gives <b>★{a}</b>",
   "Fusão: <b>{a}/{b}</b> cópias iguais para a ★{c}": "Fusion: <b>{a}/{b}</b> identical copies for ★{c}",
   "Quebra: dá <b>{a}</b> {b}": "Breaking: gives <b>{a}</b> {b}",
-  "Cai em: <b>{a}</b>": "Drops in: <b>{a}</b>"
+  "Cai em: <b>{a}</b>": "Drops in: <b>{a}</b>",
+  // ---- 08/10 à noite: a barraquinha com os prêmios à vista
+  "Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.": "Prizes still in play are dark; the ✓ marks what the outfit already has."
 } });

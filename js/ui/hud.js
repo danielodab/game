@@ -4177,6 +4177,8 @@ var JOGO = (typeof window !== 'undefined')
     if (pilha.extra) cell.appendChild(el('span', 'ig-gema', '◆'));
     if (pilha.stars) cell.appendChild(starPips(pilha.stars));
     cell.appendChild(el('span', 'ig-nm', esc(it.name || pilha.itemId)));
+    cell.setAttribute('data-rot', (itemDef(pilha.itemId) || {}).name || pilha.itemId);   // 08/10 à noite: o nome no balão (a grade compacta o esconde)
+    legendaNoToque(cell);
     var nvB = nvBadge(pilha.itemId);
     if (nvB) cell.appendChild(nvB);
     tipOn(cell, it.name || pilha.itemId,
@@ -4276,7 +4278,7 @@ var JOGO = (typeof window !== 'undefined')
    * cabe, e sempre sobra ao menos uma fileira — uma grade cheia até a borda
    * diz "não cabe mais", e cabe. */
   function bancoGrade(pilhas, lado, aoTransferir) {
-    var grid = el('div', 'bk2-grid');
+    var grid = el('div', 'bk2-grid grade-icones');     // 08/10 à noite: só ícones, como o inventário limpo
     pilhas.forEach(function (pi) {
       grid.appendChild(bancoCelula(pi, lado, function () { aoTransferir(pi); }));
     });
@@ -4388,7 +4390,8 @@ var JOGO = (typeof window !== 'undefined')
       // DUAS grades de uma vez — quem procura a peça de água não quer caçá-la
       // em dois lugares. Filtrar não mexe nos `indices` das pilhas: guardar e
       // sacar continuam achando a posição real no saco e no cofre.
-      caixa.appendChild(filtrosDeItem(bancoSlotFiltro, function (s) {
+      // 08/10 à noite: os mesmos seletores do inventário limpo (espaço e elemento)
+      caixa.appendChild(seletoresDeItem(bancoSlotFiltro, function (s) {
         bancoSlotFiltro = s;
         sheetBanco();
       }, bancoElemFiltro, function (e2) {
@@ -4442,8 +4445,10 @@ var JOGO = (typeof window !== 'undefined')
         });
       }));
 
-      duplo.appendChild(colSaco);
+      // 08/10 à noite (o dono: "os itens do banco do lado esquerdo e o inventário do lado direito, como
+      // se fosse dois inventários"): o cofre à esquerda, o saco à direita
       duplo.appendChild(colCofre);
+      duplo.appendChild(colSaco);
       caixa.appendChild(duplo);
       if (bancoBusca) aplicaBusca(duplo, bancoBusca);
     });
@@ -5995,6 +6000,28 @@ var JOGO = (typeof window !== 'undefined')
         }, true);
         filaEl.appendChild(escolhas);
         colec.appendChild(filaEl);
+        /* 08/10 à noite (o dono: "os prêmios que estão em jogo devem aparecer mais escuros, e aleatoriamente
+         * passa um círculo em volta acendendo o item quando passa e sorteando"): a fileira do traje fica
+         * SEMPRE à vista — a peça ainda em jogo escura, a que o traje já tem com ✓ — e o giro corre o anel
+         * de luz aos saltos, ao acaso, devagar no fim, até parar na sorteada. */
+        var sdF = setDef(cfgSel.setId);
+        var pecasF = (sdF && sdF.pieces) || [];
+        var faixa = el('div', 'colec-roleta');
+        var cels = pecasF.map(function (pid) {
+          var tem = faltamP.indexOf(pid) < 0;
+          var c2 = el('div', 'colec-peca ' + (tem ? 'is-tem' : 'is-escura'));
+          c2.setAttribute('data-peca', pid);
+          c2.appendChild(art('itemIcon', [pid, 48], 48));
+          c2.appendChild(el('span', null, esc(((itemDef(pid) || {}).name || pid) + nvTxt(pid))));
+          if (tem) c2.appendChild(el('i', 'colec-tem', '✓'));
+          faixa.appendChild(c2);
+          return c2;
+        });
+        if (pecasF.length) {
+          colec.appendChild(el('p', 'inv-dica colec-premios', tr('Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.')));
+          colec.appendChild(faixa);
+        }
+        var girando = false;
         var pronta = safe(function () { return P().roletaPronta(); }, false);
         colec.appendChild(btn(tr('Girar a roleta'), 'btn-gold btn-block' + (pronta ? '' : ' is-off'),
           function () {
@@ -6015,32 +6042,31 @@ var JOGO = (typeof window !== 'undefined')
                 : tr('Faltam selos para o giro.'));
               return;
             }
-            var sd3 = setDef(cfgSel.setId);
-            var pecas = (sd3 && sd3.pieces) || [];
-            var alvoIdx = Math.max(0, pecas.indexOf(r2.itemId));
-            var faixa = el('div', 'colec-roleta');
-            var cels = pecas.map(function (pid) {
-              var c2 = el('div', 'colec-peca');
-              c2.appendChild(art('itemIcon', [pid, 48], 48));
-              c2.appendChild(el('span', null, esc(((itemDef(pid) || {}).name || pid) + nvTxt(pid))));
-              faixa.appendChild(c2);
-              return c2;
-            });
-            colec.appendChild(faixa);
-            var passo = 0, ultimo = 12 + alvoIdx;      // dá as voltas e para no alvo
+            if (girando) return;
+            girando = true;
+            var alvoIdx = Math.max(0, pecasF.indexOf(r2.itemId));
+            // o anel SALTA ao acaso (nunca para a mesma casa duas vezes), rápido no começo e devagar no fim,
+            // e o último salto cai na sorteada; `window.__roletaRapida` (provas) encurta a espera
+            var total = 14 + Math.floor(Math.random() * 6), passo = 0, atual = -1;
+            var rapida = !!(window.__roletaRapida);
             (function roda() {
-              cels.forEach(function (c3, i4) {
-                c3.classList.toggle('is-on', i4 === (passo % cels.length));
-              });
-              if (passo >= ultimo) {
+              var i4;
+              if (passo >= total) i4 = alvoIdx;
+              else {
+                do { i4 = Math.floor(Math.random() * cels.length); } while (cels.length > 1 && i4 === atual);
+              }
+              atual = i4;
+              cels.forEach(function (c3, k4) { c3.classList.toggle('is-on', k4 === i4); });
+              if (passo >= total) {
+                cels[alvoIdx].classList.add('is-ganhou');
                 toast((r2.repetida
                   ? tr('A roleta parou: {a} — repetida, matéria de estrela.', { a: esc((itemDef(r2.itemId) || {}).name) })
                   : tr('A roleta parou: {a}! Já está no saco.', { a: esc((itemDef(r2.itemId) || {}).name) })), 'good');
-                setTimeout(function () { sheetLoteria(); }, 900);
+                setTimeout(function () { sheetLoteria(); }, rapida ? 100 : 1500);
                 return;
               }
               passo++;
-              setTimeout(roda, 60 + passo * 16);        // desacelera até parar
+              setTimeout(roda, rapida ? 5 : 70 + Math.pow(passo, 1.7) * 5);
             })();
             }
           }));
@@ -7530,12 +7556,30 @@ var JOGO = (typeof window !== 'undefined')
     var painelP = sheetEl.querySelector('.sheet-panel');
     if (painelP) painelP.classList.add('sheet-larga');
 
-    if (partyTab === 'forja') forgeBody(body, arg);
+    if (partyTab === 'forja') { forgeBody(body, arg); forjaEmDuasColunas(body); }
     else if (partyTab === 'colecao') collectionBody(body, arg);
     else if (partyTab === 'feiticos') spellTreeBody(body, arg);
     else if (partyTab === 'avatar') avatarBody(body);
     else inventoryBody(body, arg);
   }
+  /* A FORJA EM DUAS COLUNAS (08/10 à noite — o dono: "precisa ser o inventário do lado direito e a forja
+   * do lado esquerdo, como se fosse dois inventários; fica mais organizado"). forgeBody segue montando tudo
+   * em sequência; aqui os nós marcados `fg-dir` (os seletores, os grupos "No saco"/"Vestidas" com as grades
+   * e as dicas da grade) vão para a coluna da direita, e o resto (a bancada, a ficha, a trilha, o estado,
+   * o martelo, a prateleira, a Estrela) para a da esquerda. A fileira dos modos fica em cima, inteira. */
+  function forjaEmDuasColunas(body) {
+    var modos = body.querySelector('.fg-modos');
+    var wrap = el('div', 'fg2'), esq = el('div', 'fg2-esq'), dir = el('div', 'fg2-dir');
+    dir.appendChild(el('h3', 'bk-tit fg2-tit', tr('Inventário')));
+    [].slice.call(body.childNodes).forEach(function (n) {
+      if (n === modos) return;
+      (n.classList && n.classList.contains('fg-dir') ? dir : esq).appendChild(n);
+    });
+    wrap.appendChild(esq);
+    wrap.appendChild(dir);
+    body.appendChild(wrap);
+  }
+
   // ------------------------------------------------- ÁRVORE DE FEITIÇOS
   // A ficha do herói já listava "o que vem depois", mas em lista corrida: dava
   // para ler o próximo degrau e não dava para ENXERGAR a escada inteira nem
@@ -8134,6 +8178,15 @@ var JOGO = (typeof window !== 'undefined')
 
   /* os seletores do saco: espaço (só nos equipamentos) e elemento (equipamentos e pedras) */
   function invSeletores() {
+    return seletoresDeItem(invMainTab === 'equip' ? invFilter : null,
+      invMainTab === 'equip' ? function (v) { invFilter = v; invSel = null; sheetParty('inventario'); } : null,
+      (invMainTab === 'equip' || invMainTab === 'pedras') ? invElemFiltro : null,
+      (invMainTab === 'equip' || invMainTab === 'pedras') ? function (v) { invElemFiltro = v; invSel = null; sheetParty('inventario'); } : null);
+  }
+  /* 08/10 à noite: os DOIS seletores (espaço e elemento) dos menus de item — o inventário, a forja e o banco
+   * usam os mesmos (classes .inv2-sel-espaco / .inv2-sel-elem; as provas escolhem com `escolhe`). `aoSlot`
+   * null = sem o seletor de espaço; `aoElem` null = sem o de elemento. */
+  function seletoresDeItem(slotAtual, aoSlot, elemAtual, aoElem) {
     var w = el('div', 'inv2-sel');
     function seletor(cls, opcoes, atual, aoMudar) {
       var s = document.createElement('select');
@@ -8148,14 +8201,14 @@ var JOGO = (typeof window !== 'undefined')
       s.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
       return s;
     }
-    if (invMainTab === 'equip') {
+    if (aoSlot) {
       w.appendChild(seletor('inv2-sel-espaco', [['todos', tr('Todos os espaços')]].concat(SLOTS.map(function (c) { return [c, SLOT_PT[c]]; })),
-        invFilter, function (v) { invFilter = v; invSel = null; sheetParty('inventario'); }));
+        slotAtual || 'todos', aoSlot));
     }
-    if (invMainTab === 'equip' || invMainTab === 'pedras') {
+    if (aoElem) {
       var els = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
       w.appendChild(seletor('inv2-sel-elem', [['todos', tr('Todos os elementos')]].concat(els.map(function (e) { return [e, ELEM_PT[e] || e]; })),
-        invElemFiltro, function (v) { invElemFiltro = v; invSel = null; sheetParty('inventario'); }));
+        elemAtual || 'todos', aoElem));
     }
     return w;
   }
@@ -10074,8 +10127,8 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(stock);
 
     if (!alvos.length) {
-      body.appendChild(el('p', 'empty', quebra ? tr('Nenhuma peça no saco para quebrar.')
-                                               : tr('Nenhuma peça para forjar — nem no saco, nem vestida.')));
+      body.appendChild(el('p', 'empty fg-dir', quebra ? tr('Nenhuma peça no saco para quebrar.')
+                                                      : tr('Nenhuma peça para forjar — nem no saco, nem vestida.')));
       return;
     }
 
@@ -10102,6 +10155,8 @@ var JOGO = (typeof window !== 'undefined')
           esc(className((hero(alvo.heroId) || {}).classId || alvo.heroId).slice(0, 3))));
       }
       c.appendChild(el('span', 'ig-nm', esc(it.name)));
+      c.setAttribute('data-rot', it.name);     // 08/10 à noite: a grade compacta esconde o nome; fica no balão
+      legendaNoToque(c);
       // no Quebrar, cada célula diz quanto rende UMA cópia (→N, na cor da
       // pedra); a que não se quebra fica apagada com ✕ — o toque ainda a põe
       // na bancada, que diz o porquê
@@ -10127,13 +10182,15 @@ var JOGO = (typeof window !== 'undefined')
     // 22/09: espaço E elemento, redondos — valem para o saco e para as vestidas.
     // O `idx` de cada célula é a posição em `alvos` (a lista INTEIRA): o filtro
     // só esconde, e o arrasto até a bancada continua achando a peça certa.
-    body.appendChild(filtrosDeItem(forjaSlotFiltro, function (s) {
+    var selF = seletoresDeItem(forjaSlotFiltro, function (s) {
       forjaSlotFiltro = s;
       sheetParty('forja');
     }, forjaElemFiltro, function (e2) {
       forjaElemFiltro = e2;
       sheetParty('forja');
-    }));
+    });
+    selF.classList.add('fg-dir');
+    body.appendChild(selF);
     // No Quebrar só o SACO entra na grade: a vestida não está nele (o Progress
     // nem a alcança) — em vez do grupo, uma linha diz como trazê-la.
     var doSaco = [], vestidas = [], vestidasFora = 0;
@@ -10149,19 +10206,19 @@ var JOGO = (typeof window !== 'undefined')
       var oQue = [];
       if (forjaSlotFiltro !== 'todos') oQue.push(SLOT_PT[forjaSlotFiltro] || forjaSlotFiltro);
       if (forjaElemFiltro !== 'todos') oQue.push(ELEM_PT[forjaElemFiltro] || forjaElemFiltro);
-      body.appendChild(el('p', 'inv-dica', oQue.length
+      body.appendChild(el('p', 'inv-dica fg-dir', oQue.length
         ? tr('Nada de {a} {paraQue} — o filtro está ligado.', { a: esc(oQue.join(' de ')), paraQue: paraQue })
         : tr('Nenhuma peça no saco {paraQue}.', { paraQue: paraQue })));
     }
     [[doSaco, tr('No saco')], [vestidas, tr('Vestidas')]].forEach(function (par) {
       if (!par[0].length) return;
-      body.appendChild(el('h4', 'fg-grupo', par[1] + ' (' + par[0].length + ')'));
-      var grade = el('div', 'forge-pick' + (quebra ? ' fg-pick-quebra' : ''));
+      body.appendChild(el('h4', 'fg-grupo fg-dir', par[1] + ' (' + par[0].length + ')'));
+      var grade = el('div', 'forge-pick grade-icones fg-dir' + (quebra ? ' fg-pick-quebra' : ''));
       par[0].forEach(function (pa) { grade.appendChild(celDe(pa[0], pa[1])); });
       body.appendChild(grade);
     });
     if (vestidasFora) {
-      body.appendChild(el('p', 'inv-dica fg-vestidas-fora', vestidasFora === 1
+      body.appendChild(el('p', 'inv-dica fg-vestidas-fora fg-dir', vestidasFora === 1
         ? tr('1 peça vestida não aparece aqui: tire do herói para quebrar.')
         : tr('{vestidasFora} peças vestidas não aparecem aqui: tire do herói para quebrar.', { vestidasFora: vestidasFora })));
     }

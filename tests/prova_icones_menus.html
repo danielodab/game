@@ -461,8 +461,9 @@
     // ---- 6) FORJA: espaço + elemento, no saco e nas vestidas
     p(function () {
       abre('forge');
-      var fil = q1('.ico-filtros', ficha());
-      check('forja: as fileiras de espaço e de elemento', !!fil && !!q1('.slot-tabs', fil) && !!q1('.elem-tabs', fil));
+      // 08/10 à noite (a forja em duas colunas): os seletores de espaço e de elemento, na coluna do inventário
+      var fil = q1('.fg2-dir .inv2-sel', ficha());
+      check('forja: os seletores de espaço e de elemento, na coluna do inventário', !!fil && !!q1('.inv2-sel-espaco', fil) && !!q1('.inv2-sel-elem', fil));
       // 22/09 (a quebra): os dois modos redondos no alto — a prova inteira da
       // quebra mora em tests/quebra_hud.html; aqui só o contrato da fileira
       var modos = qa('.fg-modos [data-modo]', ficha());
@@ -472,31 +473,36 @@
             !!q1('.ico-fg-forjar', modos[0]) && !!q1('.ico-fg-quebrar', modos[1]) && !!q1('.ico-fg-gema', modos[2]), textos(modos).join(','));
       contratoDosBotoes('forja');
       cabe('forja');
-      toca('.slot-tabs [data-slot="casca"]');
+      escolhe('.inv2-sel-espaco', 'casca');
       var nomes = qa('.fg-cel .ig-nm', ficha()).map(function (n) { return n.textContent; });
       var casca = SACO.filter(function (id) { return slotDe(id) === 'casca'; }).map(nomeDe);
       check('forja · Casca: só as peças de casca', nomes.length > 0 && nomes.every(function (n) { return casca.indexOf(n) >= 0; }),
             nomes.join(','));
-      toca('.elem-tabs [data-el="ar"]');
+      escolhe('.inv2-sel-elem', 'ar');
       var ar = qa('.fg-cel .ig-nm', ficha()).map(function (n) { return n.textContent; });
       check('forja · Casca + Ar: só a casca de ar', ar.length === 1 && ar[0] === nomeDe(SACO[9]), ar.join(','));
-      toca('.slot-tabs [data-slot="passo"]');
-      toca('.elem-tabs [data-el="agua"]');
+      escolhe('.inv2-sel-espaco', 'passo');
+      escolhe('.inv2-sel-elem', 'agua');
       check('forja · Passo + Água, sem peça: a grade some e a dica diz os dois filtros',
             qa('.fg-cel', ficha()).length === 0 && /Nada de Passo de Água para forjar/.test(ficha().textContent),
             qa('.fg-cel', ficha()).length + ' células');
-      toca('.slot-tabs [data-slot="todos"]');
-      toca('.elem-tabs [data-el="todos"]');
+      escolhe('.inv2-sel-espaco', 'todos');
+      escolhe('.inv2-sel-elem', 'todos');
     });
 
     // ---- 7) BANCO: espaço + elemento nas DUAS grades
     p(function () {
       abre('banco');
       return ate(function () { return !!q1('.bk2-duplo', ficha()); }, 4000).then(function () {
-        check('banco: as fileiras de espaço e de elemento', !!q1('.ico-filtros .slot-tabs', ficha()) && !!q1('.ico-filtros .elem-tabs', ficha()));
-        contratoDosBotoes('banco');
-        toca('.slot-tabs [data-slot="passo"]');
-        return ate(function () { return q1('.slot-tabs [data-slot="passo"].is-on', ficha()) && q1('.bk2-duplo', ficha()); }, 4000);
+        // 08/10 à noite: os seletores do inventário limpo; o cofre à esquerda e o saco à direita
+        check('banco: os seletores de espaço e de elemento', !!q1('.inv2-sel-espaco', ficha()) && !!q1('.inv2-sel-elem', ficha()));
+        var cols = qa('.bk2-col', ficha());
+        check('banco: o cofre à esquerda e o saco (o inventário) à direita', cols.length === 2 &&
+              cols[0].dataset.lado === 'cofre' && cols[1].dataset.lado === 'saco');
+        // (sem botão redondo no banco desde 08/10 à noite: os filtros são seletores)
+        var antesB = q1('.bk2-duplo', ficha());
+        escolhe('.inv2-sel-espaco', 'passo');
+        return ate(function () { var d2 = q1('.bk2-duplo', ficha()); return d2 && d2 !== antesB && q1('.inv2-sel-espaco', ficha()).value === 'passo'; }, 4000);
       }).then(function () {
         var saco = celulasNomes(q1('.bk2-col[data-lado="saco"]', ficha()));
         var cofre = celulasNomes(q1('.bk2-col[data-lado="cofre"]', ficha()));
@@ -506,8 +512,9 @@
               saco.join(',') + ' | ' + cofre.join(','));
         check('banco · Passo: os títulos contam TUDO (o filtro só esconde)',
               /No cofre \(4\)/.test(ficha().textContent), (q1('.bk2-col[data-lado="cofre"] .bk-tit', ficha()) || {}).textContent);
-        toca('.slot-tabs [data-slot="todos"]');
-        return ate(function () { return q1('.slot-tabs [data-slot="todos"].is-on', ficha()); }, 4000);
+        var antesT = q1('.bk2-duplo', ficha());
+        escolhe('.inv2-sel-espaco', 'todos');
+        return ate(function () { var d2 = q1('.bk2-duplo', ficha()); return d2 && d2 !== antesT; }, 4000);
       });
     });
 

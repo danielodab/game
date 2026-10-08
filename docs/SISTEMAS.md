@@ -1135,6 +1135,29 @@ novo (`hud.js inventoryBody`, classes `.inv2-*`):
 - Foto: `tests/foto_fichas.html?aba=inventario&cartas=1&nivel=10&veste=1&toca=1`
   (`&aba2=carac`, `&slot=punho`; `aba=forja&forjaPeca=1`), também em 390 px.
 
+## 9-A.11 A forja e o banco como dois inventários; a roleta à vista (08/10 à noite)
+
+O dono: "precisa ser o inventário do lado direito e a forja / os itens do banco do lado
+esquerdo, como se fosse dois inventários; fica mais organizado". E na Barraquinha: "os
+prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o item e sorteando".
+
+- **A forja em duas colunas** (`forjaEmDuasColunas`, chamada por `sheetParty` depois de
+  `forgeBody`): a fileira dos modos em cima, inteira; à esquerda a bancada, a ficha do
+  item, a trilha, o estado, o martelo, a prateleira e a Estrela; à direita, numa caixa
+  "Inventário", os seletores de espaço e elemento (`seletoresDeItem`, os mesmos do
+  inventário limpo) e as grades "No saco"/"Vestidas" só de ícones. `forgeBody` marca com
+  `fg-dir` o que vai para a direita; o resto fica. CSS `.fg2`; no estreito, pilha.
+- **O banco**: o cofre à ESQUERDA e o saco à direita (`sheetBanco`), os seletores no lugar
+  das fileiras, as duas grades compactas (`bancoGrade` leva `grade-icones`; vale também
+  para o banco da guilda). A classe `.grade-icones` é a grade só de ícones que o inventário
+  também usa (o nome fica no balão do toque longo, `data-rot`).
+- **A Barraquinha**: a fileira do traje fica SEMPRE à vista — a peça ainda em jogo escura
+  (`.colec-peca.is-escura`), a que o traje já tem com ✓ (`is-tem`) — e o giro corre o anel
+  de luz (`is-on`) aos SALTOS, ao acaso, rápido no começo e devagar no fim, até parar na
+  sorteada (`is-ganhou` pulsa). `window.__roletaRapida` encurta a espera nas provas.
+- Provas: `prova_icones_menus` (forja e banco pelos seletores), `quebra_hud`,
+  `prova_forja`, `prova_conjunto`, `fichas_fotos` 390 px.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
