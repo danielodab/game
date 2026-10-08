@@ -21,6 +21,20 @@ function inteiro(v) { return typeof v === 'number' && isFinite(v) && Math.floor(
  * pedida pela API na sala de espera. Daqui sai, com o PV do fim (carry), o PV MÁXIMO de
  * cada herói (vidaMax, a mesma chave do carry): a API guarda os dois para a sala de
  * espera saber quando a vida enche e recusar a poção de quem já está cheio. */
+/* 08/10 à noite, A PLATEIA (o dono: "drop raro, gema engastada com +1 PA, coroa nova: anunciar no chat da praça com
+ * o nome de quem conseguiu"): as peças ÉPICAS (ou mais) desta sala, para a API gravar (tabela plateia) e o relé
+ * anunciar. O juiz tem o DATA; a API não precisa saber de raridade. */
+const RARIDADES_DE_PLATEIA = ['epico', 'lendario'];
+function rarosDe(J, rw) {
+  const out = [];
+  const ids = (rw && Array.isArray(rw.drops)) ? rw.drops : [];
+  for (const id of ids) {
+    const it = J && J.DATA && J.DATA.items ? J.DATA.items[id] : null;
+    if (it && RARIDADES_DE_PLATEIA.indexOf(it.rarity) >= 0) out.push({ itemId: id, raridade: it.rarity });
+  }
+  return out;
+}
+
 function fecha(corpo) {
   const c = corpo || {};
   const b = c.bilhete || {};
@@ -78,6 +92,7 @@ function fecha(corpo) {
     G.roomIndex = b.roomIndex;
     const rw = G._computeRewards();
     recompensa = JSON.parse(JSON.stringify(rw));
+    recompensa.raros = rarosDe(J, rw);                 // 08/10 à noite: a plateia
     if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
   }
 
@@ -190,6 +205,7 @@ function fechaGrupo(corpo) {
       G.roomIndex = ata.roomIndex;
       const rw = G._computeRewards();
       recompensa = JSON.parse(JSON.stringify(rw));
+      recompensa.raros = rarosDe(J, rw);               // 08/10 à noite: a plateia
       if (rw && rw.drops && rw.drops.perdidos) recompensa.dropsPerdidos = rw.drops.perdidos.slice();
       G._defineRede(null);
     }

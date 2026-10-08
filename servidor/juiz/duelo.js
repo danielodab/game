@@ -93,7 +93,9 @@ function fechaDuelo(corpo) {
     x.w.J.DB.definirBrasa(novo, eu.partidas + 1);
     const depois = tiraEstado(x.w);
     saida[x.k] = Object.assign({ progress: depois.progress, db: depois.db, hash: depois.hash, hashAntes: x.antes.hash, delta,
-                                 pts: novo, partidas: eu.partidas + 1 }, vida[x.k]);
+                                 pts: novo, partidas: eu.partidas + 1,
+                                 // 08/10 à noite: a plateia — o degrau da coroa antes e depois (sem o topo: o placar é da API)
+                                 coroa: { antes: B.tierDe(eu.pts, false).nivel, depois: B.tierDe(novo, false).nivel } }, vida[x.k]);
   });
   return saida;
 }

@@ -943,6 +943,11 @@ var JOGO = (typeof window !== 'undefined')
         if (n > 0) st.cards[id] = n;
       }
     }
+    // ---- o DESCANSO (08/10 à noite): só se o save já o tem — o de antes fica SEM o campo (o hash dele não muda);
+    // ele nasce na primeira sala vencida (Progress.anotaDescanso)
+    if (isObj(raw.descanso) && typeof raw.descanso.dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.descanso.dia)) {
+      st.descanso = { dia: raw.descanso.dia, salas: Math.max(0, Math.floor(num(raw.descanso.salas, 0))) };
+    }
     // ---- as ESTRELAS (08/10): campo novo; o save de antes (sem ele) migra da sobra de cartas
     st.estrelas = {};
     var maxE = num(starsCfg().max, 5);
@@ -2537,6 +2542,35 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
   /* a lista inteira, para a tela: [{id, tipo, nome, prog, alvo, feito, calabouco?}] */
+  /* O BÔNUS DE DESCANSO (08/10 à noite, o dono: "XP dobrado nas três primeiras salas do dia — dá motivo diário sem
+   * punir quem joga muito"). Mora no SAVE (`state.descanso = {dia, salas}`): o dia é o de Brasília, pelo relógio do
+   * SERVIDOR (a agenda) — o cliente e o juiz chegam ao mesmo número, e o hash bate. Quem conta a sala é o funil da
+   * recompensa (game.js, collectRewards), vitória a vitória. */
+  Progress.DESCANSO_SALAS = 3;
+  Progress.DESCANSO_FATOR = 2;
+  function diaBrasilia(ts) {
+    var d = new Date(ts - 3 * 3600 * 1000);
+    var m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+    return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+  }
+  Progress.diaBrasilia = diaBrasilia;
+  /* o retrato de hoje: {dia, salas (vencidas hoje), restam (com XP em dobro), fator}; null sem um instante válido */
+  Progress.descanso = function (ts) {
+    if (!Progress.state) Progress.load();
+    if (!(typeof ts === 'number' && isFinite(ts))) return null;
+    var dia = diaBrasilia(ts), d = Progress.state.descanso;
+    var salas = (isObj(d) && d.dia === dia) ? Math.max(0, Math.floor(num(d.salas, 0))) : 0;
+    var restam = Math.max(0, Progress.DESCANSO_SALAS - salas);
+    return { dia: dia, salas: salas, restam: restam, fator: restam > 0 ? Progress.DESCANSO_FATOR : 1 };
+  };
+  /* uma sala vencida a mais hoje (o dia virou: recomeça do zero); devolve o retrato DEPOIS */
+  Progress.anotaDescanso = function (ts) {
+    var r = Progress.descanso(ts);
+    if (!r) return null;
+    Progress.state.descanso = { dia: r.dia, salas: r.salas + 1 };
+    return Progress.descanso(ts);
+  };
+
   Progress.feitos = function () {
     var ms = isObj(D().monsters) ? D().monsters : {};
     var ds = isArray(D().dungeons) ? D().dungeons : [];

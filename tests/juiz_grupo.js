@@ -188,6 +188,9 @@ if (rd && rd.ok && rd.venc && rd.venc !== 'empate') {
   check('a Brasa sobe para quem venceu e desce para quem perdeu, nos DOIS estados',
         ven.delta > 0 && per.delta < 0 && ven.db.jogador.brasa.pts === ven.pts && per.db.jogador.brasa.partidas === 1,
         JSON.stringify({ ven: [ven.delta, ven.pts], per: [per.delta, per.pts] }));
+  check('o fim do duelo diz o degrau da coroa antes e depois (08/10 à noite: a plateia)',
+        ven.coroa && ven.coroa.antes >= 1 && ven.coroa.depois >= ven.coroa.antes && per.coroa && per.coroa.depois <= per.coroa.antes,
+        JSON.stringify([ven.coroa, per.coroa]));
 }
 let rf;
 try { rf = fechaDuelo(Object.assign({}, pedDuelo, { hashFinal: (ds.hash + 7) >>> 0 })); } catch (e) { rf = { motivo: e.motivo }; }

@@ -1039,6 +1039,10 @@ class GrupoMixin:
                         for k in lados:
                             nova, _ = self._estado_grava(contas[k], estados[k], lado_saida[k], t)
                             soma_trilha(self.con, lados[k]['conta'], t, 'duelo', {'venceu': venc == k})   # 07/10
+                            # 08/10 à noite: a plateia — subiu de coroa (o juiz diz o degrau antes e depois)
+                            coroa = (saida.get(k) or {}).get('coroa')
+                            if isinstance(coroa, dict) and inteiro(coroa.get('depois')) > inteiro(coroa.get('antes')):
+                                self._plateia(lados[k]['conta'], 'coroa', {'nivel': inteiro(coroa['depois'])})
                             self._evento(lados[k]['conta'], 'duelo-ranqueado', {
                                 'did': did, 'venc': venc, 'lado': k, 'versao': nova,
                                 'delta': resultado['delta'][str(lados[k]['conta'])],

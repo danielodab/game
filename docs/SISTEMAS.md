@@ -1071,6 +1071,35 @@ pergaminho gasto). Rotas `/api/guilda/renomear` e `/api/guilda/brasao` (`guilda.
 ficha traz `pergaminhos: {nome, brasao}`. Recusas traduzidas em `erros_en/es.js`. Provas:
 `tests/guilda_api.py` (test_07b), `tests/loja_api.py` 31.
 
+## 9-A.9 A plateia e o bônus de descanso (08/10 à noite)
+
+Duas das sugestões de retenção que o dono escolheu ("faça esses dois").
+
+**A plateia** ("drop raro, gema engastada com +1 PA, coroa nova: anunciar no chat da
+praça com o nome de quem conseguiu"). A fonte é o SERVIDOR, nunca o cliente (que
+poderia inventar): o juiz diz as peças épicas ou lendárias da sala
+(`recompensa.raros`, `recompensa.js rarosDe`) e o degrau da coroa antes e depois do
+duelo (`duelo.js coroa`); a API grava na tabela `plateia` (`api.py _plateia`: nome do
+jogo pelos resumos, senão o da conta; nome reservado cala) ao fechar a sala
+(`salas.py`), na op `engastarGema` com `extra 'pa'` e no duelo ranqueado que sobe de
+coroa (`grupo.py`). O relé (`rele.py vigia_plateia`) olha a tabela a cada 3 s, começa
+do fim (nada do passado) e manda `{t:'plateia', nome, tipo, dados}` a TODAS as
+conexões; a Rede repassa (`tipo 'plateia'`) e a HUD escreve a linha com ✦ no chat
+(`frasePlateia`: os nomes do DATA, já no idioma de quem lê). Provas:
+`tests/rele_plateia_prova.py` 9 (puras + ao vivo), `juiz_recompensa` (raros),
+`juiz_grupo` (coroa), `tests/foto_plateia.html` (as três frases no chat).
+
+**O bônus de descanso** ("XP dobrado nas três primeiras salas do dia; dá motivo
+diário sem punir quem joga muito"). `Progress.descanso(ts)` / `anotaDescanso(ts)`:
+o campo `state.descanso = {dia, salas}` no save, o dia de Brasília pelo relógio do
+servidor (a agenda) — o cliente só aplica com a agenda medida; o juiz, que tem o
+relógio, decide, e o hash bate. No funil (`game.js collectRewards`) o fator ×2 entra
+fora do teto do comprado (é regra, não compra) e a sala vencida conta antes do save.
+O save de antes fica sem o campo (o hash dele não muda) até a primeira sala. A porta
+diz quantas salas em dobro restam hoje (`blocoDescanso`) e a recompensa mostra
+"☀ Descanso · XP ×2 (n de 3 hoje)". Provas: `tests/descanso.js` 12,
+`juiz_recompensa` (a 1ª sala em dobro; com 3 usadas, a metade).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

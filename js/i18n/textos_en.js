@@ -2842,5 +2842,14 @@ JOGO.I18n.registra('en', { textos: {
   "A guilda agora se chama {a}.": "The guild is now called {a}.",
   "Trocar o brasão": "Change the crest",
   "Trocar o brasão (gasta 1 pergaminho)": "Change the crest (spends 1 scroll)",
-  "O brasão da {a} mudou.": "The crest of {a} changed."
+  "O brasão da {a} mudou.": "The crest of {a} changed.",
+  // ---- 08/10 à noite: a plateia no chat e o bônus de descanso
+  "{nome} achou {item} ({rar}) em {portal}!": "{nome} found {item} ({rar}) in {portal}!",
+  "{nome} achou {item} ({rar})!": "{nome} found {item} ({rar})!",
+  "{nome} engastou uma Gema de +1 PA em {item}!": "{nome} socketed a +1 AP Gem into {item}!",
+  "{nome} engastou uma Gema de +1 PA!": "{nome} socketed a +1 AP Gem!",
+  "{nome} chegou à {coroa} na Arena!": "{nome} reached {coroa} in the Arena!",
+  "☀ Descanso · XP ×{f} ({u} de {de} hoje)": "☀ Rest · XP ×{f} ({u} of {de} today)",
+  "☀ <b>Descanso</b>: XP em dobro nas próximas {n} sala(s) vencida(s) de hoje.": "☀ <b>Rest</b>: double XP in the next {n} room(s) won today.",
+  "☀ O descanso de hoje já foi usado ({de} salas em dobro). Amanhã volta.": "☀ Today's rest is already used ({de} rooms at double). It comes back tomorrow."
 } });

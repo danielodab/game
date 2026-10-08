@@ -1110,6 +1110,12 @@ class SalasMixin:
                                                     'versao': nova, 'turnos': turnos,
                                                     'novos': [n['iid'] for n in saida['iids']['novos']],
                                                     'guildaXp': saida['guildaXp']})
+                    # 08/10 à noite: a plateia — a peça épica (ou mais) que caiu nesta sala (o juiz diz quais)
+                    rec = saida.get('recompensa') if isinstance(saida.get('recompensa'), dict) else {}
+                    for raro in (rec.get('raros') or [])[:4]:
+                        if isinstance(raro, dict) and isinstance(raro.get('itemId'), str):
+                            self._plateia(cid, 'drop', {'itemId': raro['itemId'], 'raridade': raro.get('raridade'),
+                                                        'dungeon': s['dungeon']})
             except EstadoMudou:
                 continue                                        # a mesma semente refaz a mesma sala no estado novo
             resp = {'ok': True, 'fase': 'won', 'recompensa': saida.get('recompensa'), 'versao': nova,
@@ -1201,6 +1207,9 @@ class SalasMixin:
                     res = resultados[i] if i < len(resultados) else None
                     if op['nome'] == 'reivindicarMissao' and isinstance(res, dict) and res.get('ok') is True:
                         soma_trilha(self.con, cid, t, 'missao')
+                    # 08/10 à noite: a plateia — a Gema que saiu com +1 PA (o bônus mais raro)
+                    if op['nome'] == 'engastarGema' and isinstance(res, dict) and res.get('extra') == 'pa':
+                        self._plateia(cid, 'gema', {'itemId': res.get('itemId'), 'extra': 'pa'})
                 # 02/10: a Caixa e as ferramentas do Mestre (as ops gm*) também vão à auditoria (moderacao.py)
                 if conta['gm'] and any(n.startswith('gm') for n in nomes_ops) and hasattr(self, '_audita'):
                     self._audita(conta, 'op', cid, {'ops': limpas, 'versao': nova}, t=t)

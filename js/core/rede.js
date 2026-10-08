@@ -468,6 +468,7 @@ var JOGO = (typeof window !== 'undefined')
     return (typeof v === 'string' && AURAS_COR.indexOf(v) >= 0) ? v : null;
   }
   R._corAura = corAura;             // provas
+  R._avisa = avisa;                 // provas (08/10 à noite: a plateia no chat, tests/foto_plateia.html)
   function cartao(para) {
     if (eu) eu.zona = zonaAtual();
     var c = { v: R.VERSAO, nome: eu.nome, titulo: eu.titulo, classe: eu.classe,
@@ -823,6 +824,12 @@ var JOGO = (typeof window !== 'undefined')
       if (!(m.mestre === true && confiaMestre()) && reservadoAqui(nomeChat)) nomeChat = nomeDeTroca(m.de);
       avisa({ tipo: 'chat', id: m.de, nome: nomeChat,
               texto: String(m.texto || '').slice(0, 240) });
+    } else if (m.t === 'plateia') {
+      // 08/10 à noite: A PLATEIA — o anúncio que a API gravou e o relé espalhou (peça épica, Gema +1 PA, coroa nova)
+      var nomeP = String(m.nome || '').slice(0, 40);
+      if (!nomeP || reservadoAqui(nomeP)) return;
+      avisa({ tipo: 'plateia', nome: nomeP, feito: String(m.tipo || ''),
+              dados: (m.dados && typeof m.dados === 'object') ? m.dados : {} });
     } else if (m.t === 'gchat') {
       // 13/09 (dono: "/g manda mensagem pra guild"): o relé novo entrega só aos
       // membros, conferidos pela CONTA no banco — no canal de abas qualquer aba ouviria

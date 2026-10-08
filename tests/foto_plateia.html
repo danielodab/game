@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: a plateia no chat da praça</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10 à noite): as três frases da PLATEIA no chat da praça (peça épica, Gema +1 PA, coroa
+     nova), injetadas pelo gancho de prova da Rede (R._avisa) com o boot de tests/foto_auras.html. O título diz
+     quantas linhas com ✦ o chat mostrou. -->
+<iframe id="tela"></iframe>
+<script>
+(function () {
+  'use strict';
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&graficos=baixa&foto-plateia';
+  var J, U, H, R, t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() && J.UI && J.Hub && J.Rede && J.DB);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) { document.title = 'ERRO sem jogo'; window.__pronto = true; return; }
+      return setTimeout(espera, 250);
+    }
+    U = J.UI; H = J.Hub; R = J.Rede;
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      quadro.contentWindow.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var P = J.Progress;
+    var ids = P.heroIds().filter(function (h) { return h !== 'gm'; });
+    U.selection(ids.slice(0, 1));
+    R.entrar = function () { return true; };
+    R.pares = function () { return []; };
+    R.mover = function () {};
+    J.DB.batizar('Fotógrafo').then(function () {
+      U.showScreen('hub');
+      var v = 0;
+      (function praca() {
+        var e = null;
+        try { e = H._estado(); } catch (e1) {}
+        var d0 = quadro.contentWindow.document;
+        // a HUD liga o ouvinte (R.aoEvento) e monta o chat depois de entrar na praça: espera os dois
+        if ((!(e && e.pos) || typeof R.aoEvento !== 'function' || !d0.querySelector('.hub-chat-log')) && ++v < 160) return setTimeout(praca, 250);
+        R._avisa({ tipo: 'plateia', nome: 'Capitã Ana', feito: 'drop', dados: { itemId: 'gh-widow-shears', raridade: 'epico', dungeon: 'greenhouse' } });
+        R._avisa({ tipo: 'plateia', nome: 'Bia', feito: 'gema', dados: { itemId: 'ci-harpoon-flute', extra: 'pa' } });
+        R._avisa({ tipo: 'plateia', nome: 'Caio', feito: 'coroa', dados: { nivel: 6 } });
+        R._avisa({ tipo: 'chat', id: 'x9', nome: 'Dani', texto: 'parabéns!' });
+        setTimeout(function () {
+          var d = quadro.contentWindow.document;
+          var linhas = [].slice.call(d.querySelectorAll('.hub-chat-linha')).map(function (l) { return l.textContent; });
+          document.title = 'PLATEIA ' + linhas.filter(function (t) { return t.indexOf('✦') === 0 && t.indexOf('✦:') !== 0; }).length + ' de 3 | ' + linhas.join(' || ');
+          window.__pronto = true;
+        }, 800);
+      })();
+    });
+  })();
+})();
+</script>
+</body>
+</html>

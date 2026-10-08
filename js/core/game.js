@@ -2785,15 +2785,25 @@ var JOGO = (typeof window !== 'undefined')
     var fFeitoXp = 1, fFeitoSaque = 1;
     try { if (prog && prog.feitoXp) fFeitoXp = num(prog.feitoXp(), 1); } catch (eF1) { fFeitoXp = 1; }
     try { if (prog && prog.feitoSaque) fFeitoSaque = num(prog.feitoSaque(Game.dungeonId), 1); } catch (eF2) { fFeitoSaque = 1; }
+    /* O BÔNUS DE DESCANSO (08/10 à noite): XP em DOBRO nas três primeiras salas vencidas do dia (Progress.descanso,
+     * no dia de Brasília pelo relógio do servidor). Fora do teto do comprado: é regra do jogo, não compra. Sem a
+     * agenda medida nesta página o fator é 1 — o juiz, que tem o relógio, decide, e o cliente adota o estado dele. */
+    var fDescanso = 1, descansoAntes = null;
+    try {
+      if (prog && prog.descanso && typeof tAg === 'number' && JOGO.Agenda && JOGO.Agenda.medido && JOGO.Agenda.medido()) {
+        descansoAntes = prog.descanso(tAg);
+        if (descansoAntes) fDescanso = descansoAntes.fator;
+      }
+    } catch (eD) { fDescanso = 1; descansoAntes = null; }
     var xpGanho = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                             fatorPoco * fatorGuildaXp * fXp * fFeitoXp);
+                             fatorPoco * fatorGuildaXp * fXp * fFeitoXp * fDescanso);
     /* a carga só se gasta quando o pergaminho ACRESCENTOU XP nesta sala
      * (o grupo ganhou mais do que ganharia sem ele); o bônus por tempo não
      * tem carga — quando ele pesou, só se anota, para a tela dizer */
     var pergaminhoSala = null, bonusTempoSala = null;
     if (fXp > fEvXp) {
       var xpSemPerg = Math.floor(xpTotal / partySize * (difSala.xp || 1) * bonusDesafio *
-                                 fatorPoco * fatorGuildaXp * fEvXp * fFeitoXp);
+                                 fatorPoco * fatorGuildaXp * fEvXp * fFeitoXp * fDescanso);
       if (xpGanho > xpSemPerg && xpGanho > 0) {
         if (fPerg > 1) {
           var restamPerg = 0;
@@ -3027,6 +3037,17 @@ var JOGO = (typeof window !== 'undefined')
     if (fEvPedras > 1 && pedrasComEvento) eventos.push(evAg('pedras', fEvPedras, tAg));
     if (saqueDoEvento) eventos.push(evAg('saque', fSaque, tAg));
 
+    // 08/10 à noite: a sala vencida conta para o descanso de hoje (antes do save, no mesmo funil do juiz)
+    var descansoSala = null;
+    if (descansoAntes && prog && prog.anotaDescanso) {
+      try {
+        var dDepois = prog.anotaDescanso(tAg);
+        if (dDepois) {
+          descansoSala = { fator: fDescanso, usadas: Math.min(prog.DESCANSO_SALAS, dDepois.salas), de: prog.DESCANSO_SALAS,
+                           restam: dDepois.restam };
+        }
+      } catch (eD2) { descansoSala = null; }
+    }
     if (prog && prog.save) { try { prog.save(); } catch (err) { /* sem storage */ } }
 
     return {
@@ -3057,6 +3078,7 @@ var JOGO = (typeof window !== 'undefined')
       eventos: eventos,          // 10/09: [{id, titulo, tipo, fator}] — os eventos do mundo que pesaram
       pergaminho: pergaminhoSala, // Fase C: {fator, restam} quando o Pergaminho da Sabedoria gastou carga; senão null
       bonusXp: bonusTempoSala,    // loja 2: {fator, ate} quando o bônus de XP por tempo pesou; senão null
+      descanso: descansoSala,     // 08/10 à noite: {fator, usadas, de, restam} — o bônus de descanso desta sala (fator 1 = já usado hoje)
       elementChoices: elementChoices
     };
   }

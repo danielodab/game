@@ -219,6 +219,16 @@ CREATE TABLE IF NOT EXISTS eventos(
   dados     TEXT,
   criado_em INTEGER NOT NULL
 );
+-- 08/10 à noite: A PLATEIA — o que o mundo inteiro fica sabendo (peça épica, Gema com +1 PA, coroa nova). A API
+-- grava aqui (_plateia), o relé lê o que é novo (rele.py, vigia_plateia) e anuncia no chat da praça. Nunca apaga
+CREATE TABLE IF NOT EXISTS plateia(
+  id        INTEGER PRIMARY KEY,
+  conta_id  INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  nome      TEXT NOT NULL,
+  tipo      TEXT NOT NULL,
+  dados     TEXT,
+  criado_em INTEGER NOT NULL
+);
 -- os eventos do mundo (10/09). Cancelar grava cancelado_em e nunca apaga: a
 -- linha fica como trilha. O público nunca vê criado_por, criado_em nem o cancelado.
 CREATE TABLE IF NOT EXISTS agenda_eventos(
@@ -897,6 +907,22 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         self.con.execute("INSERT INTO eventos(conta_id, tipo, dados, criado_em) VALUES (?, ?, ?, ?)",
                          (conta_id, tipo, json.dumps(dados, ensure_ascii=False) if dados is not None else None,
                           agora()))
+
+    def _plateia(self, conta_id, tipo, dados):
+        """08/10 à noite: uma linha para o relé anunciar na praça (tabela plateia); dentro da escrita de quem
+        chama. O nome é o do jogador no jogo (resumos), senão o da conta; nome reservado à equipe não sai."""
+        try:
+            r = self.con.execute("SELECT r.nome AS jogo, c.nome AS conta FROM contas c LEFT JOIN resumos r "
+                                 "ON r.conta_id = c.id WHERE c.id = ?", (conta_id,)).fetchone()
+        except sqlite3.Error:
+            r = None
+        nome = (r['jogo'] or r['conta']) if r is not None else None
+        if not isinstance(nome, str) or not nome.strip() or nomes.reservado(nome):
+            return False
+        self.con.execute("INSERT INTO plateia(conta_id, nome, tipo, dados, criado_em) VALUES (?, ?, ?, ?, ?)",
+                         (conta_id, nome.strip()[:40], tipo,
+                          json.dumps(dados, ensure_ascii=False) if dados is not None else None, agora()))
+        return True
 
     @contextlib.contextmanager
     def _escrita(self):

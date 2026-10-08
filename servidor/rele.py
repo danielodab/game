@@ -853,6 +853,26 @@ def le_guilda(caminho, conta_id):
     return (int(g[0]), str(g[1]), frozenset(r[0] for r in ms if isinstance(r[0], int))), True
 
 
+def le_plateia(caminho, desde):
+    """08/10 à noite: as linhas NOVAS da plateia (id > desde) para anunciar na praça; `desde` None = só o id
+    mais alto de agora (o relé começa do fim). Síncrona (thread, _le_banco). Sem a tabela (API de antes): nada."""
+    try:
+        con = _abre_banco(caminho)
+    except (sqlite3.Error, ValueError, OSError):
+        return None, False
+    try:
+        if desde is None:
+            r = con.execute("SELECT COALESCE(MAX(id), 0) FROM plateia").fetchone()
+            return (int(r[0]), []), True
+        rs = con.execute("SELECT id, conta_id, nome, tipo, dados FROM plateia WHERE id > ? ORDER BY id LIMIT ?",
+                         (desde, PLATEIA_LOTE)).fetchall()
+    except sqlite3.Error:
+        return None, False
+    finally:
+        con.close()
+    return (desde, rs), True
+
+
 def le_relacoes(caminho, conta_id):
     """(lista, definitivo): as relações que a conta marcou, [(conta, 'amigo' |
     'inimigo')], até AMIGOS_MAX. Sem a tabela (a API de antes de 13/09), vazia."""
@@ -1804,6 +1824,38 @@ async def trata(ws, path=None):                 # path: assinatura antiga
         log.info("saiu — conectados: %d", len(PARES))
 
 
+PLATEIA_PASSO_S = 3.0          # 08/10 à noite: de quanto em quanto o relé olha a tabela plateia
+PLATEIA_LOTE = 20              # e quantas linhas anuncia por olhada
+
+
+async def vigia_plateia():
+    """08/10 à noite, A PLATEIA: a cada PLATEIA_PASSO_S lê o que a API gravou de novo na tabela plateia (peça
+    épica, Gema com +1 PA, coroa nova — api.py _plateia) e anuncia a TODAS as conexões vivas, {t:'plateia'}.
+    Começa do fim: o que já estava lá antes de o relé subir não se anuncia. Sem --banco, nunca lê; sem ninguém
+    conectado, não gasta leitura."""
+    ultimo = None
+    while True:
+        await asyncio.sleep(PLATEIA_PASSO_S)
+        if VERIFICADOR.caminho is None or (ultimo is not None and not PARES):
+            continue
+        r, ok = await _le_banco(le_plateia, ultimo)
+        if not ok or r is None:
+            continue
+        if ultimo is None:
+            ultimo = r[0]
+            continue
+        for linha in r[1]:
+            ultimo = max(ultimo, int(linha[0]))
+            try:
+                dados = json.loads(linha[4]) if linha[4] else None
+            except ValueError:
+                dados = None
+            msg = json.dumps({'t': 'plateia', 'id': int(linha[0]), 'nome': linha[2], 'tipo': linha[3], 'dados': dados},
+                             ensure_ascii=False, separators=(',', ':'))
+            if PARES:
+                manda_a_todos([p.ws for p in PARES.values()], msg)
+
+
 async def zelador(relatorio):
     """A faxina das dívidas vencidas (oi sem eco, quem já saiu) a cada 30 s,
     e — se `relatorio` > 0 — uma linha de números a cada tantos segundos."""
@@ -1848,10 +1900,12 @@ async def principal(host, porta, compressao=False, relatorio=60.0):
     async with serve(trata, host, porta, **opcoes):
         log.info("o Relé escuta em ws://%s:%d", host, porta)
         faxina = asyncio.ensure_future(zelador(relatorio))
+        plateia = asyncio.ensure_future(vigia_plateia())      # 08/10 à noite
         try:
             await asyncio.Future()
         finally:
             faxina.cancel()
+            plateia.cancel()
 
 
 if __name__ == "__main__":

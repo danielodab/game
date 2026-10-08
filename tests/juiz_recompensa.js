@@ -195,6 +195,22 @@ const fica = (r6.recompensa.xpPorHeroi || {}).sumo || 0;
 check('o dízimo da guilda sai do XP do herói e volta anotado para a guilda do servidor',
       fica >= 2 && (r6.guildaXp === fica || r6.guildaXp === fica - 1), JSON.stringify({ fica, guilda: r6.guildaXp }));
 
+// ---- 08/10 à noite: o bônus de descanso (as três primeiras salas do dia em dobro) e a lista da plateia
+check('a primeira sala do dia paga XP em dobro e conta no save (descanso 1 de 3)',
+      rw.descanso && rw.descanso.fator === 2 && rw.descanso.usadas === 1 && rw.descanso.de === 3 &&
+      r.progress.descanso && r.progress.descanso.salas === 1 && r.progress.descanso.dia === '2026-09-13',
+      JSON.stringify([rw.descanso, r.progress.descanso]));
+const contaUsada = { progress: Object.assign({}, conta.progress, { descanso: { dia: '2026-09-13', salas: 3 } }), db: conta.db };
+let rU = null;
+try { rU = fecha(pedido(contaUsada, dg, ri, s, 'normal', jogo.lances, jogo.hash)); } catch (e) { rU = { erro: e.message }; }
+check('com o descanso de hoje gasto a MESMA sala paga a metade (e anota a 4ª vencida)',
+      rU && rU.ok && Math.abs(rU.recompensa.xpGanho * 2 - rw.xpGanho) <= 1 && rU.recompensa.descanso &&
+      rU.recompensa.descanso.fator === 1 && rU.progress.descanso.salas === 4,
+      JSON.stringify(rU && (rU.erro || [rw.xpGanho, rU.recompensa.xpGanho, rU.recompensa.descanso, rU.progress.descanso])));
+check('a recompensa traz a lista das peças épicas para a plateia (raros, só itemId e raridade)',
+      Array.isArray(rw.raros) && rw.raros.every((x) => typeof x.itemId === 'string' && ['epico', 'lendario'].indexOf(x.raridade) >= 0),
+      JSON.stringify(rw.raros));
+
 // ---- o bônus da guilda confere com o do jogo
 const fs = require('fs');
 const txtGuilda = fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'guilda.js'), 'utf8');

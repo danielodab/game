@@ -1805,6 +1805,7 @@ var JOGO = (typeof window !== 'undefined')
         else {
           var sd2 = seletorDif();
           if (sd2) painel.appendChild(sd2);
+          blocoDescanso(painel);             // 08/10 à noite: as salas com XP em dobro que ainda há hoje
           blocoEscuro(painel);               // 07/10: o caminho escuro, da segunda sala em diante
           // 13/09: a vida na porta; herói a 0 PV apaga o botão e diz quanto falta (vidaTique)
           painel.appendChild(vidaBloco('porta'));
@@ -1933,9 +1934,35 @@ var JOGO = (typeof window !== 'undefined')
      * ninguém. O chat mora no canto: Enter fala, as últimas oito linhas
      * ficam. Em file:// a Rede é no-op e nada disto aparece. */
     var chatLog = null;
-    function chatLinha(quem, texto, cor, de) {
+    /* 08/10 à noite, A PLATEIA (o dono: "drop raro, gema com +1 PA, coroa nova: anunciar no chat da praça com o
+     * nome de quem conseguiu; inveja saudável é o motor de MMO"): a frase de cada feito, com os nomes do DATA (já
+     * no idioma de quem lê). O texto vai cru: chatLinha escapa. */
+    function frasePlateia(ev) {
+      var d = ev.dados || {}, D0 = JOGO.DATA || {}, nome = ev.nome;
+      if (ev.feito === 'drop') {
+        var it = D0.items && D0.items[d.itemId];
+        var dg = null;
+        (D0.dungeons || []).forEach(function (x) { if (x && x.id === d.dungeon) dg = x; });   // o DATA.dungeons é lista
+        if (!it) return '';
+        var rar = d.raridade === 'lendario' ? tr('lendária') : tr('épica');
+        return dg ? tr('{nome} achou {item} ({rar}) em {portal}!', { nome: nome, item: it.name, rar: rar, portal: dg.name || d.dungeon })
+                  : tr('{nome} achou {item} ({rar})!', { nome: nome, item: it.name, rar: rar });
+      }
+      if (ev.feito === 'gema') {
+        var it2 = D0.items && D0.items[d.itemId];
+        return it2 ? tr('{nome} engastou uma Gema de +1 PA em {item}!', { nome: nome, item: it2.name })
+                   : tr('{nome} engastou uma Gema de +1 PA!', { nome: nome });
+      }
+      if (ev.feito === 'coroa') {
+        var T = (JOGO.Brasa && JOGO.Brasa.TIERS) || [];
+        var t = T[Math.max(0, Math.min(T.length - 1, Math.floor(Number(d.nivel) || 1) - 1))];
+        return t ? tr('{nome} chegou à {coroa} na Arena!', { nome: nome, coroa: t.nome }) : '';
+      }
+      return '';
+    }
+    function chatLinha(quem, texto, cor, de, classe) {
       if (!chatLog) return;
-      var li = el('div', 'hub-chat-linha');
+      var li = el('div', 'hub-chat-linha' + (classe ? ' ' + classe : ''));
       // 02/10: a linha de OUTRO jogador leva quem falou — o toque longo / clique direito denuncia (js/ui/moderacao.js)
       if (de) { li.setAttribute('data-de', de); li.setAttribute('data-nome', quem || ''); }
       li.innerHTML = (quem ? '<b style="color:' + (cor || '#e8c25a') + '">' +
@@ -2241,6 +2268,9 @@ var JOGO = (typeof window !== 'undefined')
           } else if (ev.tipo === 'gchat-nao') {
             toast(ev.motivo === 'sem-guilda' ? tr('Você não está numa guilda: o /g não tem para quem ir.')
                                              : tr('O chat da guilda precisa que você esteja na sua conta.'));
+          } else if (ev.tipo === 'plateia') {
+            var fraseP = frasePlateia(ev);               // 08/10 à noite: a plateia no chat
+            if (fraseP) chatLinha(null, '✦ ' + fraseP, null, null, 'is-plateia');
           } else if (ev.tipo === 'chat') {
             if (mutados[ev.id]) return;               // silenciado: nem uma linha
             var textoC = R.filtra ? R.filtra(ev.texto) : ev.texto;
@@ -2992,6 +3022,12 @@ var JOGO = (typeof window !== 'undefined')
           w.appendChild(el('span', 'rw-desafio is-cumprido rw-afixo',
             tr('{icone} {nome} · +{pct}%', { icone: esc(lastRewards.afixo.icone || '✦'), nome: esc(lastRewards.afixo.nome),
                                              pct: Math.round(((lastRewards.afixo.bonus || 1.25) - 1) * 100) })));
+        }
+        // 08/10 à noite: o bônus de descanso pesou nesta sala
+        if (lastRewards.descanso && lastRewards.descanso.fator > 1) {
+          w.appendChild(el('span', 'rw-desafio is-cumprido rw-descanso',
+            tr('☀ Descanso · XP ×{f} ({u} de {de} hoje)', { f: lastRewards.descanso.fator, u: lastRewards.descanso.usadas,
+                                                           de: lastRewards.descanso.de })));
         }
         var chV = chipsEvento('vintem');     // 10/09: o evento do mundo de vinténs
         if (chV) w.appendChild(chV);
@@ -13982,6 +14018,18 @@ var JOGO = (typeof window !== 'undefined')
   /* O CAMINHO ESCURO NA PORTA (07/10, game.js Game.podeEscuro): da segunda sala em diante a porta oferece a
    * escolha — a sala de sempre, ou a sala com um afixo sorteado que paga +25% de XP e saque. Sozinho e, desde
    * 07/10 à noite, em grupo: quem lidera escolhe (a escolha vai no abrir da sala do grupo) e quem segue vê. */
+  /* 08/10 à noite: o BÔNUS DE DESCANSO na porta — quantas salas vencidas com XP em dobro ainda há hoje
+   * (Progress.descanso, no dia de Brasília pelo relógio do servidor; sem a agenda medida, nada se promete) */
+  function blocoDescanso(painel) {
+    var r = safe(function () {
+      if (!(JOGO.Agenda && JOGO.Agenda.medido && JOGO.Agenda.medido())) return null;
+      return P().descanso ? P().descanso(JOGO.Agenda.agora()) : null;
+    }, null);
+    if (!r) return;
+    painel.appendChild(el('p', 'hub-nota porta-descanso' + (r.restam > 0 ? ' is-on' : ''), r.restam > 0
+      ? tr('☀ <b>Descanso</b>: XP em dobro nas próximas {n} sala(s) vencida(s) de hoje.', { n: r.restam })
+      : tr('☀ O descanso de hoje já foi usado ({de} salas em dobro). Amanhã volta.', { de: P().DESCANSO_SALAS || 3 })));
+  }
   function blocoEscuro(painel) {
     if (!safe(function () { return !!(G().podeEscuro && G().podeEscuro()); }, false)) return;
     var ligado = safe(function () { return !!G().escuroDaSala(); }, false);
@@ -14018,6 +14066,7 @@ var JOGO = (typeof window !== 'undefined')
     }
     var sd = seletorDif();
     if (sd) p.appendChild(sd);
+    blocoDescanso(p);                     // 08/10 à noite: o descanso de QUEM olha (cada conta tem o seu)
     blocoEscuro(p);                       // 07/10: quem lidera escolhe o caminho escuro
     if (vidaG) p.appendChild(vidaG);
     var pe = safe(function () { return Cp().podeEntrar(); }, null) || { ok: false, motivo: 'sem-pronto' };
