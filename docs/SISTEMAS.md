@@ -1204,6 +1204,52 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
 - Provas: `node tests/palavroes.js` 12, `tests/rede.html` 17, `tests/titulos.html` 34,
   `node tests/juiz_economia.js` 53 (o Mestre passa, a conta comum cai).
 
+## 9-A.15 A coroa do Mestre (08/10 à noite)
+
+- **O pedido** (o dono: "fiz a arte da coroa do GM que deve ser liberada somente para ele.. e o
+  brilho no meio deve ser vermelho. implante no jogo"). Até aqui o Mestre não tinha coroa própria:
+  ele não joga a Arena (a conta da equipe fica fora do ranking), então em 05/10 ganhou um seletor
+  no painel para vestir qualquer uma das dez do ranking (`GM.coroa/defineCoroa`, `coroaMestre`
+  no resumo). Agora ele tem a DELE, fixa, e o seletor saiu.
+- **A régua** (`js/core/brasa.js`): `JOGO.Brasa.MESTRE = { id: 'gm', nivel: 'gm', nome: 'Coroa do
+  Mestre', tam: 1.42, brilho: 1, cor: '#ff2f2f', modelo: 'coroa_gm', mestre: true }` — um degrau
+  FORA de `TIERS` (ninguém chega nela por pontos). `coroaDe(pts, partidas, ehTopo, oculta,
+  mestre)`: o 5º argumento virou a marca booleana — `true` devolve `MESTRE`; o número da escolha
+  antiga não é mais lido. "Esconder a coroa" (`oculta`) continua valendo por cima. O brilho é o
+  halo da praça (`haloDaCoroa`), na força da Coroa X e VERMELHO; o tamanho é o da X.
+- **Quem é o Mestre**: o próprio cliente pelo `JOGO.GM.ativo()` (`coroaDoMestre()` na HUD, agora
+  booleano — no ar, só a conta que o servidor marcou `gm`); os outros pelo `mestre: true` que SÓ
+  o Relé carimba no perfil (`servidor/rele_ident.carimba` joga fora o `mestre` do cliente e põe o
+  seu na conta gm). `hub3d.tierDoFantasma` passa `perfil.mestre === true`; a HUD não manda mais
+  `coroaMestre` no resumo (o Relé e a Rede seguem tirando o campo de quem o forjar — um cliente
+  antigo não suja o cartão).
+- **A arte** (`tools/embute_coroa_gm.py`): o `.glb` do dono pesava 8,6 MB (três JPEG de 2048² e
+  26 mil triângulos). A ferramenta lança o Blender em segundo plano (Decimate por colapso, razão
+  0,3 → 7,8 mil triângulos; texturas a 1024; GLB com JPEG q90) e grava `JOGO.MODELS['coroa_gm']`
+  em `assets/embedded/coroas-pvp-3d.js`, ao lado das dez do ranking; `extrai_assets.py` a vira
+  `assets/models/bundle/coroas-pvp-3d/coroa_gm.glb` (796 KB, grupo `coroas`). As três texturas
+  ficam em 1024 como nas dez coroas (`fica_inteiro` poupa a pasta; `tests/texturas_prova.py`
+  cobra que nas exceções o relevo siga do tamanho da cor). Nunca referencia a pasta de downloads:
+  o caminho do `.glb` cru é argumento.
+- **Na praça** (`js/render3d/hub3d.js`): `chaveDaCoroa(tier)` = `tier.modelo` ou
+  `'coroa_pvp_n' + nivel`; `modeloCoroa` aceita a patente (número) ou a chave (string). A coroa
+  do Mestre desce SOB DEMANDA pela mesma porta das dez (`esperaCoroa` → `Bundle.pede`), só
+  quando um Mestre está à vista — nunca no boot, e a pré-busca (`/^coroa_pvp_n/`) não a lista.
+  Não há bilhete PNG dela (`COROAS_PVP['ngm']` não existe): enquanto o 3D não abre, a plaquinha
+  espera, em vez de mostrar outra patente. Gira e flutua como as outras, no topo da pilha
+  (`baseY`). `Hub._estado()` ganha `coroaMestre` e `coroaHalo`; `Hub._coroaFantasma(id)` é a
+  sonda das provas.
+- **Nas fichas**: Personagem › Arena mostra a marca ♛ em vermelho (`.char-coroa-mestre`) e "a
+  coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho"; o perfil de um
+  vizinho Mestre mostra "Coroa do Mestre · fixa, só do Mestre" (`.perfil-coroa-mestre`). O painel
+  do Mestre › Ferramentas troca o seletor por um cartão (`.pm-coroa-fixa`) que diz que ela é fixa.
+  en/es.
+- Provas: `node tests/coroa_mestre.js` 20 (régua, GM sem seletor, Rede: carimbo/forjado/esconder);
+  `tests/foto_coroa_gm.html` (a praça com o herói como Mestre, um vizinho carimbado `mestre:
+  true` no Cavaleiro Negro e um comum de Coroa VII; cobra 3D, halo vermelho, giro e altura; título
+  `COROA GM n/n`, `window.__pronto`); `tests/painel_mestre.html` (o cartão no lugar do seletor);
+  `python tests/texturas_prova.py` 16; `tools/reduz_texturas.py --conferir` e `extrai_assets.py
+  --conferir` em dia; `node tools/i18n_falta.js --lista` zero.
 ## 9-A.14 A grade dos membros fora do salão e a pergunta antes do ataque no Campo (08/10 à noite)
 
 - **A grade dos membros fora do salão** (o dono: "no menu da guilda, fora dela, os membros podem

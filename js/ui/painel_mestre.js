@@ -1047,33 +1047,15 @@ var JOGO = (typeof window !== 'undefined')
       alvo.appendChild(c);
     }
     // 05/10 (o dono: "preciso que no menu do mestre ele consiga liberar [...] o ranking da coroa também"):
-    // qual das dez coroas o Mestre carrega acima da cabeça. Só a arte — não mexe em ponto nem placar
-    if (G && G.coroa && G.defineCoroa && G.ativo && G.ativo()) {
-      var cc = el('div', 'pm-cartao');
+    // o Mestre escolhia aqui qual das dez coroas do ranking carregava. 08/10 à noite (o dono: "fiz a arte
+    // da coroa do GM que deve ser liberada somente para ele"): a coroa do Mestre é a DELE, fixa
+    // (JOGO.Brasa.MESTRE), e o seletor saiu — o cartão só diz isso, para ninguém procurar a escolha aqui
+    if (G && G.ativo && G.ativo()) {
+      var cc = el('div', 'pm-cartao pm-coroa-fixa');
       cc.appendChild(el('h3', null, 'Coroa do Mestre'));
-      var sel = document.createElement('select');
-      sel.className = 'pm-coroa';
-      var ROM = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-      var op0 = document.createElement('option');
-      op0.value = '0'; op0.textContent = 'a de verdade';
-      sel.appendChild(op0);
-      ROM.forEach(function (r, i) {
-        var op = document.createElement('option');
-        op.value = String(i + 1); op.textContent = 'Coroa ' + r;
-        sel.appendChild(op);
-      });
-      sel.value = String(G.coroa());
-      sel.onchange = function () {
-        if (!G.defineCoroa(Number(sel.value))) { aviso('não deu — só o Mestre escolhe a coroa'); return; }
-        // repinta só a plaquinha e reanuncia o cartão (a praça não é refeita)
-        try { if (JOGO.UI && JOGO.UI.coroaDoMestreMudou) JOGO.UI.coroaDoMestreMudou(); } catch (e) {}
-        aviso(G.coroa() ? 'O Mestre carrega a Coroa ' + ROM[G.coroa() - 1] + '.' : 'O Mestre voltou à coroa de verdade.', 'good');
-      };
-      var lc = el('div', 'pm-linha');
-      lc.appendChild(campo('Coroa acima da cabeça', sel));
-      cc.appendChild(lc);
-      cc.appendChild(el('p', 'pm-dim', 'Só a aparência, na praça e na ficha: pontos, partidas e placar da Arena não mudam. ' +
-        'Mora neste navegador; "Esconder a coroa" na ficha continua valendo por cima.'));
+      cc.appendChild(el('p', 'pm-dim', 'A coroa acima da cabeça do Mestre é a dele, fixa — a arte do dono, com o brilho vermelho. ' +
+        'Só a conta do Mestre a carrega (o servidor carimba quem é); as dez coroas do ranking são dos jogadores. ' +
+        'Pontos, partidas e placar da Arena não mudam; "Esconder a coroa" na ficha continua valendo por cima.'));
       alvo.appendChild(cc);
     }
     // 04/10 (o dono: "o modo teste retire também, qualquer coisa dou nível para outra conta minha"): o corpo

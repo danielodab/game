@@ -151,22 +151,12 @@ var JOGO = (typeof window !== 'undefined')
     injetaClasse();                        // os stats do def mudam na hora
     return true;
   };
-  /* A COROA DO MESTRE (05/10): qual das dez ele carrega acima da cabeça — 0 é "a de verdade".
-   * Mora neste navegador, junto do PA/PP: é enfeite, não vale nada no servidor, e assim não
-   * pede coluna no banco nem rota nova. Quem não é Mestre lê 0 sempre (a marca de um save
-   * mexido não veste ninguém); e o que viaja para os outros só vale carimbado pelo Relé. */
-  GM.coroa = function () {
-    if (!GM.ativo()) return 0;
-    var n = cfg.coroa;
-    return (typeof n === 'number' && n === Math.floor(n) && n >= 1 && n <= 10) ? n : 0;
-  };
-  GM.defineCoroa = function (n) {
-    if (!GM.ativo()) return false;
-    n = Math.floor(Number(n) || 0);
-    cfg.coroa = (n >= 1 && n <= 10) ? n : 0;
-    gravaConfig(cfg);
-    return true;
-  };
+  /* A COROA DO MESTRE (05/10 → 08/10 à noite). De 05/10 a 08/10 o Mestre escolhia aqui qual das
+   * dez coroas do ranking carregava (GM.coroa/defineCoroa, `cfg.coroa` neste navegador). Em
+   * 08/10 o dono fez a ARTE dela ("a coroa do GM que deve ser liberada somente para ele") e a
+   * escolha saiu: a coroa do Mestre é fixa, JOGO.Brasa.MESTRE, e quem a pendura é a HUD pelo
+   * GM.ativo() (o próprio) e o `mestre: true` do Relé (os outros). Um `cfg.coroa` que tenha
+   * sobrado num save antigo não é lido por ninguém. */
   function clampa(v, lo, hi, def) {
     v = Math.floor(Number(v));
     if (!isFinite(v)) return def;

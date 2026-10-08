@@ -2158,6 +2158,9 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
   background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
 }
 .char-coroa { width: 62px; height: 62px; object-fit: contain; }
+/* 08/10 à noite: a coroa do Mestre não tem bilhete PNG — a marca em vermelho, a cor do brilho dela na praça */
+.char-coroa.char-coroa-mestre { display: flex; align-items: center; justify-content: center;
+  font: 700 46px var(--ui-serif); color: #ff2f2f; text-shadow: 0 0 14px rgba(255,47,47,.85), 0 0 3px #fff; }
 .char-coroa-nm { font: 700 14px var(--ui-serif); color: var(--gold); }
 .char-heroi { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; }
 .char-heroi-nm { font: 700 15px var(--ui-serif); color: #f0ead8; }
@@ -2253,6 +2256,8 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .perfil-coroa img { width: 44px; height: 44px; object-fit: contain;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
 .perfil-coroa.is-sem { color: var(--dim); font-size: 12px; }
+.perfil-coroa-marca { font: 700 34px var(--ui-serif); color: #ff2f2f; line-height: 44px;
+  text-shadow: 0 0 12px rgba(255,47,47,.85), 0 0 2px #fff; }
 .perfil-total { font-size: 12.5px; color: var(--dim); }
 .perfil-h { font: 700 14px var(--ui-serif); color: var(--gold); margin: 12px 0 6px; }
 .perfil-classes { display: flex; flex-direction: column; gap: 4px; }

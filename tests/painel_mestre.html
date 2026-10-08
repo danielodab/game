@@ -375,22 +375,15 @@
           q('.pm-corpo').textContent.indexOf('PA e PP do Mestre') >= 0);
     check('o "Aparelhar o Mestre" (da ficha da tecla M) mora nas Ferramentas, uma vez só',
           qq('.pm-corpo button').filter(function (b) { return b.textContent === 'Aparelhar o Mestre'; }).length === 1);
-    // 05/10: a Coroa do Mestre — o seletor grava a escolha e manda repintar SÓ a plaquinha (uma vez)
-    var selC = q('.pm-corpo select.pm-coroa');
-    check('Ferramentas: o seletor da Coroa do Mestre, com "a de verdade" e as dez coroas',
-          !!selC && selC.options.length === 11 && selC.options[0].textContent === 'a de verdade' &&
-          selC.options[7].textContent === 'Coroa VII' && selC.options[10].textContent === 'Coroa X' && selC.value === '0');
-    var repintes = 0, uiAntes = JOGO.UI;
-    JOGO.UI = Object.assign({}, uiAntes || {}, { coroaDoMestreMudou: function () { repintes++; return true; } });
-    if (selC) { selC.value = '7'; selC.onchange(); }
-    check('escolher a Coroa VII: o JOGO.GM guarda 7 e a plaquinha é repintada uma vez só',
-          JOGO.GM.coroa() === 7 && repintes === 1, 'coroa ' + JOGO.GM.coroa() + ', repintes ' + repintes);
-    PM.abrir('ferramentas');
-    selC = q('.pm-corpo select.pm-coroa');
-    check('reabrir as Ferramentas mostra a escolha guardada, sem repintar nada', !!selC && selC.value === '7' && repintes === 1);
-    if (selC) { selC.value = '0'; selC.onchange(); }
-    check('"a de verdade" volta ao normal', JOGO.GM.coroa() === 0 && repintes === 2);
-    JOGO.UI = uiAntes;
+    // 05/10: a Coroa do Mestre tinha um seletor (qual das dez do ranking). 08/10 à noite (o dono fez a arte
+    // da coroa do GM, "liberada somente para ele"): a coroa é fixa, o seletor saiu e o cartão só diz isso
+    var cartaoC = q('.pm-corpo .pm-coroa-fixa');
+    check('Ferramentas: o cartão "Coroa do Mestre" diz que ela é fixa e só dele — e não há mais seletor (08/10 à noite)',
+          !!cartaoC && cartaoC.textContent.indexOf('Coroa do Mestre') >= 0 && cartaoC.textContent.indexOf('fixa') >= 0 &&
+          cartaoC.textContent.indexOf('vermelho') >= 0 && !q('.pm-corpo select.pm-coroa'),
+          cartaoC ? cartaoC.textContent.slice(0, 80) : 'sem cartão');
+    check('o JOGO.GM não guarda mais escolha de coroa (GM.coroa/defineCoroa saíram)',
+          JOGO.GM.coroa === undefined && JOGO.GM.defineCoroa === undefined);
     PM.fechar();
 
     // ============================================================ a denúncia do jogador

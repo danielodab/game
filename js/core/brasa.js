@@ -119,22 +119,26 @@ var JOGO = (typeof window !== 'undefined')
    * quem ESCONDEU a coroa na ficha (`oculta`) fica sem ela. `partidas` fica na assinatura para
    * quem chama dizer o que sabe — a regra não o usa mais. É a régua única do herói, dos
    * fantasmas da praça, da ficha, do perfil e do placar. */
-  B.coroaDe = function (pts, partidas, ehTopo, oculta, escolha) {
+  B.coroaDe = function (pts, partidas, ehTopo, oculta, mestre) {
     if (oculta === true) return null;
-    var n = B.coroaEscolha(escolha);
-    if (n) return B.TIERS[n - 1];
+    if (mestre === true) return B.MESTRE;
     return B.tierDe(pts, ehTopo === true);
   };
-  /* A COROA QUE O MESTRE ESCOLHE (05/10). O dono: "preciso que no menu do mestre ele consiga
-   * liberar [...] o ranking da coroa também". O Mestre não joga a Arena (o servidor o recusa),
-   * então a coroa dele parava na I para sempre; pelo painel ele escolhe qual carrega, da I à X.
-   * É SÓ A ARTE acima da cabeça: pontos, partidas, placar e temporada não sabem disto, e o
-   * "esconder a coroa" continua por cima. Aqui só a régua: 1..10 inteiro vale, o resto é 0
-   * ("a de verdade"). Quem pode escolher é o JOGO.GM; quem confere que veio de um Mestre é o
-   * Relé (servidor/rele_ident.py) e a Rede (js/core/rede.js, vitrine). */
-  B.coroaEscolha = function (v) {
-    return (typeof v === 'number' && v === Math.floor(v) && v >= 1 && v <= B.TIERS.length) ? v : 0;
-  };
+  /* A COROA DO MESTRE (08/10 à noite). O dono: "fiz a arte da coroa do GM que deve ser liberada
+   * somente para ele.. e o brilho no meio deve ser vermelho". Até aqui o Mestre escolhia no
+   * painel qual das DEZ do ranking carregava (05/10) — ele não joga a Arena, então a de verdade
+   * parava na I para sempre. Agora ele tem a dele: um degrau FORA da escada (não está em TIERS,
+   * ninguém chega nela por pontos), fixo, que só a conta carimbada `mestre` pelo Relé pendura —
+   * o próprio cliente pelo JOGO.GM.ativo(), os outros pelo `mestre: true` do perfil que o
+   * servidor/rele_ident.py carimba. É SÓ A ARTE acima da cabeça: pontos, partidas, placar e
+   * temporada não sabem disto, e o "esconder a coroa" continua por cima. `modelo` é a chave do
+   * .glb (coroas-pvp-3d.js, tools/embute_coroa_gm.py); `nivel` fica 'gm' porque a praça só
+   * pendura coroa com nivel verdadeiro e o bilhete PNG (COROAS_PVP['n'+nivel]) não existe
+   * para ela — sem o 3D aberto, a plaquinha espera a coroa descer (Bundle.pede) em vez de
+   * mostrar um bilhete de outra patente. O brilho é o halo da praça, na força da Coroa X e
+   * VERMELHO; `tam` é o diâmetro, o mesmo da X. */
+  B.MESTRE = { id: 'gm', nivel: 'gm', nome: Tx('Coroa do Mestre'), min: 0, tam: 1.42, brilho: 1.00,
+               cor: '#ff2f2f', modelo: 'coroa_gm', mestre: true };
 
   /* Elo clássico: o esperado vem da diferença, o K é fixo, o piso segura o
    * fundo. Devolve { pts, delta } — quem aplica no DB é o chamador. */

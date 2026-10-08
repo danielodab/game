@@ -2953,5 +2953,8 @@ JOGO.I18n.registra('en', { textos: {
   "<b>A sala não rendeu:</b> o servidor recusou a conferência da batalha ({erro}).": "<b>The room gave nothing:</b> the server refused the battle's verification ({erro}).",
   "<b>A sala não rendeu:</b> o servidor não confirmou a vitória ({erro}).": "<b>The room gave nothing:</b> the server didn't confirm the victory ({erro}).",
   "(até {s} s)": "(up to {s} s)",
-  "<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.": "<b>Waiting for the server's verification…</b> your battle synced from a snapshot, and it's the other player's clean record that confirms the room{ate}. The reward comes in by itself when it arrives."
+  "<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.": "<b>Waiting for the server's verification…</b> your battle synced from a snapshot, and it's the other player's clean record that confirms the room{ate}. The reward comes in by itself when it arrives.",
+  "Coroa do Mestre": "Master's Crown",
+  "a coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho": "the Master's crown is fixed — only your account wears it, with the red glow",
+  "<b>{a}</b> · fixa, só do Mestre": "<b>{a}</b> · fixed, the Master's alone"
 } });
