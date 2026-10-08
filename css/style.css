@@ -597,6 +597,10 @@ i, em { font-style: normal; color: var(--dim); }
   border-left: 3px solid var(--bad); padding: 4px 0 4px 8px; margin-bottom: 8px;
 }
 .rw-xp-why b { color: var(--gold); }
+/* 08/10 à noite: a sala que o servidor NÃO pagou (o porquê, em vermelho) e a que ainda espera a conferência */
+.rw-xp-recusa { color: var(--bad); }
+.rw-xp-recusa b { color: var(--bad); }
+.rw-xp-espera { border-left-color: var(--gold); }
 .rw-hero { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .rw-hero canvas { border-radius: 8px; border: 1px solid var(--line2); }
 .rw-hero-t { flex: 1 1 auto; min-width: 0; }

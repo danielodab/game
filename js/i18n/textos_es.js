@@ -2934,5 +2934,20 @@ JOGO.I18n.registra('es', { textos: {
   // ---- 08/10 à noite: a pergunta antes do ataque no Campo
   "Atacar {nome}?": "¿Atacar a {nome}?",
   "A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.": "La pelea empieza al instante y <b>{nome}</b> no puede negarse. Los dos deben estar en el Campo, con la pareja viva y dentro de la paridad.",
-  "Atacar": "Atacar"
+  "Atacar": "Atacar",
+  // ---- 08/10 à noite: a sala que não rendeu — o porquê na tela de recompensa (hud.js) e a espera da conferência
+  "A sala do grupo foi conferida: a recompensa entrou.": "La sala del grupo fue verificada: la recompensa entró.",
+  "<b>A sala não rendeu:</b> fechou rápido demais para ser de verdade — o servidor não pagou.": "<b>La sala no rindió:</b> cerró demasiado rápido para ser de verdad — el servidor no pagó.",
+  "<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abram a sala de novo.": "<b>La sala no rindió:</b> las reglas del juego cambiaron en medio de la sala (el servidor se actualizó) — abran la sala de nuevo.",
+  "<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abra a sala de novo.": "<b>La sala no rindió:</b> las reglas del juego cambiaron en medio de la sala (el servidor se actualizó) — abre la sala de nuevo.",
+  "<b>A sala não rendeu:</b> a batalha sincronizou por foto e nenhum registro limpo chegou a tempo — o servidor não pôde conferir a vitória. Se a conexão cair de novo, espere o parceiro antes de seguir.": "<b>La sala no rindió:</b> la batalla se sincronizó por foto y ningún registro limpio llegó a tiempo — el servidor no pudo verificar la victoria. Si la conexión vuelve a caer, espera a tu compañero antes de seguir.",
+  "<b>A sala não rendeu:</b> a sala venceu no servidor (passou da validade, ou outra foi aberta por cima) — abram de novo.": "<b>La sala no rindió:</b> la sala venció en el servidor (pasó su validez, u otra se abrió encima) — ábranla de nuevo.",
+  "<b>A sala não rendeu:</b> o registro que o servidor refez não chegou à vitória (parou antes do fim).": "<b>La sala no rindió:</b> el registro que el servidor rehízo no llegó a la victoria (se detuvo antes del final).",
+  "<b>A sala não rendeu:</b> sua conta entrou em outro aparelho e esta sala não foi conferida.": "<b>La sala no rindió:</b> tu cuenta entró en otro dispositivo y esta sala no fue verificada.",
+  "<b>A sala não rendeu:</b> o servidor não respondeu à conferência.": "<b>La sala no rindió:</b> el servidor no respondió a la verificación.",
+  "<b>A sala não rendeu:</b> o servidor confirmou a vitória mas não mandou a recompensa.": "<b>La sala no rindió:</b> el servidor confirmó la victoria pero no envió la recompensa.",
+  "<b>A sala não rendeu:</b> o servidor recusou a conferência da batalha ({erro}).": "<b>La sala no rindió:</b> el servidor rechazó la verificación de la batalla ({erro}).",
+  "<b>A sala não rendeu:</b> o servidor não confirmou a vitória ({erro}).": "<b>La sala no rindió:</b> el servidor no confirmó la victoria ({erro}).",
+  "(até {s} s)": "(hasta {s} s)",
+  "<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.": "<b>Esperando la verificación del servidor…</b> tu batalla se sincronizó por foto y es el registro limpio del otro jugador el que confirma la sala{ate}. La recompensa entra sola cuando llegue."
 } });

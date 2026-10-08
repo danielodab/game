@@ -326,6 +326,35 @@ async function algunsLances(c) {
         depoisE.length === 1 && depoisE[0].corpo.tentativa === 'eco-tent-2' && Array.isArray(depoisE[0].corpo.lances) &&
         !registroDe(sete), JSON.stringify(depoisE.map((p) => p.corpo.tentativa)));
 
+  // ---- 08/10 à noite (o dono: "todas as XPs foram zeradas" numa sala em grupo): a SALA EM GRUPO 'aguardando' — o
+  //      registro fotografado não refaz a sala; o servidor espera o limpo do outro — pergunta de novo sozinha até a
+  //      resposta de vez (antes a tela zerava na primeira resposta), cada volta avisa a tela, e o teto de voltas segura
+  const AG = tres.J.Autoridade;
+  let vezAg = 0; const esperas = [];
+  srv.respostas['/api/grupo/fechar'] = (corpo) => (++vezAg < 3
+    ? { ok: true, status: 200, fase: 'aguardando', motivo: 'fotografada', recompensa: null, esperaAte: Math.floor(Date.now() / 1000) + 120, esperaMs: 5 }
+    : { ok: true, status: 200, fase: 'won', recompensa: { xpGanho: 6, xpPorHeroi: { sumo: 6 } }, versao: 3, hash: 1 });
+  const antesAg = srv.pedidos.length;
+  const rAg = await AG.fechaGrupo({ gid: 'grupo-0000000000000000c0de', lances: [], hashFinal: 42, fotografada: true }, (r, n) => esperas.push([r.motivo, n]));
+  const fAg = srv.pedidos.slice(antesAg).filter((p) => p.rota === '/api/grupo/fechar');
+  check('a sala em grupo "aguardando" pergunta de novo até a resposta de vez (3 pedidos, o mesmo corpo) e resolve com a paga',
+        rAg && rAg.ok && rAg.fase === 'won' && rAg.recompensa && rAg.recompensa.xpGanho === 6 && fAg.length === 3 &&
+        fAg.every((p) => p.corpo.fotografada === true && p.corpo.hashFinal === 42), JSON.stringify({ rAg, n: fAg.length }));
+  check('cada volta da espera avisa a tela com o motivo do servidor', JSON.stringify(esperas) === '[["fotografada",0],["fotografada",1]]', JSON.stringify(esperas));
+  srv.respostas['/api/grupo/fechar'] = () => ({ ok: true, status: 200, fase: 'aguardando', motivo: 'fotografada', recompensa: null, esperaMs: 5 });
+  const tetoAntes = AG.ESPERA_GRUPO_VEZES; AG.ESPERA_GRUPO_VEZES = 2;
+  const antesTeto = srv.pedidos.length;
+  const rTeto = await AG.fechaGrupo({ gid: 'grupo-0000000000000000c0de', lances: [], hashFinal: null, fotografada: true });
+  AG.ESPERA_GRUPO_VEZES = tetoAntes;
+  check('o teto de voltas segura a espera sem fim (2 voltas = 3 pedidos) e resolve com a última resposta',
+        rTeto && rTeto.fase === 'aguardando' && srv.pedidos.slice(antesTeto).filter((p) => p.rota === '/api/grupo/fechar').length === 3,
+        JSON.stringify(rTeto));
+  srv.respostas['/api/grupo/fechar'] = () => ({ ok: false, status: 422, erro: 'a sala fechou rápido demais para ser de verdade', motivo: 'rapido-demais' });
+  const antesR = srv.pedidos.length;
+  const rR = await AG.fechaGrupo({ gid: 'grupo-0000000000000000c0de', lances: [], hashFinal: null, fotografada: false });
+  check('a recusa de vez (422 rapido-demais) resolve na hora, com o motivo para a tela de recompensa',
+        rR && !rR.ok && rR.recusada === true && rR.motivo === 'rapido-demais' && srv.pedidos.slice(antesR).length === 1, JSON.stringify(rR));
+
   console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);
 })().catch((e) => { console.log('a prova estourou:', e && e.stack); process.exit(1); });

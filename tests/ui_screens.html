@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOTERRA 2.0 — Telas da Interface (JOGO.UI)</title>
-<link rel="stylesheet" href="../css/style.css?v=32">
+<link rel="stylesheet" href="../css/style.css?v=33">
 <style>
   /* moldura do teste: um "celular" 390×844 ao lado do painel de verificação */
   html, body { overflow: auto; height: auto; }
@@ -51,26 +51,26 @@
 <!-- BLINDAGEM DO SAVE: antes de tudo, porque esta página semeia um progresso de
      mentira e não pode encostar no jogo do usuário. Uma linha; qualquer página
      de teste que use JOGO.Progress deveria incluí-la. -->
-<script src="save_sandbox.js?v=32"></script>
-<script src="../vendor/pixi.min.js?v=32" onerror="window.__noPixi=1"></script>
-<script src="../js/core/data/elements.js?v=32"></script>
-<script src="../js/core/data/classes.js?v=32"></script>
-<script src="../js/core/data/spells.js?v=32"></script>
-<script src="../js/core/data/progression.js?v=32"></script>
-<script src="../js/core/data/monsters.js?v=32"></script>
-<script src="../js/core/data/dungeons.js?v=32"></script>
-<script src="../js/core/data/fusions.js?v=32"></script>
-<script src="../js/core/data/pets.js?v=32"></script>
-<script src="../js/core/data/items.js?v=32"></script>
-<script src="../js/core/data/items_extra.js?v=32"></script>
-<script src="../js/core/engine.js?v=32"></script>
-<script src="../js/core/fusion.js?v=32"></script>
-<script src="../js/core/ai.js?v=32"></script>
-<script src="../js/core/progress.js?v=32"></script>
-<script src="../js/core/game.js?v=32"></script>
-<script src="../js/render2d/art.js?v=32"></script>
-<script src="../js/ui/icones_ui.js?v=32"></script>
-<script src="../js/ui/hud.js?v=32"></script>
+<script src="save_sandbox.js?v=33"></script>
+<script src="../vendor/pixi.min.js?v=33" onerror="window.__noPixi=1"></script>
+<script src="../js/core/data/elements.js?v=33"></script>
+<script src="../js/core/data/classes.js?v=33"></script>
+<script src="../js/core/data/spells.js?v=33"></script>
+<script src="../js/core/data/progression.js?v=33"></script>
+<script src="../js/core/data/monsters.js?v=33"></script>
+<script src="../js/core/data/dungeons.js?v=33"></script>
+<script src="../js/core/data/fusions.js?v=33"></script>
+<script src="../js/core/data/pets.js?v=33"></script>
+<script src="../js/core/data/items.js?v=33"></script>
+<script src="../js/core/data/items_extra.js?v=33"></script>
+<script src="../js/core/engine.js?v=33"></script>
+<script src="../js/core/fusion.js?v=33"></script>
+<script src="../js/core/ai.js?v=33"></script>
+<script src="../js/core/progress.js?v=33"></script>
+<script src="../js/core/game.js?v=33"></script>
+<script src="../js/render2d/art.js?v=33"></script>
+<script src="../js/ui/icones_ui.js?v=33"></script>
+<script src="../js/ui/hud.js?v=33"></script>
 <script>
 (function () {
   'use strict';
@@ -325,6 +325,39 @@
     check('recompensa: aguenta o pacote sem xpMult/xpPorHeroi',
       /\+50\s*XP/.test(velho) && velho.indexOf('[object Object]') < 0 && velho.indexOf('NaN') < 0,
       velho.slice(0, 140));
+    // ---- 08/10 à noite (o dono: "todas as XPs foram zeradas"): a sala que o servidor NÃO pagou diz POR QUÊ, numa
+    //      linha fixa em vermelho (.rw-xp-recusa) pelo código do servidor; a que ainda espera a conferência diz que espera
+    var vazia = { xpGanho: 0, xpMult: {}, xpPorHeroi: {}, levelUps: [], drops: [], elementChoices: [] };
+    function telaCom(extra) {
+      var d = {}, k;
+      for (k in vazia) d[k] = vazia[k];
+      for (k in extra) d[k] = extra[k];
+      JOGO.UI.showScreen('roomClear', d);
+      return document.querySelector('#ui-root .ui-screen.is-on');
+    }
+    var tR = telaCom({ recusada: 'a sala fechou rápido demais para ser de verdade', recusadaMotivo: 'rapido-demais' });
+    var lR = tR.querySelector('.rw-xp-recusa');
+    check('recompensa recusada (rapido-demais): a linha fixa do porquê existe e fala do rápido demais',
+      !!lR && /r[áa]pido demais/i.test(lR.textContent) && /n[ãa]o rendeu/i.test(lR.textContent), lR ? lR.textContent : 'sem linha');
+    check('recompensa recusada: a linha é vermelha (a cor de --bad)',
+      !!lR && getComputedStyle(lR).color === getComputedStyle(document.documentElement).getPropertyValue('--bad').trim().replace(/^#(..)(..)(..)$/, function (m, r, g, b) { return 'rgb(' + parseInt(r, 16) + ', ' + parseInt(g, 16) + ', ' + parseInt(b, 16) + ')'; }),
+      lR ? getComputedStyle(lR).color : 'sem linha');
+    var tF = telaCom({ recusada: 'a sala em grupo teve uma sincronização por foto e não pôde ser conferida', recusadaMotivo: 'nao-conferida', rede: true });
+    check('recompensa não conferida (foto): explica a foto e o registro limpo',
+      /foto/i.test((tF.querySelector('.rw-xp-recusa') || {}).textContent || ''), (tF.querySelector('.rw-xp-recusa') || {}).textContent);
+    var tG = telaCom({ recusada: 'as regras do jogo mudaram no meio da sala — abram a sala de novo', recusadaMotivo: 'regras-mudaram', rede: true });
+    check('recompensa com as regras mudadas: manda abrir de novo',
+      /abram a sala de novo/i.test((tG.querySelector('.rw-xp-recusa') || {}).textContent || ''));
+    var tV = telaCom({ recusada: 'o estado divergiu no lance 7', recusadaMotivo: 'divergiu' });
+    check('recompensa recusada pelo juiz: cita a frase do servidor',
+      /recusou a confer[êe]ncia/i.test((tV.querySelector('.rw-xp-recusa') || {}).textContent || '') && /lance 7/.test(tV.textContent));
+    var tE = telaCom({ conferindo: { motivo: 'fotografada', esperaMs: 95000 }, rede: true });
+    var lE = tE.querySelector('.rw-xp-espera');
+    check('recompensa esperando a conferência: a linha de espera diz que espera, o porquê e até quando (95 s)',
+      !!lE && /esperando a confer[êe]ncia/i.test(lE.textContent) && /foto/i.test(lE.textContent) && /95 s/.test(lE.textContent) && !tE.querySelector('.rw-xp-recusa'),
+      lE ? lE.textContent : 'sem linha');
+    var tOk = telaCom({ xpGanho: 90, xpMult: { sumo: 1, curandeiro: 1 }, xpPorHeroi: { sumo: 90, curandeiro: 90 } });
+    check('recompensa paga: nenhuma linha de recusa nem de espera', !tOk.querySelector('.rw-xp-recusa') && !tOk.querySelector('.rw-xp-espera'));
   })();
 
   // ---- folhas (modais)

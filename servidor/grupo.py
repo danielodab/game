@@ -314,10 +314,16 @@ class GrupoMixin:
                         vidas[d + ':' + h] = v
                 self._vida_recusa_zero(vidas)
             carry = {k: v['hp'] for k, v in vidas.items()} or None
-            # uma sala em grupo aberta por dupla: abrir outra vence a anterior
-            self.con.execute("UPDATE salas_grupo SET estado = 'vencida', fechada_em = ? WHERE estado = 'aberta' "
-                             "AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?))",
+            # uma sala em grupo aberta por dupla: abrir outra vence a anterior (08/10 à noite: com o motivo
+            # 'outra-aberta' — quem ainda fechar a de antes recebe o porquê, e o log diz qual foi vencida)
+            vencidas = [r['gid'] for r in self.con.execute(
+                "SELECT gid FROM salas_grupo WHERE estado = 'aberta' "
+                "AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?))", (cid, pid, pid, cid)).fetchall()]
+            self.con.execute("UPDATE salas_grupo SET estado = 'vencida', motivo = 'outra-aberta', fechada_em = ? "
+                             "WHERE estado = 'aberta' AND ((lider_id = ? AND membro_id = ?) OR (lider_id = ? AND membro_id = ?))",
                              (t, cid, pid, pid, cid))
+            for vg in vencidas:
+                log.warning("sala em grupo vencida por outra aberta por cima: %s — aberta por #%d com #%d", vg, cid, pid)
             gid, semente = secrets.token_urlsafe(18), secrets.randbits(31)
             party = [{'conta': cid, 'dono': dono, 'herois': herois}, {'conta': pid, 'dono': dono_p, 'herois': herois_p}]
             self.con.execute(
@@ -358,7 +364,11 @@ class GrupoMixin:
         log.info("sala em grupo vencida por regras novas: %s — %.200s", gid, erro)
         raise Recusa(410, 'as regras do jogo mudaram no meio da sala — abram a sala de novo', motivo='regras-mudaram')
 
-    def _grupo_marca(self, gid, estado, motivo, t, evento=None):
+    def _grupo_marca(self, gid, estado, motivo, t, evento=None, por=None, detalhe=None):
+        """A sala em grupo que NÃO paga (recusada, vencida, nao-conferida). 08/10 à noite (o dono: "todas as XPs
+        foram zeradas"): TODA marca dessas vai ao log, com o gid, quem fechou (`por`), o motivo e o detalhe (o tempo,
+        a frase do juiz) — a sala em grupo recusada era muda no log e o dono não tinha como achar o porquê no Coolify
+        (a solo já dizia "sala recusada: #cid (motivo)")."""
         with self._escrita():
             linha = self.con.execute("SELECT lider_id, membro_id FROM salas_grupo WHERE gid = ?", (gid,)).fetchone()
             n = self.con.execute("UPDATE salas_grupo SET estado = ?, motivo = ?, fechada_em = ? WHERE gid = ? "
@@ -366,6 +376,10 @@ class GrupoMixin:
             if n and evento and linha is not None:
                 for quem in (linha['lider_id'], linha['membro_id']):
                     self._evento(quem, evento, {'gid': gid, 'motivo': motivo})
+        if n:
+            log.warning("sala em grupo %s: %s (%s) — fechada por #%s, contas #%s e #%s%s", estado, gid, motivo,
+                        por if por is not None else '?', linha['lider_id'] if linha else '?',
+                        linha['membro_id'] if linha else '?', (' — %.200s' % detalhe) if detalhe else '')
         return n
 
     def _grupo_fechada(self, cid, gid):
@@ -375,7 +389,9 @@ class GrupoMixin:
             pago = self.con.execute("SELECT recompensa FROM salas_grupo_pago WHERE gid = ? AND conta_id = ?",
                                     (gid, cid)).fetchone()
         if g['estado'] == 'vencida':
-            raise Recusa(410, 'sala em grupo vencida: abram de novo')
+            # 08/10 à noite: o `motivo` viaja (a tela de recompensa diz o porquê pelo código) e o log diz quem pediu
+            log.info("sala em grupo vencida pedida de novo: %s — conta #%d (%s)", gid, cid, g['motivo'] or 'vencida')
+            raise Recusa(410, 'sala em grupo vencida: abram de novo', motivo=g['motivo'] or 'vencida')
         if g['estado'] == 'paga':
             rec = json.loads(pago['recompensa']) if pago else None
             if isinstance(rec, dict) and rec.get('eco') is True:
@@ -386,6 +402,9 @@ class GrupoMixin:
         resposta = {'ok': True, 'fase': g['estado'], 'recompensa': None, 'motivo': g['motivo']}
         if g['estado'] == 'nao-conferida':
             resposta['erro'] = NAO_CONFERIDA
+        # 08/10 à noite: o segundo a fechar uma sala que já caiu (recusada pelo registro do outro, perdida pelo
+        # registro do outro, não conferida) recebe o porquê — e o log também o diz, com quem pediu
+        log.info("sala em grupo %s pedida de novo: %s — conta #%d, motivo %s", g['estado'], gid, cid, g['motivo'])
         return 200, resposta
 
     def grupo_fechar(self, conta, corpo):
@@ -411,7 +430,10 @@ class GrupoMixin:
                 if g['estado'] != 'aberta':
                     acao = 'fechada'
                 elif t - g['aberta_em'] > SALA_VALIDADE:
-                    self.con.execute("UPDATE salas_grupo SET estado = 'vencida', fechada_em = ? WHERE gid = ?", (t, gid))
+                    self.con.execute("UPDATE salas_grupo SET estado = 'vencida', motivo = 'validade', fechada_em = ? "
+                                     "WHERE gid = ?", (t, gid))
+                    log.warning("sala em grupo vencida pela validade: %s — fechada por #%d, %d s depois de abrir",
+                                gid, cid, t - g['aberta_em'])
                     acao = 'fechada'
                 elif fotos and g['primeiro_fecho'] is not None and t >= g['primeiro_fecho'] + GRUPO_ESPERA:
                     acao = 'nao-conferida'                  # a espera pelo registro limpo acabou
@@ -448,17 +470,26 @@ class GrupoMixin:
                 return self._grupo_fechada(cid, gid)
             if acao == 'eco':
                 if instante - g['aberta_em'] < SALA_MIN_S:
-                    self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
+                    self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada', por=cid,
+                                      detalhe='fechou em %.1f s (mínimo %.1f s)' % (instante - g['aberta_em'], SALA_MIN_S))
                     raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
                 return self._grupo_fecha_eco(cid, continue_eco[0], gid, continue_eco[1], lances, hash_final, instante, t)
             if acao == 'nao-conferida':
-                self._grupo_marca(gid, 'nao-conferida', 'fotografada', t, 'grupo-nao-conferida')
+                self._grupo_marca(gid, 'nao-conferida', 'fotografada', t, 'grupo-nao-conferida', por=cid,
+                                  detalhe='fotografadas %s, primeiro fecho há %d s' % (fotos, t - (g['primeiro_fecho'] or t)))
                 return self._grupo_fechada(cid, gid)
             if acao == 'aguarda':
-                return 200, {'ok': True, 'fase': 'aguardando', 'recompensa': None,
-                             'esperaAte': (g['primeiro_fecho'] or t) + GRUPO_ESPERA}
+                # 08/10 à noite: a espera tem o `esperaMs` como a guerra (o jogo pergunta de novo até a resposta de vez,
+                # em vez de zerar a tela — js/core/autoridade.js esperaGrupo) e vai ao log: é a cara mais provável do
+                # "XP zerada" em grupo (o registro de quem sincronizou por foto não refaz a sala; só o limpo do outro paga)
+                ate = (g['primeiro_fecho'] or t) + GRUPO_ESPERA
+                log.info("sala em grupo fotografada espera o registro limpo: %s — conta #%d, fotografadas %s, até +%d s",
+                         gid, cid, fotos, max(0, ate - t))
+                return 200, {'ok': True, 'fase': 'aguardando', 'motivo': 'fotografada', 'recompensa': None,
+                             'esperaAte': ate, 'esperaMs': max(0, int((ate - instante) * 1000))}
             if acao == 'rapido':
-                self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
+                self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada', por=cid,
+                                  detalhe='fechou em %.1f s (mínimo %.1f s)' % (instante - g['aberta_em'], SALA_MIN_S))
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             pedido = {
                 'membros': [{'conta': {'id': m['conta']['id'], 'gm': bool(m['conta']['gm'])}, 'dono': m['p']['dono'],
@@ -476,15 +507,21 @@ class GrupoMixin:
                 if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
                     self._grupo_vence_por_regras(gid, t, e.erro)            # 19/09: vence, não é fraude (410)
                 if e.status == 422:
-                    self._grupo_marca(gid, 'recusada', e.extra.get('motivo') or 'juiz', t, 'grupo-recusada')
+                    self._grupo_marca(gid, 'recusada', e.extra.get('motivo') or 'juiz', t, 'grupo-recusada', por=cid,
+                                      detalhe=e.erro)
+                else:
+                    # o juiz fora do ar (503) não marca a sala: o jogo tenta de novo — mas o log diz que ele caiu
+                    log.warning("sala em grupo sem o juiz: %s — conta #%d, %d %.200s", gid, cid, e.status, e.erro)
                 raise
             if (not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str)
                     or not isinstance(saida.get('membros'), list)):
+                log.warning("sala em grupo com o juiz torto: %s — conta #%d", gid, cid)
                 raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')
             turnos = max(0, inteiro(saida.get('turnosJogador')))
             minimo = max(SALA_MIN_S, SALA_S_POR_TURNO * turnos)
             if instante - g['aberta_em'] < minimo:
-                self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada')
+                self._grupo_marca(gid, 'recusada', 'rapido-demais', t, 'grupo-recusada', por=cid,
+                                  detalhe='%d vezes em %.1f s (mínimo %.1f s)' % (turnos, instante - g['aberta_em'], minimo))
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
             if saida['fase'] != 'won':
                 # derrota: nada muda nos estados da economia (13/09: a poção saiu da batalha, e com ela o
@@ -494,6 +531,10 @@ class GrupoMixin:
                                          "WHERE gid = ? AND estado = 'aberta'", (t, gid)).rowcount
                     if n:
                         self._grupo_vida_grava(json.loads(g['party']), saida.get('carry'), saida.get('vidaMax'), gid)
+                # 08/10 à noite: o registro refeito que não chega à vitória (a derrota, ou a sala largada no meio) também
+                # vai ao log — se o jogo de quem fechou viu 'won', o registro dele parou antes do fim, e é aqui que se vê
+                log.info("sala em grupo perdida: %s — fechada por #%d, o juiz refez até '%s' (%d vezes)", gid, cid,
+                         saida['fase'], turnos)
                 return self._grupo_fechada(cid, gid)
             por_conta = {m.get('contaId'): m for m in saida['membros'] if isinstance(m, dict)}
             pagos = []

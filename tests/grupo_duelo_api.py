@@ -243,11 +243,26 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertEqual((r['fase'], r['recompensa']), ('aguardando', None))
         self.assertGreater(r['esperaAte'], time.time())
+        # 08/10 à noite: a espera diz o motivo e o `esperaMs` (o jogo pergunta de novo até a resposta de vez, como na
+        # guerra, em vez de zerar a tela), e vai ao log com o gid e a conta — a cara mais provável do "XP zerada"
+        self.assertEqual(r['motivo'], 'fotografada', r)
+        self.assertTrue(0 < r['esperaMs'] <= 120000, r)
+        self.assertIn('sala em grupo fotografada espera o registro limpo: %s — conta #%d' % (gid, bia.conta['id']),
+                      self.log_api())
         status, r = self.fecha_grupo(ana, gid, jogo)                    # o limpo chega dentro da espera: paga
         self.assertEqual((status, r.get('fase')), (200, 'won'), r)
         status, r = self.fecha_grupo(bia, gid, {'lances': [], 'hash': None}, fotografada=True)
         self.assertEqual((status, r['fase'], r['versao']), (200, 'won', 2), r)
         self.assertIsInstance(r['recompensa'], dict)
+
+    def log_api(self):
+        """08/10 à noite: o log da API da prova (o que o dono vê no Coolify) — toda sala que não paga tem de estar nele."""
+        with open(os.path.join(self.pasta, 'api.log'), 'rb') as f:
+            bruto = f.read()
+        try:
+            return bruto.decode('utf-8')
+        except UnicodeDecodeError:              # no Windows a API escreve no codepage do console (cp1252)
+            return bruto.decode('cp1252', errors='replace')
 
     def test_04_grupo_nao_conferida(self):
         self.precisa('grupo')
@@ -261,6 +276,30 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         self.assertEqual((r['fase'], r['recompensa'], r['erro']),
                          ('nao-conferida', None, 'a sala em grupo teve uma sincronização por foto e não pôde ser conferida'))
         self.assertEqual((self.save(ana)['versao'], self.save(bia)['versao']), (1, 1))
+        # 08/10 à noite: a marca vai ao log (quem fechou, as duas contas, o motivo) e o segundo a pedir também
+        log = self.log_api()
+        self.assertIn('sala em grupo nao-conferida: %s (fotografada) — fechada por #%d, contas #%d e #%d'
+                      % (gid, bia.conta['id'], ana.conta['id'], bia.conta['id']), log)
+        status, r = self.fecha_grupo(ana, gid, jogo, fotografada=True)
+        self.assertEqual((status, r['fase'], r['motivo']), (200, 'nao-conferida', 'fotografada'), r)
+        self.assertIn('sala em grupo nao-conferida pedida de novo: %s — conta #%d, motivo fotografada' % (gid, ana.conta['id']),
+                      self.log_api())
+
+    def test_04b_grupo_vencida_diz_o_motivo(self):
+        """08/10 à noite: a sala em grupo que venceu (outra aberta por cima, como o jogo faz ao seguir para a próxima)
+        responde 410 com o `motivo` — a tela de recompensa diz o porquê pelo código — e o log diz quem pediu."""
+        self.precisa('grupo')
+        ana, bia = self.dupla()
+        gid, jogo = self.abre_vencivel(ana, bia)
+        self.sql("UPDATE luta_aberta SET estado = 'fechada' WHERE conta_id = ? AND estado = 'aberta'", ana.conta['id'])
+        status, r2 = ana.pede('POST', '/api/grupo/abrir', self.corpo_abrir(bia))
+        self.assertEqual(status, 200, r2)
+        status, r = self.fecha_grupo(bia, gid, jogo)
+        self.assertEqual((status, r['motivo']), (410, 'outra-aberta'), r)
+        log = self.log_api()
+        self.assertIn('sala em grupo vencida por outra aberta por cima: %s — aberta por #%d com #%d'
+                      % (gid, ana.conta['id'], bia.conta['id']), log)
+        self.assertIn('sala em grupo vencida pedida de novo: %s — conta #%d (outra-aberta)' % (gid, bia.conta['id']), log)
 
     def test_05_grupo_adulterado_e_largado(self):
         self.precisa('grupo')
@@ -272,6 +311,9 @@ class ProvaDoGrupoEDuelo(unittest.TestCase):
         status, r = self.fecha_grupo(bia, gid, torto)
         self.assertEqual((status, r.get('motivo')), (422, 'vez'), r)
         self.assertEqual(self.sql("SELECT estado FROM salas_grupo WHERE gid = ?", gid)[0]['estado'], 'recusada')
+        # 08/10 à noite: a recusa do juiz vai ao log com o gid, quem fechou, as contas, o motivo e a frase do juiz
+        self.assertIn('sala em grupo recusada: %s (vez) — fechada por #%d, contas #%d e #%d — '
+                      % (gid, bia.conta['id'], ana.conta['id'], bia.conta['id']), self.log_api())
         status, r = self.fecha_grupo(ana, gid, jogo)
         self.assertEqual((status, r['fase'], r['motivo']), (200, 'recusada', 'vez'), r)
         self.assertEqual((self.save(ana)['versao'], self.save(bia)['versao']), (1, 1))

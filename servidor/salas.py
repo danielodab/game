@@ -988,7 +988,8 @@ class SalasMixin:
                                  (agora(), bilhete)).rowcount
             if n:
                 self._evento(cid, 'sala-recusada', {'bilhete': bilhete, 'motivo': motivo, 'erro': erro})
-        log.info("sala recusada: #%d (%s) — %.200s", cid, motivo, erro)
+        # 08/10 à noite: com o bilhete e como aviso (a sala que não paga é o que o dono procura no log do Coolify)
+        log.warning("sala recusada: %s — conta #%d (%s) — %.200s", bilhete, cid, motivo, erro)
 
     def sala_fechar(self, conta, corpo):
         """Sem conferência de versão (o bilhete basta): o estado é o que o servidor tem
@@ -1016,11 +1017,16 @@ class SalasMixin:
                 regras_bilhete = rg['regras'] if rg is not None and _inteiro_puro(rg['regras']) else 1
                 afixo_bilhete = self._afixo_guardado('salas_afixo', 'bilhete', bilhete)   # 07/10
                 if s['estado'] == 'vencida':
-                    raise Recusa(410, 'bilhete vencido: abra a sala de novo')
+                    # 08/10 à noite: o `motivo` viaja (a tela de recompensa diz o porquê pelo código)
+                    log.info("bilhete vencido pedido de novo: %s — conta #%d", bilhete, cid)
+                    raise Recusa(410, 'bilhete vencido: abra a sala de novo', motivo='vencida')
                 if s['estado'] != 'aberta':
-                    raise Recusa(409, 'esse bilhete já foi fechado (%s)' % s['estado'])
+                    log.info("bilhete já fechado pedido de novo: %s — conta #%d (%s)", bilhete, cid, s['estado'])
+                    raise Recusa(409, 'esse bilhete já foi fechado (%s)' % s['estado'], motivo=s['estado'])
                 if t - s['aberta_em'] > SALA_VALIDADE:
                     self.con.execute("UPDATE salas SET estado = 'vencida', fechada_em = ? WHERE bilhete = ?", (t, bilhete))
+                    log.warning("bilhete vencido pela validade: %s — conta #%d, %d s depois de abrir", bilhete, cid,
+                                t - s['aberta_em'])
                     vencido = True
                 elif instante - s['aberta_em'] < SALA_MIN_S:
                     rapido = True                               # nem pede ao juiz
@@ -1029,7 +1035,7 @@ class SalasMixin:
                     fatores = self._fatores_no_ar(t)
                     guilda = self._guilda_contexto(cid, t)
             if vencido:
-                raise Recusa(410, 'bilhete vencido: abra a sala de novo')
+                raise Recusa(410, 'bilhete vencido: abra a sala de novo', motivo='vencida')
             if rapido:
                 self._sala_recusa(cid, bilhete, 'rapido-demais', 'fechou em %.1f s' % (instante - s['aberta_em']))
                 raise Recusa(422, 'a sala fechou rápido demais para ser de verdade', motivo='rapido-demais')
@@ -1083,6 +1089,9 @@ class SalasMixin:
                         self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                 if not n:
                     raise Recusa(409, 'esse bilhete já foi fechado')
+                # 08/10 à noite: a sala que o juiz refez sem chegar à vitória vai ao log — se o jogo viu 'won' e o
+                # juiz parou antes, o registro chegou curto, e é aqui que se vê (com o bilhete e as vezes)
+                log.info("sala perdida: %s — conta #%d, o juiz refez até '%s' (%d vezes)", bilhete, cid, saida['fase'], turnos)
                 self._loja_depois_da_luta(conta)                # 04/10: o que a loja segurou pela luta entra agora
                 pub = self._estado_publico(cid)
                 return 200, {'ok': True, 'fase': saida['fase'], 'recompensa': None, 'versao': pub['versao'],

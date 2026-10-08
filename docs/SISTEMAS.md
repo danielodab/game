@@ -1221,6 +1221,63 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
   `pvp_hud` (a pergunta, o Cancelar e o Atacar; as duas falhas do quadro já existiam no HEAD),
   `sede_visita` (a grade fora do salão).
 
+## 9-A.18 A sala que não rendeu: o porquê na tela (08/10 à noite)
+
+O dono: "acho que os XPs dos calabouços estão bugados.. fui na Cisterna dos Afogados primeira sala
+em modo normal com duas contas, 4 personagens level 1 e ativei x3 o bônus de xp ou seja x30 e todas
+as XPs foram zeradas".
+
+- **A conta do juiz está certa.** `tests/juiz_grupo_xp.js` refaz exatamente essa sala
+  (duas contas × dois heróis nível 1, Cisterna sala 0 em normal, a IA pelos quatro): sem evento
+  cada herói ganha 6 XP; com o evento ×3, 19; com ×10, 64; o "×30" do dono vale o **teto**
+  (`AGENDA_TETOS` xp = 10) e dá os mesmos 64 — nunca zero. O descanso (×2) entra; o nível sobe.
+- **De onde vem o zero, então:** de quando o servidor NÃO confirma a vitória. Em
+  `js/core/game.js` (`fechaNoServidor` / `fechaGrupoNoServidor`), toda resposta que não é
+  `ok + fase 'won' + recompensa` virava `recompensaVazia(motivo)` — tudo a zero — e o motivo
+  passava só num toast que some. A HUD não imprimia `recusada`. As caras possíveis, pelo servidor:
+  - `fase: 'aguardando'` (a sala em grupo **fotografada**: o registro de quem sincronizou por
+    foto não refaz a sala; o servidor espera o registro limpo do outro até `esperaAte`,
+    `GRUPO_ESPERA` = 120 s, e só então paga ou dá `nao-conferida`). O jogo tratava como "não
+    confirmou" e zerava NA HORA — mesmo com o outro membro pagando a sala segundos depois. É a
+    cara mais provável do relato: duas contas na mesma máquina são duas abas, e a aba escondida
+    anda sem tela (`Game._tique(semTela)`), passa a vez pelo relógio, é dada por sumida pelo outro
+    (`Coop.SILENCIO_MS`/`GRACA_MS`), e ao voltar sincroniza pela foto (`coop.js`, `S.fotografada =
+    true`). Com as duas abas fotografadas, ninguém paga: `nao-conferida` para as duas.
+  - `rapido-demais` (`SALA_MIN_S` 4 s, `SALA_S_POR_TURNO` 0,35 s × vezes encerradas pelos
+    **dois** jogadores — o juiz conta todo `e` do registro). A régua NÃO é injusta para quatro
+    heróis nível 1: a sala da prova tem 37 vezes → mínimo 12,9 s desde a abertura (que é na
+    antessala, antes da preparação), contra minutos de luta real. Fica como está.
+  - 422 do juiz (`divergiu`, `vez`, `unidade`…), 410 `regras-mudaram`/`vencida` (outra sala
+    aberta por cima, a validade), `perdida` pelo registro do outro, `outro-aparelho`.
+  - A API fora do ar: `fechaEmBruto` tenta de novo até responder (status 0/5xx nunca chega à
+    tela zerada); o 503 do juiz também volta a tentar.
+- **O que entrou:**
+  - **A tela de recompensa diz o porquê**, numa linha fixa em vermelho no bloco Experiência
+    (`hud.js`, `porqueSemRecompensa`, `.rw-xp-recusa`), pelo código do servidor em
+    `recusadaMotivo` (`game.js`, `codigoDaRecusa`: o `motivo`, senão a `fase` da sala já fechada,
+    senão `sem-resposta`), com a frase dele como complemento: rápido demais / as regras mudaram,
+    abram de novo / sincronizou por foto e nenhum registro limpo chegou / a sala venceu / o
+    registro não chegou à vitória / outro aparelho / sem resposta / o servidor recusou a
+    conferência ({erro}). No solo e no grupo.
+  - **`aguardando` espera em vez de zerar**: `Autoridade.fechaGrupo(corpo, aoAguardar)` pergunta
+    de novo a cada `ESPERA_GRUPO_MS` (5 s, ou o `esperaMs` da resposta) até a resposta de vez
+    (`esperaGrupo`, como `esperaGuerra`; teto `ESPERA_GRUPO_VEZES` 40, acima dos 120 s do
+    servidor). Na primeira volta a tela de recompensa sai já, dizendo que **espera** (`conferindo`,
+    `porqueEspera`, `.rw-xp-espera`, "até N s"); a resposta de vez refaz a tela se o jogador ainda
+    estiver nela — se já seguiu, a recompensa entrou pelo estado adotado e um toast avisa.
+  - **O servidor registra toda sala que não paga** (`log.warning`, para o dono achar no Coolify):
+    em grupo, `_grupo_marca` com gid, quem fechou, as duas contas, o motivo e o detalhe (o tempo e
+    o mínimo no `rapido-demais`, a frase do juiz, as contas fotografadas); a espera fotografada e a
+    sala vencida pela validade; a `perdida` (até onde o juiz refez); o segundo a pedir uma sala já
+    caída. No solo, `_sala_recusa` com o bilhete, o bilhete vencido e o já fechado. A resposta
+    `aguardando` leva `motivo: 'fotografada'` e `esperaMs`; os 410 levam `motivo`
+    (`vencida`/`regras-mudaram`).
+- Provas: `tests/juiz_grupo_xp.js` (9), `tests/luta_aberta_cliente.js` (+4: a espera do grupo, o
+  aviso por volta, o teto, a recusa de vez; as 2 falhas de sempre já existiam no HEAD),
+  `tests/grupo_duelo_api.py` (test_03 cobra `motivo`/`esperaMs` e o log; test_04 o log da
+  `nao-conferida` e do segundo pedido; test_04b o 410 `vencida` com motivo; test_05 o log da
+  recusa do juiz), `tests/ui_screens.html` (a linha de recusa por código, a cor, a espera).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
