@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: Nome e brasão (os pergaminhos da guilda)</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10 à noite): o bloco "Nome e brasão" da ficha da guilda, o que o LÍDER vê dentro
+     da Sede com os pergaminhos da loja do site. O servidor é um dublê (Gd.minha/renomear/trocarBrasao e
+     Hub.naSede respondem aqui): `?nome=1&brasao=0` são os pergaminhos que a conta tem; `?abre=nome|brasao`
+     toca o botão antes da foto. O título diz o que achou: NB bN=on|off bB=on|off campo=1|0 oficina=1|0. -->
+<iframe id="f" src="../index.html?foto-guilda-pergaminhos"></iframe>
+<script>
+var Q = {};
+location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+var f = document.getElementById('f');
+f.onload = function () {
+  var w = f.contentWindow, d = w.document;
+  var t0 = Date.now();
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && Date.now() - t0 < 60000) return setTimeout(espera, 800);
+    try {
+      var Gd = w.JOGO.Guilda;
+      var FICHA = { id: 7, nome: 'Os Soterrados', emblema: '⚔', liderId: 11, eu: 11, souLider: true, meuCargo: 'lider',
+                    membros: [{ id: 11, nome: 'Capitã Ana', cargo: 'lider', xpDoado: 1200, dizimo: 10, dizimoProprio: false },
+                              { id: 12, nome: 'Bia', cargo: 'membro', xpDoado: 300, dizimo: 10, dizimoProprio: false }],
+                    xp: 900, nivel: 4, moedas: 5000, bonus: { drop: 0, xp: 0 }, banco: [], treinos: 12, criadaEm: Date.now(),
+                    porta: 'aberta', dizimo: 10, mural: null, pedidos: [], meta: null,
+                    pergaminhos: { nome: Number(Q.nome != null ? Q.nome : 1), brasao: Number(Q.brasao != null ? Q.brasao : 0) } };
+      w.JOGO.Hub.naSede = function () { return true; };
+      Gd.noServidor = function () { return true; };
+      Gd.minha = function () { return Promise.resolve(FICHA); };
+      Gd.lista = function () { return Promise.resolve([]); };
+      Gd.renomear = function (nome) { FICHA.nome = nome; FICHA.pergaminhos.nome--; return Promise.resolve({ ok: true, guilda: FICHA }); };
+      Gd.trocarBrasao = function (emb) { FICHA.emblema = emb; FICHA.pergaminhos.brasao--; return Promise.resolve({ ok: true, guilda: FICHA }); };
+      w.JOGO.DB.batizar('Capitã Ana').then(function () {
+        w.JOGO.UI.openSheet('guilda');
+        setTimeout(function () {
+          var nb = d.querySelector('.guilda-nb');
+          var bts = nb ? nb.querySelectorAll('.guilda-nb-corpo button') : [];
+          var bN = bts[0], bB = bts[1];
+          var estado = 'NB' + (nb ? '' : '-AUSENTE') + ' bN=' + (bN ? (bN.disabled ? 'off' : 'on') : '?') +
+                       ' bB=' + (bB ? (bB.disabled ? 'off' : 'on') : '?');
+          if (Q.abre === 'nome' && bN) bN.click();
+          if (Q.abre === 'brasao' && bB) bB.click();
+          setTimeout(function () {
+            estado += ' campo=' + (d.querySelector('.guilda-nb-corpo input.hub-input') ? 1 : 0) +
+                      ' oficina=' + (d.querySelector('.guilda-nb-corpo .brasao-ed') ? 1 : 0);
+            document.title = estado;
+            window.__pronto = true;
+          }, 900);
+        }, 1800);
+      });
+    } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
+  })();
+};
+</script>
+</body>
+</html>
