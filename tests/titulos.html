@@ -102,6 +102,9 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
   check('perder a posição NÃO invalida o de chefe',
         T.valido('o Cala-Batida', { chefes: { 'boss-deepknock': 10 }, pvm: null }) === true);
   check('título inventado nunca é válido', T.valido('o Rei de Tudo', { pvm: 1 }) === false);
+  // 08/10 à noite: só o Mestre escolhe o que quiser (curto)
+  check('o Mestre escolhe o título que quiser (até 23 letras)', T.valido('o Rei de Tudo', { pvm: 1, mestre: true }) === true &&
+        T.valido('um título comprido demais para a placa', { mestre: true }) === false && T.valido('   ', { mestre: true }) === false);
   check('sem título é sem título', T.valido(null, { pvm: 1 }) === false);
 
   // ---- a posição numa lista ordenada

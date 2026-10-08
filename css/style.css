@@ -1649,6 +1649,9 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .inv2 .ig-cell .ig-lv { top: -6px; left: -3px; font-size: 10px; }
 .inv2 .ig-cell .item-stars { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
 .inv2 .ig-cell.is-vazia { min-height: 54px; }
+/* 08/10 à noite: o título livre do Mestre, no menu dos títulos */
+.tit-livre { display: flex; gap: 6px; padding: 6px 8px; align-items: center; }
+.tit-livre .hub-input { flex: 1 1 auto; min-width: 0; }
 /* ---- SELECIONAR VÁRIAS (08/10 à noite): o banco e a quebra da forja */
 .bk2-dica { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bk2-dica .bk2-varios { margin-left: auto; }

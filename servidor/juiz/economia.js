@@ -218,7 +218,8 @@ const OPS = {
       // pela fila da loja) — sem esta linha a régua não o via e o servidor recusava "Voz do Eco" a quem o ganhou
       const eco = (J.Progress && J.Progress.titulosEco) ? J.Progress.titulosEco() : [];
       const estado = { chefes: chefes || {}, pvm: x.contexto.pvm || null, pvp: x.contexto.pvp || null,
-                       porClasse: pc, classeNomes: nomesClasse, eco };
+                       porClasse: pc, classeNomes: nomesClasse, eco,
+                       mestre: !!(x.conta && x.conta.gm) };     // 08/10 à noite: o Mestre escolhe o título que quiser
       if (!J.Titulos || !J.Titulos.valido(t, estado)) return { ok: false, erro: 'título não conquistado' };
       return J.DB.definirTitulo(t);
     });

@@ -6597,6 +6597,25 @@ var JOGO = (typeof window !== 'undefined')
           return b;
         }
         listaT.appendChild(itemT('', tr('— sem título —'), '', true));
+        // 08/10 à noite (o dono: "o Mestre pode escolher o título que ele quiser"): na conta do Mestre, um campo livre
+        if (mestreAtivo()) {
+          var livreT = el('div', 'tit-livre');
+          var campoT = document.createElement('input');
+          campoT.className = 'hub-input';
+          campoT.maxLength = 23;
+          campoT.placeholder = tr('título à sua escolha (até 23 letras)');
+          campoT.value = (escolhidoT && !catal.some(function (t) { return t.titulo === escolhidoT; })) ? escolhidoT : '';
+          campoT.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') bUsar.click(); });
+          var bUsar = btn(tr('Usar'), 'btn-mini btn-gold', function () {
+            var v = String(campoT.value || '').trim().slice(0, 23);
+            if (!v) { toast(tr('Escreva o título.')); return; }
+            escolheT(v);
+          });
+          livreT.appendChild(campoT);
+          livreT.appendChild(bUsar);
+          listaT.appendChild(el('div', 'tit-grupo', tr('O Mestre escolhe')));
+          listaT.appendChild(livreT);
+        }
         ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
           listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
           // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
@@ -8840,6 +8859,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!t) return '';
     var T = JOGO.Titulos;
     if (!T || !tituloEstado) return t;
+    if (mestreAtivo()) return t;                    // 08/10 à noite: o título do Mestre é o que ele quis
     if (T.valido(t, tituloEstado)) return t;
     // 08/10 (o dono: "se ele é top 1 pvp e perde o posto, não terá mais esse título; passa para o top 1
     // atual"): o título de pódio ACOMPANHA a posição — caiu para o 2º, a placa diz Top 2; saiu do pódio,
@@ -14974,9 +14994,10 @@ var JOGO = (typeof window !== 'undefined')
   function chatVivo() { return (chatUI && naTelaAberta(chatUI.log)) ? chatUI : null; }
   function linhaSussurro(l) {
     var li = el('div', 'hub-chat-linha chat-sussurro' + (l.meu ? ' is-meu' : '') + (l.sistema ? ' is-falhou' : ''));
+    var textoS = (JOGO.Rede && JOGO.Rede.filtra) ? JOGO.Rede.filtra(l.texto) : l.texto;   // 08/10 à noite: o filtro
     if (l.sistema) li.textContent = l.texto;
-    else if (l.meu) li.innerHTML = '→ <b>' + esc(l.nome) + ':</b> ' + esc(l.texto);
-    else li.innerHTML = '<b>' + esc(l.nome) + '</b> (particular): ' + esc(l.texto);
+    else if (l.meu) li.innerHTML = '→ <b>' + esc(l.nome) + ':</b> ' + esc(textoS);
+    else li.innerHTML = '<b>' + esc(l.nome) + '</b> (particular): ' + esc(textoS);
     if (!l.meu && !l.sistema) {
       // 03/10: o particular é onde o assédio mais acontece — a linha também se denuncia (js/ui/moderacao.js)
       li.setAttribute('data-de', l.de);

@@ -182,6 +182,12 @@ var JOGO = (typeof window !== 'undefined')
    * ninguém precise ir lá tirar. */
   T.valido = function (titulo, estado) {
     if (!titulo) return false;
+    // 08/10 à noite (o dono: "o Mestre pode escolher o título que ele quiser"): a conta do Mestre leva
+    // qualquer título curto (até 23 letras — o maior do catálogo); os outros, só o que a régua dá
+    if (estado && estado.mestre === true) {
+      var t = String(titulo).trim();
+      return t.length > 0 && t.length <= 23 && t.indexOf('\n') < 0;
+    }
     return T.ganhos(estado).indexOf(titulo) >= 0;
   };
 

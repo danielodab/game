@@ -1182,6 +1182,28 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
 - Provas: `mercado_hud` 22, `mercado_pedras_hud` 69, `prova_icones_menus` (pelos
   seletores), `fichas_fotos` 390 px, `supremo_api` test_02.
 
+## 9-A.13 O título livre do Mestre e o filtro de palavrões (08/10 à noite)
+
+- **O Mestre escolhe o título que quiser** (o dono: "mestre pode escolher o título que ele
+  quiser"): `Titulos.valido(titulo, estado)` aceita qualquer título curto (1–23 letras, o maior
+  do catálogo) quando `estado.mestre === true`; o juiz (`definirTitulo`) passa
+  `mestre: !!x.conta.gm`, então só a conta gm passa — a comum segue na régua (pvm/pvp/classe/
+  eco/chefe). Na ficha Customizar › Título, a conta do Mestre vê o grupo "O Mestre escolhe"
+  com um campo (`.tit-livre`, 23 letras) e o botão Usar; `tituloPendurado` não derruba o
+  título do Mestre. O `rele_ident.carimba` já deixava o título do Mestre passar.
+- **O filtro de palavrões** (o dono: "quando alguém mandar palavrão fica tipo %$@!#"):
+  `js/core/palavroes.js` (`JOGO.Palavroes.limpa/tem`, puro, listado ANTES de rede.js) — a
+  palavra feia vira símbolos `%$@!#` do MESMO tamanho, por palavra inteira (computador passa),
+  sem acento nem caixa, com o disfarce desfeito (p0rra, m3rd@, c@r@lho: 0→o 1→i 3→e 4→a 5→s
+  7→t 8→b @→a $→s !→i |→l), letras repetidas juntas (meeerda; porrrra pela TABELA_JUNTA) e o
+  plural simples; a pontuação das pontas fica ("pôrra!" → "%$@!#!"). Lista pt/en/es, inclusive
+  as emendadas (fodase, vaitomarnocu) e as siglas (vsf, pqp, wtf). `Rede.filtra` delega a ele
+  (sem o módulo, os asteriscos antigos). A frase sai limpa AO MANDAR (`falar`, `falarGuilda`,
+  `sussurrar`) e a HUD filtra AO MOSTRAR (chat, guilda e, agora, o particular) — o que chega de
+  uma aba antiga também sai limpo. O nome do jogador não passa pelo filtro (é da conta).
+- Provas: `node tests/palavroes.js` 12, `tests/rede.html` 17, `tests/titulos.html` 34,
+  `node tests/juiz_economia.js` 53 (o Mestre passa, a conta comum cai).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

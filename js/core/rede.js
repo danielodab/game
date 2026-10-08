@@ -1228,7 +1228,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!eu || !canal) return recusou('sem-conexao');
     if (!R.privado()) return recusou('privado');
     if (typeof para !== 'string' || !para || para.length > 80) return recusou('sem-para');
-    texto = String(texto === undefined || texto === null ? '' : texto).trim().slice(0, R.TEXTO_MAX);
+    texto = R.filtra(String(texto === undefined || texto === null ? '' : texto).trim().slice(0, R.TEXTO_MAX));
     if (!texto) return recusou('texto');
     var c = { para: para, nome: eu.nome, texto: texto };
     if (opts && typeof opts.cx === 'string' && opts.cx) c.paraCx = opts.cx;
@@ -1349,7 +1349,7 @@ var JOGO = (typeof window !== 'undefined')
 
   R.falar = function (texto) {
     if (!eu) return false;
-    texto = String(texto || '').trim().slice(0, 240);
+    texto = R.filtra(String(texto || '').trim().slice(0, 240));   // 08/10 à noite: a frase sai limpa daqui
     if (!texto) return false;
     manda('chat', { nome: eu.nome, texto: texto });
     return true;
@@ -1359,7 +1359,7 @@ var JOGO = (typeof window !== 'undefined')
    * a voz gchat-nao). Nunca pelo canal de abas, onde todas ouviriam. */
   R.falarGuilda = function (texto) {
     if (!eu || !R.privado()) return false;
-    texto = String(texto || '').trim().slice(0, 240);
+    texto = R.filtra(String(texto || '').trim().slice(0, 240));
     if (!texto) return false;
     return manda('gchat', { nome: eu.nome, texto: texto });
   };
@@ -1380,6 +1380,9 @@ var JOGO = (typeof window !== 'undefined')
     'putinha', 'fdp', 'foda', 'fodase', 'fudido', 'buceta', 'cu', 'cuzao',
     'arrombado', 'arrombada', 'viado', 'vagabunda', 'desgracado', 'krl', 'vsf', 'pqp'];
   R.filtra = function (texto) {
+    // 08/10 à noite (o dono: "quando alguém mandar palavrão fica tipo %$@!#"): o módulo js/core/palavroes.js
+    // faz a conta (símbolos do tamanho da palavra, disfarce desfeito); sem ele (página antiga), os asteriscos
+    if (JOGO.Palavroes && JOGO.Palavroes.limpa) return JOGO.Palavroes.limpa(texto);
     return String(texto || '').split(/(\s+)/).map(function (tk) {
       var miolo = tk.replace(/^[^0-9A-Za-zÀ-ÿ]+|[^0-9A-Za-zÀ-ÿ]+$/g, '');
       if (!miolo) return tk;

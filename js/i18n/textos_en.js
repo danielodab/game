@@ -2922,5 +2922,10 @@ JOGO.I18n.registra('en', { textos: {
   "Quebrar {n} peças?": "Break {n} pieces?",
   "As <b>{n} peças</b> marcadas somem <b>para sempre</b> e viram {b}. Não tem volta.": "The <b>{n} marked pieces</b> vanish <b>forever</b> and become {b}. There is no undo.",
   "{n} peça(s) viraram pedra: +{p} pedras na prateleira.": "{n} piece(s) turned to stone: +{p} stones on the shelf.",
-  "Nenhuma peça se quebrou.": "No piece was broken."
+  "Nenhuma peça se quebrou.": "No piece was broken.",
+  // ---- 08/10 à noite: o título livre do Mestre
+  "título à sua escolha (até 23 letras)": "a title of your choice (up to 23 letters)",
+  "Usar": "Use",
+  "Escreva o título.": "Write the title.",
+  "O Mestre escolhe": "The Master chooses"
 } });

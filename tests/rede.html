@@ -26,6 +26,7 @@ varredura dos calados com relógio injetado.</div>
 <script src="save_sandbox.js"></script>
 <script>
   window.__V = '?v=' + Date.now();
+  document.write('<scr'+'ipt src="../js/core/palavroes.js'+window.__V+'"></scr'+'ipt>');   // 08/10 à noite: o filtro do chat
   document.write('<scr'+'ipt src="../js/core/rede.js'+window.__V+'"></scr'+'ipt>');
 </script>
 
@@ -127,6 +128,7 @@ varredura dos calados com relógio injetado.</div>
       // eu ando e falo: o par tem de receber
       R.mover(1, 2);
       R.falar('  olá, praça!  ');
+      R.falar('p0rra, que MERDA!');     // 08/10 à noite: o palavrão sai daqui já virado em símbolos
       return respiro();
     })
     .then(function () {
@@ -135,7 +137,11 @@ varredura dos calados com relógio injetado.</div>
       check('mover chega do outro lado como alvo',
             alvos.length === 1 && alvos[0].x === 1 && alvos[0].z === 2);
       check('falar apara as pontas e chega',
-            falas.length === 1 && falas[0].texto === 'olá, praça!');
+            falas.length === 2 && falas[0].texto === 'olá, praça!');
+      check('o palavrão sai da aba já virado em símbolos (%$@!#), com a pontuação no lugar',
+            falas[1] && falas[1].texto === '%$@!#, que %$@!#!', JSON.stringify(falas[1] && falas[1].texto));
+      check('o que chega de uma aba antiga sem o filtro também sai limpo ao mostrar (R.filtra)',
+            R.filtra('seu c@ralho!') === 'seu %$@!#%$!' && R.filtra('computador') === 'computador');
       // o tchau educado
       par.postMessage({ t: 'tchau', de: 'bento' });
       return respiro();

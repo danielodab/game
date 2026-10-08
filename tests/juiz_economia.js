@@ -240,6 +240,11 @@ async function tenta(base, ops, extra) {
         JSON.stringify(torto));
 
   // ---- o título só entra se a régua der
+  // 08/10 à noite: o Mestre (conta gm) escolhe o título que quiser; a conta comum não
+  const tM = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: 'Rei do Fundo' } }], { conta: { id: 1, gm: true } });
+  const tC = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: 'Rei do Fundo' } }]);
+  check('o Mestre escolhe qualquer título curto; a conta comum é recusada', tM.ok && tM.db.jogador.titulo === 'Rei do Fundo' &&
+        tC.ok && tC.resultados[0] && tC.resultados[0].ok === false, JSON.stringify([tM.ok && tM.db.jogador.titulo, tC.resultados]));
   const t1 = await tenta(base, [{ nome: 'definirTitulo', args: { titulo: 'Top 1 PVM' } }]);
   check('título de pódio sem a posição não entra', t1.ok && t1.resultados[0].ok === false && !t1.db.jogador.titulo,
         JSON.stringify(t1.resultados || t1));
