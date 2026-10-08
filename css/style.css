@@ -1595,6 +1595,111 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .pt-slot-b { font-size: 10.5px; color: var(--dim); line-height: 1.35; }
 .pt-slot .btn-mini { width: 100%; }
 
+/* ================================================================ O INVENTÁRIO LIMPO (08/10 à noite)
+ * o boneco com os espaços dos dois lados do retrato, o saco com seletores e a grade só de ícones, e a
+ * FICHA DO ITEM (.inv2-ficha / fichaItem: Efeitos · Condições · Carac.) — a mesma na forja e no mercado */
+.inv2 { display: flex; flex-direction: column; gap: 10px; }
+.inv2-top {
+  display: grid; grid-template-columns: 392px 1fr; grid-template-areas: 'boneco saco' 'ficha saco';
+  gap: 12px 14px; align-items: start;
+}
+/* dentro do inventário o cartão do herói encolhe (os atributos e a dupla moram na ficha dele e na aba Personagem) */
+.inv2 .pt-carrossel { gap: 4px; margin: 4px 0; }
+@media (min-width: 761px) { .inv2 .pt-seta { width: 26px; min-width: 26px; padding: 6px 0; } }
+.inv2 .pt-hero-card { padding: 6px 10px; }
+.inv2 .pt-hero-st, .inv2 .pt-dupla { display: none; }
+.inv2 .pt-hero-txt { gap: 2px; }
+.inv2-boneco { grid-area: boneco; }
+.inv2-saco { grid-area: saco; }
+.inv2-ficha-area { grid-area: ficha; min-width: 0; }
+.inv2-boneco-caixa { display: flex; align-items: flex-start; justify-content: center; gap: 8px; }
+.inv2-col { margin-top: 34px; }
+.inv2-boneco-caixa .pt-hero-caixa { flex: 0 1 auto; min-width: 0; }
+.inv2-col { display: flex; flex-direction: column; gap: 8px; }
+.inv2-slot {
+  width: 58px; height: 58px; padding: 4px; gap: 0; justify-content: center;
+  border-radius: 10px; background: rgba(6,9,13,.55); cursor: pointer; font: inherit; color: var(--text);
+}
+.inv2-slot.has-item { border-style: solid; border-color: var(--rc, var(--line2)); }
+.inv2-slot.is-empty { opacity: .8; }
+.inv2-slot.is-sel { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold-a22); }
+.inv2-slot .pt-slot-ic canvas { border: none; border-radius: 8px; }
+.inv2-slot .item-stars { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); }
+.inv2-slot { position: relative; }
+.inv2-slot .pet-empty { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--dim); }
+.inv2-trajes { justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px; }
+.inv2-trajes .btn-mini { padding: 4px 8px; font-size: 11px; }
+.inv2-trajes .pt-trajes-rot { font-size: 11px; }
+.inv2-saco { gap: 8px; }
+.inv2-barra { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inv2-sel { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.inv2-select { flex: 1 1 140px; min-width: 120px; min-height: 44px; padding: 7px 9px; font-size: 12.5px; border-radius: 9px; }
+.inv2-lupa { flex: 0 0 auto; }
+.inv2-lotacao { margin-left: auto; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.inv2-lotacao b { color: var(--text); }
+.inv2-lotacao.is-quase b { color: var(--gold); }
+.inv2-lotacao.is-cheio b { color: #ff8a8a; }
+.inv2-busca { display: none; }
+.inv2-busca.is-aberta { display: block; }
+.inv2 .inv-big { gap: 6px; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
+.inv2 .ig-cell { min-height: 0; padding: 4px; gap: 0; border-radius: 10px; border-width: 2px; }
+.inv2 .ig-cell .ig-nm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.inv2 .ig-cell .ig-cura, .inv2 .ig-cell .ig-prog { display: none; }
+.inv2 .ig-cell .ig-n { top: -6px; right: -4px; min-width: 20px; font-size: 11px; padding: 1px 4px; }
+.inv2 .ig-cell .ig-lv { top: -6px; left: -3px; font-size: 10px; }
+.inv2 .ig-cell .item-stars { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
+.inv2 .ig-cell.is-vazia { min-height: 54px; }
+/* ---- a ficha do item */
+.inv-pick.inv2-ficha {
+  position: static; top: auto; z-index: auto; display: flex; flex-direction: column; gap: 8px;
+  grid-template-columns: none; align-items: stretch;
+}
+.inv-pick.inv2-ficha.is-idle { display: block; }
+.fi-cab { display: flex; align-items: flex-start; gap: 12px; }
+.fi-ic canvas { width: 64px; height: 64px; }
+.fi-tx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fi-nm { font-size: 16px; }
+.fi-nivel {
+  flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font: 700 11.5px var(--ui-sans);
+  color: var(--gold); border: 1px solid var(--gold-dim); background: rgba(255,196,77,.08); white-space: nowrap;
+}
+.fi-nivel.is-trancado { color: #ff9a8a; border-color: rgba(255,138,138,.4); background: rgba(164,35,43,.15); }
+.fi-abas { display: flex; gap: 2px; border-bottom: 1px solid var(--line2); }
+.fi-aba {
+  padding: 6px 12px; border: 1px solid transparent; border-bottom: none; border-radius: 9px 9px 0 0;
+  background: transparent; color: var(--dim); font: 600 12.5px var(--ui-sans); cursor: pointer;
+}
+.fi-aba.is-on { color: var(--gold); border-color: var(--line2); background: rgba(255,255,255,.04); }
+.fi-corpo { display: flex; flex-direction: column; gap: 3px; min-height: 56px; padding: 4px 2px; }
+.fi-ln { font: 600 12.5px var(--ui-sans); color: #cfe0f5; line-height: 1.4; }
+.fi-ln.is-mais { color: #7fe08a; }
+.fi-ln.is-menos { color: #ff9a8a; }
+.fi-ln.is-ok { color: #7fe08a; }
+.fi-ln.is-gema { color: var(--gold); }
+.fi-ln.is-feitico { color: var(--gold); }
+.fi-ln b { color: var(--text); }
+.fi-ln em { font-style: normal; font-weight: 700; margin-left: 4px; }
+.fi-ln.fi-nota, .fi-nota { font: 11.5px var(--ui-sans); color: var(--dim); }
+.fi-desc { font: italic 12px var(--ui-serif); color: var(--dim); line-height: 1.45; padding: 6px 8px; border-left: 2px solid var(--gold-dim); }
+.fi-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.fi-perg { font-size: 44px; line-height: 64px; width: 64px; text-align: center; display: block; color: var(--gold); }
+.inv2-ficha.is-compacta .fi-cab { gap: 10px; }
+.inv2-ficha.is-compacta .fi-ic canvas { width: 48px; height: 48px; }
+.mc-ficha { margin: 2px 0 8px; }
+.mc-linha .ms-tx.is-toque { cursor: pointer; }
+.mc-linha .ms-tx.is-toque .ms-nome { text-decoration: underline dotted rgba(255,255,255,.35); text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .inv2-top { grid-template-columns: 1fr; grid-template-areas: 'boneco' 'saco' 'ficha'; }
+  /* no estreito os espaços vão numa FILEIRA debaixo do retrato */
+  .inv2-boneco-caixa { flex-wrap: wrap; }
+  .inv2-boneco-caixa .pt-hero-caixa { flex: 1 1 100%; order: 0; }
+  .inv2-col { flex-direction: row; order: 1; margin-top: 0; }
+  /* a ficha gruda no pé da folha enquanto a grade rola (como na referência); alta demais, rola por dentro */
+  .inv2-ficha-area { position: sticky; bottom: calc(-1 * var(--pad)); max-height: 46vh; overflow: auto;
+                     background: linear-gradient(180deg, transparent, var(--ink2) 10px); padding-top: 10px; }
+  .inv2-boneco-caixa { gap: 6px; }
+  .inv2-slot { width: 52px; height: 52px; }
+}
 /* ---- barra da peça escolhida: gruda no topo enquanto se rola a grade */
 .inv-pick {
   position: sticky; top: 0; z-index: 3;

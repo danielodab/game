@@ -34,6 +34,9 @@ f.onload = function () {
         try { P.addStones('stone-ember', 12); P.addStones('stone-gem-frag', 37); } catch (e3) {}
       }
       UI.selection(['sumo', 'curandeiro']);
+      // 08/10 à noite: `?nivel=N` sobe o Bárbaro (as peças pedem nível); `?veste=1` veste nele a 1ª peça do saco
+      if (Q.nivel) { try { P.state.heroes.sumo.level = Number(Q.nivel); P.save(); } catch (eN) {} }
+      if (Q.veste) { try { var pri = P.state.inventory[0]; if (pri) P.equip('sumo', pri.itemId, 0); } catch (eV) {} }
       if (Q.porta) {
         // a PORTA da antessala: desce, anda até a porta e abre o painel dos monstros (como prova_antessala.html)
         var G = w.JOGO.Game;
@@ -61,13 +64,26 @@ f.onload = function () {
         try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e4) {}
         try {
           if (Q.ficha) UI.openSheet(Q.ficha, Q.arg || undefined);
+          else if (Q.aba === 'forja') {
+            var pecaF = Q.forjaPeca ? P.state.inventory[0] : null;    // `?forjaPeca=1`: a 1ª peça do saco já na bancada
+            UI.openSheet('forge', pecaF ? { kind: 'bag', itemId: pecaF.itemId, level: pecaF.level || 0, stars: pecaF.stars || 0, extra: pecaF.extra || null } : undefined);
+          }
+          else if (Q.aba === 'inventario') UI.openSheet('inventory');
           else UI.openSheet('party', Q.aba || 'avatar');
         } catch (e5) { document.title = 'ERRO ' + e5; }
         setTimeout(function () {
+          // 08/10 à noite: `?toca=N` toca a N-ésima célula cheia da grade (a ficha de baixo abre); `?aba2=` a aba da ficha
+          if (Q.toca) {
+            try { var cels = d.querySelectorAll('.ig-cell:not(.is-vazia)'); if (cels[Number(Q.toca) - 1]) cels[Number(Q.toca) - 1].click(); } catch (e8) {}
+          }
+          if (Q.slot) { try { d.querySelector('.inv2-slot[data-slot="' + Q.slot + '"]').click(); } catch (e9) {} }
+          setTimeout(function () {
+          if (Q.aba2) { try { d.querySelector('.fi-aba[data-aba="' + Q.aba2 + '"]').click(); } catch (e10) {} }
           var sp = d.querySelector('.sheet-panel');
           document.title = sp ? ('FICHA ' + sp.scrollHeight + 'x' + sp.clientHeight + ' janela ' + w.innerWidth + 'x' + w.innerHeight +
                                  ' celular=' + (w.JOGO.Mobile && w.JOGO.Mobile.celular())) : 'SEM FICHA';
           window.__pronto = true;
+          }, Q.toca || Q.slot ? 900 : 10);
         }, 1500);
       }, 2500);
     });

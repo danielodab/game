@@ -723,8 +723,10 @@
       var cel = qa('.ig-cell.is-pedra', ficha())[0];
       limpaToast();
       toca(cel);
-      check('inventário · o toque na pedra lembra que ela vende em lotes no Mercadinho',
-            /Mercadinho vende avulsa ou em lotes de 10, 50 e 100/.test(toastTxt()), toastTxt());
+      // 08/10 à noite (o inventário limpo): a pedra abre na FICHA de baixo, e é ela que lembra do Mercadinho
+      var fichaPedra = q1('.inv2-ficha-outro', ficha());
+      check('inventário · o toque na pedra abre a ficha, que lembra que ela vende em lotes no Mercadinho',
+            !!fichaPedra && /Mercadinho vende avulsa ou em lotes de 10, 50 e 100/.test(fichaPedra.textContent), fichaPedra ? fichaPedra.textContent.slice(0, 120) : 'sem ficha');
       toca('.inv-tabs-main [data-cat="equip"]');
       UI.closeSheet();
     });

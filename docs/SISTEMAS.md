@@ -1100,6 +1100,41 @@ diz quantas salas em dobro restam hoje (`blocoDescanso`) e a recompensa mostra
 "☀ Descanso · XP ×2 (n de 3 hoje)". Provas: `tests/descanso.js` 12,
 `juiz_recompensa` (a 1ª sala em dobro; com 3 usadas, a metade).
 
+## 9-A.10 O inventário limpo e a ficha do item (08/10 à noite)
+
+O dono, com uma foto de referência na mão: "na hora de clicar em um item e ver as
+características fica bem confuso no menu do inventário, os filtros também; queria
+mais clean; e que todos os menus (forja, mercado...) sejam nesse estilo". O desenho
+novo (`hud.js inventoryBody`, classes `.inv2-*`):
+
+- **O boneco** à esquerda: os quatro espaços e o do bicho em quadradinhos dos DOIS
+  lados do retrato (`invBoneco`, `invSlotCompacto`), sem texto — o nome fica no balão
+  do toque longo. Toque numa vestida abre a ficha dela (com "Tirar"); toque num
+  espaço vazio filtra a grade por ele. O cartão do herói encolhe (nome, nível,
+  elemento, Ficha); os trajes numa linha só.
+- **O saco** à direita: as cinco categorias de sempre (`.inv-tabs-main`, as provas as
+  conhecem), e no lugar das duas fileiras de botões DOIS seletores (`invSeletores`:
+  espaço e elemento), a lupa que abre a busca e a lotação "5 / 80". A grade é só de
+  ícones (`INV_ICONE` 44 px; o `.ig-nm` fica escondido para as provas que leem o
+  nome). Pedra, poção, pergaminho, carta e bicho também abrem na ficha de baixo
+  (`fichaOutro`), em vez de um toast.
+- **A ficha do item** (`fichaItem(ref, op)`): o retrato, o nome, o chip "Nv. N"
+  (vermelho quando o herói não alcança), três abas — **Efeitos** (cada bônus numa
+  linha, com a diferença para a vestida no mesmo espaço entre parênteses, a Gema, o
+  feitiço concedido), **Condições** (nível, espaço, conjunto, quem usa a outra cópia,
+  a Gema que prende à conta) e **Carac.** (espaço, raridade, pedra, estrela, cópias,
+  fusão, quebra, de onde cai) —, a descrição em itálico e as ações (equipar, forja,
+  Gema, quebra: `acoesDoSaco`). Mantém `.inv-pick`, `.inv-pick-nm`, `.inv-pick-ic`,
+  `.inv-pick-tranca`, `.inv-pick-acts`. No desktop mora debaixo do boneco (áreas do
+  grid `.inv2-top`); no celular vai para o fim e GRUDA no pé da folha enquanto a grade
+  rola (`.inv2-ficha-area` sticky, rola por dentro acima de 46vh).
+- **A mesma ficha na forja e no mercado**: a peça na bancada ganha a ficha (modo
+  compacto, sem ações) logo abaixo da bancada; no Mercadinho (local e do servidor),
+  o toque no nome da linha abre a ficha debaixo dela e o segundo toque fecha
+  (`.mc-ficha`).
+- Foto: `tests/foto_fichas.html?aba=inventario&cartas=1&nivel=10&veste=1&toca=1`
+  (`&aba2=carac`, `&slot=punho`; `aba=forja&forjaPeca=1`), também em 390 px.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

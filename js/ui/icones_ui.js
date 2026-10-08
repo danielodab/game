@@ -472,6 +472,9 @@ var JOGO = (typeof window !== 'undefined')
     cheio('M10.8 13.2V21.93A10 10 0 0 1 2.07 13.2Z', MEIA) +
     disco(12, 12, 2.5));
 
+  // 08/10 à noite: a LUPA da busca do inventário limpo (inv2)
+  poe('busca', risco('M10 4a6 6 0 1 1 0 12a6 6 0 1 1 0-12Z', 2.4) + risco('M14.6 14.6 20.5 20.5', 2.8));
+
   /* --------------------------------------------------------------- a API */
   function tem(id) { return Object.prototype.hasOwnProperty.call(DESENHO, id); }
 

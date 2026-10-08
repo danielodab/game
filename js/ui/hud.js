@@ -5003,6 +5003,15 @@ var JOGO = (typeof window !== 'undefined')
         tx.appendChild(el('div', 'ms-prog', esc(SLOT_PT[slotOf(itemId)] || '') + ' · ' +
           esc(RAR_PT[it.rarity] || it.rarity || '') + nvTxt(itemId) + (sub ? ' · ' + sub : '')));
         row.appendChild(tx);
+        // 08/10 à noite: o toque no nome abre, debaixo da linha, a MESMA ficha do inventário (e fecha no segundo)
+        tx.classList.add('is-toque');
+        tap(tx, function () {
+          var aberta = row.nextSibling;
+          if (aberta && aberta.classList && aberta.classList.contains('mc-ficha')) { aberta.parentNode.removeChild(aberta); return; }
+          var f = fichaItem({ itemId: itemId, level: level || 0, stars: stars || 0 }, { hid: ensurePartyHero(), compacto: true });
+          f.classList.add('mc-ficha');
+          if (row.parentNode) row.parentNode.insertBefore(f, row.nextSibling);
+        });
         return row;
       }
       var listaEl = null;
@@ -5428,6 +5437,15 @@ var JOGO = (typeof window !== 'undefined')
       if (cmp) tx.appendChild(el('div', 'mc-cmp', cmp));
     }
     row.appendChild(tx);
+    // 08/10 à noite: o toque no nome abre, debaixo da linha, a MESMA ficha do inventário (e fecha no segundo)
+    tx.classList.add('is-toque');
+    tap(tx, function () {
+      var aberta = row.nextSibling;
+      if (aberta && aberta.classList && aberta.classList.contains('mc-ficha')) { aberta.parentNode.removeChild(aberta); return; }
+      var f = fichaItem({ itemId: itemId, level: lv || 0, stars: st || 0 }, { hid: ensurePartyHero(), compacto: true });
+      f.classList.add('mc-ficha');
+      if (row.parentNode) row.parentNode.insertBefore(f, row.nextSibling);
+    });
     return row;
   }
   function mcEstadoChip(estado) {
@@ -8042,59 +8060,32 @@ var JOGO = (typeof window !== 'undefined')
     return out.join(' · ') || '—';
   }
 
+  /* O INVENTÁRIO LIMPO (08/10 à noite — o dono, com uma foto de referência na mão: "na hora de clicar em um
+   * item e ver as características fica bem confuso no menu do inventário, os filtros também; queria mais
+   * clean"). O desenho: o BONECO à esquerda — os espaços vestidos em quadradinhos dos dois lados do retrato,
+   * sem texto —, o SACO à direita — as cinco categorias, DOIS seletores (espaço e elemento) no lugar das
+   * fileiras de botões, a lupa que abre a busca, e a grade só de ícones — e, embaixo, UMA ficha para o que
+   * foi tocado (fichaItem: Efeitos, Condições, Carac., a descrição e as ações). No estreito as colunas
+   * viram pilha (CSS .inv2). */
+  var INV_ICONE = 44;                        // o ícone da grade compacta (era 54 com o nome embaixo)
   function inventoryBody(body, preselect) {
     var hid = ensurePartyHero();
     avisaDevolvidasPorNivel();             // [D19] cobre a página sem praça
     if (typeof preselect === 'string' && preselect) {
       var pilha0 = pilhaDe(preselect);
-      if (pilha0) invSel = { itemId: pilha0.itemId, level: pilha0.level, stars: pilha0.stars };
+      if (pilha0) invSel = { itemId: pilha0.itemId, level: pilha0.level, stars: pilha0.stars, extra: pilha0.extra || null };
     }
-    /* O desenho clássico de MMORPG: o PERSONAGEM à esquerda — retrato com as
-     * setas ‹ ›, nível, e o equipamento vestido em boneco — e o SACO à
-     * direita. No estreito as colunas voltam a ser pilha (CSS). */
-    var duo = el('div', 'pt-mmo');
-    var ladoHeroi = el('div', 'pt-mmo-heroi');
-    ladoHeroi.appendChild(heroCarousel(hid));
-    if (hid) ladoHeroi.appendChild(equipRow(hid));
-    // TRAJES (25/08): duas fotos do equipamento por herói — vestir com um
-    // toque, guardar o atual com outro
-    if (hid) {
-      var trj = el('div', 'pt-trajes');
-      trj.appendChild(el('span', 'pt-trajes-rot', tr('Trajes:')));
-      [1, 2].forEach(function (n) {
-        var tem = safe(function () {
-          var hh = hero(hid);
-          return !!(hh && hh.trajes && hh.trajes['t' + n]);
-        }, false);
-        var b = btn(tr('Vestir {n}', { n: n }), 'btn-mini' + (tem ? '' : ' is-off'), function () {
-          var r = safe(function () { return P().wearTraje(hid, n); }, null);
-          if (!r) return;
-          var msgT;
-          if (!r.faltas) msgT = tr('Traje {n} vestido.', { n: n });
-          else if (r.porNivel && r.recusas && r.recusas.length) {
-            msgT = tr('Traje {n}', { n: n }) + ': ' + textoRecusa(r.recusas[0]) +
-                   (r.faltas > 1 ? ' ' + tr('(+{a} peça(s) ficaram de fora)', { a: r.faltas - 1 }) : '');
-          } else msgT = tr('Traje {n}: {faltas} peça(s) não estavam no saco.', { n: n, faltas: r.faltas });
-          toast(msgT, r.faltas ? undefined : 'good');
-          sheetParty('inventario');
-        });
-        if (!tem) b.title = tr('Guarde o traje {n} primeiro', { n: n });
-        trj.appendChild(b);
-      });
-      trj.appendChild(el('span', 'pt-trajes-rot', tr('guardar o atual em:')));
-      [1, 2].forEach(function (n) {
-        trj.appendChild(btn(String(n), 'btn-mini btn-ghost', function () {
-          safe(function () { return P().saveTraje(hid, n); }, false);
-          toast(tr('Equipamento atual guardado como traje {n}.', { n: n }), 'good');
-          sheetParty('inventario');
-        }));
-      });
-      ladoHeroi.appendChild(trj);
-    }
-    var ladoSaco = el('div', 'pt-mmo-saco');
-    /* OS VINTÉNS (06/10): saíram do topo da praça (o dono: "os vinténs devem mostrar somente dentro do
-     * inventário") e passam a aparecer aqui, em destaque, no alto do saco. É o saldo do SACO, o mesmo número
-     * que o topo mostrava; o banco e as telas de compra seguem mostrando o deles. */
+    var raiz = el('div', 'inv2 pt-mmo');
+    var topo = el('div', 'inv2-top');
+
+    // ---- o boneco: os espaços dos dois lados do retrato
+    var ladoHeroi = el('div', 'inv2-boneco pt-mmo-heroi');
+    ladoHeroi.appendChild(invBoneco(hid));
+    if (hid) ladoHeroi.appendChild(invTrajes(hid));
+    topo.appendChild(ladoHeroi);
+
+    // ---- o saco
+    var ladoSaco = el('div', 'inv2-saco pt-mmo-saco');
     if (JOGO.DB && JOGO.DB.moedas) {
       var saldoV = el('div', 'inv-vintens', '');
       ladoSaco.appendChild(saldoV);
@@ -8107,40 +8098,261 @@ var JOGO = (typeof window !== 'undefined')
         });
       }, null);
     }
-    ladoSaco.appendChild(pickBar(hid));
-    // as abas e os filtros redondos (a fileira dos elementos mora lá dentro
-    // desde 22/09: some nas abas sem elemento — Consumíveis e Pets)
     ladoSaco.appendChild(invFilterTabs());
-    // O FUNDO DO SACO à vista (25/08): unidades / limite, amarelando perto
-    // do fim e avermelhando cheio — e a regra dita, para o limite não
-    // parecer castigo: ele cresce com as classes.
-    var lot = safe(function () {
-      return { n: P().state.inventory.length, max: P().bagLimit() };
-    }, null);
-    if (lot) {
-      ladoSaco.appendChild(el('div',
-        'inv-lotacao' + (lot.n >= lot.max ? ' is-cheio'
-                        : (lot.n >= lot.max * 0.85 ? ' is-quase' : '')),
-        tr('Saco: <b>{n} / {max}</b> — o limite cresce ao liberar classes', { n: lot.n, max: lot.max })));
-    }
     var g = invGrid(hid);
-    ladoSaco.appendChild(buscaInput(invBusca, function (t) {
-      invBusca = t;
-      aplicaBusca(g, t);
-    }));
-    if (g.dataset && g.dataset.vazio) {
-      ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
+    var lot = safe(function () { return { n: P().state.inventory.length, max: P().bagLimit() }; }, null);
+    var barra = el('div', 'inv2-barra');
+    barra.appendChild(invSeletores());
+    var busca = buscaInput(invBusca, function (t) { invBusca = t; aplicaBusca(g, t); });
+    busca.classList.add('inv2-busca' + (invBusca ? ' is-aberta' : ''));
+    var lupa = icoBotao('busca', tr('Buscar'), !!invBusca, function () {
+      busca.classList.toggle('is-aberta');
+      lupa.classList.toggle('is-on', busca.classList.contains('is-aberta'));
+      var campo = busca.querySelector('input');
+      if (busca.classList.contains('is-aberta') && campo) campo.focus();
+    }, { cls: 'btn-mini inv2-lupa' });
+    barra.appendChild(lupa);
+    if (lot) {
+      barra.appendChild(el('span',
+        'inv-lotacao inv2-lotacao' + (lot.n >= lot.max ? ' is-cheio' : (lot.n >= lot.max * 0.85 ? ' is-quase' : '')),
+        '<b>' + lot.n + ' / ' + lot.max + '</b>'));
     }
-    // 04/10: a carta escolhida abre em cima da grade (o que faz, quanto falta, a Coleção)
-    if (invMainTab === 'cartas') {
-      if (invCartaSel) ladoSaco.appendChild(cartaDetalhe(invCartaSel));
-      else if (!g.dataset.vazio) ladoSaco.appendChild(el('p', 'inv-dica', tr('Toque numa carta para ver o que ela faz e quanto falta.')));
-    }
+    ladoSaco.appendChild(barra);
+    ladoSaco.appendChild(busca);
+    if (g.dataset && g.dataset.vazio) ladoSaco.appendChild(el('p', 'inv-dica', g.dataset.vazio));
     ladoSaco.appendChild(g);
     if (invBusca) aplicaBusca(g, invBusca);
-    duo.appendChild(ladoHeroi);
-    duo.appendChild(ladoSaco);
-    body.appendChild(duo);
+    topo.appendChild(ladoSaco);
+
+    // ---- a ficha do que foi tocado: debaixo do boneco (no estreito, depois da grade — CSS)
+    var fichaArea = el('div', 'inv2-ficha-area');
+    fichaArea.appendChild(invFichaAtual(hid));
+    topo.appendChild(fichaArea);
+    raiz.appendChild(topo);
+    body.appendChild(raiz);
+  }
+
+  /* os seletores do saco: espaço (só nos equipamentos) e elemento (equipamentos e pedras) */
+  function invSeletores() {
+    var w = el('div', 'inv2-sel');
+    function seletor(cls, opcoes, atual, aoMudar) {
+      var s = document.createElement('select');
+      s.className = 'hub-input inv2-select ' + cls;
+      opcoes.forEach(function (o) {
+        var op = document.createElement('option');
+        op.value = o[0]; op.textContent = o[1];
+        if (o[0] === atual) op.selected = true;
+        s.appendChild(op);
+      });
+      s.addEventListener('change', function () { aoMudar(s.value); });
+      s.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      return s;
+    }
+    if (invMainTab === 'equip') {
+      w.appendChild(seletor('inv2-sel-espaco', [['todos', tr('Todos os espaços')]].concat(SLOTS.map(function (c) { return [c, SLOT_PT[c]]; })),
+        invFilter, function (v) { invFilter = v; invSel = null; sheetParty('inventario'); }));
+    }
+    if (invMainTab === 'equip' || invMainTab === 'pedras') {
+      var els = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
+      w.appendChild(seletor('inv2-sel-elem', [['todos', tr('Todos os elementos')]].concat(els.map(function (e) { return [e, ELEM_PT[e] || e]; })),
+        invElemFiltro, function (v) { invElemFiltro = v; invSel = null; sheetParty('inventario'); }));
+    }
+    return w;
+  }
+
+  /* os trajes, numa linha só */
+  function invTrajes(hid) {
+    var trj = el('div', 'pt-trajes inv2-trajes');
+    trj.appendChild(el('span', 'pt-trajes-rot', tr('Trajes:')));
+    [1, 2].forEach(function (n) {
+      var tem = safe(function () {
+        var hh = hero(hid);
+        return !!(hh && hh.trajes && hh.trajes['t' + n]);
+      }, false);
+      var b = btn(tr('Vestir {n}', { n: n }), 'btn-mini' + (tem ? '' : ' is-off'), function () {
+        var r = safe(function () { return P().wearTraje(hid, n); }, null);
+        if (!r) return;
+        var msgT;
+        if (!r.faltas) msgT = tr('Traje {n} vestido.', { n: n });
+        else if (r.porNivel && r.recusas && r.recusas.length) {
+          msgT = tr('Traje {n}', { n: n }) + ': ' + textoRecusa(r.recusas[0]) +
+                 (r.faltas > 1 ? ' ' + tr('(+{a} peça(s) ficaram de fora)', { a: r.faltas - 1 }) : '');
+        } else msgT = tr('Traje {n}: {faltas} peça(s) não estavam no saco.', { n: n, faltas: r.faltas });
+        toast(msgT, r.faltas ? undefined : 'good');
+        sheetParty('inventario');
+      });
+      if (!tem) b.title = tr('Guarde o traje {n} primeiro', { n: n });
+      trj.appendChild(b);
+    });
+    trj.appendChild(el('span', 'pt-trajes-rot', tr('guardar em:')));
+    [1, 2].forEach(function (n) {
+      trj.appendChild(btn(String(n), 'btn-mini btn-ghost', function () {
+        safe(function () { return P().saveTraje(hid, n); }, false);
+        toast(tr('Equipamento atual guardado como traje {n}.', { n: n }), 'good');
+        sheetParty('inventario');
+      }));
+    });
+    return trj;
+  }
+
+  /* a ficha de baixo: a peça do saco, a vestida tocada, ou o outro tipo de coisa (pedra, poção, pergaminho,
+   * carta, bicho); sem nada tocado, a dica */
+  function invFichaAtual(hid) {
+    var pilha = pilhaSel();
+    if (pilha) {
+      var ref = { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null,
+                  count: pilha.count, index: pilha.index };
+      return fichaItem(ref, { hid: hid, acoes: acoesDoSaco(pilha, hid) });
+    }
+    if (invSel && invSel.vestida && hid) {
+      var canon = invSel.slot;
+      var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+      var itemId = v ? v.itemId : heroItem(hero(hid), canon);
+      if (itemId) {
+        var refV = { itemId: itemId, level: v ? v.level : 0, stars: v ? v.stars : 0, extra: (v && v.extra) || null, vestida: true, heroId: hid };
+        var tirar = btn(tr('Tirar'), 'btn-mini btn-warn', function () {
+          var ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
+          if (ok) {
+            invSel = { itemId: refV.itemId, level: refV.level, stars: refV.stars, extra: refV.extra };     // volta selecionada na grade
+            toast(tr('Voltou para o inventário.'), 'good');
+          } else if (!safe(function () { return P().bagFree(1); }, true)) {
+            toast(tr('O saco está cheio — a peça fica vestida.'));
+          }
+          sheetParty('inventario');
+        });
+        var acoesV = [tirar];
+        if (!refV.extra) {
+          acoesV.push(btn(tr('◆ Engastar Gema'), 'btn-mini inv-pick-gema', function () {
+            forjaModo = 'gema';
+            forgeTarget = { kind: 'worn', heroId: hid, slot: slotRaw(canon), itemId: refV.itemId, level: refV.level, stars: refV.stars, extra: null };
+            sheetParty('forja');
+          }));
+        }
+        return fichaItem(refV, { hid: hid, acoes: acoesV });
+      }
+    }
+    if (invSel && invSel.tipo) return fichaOutro(invSel, hid);
+    var w = el('div', 'inv-pick inv2-ficha is-idle');
+    w.appendChild(el('p', null, invMainTab === 'equip'
+      ? (invFilter !== 'todos' ? tr('Peças de {a}. Toque numa para ver o que ela dá e equipar.', { a: esc(SLOT_PT[invFilter] || '') })
+                               : tr('Toque numa peça da grade para ver o que ela dá e equipar.'))
+      : tr('Toque num item da grade para ver o que ele faz.')));
+    return w;
+  }
+
+  /* as ações da peça do saco (as mesmas de sempre: equipar, a forja, a Gema, a quebra) */
+  function acoesDoSaco(pilha, hid) {
+    var acts = [];
+    var it = itemDef(pilha.itemId), canon = slotOf(pilha.itemId);
+    if (hid) {
+      var nome = className((hero(hid) || {}).classId || hid).split(' ')[0];
+      acts.push(btn(tr('Equipar em {a}', { a: esc(nome) }), 'btn-primary btn-mini', function () {
+        limpaRecusa();
+        var ok = safe(function () { return P().equip(hid, pilha.itemId, pilha.index); }, false);
+        if (!ok) {
+          var rc = recusaAtual();
+          toast(rc ? textoRecusa(rc) : tr('Não deu para equipar essa peça.'));
+        } else {
+          toast(tr('{a} no {b}.', { a: esc((it && it.name) || tr('Peça')), b: SLOT_PT[canon] || tr('espaço') }), 'good');
+          // o Traje do Colecionador FECHOU nesta peça? A aura acende agora
+          if (it && D().selos && it.setId === D().selos.setId && safe(temAuraSelos, false)) {
+            toast(tr('O Traje do Colecionador FECHOU — a aura acende na praça e o Selinho se junta a você!'), 'good');
+            aplicaAuraPraca();
+          }
+          if (pilha.count <= 1) invSel = null;
+        }
+        sheetParty('inventario');
+      }));
+    }
+    // UMA porta só para a forja (reorganização 25/08). Com fusão pronta, o rótulo adianta a boa notícia
+    var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
+    var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
+    var fundePronto = !!(fu && !fu.maxed && fu.pode);
+    if ((fi && !fi.maxed) || (fu && !fu.maxed)) {
+      acts.push(btn(
+        fundePronto ? tr('Levar à forja — dá ★{proxima}!', { proxima: fu.proxima }) : tr('Levar à forja'),
+        'btn-mini' + (fundePronto ? ' btn-gold' : ''), function () {
+          forjaModo = 'forjar';
+          forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
+          sheetParty('forja');
+        }));
+    }
+    // 08/10: a GEMA — a terceira porta da forja, só para a peça que ainda não tem a sua
+    if (!pilha.extra) {
+      acts.push(btn(tr('◆ Engastar Gema'), 'btn-mini inv-pick-gema', function () {
+        forjaModo = 'gema';
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: null };
+        sheetParty('forja');
+      }));
+    }
+    // A QUEBRA (22/09): a outra porta da forja — só para o que se quebra
+    var qb = safe(function () { return P().quebraInfoDe(pilha.itemId, pilha.level, pilha.stars); }, null);
+    if (qb && qb.pode) {
+      acts.push(btn(tr('Quebrar na forja'), 'btn-mini inv-pick-quebra', function () {
+        forjaModo = 'quebrar';
+        forjaQuebraN = 1;
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
+        sheetParty('forja');
+      }));
+    }
+    return acts;
+  }
+
+  /* a ficha das outras coisas do saco: pedra, poção, pergaminho, carta, bicho */
+  function fichaOutro(sel, hid) {
+    var w = el('div', 'inv-pick inv2-ficha inv2-ficha-outro');
+    var cab = el('div', 'fi-cab'), ic = el('div', 'inv-pick-ic fi-ic'), tx = el('div', 'fi-tx');
+    var corpo = el('div', 'fi-corpo'), acts = el('div', 'inv-pick-acts fi-acoes');
+    function linha(html, cls) { corpo.appendChild(el('div', 'fi-ln' + (cls ? ' ' + cls : ''), html)); }
+    if (sel.tipo === 'pedra') {
+      var sdP = stoneDefs()[sel.id] || {};
+      ic.appendChild(art('stoneIcon', [sel.id, 64], 64));
+      tx.appendChild(el('div', 'inv-pick-nm fi-nm', esc(sdP.name || sel.id)));
+      tx.appendChild(el('div', 'inv-pick-sub fi-sub', tr('Pedra de forja') + ' · ×' + stoneCount(sel.id)));
+      linha(esc(sdP.description || tr('Usada na forja.')));
+      linha(tr('Sobrando? O Mercadinho vende avulsa ou em lotes de 10, 50 e 100.'), 'fi-nota');
+    } else if (sel.tipo === 'pocao') {
+      var dP = (D().consumiveis || {})[sel.id] || {};
+      ic.appendChild(art('pocaoIcon', [sel.id, 64], 64));
+      tx.appendChild(el('div', 'inv-pick-nm fi-nm', esc(dP.name || sel.id)));
+      tx.appendChild(el('div', 'inv-pick-sub fi-sub', tr('Poção') + ' · ×' + (safe(function () { return P().consumivelVer(sel.id); }, 0) || 0)));
+      linha(tr('Cura <b>{cura} PV</b>, sem passar do máximo.', { cura: dP.cura || 0 }), 'is-mais');
+      linha(tr('Beba fora da batalha (na praça, na sala de espera): o quadro da vida mostra um botão por poção quando um herói está ferido.'), 'fi-nota');
+    } else if (sel.tipo === 'perg') {
+      var pg = safe(function () { return P().pergaminhos(); }, null) || {};
+      ic.appendChild(el('span', 'perg-glifo fi-perg', sel.id === 'xp' ? '❦' : '↺'));
+      tx.appendChild(el('div', 'inv-pick-nm fi-nm', sel.id === 'xp' ? tr('Pergaminho da Sabedoria') : tr('Pergaminho da Reescrita')));
+      tx.appendChild(el('div', 'inv-pick-sub fi-sub', tr('Pergaminho') + ' · ×' + (pg[sel.id === 'xp' ? 'xp' : 'elemento'] || 0)));
+      if (sel.id === 'xp') {
+        linha(tr('Lido, multiplica o XP das próximas salas enquanto a carga durar.'));
+        acts.appendChild(btn(tr('Ler'), 'btn-primary btn-mini', function () { lerSabedoria(function () { sheetParty('inventario'); }); }));
+      } else {
+        linha(tr('A Reescrita é usada no painel de Caminhos Elementais, dentro da ficha do herói.'));
+        if (hid) acts.appendChild(btn(tr('Ficha do herói'), 'btn-mini', function () { openSheet('heroSheet', hid); }));
+      }
+    } else if (sel.tipo === 'carta') {
+      w.appendChild(cartaDetalhe(sel.id));
+      return w;
+    } else if (sel.tipo === 'pet') {
+      var pdef = (D().pets || {})[sel.id] || {};
+      ic.appendChild(art('petIcon', [sel.id, 64], 64));
+      tx.appendChild(el('div', 'inv-pick-nm fi-nm', esc(pdef.name || sel.id)));
+      tx.appendChild(el('div', 'inv-pick-sub fi-sub', tr('Bicho') + (pdef.bonuses ? ' · ' + esc(bonusText(pdef.bonuses)) : '')));
+      if (pdef.description) linha(esc(pdef.description));
+      linha(tr('Age depois do dono, na batalha.'), 'fi-nota');
+      if (hid) {
+        acts.appendChild(btn(tr('Chamar para {a}', { a: esc(className((hero(hid) || {}).classId || hid).split(' ')[0]) }), 'btn-primary btn-mini', function () {
+          var ok = safe(function () { return P().equipPet(hid, sel.id); }, false);
+          toast(ok ? tr('Companheiro equipado.') : tr('Não foi possível equipar o companheiro.'), ok ? 'good' : undefined);
+          if (ok) invSel = null;
+          sheetParty('inventario');
+        }));
+      }
+    }
+    cab.appendChild(ic); cab.appendChild(tx);
+    w.appendChild(cab); w.appendChild(corpo);
+    if (acts.childNodes.length) w.appendChild(acts);
+    return w;
   }
 
   // ------------------------------------------------- O GUARDA-ROUPA (avatar)
@@ -8689,193 +8901,248 @@ var JOGO = (typeof window !== 'undefined')
     return wrap;
   }
 
-  // ---- os quatro espaços do herói + o do bicho
-  function equipRow(hid) {
+  // ---- o BONECO: os quatro espaços e o do bicho, em quadradinhos dos dois lados do retrato
+  function invSlotCompacto(hid, canon) {
     var h = hero(hid) || {};
-    var wrap = el('div', 'pt-slots');
-    SLOTS.forEach(function (canon) {
-      var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
-      var itemId = v ? v.itemId : heroItem(h, canon);
-      var it = itemId ? itemDef(itemId) : null;
-      var lv = v ? v.level : 0, sr = v ? v.stars : 0;
-      var cell = el('div', 'pt-slot ' + starClass(sr) + (it ? ' has-item' : ' is-empty') +
-                            (invFilter === canon ? ' is-focus' : ''));
-      if (it) markRarity(cell, it.rarity);
-      var ic = el('div', 'pt-slot-ic');
-      ic.appendChild(it ? art('itemIcon', [itemId, 46], 46) : art('slotIcon', [canon, 46], 46));
-      if (lv) ic.appendChild(el('span', 'ig-lv', '+' + lv));
-      if (it) { var bs2 = setBadge(itemId); if (bs2) ic.appendChild(bs2); }
-      cell.appendChild(ic);
-      cell.appendChild(el('span', 'pt-slot-nm', SLOT_PT[canon]));
-      cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) + nvTxt(itemId) : tr('vazio')));
-      if (sr) cell.appendChild(starPips(sr));
-      if (it) {
-        cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, sr, v && v.extra))));
-        if (v && v.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
-        cell.appendChild(btn(tr('Tirar'), 'btn-mini btn-warn', function () {
-          var ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
-          if (ok) {
-            invSel = { itemId: itemId, level: lv, stars: sr, extra: (v && v.extra) || null };     // volta selecionada na grade
-            toast(tr('Voltou para o inventário.'), 'good');
-          } else if (!safe(function () { return P().bagFree(1); }, true)) {
-            toast(tr('O saco está cheio — a peça fica vestida.'));
-          }
-          sheetParty('inventario');
-        }));
-      } else {
-        cell.appendChild(el('span', 'pt-slot-b', esc(SLOT_HINT[canon])));
-        cell.appendChild(btn(tr('Ver peças'), 'btn-mini', function () {
-          invFilter = canon;
-          sheetParty('inventario');
-        }));
-      }
-      wrap.appendChild(cell);
+    var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+    var itemId = v ? v.itemId : heroItem(h, canon);
+    var it = itemId ? itemDef(itemId) : null;
+    var lv = v ? v.level : 0, sr = v ? v.stars : 0;
+    var selV = !!(invSel && invSel.vestida && invSel.slot === canon);
+    var cell = el('button', 'pt-slot inv2-slot ' + starClass(sr) + (it ? ' has-item' : ' is-empty') +
+                            (invFilter === canon && !it ? ' is-focus' : '') + (selV ? ' is-sel' : ''));
+    cell.type = 'button';
+    cell.setAttribute('data-slot', canon);
+    cell.setAttribute('aria-label', SLOT_PT[canon] + (it ? ': ' + it.name : ''));
+    cell.setAttribute('data-rot', it ? it.name : SLOT_PT[canon]);
+    if (it) markRarity(cell, it.rarity);
+    var ic = el('div', 'pt-slot-ic');
+    ic.appendChild(it ? art('itemIcon', [itemId, INV_ICONE], INV_ICONE) : art('slotIcon', [canon, INV_ICONE], INV_ICONE));
+    if (lv) ic.appendChild(el('span', 'ig-lv', '+' + lv));
+    if (it) { var bs2 = setBadge(itemId); if (bs2) ic.appendChild(bs2); }
+    if (v && v.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
+    cell.appendChild(ic);
+    if (sr) cell.appendChild(starPips(sr));
+    cell.appendChild(el('span', 'pt-slot-nm rot-oculto', SLOT_PT[canon]));
+    legendaNoToque(cell);
+    tap(cell, function () {
+      if (it) invSel = selV ? null : { vestida: true, slot: canon, heroId: hid };
+      else { invFilter = (invFilter === canon) ? 'todos' : canon; invMainTab = 'equip'; invSel = null; }
+      sheetParty('inventario');
     });
-
-    // espaço do bicho, separado dos quatro
-    var pid = h.pet;
-    var pd = pid ? petDef(pid) : null;
-    var cp = el('div', 'pt-slot pt-pet' + (pd ? ' has-item' : ' is-empty'));
+    return cell;
+  }
+  function invSlotBicho(hid) {
+    var h = hero(hid) || {};
+    var pid = h.pet, pd = pid ? petDef(pid) : null;
+    var selP = !!(invSel && invSel.tipo === 'bicho-vestido');
+    var cp = el('button', 'pt-slot pt-pet inv2-slot' + (pd ? ' has-item' : ' is-empty') + (selP ? ' is-sel' : ''));
+    cp.type = 'button';
+    cp.setAttribute('data-slot', 'bicho');
+    cp.setAttribute('data-rot', pd ? pd.name : tr('Bicho'));
+    cp.setAttribute('aria-label', tr('Bicho') + (pd ? ': ' + pd.name : ''));
     var cic = el('div', 'pt-slot-ic');
-    cic.appendChild(pd ? art('petIcon', [pid, 46], 46) : el('div', 'pet-empty', '☾'));
+    cic.appendChild(pd ? art('petIcon', [pid, INV_ICONE], INV_ICONE) : el('div', 'pet-empty', '☾'));
     cp.appendChild(cic);
-    cp.appendChild(el('span', 'pt-slot-nm', tr('Bicho')));
-    cp.appendChild(el('span', 'pt-slot-it', pd ? esc(pd.name) + ' · ' + petNivelTxt(pid) : tr('nenhum')));
-    cp.appendChild(el('span', 'pt-slot-b', pd ? esc(bonusText(pd.bonuses)) : tr('age depois do dono')));
-    var pets = ownedPets();
-    if (pd) {
-      cp.appendChild(btn(tr('Soltar'), 'btn-mini btn-warn', function () {
-        safe(function () { P().unequipPet(hid); }, null);
-        sheetParty('inventario');
-      }));
-    } else if (pets.length) {
-      cp.appendChild(btn(tr('Chamar'), 'btn-mini', function () { petPicker(hid, 'party'); }));
-    } else {
-      cp.appendChild(el('span', 'hs-none', tr('nenhum no saco')));
+    cp.appendChild(el('span', 'pt-slot-nm rot-oculto', tr('Bicho')));
+    legendaNoToque(cp);
+    tap(cp, function () {
+      if (pd) {
+        confirmSheet(tr('Soltar {a}?', { a: esc(pd.name) }), tr('O bicho volta para o saco.'), function () {
+          safe(function () { P().unequipPet(hid); }, null);
+          sheetParty('inventario');
+        });
+      } else if (ownedPets().length) petPicker(hid, 'party');
+      else toast(tr('Nenhum bicho no saco — eles caem dos chefes.'));
+    });
+    return cp;
+  }
+  function invBoneco(hid) {
+    var w = el('div', 'inv2-boneco-caixa');
+    if (hid) {
+      var esq = el('div', 'inv2-col inv2-col-esq');
+      esq.appendChild(invSlotCompacto(hid, 'punho'));
+      esq.appendChild(invSlotCompacto(hid, 'passo'));
+      w.appendChild(esq);
     }
-    wrap.appendChild(cp);
-    return wrap;
+    w.appendChild(heroCarousel(hid));
+    if (hid) {
+      var dir = el('div', 'inv2-col inv2-col-dir');
+      dir.appendChild(invSlotCompacto(hid, 'casca'));
+      dir.appendChild(invSlotCompacto(hid, 'lume'));
+      dir.appendChild(invSlotBicho(hid));
+      w.appendChild(dir);
+    }
+    return w;
   }
 
-  // ---- barra da peça escolhida: fica grudada no topo enquanto se rola a grade,
-  // e é ela que carrega TODA a informação e TODAS as ações (nada de balãozinho).
-  function pickBar(hid) {
-    var wrap = el('div', 'inv-pick');
-    var pilha = pilhaSel();
-    if (!pilha) {
-      wrap.classList.add('is-idle');
-      wrap.appendChild(el('p', null, tr('Toque numa peça da grade para ver o que ela dá e equipar.')));
-      return wrap;
+  /* ================================================================ A FICHA DO ITEM (08/10 à noite)
+   * O dono (com uma foto de referência na mão): "na hora de clicar em um item e ver as características fica
+   * bem confuso... queria mais clean; e que todos os menus (forja, mercado...) sejam nesse estilo". UMA ficha
+   * para a peça escolhida, em todo lugar: o retrato à esquerda, o nome e o nível de uso, e três abas —
+   * Efeitos (o que ela dá, com o ganho/perda contra a vestida), Condições (nível, quem usa, conjunto) e
+   * Carac. (espaço, raridade, pedra, estrela, cópias, fusão, quebra, de onde vem) — e a descrição embaixo.
+   * `ref` = {itemId, level, stars, extra, count, index, vestida, heroId}; `op` = {hid, acoes: [botões],
+   * compacto}. Guarda as classes de antes (.inv-pick, .inv-pick-nm, .inv-pick-ic, .inv-pick-tranca,
+   * .inv-pick-acts) que as provas e o CSS conhecem. A aba aberta sobrevive ao redesenho (fichaAba). */
+  var fichaAba = 'efeitos';
+  function tabelaBonus(def, mult) {
+    var m = {}, b = (def && def.bonuses) || {};
+    for (var k in b) {
+      if (!b.hasOwnProperty(k)) continue;
+      if (k === 'resists') {
+        for (var e in b.resists) {
+          if (b.resists.hasOwnProperty(e)) m['r:' + e] = Math.round(b.resists[e] * mult);
+        }
+      } else if (k === 'pa' || k === 'pp') m[k] = b[k];
+      else m[k] = Math.round(b[k] * mult);
     }
-    var it = itemDef(pilha.itemId);
-    var canon = slotOf(pilha.itemId);
-    wrap.classList.add(starClass(pilha.stars));
-    markRarity(wrap, it && it.rarity);
-    marcaTranca(wrap, hid, pilha.itemId);
+    return m;
+  }
+  function nomeStat(k) {
+    if (k.indexOf('r:') === 0) return '% ' + (ELEM_PT[k.slice(2)] || k.slice(2));
+    return STAT_PT[k] || k;
+  }
+  function portalDe(dungeonId) {
+    var nome = null;
+    (D().dungeons || []).forEach(function (x) { if (x && x.id === dungeonId) nome = x.name || x.id; });
+    return nome;
+  }
+  function fichaItem(ref, op) {
+    op = op || {};
+    var it = itemDef(ref.itemId);
+    var hid = op.hid || null;
+    var wrap = el('div', 'inv-pick inv2-ficha ' + starClass(ref.stars) + (op.compacto ? ' is-compacta' : ''));
+    if (!it) { wrap.appendChild(el('p', null, esc(ref.itemId))); return wrap; }
+    markRarity(wrap, it.rarity);
+    if (hid && !ref.vestida) marcaTranca(wrap, hid, ref.itemId);
+    var canon = slotOf(ref.itemId);
+    var nv = nivelUsoDe(ref.itemId);
+    var puP = (hid && nv) ? safe(function () { return P().podeUsar(hid, ref.itemId); }, null) : null;
+    var travada = !!(puP && puP.precisa > puP.nivel);
 
-    var ic = el('div', 'inv-pick-ic');
-    ic.appendChild(art('itemIcon', [pilha.itemId, 52], 52));
-    if (pilha.count > 1) ic.appendChild(el('span', 'ig-n', '×' + pilha.count));
-    if (pilha.level) ic.appendChild(el('span', 'ig-lv', '+' + pilha.level));
-    if (pilha.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
-    var bsp = setBadge(pilha.itemId);
+    // ---- o cabeçalho: o retrato, o nome, o nível de uso
+    var cab = el('div', 'fi-cab');
+    var ic = el('div', 'inv-pick-ic fi-ic');
+    ic.appendChild(art('itemIcon', [ref.itemId, 64], 64));
+    if (ref.count > 1) ic.appendChild(el('span', 'ig-n', '×' + ref.count));
+    if (ref.level) ic.appendChild(el('span', 'ig-lv', '+' + ref.level));
+    if (ref.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
+    var bsp = setBadge(ref.itemId);
     if (bsp) ic.appendChild(bsp);
-    wrap.appendChild(ic);
+    cab.appendChild(ic);
+    var tx = el('div', 'fi-tx');
+    var nm = el('div', 'inv-pick-nm fi-nm', esc(it.name));
+    if (ref.stars) nm.appendChild(starPips(ref.stars));
+    tx.appendChild(nm);
+    tx.appendChild(el('div', 'inv-pick-sub fi-sub',
+      esc(SLOT_PT[canon] || '') + ' · ' + esc(RAR_PT[it.rarity] || it.rarity || '') +
+      (ref.level ? ' · +' + ref.level + ' ' + esc(tierNome(ref.level)) : '') +
+      (ref.vestida ? ' · ' + tr('vestida por {a}', { a: esc(className((hero(ref.heroId || hid) || {}).classId || ref.heroId || hid)) }) : '')));
+    if (travada) {
+      tx.appendChild(el('div', 'inv-pick-tranca', tr('🔒 pede o nível <b>{precisa}</b> — o {a} está no {nivel}', { precisa: puP.precisa, a: esc(className((hero(hid) || {}).classId || hid)), nivel: puP.nivel })));
+    }
+    cab.appendChild(tx);
+    cab.appendChild(el('span', 'fi-nivel' + (travada ? ' is-trancado' : ''), tr('Nv.') + ' ' + (nv || 1)));
+    wrap.appendChild(cab);
 
-    var tx = el('div', 'inv-pick-tx');
-    var h3 = el('div', 'inv-pick-nm', esc((it && it.name) || pilha.itemId));
-    if (pilha.stars) h3.appendChild(starPips(pilha.stars));
-    tx.appendChild(h3);
-    tx.appendChild(el('div', 'inv-pick-sub',
-      esc(SLOT_PT[canon] || '') + ' · ' + esc(RAR_PT[(it || {}).rarity] || (it || {}).rarity || '') +
-      (nivelUsoDe(pilha.itemId) ? ' · <b>' + tr('Nv.') + ' ' + nivelUsoDe(pilha.itemId) + '</b>' : '') +
-      (pilha.level ? ' ' + tr('· pedra <b>+{level}</b> {a}', { level: pilha.level, a: esc(tierNome(pilha.level)) }) : '') +
-      (pilha.stars ? ' ' + tr('· estrela <b>★{stars}</b>', { stars: pilha.stars }) : '')));
-    if (hid && trancado(hid, pilha.itemId)) {
-      var puP = safe(function () { return P().podeUsar(hid, pilha.itemId); }, null);
-      if (puP) {
-        tx.appendChild(el('div', 'inv-pick-tranca', tr('🔒 pede o nível <b>{precisa}</b> — o {a} está no {nivel}', { precisa: puP.precisa, a: esc(className((hero(hid) || {}).classId || hid)), nivel: puP.nivel })));
+    // ---- as abas
+    var abas = el('div', 'fi-abas');
+    var corpo = el('div', 'fi-corpo');
+    var botoes = {};
+    [['efeitos', tr('Efeitos')], ['condicoes', tr('Condições')], ['carac', tr('Carac.')]].forEach(function (a2) {
+      var b = btn(a2[1], 'fi-aba' + (fichaAba === a2[0] ? ' is-on' : ''), function () {
+        fichaAba = a2[0];
+        for (var k in botoes) if (botoes.hasOwnProperty(k)) botoes[k].classList.toggle('is-on', k === a2[0]);
+        pintaAba();
+      });
+      b.setAttribute('data-aba', a2[0]);
+      botoes[a2[0]] = b;
+      abas.appendChild(b);
+    });
+    wrap.appendChild(abas);
+    wrap.appendChild(corpo);
+    function linha(cls, html) { corpo.appendChild(el('div', 'fi-ln' + (cls ? ' ' + cls : ''), html)); }
+    function pintaAba() {
+      clear(corpo);
+      var mult = itemMult(ref.level, ref.stars), k;
+      if (fichaAba === 'efeitos') {
+        var nova = tabelaBonus(it, mult), velha = null, atual = null;
+        if (hid && !ref.vestida) {
+          var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
+          if (v && v.itemId && !(v.itemId === ref.itemId && (v.level || 0) === (ref.level || 0) && (v.stars || 0) === (ref.stars || 0))) {
+            atual = itemDef(v.itemId);
+            if (atual) velha = tabelaBonus(atual, itemMult(v.level || 0, v.stars || 0));
+          }
+        }
+        var algum = false;
+        for (k in nova) {
+          if (!nova.hasOwnProperty(k)) continue;
+          algum = true;
+          var d = velha ? nova[k] - (velha[k] || 0) : 0;
+          linha('is-mais', '+' + nova[k] + ' ' + esc(nomeStat(k)) +
+            (velha && d ? ' <em class="' + (d > 0 ? 'cmp-mais' : 'cmp-menos') + '">(' + (d > 0 ? '+' : '') + d + ')</em>' : ''));
+        }
+        if (velha) {
+          for (k in velha) {
+            if (velha.hasOwnProperty(k) && !nova.hasOwnProperty(k)) linha('is-menos', tr('perde +{a} {b} da vestida', { a: velha[k], b: esc(nomeStat(k)) }));
+          }
+        }
+        if (ref.extra && extraTxt(ref.extra)) linha('is-gema', '◆ ' + esc(extraTxt(ref.extra)) + ' <i>' + tr('(Gema engastada)') + '</i>');
+        if (it.grantsSpell) {
+          var sp = spellDef(it.grantsSpell);
+          linha('is-feitico', tr('Concede <b>{a}</b>{b}', { a: esc(spellName(sp, it.grantsSpell)), b: sp && sp.paCost ? ' ' + tr('({paCost} PA)', { paCost: sp.paCost }) : '' }));
+        }
+        if (!algum && !it.grantsSpell && !ref.extra) linha('', tr('Sem bônus de atributo.'));
+        if (velha && atual) corpo.appendChild(el('p', 'fi-nota', tr('Entre parênteses: a diferença para {a}, a vestida no mesmo espaço.', { a: esc(atual.name) })));
+      } else if (fichaAba === 'condicoes') {
+        if (nv) {
+          linha(travada ? 'is-menos' : 'is-ok', tr('Nível {a} ou mais', { a: nv }) +
+            (travada ? ' — ' + tr('🔒 o {a} está no {nivel}', { a: esc(className((hero(hid) || {}).classId || hid)), nivel: puP.nivel }) : (hid ? ' ✓' : '')));
+        } else linha('is-ok', tr('Sem exigência de nível'));
+        linha('', tr('Espaço: <b>{a}</b> — {b}', { a: esc(SLOT_PT[canon] || ''), b: esc(SLOT_HINT[canon] || '') }));
+        if (it.setId) {
+          var sd = setDef(it.setId);
+          var lnSet = el('div', 'fi-ln inv-pick-set is-toque', tr('{a}</b> · {b}/{c} vestidas · <u>ver</u>', { a: tr('Conjunto <b>{a}', { a: esc((sd && sd.name) || it.setId) }), b: setEquippedCount(it.setId), c: setPieceCount(it.setId) }));
+          tap(lnSet, function () { showTip(lnSet, (sd && sd.name) || it.setId, setTipBody(it.setId), elemColor(sd && sd.element)); });
+          corpo.appendChild(lnSet);
+        }
+        var donos = safe(function () { return P().equippedByAll(ref.itemId); }, []);
+        if (donos.length) {
+          linha('inv-pick-us', tr('Outra cópia em uso por <b>{a}</b>', { a: donos.map(function (d2) { return esc(className((hero(d2) || {}).classId || d2)); }).join(', ') }));
+        }
+        if (ref.extra) linha('fi-nota', tr('Com a Gema engastada a peça fica presa à conta: não vai ao mercadinho, à troca nem ao banco da guilda.'));
+      } else {
+        linha('', tr('Espaço: <b>{a}</b>', { a: esc(SLOT_PT[canon] || '') }));
+        var rarL = el('div', 'fi-ln', tr('Raridade: <b>{a}</b>', { a: esc(RAR_PT[it.rarity] || it.rarity || '') }));
+        rarL.style.setProperty('--rc', rarColor(it.rarity));
+        corpo.appendChild(rarL);
+        linha('', ref.level ? tr('Pedra: <b>+{a}</b> {b}', { a: ref.level, b: esc(tierNome(ref.level)) }) : tr('Pedra: <b>+0</b> — ainda não forjada'));
+        linha('', ref.stars ? tr('Estrela: <b>★{a}</b>', { a: ref.stars }) : tr('Estrela: <b>nenhuma</b>'));
+        if (ref.count > 1) linha('', tr('Cópias iguais no saco: <b>×{a}</b>', { a: ref.count }));
+        if (typeof ref.index === 'number') {
+          var fu = safe(function () { return P().fuseInfo(ref.index); }, null);
+          if (fu && !fu.maxed) {
+            linha(fu.pode ? 'is-mais' : '', fu.engastada
+              ? tr('Fusão: a cópia com Gema não funde')
+              : (fu.pode ? tr('Fusão pronta na forja: dá <b>★{a}</b>', { a: fu.proxima })
+                         : tr('Fusão: <b>{a}/{b}</b> cópias iguais para a ★{c}', { a: fu.copias, b: fu.precisa, c: fu.proxima })));
+          }
+          var qb = safe(function () { return P().quebraInfoDe(ref.itemId, ref.level, ref.stars); }, null);
+          if (qb && qb.pode) {
+            var sdQ = stoneDefs()[qb.stoneId] || {};
+            linha('', tr('Quebra: dá <b>{a}</b> {b}', { a: qb.pedras, b: esc(sdQ.name || qb.stoneId || '') }));
+          }
+        }
+        var portal = it.dungeonId ? portalDe(it.dungeonId) : null;
+        if (portal) linha('', tr('Cai em: <b>{a}</b>', { a: esc(portal) }));
       }
     }
-    tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars, pilha.extra))));
-    var cmp = comparaComVestida(pilha.itemId, pilha.level, pilha.stars, hid);
-    if (cmp) tx.appendChild(el('div', 'inv-pick-cmp', cmp));
-    if (it && it.grantsSpell) {
-      var sp = spellDef(it.grantsSpell);
-      tx.appendChild(el('div', 'inv-pick-sp', tr('Concede <b>{a}</b>{b}', { a: esc(spellName(sp, it.grantsSpell)), b: sp && sp.paCost ? ' ' + tr('({paCost} PA)', { paCost: sp.paCost }) : '' })));
-    }
-    if (it && it.setId) {
-      var sd = setDef(it.setId);
-      var lnSet = el('div', 'inv-pick-set is-toque', tr('{a}</b> · {b}/{c} vestidas · <u>ver</u>', { a: tr('Conjunto <b>{a}', { a: esc((sd && sd.name) || it.setId) }), b: setEquippedCount(it.setId), c: setPieceCount(it.setId) }));
-      tap(lnSet, function () {
-        showTip(lnSet, (sd && sd.name) || it.setId, setTipBody(it.setId), elemColor(sd && sd.element));
-      });
-      tx.appendChild(lnSet);
-    }
-    var donos = safe(function () { return P().equippedByAll(pilha.itemId); }, []);
-    if (donos.length) {
-      tx.appendChild(el('div', 'inv-pick-us', tr('Outra cópia em uso por <b>{a}</b>', { a: donos.map(function (d) { return esc(className((hero(d) || {}).classId || d)); }).join(', ') })));
-    }
-    wrap.appendChild(tx);
-
-    var acts = el('div', 'inv-pick-acts');
-    if (hid) {
-      var nome = className((hero(hid) || {}).classId || hid).split(' ')[0];
-      acts.appendChild(btn(tr('Equipar em {a}', { a: esc(nome) }), 'btn-primary btn-mini', function () {
-        limpaRecusa();
-        var ok = safe(function () { return P().equip(hid, pilha.itemId, pilha.index); }, false);
-        if (!ok) {
-          var rc = recusaAtual();
-          toast(rc ? textoRecusa(rc) : tr('Não deu para equipar essa peça.'));
-        }
-        else {
-          toast(tr('{a} no {b}.', { a: esc((it && it.name) || tr('Peça')), b: SLOT_PT[canon] || tr('espaço') }), 'good');
-          // o Traje do Colecionador FECHOU nesta peça? A aura acende agora
-          if (it && D().selos && it.setId === D().selos.setId && safe(temAuraSelos, false)) {
-            toast(tr('O Traje do Colecionador FECHOU — a aura acende na praça e o Selinho se junta a você!'), 'good');
-            aplicaAuraPraca();
-          }
-          if (pilha.count <= 1) invSel = null;
-        }
-        sheetParty('inventario');
-      }));
-    }
-    // UMA porta só para a forja (reorganização 25/08: "Forjar" e "Fundir na
-    // forja" eram dois botões indo ao MESMO lugar — confundia). Quando há
-    // fusão pronta, o rótulo adianta a boa notícia e o botão fica dourado.
-    var fu = safe(function () { return P().fuseInfo(pilha.index); }, null);
-    var fi = safe(function () { return P().upgradeInfo(pilha.index); }, null);
-    var fundePronto = !!(fu && !fu.maxed && fu.pode);
-    if ((fi && !fi.maxed) || (fu && !fu.maxed)) {
-      acts.appendChild(btn(
-        fundePronto ? tr('Levar à forja — dá ★{proxima}!', { proxima: fu.proxima }) : tr('Levar à forja'),
-        'btn-mini' + (fundePronto ? ' btn-gold' : ''), function () {
-          forjaModo = 'forjar';
-          forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
-          sheetParty('forja');
-        }));
-    }
-    // 08/10: a GEMA — a terceira porta da forja, só para a peça que ainda não tem a sua
-    if (!pilha.extra) {
-      acts.appendChild(btn(tr('◆ Engastar Gema'), 'btn-mini inv-pick-gema', function () {
-        forjaModo = 'gema';
-        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: null };
-        sheetParty('forja');
-      }));
-    }
-    // A QUEBRA (22/09): a outra porta da forja — já no modo Quebrar, com a
-    // peça na bancada. Só aparece para o que se quebra (a Panóplia do Mestre
-    // e a peça de elemento sem pedra não ganham o botão).
-    var qb = safe(function () { return P().quebraInfoDe(pilha.itemId, pilha.level, pilha.stars); }, null);
-    if (qb && qb.pode) {
-      acts.appendChild(btn(tr('Quebrar na forja'), 'btn-mini inv-pick-quebra', function () {
-        forjaModo = 'quebrar';
-        forjaQuebraN = 1;
-        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
-        sheetParty('forja');
-      }));
-    }
-    wrap.appendChild(acts);
+    pintaAba();
+    if (it.description) wrap.appendChild(el('p', 'fi-desc', esc(it.description)));
+    var acts = el('div', 'inv-pick-acts fi-acoes');
+    (op.acoes || []).forEach(function (b2) { if (b2) acts.appendChild(b2); });
+    if (acts.childNodes.length) wrap.appendChild(acts);
     return wrap;
   }
 
@@ -8967,8 +9234,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function invFilterTabs() {
     var cont = el('div', 'inv-tabs-container');
-
-    // As abas principais (categorias)
+    // As abas principais (categorias); os filtros de espaço e elemento viraram os seletores da barra (invSeletores)
     var mTabs = icoFila('inv-tabs-main', INV_CATS.map(function (t) {
       return { id: t.id, ico: t.ico, rot: t.rot, cls: 'btn-tab', data: { cat: t.id } };
     }), invMainTab, function (id) {
@@ -8977,20 +9243,6 @@ var JOGO = (typeof window !== 'undefined')
       sheetParty('inventario');
     }, true);
     cont.appendChild(mTabs);
-
-    // Os filtros: espaço só nos Equipamentos; elemento nos Equipamentos e nas Pedras
-    if (invMainTab === 'equip' || invMainTab === 'pedras') {
-      var filtros = filtrosDeItem(invFilter, invMainTab === 'equip' ? function (f) {
-        invFilter = f;
-        sheetParty('inventario');
-      } : null, invElemFiltro, function (e2) {
-        invElemFiltro = e2;
-        sheetParty('inventario');
-      });
-      var sub = filtros.querySelector('.slot-tabs');
-      if (sub) sub.classList.add('inv-tabs-sub');
-      cont.appendChild(filtros);
-    }
     return cont;
   }
 
@@ -9278,8 +9530,10 @@ var JOGO = (typeof window !== 'undefined')
         cell.type = 'button';
         markRarity(cell, it.rarity);
         marcaTranca(cell, hid, pilha.itemId);
+        cell.setAttribute('data-rot', it.name);     // 08/10 à noite: a grade compacta esconde o nome; fica no balão
+        legendaNoToque(cell);
         var plate = el('span', 'ig-plate');
-        plate.appendChild(art('itemIcon', [pilha.itemId, 54], 54));
+        plate.appendChild(art('itemIcon', [pilha.itemId, INV_ICONE], INV_ICONE));
         var bs1 = setBadge(pilha.itemId);
         if (bs1) plate.appendChild(bs1);
         cell.appendChild(plate);
@@ -9307,13 +9561,15 @@ var JOGO = (typeof window !== 'undefined')
         var cell = el('button', 'ig-cell is-pedra');
         cell.type = 'button';
         var plate = el('span', 'ig-plate');
-        plate.appendChild(art('stoneIcon', [k, 54], 54));
+        plate.appendChild(art('stoneIcon', [k, INV_ICONE], INV_ICONE));
         cell.appendChild(plate);
         cell.appendChild(el('span', 'ig-n', String(n)));
         cell.appendChild(el('span', 'ig-nm', esc(defs[k].name)));
+        if (invSel && invSel.tipo === 'pedra' && invSel.id === k) cell.classList.add('is-sel');
         tap(cell, function () {
-          // 22/09: a pedra sobrando tem saída — o Mercadinho vende em lote
-          toast(tr('{name}: {a} Sobrando? O Mercadinho vende avulsa ou em lotes de 10, 50 e 100.', { name: defs[k].name, a: defs[k].description || tr('Usada na forja.') }));
+          // 08/10 à noite: a ficha de baixo diz o que é (e que o Mercadinho vende o que sobra)
+          invSel = (invSel && invSel.tipo === 'pedra' && invSel.id === k) ? null : { tipo: 'pedra', id: k };
+          sheetParty('inventario');
         });
         grid.appendChild(cell);
       });
@@ -9329,13 +9585,15 @@ var JOGO = (typeof window !== 'undefined')
         cP.type = 'button';
         cP.setAttribute('data-pocao', pid);
         var plP = el('span', 'ig-plate');
-        plP.appendChild(art('pocaoIcon', [pid, 54], 54));
+        plP.appendChild(art('pocaoIcon', [pid, INV_ICONE], INV_ICONE));
         cP.appendChild(plP);
         cP.appendChild(el('span', 'ig-n', '×' + nP));
         cP.appendChild(el('span', 'ig-nm', esc(dP.name)));
         cP.appendChild(el('span', 'ig-cura', tr('cura {cura} PV', { cura: dP.cura })));
+        if (invSel && invSel.tipo === 'pocao' && invSel.id === pid) cP.classList.add('is-sel');
         tap(cP, function () {
-          toast(tr('{name}: cura {cura} PV, sem passar do máximo. Beba fora da batalha (na praça, na sala de espera) — o quadro da vida mostra um botão por poção quando um herói está ferido.', { name: dP.name, cura: dP.cura }));
+          invSel = (invSel && invSel.tipo === 'pocao' && invSel.id === pid) ? null : { tipo: 'pocao', id: pid };
+          sheetParty('inventario');
         });
         grid.appendChild(cP);
       });
@@ -9349,7 +9607,8 @@ var JOGO = (typeof window !== 'undefined')
         cxp.appendChild(plateXp);
         cxp.appendChild(el('span', 'ig-n', '×' + pg.xp));
         cxp.appendChild(el('span', 'ig-nm', tr('Pergaminho da Sabedoria')));
-        tap(cxp, function () { lerSabedoria(function () { sheetParty('inventario'); }); });
+        if (invSel && invSel.tipo === 'perg' && invSel.id === 'xp') cxp.classList.add('is-sel');
+        tap(cxp, function () { invSel = (invSel && invSel.tipo === 'perg' && invSel.id === 'xp') ? null : { tipo: 'perg', id: 'xp' }; sheetParty('inventario'); });
         grid.appendChild(cxp);
       }
       if (pg.elemento) {
@@ -9361,13 +9620,15 @@ var JOGO = (typeof window !== 'undefined')
         cel.appendChild(plateEl);
         cel.appendChild(el('span', 'ig-n', '×' + pg.elemento));
         cel.appendChild(el('span', 'ig-nm', tr('Pergaminho da Reescrita')));
-        tap(cel, function () { toast(tr('A Reescrita é usada no painel de Caminhos Elementais, dentro da ficha do herói.')); });
+        if (invSel && invSel.tipo === 'perg' && invSel.id === 'elemento') cel.classList.add('is-sel');
+        tap(cel, function () { invSel = (invSel && invSel.tipo === 'perg' && invSel.id === 'elemento') ? null : { tipo: 'perg', id: 'elemento' }; sheetParty('inventario'); });
         grid.appendChild(cel);
       }
     } else if (invMainTab === 'cartas') {
       // 04/10: uma pilha por classe — o cartão com o retrato, ×N e o risco do progresso
       var cids = cartasDoSaco();
       if (invCartaSel && cids.indexOf(invCartaSel) < 0) invCartaSel = null;
+      if (invCartaSel && !(invSel && invSel.tipo === 'carta')) invSel = { tipo: 'carta', id: invCartaSel };
       cids.forEach(function (cid) {
         mostrou++;
         var pr = cartaProgresso(cid);
@@ -9376,7 +9637,7 @@ var JOGO = (typeof window !== 'undefined')
         cc.setAttribute('data-carta', cid);
         markRarity(cc, cartaRaridade(cid));
         var plateC = el('span', 'ig-plate');
-        plateC.appendChild(cartaClasse(cid, 54));
+        plateC.appendChild(cartaClasse(cid, INV_ICONE));
         cc.appendChild(plateC);
         cc.appendChild(el('span', 'ig-n', '×' + pr.info.cards));
         cc.appendChild(el('span', 'ig-nm', esc(pr.info.name || className(cid))));
@@ -9388,6 +9649,7 @@ var JOGO = (typeof window !== 'undefined')
         cc.appendChild(risco);
         tap(cc, function () {
           invCartaSel = (invCartaSel === cid) ? null : cid;
+          invSel = invCartaSel ? { tipo: 'carta', id: cid } : null;     // 08/10 à noite: a carta abre na ficha de baixo
           sheetParty('inventario');
         });
         grid.appendChild(cc);
@@ -9409,22 +9671,14 @@ var JOGO = (typeof window !== 'undefined')
         cp.type = 'button';
         markRarity(cp, 'epic');
         var plateP = el('span', 'ig-plate');
-        plateP.appendChild(art('petIcon', [pid, 54], 54));
+        plateP.appendChild(art('petIcon', [pid, INV_ICONE], INV_ICONE));
         cp.appendChild(plateP);
         if (n > 1) cp.appendChild(el('span', 'ig-n', '×' + n));
         cp.appendChild(el('span', 'ig-nm', esc(pdef ? pdef.name : pid)));
+        if (invSel && invSel.tipo === 'pet' && invSel.id === pid) cp.classList.add('is-sel');
         tap(cp, function () {
-          if (!hid) return;
-          confirmSheet(tr('Equipar {a}', { a: pdef ? pdef.name : pid }) + '?',
-            tr('Deseja equipar este companheiro no herói atual?'), function () {
-              var ok = safe(function () { return P().equipPet(hid, pid); }, false);
-              if (ok) {
-                toast(tr('Companheiro equipado.'), 'good');
-                sheetParty('inventario');
-              } else {
-                toast(tr('Não foi possível equipar o companheiro.'));
-              }
-            });
+          invSel = (invSel && invSel.tipo === 'pet' && invSel.id === pid) ? null : { tipo: 'pet', id: pid };
+          sheetParty('inventario');
         });
         grid.appendChild(cp);
       });
@@ -9690,6 +9944,13 @@ var JOGO = (typeof window !== 'undefined')
       }
       banca.appendChild(sRes);
       body.appendChild(banca);
+      // 08/10 à noite: a MESMA ficha do inventário (Efeitos / Condições / Carac.) para a peça na bancada
+      if (atual) {
+        body.appendChild(fichaItem({ itemId: atual.itemId, level: lv2, stars: atual.stars || 0, extra: atual.extra || null,
+                                     count: atual.count, index: atual.kind === 'bag' ? atual.index : undefined,
+                                     vestida: atual.kind === 'worn', heroId: atual.heroId || null },
+                                   { hid: atual.kind === 'worn' ? atual.heroId : ensurePartyHero(), compacto: true }));
+      }
 
       // a trilha de níveis e o estado da bancada
       if (atual) {

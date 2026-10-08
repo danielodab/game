@@ -239,6 +239,15 @@
     UI.openSheet(nome, arg);
   }
   function toca(sel, raiz) { var b = q1(sel, raiz || ficha()); if (b) b.click(); return !!b; }
+  // 08/10 à noite: os seletores do inventário limpo — escolher um valor dispara o change (a ficha redesenha)
+  function escolhe(sel, valor, raiz) {
+    var s = q1(sel, raiz || ficha());
+    if (!s) return false;
+    s.value = valor;
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  function valores(select) { return qa('option', select).map(function (o) { return o.value; }); }
 
   // ------------------------------------------------------------ o modo FOTO
   function foto() {
@@ -345,49 +354,46 @@
       var nome = q1('.ico-fila-nome', main);
       check('inventário: o nome da aba aberta fica escrito ao lado', !!nome && nome.textContent === 'Equipamentos',
             nome ? nome.textContent : 'sem nome');
-      var sub = q1('.inv-tabs-sub', ficha()), el = q1('.elem-tabs', ficha());
-      check('Equipamentos: a fileira dos espaços (Tudo·Punho·Passo·Casca·Lume) redonda',
-            !!sub && mesmo(textos(qa('.btn-ico', sub)), ['Tudo', 'Punho', 'Passo', 'Casca', 'Lume']) &&
-            mesmo(qa('.btn-ico', sub).map(function (b) { return b.getAttribute('data-slot'); }), ['todos', 'punho', 'passo', 'casca', 'lume']));
-      var els = el ? qa('.btn-ico', el) : [];
-      check('Equipamentos: a fileira dos elementos redonda, com bt-elem e a cor (--ec) de cada um',
-            mesmo(textos(els), ['Todos', 'Fogo', 'Água', 'Terra', 'Ar', 'Neutro']) &&
-            els.every(function (b) { return b.classList.contains('bt-elem'); }) &&
-            els.slice(1).every(function (b) { return b.classList.contains('ico-cor') && !!b.style.getPropertyValue('--ec'); }) &&
-            !els[0].classList.contains('ico-cor'), textos(els).join(','));
+      // 08/10 à noite (o inventário limpo): as duas fileiras redondas viraram DOIS seletores — espaço e elemento
+      var selE = q1('.inv2-sel-espaco', ficha()), selL = q1('.inv2-sel-elem', ficha());
+      check('Equipamentos: o seletor de espaço (Todos os espaços·Punho·Passo·Casca·Lume)',
+            !!selE && mesmo(valores(selE), ['todos', 'punho', 'passo', 'casca', 'lume']) &&
+            mesmo(textos(qa('option', selE)), ['Todos os espaços', 'Punho', 'Passo', 'Casca', 'Lume']), selE ? textos(qa('option', selE)).join(',') : 'sem seletor');
+      check('Equipamentos: o seletor de elemento (Todos·Fogo·Água·Terra·Ar·Neutro)',
+            !!selL && mesmo(valores(selL), ['todos', 'fogo', 'agua', 'terra', 'ar', 'neutro']), selL ? valores(selL).join(',') : 'sem seletor');
       contratoDosBotoes('inventário · Equipamentos');
       cabe('inventário · Equipamentos');
       // o espaço e o elemento filtram a grade
-      toca('.inv-tabs-sub [data-slot="punho"]');
+      escolhe('.inv2-sel-espaco', 'punho');
       var soPunho = celulasNomes();
       var esperado = P.invStacks().filter(function (s) { return slotDe(s.itemId) === 'punho'; }).length;
       check('Punho: a grade fica só com as peças de punho', soPunho.length === esperado && esperado > 0 &&
-            q1('.inv-tabs-sub [data-slot="punho"]', ficha()).classList.contains('is-on'), soPunho.join(',') + ' (esperava ' + esperado + ')');
-      toca('.elem-tabs [data-el="fogo"]');
+            q1('.inv2-sel-espaco', ficha()).value === 'punho', soPunho.join(',') + ' (esperava ' + esperado + ')');
+      escolhe('.inv2-sel-elem', 'fogo');
       var punhoFogo = P.invStacks().filter(function (s) { return slotDe(s.itemId) === 'punho' && elDe(s.itemId) === 'fogo'; });
       check('Punho + Fogo: só as peças de punho de fogo', celulasNomes().length === punhoFogo.length &&
             celulasNomes().every(function (n) { return punhoFogo.some(function (s) { return nomeDe(s.itemId) === n; }); }),
             celulasNomes().join(','));
-      toca('.inv-tabs-sub [data-slot="todos"]');
-      toca('.elem-tabs [data-el="todos"]');
+      escolhe('.inv2-sel-espaco', 'todos');
+      escolhe('.inv2-sel-elem', 'todos');
     });
 
     // ---- 2) PEDRAS: o elemento filtra pela PEDRA (antes toda pedra era "neutro")
     p(function () {
       toca('.inv-tabs-main [data-cat="pedras"]');
-      check('Pedras: sem a fileira dos espaços, com a dos elementos',
-            !q1('.inv-tabs-sub', ficha()) && !!q1('.elem-tabs', ficha()));
+      check('Pedras: sem o seletor de espaço, com o de elemento',
+            !q1('.inv2-sel-espaco', ficha()) && !!q1('.inv2-sel-elem', ficha()));
       check('Pedras: "Todos" mostra as 6 pedras (a Âncora junto)', celulasNomes().length === Object.keys(D.stones).length,
             celulasNomes().join(','));
       var ruins = [];
       ['fogo', 'agua', 'terra', 'ar', 'neutro'].forEach(function (e) {
-        toca('.elem-tabs [data-el="' + e + '"]');
+        escolhe('.inv2-sel-elem', e);
         var quer = Object.keys(D.stones).filter(function (s) { return D.stones[s].element === e; })
                          .map(function (s) { return D.stones[s].name; });
         if (!mesmo(celulasNomes().slice().sort(), quer.slice().sort())) ruins.push(e + ': ' + celulasNomes().join('/'));
       });
       check('Pedras: cada elemento mostra SÓ a pedra dele (Neutro = a Lasca, sem a Âncora)', ruins.length === 0, ruins.join(' | '));
-      toca('.elem-tabs [data-el="todos"]');
+      escolhe('.inv2-sel-elem', 'todos');
       contratoDosBotoes('inventário · Pedras');
     });
 
@@ -444,11 +450,10 @@
       JOGO.IconesUI = undefined;
       abre('inventory');
       var cats = qa('.inv-tabs-main button', ficha());
-      var el = qa('.elem-tabs button', ficha());
-      check('sem icones_ui.js: as abas voltam a ser TEXTO (btn-tab, sem btn-ico, sem nome escrito ao lado)',
+      check('sem icones_ui.js: as abas voltam a ser TEXTO (btn-tab, sem btn-ico, sem nome escrito ao lado) e os seletores ficam',
             mesmo(textos(cats), ['Equipamentos', 'Pedras', 'Consumíveis', 'Pets', 'Cartas']) &&
             cats.every(function (b) { return b.classList.contains('btn-tab') && !b.classList.contains('btn-ico'); }) &&
-            !q1('.ico-fila-nome', ficha()) && el.length === 6 && el[1].style.getPropertyValue('--ec') !== '');
+            !q1('.ico-fila-nome', ficha()) && qa('.inv2-sel-elem option', ficha()).length === 6);
       JOGO.IconesUI = IU;
       abre('inventory');
     });
