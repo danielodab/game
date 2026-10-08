@@ -195,6 +195,27 @@ var JOGO = (typeof window !== 'undefined')
  *     Sorteado pelo rng da sala (`Ex()`, depois do afixo), marcado em
  *     `unit.elite` (entra no hash); paga ×1,5 de XP e pedra garantida
  *     (game.js). Mesma VERSAO_REGRAS 8 dos afixos.
+ * 24. ATACAR A CASA VAZIA (08/10 à noite, o dono: "os jogadores podem atacar
+ *     em células vazias.. não só em monstro, porque se o outro estiver
+ *     invisível ou ataque em área"). O feitiço 'enemy' de casa única passava
+ *     só com um inimigo VISÍVEL na casa — a casa do invisível do outro lado
+ *     parecia chão e o lance era recusado (decisão 5 da versão das regras),
+ *     então o Ladino sumido só apanhava de área, de feitiço 'any' ou por
+ *     acaso. Agora a casa VAZIA (ou que parece vazia para quem mira) é alvo
+ *     do feitiço 'enemy' que fere — dentro do alcance, da linha e da visão de
+ *     sempre. Quem estiver ali leva o golpe, visível ou não (applyEffects já
+ *     batia em quem está nas casas, sem perguntar se se vê); o raio em cadeia
+ *     acerta o invisível na casa mirada e segue sem saltar para outro
+ *     invisível (o salto é automático, não é uma mira); sem ninguém, o feitiço
+ *     SAI mesmo assim — gasta PA, vezes por turno e recarga — e o diário diz
+ *     "golpeia o vazio" (a linha aparece sempre que ninguém VISÍVEL para quem
+ *     lançou está na área, haja ou não um invisível ali: a ausência dela
+ *     entregaria o escondido). A casa de um ALIADO continua recusada no
+ *     feitiço 'enemy'; 'ally', 'self' e needsEmptyTile não mudam — cura,
+ *     escudo e bênção não caem no vazio sem querer, e a casa do invisível
+ *     segue "ocupada" para invocar e saltar. A IA não muda (validFrom em
+ *     ai.js continua pedindo um corpo: ela não gasta PA no vazio nem
+ *     "adivinha" o invisível). Sobe Engine.VERSAO_REGRAS para 10.
  * ==========================================================================*/
 
 (function () {
@@ -304,8 +325,17 @@ var JOGO = (typeof window !== 'undefined')
    *       sempre não mudam de regra, mas o juiz passa a carregar dois arquivos
    *       novos e oito monstros no bestiário: a página de antes não conhece o
    *       calabouço 'elementsanctum' nem refaz uma sala dele, e o número diz
-   *       ao servidor qual das duas páginas está falando. */
-  Engine.VERSAO_REGRAS = 9;   // 08/10: os fragmentos de Gema no saque e o bônus da Gema nos stats
+   *       ao servidor qual das duas páginas está falando.
+   *   8 — 07/10: os afixos de sala (decisão 22) e os elites (23).
+   *   9 — 08/10: os fragmentos de Gema no saque e o bônus da Gema nos stats.
+   *  10 — 08/10 à noite: ATACAR A CASA VAZIA (decisão 24 no topo deste
+   *       arquivo). O feitiço 'enemy' de casa única sai na casa vazia e na do
+   *       invisível do outro lado — um lance que a página de antes recusava
+   *       (e não gastava) agora sai, gasta e fere: a mesma lista de lances
+   *       refeita aqui termina diferente. O juiz tem de subir ANTES da API
+   *       (docs/SEGURANCA.md §4.1): a sala aberta na versão velha cai como
+   *       'regras-mudaram', e não como fraude. */
+  Engine.VERSAO_REGRAS = 10;
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {
@@ -2272,6 +2302,20 @@ var JOGO = (typeof window !== 'undefined')
     var temArea = !!(ar && ar.shape && ar.shape !== 'single' && (ar.size || 0) > 0);
     if (temArea && (ts === 'enemy' || ts === 'ally')) return true;
 
+    /* ATACAR A CASA VAZIA (08/10 à noite, decisão 24 no topo; o dono: "os
+     * jogadores podem atacar em células vazias.. não só em monstro, porque se
+     * o outro estiver invisível ou ataque em área"). O feitiço 'enemy' de casa
+     * única que FERE (efeitoHostil: dano, raio, veneno, empurrão, puxão, raiz,
+     * marca, detonar, quebrar escudo, maldição) aceita a casa sem ninguém à
+     * vista — o invisível do outro lado está ali ou não, e quem mira não tem
+     * como saber: o golpe sai, gasta, e pega quem estiver (applyEffects bate
+     * em quem está nas casas). A casa de um aliado continua recusada: 'enemy'
+     * nunca foi "qualquer casa". O 'ally' não entra aqui de propósito — a cura
+     * e a bênção que caíssem no chão por um toque errado seriam PA jogado
+     * fora, e não há invisível aliado a procurar (a invisibilidade nunca vai
+     * para o outro lado). Com `vazia` (a tela) a casa já entrava pelo mesmo
+     * caminho: ela parecia vazia; agora o motor aceita o que a tela mostra. */
+    if (ts === 'enemy' && !occupant && feiticoFere(spell)) return true;
     if (ts === 'enemy' && (!occupant || occupant.side === unit.side)) return false;
     if (ts === 'ally' && (!occupant || occupant.side !== unit.side)) return false;
     if (ts === 'self' && !(tx === unit.x && ty === unit.y)) return false;
@@ -3161,7 +3205,16 @@ var JOGO = (typeof window !== 'undefined')
     // 02/10: o corpo grande conjura da casa dele que mira (origemPara) — a linha, o cone, o
     // empurrão e a cobertura saem dali, e não do canto noroeste
     var oc = porteDe(caster) > 1 ? origemPara(state, caster, spell, x, y) : null;
+    /* 08/10 à noite (decisão 24): o golpe 'enemy' lançado onde quem lança não
+     * vê ninguém — medido ANTES do golpe (o deslize do moveTo e o empurrão
+     * mudam as casas) e dito DEPOIS dele, para o diário ler "conjura" e então
+     * "golpeia o vazio". A linha sai com ou sem invisível na área (ver
+     * alguemAVistaNaArea): é pública, e não conta nada que o estado já não
+     * mostre a quem mirou uma casa que lhe parecia vazia. */
+    var noVazio = spell.targetSide === 'enemy' &&
+      !alguemAVistaNaArea(state, caster, spell, oc ? oc.x : caster.x, oc ? oc.y : caster.y, x, y);
     castCore(state, caster, spell, x, y, oc ? { casterX: oc.x, casterY: oc.y } : {});
+    if (noVazio) log(Tx('{name} golpeia o vazio.', { name: caster.name }));
     return true;
   };
 
@@ -3261,6 +3314,29 @@ var JOGO = (typeof window !== 'undefined')
   Engine.feiticoMisto = feiticoMisto;
   Engine.efeitoAFavor = efeitoAFavor;
   Engine.efeitoHostil = efeitoHostil;
+  /* O FEITIÇO QUE FERE (08/10 à noite, decisão 24): tem ao menos um efeito
+   * hostil. É a régua de "atacar a casa vazia" em validTargetCell — e, por
+   * ser função declarada, vale lá em cima também. Hoje todo feitiço 'enemy'
+   * dos dados passa (medido: 102 de 102); a régua existe para o dia em que
+   * alguém desenhar um 'enemy' só de troca ou de marca neutra. */
+  function feiticoFere(spell) {
+    var efs = sEffects(spell);
+    for (var i = 0; i < efs.length; i++) if (efeitoHostil(efs[i])) return true;
+    return false;
+  }
+  Engine.feiticoFere = feiticoFere;
+  /* QUEM, À VISTA DE QUEM LANÇA, ESTÁ NA ÁREA DO GOLPE (08/10 à noite): para o
+   * diário dizer "golpeia o vazio". Conta só quem o conjurador VÊ (ocultoDe):
+   * o invisível na casa mirada leva o golpe e NÃO conta — a linha tem de sair
+   * igual com ele lá ou não, senão a falta dela o entregaria. */
+  function alguemAVistaNaArea(state, caster, spell, cx, cy, x, y) {
+    var tiles = Engine.aoeTiles(state, spell, cx, cy, x, y);
+    for (var i = 0; i < tiles.length; i++) {
+      var u = Engine.unitAt(state, tiles[i].x, tiles[i].y);
+      if (u && u.alive && u !== caster && !ocultoDe(caster, u, state)) return true;
+    }
+    return false;
+  }
 
   function applyEffects(state, caster, spell, x, y, opts) {
     opts = opts || {};
@@ -3789,6 +3865,8 @@ var JOGO = (typeof window !== 'undefined')
   // visão (a revisão pegou um salto em linha reta "coberto" por uma mureta que
   // só estava na linha do conjurador).
   function chainDamage(state, caster, eff, spell, x, y, castPower, cx, cy) {
+    // 08/10 à noite (decisão 24): a casa mirada é lida pelo CORPO — o invisível
+    // que está nela leva o primeiro golpe; só os saltos seguem sem achá-lo
     var cur = Engine.unitAt(state, x, y);
     if (!cur || !cur.alive || cur.side === caster.side) return;
     var hit = {};

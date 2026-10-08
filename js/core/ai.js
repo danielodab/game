@@ -205,6 +205,12 @@ var JOGO = (typeof window !== 'undefined')
     var ar = spell.aoe;
     var temArea = !!(ar && ar.shape && ar.shape !== 'single' && (ar.size || 0) > 0);
     if (temArea && (ts === 'enemy' || ts === 'ally')) return true;
+    /* 08/10 à noite: o MOTOR passou a aceitar a casa vazia no feitiço 'enemy'
+     * que fere (engine.js, decisão 24 — o jogador caça o invisível). A IA
+     * segue pedindo um corpo DE PROPÓSITO: no vazio o valor seria zero (PA
+     * jogado fora), e mirar a casa do invisível "sem ver" seria adivinhar —
+     * castValue já dá −1 a essa casa. Como o motor aceita tudo o que a IA
+     * propõe (a regra nova só abre casas), nada aqui quebra. */
     if (ts === 'enemy' && (!occ || occ.side === unit.side)) return false;
     if (ts === 'ally' && !((occ && occ.side === unit.side) || self)) return false;
     if (ts === 'self' && !self) return false;

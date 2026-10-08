@@ -1252,7 +1252,10 @@ var JOGO = (typeof window !== 'undefined')
    * casa vazia (as armadilhas do Xamã, invocação, salto) pintava todo o alcance
    * menos ELA — o buraco entregava o Ladino sem gastar nada. Com ela no
    * destaque, o toque vai ao motor, que recusa e avisa "há alguém que não se
-   * vê", como o esbarrão do passo. */
+   * vê", como o esbarrão do passo.
+   * 08/10 à noite (engine.js, decisão 24): o feitiço 'enemy' que fere aceita a
+   * casa vazia no PRÓPRIO motor (castTargets já a traz, com ou sem invisível
+   * nela), então esta volta só faz diferença para quem pede chão livre. */
   Game.alvosNaTela = function (uid, spellId) {
     var st = Game.state, en = E(), alvos = [];
     if (!st || !en) return alvos;

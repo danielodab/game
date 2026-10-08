@@ -2956,5 +2956,6 @@ JOGO.I18n.registra('es', { textos: {
   "<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.": "<b>Esperando la verificación del servidor…</b> tu batalla se sincronizó por foto y es el registro limpio del otro jugador el que confirma la sala{ate}. La recompensa entra sola cuando llegue.",
   "Coroa do Mestre": "Corona del Maestro",
   "a coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho": "la corona del Maestro es fija: solo tu cuenta la lleva, con el brillo rojo",
-  "<b>{a}</b> · fixa, só do Mestre": "<b>{a}</b> · fija, solo del Maestro"
+  "<b>{a}</b> · fixa, só do Mestre": "<b>{a}</b> · fija, solo del Maestro",
+  "{name} golpeia o vazio.": "{name} golpea el vacío."
 } });
