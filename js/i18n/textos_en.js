@@ -2898,5 +2898,29 @@ JOGO.I18n.registra('en', { textos: {
   "Quebra: dá <b>{a}</b> {b}": "Breaking: gives <b>{a}</b> {b}",
   "Cai em: <b>{a}</b>": "Drops in: <b>{a}</b>",
   // ---- 08/10 à noite: a barraquinha com os prêmios à vista
-  "Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.": "Prizes still in play are dark; the ✓ marks what the outfit already has."
+  "Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.": "Prizes still in play are dark; the ✓ marks what the outfit already has.",
+  // ---- 08/10 à noite: o Mercadinho limpo, o selecionar várias (banco e quebra) e o Mestre no Eco
+  "Toque nas peças para marcar; a barra de cada lado guarda ou saca todas as marcadas de uma vez.": "Tap pieces to mark them; the bar on each side stores or withdraws all marked ones at once.",
+  "Sair da seleção": "Leave selection",
+  "Selecionar várias": "Select several",
+  "<b>{a}</b> pilha(s) · <b>{n}</b> peça(s) marcada(s)": "<b>{a}</b> stack(s) · <b>{n}</b> piece(s) marked",
+  "Toque nas peças para marcar.": "Tap pieces to mark them.",
+  "Guardar as marcadas →": "Store the marked →",
+  "← Sacar as marcadas": "← Withdraw the marked",
+  "{n} peça(s) guardada(s) no cofre.": "{n} piece(s) stored in the vault.",
+  "O saco não tem {n} vaga(s) — guarde ou quebre alguma coisa antes.": "The bag has no room for {n} — store or break something first.",
+  "{n} peça(s) de volta no saco.": "{n} piece(s) back in the bag.",
+  "Todas as raridades": "All rarities",
+  "Toque numa pedra para ver os lotes à venda.": "Tap a stone to see the lots for sale.",
+  "Toque numa peça para ver quem vende, o preço e fazer a sua oferta.": "Tap a piece to see who sells it, the price, and make your offer.",
+  "Toque numa peça do saco para pôr o preço e anunciar.": "Tap a piece from the bag to set the price and list it.",
+  "Essa dupla não abre a Câmara do Eco agora.": "That duo cannot open the Echo Chamber right now.",
+  "Essa peça não se quebra.": "That piece cannot be broken.",
+  "<b>{a}</b> pilha(s) marcada(s) · <b>{n}</b> peça(s) · viram {b}": "<b>{a}</b> stack(s) marked · <b>{n}</b> piece(s) · become {b}",
+  "Toque nas peças para marcar; todas as cópias da pilha vão juntas.": "Tap pieces to mark them; all copies in the stack go together.",
+  "Quebrar as {n} marcadas": "Break the {n} marked",
+  "Quebrar {n} peças?": "Break {n} pieces?",
+  "As <b>{n} peças</b> marcadas somem <b>para sempre</b> e viram {b}. Não tem volta.": "The <b>{n} marked pieces</b> vanish <b>forever</b> and become {b}. There is no undo.",
+  "{n} peça(s) viraram pedra: +{p} pedras na prateleira.": "{n} piece(s) turned to stone: +{p} stones on the shelf.",
+  "Nenhuma peça se quebrou.": "No piece was broken."
 } });

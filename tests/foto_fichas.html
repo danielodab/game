@@ -81,6 +81,16 @@ f.onload = function () {
             try { var cels = d.querySelectorAll('.ig-cell:not(.is-vazia)'); if (cels[Number(Q.toca) - 1]) cels[Number(Q.toca) - 1].click(); } catch (e8) {}
           }
           if (Q.slot) { try { d.querySelector('.inv2-slot[data-slot="' + Q.slot + '"]').click(); } catch (e9) {} }
+          if (Q.modo) { try { d.querySelector('.fg-modos [data-modo="' + Q.modo + '"]').click(); } catch (e11) {} }
+          if (Q.varios) {
+            // 08/10 à noite: o modo "selecionar várias" (banco: .bk2-varios; forja no Quebrar: .fg-varios-b) e duas peças marcadas
+            setTimeout(function () {
+              try { (d.querySelector('.bk2-varios') || d.querySelector('.fg-varios-b')).click(); } catch (e12) {}
+              setTimeout(function () {
+                try { var cs = d.querySelectorAll('.bk2-col[data-lado="saco"] .bk2-cel:not(.is-vazia), .fg-cel'); if (cs[0]) cs[0].click(); if (cs[1]) cs[1].click(); } catch (e13) {}
+              }, 700);
+            }, 700);
+          }
           setTimeout(function () {
           if (Q.aba2) { try { d.querySelector('.fi-aba[data-aba="' + Q.aba2 + '"]').click(); } catch (e10) {} }
           var sp = d.querySelector('.sheet-panel');
@@ -88,7 +98,7 @@ f.onload = function () {
           document.title = sp ? ('FICHA ' + sp.scrollHeight + 'x' + sp.clientHeight + ' janela ' + w.innerWidth + 'x' + w.innerHeight +
                                  ' celular=' + (w.JOGO.Mobile && w.JOGO.Mobile.celular())) : 'SEM FICHA';
           window.__pronto = true;
-          }, Q.toca || Q.slot ? 900 : 10);
+          }, (Q.varios ? 2600 : 0) + (Q.toca || Q.slot || Q.modo ? 900 : 10));
         }, 1500);
       }, 2500);
     });

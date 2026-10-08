@@ -263,6 +263,7 @@
       return espera(500);
     }).then(function () {
       if (Q.modo) toca('.fg-modos [data-modo="' + Q.modo + '"]');   // a forja no Quebrar (22/09)
+      if (Q.item) { var cels = qa('.mc-cel', ficha()); var alvoC = Q.item === '1' ? cels[0] : q1('.mc-cel[data-item="' + Q.item + '"]', ficha()); if (alvoC) alvoC.click(); }   // 08/10 à noite: a peça do balcão
       if (Q.slot) toca('[data-slot="' + Q.slot + '"]');
       return espera(300);
     }).then(function () {
@@ -304,7 +305,7 @@
       if (!b.querySelector('svg.ico-svg') || !b.querySelector('.rot-oculto')) ruins.push(rot + ' sem svg/rot-oculto');
     });
     check(onde + ': ' + bs.length + ' botões redondos, >= 44 px, nome escondido = data-rot = aria-label, sem title',
-          bs.length > 0 && ruins.length === 0, ruins.slice(0, 5).join(' | '));
+          ruins.length === 0, ruins.slice(0, 5).join(' | '));     // 08/10 à noite: sem botão redondo também passa (os filtros são seletores)
   }
   // nada vaza da ficha (a coluna de 390 px da prova)
   function cabe(onde, raiz) {
@@ -522,46 +523,37 @@
     p(function () {
       abre('mercado');
       return ate(function () { return !!q1('.mc-abas', ficha()); }, 4000).then(function () {
+        // 08/10 à noite (o mercadinho limpo): as abas são PÍLULAS com o ícone e o nome escrito; os filtros, seletores
         var abas = qa('.mc-abas button', ficha());
-        check('mercadinho: 4 abas redondas com o nome exato de antes',
+        check('mercadinho: 4 abas-pílula com o nome escrito e o ícone',
               mesmo(textos(abas), ['Comprar', 'Vender', 'Meus anúncios', 'Poções']) &&
-              abas.every(function (b) { return b.classList.contains('btn-ico') && b.classList.contains('btn-mini'); }), textos(abas).join(','));
-        check('mercadinho: a aba aberta é is-on (sem btn-gold) e o nome dela fica escrito',
-              abas[0].classList.contains('is-on') && !abas.some(function (b) { return b.classList.contains('btn-gold'); }) &&
-              (q1('.mc-abas .ico-fila-nome', ficha()) || {}).textContent === 'Comprar');
+              abas.every(function (b) { return b.classList.contains('mc-aba') && !!q1('.ico-svg', b) && !!q1('.mc-aba-nm', b); }), textos(abas).join(','));
+        check('mercadinho: a aba aberta é is-on (aria-pressed) e as outras não',
+              abas[0].classList.contains('is-on') && abas[0].getAttribute('aria-pressed') === 'true' &&
+              !abas.slice(1).some(function (b) { return b.classList.contains('is-on'); }));
         check('mercadinho: a conta vai na pílula (data-conta) — Comprar 6, Meus anúncios 1',
               abas[0].getAttribute('data-conta') === '6' && abas[2].getAttribute('data-conta') === '1' &&
               getComputedStyle(abas[0], '::before').content === '"6"', abas[0].getAttribute('data-conta') + '/' + abas[2].getAttribute('data-conta'));
-        var filas = qa('.mc-filtros', ficha());
-        check('mercadinho: a PRIMEIRA .mc-filtros é a do espaço, com a legenda de sempre',
-              filas.length === 3 && filas[0].getAttribute('data-filtro') === 'slot' &&
-              (q1('.mc-filtro-rot', filas[0]) || {}).textContent === 'Espaço' &&
-              mesmo(textos(qa('.mc-chip', filas[0])), ['Tudo', 'Punho', 'Passo', 'Casca', 'Lume']));
-        // 22/09 (as pedras no mercado): a categoria em cima, fora da conta das .mc-filtros
-        var cats = qa('.mc-cats .btn-ico', ficha());
-        check('mercadinho: a fileira de categoria (Equipamentos | Pedras) é .mc-cats, não .mc-filtros, e abre em Equipamentos',
-              mesmo(textos(cats), ['Equipamentos', 'Pedras']) && !q1('.mc-cats.mc-filtros', ficha()) &&
-              cats[0].classList.contains('is-on') && cats[0].getAttribute('data-cat') === 'equip', textos(cats).join(','));
-        var rar = qa('.mc-chip', filas[1]);
-        check('mercadinho: Raridade redonda, na cor dela (--rc); "Todas" é a gema de quatro cores',
-              mesmo(textos(rar), ['Todas', 'Comum', 'Raro', 'Épico', 'Lendário']) &&
-              rar.slice(1).every(function (b) { return b.classList.contains('ico-cor') && !!b.style.getPropertyValue('--rc'); }) &&
-              !!q1('.ico-rar-todas', rar[0]));
-        check('mercadinho: Ordem redonda (Preço ↑, Preço ↓, Nome, Raridade)',
-              mesmo(textos(qa('.mc-chip', filas[2])), ['Preço ↑', 'Preço ↓', 'Nome', 'Raridade']) &&
-              q1('.mc-chip.is-on', filas[2]).getAttribute('data-ord') === 'preco');
+        var sels = qa('.mc-barra select', ficha()).map(function (x) { return x.getAttribute('data-filtro'); });
+        check('mercadinho: a barra numa linha — categoria, busca, espaço, raridade e ordem',
+              mesmo(sels, ['cat', 'slot', 'rar', 'ordem']) && !!q1('.mc-barra input.hub-input', ficha()) &&
+              mesmo(valores(q1('.inv2-sel-espaco', ficha())), ['todos', 'punho', 'passo', 'casca', 'lume']), sels.join(','));
+        check('mercadinho: a categoria (Equipamentos | Pedras) abre em Equipamentos',
+              mesmo(valores(q1('.mc-sel-cat', ficha())), ['equip', 'pedras']) && q1('.mc-sel-cat', ficha()).value === 'equip');
+        check('mercadinho: Raridade (Todas, Comum, Raro, Épico, Lendário) e Ordem (Preço ↑, Preço ↓, Nome, Raridade)',
+              mesmo(valores(q1('.mc-sel-rar', ficha())), ['todas', 'comum', 'raro', 'epico', 'lendario']) &&
+              mesmo(textos(qa('option', q1('.mc-sel-ord', ficha()))), ['Preço ↑', 'Preço ↓', 'Nome', 'Raridade']) &&
+              q1('.mc-sel-ord', ficha()).value === 'preco');
         contratoDosBotoes('mercadinho · Comprar');
         cabe('mercadinho · Comprar');
-        // o jeito das provas antigas: o chip pelo texto exato
-        var punho = qa('.mc-chip', ficha()).filter(function (b) { return b.textContent.trim() === 'Punho'; })[0];
-        punho.click();
-        return ate(function () { var c = q1('.mc-chip[data-slot="punho"]', ficha()); return c && c.classList.contains('is-on'); }, 4000);
+        escolhe('.inv2-sel-espaco', 'punho');
+        return ate(function () { var c = q1('.inv2-sel-espaco', ficha()); return c && c.value === 'punho' && qa('.mc-lista .mc-linha', ficha()).length > 0; }, 4000);
       }).then(function () {
         var linhas = qa('.mc-lista .mc-linha', ficha()).length;
         var quer = [SACO[1], SACO[3], SACO[6], SACO[7], SACO[9], SACO[11]].filter(function (id) { return slotDe(id) === 'punho'; }).length;
-        check('mercadinho · Punho (achado pelo texto): o balcão só com punho', linhas === quer, linhas + ' de ' + quer);
-        toca('.mc-chip[data-slot="todos"]');
-        return ate(function () { var c = q1('.mc-chip[data-slot="todos"]', ficha()); return c && c.classList.contains('is-on'); }, 4000);
+        check('mercadinho · Punho: o balcão só com punho', linhas === quer, linhas + ' de ' + quer);
+        escolhe('.inv2-sel-espaco', 'todos');
+        return ate(function () { var c = q1('.inv2-sel-espaco', ficha()); return c && c.value === 'todos'; }, 4000);
       }).then(function () {
         var pocoes = qa('.mc-abas button', ficha()).filter(function (b) { return /^Poções$/.test(b.textContent); })[0];
         pocoes.click();
@@ -579,22 +571,19 @@
       ligaSrv();
       abre('mercado');                                    // abre na última aba (Poções)
       toca('.mc-abas [data-aba="comprar"]');
-      return ate(function () { return qa('.mc-filtros', ficha()).length === 2; }, 4000).then(function () {
+      return ate(function () { return !!q1('.inv2-sel-espaco', ficha()) && qa('.mc-cel', ficha()).length > 0; }, 4000).then(function () {
         var abas = qa('.mc-abas button', ficha());
-        check('entre contas: 5 abas redondas (com Minhas ofertas)',
+        check('entre contas: 5 abas-pílula (com Minhas ofertas)',
               mesmo(textos(abas), ['Comprar', 'Vender', 'Meus anúncios', 'Minhas ofertas', 'Poções']) && !!q1('.ico-mc-ofertas', abas[3]));
-        var fila = qa('.mc-filtros', ficha())[0];
+        var sel = q1('.inv2-sel-espaco', ficha());
         var ficha0 = ficha().querySelector('.mc-abas');
-        check('entre contas: a PRIMEIRA .mc-filtros é a do tipo', fila.getAttribute('data-filtro') === 'slot' &&
-              (q1('.mc-filtro-rot', fila) || {}).textContent === 'Tipo');
-        var b = q1('[data-slot="passo"]', fila);
-        b.click();
-        check('entre contas: o chip acende no lugar, sem redesenhar a ficha',
-              b.classList.contains('is-on') && document.body.contains(b) && ficha().querySelector('.mc-abas') === ficha0 &&
-              qa('.is-on', fila).length === 1 && b.getAttribute('aria-pressed') === 'true');
+        check('entre contas: os seletores de espaço e raridade na barra', !!sel && !!q1('.mc-sel-rar', ficha()));
+        escolhe('.inv2-sel-espaco', 'passo');
+        check('entre contas: o seletor filtra no lugar, sem redesenhar a ficha',
+              sel.value === 'passo' && document.body.contains(sel) && ficha().querySelector('.mc-abas') === ficha0);
         var quer = SACO.slice(0, 8).filter(function (id) { return slotDe(id) === 'passo'; }).length;
-        check('entre contas · Passo: a lista filtra', qa('.mc-lista .mc-linha', ficha()).length === quer,
-              qa('.mc-lista .mc-linha', ficha()).length + ' de ' + quer);
+        check('entre contas · Passo: a grade filtra', qa('.mc-cel', ficha()).length === quer,
+              qa('.mc-cel', ficha()).length + ' de ' + quer);
         contratoDosBotoes('mercadinho entre contas');
         desligaSrv();
       });

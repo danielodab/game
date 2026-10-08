@@ -1649,6 +1649,18 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .inv2 .ig-cell .ig-lv { top: -6px; left: -3px; font-size: 10px; }
 .inv2 .ig-cell .item-stars { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
 .inv2 .ig-cell.is-vazia { min-height: 54px; }
+/* ---- SELECIONAR VÁRIAS (08/10 à noite): o banco e a quebra da forja */
+.bk2-dica { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bk2-dica .bk2-varios { margin-left: auto; }
+.bk2-varios.is-on, .fg-varios-b.is-on { color: var(--gold); border-color: var(--gold-dim); background: rgba(255,196,77,.12); }
+.ig-cell.is-marcavel { cursor: pointer; }
+.ig-cell.is-marcada { box-shadow: 0 0 0 2px #7fe08a, 0 0 14px rgba(127,224,138,.35); }
+.bk2-marca { position: absolute; top: -7px; left: -5px; z-index: 2; width: 18px; height: 18px; line-height: 18px; border-radius: 999px;
+  text-align: center; font: 800 11px var(--ui-sans); font-style: normal; color: #0d1116; background: #7fe08a; }
+.bk2-barra-varios, .fg-varios { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px; font-size: 12px; color: var(--dim); }
+.bk2-barra-varios b, .fg-varios b { color: var(--text); }
+.bk2-barra-varios .btn, .fg-varios .btn { margin-left: auto; }
+.fg-varios .fg-varios-n { flex: 1 1 100%; }
 /* ---- a GRADE SÓ DE ÍCONES (08/10 à noite): o inventário, a grade da forja e as do banco */
 .grade-icones { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); padding: 2px 0 6px; }
 .grade-icones .ig-cell { width: auto; flex: none; min-height: 0; padding: 4px; gap: 0; border-radius: 10px; border-width: 2px; }
@@ -1670,6 +1682,32 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .fg2 .fg-slot { width: 108px; min-height: 108px; }
 .fg2 .fg-grupo { margin: 4px 0 0; }
 @media (max-width: 760px) { .fg2 { grid-template-columns: 1fr; } }
+/* ---- o MERCADINHO LIMPO (08/10 à noite): as abas com nome, a barra de seletores, as duas colunas */
+.mc-abas { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+.mc-aba { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 7px 9px; min-height: 44px;
+          border-radius: 999px; color: var(--dim); border: 1px solid var(--line2); background: rgba(255,255,255,.03); }
+.mc-aba .ico-svg { width: 20px; height: 20px; }
+.mc-aba .mc-aba-nm { font: 600 12.5px var(--ui-sans); }
+.mc-aba.is-on { color: var(--gold); border-color: var(--gold-dim); background: rgba(255,196,77,.12); }
+.mc-aba[data-conta]::before { content: attr(data-conta); position: absolute; top: -6px; right: -4px; min-width: 18px; padding: 1px 5px;
+  border-radius: 999px; font: 800 10.5px var(--ui-sans); color: #0d1116; background: var(--gold); text-align: center; }
+.mc-barra { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 2px 0 6px; }
+.mc-barra .inv2-select { flex: 1 1 130px; }
+.mc-barra .mc-busca { flex: 2 1 160px; min-width: 120px; min-height: 44px; box-sizing: border-box; }
+.mc2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 14px; align-items: start; }
+.mc2-esq, .mc2-dir { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mc2-dir { border: 1px solid var(--line2); border-radius: var(--rad-m); padding: 8px 10px;
+           background: linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.12)); box-shadow: var(--relevo); min-height: 120px; }
+.mc2-dica { margin: auto 0; text-align: center; }
+.mc-grade { margin-top: 4px; }
+.mc-cel .mc-cel-preco { display: block; margin-top: 2px; font: 700 10px var(--ui-sans); color: #e8c25a; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mc-linha.is-sel { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold-a22); }
+.mc-linha.mc-venda { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+.mc-linha.mc-venda > .mc-cmp { flex: 1 1 100%; }
+.mc2-dir .mc-voltar { align-self: flex-start; }
+.mc2-dir .mc-sub, .mc2-dir .mc-oferta { margin-left: 8px; }
+@media (max-width: 760px) { .mc2 { grid-template-columns: 1fr; } }
 /* ---- a ficha do item */
 .inv-pick.inv2-ficha {
   position: static; top: auto; z-index: auto; display: flex; flex-direction: column; gap: 8px;

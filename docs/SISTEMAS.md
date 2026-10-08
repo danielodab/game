@@ -1158,6 +1158,30 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
 - Provas: `prova_icones_menus` (forja e banco pelos seletores), `quebra_hud`,
   `prova_forja`, `prova_conjunto`, `fichas_fotos` 390 px.
 
+## 9-A.12 O Mercadinho limpo, o "selecionar várias" e o Mestre no Eco (08/10 à noite)
+
+- **O Mercadinho** (o dono: "acho que o mercadinho dá para melhorar o layout"): as abas
+  viraram pílulas com o ícone E o nome (`mcAbas`, `.mc-aba`, a conta na pílula); as três
+  fileiras de botões viraram UMA barra de seletores (`mcBarra`: categoria, busca, espaço,
+  raridade, ordem | elemento nas pedras); no balcão entre contas, Comprar e Vender ganharam
+  duas colunas (`mc2Molde`): à esquerda a grade só de ícones com o preço embaixo
+  (`mcCelula`: "desde Xv" / "~régua"), à direita a ficha da peça tocada (`fichaItem`) com
+  os anúncios, quem vende, Comprar e Fazer oferta — ou o preço e o Anunciar, no Vender.
+  As pedras seguem em linhas (os lotes abrem à direita). Meus anúncios, Minhas ofertas e
+  Poções ficaram como eram. O balcão local ganhou as pílulas e a barra.
+- **Selecionar várias** (o dono: "transferir vários itens para o banco ou quebrar vários
+  de uma vez, não um por um"): no Banco o botão "Selecionar várias" liga o modo — o toque
+  marca a pilha (✓) em vez de arrastar e a barra de cada coluna guarda/saca TODAS as cópias
+  das marcadas (índices decrescentes, uma op por cópia). Na Forja › Quebrar, o mesmo botão
+  na coluna do inventário: marca as pilhas que se quebram, a barra soma as pedras e
+  "Quebrar as N marcadas" pergunta uma vez e quebra uma pilha por vez, achando o índice
+  pela pilha na hora (o estado do servidor é adotado entre uma e outra).
+- **O Mestre no Eco** (o dono: "mestre também deve enfrentar o Eco, preciso testar"): a
+  classe `gm` abre a tentativa, solo e em dupla (`supremo.py _classe_entra`); a conta da
+  equipe segue fora do ranking.
+- Provas: `mercado_hud` 22, `mercado_pedras_hud` 69, `prova_icones_menus` (pelos
+  seletores), `fichas_fotos` 390 px, `supremo_api` test_02.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

@@ -84,6 +84,15 @@
     return b;
   }
   function linhasItem() { var f = ficha(); return f ? [].slice.call(f.querySelectorAll('.mc-lista .mc-linha')) : []; }
+  // 08/10 à noite (o mercadinho limpo): a lista POR ITEM virou uma grade de células; os filtros, seletores
+  function celulas() { var f = ficha(); return f ? [].slice.call(f.querySelectorAll('.mc-cel')) : []; }
+  function escolhe(sel, valor) {
+    var x = ficha().querySelector(sel);
+    if (!x) return false;
+    x.value = valor;
+    x.dispatchEvent(new w.Event('change', { bubbles: true }));
+    return true;
+  }
   function ultimo(rota) {
     for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota.indexOf(rota) === 0) return pedidos[i];
     return null;
@@ -130,31 +139,31 @@
 
     J.UI.closeSheet();
     J.UI.openSheet('mercado');
-    return ate(function () { return linhasItem().length === 2; }, 15000).then(function (ok) {
-      check('o Mercadinho com sessão pede o resumo e lista POR ITEM', ok && conta('/api/mercado/resumo') === 1 &&
-            tituloFicha() === 'Mercadinho do Acampamento', linhasItem().length + ' linhas');
+    return ate(function () { return celulas().length === 2; }, 15000).then(function (ok) {
+      check('o Mercadinho com sessão pede o resumo e lista POR ITEM (a grade de células)', ok && conta('/api/mercado/resumo') === 1 &&
+            tituloFicha() === 'Mercadinho do Acampamento', celulas().length + ' células');
       var t = textoFicha();
       check('as quatro abas e o bolso com saco e banco', /Comprar/.test(t) && /Vender/.test(t) && /Meus anúncios/.test(t) &&
             /Minhas ofertas/.test(t) && /no banco/.test(t));
-      check('a linha do item diz quantos e o menor preço', /2 à venda/.test(t) && /desde 80v/.test(t) && t.indexOf(nome) >= 0);
+      var celItem = celulas().filter(function (c) { return c.getAttribute('data-item') === ITEM; })[0];
+      check('a célula do item diz quantos (×2) e o menor preço (80v); o resumo conta os itens', !!celItem && /×2/.test(celItem.textContent) &&
+            /80v/.test(celItem.textContent) && /2 itens/.test(t) && celItem.textContent.indexOf(nome) >= 0, celItem && celItem.textContent);
       // a busca por nome, ao vivo
       var busca = ficha().querySelector('input.hub-input');
       busca.value = nomeOutro.slice(0, 5).toLowerCase();
       busca.dispatchEvent(new w.Event('input'));
-      check('a busca por nome filtra ao vivo (sem pedir de novo)', linhasItem().length === 1 &&
-            linhasItem()[0].textContent.indexOf(nomeOutro) >= 0 && conta('/api/mercado/resumo') === 1);
+      check('a busca por nome filtra ao vivo (sem pedir de novo)', celulas().length === 1 &&
+            celulas()[0].textContent.indexOf(nomeOutro) >= 0 && conta('/api/mercado/resumo') === 1);
       busca.value = '';
       busca.dispatchEvent(new w.Event('input'));
       // o tipo (o espaço da peça)
       var slotOutro = J.DATA.items[OUTRO].slot;
-      var chipsTipo = [].slice.call(ficha().querySelectorAll('.mc-filtros'))[0];
-      var rot = { punho: 'Punho', passo: 'Passo', casca: 'Casca', lume: 'Lume' };
       var outroSlot = ['punho', 'passo', 'casca', 'lume'].filter(function (s) { return s !== slotOutro && s !== J.DATA.items[ITEM].slot; })[0];
-      botao(chipsTipo, new RegExp('^' + rot[outroSlot] + '$')).click();
-      check('o filtro por tipo esconde o que não é do tipo', linhasItem().length === 0 && /Nada com esses filtros/.test(textoFicha()));
-      botao(chipsTipo, /^Tudo$/).click();
-      var linhaItem = linhasItem().filter(function (l) { return l.textContent.indexOf(nome) >= 0; })[0];
-      botao(linhaItem, /Ver todos/).click();
+      escolhe('.inv2-sel-espaco', outroSlot);
+      check('o filtro por espaço esconde o que não é dele', celulas().length === 0 && /Nada com esses filtros/.test(textoFicha()));
+      escolhe('.inv2-sel-espaco', 'todos');
+      // 08/10 à noite: o toque na célula abre os anúncios do item à direita (sem botão "Ver todos")
+      celulas().filter(function (c) { return c.getAttribute('data-item') === ITEM; })[0].click();
       return ate(function () { return /Beltrano/.test(textoFicha()); }, 10000);
     }).then(function (ok) {
       var p = ultimo('/api/mercado/item');

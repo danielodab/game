@@ -93,6 +93,8 @@ var JOGO = (typeof window !== 'undefined')
    * muda depois do golpe: um segundo toque quebraria a vizinha). */
   var forjaModo = 'forjar';
   var forjaQuebraN = 1;
+  var forjaVarios = false, forjaMarcadas = {};     // 08/10 à noite: o modo quebrar várias e as pilhas marcadas (pela chave da pilha)
+  function chaveDoAlvo(a) { return a.itemId + '|' + (a.level || 0) + '|' + (a.stars || 0) + '|' + (a.extra || ''); }
   var forjaQuebrando = false;
 
   var LUCK = { 1: 2.4, 2: 1.6 };
@@ -4163,9 +4165,30 @@ var JOGO = (typeof window !== 'undefined')
    * de destino acende (is-alvo), e soltar sobre ela transfere. Menos de 8 px
    * de movimento é toque — e o segundo toque em menos de 350 ms também
    * transfere. */
+  /* SELECIONAR VÁRIAS (08/10 à noite — o dono: "tem que ter um jeito de transferir vários itens para o banco
+   * ou quebrar vários de uma vez, não um por um"). No banco: o botão "Selecionar várias" liga o modo; o toque
+   * marca a pilha (✓) em vez de arrastar; a barra de cada coluna diz quantas e guarda/saca TODAS as cópias das
+   * marcadas de uma vez (índices em ordem decrescente, uma op da autoridade por cópia). `bancoMarcadas` guarda
+   * as chaves (lado|itemId|level|stars|extra) e sobrevive ao redesenho. */
+  var bancoVarios = false, bancoMarcadas = {};
+  function chaveDaPilha(lado, pilha) { return lado + '|' + pilha.itemId + '|' + (pilha.level || 0) + '|' + (pilha.stars || 0) + '|' + (pilha.extra || ''); }
   function bancoCelula(pilha, lado, transferir) {
     var it = itemDef(pilha.itemId) || {};
-    var cell = el('div', 'ig-cell bk2-cel ' + starClass(pilha.stars));
+    var marcada = bancoVarios && !!bancoMarcadas[chaveDaPilha(lado, pilha)];
+    var cell = el('div', 'ig-cell bk2-cel ' + starClass(pilha.stars) + (bancoVarios ? ' is-marcavel' : '') + (marcada ? ' is-marcada' : ''));
+    if (marcada) cell.appendChild(el('i', 'bk2-marca', '✓'));
+    if (bancoVarios) {
+      // no modo de seleção o toque só marca/desmarca (sem arrasto, sem os dois toques)
+      tap(cell, function () {
+        var k = chaveDaPilha(lado, pilha);
+        if (bancoMarcadas[k]) delete bancoMarcadas[k]; else bancoMarcadas[k] = true;
+        cell.classList.toggle('is-marcada', !!bancoMarcadas[k]);
+        var m = cell.querySelector('.bk2-marca');
+        if (bancoMarcadas[k] && !m) cell.appendChild(el('i', 'bk2-marca', '✓'));
+        else if (!bancoMarcadas[k] && m) m.remove();
+        var ev = document.createEvent('Event'); ev.initEvent('bancomarca', true, false); cell.dispatchEvent(ev);
+      });
+    }
     markRarity(cell, it.rarity);
     var plate = el('span', 'ig-plate');
     plate.appendChild(art('itemIcon', [pilha.itemId, 44], 44));
@@ -4190,6 +4213,7 @@ var JOGO = (typeof window !== 'undefined')
       if (m) m.classList.remove('is-alvo');
     }
     cell.addEventListener('pointerdown', function (ev) {
+      if (bancoVarios) return;                     // 08/10 à noite: no modo de seleção o toque só marca
       ev.preventDefault();
       draga = { x: ev.clientX, y: ev.clientY, fantasma: null };
       try { cell.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -4210,7 +4234,7 @@ var JOGO = (typeof window !== 'undefined')
       }
     });
     cell.addEventListener('pointerup', function (ev) {
-      if (!draga) return;
+      if (bancoVarios || !draga) return;
       var arrastou = !!draga.fantasma;
       if (draga.fantasma) draga.fantasma.remove();
       draga = null;
@@ -4368,8 +4392,15 @@ var JOGO = (typeof window !== 'undefined')
       caixa.appendChild(moedas);
 
       // ---- AS DUAS GRADES, lado a lado
-      caixa.appendChild(el('p', 'inv-dica',
-        tr('Arraste uma peça de uma grade para a outra — cada viagem leva uma unidade. Dois toques rápidos também transferem.')));
+      var dicaB = el('p', 'inv-dica bk2-dica', bancoVarios
+        ? tr('Toque nas peças para marcar; a barra de cada lado guarda ou saca todas as marcadas de uma vez.')
+        : tr('Arraste uma peça de uma grade para a outra — cada viagem leva uma unidade. Dois toques rápidos também transferem.'));
+      dicaB.appendChild(btn(bancoVarios ? tr('Sair da seleção') : tr('Selecionar várias'), 'btn-mini bk2-varios' + (bancoVarios ? ' is-on' : ''), function () {
+        bancoVarios = !bancoVarios;
+        bancoMarcadas = {};
+        sheetBanco();
+      }));
+      caixa.appendChild(dicaB);
 
       var pilhas = safe(function () { return P().invStacks(); }, [])
         .filter(function (s2) { return !!itemDef(s2.itemId); });
@@ -4411,10 +4442,57 @@ var JOGO = (typeof window !== 'undefined')
       pilhasCofre = pilhasCofre.filter(passaBanco);
       var duplo = el('div', 'bk2-duplo');
 
+      // 08/10 à noite: a barra das marcadas de cada coluna (quantas, e o botão que move todas)
+      function barraMarcadas(lado, pilhasDoLado, aoMover) {
+        var barra = el('div', 'bk2-barra-varios');
+        function pinta() {
+          clear(barra);
+          var marc = pilhasDoLado.filter(function (pi) { return !!bancoMarcadas[chaveDaPilha(lado, pi)]; });
+          var n = 0;
+          marc.forEach(function (pi) { n += pi.count; });
+          barra.appendChild(el('span', 'bk2-varios-n', marc.length
+            ? tr('<b>{a}</b> pilha(s) · <b>{n}</b> peça(s) marcada(s)', { a: marc.length, n: n })
+            : tr('Toque nas peças para marcar.')));
+          var b = btn(lado === 'saco' ? tr('Guardar as marcadas →') : tr('← Sacar as marcadas'), 'btn-mini btn-gold' + (marc.length ? '' : ' is-off'), function () {
+            if (!marc.length) return;
+            b.classList.add('is-off');
+            aoMover(marc, n);
+          });
+          barra.appendChild(b);
+        }
+        pinta();
+        barra.addEventListener('bancomarca', pinta);
+        return barra;
+      }
       var colSaco = el('div', 'bk2-col');
       colSaco.dataset.lado = 'saco';
       var limSaco = safe(function () { return P().bagLimit(); }, 0);
       colSaco.appendChild(el('h3', 'bk-tit', tr('No saco ({unidadesSaco}{a})', { unidadesSaco: unidadesSaco, a: limSaco ? ' / ' + limSaco : '' })));
+      if (bancoVarios) {
+        colSaco.appendChild(barraMarcadas('saco', pilhas, function (marc) {
+          // todas as cópias das pilhas marcadas, do índice maior para o menor (o splice não desloca o que falta)
+          var st2 = P().state, idxs = [];
+          marc.forEach(function (pi) { pi.indices.forEach(function (i) { idxs.push(i); }); });
+          idxs.sort(function (a, b2) { return b2 - a; });
+          var fila = Promise.resolve(), movidas = 0;
+          idxs.forEach(function (idx) {
+            fila = fila.then(function () {
+              var entrada = st2.inventory[idx];
+              if (!entrada) return null;
+              if (JOGO.Autoridade) JOGO.Autoridade.op('depositarItem', { invIndex: idx });
+              st2.inventory.splice(idx, 1);
+              movidas++;
+              return DBc.depositarItem(entrada);
+            });
+          });
+          fila.then(function () {
+            safe(function () { P().save(); }, null);
+            bancoMarcadas = {};
+            toast(tr('{n} peça(s) guardada(s) no cofre.', { n: movidas }), 'good');
+            sheetBanco();
+          });
+        }));
+      }
       colSaco.appendChild(bancoGrade(pilhas, 'saco', function (pi) {
         var st2 = P().state;
         var entrada = st2.inventory[pi.indices[0]];
@@ -4429,6 +4507,35 @@ var JOGO = (typeof window !== 'undefined')
       var colCofre = el('div', 'bk2-col');
       colCofre.dataset.lado = 'cofre';
       colCofre.appendChild(el('h3', 'bk-tit', tr('No cofre ({length})', { length: cofre.itens.length })));
+      if (bancoVarios) {
+        colCofre.appendChild(barraMarcadas('cofre', pilhasCofre, function (marc, n) {
+          if (!safe(function () { return P().bagFree(n); }, true)) {
+            toast(tr('O saco não tem {n} vaga(s) — guarde ou quebre alguma coisa antes.', { n: n }));
+            sheetBanco();
+            return;
+          }
+          var idxs = [];
+          marc.forEach(function (pi) { pi.indices.forEach(function (i) { idxs.push(i); }); });
+          idxs.sort(function (a, b2) { return b2 - a; });
+          var fila = Promise.resolve(), movidas = 0;
+          idxs.forEach(function (idx) {
+            fila = fila.then(function () {
+              if (JOGO.Autoridade) JOGO.Autoridade.op('sacarItem', { indice: idx });
+              return DBc.sacarItem(idx).then(function (res) {
+                if (!res || !res.ok || !res.item) return;
+                P().state.inventory.push(P().carimba ? P().carimba(res.item, 'banco') : res.item);
+                movidas++;
+              });
+            });
+          });
+          fila.then(function () {
+            safe(function () { P().save(); }, null);
+            bancoMarcadas = {};
+            toast(tr('{n} peça(s) de volta no saco.', { n: movidas }), 'good');
+            sheetBanco();
+          });
+        }));
+      }
       colCofre.appendChild(bancoGrade(pilhasCofre, 'cofre', function (pi) {
         // o saco tem fundo (25/08): sacar do cofre só com vaga
         if (!safe(function () { return P().bagFree(1); }, true)) {
@@ -4681,12 +4788,100 @@ var JOGO = (typeof window !== 'undefined')
     pocoes:  { ico: 'mc-pocoes',  rot: tr('Poções') }
   };
   // mcAbas([{id, conta?}], aoMudar) -> div.mc-abas; a acesa é a do `mcAba`
+  /* 08/10 à noite (o dono: "o mercadinho dá para melhorar o layout"): as abas viraram PÍLULAS com o ícone E o
+   * nome escrito (as redondas só diziam o nome no toque longo); a conta segue na pílula do canto (data-conta).
+   * O textContent continua sendo o nome, letra por letra — as provas acham "Meus anúncios" pelo texto. */
   function mcAbas(lista, aoMudar) {
-    return icoFila('mc-abas', lista.map(function (a) {
-      var def = MC_ABAS[a.id];
-      return { id: a.id, ico: def.ico, rot: def.rot, conta: a.conta, cls: 'btn-mini',
-               clsTexto: mcAba === a.id ? 'btn-gold' : 'btn-ghost', data: { aba: a.id } };
-    }), mcAba, aoMudar, true);
+    var fila = el('div', 'mc-abas');
+    fila.setAttribute('role', 'tablist');
+    lista.forEach(function (a) {
+      var def = MC_ABAS[a.id], ligado = mcAba === a.id;
+      var svg = safe(function () { return JOGO.IconesUI ? JOGO.IconesUI.svg(def.ico) : ''; }, '') || '';
+      var b = btn(svg + '<span class="mc-aba-nm">' + esc(def.rot) + '</span>',
+                  'btn-mini mc-aba' + (ligado ? ' is-on' : ''), function () { aoMudar(a.id); });
+      b.setAttribute('data-aba', a.id);
+      b.setAttribute('aria-pressed', ligado ? 'true' : 'false');
+      if (a.conta != null && a.conta !== '' && Number(a.conta) > 0) b.setAttribute('data-conta', String(a.conta));
+      fila.appendChild(b);
+    });
+    return fila;
+  }
+  /* A BARRA DE FILTROS do mercadinho (08/10 à noite): UMA linha — o seletor da categoria (Equipamentos | Pedras),
+   * a busca e, por categoria, os seletores de espaço, raridade e ordem (ou o de elemento, nas pedras) — no lugar
+   * das três fileiras de botões redondos. `cfg` = { cat, aoCat, q, aoQ, placeholder, slot, aoSlot, rar, aoRar,
+   * ordem, aoOrdem, el, aoEl }; `ao*` null = sem aquele seletor. Cada seletor leva data-filtro. */
+  var MC_RAR_OP = [['todas', tr('Todas as raridades')], ['comum', tr('Comum')], ['raro', tr('Raro')], ['epico', tr('Épico')], ['lendario', tr('Lendário')]];
+  var MC_ORD_OP = [['preco', tr('Preço ↑')], ['precoDesc', tr('Preço ↓')], ['nome', tr('Nome')], ['raridade', tr('Raridade')]];
+  function mcBarra(cfg) {
+    var w = el('div', 'mc-barra');
+    function seletor(cls, filtro, opcoes, atual, aoMudar) {
+      var s = document.createElement('select');
+      s.className = 'hub-input inv2-select ' + cls;
+      s.setAttribute('data-filtro', filtro);
+      opcoes.forEach(function (o) {
+        var op = document.createElement('option');
+        op.value = o[0]; op.textContent = o[1];
+        if (o[0] === atual) op.selected = true;
+        s.appendChild(op);
+      });
+      s.addEventListener('change', function () { aoMudar(s.value); });
+      s.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      w.appendChild(s);
+      return s;
+    }
+    if (cfg.aoCat) seletor('mc-sel-cat', 'cat', [['equip', tr('Equipamentos')], ['pedras', tr('Pedras')]], cfg.cat || 'equip', cfg.aoCat);
+    var busca = document.createElement('input');
+    busca.className = 'hub-input mc-busca';
+    busca.type = 'search';
+    busca.placeholder = cfg.placeholder || tr('buscar por nome...');
+    busca.value = cfg.q || '';
+    busca.addEventListener('input', function () { cfg.aoQ(busca.value); });
+    busca.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+    w.appendChild(busca);
+    if (cfg.cat === 'pedras') {
+      if (cfg.aoEl) {
+        var els = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
+        seletor('inv2-sel-elem', 'el', [['todos', tr('Todos os elementos')]].concat(els.map(function (e) { return [e, ELEM_PT[e] || e]; })), cfg.el || 'todos', cfg.aoEl);
+      }
+      return w;
+    }
+    if (cfg.aoSlot) seletor('inv2-sel-espaco', 'slot', [['todos', tr('Todos os espaços')]].concat(SLOTS.map(function (c) { return [c, SLOT_PT[c]]; })), cfg.slot || 'todos', cfg.aoSlot);
+    if (cfg.aoRar) seletor('mc-sel-rar', 'rar', MC_RAR_OP, cfg.rar || 'todas', cfg.aoRar);
+    if (cfg.aoOrdem) seletor('mc-sel-ord', 'ordem', MC_ORD_OP, cfg.ordem || 'preco', cfg.aoOrdem);
+    return w;
+  }
+  /* AS DUAS COLUNAS do mercadinho (08/10 à noite), como a forja e o banco: à esquerda o balcão (a barra de filtros
+   * e a grade só de ícones, com o preço embaixo de cada peça), à direita a ficha da peça tocada com quem vende e
+   * os botões. `mc2Molde(pai)` devolve {esq, dir}; `mc2Dica(dir, texto)` escreve a dica quando nada foi tocado. */
+  function mc2Molde(pai) {
+    var m = el('div', 'mc2'), esq = el('div', 'mc2-esq'), dir = el('div', 'mc2-dir');
+    m.appendChild(esq); m.appendChild(dir); pai.appendChild(m);
+    return { esq: esq, dir: dir };
+  }
+  function mc2Dica(dir, texto) {
+    clear(dir);
+    dir.appendChild(el('p', 'inv-dica mc2-dica', texto));
+  }
+  /* a CÉLULA do balcão: o ícone com a borda da raridade, ×N e o preço (ou a régua) embaixo; o nome no balão */
+  function mcCelula(itemId, op) {
+    op = op || {};
+    var it = itemDef(itemId) || {};
+    var c = el('button', 'ig-cell mc-cel ' + starClass(op.stars || 0) + (op.sel ? ' is-sel' : ''));
+    c.type = 'button';
+    c.setAttribute('data-item', itemId);
+    markRarity(c, it.rarity);
+    var plate = el('span', 'ig-plate');
+    plate.appendChild(art('itemIcon', [itemId, INV_ICONE], INV_ICONE));
+    c.appendChild(plate);
+    if (op.n > 1) c.appendChild(el('span', 'ig-n', '×' + op.n));
+    if (op.level) c.appendChild(el('span', 'ig-lv', '+' + op.level));
+    if (op.stars) c.appendChild(starPips(op.stars));
+    c.appendChild(el('span', 'ig-nm', esc(it.name || itemId)));
+    if (op.preco != null) c.appendChild(el('span', 'mc-cel-preco' + (op.precoCls ? ' ' + op.precoCls : ''), esc(String(op.preco))));
+    c.setAttribute('data-rot', it.name || itemId);
+    legendaNoToque(c);
+    if (op.aoTocar) tap(c, op.aoTocar);
+    return c;
   }
   // as opções de cada fileira de filtro: {id, ico, rot, rc?, data} (o espaço
   // vem do slotOpcoes(), o mesmo do inventário)
@@ -4954,31 +5149,17 @@ var JOGO = (typeof window !== 'undefined')
       }
       var pedras = mcFiltro.cat === 'pedras';
       function barraFiltros(comOrigem) {
-        // 22/09: a categoria em cima (.mc-cats, fora da conta das .mc-filtros);
-        // trocar de categoria limpa a busca — o nome de pedra não acha peça
-        caixa.appendChild(mcCats(mcFiltro.cat, function (id) {
-          if (id === mcFiltro.cat) return;
-          mcFiltro.cat = id; mcFiltro.q = ''; sheetMercado();
+        // 08/10 à noite: a barra de seletores (categoria, busca, espaço, raridade, ordem | elemento) no lugar das
+        // fileiras redondas; trocar de categoria limpa a busca — o nome de pedra não acha peça
+        caixa.appendChild(mcBarra({
+          cat: mcFiltro.cat, aoCat: function (id) { if (id === mcFiltro.cat) return; mcFiltro.cat = id; mcFiltro.q = ''; sheetMercado(); },
+          q: mcFiltro.q, aoQ: function (v) { mcFiltro.q = v; pinta(); },
+          placeholder: pedras ? tr('buscar pedra por nome...') : tr('buscar por nome...'),
+          el: mcFiltro.el, aoEl: function (v) { mcFiltro.el = v; sheetMercado(); },
+          slot: mcFiltro.slot, aoSlot: function (v) { mcFiltro.slot = v; sheetMercado(); },
+          rar: mcFiltro.rar, aoRar: function (v) { mcFiltro.rar = v; sheetMercado(); },
+          ordem: mcFiltro.ordem, aoOrdem: comOrigem ? function (v) { mcFiltro.ordem = v; sheetMercado(); } : null
         }));
-        var busca = document.createElement('input');
-        busca.className = 'hub-input';
-        busca.placeholder = pedras ? tr('buscar pedra por nome...') : tr('buscar por nome...');
-        busca.value = mcFiltro.q;
-        busca.addEventListener('input', function () { mcFiltro.q = busca.value; pinta(); });
-        caixa.appendChild(busca);
-        if (pedras) {
-          caixa.appendChild(chips(tr('Elemento'), 'el', mcOpElem()));
-          return;
-        }
-        // a PRIMEIRA .mc-filtros é sempre a do espaço (as provas a acham assim)
-        caixa.appendChild(chips(tr('Espaço'), 'slot', slotOpcoes()));
-        caixa.appendChild(chips(tr('Raridade'), 'rar', mcOpRar()));
-        if (comOrigem) {
-          // 12/09: o mercador-fantasma saiu — com um vendedor só, filtrar por
-          // vendedor não separava nada
-
-          caixa.appendChild(chips(tr('Ordem'), 'ordem', mcOpOrdem()));
-        }
       }
       var ORDEM_RAR = { comum: 0, raro: 1, epico: 2, lendario: 3 };
       function passaFiltro(itemId) {
@@ -5498,26 +5679,17 @@ var JOGO = (typeof window !== 'undefined')
     /* `aoMudar` repinta a lista que já veio; `aoCat` remonta a área na outra
      * categoria (as fileiras de filtro são outras) — nenhum dos dois pede ao
      * servidor de novo */
-    function filtros(aoMudar, aoCat) {
-      area.appendChild(mcCats(mcSrv.cat, function (id) {
-        if (id === mcSrv.cat) return;
-        mcSrv.cat = id; mcSrv.q = '';
-        aoCat();
-      }));
+    function filtros(aoMudar, aoCat, onde) {
+      // 08/10 à noite: a barra de seletores; os de espaço/raridade/elemento filtram NO LUGAR (a lista já veio)
       var pedras = mcSrv.cat === 'pedras';
-      var busca = document.createElement('input');
-      busca.className = 'hub-input';
-      busca.placeholder = pedras ? tr('buscar pedra por nome...') : tr('buscar por nome...');
-      busca.value = mcSrv.q;
-      busca.addEventListener('input', function () { mcSrv.q = busca.value; aoMudar(); });
-      area.appendChild(busca);
-      if (pedras) {
-        area.appendChild(chipsSrv(tr('Elemento'), 'el', mcOpElem(), aoMudar));
-        return;
-      }
-      // a PRIMEIRA .mc-filtros é sempre a do tipo (tests/mercado_hud.html a acha assim)
-      area.appendChild(chipsSrv(tr('Tipo'), 'slot', slotOpcoes(), aoMudar));
-      area.appendChild(chipsSrv(tr('Raridade'), 'rar', mcOpRar(), aoMudar));
+      (onde || area).appendChild(mcBarra({
+        cat: mcSrv.cat, aoCat: function (id) { if (id === mcSrv.cat) return; mcSrv.cat = id; mcSrv.q = ''; aoCat(); },
+        q: mcSrv.q, aoQ: function (v) { mcSrv.q = v; aoMudar(); },
+        placeholder: pedras ? tr('buscar pedra por nome...') : tr('buscar por nome...'),
+        el: mcSrv.el, aoEl: function (v) { mcSrv.el = v; aoMudar(); },
+        slot: mcSrv.slot, aoSlot: function (v) { mcSrv.slot = v; aoMudar(); },
+        rar: mcSrv.rar, aoRar: function (v) { mcSrv.rar = v; aoMudar(); }
+      }));
     }
     // a pedra não tem itemDef: nunca passa em Equipamentos (22/09)
     function passa(itemId) {
@@ -5531,8 +5703,8 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     // ---- COMPRAR: a lista por item
+    var mc2 = null;                       // as duas colunas da aba aberta ({esq, dir})
     function pintaComprar() {
-      if (mcSrv.item) { pintaItem(mcSrv.item); return; }
       carregando();
       Srv.resumo().then(function (r) {
         if (!ainda()) return;
@@ -5541,14 +5713,18 @@ var JOGO = (typeof window !== 'undefined')
         // a categoria troca AQUI, com o resumo que já veio (sem pedir de novo)
         function monta() {
           clear(area);
+          mc2 = mc2Molde(area);
           var lista = el('div', 'mc-lista');
           function pintaLista() {
             clear(lista);
             if (mcSrv.cat === 'pedras') pintaPedras(lista); else pintaItens(lista);
           }
-          filtros(pintaLista, monta);
-          area.appendChild(lista);
+          filtros(pintaLista, monta, mc2.esq);
+          mc2.esq.appendChild(lista);
           pintaLista();
+          // 08/10 à noite: o item tocado abre à DIREITA, com a lista ainda à vista
+          if (mcSrv.item) pintaItem(mcSrv.item, mc2.dir);
+          else mc2Dica(mc2.dir, mcSrv.cat === 'pedras' ? tr('Toque numa pedra para ver os lotes à venda.') : tr('Toque numa peça para ver quem vende, o preço e fazer a sua oferta.'));
         }
         /* COMPRAR › PEDRAS: uma linha por PEDRA (o resumo.pedras do servidor):
          * quantos lotes, quantas pedras somadas, o lote mais barato e o menor
@@ -5571,8 +5747,11 @@ var JOGO = (typeof window !== 'undefined')
               : (x.pedras === 1 ? tr('<b>{lotes}</b> lotes · {pedras} pedra{a}', { lotes: x.lotes, pedras: x.pedras, a: x.meus ? ' (' + x.meus + (x.meus === 1 ? ' seu' : ' seus') + ')' : '' }) : tr('<b>{lotes}</b> lotes · {pedras} pedras{a}', { lotes: x.lotes, pedras: x.pedras, a: x.meus ? ' (' + x.meus + (x.meus === 1 ? ' seu' : ' seus') + ')' : '' }))));
             row.appendChild(el('span', 'mc-preco', 'desde ' + x.menor + 'v' +
               (x.menorUnit != null ? '<small>' + tr('{a}v cada', { a: mcNum(x.menorUnit) }) + '</small>' : '')));
+            if (mcSrv.item === x.stoneId) row.classList.add('is-sel');
             row.appendChild(btn(tr('Ver lotes'), 'btn-mini btn-gold', function () {
-              mcSrv.item = x.stoneId; mcSrv.oferta = null; pintaComprar();
+              mcSrv.item = x.stoneId; mcSrv.oferta = null;
+              [].forEach.call(lista.querySelectorAll('.mc-linha'), function (l) { l.classList.toggle('is-sel', l === row); });
+              pintaItem(x.stoneId, mc2 && mc2.dir);
             }));
             lista.appendChild(row);
           });
@@ -5593,14 +5772,17 @@ var JOGO = (typeof window !== 'undefined')
             lista.appendChild(el('p', 'inv-dica', todos.length ? tr('Nada com esses filtros.')
               : tr('O balcão está vazio. Ele só enche quando alguém anuncia uma peça — e a sua oferta fica aqui até vender.')));
           }
+          // 08/10 à noite: a grade só de ícones — ×N à venda e "desde Xv" embaixo; o toque abre à direita
+          var grade = el('div', 'mc-grade grade-icones');
           itens.forEach(function (x) {
-            var row = mcLinhaSrv(x.itemId, 0, 0, tr('<b>{qtd}</b> à venda{a}', { qtd: x.qtd, a: x.meus ? ' (' + x.meus + (x.meus === 1 ? ' seu' : ' seus') + ')' : '' }));
-            row.appendChild(el('span', 'mc-preco', 'desde ' + x.menor + 'v'));
-            row.appendChild(btn(tr('Ver todos'), 'btn-mini btn-gold', function () {
-              mcSrv.item = x.itemId; mcSrv.oferta = null; pintaComprar();
-            }));
-            lista.appendChild(row);
+            grade.appendChild(mcCelula(x.itemId, { n: x.qtd, preco: x.menor + 'v', sel: mcSrv.item === x.itemId,
+              aoTocar: function () {
+                mcSrv.item = x.itemId; mcSrv.oferta = null;
+                [].forEach.call(grade.querySelectorAll('.mc-cel'), function (c) { c.classList.toggle('is-sel', c.getAttribute('data-item') === x.itemId); });
+                pintaItem(x.itemId, mc2 && mc2.dir);
+              } }));
           });
+          if (itens.length) lista.appendChild(grade);
         }
       });
     }
@@ -5609,25 +5791,33 @@ var JOGO = (typeof window !== 'undefined')
      * para uma PEDRA (o ?id= é o da pedra) — cada linha é um lote ("Lote de 50 ·
      * vende Fulano"), com o preço do lote e o preço por pedra, e "Comprar por X"
      * sem olhar o saco (a pedra vai ao estoque). A oferta vale igual para o lote. */
-    function pintaItem(itemId) {
+    function pintaItem(itemId, alvo) {
       var pedra = ehPedraId(itemId);
-      carregando();
+      var alvo2 = alvo || area;
+      clear(alvo2);
+      alvo2.appendChild(el('p', 'inv-dica', tr('Consultando o balcão…')));
       Srv.item(itemId).then(function (r) {
         if (!ainda()) return;
         if (!r || !r.ok) { falhou(r); return; }
-        clear(area);
-        area.appendChild(btn(pedra ? tr('← Todas as pedras') : tr('← Todos os itens'), 'btn-mini btn-ghost mc-voltar', function () {
-          mcSrv.item = null; mcSrv.oferta = null; pintaComprar();
+        clear(alvo2);
+        // 08/10 à noite: a ficha da peça no alto da coluna (a pedra tem a linha dela)
+        if (!pedra) alvo2.appendChild(fichaItem({ itemId: itemId, level: 0, stars: 0 }, { hid: ensurePartyHero(), compacto: true }));
+        alvo2.appendChild(btn(pedra ? tr('← Todas as pedras') : tr('← Todos os itens'), 'btn-mini btn-ghost mc-voltar', function () {
+          mcSrv.item = null; mcSrv.oferta = null;
+          if (alvo) { mc2Dica(alvo, pedra ? tr('Toque numa pedra para ver os lotes à venda.') : tr('Toque numa peça para ver quem vende, o preço e fazer a sua oferta.')); [].forEach.call(area.querySelectorAll('.is-sel'), function (c) { c.classList.remove('is-sel'); }); }
+          else pintaComprar();
         }));
         var ans = r.anuncios || [];
-        area.appendChild(el('p', 'mc-resumo', pedra
+        alvo2.appendChild(el('p', 'mc-resumo', pedra
           ? (ans.length === 1
             ? tr('<b>{length}</b> lote de <b>{a}</b> — do mais barato ao mais caro por pedra', { length: ans.length, a: esc(mcNomePedra(itemId)) })
             : tr('<b>{length}</b> lotes de <b>{a}</b> — do mais barato ao mais caro por pedra', { length: ans.length, a: esc(mcNomePedra(itemId)) }))
           : (ans.length === 1
             ? tr('<b>{length}</b> anúncio de <b>{a}</b> — do mais barato ao mais caro', { length: ans.length, a: mcPeca(itemId, 0, 0) })
             : tr('<b>{length}</b> anúncios de <b>{a}</b> — do mais barato ao mais caro', { length: ans.length, a: mcPeca(itemId, 0, 0) }))));
-        if (!ans.length) area.appendChild(el('p', 'inv-dica', pedra ? tr('Os lotes dessa pedra acabaram de sair do balcão.')
+        var listaDir = el('div', 'mc-lista');      // as linhas dos anúncios (as provas acham .mc-lista .mc-linha)
+        alvo2.appendChild(listaDir);
+        if (!ans.length) listaDir.appendChild(el('p', 'inv-dica', pedra ? tr('Os lotes dessa pedra acabaram de sair do balcão.')
           : tr('Esse item acabou de sair do balcão.')));
         var tenho = bolso.saco + bolso.banco;
         ans.forEach(function (an) {
@@ -5661,7 +5851,7 @@ var JOGO = (typeof window !== 'undefined')
               }));
             }
           }
-          area.appendChild(row);
+          listaDir.appendChild(row);
           if (an.minhaProposta) {
             var sub = el('div', 'mc-sub');
             var mp = an.minhaProposta;
@@ -5672,7 +5862,7 @@ var JOGO = (typeof window !== 'undefined')
               Srv.cancelar(mp.id).then(function (res) { depois(res, tr('Oferta cancelada.')); });
             }));
             sub.appendChild(lp);
-            area.appendChild(sub);
+            listaDir.appendChild(sub);
           }
           if (!an.meu && an.preco > 1) {
             form = el('div', 'mc-oferta');
@@ -5692,15 +5882,17 @@ var JOGO = (typeof window !== 'undefined')
                 depois(res, tr('Oferta de {v} vinténs enviada a {a}. Se ele aceitar, você confirma aqui na praça.', { v: v, a: an.vendedor || 'o vendedor' }));
               });
             }));
-            area.appendChild(form);
+            listaDir.appendChild(form);
           }
         });
       });
     }
 
     // ---- VENDER: o saco, com a régua e a taxa antes de anunciar
+    var mcVenda = null;                   // a pilha do saco escolhida para vender ({itemId, level, stars, extra})
     function pintaVender() {
       clear(area);
+      mc2 = mc2Molde(area);
       var lista = el('div', 'mc-lista');
       function pintaLista() {
         clear(lista);
@@ -5718,10 +5910,29 @@ var JOGO = (typeof window !== 'undefined')
           .filter(function (s2) { return passa(s2.itemId); });
         lista.appendChild(el('p', 'mc-resumo', tr('<b>{length}</b> no saco · a taxa de 5% sai do preço final da venda', { length: pilhas.length })));
         if (!pilhas.length) lista.appendChild(el('p', 'inv-dica', tr('Nada no saco com esses filtros.')));
+        // 08/10 à noite: a grade do saco; a peça tocada abre à direita com o preço e o Anunciar
+        var grade = el('div', 'mc-grade grade-icones');
+        function mesma(pi) { return !!(mcVenda && mcVenda.itemId === pi.itemId && mcVenda.level === pi.level && mcVenda.stars === pi.stars && (mcVenda.extra || null) === (pi.extra || null)); }
+        var escolhida = null;
         pilhas.forEach(function (pi) {
+          if (mesma(pi)) escolhida = pi;
+          grade.appendChild(mcCelula(pi.itemId, { n: pi.count, level: pi.level, stars: pi.stars, sel: mesma(pi),
+            preco: '~' + JOGO.Mercado.precoSugerido(pi.itemId, pi.level, pi.stars) + 'v',
+            aoTocar: function () {
+              mcVenda = { itemId: pi.itemId, level: pi.level, stars: pi.stars, extra: pi.extra || null };
+              [].forEach.call(grade.querySelectorAll('.mc-cel'), function (c) { c.classList.remove('is-sel'); });
+              pintaLista();
+            } }));
+        });
+        if (pilhas.length) lista.appendChild(grade);
+        if (!escolhida) { mc2Dica(mc2.dir, tr('Toque numa peça do saco para pôr o preço e anunciar.')); return; }
+        clear(mc2.dir);
+        [escolhida].forEach(function (pi) {
           var sugerido = JOGO.Mercado.precoSugerido(pi.itemId, pi.level, pi.stars);
-          var row = mcLinhaSrv(pi.itemId, pi.level, pi.stars,
-            tr('{a}a régua sugere {sugerido}v', { a: pi.count > 1 ? '×' + pi.count + ' · ' : '', sugerido: sugerido }));
+          mc2.dir.appendChild(fichaItem({ itemId: pi.itemId, level: pi.level, stars: pi.stars, extra: pi.extra || null, count: pi.count, index: pi.indices ? pi.indices[0] : pi.index },
+                                        { hid: ensurePartyHero(), compacto: true }));
+          var row = el('div', 'mc-linha mc-venda');
+          row.appendChild(el('span', 'mc-cmp', tr('{a}a régua sugere {sugerido}v', { a: pi.count > 1 ? '×' + pi.count + ' · ' : '', sugerido: sugerido })));
           var campo = document.createElement('input');
           campo.type = 'number'; campo.min = '1'; campo.max = String(JOGO.Mercado.PRECO_MAX); campo.step = '1';
           campo.className = 'bk2-qtd mc-qtd';
@@ -5747,11 +5958,11 @@ var JOGO = (typeof window !== 'undefined')
             });
           });
           row.appendChild(bA);
-          lista.appendChild(row);
+          mc2.dir.appendChild(row);
         });
       }
-      filtros(pintaLista, pintaVender);
-      area.appendChild(lista);
+      filtros(pintaLista, pintaVender, mc2.esq);
+      mc2.esq.appendChild(lista);
       pintaLista();
     }
 
@@ -10135,8 +10346,12 @@ var JOGO = (typeof window !== 'undefined')
     // ===== A GRADE: as peças, arrastáveis para a bancada (toque também põe)
     function celDe(alvo, idx) {
       var it = itemDef(alvo.itemId);
+      var marcavel = quebra && forjaVarios && alvo.kind === 'bag';
+      var marcada = marcavel && !!forjaMarcadas[chaveDoAlvo(alvo)];
       var c = el('button', 'ig-cell fg-cel ' + starClass(alvo.stars) +
-                            (mesmoAlvo(alvo, atual) ? ' is-sel' : ''));
+                            (mesmoAlvo(alvo, atual) && !forjaVarios ? ' is-sel' : '') +
+                            (marcavel ? ' is-marcavel' : '') + (marcada ? ' is-marcada' : ''));
+      if (marcada) c.appendChild(el('i', 'bk2-marca', '✓'));
       c.type = 'button';
       markRarity(c, it.rarity);
       var plate = el('span', 'ig-plate');
@@ -10171,6 +10386,17 @@ var JOGO = (typeof window !== 'undefined')
         }
         c.appendChild(rende);
       }
+      if (marcavel) {
+        // 08/10 à noite: no modo "várias" o toque marca a pilha (a que não se quebra não marca)
+        tap(c, function () {
+          var qm = quebraInfoAlvo(alvo, 1);
+          if (!qm || !qm.pode) { toast(tr('Essa peça não se quebra.')); return; }
+          var k = chaveDoAlvo(alvo);
+          if (forjaMarcadas[k]) delete forjaMarcadas[k]; else forjaMarcadas[k] = true;
+          sheetParty('forja');
+        });
+        return c;
+      }
       arrastavel(c, { tipo: 'peca', idx: idx });
       tap(c, function () {
         if (!mesmoAlvo(alvo, forgeTarget)) forjaQuebraN = 1;
@@ -10178,6 +10404,81 @@ var JOGO = (typeof window !== 'undefined')
         sheetParty('forja');
       });
       return c;
+    }
+    // 08/10 à noite: no Quebrar, o botão do modo "várias" e a barra do golpe em lote (vão para a coluna da direita)
+    if (quebra) {
+      var modoV = el('div', 'fg-varios fg-dir');
+      modoV.appendChild(btn(forjaVarios ? tr('Sair da seleção') : tr('Selecionar várias'), 'btn-mini fg-varios-b' + (forjaVarios ? ' is-on' : ''), function () {
+        forjaVarios = !forjaVarios;
+        forjaMarcadas = {};
+        sheetParty('forja');
+      }));
+      if (forjaVarios) {
+        var marcadosF = [];
+        alvos.forEach(function (a2) {
+          if (a2.kind !== 'bag') return;
+          if (forjaMarcadas[chaveDoAlvo(a2)]) marcadosF.push(a2);
+        });
+        var somaPedras = {}, nPecas = 0, maxNQ = safe(function () { return P().quebraCfg().maxN; }, 99) || 99;
+        marcadosF.forEach(function (a2) {
+          var nQ = Math.min(a2.count || 1, maxNQ);
+          var qq = quebraInfoAlvo(a2, nQ);
+          if (!qq || !qq.pode) return;
+          nPecas += nQ;
+          somaPedras[qq.stoneId] = (somaPedras[qq.stoneId] || 0) + (qq.total || 0);
+        });
+        var viramTxt = Object.keys(somaPedras).map(function (sid) { return '<b>' + somaPedras[sid] + ' ' + esc((defs[sid] || {}).name || sid) + '</b>'; }).join(' + ');
+        modoV.appendChild(el('span', 'fg-varios-n', marcadosF.length
+          ? tr('<b>{a}</b> pilha(s) marcada(s) · <b>{n}</b> peça(s) · viram {b}', { a: marcadosF.length, n: nPecas, b: viramTxt || '—' })
+          : tr('Toque nas peças para marcar; todas as cópias da pilha vão juntas.')));
+        if (marcadosF.length) {
+          modoV.appendChild(btn(forjaQuebrando ? tr('Quebrando…') : tr('Quebrar as {n} marcadas', { n: nPecas }), 'btn-warn btn-mini fg-varios-go' + (forjaQuebrando ? ' is-off' : ''), function () {
+            confirmSheet(tr('Quebrar {n} peças?', { n: nPecas }),
+              tr('As <b>{n} peças</b> marcadas somem <b>para sempre</b> e viram {b}. Não tem volta.', { n: nPecas, b: viramTxt }),
+              function () { quebraVarias(marcadosF); }, { sim: tr('Quebrar'), simCls: 'btn-warn', aoCancelar: function () { sheetParty('forja'); } });
+          }));
+        }
+      }
+      body.appendChild(modoV);
+    }
+    /* o golpe em lote: uma peça de cada vez, de novo achando o índice pela série (o estado do servidor é
+     * adotado entre uma e outra, e o índice muda); com sessão do site quem quebra é o servidor */
+    function quebraVarias(lista) {
+      var AutQ = JOGO.Autoridade, comServidor = !!(AutQ && AutQ.ligada && AutQ.ligada());
+      var maxNQ = safe(function () { return P().quebraCfg().maxN; }, 99) || 99;
+      var fila = Promise.resolve(), feitas = 0, pedrasTotal = 0;
+      forjaQuebrando = true;
+      sheetParty('forja');
+      lista.forEach(function (a2) {
+        fila = fila.then(function () {
+          // a pilha não tem série: acha-se a PRIMEIRA cópia dela no saco de agora (o estado pode ter sido adotado)
+          var inv = P().state.inventory, idx = -1;
+          for (var i3 = 0; i3 < inv.length; i3++) {
+            var e3 = inv[i3];
+            if (e3 && e3.itemId === a2.itemId && (e3.level || 0) === (a2.level || 0) && (e3.stars || 0) === (a2.stars || 0) &&
+                (e3.extra || null) === (a2.extra || null)) { idx = i3; break; }
+          }
+          if (idx < 0) return null;
+          var nQ = Math.min(a2.count || 1, maxNQ);
+          var args = { invIndex: idx, n: nQ };
+          if (inv[idx].iid) args.iid = inv[idx].iid;
+          if (comServidor) {
+            return AutQ.opAgora('quebrarPeca', args).then(function (res) {
+              if (res && res.ok && res.resultado) { feitas += res.resultado.n || nQ; pedrasTotal += res.resultado.pedras || 0; }
+            }, function () { return null; });
+          }
+          var fim = safe(function () { return P().quebraPeca(idx, nQ, { iid: args.iid || null }); }, false);
+          if (fim) { feitas += fim.n || nQ; pedrasTotal += fim.pedras || 0; }
+          return null;
+        });
+      });
+      fila.then(function () {
+        forjaQuebrando = false;
+        forjaMarcadas = {};
+        forgeTarget = null;
+        toast(feitas ? tr('{n} peça(s) viraram pedra: +{p} pedras na prateleira.', { n: feitas, p: pedrasTotal }) : tr('Nenhuma peça se quebrou.'), feitas ? 'good' : undefined);
+        if (sheetName === 'party' && partyTab === 'forja') sheetParty('forja');
+      });
     }
     // 22/09: espaço E elemento, redondos — valem para o saco e para as vestidas.
     // O `idx` de cada célula é a posição em `alvos` (a lista INTEIRA): o filtro

@@ -2898,5 +2898,29 @@ JOGO.I18n.registra('es', { textos: {
   "Quebra: dá <b>{a}</b> {b}": "Romper: da <b>{a}</b> {b}",
   "Cai em: <b>{a}</b>": "Cae en: <b>{a}</b>",
   // ---- 08/10 à noite: a barraquinha com os prêmios à vista
-  "Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.": "Los premios aún en juego están oscuros; la ✓ marca lo que el traje ya tiene."
+  "Os prêmios em jogo ficam escuros; o ✓ marca o que o traje já tem.": "Los premios aún en juego están oscuros; la ✓ marca lo que el traje ya tiene.",
+  // ---- 08/10 à noite: o Mercadinho limpo, o selecionar várias (banco e quebra) e o Mestre no Eco
+  "Toque nas peças para marcar; a barra de cada lado guarda ou saca todas as marcadas de uma vez.": "Toca las piezas para marcarlas; la barra de cada lado guarda o saca todas las marcadas de una vez.",
+  "Sair da seleção": "Salir de la selección",
+  "Selecionar várias": "Seleccionar varias",
+  "<b>{a}</b> pilha(s) · <b>{n}</b> peça(s) marcada(s)": "<b>{a}</b> pila(s) · <b>{n}</b> pieza(s) marcada(s)",
+  "Toque nas peças para marcar.": "Toca las piezas para marcarlas.",
+  "Guardar as marcadas →": "Guardar las marcadas →",
+  "← Sacar as marcadas": "← Sacar las marcadas",
+  "{n} peça(s) guardada(s) no cofre.": "{n} pieza(s) guardada(s) en la caja fuerte.",
+  "O saco não tem {n} vaga(s) — guarde ou quebre alguma coisa antes.": "La bolsa no tiene {n} hueco(s): guarda o rompe algo antes.",
+  "{n} peça(s) de volta no saco.": "{n} pieza(s) de vuelta en la bolsa.",
+  "Todas as raridades": "Todas las rarezas",
+  "Toque numa pedra para ver os lotes à venda.": "Toca una piedra para ver los lotes en venta.",
+  "Toque numa peça para ver quem vende, o preço e fazer a sua oferta.": "Toca una pieza para ver quién la vende, el precio y hacer tu oferta.",
+  "Toque numa peça do saco para pôr o preço e anunciar.": "Toca una pieza de la bolsa para poner el precio y anunciarla.",
+  "Essa dupla não abre a Câmara do Eco agora.": "Esa pareja no abre la Cámara del Eco ahora.",
+  "Essa peça não se quebra.": "Esa pieza no se rompe.",
+  "<b>{a}</b> pilha(s) marcada(s) · <b>{n}</b> peça(s) · viram {b}": "<b>{a}</b> pila(s) marcada(s) · <b>{n}</b> pieza(s) · se vuelven {b}",
+  "Toque nas peças para marcar; todas as cópias da pilha vão juntas.": "Toca las piezas para marcarlas; todas las copias de la pila van juntas.",
+  "Quebrar as {n} marcadas": "Romper las {n} marcadas",
+  "Quebrar {n} peças?": "¿Romper {n} piezas?",
+  "As <b>{n} peças</b> marcadas somem <b>para sempre</b> e viram {b}. Não tem volta.": "Las <b>{n} piezas</b> marcadas desaparecen <b>para siempre</b> y se vuelven {b}. No hay vuelta atrás.",
+  "{n} peça(s) viraram pedra: +{p} pedras na prateleira.": "{n} pieza(s) se volvieron piedra: +{p} piedras en el estante.",
+  "Nenhuma peça se quebrou.": "Ninguna pieza se rompió."
 } });

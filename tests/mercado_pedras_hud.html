@@ -117,6 +117,17 @@
   function toastTxt() { var t = q1('.ui-toast'); return t ? txt(t) : ''; }
   function limpaToast() { var t = q1('.ui-toast'); if (t) { t.innerHTML = ''; t.className = 'ui-toast'; } }
   function linhas() { return qa('.mc-lista .mc-linha', ficha()); }
+  // 08/10 à noite (o mercadinho limpo): os filtros são SELETORES — escolher um valor dispara o change
+  function escolhe(sel, valor, raiz) {
+    var x = q1(sel, raiz || ficha());
+    if (!x) return false;
+    x.value = valor;
+    x.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  function valorDe(sel) { var x = q1(sel, ficha()); return x ? x.value : null; }
+  function textosOp(sel) { var x = q1(sel, ficha()); return x ? qa('option', x).map(function (o) { return o.textContent; }) : []; }
+  function cels() { return qa('.mc-cel', ficha()); }
   function linhasPedra() { return qa('.mc-lista .mc-linha.mc-pedra', ficha()); }
   function linhaDa(sid) { return q1('.mc-linha.mc-pedra[data-pedra="' + sid + '"]', ficha()); }
   function lotesDe(linha) { return qa('.mc-lote', linha); }
@@ -148,7 +159,7 @@
       if (!b.querySelector('svg.ico-svg') || !b.querySelector('.rot-oculto')) ruins.push(rot + ' sem svg/rot-oculto');
     });
     check(onde + ': ' + bs.length + ' botões redondos no contrato (>= 44 px, nome escondido = data-rot = aria-label)',
-          bs.length > 0 && ruins.length === 0, ruins.slice(0, 5).join(' | '));
+          ruins.length === 0, ruins.slice(0, 5).join(' | '));     // 08/10 à noite: sem botão redondo também passa (os filtros são seletores)
   }
   // nada vaza da ficha (a coluna de 390 px da prova)
   function cabe(onde) {
@@ -291,7 +302,7 @@
       toca('.mc-abas [data-aba="' + aba + '"]');
       return espera(400);
     }).then(function () {
-      if (aba !== 'meus') toca('.mc-cats [data-cat="pedras"]');
+      if (aba !== 'meus') escolhe('.mc-sel-cat', 'pedras');
       return espera(400);
     }).then(function () {
       if (Q.foto === 'lotes') {
@@ -322,20 +333,15 @@
     // ---- 1) LOCAL · Comprar em Equipamentos: a categoria em cima, o espaço segue sendo a primeira .mc-filtros
     p(function () {
       UI.openSheet('mercado');
-      return ate(function () { return !!q1('.mc-cats', ficha()) && linhas().length > 0; }).then(function (ok) {
-        var cats = qa('.mc-cats .btn-ico', ficha());
-        check('local · Comprar: a fileira de categoria (Equipamentos | Pedras) redonda, com data-cat e o nome da aberta',
-              ok && mesmo(textos(cats), ['Equipamentos', 'Pedras']) &&
-              mesmo(cats.map(function (b) { return b.getAttribute('data-cat'); }), ['equip', 'pedras']) &&
-              cats[0].classList.contains('is-on') && !!q1('.ico-cat-equip', cats[0]) && !!q1('.ico-cat-pedras', cats[1]) &&
-              txt(q1('.mc-cats .ico-fila-nome', ficha())) === 'Equipamentos', textos(cats).join(','));
-        var filas = qa('.mc-filtros', ficha());
-        check('local · a fileira de categoria NÃO é .mc-filtros; a primeira .mc-filtros é a do espaço, com /^Punho$/',
-              !q1('.mc-cats', ficha()).classList.contains('mc-filtros') && filas.length === 3 &&
-              filas[0].getAttribute('data-filtro') === 'slot' && !!botaoTexto(/^Punho$/, filas[0]),
-              filas.map(function (f) { return f.getAttribute('data-filtro'); }).join(','));
+      return ate(function () { return !!q1('.mc-sel-cat', ficha()) && linhas().length > 0; }).then(function (ok) {
+        // 08/10 à noite (o mercadinho limpo): a categoria é um SELETOR (Equipamentos | Pedras), e os filtros também
+        check('local · Comprar: o seletor de categoria (Equipamentos | Pedras) aberto em Equipamentos',
+              ok && mesmo(textosOp('.mc-sel-cat'), ['Equipamentos', 'Pedras']) && valorDe('.mc-sel-cat') === 'equip', textosOp('.mc-sel-cat').join(','));
+        var sels = qa('.mc-barra select', ficha()).map(function (x) { return x.getAttribute('data-filtro'); });
+        check('local · a barra: categoria, espaço (com Punho), raridade e ordem',
+              mesmo(sels, ['cat', 'slot', 'rar', 'ordem']) && textosOp('.inv2-sel-espaco').indexOf('Punho') >= 0, sels.join(','));
         check('local · a categoria vem antes da busca, e a busca é o primeiro campo da ficha',
-              !!(q1('.mc-cats', ficha()).compareDocumentPosition(q1('input.hub-input', ficha())) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+              !!(q1('.mc-sel-cat', ficha()).compareDocumentPosition(q1('input.hub-input', ficha())) & Node.DOCUMENT_POSITION_FOLLOWING) &&
               q1('input', ficha()) === q1('input.hub-input', ficha()));
         check('local · Equipamentos mostra a peça e NÃO o lote de pedra', linhas().length === 1 && linhasPedra().length === 0 &&
               ficha().textContent.indexOf(pedraNome('stone-tear')) < 0, linhas().length + ' linhas');
@@ -347,15 +353,12 @@
 
     // ---- 2) LOCAL · Comprar › Pedras: o lote do outro vendedor, o elemento e a busca
     p(function () {
-      toca('.mc-cats [data-cat="pedras"]');
-      return ate(function () { var b = q1('.mc-cats [data-cat="pedras"]', ficha()); return b && b.classList.contains('is-on'); }).then(function (ok) {
-        var filas = qa('.mc-filtros', ficha());
-        var els = filas.length ? qa('.btn-ico', filas[0]) : [];
-        check('local · Pedras: sem espaço nem raridade; UMA .mc-filtros, a do elemento (Todos · Fogo · Água · Terra · Ar · Neutro)',
-              ok && !q1('[data-filtro="slot"]', ficha()) && !q1('[data-filtro="rar"]', ficha()) && filas.length === 1 &&
-              filas[0].getAttribute('data-filtro') === 'el' && mesmo(textos(els), ['Todos', 'Fogo', 'Água', 'Terra', 'Ar', 'Neutro']) &&
-              els.slice(1).every(function (b) { return b.classList.contains('ico-cor') && !!b.style.getPropertyValue('--ec'); }),
-              textos(els).join(','));
+      escolhe('.mc-sel-cat', 'pedras');
+      return ate(function () { return valorDe('.mc-sel-cat') === 'pedras'; }).then(function (ok) {
+        check('local · Pedras: sem espaço nem raridade; só o seletor do elemento (Todos · Fogo · Água · Terra · Ar · Neutro)',
+              ok && !q1('[data-filtro="slot"]', ficha()) && !q1('[data-filtro="rar"]', ficha()) && !!q1('[data-filtro="el"]', ficha()) &&
+              mesmo(textosOp('.inv2-sel-elem'), ['Todos os elementos', 'Fogo', 'Água', 'Terra', 'Ar', 'Neutro']),
+              textosOp('.inv2-sel-elem').join(','));
         check('local · Pedras: a busca diz que procura pedra', q1('input.hub-input', ficha()).placeholder === 'buscar pedra por nome...');
         var l = linhaDa('stone-tear');
         check('local · Pedras: o lote do outro vendedor com o tamanho, quem vende, o preço e o preço por pedra; nenhuma peça',
@@ -363,12 +366,12 @@
               txt(q1('.ms-prog', l)) === 'de Beltrano' && txt(q1('.mc-preco', l)) === '40v4v cada' && !!botaoTexto(/^Comprar$/, l),
               txt(l));
         check('local · Pedras: a linha da pedra leva a cor do elemento (--ec)', !!l && !!l.style.getPropertyValue('--ec'));
-        toca('.mc-filtros [data-el="fogo"]');
-        return ate(function () { var b = q1('.mc-filtros [data-el="fogo"]', ficha()); return b && b.classList.contains('is-on'); });
+        escolhe('.inv2-sel-elem', 'fogo');
+        return ate(function () { return valorDe('.inv2-sel-elem') === 'fogo'; });
       }).then(function () {
         check('local · Pedras · Fogo: o lote de água some, e a frase diz que é o filtro',
               linhasPedra().length === 0 && /Nenhum lote com esses filtros/.test(ficha().textContent));
-        toca('.mc-filtros [data-el="todos"]');
+        escolhe('.inv2-sel-elem', 'todos');
         return ate(function () { return linhasPedra().length === 1; });
       }).then(function () {
         var busca = q1('input.hub-input', ficha());
@@ -451,16 +454,16 @@
       }).then(function (ok) {
         check('local · a ficha redesenha com o estoque novo e lembra o lote escolhido (10)',
               ok && loteAceso(linhaDa('stone-ember')) === '10');
-        toca('.mc-filtros [data-el="fogo"]');
+        escolhe('.inv2-sel-elem', 'fogo');
         return ate(function () { return qa('.mc-pedra-venda', ficha()).length === 1; });
       }).then(function (ok) {
         var s1 = qa('.mc-pedra-venda', ficha()).map(function (l) { return l.getAttribute('data-pedra'); });
-        toca('.mc-filtros [data-el="neutro"]');
-        return ate(function () { var b = q1('.mc-filtros [data-el="neutro"]', ficha()); return b && b.classList.contains('is-on'); }).then(function () {
+        escolhe('.inv2-sel-elem', 'neutro');
+        return ate(function () { return valorDe('.inv2-sel-elem') === 'neutro'; }).then(function () {
           var s2 = qa('.mc-pedra-venda', ficha()).map(function (l) { return l.getAttribute('data-pedra'); });
           check('local · Vender › Pedras por elemento: Fogo = a Brasa; Neutro = a Lasca, sem a Âncora',
                 ok && mesmo(s1, ['stone-ember']) && mesmo(s2, ['stone-slate']), s1.join(',') + ' | ' + s2.join(','));
-          toca('.mc-filtros [data-el="todos"]');
+          escolhe('.inv2-sel-elem', 'todos');
           return ate(function () { return !!linhaDa('stone-anchor'); });
         });
       }).then(function (ok) {
@@ -474,13 +477,12 @@
 
     // ---- 5) LOCAL · Vender em Equipamentos: o saco de sempre, sem pedra
     p(function () {
-      toca('.mc-cats [data-cat="equip"]');
-      return ate(function () { var b = q1('.mc-cats [data-cat="equip"]', ficha()); return b && b.classList.contains('is-on'); }).then(function (ok) {
-        var filas = qa('.mc-filtros', ficha());
-        check('local · Vender › Equipamentos: as peças do saco, nenhuma pedra, e a primeira .mc-filtros é a do espaço',
-              ok && linhas().length === SACO.length && linhasPedra().length === 0 && filas.length === 2 &&
-              filas[0].getAttribute('data-filtro') === 'slot' && !!botaoTexto(/^Punho$/, filas[0]), linhas().length + ' linhas');
-        toca('.mc-cats [data-cat="pedras"]');
+      escolhe('.mc-sel-cat', 'equip');
+      return ate(function () { return valorDe('.mc-sel-cat') === 'equip'; }).then(function (ok) {
+        check('local · Vender › Equipamentos: as peças do saco, nenhuma pedra, e os seletores de espaço e raridade',
+              ok && linhas().length === SACO.length && linhasPedra().length === 0 && !!q1('[data-filtro="slot"]', ficha()) &&
+              !!q1('[data-filtro="rar"]', ficha()) && !q1('[data-filtro="ordem"]', ficha()), linhas().length + ' linhas');
+        escolhe('.mc-sel-cat', 'pedras');
         return ate(function () { return qa('.mc-pedra-venda', ficha()).length > 0; });
       });
     });
@@ -514,19 +516,18 @@
       UI.closeSheet();
       UI.openSheet('mercado');
       toca('.mc-abas [data-aba="comprar"]');
-      return ate(function () { return qa('.mc-filtros', ficha()).length === 2 && linhas().length > 0; }).then(function (ok) {
+      return ate(function () { return !!q1('.mc-sel-cat', ficha()) && cels().length > 0; }).then(function (ok) {
         var abas = qa('.mc-abas button', ficha());
-        var filas = qa('.mc-filtros', ficha());
         check('entre contas · Comprar abre em Equipamentos (a categoria é do balcão entre contas, à parte)',
-              ok && abas.length === 5 && q1('.mc-cats [data-cat="equip"]', ficha()).classList.contains('is-on'));
-        check('entre contas · a primeira .mc-filtros é a do tipo, com /^Punho$/',
-              filas[0].getAttribute('data-filtro') === 'slot' && txt(q1('.mc-filtro-rot', filas[0])) === 'Tipo' &&
-              !!botaoTexto(/^Punho$/, filas[0]));
-        check('entre contas · Equipamentos: as duas peças; a pedra que veio em `itens` NÃO aparece',
-              linhas().length === 2 && linhasPedra().length === 0 && ficha().textContent.indexOf(pedraNome('stone-ember')) < 0 &&
-              /2 itens/.test(ficha().textContent), linhas().length + ' linhas');
+              ok && abas.length === 5 && valorDe('.mc-sel-cat') === 'equip');
+        check('entre contas · os seletores de espaço (com Punho) e de raridade',
+              !!q1('[data-filtro="slot"]', ficha()) && textosOp('.inv2-sel-espaco').indexOf('Punho') >= 0 && !!q1('[data-filtro="rar"]', ficha()));
+        // 08/10 à noite: as peças são CÉLULAS da grade (só ícones); a pedra que veio em `itens` não entra
+        check('entre contas · Equipamentos: as duas peças na grade; a pedra que veio em `itens` NÃO aparece',
+              cels().length === 2 && linhasPedra().length === 0 && ficha().textContent.indexOf(pedraNome('stone-ember')) < 0 &&
+              /2 itens/.test(ficha().textContent), cels().length + ' células');
         var abas0 = q1('.mc-abas', ficha());
-        toca('.mc-cats [data-cat="pedras"]');
+        escolhe('.mc-sel-cat', 'pedras');
         var ids = linhasPedra().map(function (l) { return l.getAttribute('data-pedra'); }).sort();
         check('entre contas · Pedras: uma linha por pedra do resumo.pedras, sem peça, SEM pedir o resumo de novo',
               chamou('resumo').length === 1 && q1('.mc-abas', ficha()) === abas0 &&
@@ -535,18 +536,17 @@
         check('entre contas · a linha da pedra: lotes, pedras somadas, desde X e o preço por pedra, e Ver lotes',
               /2 lotes · 60 pedras/.test(txt(le)) && txt(q1('.mc-preco', le)) === 'desde 50v5v cada' &&
               !!botaoTexto(/^Ver lotes$/, le) && /\(1 seu\)/.test(txt(lt)), txt(le));
-        var filas2 = qa('.mc-filtros', ficha());
-        check('entre contas · Pedras: a fileira do elemento é a única .mc-filtros',
-              filas2.length === 1 && filas2[0].getAttribute('data-filtro') === 'el');
-        var bNeutro = q1('.mc-filtros [data-el="neutro"]', ficha());
-        bNeutro.click();
+        check('entre contas · Pedras: o seletor do elemento é o único filtro',
+              !!q1('[data-filtro="el"]', ficha()) && !q1('[data-filtro="slot"]', ficha()) && !q1('[data-filtro="rar"]', ficha()));
+        var selNeutro = q1('.inv2-sel-elem', ficha());
+        escolhe('.inv2-sel-elem', 'neutro');
         var neutro = linhasPedra().length;
-        check('entre contas · Neutro: a Âncora (elemento forja) NÃO entra; o chip acende no lugar',
+        check('entre contas · Neutro: a Âncora (elemento forja) NÃO entra; o seletor filtra no lugar (sem redesenhar)',
               neutro === 0 && /Nenhuma pedra com esses filtros/.test(ficha().textContent) &&
-              bNeutro.classList.contains('is-on') && document.body.contains(bNeutro));
-        toca('.mc-filtros [data-el="agua"]');
+              selNeutro.value === 'neutro' && document.body.contains(selNeutro));
+        escolhe('.inv2-sel-elem', 'agua');
         var agua = linhasPedra().map(function (l) { return l.getAttribute('data-pedra'); });
-        toca('.mc-filtros [data-el="todos"]');
+        escolhe('.inv2-sel-elem', 'todos');
         var busca = q1('input.hub-input', ficha());
         busca.value = 'ancora'; busca.dispatchEvent(new Event('input'));
         var anc = linhasPedra().map(function (l) { return l.getAttribute('data-pedra'); });
@@ -560,11 +560,13 @@
 
     // ---- 8) ENTRE CONTAS · Ver lotes → Comprar por X (sem olhar o saco) e Fazer oferta
     p(function () {
+      // 08/10 à noite (o mercadinho limpo): os lotes abrem na coluna da DIREITA, com as pedras ainda à esquerda
+      function lotes() { return qa('.mc2-dir .mc-linha.mc-pedra', ficha()); }
       toca(botaoTexto(/^Ver lotes$/, linhaDa('stone-ember')));
-      return ate(function () { return /Todas as pedras/.test(ficha().textContent) && linhasPedra().length === 2; }).then(function (ok) {
+      return ate(function () { return /Todas as pedras/.test(ficha().textContent) && lotes().length === 2; }).then(function (ok) {
         var it = ultima('item');
         check('entre contas · Ver lotes pede o item pelo id da PEDRA', ok && it && it[1] === 'stone-ember', JSON.stringify(it));
-        var ls = linhasPedra();
+        var ls = lotes();
         check('entre contas · cada lote: "Lote de N", quem vende, o preço e o preço por pedra',
               ls[0].getAttribute('data-lote') === '10' && txt(q1('.ms-nome', ls[0])) === 'Lote de 10' &&
               txt(q1('.ms-prog', ls[0])) === 'vende Beltrano' && txt(q1('.mc-preco', ls[0])) === '50v5v cada' &&
@@ -583,9 +585,9 @@
         check('entre contas · Comprar por 50 com o saco CHEIO chama comprar(902) e avisa do lote',
               ok && c && c[1] === 902 &&
               toastTxt() === 'Comprado: lote de 10 × Brasa Coagulada por 50 vinténs — as pedras já estão no estoque.', toastTxt());
-        return ate(function () { return linhasPedra().length === 2 && !!botaoTexto(/^Fazer oferta$/, linhasPedra()[1]); });
+        return ate(function () { return lotes().length === 2 && !!botaoTexto(/^Fazer oferta$/, lotes()[1]); });
       }).then(function () {
-        var l50 = linhasPedra()[1];
+        var l50 = lotes()[1];
         var fechados = qa('.mc-oferta', ficha()).every(function (f) { return f.hidden && getComputedStyle(f).display === 'none'; });
         toca(botaoTexto(/^Fazer oferta$/, l50));
         var forms = qa('.mc-oferta', ficha()).filter(function (f) { return !f.hidden; });
@@ -606,7 +608,7 @@
       toca('.mc-abas [data-aba="vender"]');
       return ate(function () { return qa('.mc-pedra-venda', ficha()).length > 0; }).then(function (ok) {
         check('entre contas · Vender abre em Pedras (a categoria ficou) com a mesma linha do balcão local',
-              ok && q1('.mc-cats [data-cat="pedras"]', ficha()).classList.contains('is-on') && !!linhaDa('stone-ember') &&
+              ok && valorDe('.mc-sel-cat') === 'pedras' && !!linhaDa('stone-ember') &&
               mesmo(textos(lotesDe(linhaDa('stone-ember'))), ['1', '10', '50', '100']));
         var le = linhaDa('stone-ember');
         toca('.mc-lote[data-lote="10"]', le);
@@ -705,12 +707,11 @@
       UI.closeSheet();
       UI.openSheet('mercado');
       toca('.mc-abas [data-aba="comprar"]');
-      return ate(function () { return !!q1('.mc-cats', ficha()) && linhas().length > 0; }).then(function () {
-        toca('.mc-cats [data-cat="equip"]');
-        var filas = qa('.mc-filtros', ficha());
-        check('entre contas · de volta a Equipamentos: a primeira .mc-filtros é a do tipo com /^Punho$/, sem pedra',
-              filas.length === 2 && filas[0].getAttribute('data-filtro') === 'slot' && !!botaoTexto(/^Punho$/, filas[0]) &&
-              linhasPedra().length === 0 && linhas().length === 2);
+      return ate(function () { return !!q1('.mc-sel-cat', ficha()) && cels().length > 0; }).then(function () {
+        escolhe('.mc-sel-cat', 'equip');
+        check('entre contas · de volta a Equipamentos: os seletores de espaço e raridade, a grade com as duas peças, sem pedra',
+              !!q1('[data-filtro="slot"]', ficha()) && !!q1('[data-filtro="rar"]', ficha()) &&
+              linhasPedra().length === 0 && cels().length === 2);
         desligaSrv();
         UI.closeSheet();
       });
