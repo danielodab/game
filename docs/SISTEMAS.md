@@ -105,7 +105,7 @@ O que "obstáculos atrapalham" quer dizer no motor, medido em **todas** as salas
   dois heróis, como o motor já permitia ao jogador.
 
 O juiz refaz a sala com esta mesma função, então mudar a visão muda o fim de
-salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **7**.
+salas já jogadas: por isso existe `Engine.VERSAO_REGRAS` (docs/SEGURANCA.md §4.1). Hoje é **10** (08/10 à noite, atacar a casa vazia — §9-A.16; a lista das subidas está no cabeçalho do engine.js).
 A 6 foi uma subida só, na junção de 03/10, para as três frentes que mudaram o fim de uma sala: o
 equilíbrio (docs/EQUILIBRIO.md), o chão do Poço e os Colossos (§6) e o corpo grande com o Eco
 Primordial (§6-B). A 7 é a do Santuário dos Elementos (§6-C): o juiz passou a carregar o calabouço
