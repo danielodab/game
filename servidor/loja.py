@@ -476,6 +476,19 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
      'nome': '10 Insígnias de Fundação',
      'descricao': 'Dez Insígnias de Fundação, as que só os chefes derrubam: o bastante para fundar uma guilda.',
      'preco': 225, 'moeda': 'barras', 'limite': None},
+    # 08/10 à noite (o dono: "pergaminho para renomear guilda e outro para alterar brasão, vendidos somente na
+    # loja do site"): tipo 'guilda' — nasce 'entregue' como a aura (não põe nada no save; a posse é o pedido),
+    # e quem o GASTA é o líder, na ficha da guilda (servidor/guilda.py: renomear e brasao, um pedido por uso)
+    {'sku': 'pergaminho-guilda-nome', 'secao': 'guilda', 'tipo': 'guilda', 'alvo': 'nome', 'qtd': 1,
+     'nome': 'Pergaminho do Novo Nome',
+     'descricao': ('Rebatiza a sua guilda — vale uma troca de nome, feita pelo líder na ficha da guilda, dentro '
+                   'da Sede. O nome novo segue a mesma lei dos nomes.'),
+     'preco': 150, 'moeda': 'barras', 'limite': None},
+    {'sku': 'pergaminho-guilda-brasao', 'secao': 'guilda', 'tipo': 'guilda', 'alvo': 'brasao', 'qtd': 1,
+     'nome': 'Pergaminho do Brasão',
+     'descricao': ('Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha '
+                   'da guilda dentro da Sede: forma, campo, símbolo e cores.'),
+     'preco': 100, 'moeda': 'barras', 'limite': None},
     # a janela da Reescrita é regra de desenho (um caminho por mês), não freio de preço: fica
     {'sku': 'pergaminho-elemento', 'secao': 'pergaminhos', 'tipo': 'pergaminho', 'alvo': 'elemento', 'qtd': 1,
      'nome': 'Pergaminho da Reescrita',
@@ -1279,7 +1292,7 @@ class LojaMixin:
         """Dentro da _escrita: a linha do pedido. A AURA nasce 'entregue' (04/10): ela não põe nada no save
         do jogo — a posse é o próprio pedido (_auras) —, então não há por que esperar o jogo abrir nem
         ocupar uma das vagas de pedido aberto. Tudo o mais nasce 'pendente', como sempre."""
-        pronto = entrega.get('tipo') == 'aura'
+        pronto = entrega.get('tipo') in ('aura', 'guilda')      # 08/10 à noite: o pergaminho da guilda também
         cur = self.con.execute(
             "INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em, fechado_em) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

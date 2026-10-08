@@ -2831,5 +2831,16 @@ JOGO.I18n.registra('en', { textos: {
   // ---- 08/10: a moldura do Mestre
   "do Mestre": "of the Master",
   // ---- 08/10: sair da conta pelo menu
-  "Sem conta do site para sair.": "No site account to sign out of."
+  "Sem conta do site para sair.": "No site account to sign out of.",
+  // ---- 08/10 à noite: Nome e brasão — os pergaminhos da guilda
+  "só com a guilda no servidor": "only with the guild on the server",
+  "Nome e brasão": "Name and crest",
+  "Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um. Eles se vendem só na <a class=\"char-aura-link\" target=\"_blank\" rel=\"noopener\">loja do site</a>, na seção Guilda.": "Scroll of the New Name: <b>{a}</b> · Scroll of the Crest: <b>{b}</b>. Each change spends one. They are sold only in the <a class=\"char-aura-link\" target=\"_blank\" rel=\"noopener\">site shop</a>, under Guild.",
+  "Renomear a guilda": "Rename the guild",
+  "nome novo da guilda": "new guild name",
+  "Trocar o nome (gasta 1 pergaminho)": "Change the name (spends 1 scroll)",
+  "A guilda agora se chama {a}.": "The guild is now called {a}.",
+  "Trocar o brasão": "Change the crest",
+  "Trocar o brasão (gasta 1 pergaminho)": "Change the crest (spends 1 scroll)",
+  "O brasão da {a} mudou.": "The crest of {a} changed."
 } });

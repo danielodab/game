@@ -117,6 +117,7 @@
                 'premio-eco': 1,     // 02/10: o prêmio da semana do Eco Primordial
                 pacote: 1, aura: 1,     // 04/10: o Pacote de Boas-Vindas e a aura da praça
                 moldura: 1,             // 08/10: a moldura premium da plaquinha
+                guilda: 1,              // 08/10 à noite: os pergaminhos da guilda (posse = pedido; o líder gasta na ficha)
                 peca: 1 };              // 04/10: a peça de equipamento, que vai para o banco
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // o gêmeo de loja.AURAS (servidor); 08/10: + três

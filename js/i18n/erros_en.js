@@ -661,5 +661,18 @@ JOGO.I18n.registra('en', { erros: {
   "Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double emerald-green border with diamonds at the corners, over a forest background. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize.",
   "Filete violeta duplo sobre fundo quase preto, com losangos nas quinas — a mais escura. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double violet border over a near-black background, with diamonds at the corners — the darkest one. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize.",
   // ---- 08/10: a moldura do Mestre (loja.py)
-  "Moldura do Mestre": "Master's Frame"
+  "Moldura do Mestre": "Master's Frame",
+  // ---- 08/10 à noite: os pergaminhos da guilda (loja.py, guilda.py)
+  "sem Pergaminho do Novo Nome: ele se vende na loja do site, na seção Guilda": "no Scroll of the New Name: it is sold in the site shop, under Guild",
+  "sem Pergaminho do Brasão: ele se vende na loja do site, na seção Guilda": "no Scroll of the Crest: it is sold in the site shop, under Guild",
+  "você não tem guilda": "you have no guild",
+  "diga um brasão": "give a crest",
+  "a guilda já se chama assim": "the guild is already called that",
+  "o brasão já é esse": "that is already the crest",
+  "só o líder renomeia a guilda": "only the leader renames the guild",
+  "só o líder troca o brasão": "only the leader changes the crest",
+  "Pergaminho do Novo Nome": "Scroll of the New Name",
+  "Pergaminho do Brasão": "Scroll of the Crest",
+  "Rebatiza a sua guilda — vale uma troca de nome, feita pelo líder na ficha da guilda, dentro da Sede. O nome novo segue a mesma lei dos nomes.": "Renames your guild — good for one name change, done by the leader in the guild panel, inside the Hall. The new name follows the same law of names.",
+  "Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha da guilda dentro da Sede: forma, campo, símbolo e cores.": "Changes your guild's crest — good for one change, done by the leader in the crest workshop, in the guild panel inside the Hall: shape, field, symbol and colors."
 } });

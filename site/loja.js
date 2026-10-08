@@ -634,6 +634,10 @@
     if (it.tipo === 'pergaminho') {
       return '<div class="arte-produto arte-pergaminho"><span class="glifo">' + (it.alvo === 'elemento' ? '⟲' : '✦') + '</span></div>';
     }
+    // 08/10 à noite: os pergaminhos da guilda (o nome e o brasão)
+    if (it.tipo === 'guilda') {
+      return '<div class="arte-produto arte-pergaminho"><span class="glifo">' + (it.alvo === 'brasao' ? '⛊' : '✎') + '</span></div>';
+    }
     // 13/09: as trocas — moedas saindo das barras, e a barra que os vinténs compram
     if (it.tipo === 'vintens') {
       return '<div class="arte-produto arte-vintens"><span class="moedas"><span class="moeda"></span><span class="moeda"></span>' +

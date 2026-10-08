@@ -2831,5 +2831,16 @@ JOGO.I18n.registra('es', { textos: {
   // ---- 08/10: a moldura do Mestre
   "do Mestre": "del Maestro",
   // ---- 08/10: sair da conta pelo menu
-  "Sem conta do site para sair.": "No hay cuenta del sitio de la que salir."
+  "Sem conta do site para sair.": "No hay cuenta del sitio de la que salir.",
+  // ---- 08/10 à noite: Nome e brasão — os pergaminhos da guilda
+  "só com a guilda no servidor": "solo con el gremio en el servidor",
+  "Nome e brasão": "Nombre y blasón",
+  "Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um. Eles se vendem só na <a class=\"char-aura-link\" target=\"_blank\" rel=\"noopener\">loja do site</a>, na seção Guilda.": "Pergamino del Nuevo Nombre: <b>{a}</b> · Pergamino del Blasón: <b>{b}</b>. Cada cambio gasta uno. Se venden solo en la <a class=\"char-aura-link\" target=\"_blank\" rel=\"noopener\">tienda del sitio</a>, en la sección Gremio.",
+  "Renomear a guilda": "Renombrar el gremio",
+  "nome novo da guilda": "nombre nuevo del gremio",
+  "Trocar o nome (gasta 1 pergaminho)": "Cambiar el nombre (gasta 1 pergamino)",
+  "A guilda agora se chama {a}.": "El gremio ahora se llama {a}.",
+  "Trocar o brasão": "Cambiar el blasón",
+  "Trocar o brasão (gasta 1 pergaminho)": "Cambiar el blasón (gasta 1 pergamino)",
+  "O brasão da {a} mudou.": "El blasón de {a} cambió."
 } });

@@ -270,6 +270,19 @@ CREATE TABLE IF NOT EXISTS guildas_antigas(
   emblema     TEXT,
   trazida_em  INTEGER
 );
+-- 08/10 à noite: os PERGAMINHOS DA GUILDA (loja.py, tipo 'guilda': Novo Nome e Brasão), vendidos só na loja do
+-- site. A posse é o pedido 'entregue'; cada USO consome um pedido (uma linha aqui, única por pedido). A guilda
+-- em que foi usado fica como número solto, sem chave: a faxina de uma guilda desfeita não pode devolver
+-- o pergaminho gasto (a prova `orfas_da_guilda` varre toda referência a guildas)
+CREATE TABLE IF NOT EXISTS guilda_pergaminhos_usados(
+  id          INTEGER PRIMARY KEY,
+  pedido_id   INTEGER NOT NULL UNIQUE REFERENCES loja_pedidos(id),
+  conta_id    INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  tipo        TEXT NOT NULL CHECK (tipo IN ('nome', 'brasao')),
+  onde        INTEGER NOT NULL,
+  antes       TEXT,
+  usado_em    INTEGER NOT NULL
+);
 """
 ORDEM_CARGO = {'lider': 0, 'oficial': 1, 'membro': 2}
 RE_CONTROLE = re.compile(r'[\x00-\x09\x0b-\x1f\x7f]')
@@ -407,7 +420,85 @@ class GuildaMixin:
             'pedidos': [{'id': p['conta_id'], 'nome': nm.get(p['conta_id'], '?'), 'em': p['em'] * 1000} for p in ps],
             'souLider': g['lider_id'] == eu, 'meuCargo': cargo, 'eu': eu,
             'meta': meta_de(self.con, gid, agora()),      # 07/10: a meta da semana (salas vencidas pelos membros)
+            'pergaminhos': self._g_pergaminhos(eu),       # 08/10 à noite: os da loja do site que ESTA conta ainda tem
         }
+
+    # -- os pergaminhos da guilda (08/10 à noite) ---------------------------------------
+    PERGAMINHOS_GUILDA = {'nome': 'pergaminho-guilda-nome', 'brasao': 'pergaminho-guilda-brasao'}
+
+    def _g_pergaminhos_livres(self, cid, tipo):
+        """Os pedidos 'entregue' do pergaminho deste tipo que ainda não foram gastos, do mais antigo."""
+        return [r['id'] for r in self.con.execute(
+            "SELECT p.id FROM loja_pedidos p LEFT JOIN guilda_pergaminhos_usados u ON u.pedido_id = p.id "
+            "WHERE p.conta_id = ? AND p.sku = ? AND p.estado = 'entregue' AND u.pedido_id IS NULL ORDER BY p.id",
+            (cid, self.PERGAMINHOS_GUILDA[tipo]))]
+
+    def _g_pergaminhos(self, cid):
+        return {tipo: len(self._g_pergaminhos_livres(cid, tipo)) for tipo in self.PERGAMINHOS_GUILDA}
+
+    def _g_gasta_pergaminho(self, cid, tipo, gid, antes, t):
+        """Dentro da tranca: o pergaminho mais antigo deste tipo vira usado. Sem nenhum, recusa."""
+        livres = self._g_pergaminhos_livres(cid, tipo)
+        if not livres:
+            raise Recusa(409, 'sem Pergaminho do Novo Nome: ele se vende na loja do site, na seção Guilda' if tipo == 'nome'
+                         else 'sem Pergaminho do Brasão: ele se vende na loja do site, na seção Guilda')
+        self.con.execute("INSERT INTO guilda_pergaminhos_usados(pedido_id, conta_id, tipo, onde, antes, usado_em) "
+                         "VALUES (?, ?, ?, ?, ?, ?)", (livres[0], cid, tipo, gid, antes, t))
+        return livres[0]
+
+    def _g_minha_como_lider(self, cid, o_que):
+        g, _ = self._g_membro(cid)
+        if g is None:
+            raise Recusa(404, 'você não tem guilda')
+        if g['lider_id'] != cid:
+            raise Recusa(403, o_que)
+        return g
+
+    def guilda_renomear(self, conta, corpo):
+        """POST /api/guilda/renomear {nome}: o líder gasta um Pergaminho do Novo Nome. A mesma lei dos
+        nomes da fundação (reservado, único sem caixa)."""
+        nome = corpo.get('nome')
+        nome = nome.strip()[:NOME_MAX].strip() if isinstance(nome, str) else ''
+        if not nome:
+            raise Recusa(400, 'diga um nome')
+        if not conta['gm'] and nomes.reservado(nome):
+            raise Recusa(400, NOME_RESERVADO)
+        cid, t = conta['id'], agora()
+        with self.tranca:
+            g = self._g_minha_como_lider(cid, 'só o líder renomeia a guilda')
+            if g['nome'] == nome:
+                raise Recusa(409, 'a guilda já se chama assim')
+            outra = self.con.execute("SELECT id FROM guildas WHERE nome = ? AND id != ?", (nome, g['id'])).fetchone()
+            if outra is not None:
+                raise Recusa(409, 'já existe uma guilda com esse nome')
+            pid = self._g_gasta_pergaminho(cid, 'nome', g['id'], g['nome'], t)
+            try:
+                self.con.execute("UPDATE guildas SET nome = ? WHERE id = ?", (nome, g['id']))
+            except sqlite3.IntegrityError:
+                self.con.rollback()
+                raise Recusa(409, 'já existe uma guilda com esse nome')
+            self._evento(cid, 'guilda', {'acao': 'renomear', 'gid': g['id'], 'de': g['nome'], 'para': nome, 'pedido': pid})
+            foto = self._g_ficha(g['id'], cid)
+        log.info("guilda #%d renomeada por #%d: %r -> %r (pedido #%d)", g['id'], cid, g['nome'], nome, pid)
+        return 200, {'ok': True, 'guilda': foto}
+
+    def guilda_brasao(self, conta, corpo):
+        """POST /api/guilda/brasao {emblema}: o líder gasta um Pergaminho do Brasão."""
+        emblema = corpo.get('emblema')
+        emblema = emblema.strip()[:EMBLEMA_MAX] if isinstance(emblema, str) and emblema.strip() else ''
+        if not emblema:
+            raise Recusa(400, 'diga um brasão')
+        cid, t = conta['id'], agora()
+        with self.tranca:
+            g = self._g_minha_como_lider(cid, 'só o líder troca o brasão')
+            if g['emblema'] == emblema:
+                raise Recusa(409, 'o brasão já é esse')
+            pid = self._g_gasta_pergaminho(cid, 'brasao', g['id'], g['emblema'], t)
+            self.con.execute("UPDATE guildas SET emblema = ? WHERE id = ?", (emblema, g['id']))
+            self._evento(cid, 'guilda', {'acao': 'brasao', 'gid': g['id'], 'pedido': pid})
+            foto = self._g_ficha(g['id'], cid)
+        log.info("guilda #%d trocou o brasão por #%d (pedido #%d)", g['id'], cid, pid)
+        return 200, {'ok': True, 'guilda': foto}
 
     def _g_existe(self, gid):
         g = self.con.execute("SELECT * FROM guildas WHERE id = ?", (gid,)).fetchone()

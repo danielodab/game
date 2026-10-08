@@ -1716,6 +1716,11 @@ html.toque .tc-ajuda { top: calc(54px + var(--sa-t)); }
 .guilda-cab-t h3 { margin: 0; font: 700 17px var(--ui-serif); color: #f0ead8; }
 .guilda-cab-t h3 i { font-style: normal; font-size: 12px; color: var(--gold); }
 .guilda-sub { font-size: 11.5px; color: var(--dim); }
+/* 08/10 à noite: NOME E BRASÃO — os pergaminhos da loja do site, só o líder vê */
+.guilda-nb .inv-dica { margin: 6px 0 8px; }
+.guilda-nb-corpo .guilda-mural-acts { justify-content: flex-start; flex-wrap: wrap; }
+.guilda-nb-corpo .btn-mini[disabled] { opacity: .45; cursor: not-allowed; }
+.guilda-nb-corpo .hub-input { margin: 4px 0 6px; }
 /* 13/09: a MENSAGEM DA GUILDA (todo membro lê; líder e oficiais escrevem) */
 .guilda-mural { margin: 12px 0 6px; padding: 10px 12px; border: 1px solid var(--gold-dim);
                 border-radius: 10px; background: rgba(255,196,77,.05); }

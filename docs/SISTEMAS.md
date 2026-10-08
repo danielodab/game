@@ -1056,6 +1056,21 @@ DELE (`Agenda.agora`), comprime pelo estado dele e aceita a coroa da galeria só
 de antes a dão (com ou sem o topo da arena, que é do placar). O aviso saiu de vez: mesmo
 virando uma vez por temporada, o dono não o quer. Prova: `tests/juiz_economia.js` 52.
 
+## 9-A.8 Os pergaminhos da guilda (08/10 à noite)
+
+O dono: "meu sistema deve ter pergaminho para renomear guilda e outro para alterar
+brasão; itens vendidos somente na loja do site". Dois produtos na seção **Guilda** da
+loja do site (`loja.py`, tipo `guilda`): o **Pergaminho do Novo Nome** (150 barras) e o
+**Pergaminho do Brasão** (100). Nascem `entregue` como a aura — não põem nada no save; a
+posse é o pedido. Quem os gasta é o **líder**, na ficha da guilda dentro da Sede, no bloco
+"Nome e brasão" (`hud.js sheetGuilda`): o nome novo num campo (a mesma lei dos nomes da
+fundação, único sem caixa) e o brasão na oficina de sempre, aberta no brasão de hoje. Cada
+troca consome UM pedido (`guilda_pergaminhos_usados`, único por pedido; a guilda onde foi
+usado fica como número solto, sem chave — a faxina de uma guilda desfeita não devolve o
+pergaminho gasto). Rotas `/api/guilda/renomear` e `/api/guilda/brasao` (`guilda.py`); a
+ficha traz `pergaminhos: {nome, brasao}`. Recusas traduzidas em `erros_en/es.js`. Provas:
+`tests/guilda_api.py` (test_07b), `tests/loja_api.py` 31.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

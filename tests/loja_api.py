@@ -71,12 +71,13 @@ PRECOS = {'boas-vindas': 250,                 # 04/10: o Pacote de Boas-Vindas, 
           'pedras-neutro-50': 180,
           'fragmentos-10': 60, 'fragmentos-50': 270, 'fragmentos-100': 500,     # 08/10: os Fragmentos de Gema
           'insignia-1': 25, 'insignias-10': 225,
+          'pergaminho-guilda-nome': 150, 'pergaminho-guilda-brasao': 100,     # 08/10 à noite: os pergaminhos da guilda
           'pergaminho-elemento': 250,
           'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 250,     # 04/10
           'aura-sombra': 250, 'aura-gelo': 250, 'aura-ouro': 400,                                        # 08/10: as três novas
           'moldura-ouro': 180, 'moldura-rubi': 180, 'moldura-esmeralda': 180, 'moldura-obsidiana': 300}  # 08/10: as molduras
 SECOES = (['boas-vindas'] + ['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 7 + ['bonus'] * 3 + ['pedras'] * 10
-          + ['gema'] * 3 + ['guilda'] * 2 + ['pergaminhos'] + ['aparencia'] * 12)
+          + ['gema'] * 3 + ['guilda'] * 4 + ['pergaminhos'] + ['aparencia'] * 12)
 GRUPOS = {'pergaminho-elemento', 'classe-sumo', 'classe-curandeiro',          # 08/10: as comuns também
           'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro', 'classe-minotauro',
           'boas-vindas', 'aura-fogo', 'aura-agua', 'aura-terra', 'aura-ar', 'aura-neutra',    # 04/10: um por conta
@@ -248,7 +249,7 @@ class ProvaDaLoja(unittest.TestCase):
         for i in itens:
             self.assertTrue(isinstance(i['preco'], int) and i['preco'] > 0, i)
             self.assertTrue(i['nome'] and i['descricao'], i)
-            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho', 'aura', 'pacote', 'moldura'))
+            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho', 'aura', 'pacote', 'moldura', 'guilda'))
             if i['limite'] is not None:
                 self.assertEqual(set(i['limite']), {'grupo', 'max', 'dias'})
         # só a Reescrita tem janela; as classes, compra única; o resto, nenhum (o preço é o freio)

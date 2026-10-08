@@ -377,6 +377,8 @@ ROTAS = {
     ('POST', '/api/guilda/cargo'):            ('guilda_cargo', True),
     ('POST', '/api/guilda/dizimo'):           ('guilda_dizimo', True),
     ('POST', '/api/guilda/mural'):            ('guilda_mural', True),     # 13/09: a mensagem da guilda
+    ('POST', '/api/guilda/renomear'):         ('guilda_renomear', True),  # 08/10 à noite: o Pergaminho do Novo Nome
+    ('POST', '/api/guilda/brasao'):           ('guilda_brasao', True),    # 08/10 à noite: o Pergaminho do Brasão
     # 13/09: amigos e inimigos (amigos.py); o online e a batalha vêm do relé
     ('GET',  '/api/amigos'):                  ('amigos_lista', True),
     ('POST', '/api/amigos/definir'):          ('amigos_definir', True),

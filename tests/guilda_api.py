@@ -12,6 +12,7 @@ fila de pedidos, os cargos, o dízimo, a oferenda, o treino, o cofre e o bônus,
 o banco (depósito, empréstimo, devolução e retirada) com a série GUARDADA sem
 ser varrida pelo save do dono, e as regras de sair. As contas são sintéticas.
 """
+import json
 import os
 import shutil
 import sqlite3
@@ -453,6 +454,49 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertFalse(any(x['id'] == gid for x in self.g(a, 'lista')['guildas']))
         self.g(b, 'sair', {}, 409)
 
+
+    def test_07b_os_pergaminhos_da_loja_rebatizam_e_trocam_o_brasao(self):
+        """08/10 à noite: Pergaminho do Novo Nome e Pergaminho do Brasão — pedidos 'entregue' da loja do
+        site; só o líder gasta, um pedido por troca; sem pergaminho, recusa com o caminho da loja."""
+        lider, membro = self.novo('Lider'), self.novo('Membro')
+        gid = self.funda(lider)
+        self.g(membro, 'entrar', {'gid': gid})
+        ficha = self.g(lider, 'minha')['guilda']
+        self.assertEqual(ficha['pergaminhos'], {'nome': 0, 'brasao': 0})
+        r = self.g(lider, 'renomear', {'nome': self.nome('Outra')}, 409)
+        self.assertIn('loja do site', r['erro'])
+        # dois pedidos entregues (o que a compra no site cria), um de cada
+        cid = self.sql("SELECT id FROM contas ORDER BY id DESC LIMIT 2")[1]['id']
+        for sku, ent in (('pergaminho-guilda-nome', {'tipo': 'guilda', 'alvo': 'nome', 'qtd': 1}),
+                         ('pergaminho-guilda-brasao', {'tipo': 'guilda', 'alvo': 'brasao', 'qtd': 1})):
+            self.sql("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em, fechado_em) "
+                     "VALUES (?, ?, ?, ?, 'entregue', ?, 1, 1)", cid, sku, json.dumps(ent), 1, 'p-' + sku + str(cid))
+        self.assertEqual(self.g(lider, 'minha')['guilda']['pergaminhos'], {'nome': 1, 'brasao': 1})
+        # o membro não gasta o do líder nem o dele (não é líder)
+        self.g(membro, 'renomear', {'nome': self.nome('Outra')}, 403)
+        # a lei dos nomes e o nome repetido
+        self.g(lider, 'renomear', {'nome': 'STAFF'}, 400)
+        self.g(lider, 'renomear', {'nome': ficha['nome']}, 409)
+        outro = self.novo('Outro')
+        nome_do_outro = self.g(outro, 'criar', {'nome': self.nome('Guilda'), 'emblema': '⚔'})['guilda']['nome']
+        self.g(lider, 'renomear', {'nome': nome_do_outro.upper()}, 409)
+        self.assertEqual(self.g(lider, 'minha')['guilda']['pergaminhos']['nome'], 1, 'recusa não gasta')
+        novo = self.nome('Rebatizada')
+        r = self.g(lider, 'renomear', {'nome': novo})
+        self.assertEqual((r['guilda']['nome'], r['guilda']['pergaminhos']), (novo, {'nome': 0, 'brasao': 1}))
+        self.assertEqual(self.g(membro, 'minha')['guilda']['nome'], novo)
+        self.g(lider, 'renomear', {'nome': self.nome('DeNovo')}, 409)           # gasto: sem pergaminho
+        r = self.g(lider, 'brasao', {'emblema': 'v1|a|#112233|#445566|#778899|b|c'})
+        self.assertEqual((r['guilda']['emblema'], r['guilda']['pergaminhos']), ('v1|a|#112233|#445566|#778899|b|c', {'nome': 0, 'brasao': 0}))
+        self.g(lider, 'brasao', {'emblema': '⚑'}, 409)
+        usados = self.sql("SELECT tipo, onde, antes FROM guilda_pergaminhos_usados ORDER BY id")
+        self.assertEqual([(u['tipo'], u['onde']) for u in usados], [('nome', gid), ('brasao', gid)])
+        self.assertEqual(usados[0]['antes'], ficha['nome'])
+        # a guilda desfeita não devolve o pergaminho gasto (a tabela não cita a guilda por chave)
+        self.g(lider, 'sair', {})
+        self.g(membro, 'sair', {})
+        self.assertEqual(self.orfas_da_guilda(gid), {})
+        self.assertEqual(len(self.sql("SELECT id FROM guilda_pergaminhos_usados")), 2)
 
     def test_08_o_mestre_desfaz_a_guilda_inteira(self):
         """04/10 (dono: "exclua a guilda Game Over do jogo.. vou refazer para sair os bugs"). Só o Mestre;

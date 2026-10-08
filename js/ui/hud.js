@@ -11938,6 +11938,82 @@ var JOGO = (typeof window !== 'undefined')
         cab.appendChild(ct);
         caixa.appendChild(cab);
 
+        /* ---- NOME E BRASÃO (08/10 à noite, o dono: "pergaminho para renomear guilda e outro para alterar
+         * brasão, vendidos somente na loja do site"). Só o líder vê. Os pergaminhos são pedidos da loja
+         * (g.pergaminhos, contados pelo servidor); cada troca gasta um. Sem nenhum, o link da loja. */
+        if (g.souLider) {
+          var perg = g.pergaminhos || { nome: 0, brasao: 0 };
+          var blocoNB = el('div', 'guilda-mural guilda-nb');
+          var nbCab = el('div', 'guilda-mural-cab');
+          nbCab.appendChild(el('h3', 'bk-tit', tr('Nome e brasão')));
+          blocoNB.appendChild(nbCab);
+          var nbDica = el('p', 'inv-dica',
+            tr('Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um. Eles se vendem só na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Guilda.',
+               { a: perg.nome || 0, b: perg.brasao || 0 }));
+          var lkNB = nbDica.querySelector('a');
+          if (lkNB) lkNB.href = paginaLoja();
+          blocoNB.appendChild(nbDica);
+          var nbCorpo = el('div', 'guilda-nb-corpo');
+          blocoNB.appendChild(nbCorpo);
+          function depoisDaTroca(res, frase) {
+            if (!res.ok) { toast(res.erro || tr('não deu')); return; }
+            resumoGuilda = { nome: res.guilda.nome, emblema: res.guilda.emblema };
+            guildaSoube();
+            reanunciaPerfil();                       // a praça inteira vê o nome/brasão novo
+            if (JOGO.Hub && JOGO.Hub.nomeia) {
+              try { JOGO.Hub.nomeia(undefined, undefined, undefined, resumoGuilda); } catch (e) {}
+            }
+            toast(frase, 'good');
+            sheetGuilda();
+          }
+          function pintaNB() {
+            clear(nbCorpo);
+            var acts = el('div', 'guilda-mural-acts');
+            var bN = btn(tr('Renomear a guilda'), 'btn-mini btn-gold', function () {
+              clear(nbCorpo);
+              var inpN = document.createElement('input');
+              inpN.className = 'hub-input';
+              inpN.maxLength = 24;
+              inpN.placeholder = tr('nome novo da guilda');
+              inpN.value = g.nome;
+              inpN.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') bOk.click(); });
+              nbCorpo.appendChild(inpN);
+              var acts2 = el('div', 'guilda-mural-acts');
+              acts2.appendChild(btn(tr('Cancelar'), 'btn-mini btn-ghost', pintaNB));
+              var bOk = btn(tr('Trocar o nome (gasta 1 pergaminho)'), 'btn-mini btn-gold', function () {
+                Gd.renomear(inpN.value).then(function (res) {
+                  depoisDaTroca(res, res.ok ? tr('A guilda agora se chama {a}.', { a: esc(res.guilda.nome) }) : '');
+                });
+              });
+              acts2.appendChild(bOk);
+              nbCorpo.appendChild(acts2);
+              inpN.focus();
+            });
+            if (!(perg.nome > 0)) bN.disabled = true;
+            acts.appendChild(bN);
+            var bB = btn(tr('Trocar o brasão'), 'btn-mini btn-gold', function () {
+              clear(nbCorpo);
+              guildaEmblemaEscolhido = g.emblema;      // a oficina abre no brasão de hoje
+              var oficinaNB = el('div', 'brasao-ed');
+              nbCorpo.appendChild(oficinaNB);
+              pintaBrasaoEditor(oficinaNB);
+              var acts3 = el('div', 'guilda-mural-acts');
+              acts3.appendChild(btn(tr('Cancelar'), 'btn-mini btn-ghost', pintaNB));
+              acts3.appendChild(btn(tr('Trocar o brasão (gasta 1 pergaminho)'), 'btn-mini btn-gold', function () {
+                Gd.trocarBrasao(guildaEmblemaEscolhido).then(function (res) {
+                  depoisDaTroca(res, res.ok ? tr('O brasão da {a} mudou.', { a: esc(res.guilda.nome) }) : '');
+                });
+              }));
+              nbCorpo.appendChild(acts3);
+            });
+            if (!(perg.brasao > 0)) bB.disabled = true;
+            acts.appendChild(bB);
+            nbCorpo.appendChild(acts);
+          }
+          pintaNB();
+          caixa.appendChild(blocoNB);
+        }
+
         /* ---- A MENSAGEM DA GUILDA (13/09, dono: "uma caixa com uma mensagem
          * inicial/orientações para membros"). Todo membro lê; líder e oficiais
          * escrevem (o servidor confere). O editor abre no lugar do texto. */

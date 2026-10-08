@@ -661,5 +661,18 @@ JOGO.I18n.registra('es', { erros: {
   "Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete verde esmeralda doble con rombos en las esquinas, sobre fondo de selva. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar.",
   "Filete violeta duplo sobre fundo quase preto, com losangos nas quinas — a mais escura. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete violeta doble sobre fondo casi negro, con rombos en las esquinas — el más oscuro. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar.",
   // ---- 08/10: a moldura do Mestre (loja.py)
-  "Moldura do Mestre": "Marco del Maestro"
+  "Moldura do Mestre": "Marco del Maestro",
+  // ---- 08/10 à noite: os pergaminhos da guilda (loja.py, guilda.py)
+  "sem Pergaminho do Novo Nome: ele se vende na loja do site, na seção Guilda": "sin Pergamino del Nuevo Nombre: se vende en la tienda del sitio, en la sección Gremio",
+  "sem Pergaminho do Brasão: ele se vende na loja do site, na seção Guilda": "sin Pergamino del Blasón: se vende en la tienda del sitio, en la sección Gremio",
+  "você não tem guilda": "no tienes gremio",
+  "diga um brasão": "indica un blasón",
+  "a guilda já se chama assim": "el gremio ya se llama así",
+  "o brasão já é esse": "ese ya es el blasón",
+  "só o líder renomeia a guilda": "solo el líder renombra el gremio",
+  "só o líder troca o brasão": "solo el líder cambia el blasón",
+  "Pergaminho do Novo Nome": "Pergamino del Nuevo Nombre",
+  "Pergaminho do Brasão": "Pergamino del Blasón",
+  "Rebatiza a sua guilda — vale uma troca de nome, feita pelo líder na ficha da guilda, dentro da Sede. O nome novo segue a mesma lei dos nomes.": "Rebautiza tu gremio — vale un cambio de nombre, hecho por el líder en la ficha del gremio, dentro de la Sede. El nombre nuevo sigue la misma ley de los nombres.",
+  "Troca o brasão da sua guilda — vale uma troca, feita pelo líder na oficina do brasão, na ficha da guilda dentro da Sede: forma, campo, símbolo e cores.": "Cambia el blasón de tu gremio — vale un cambio, hecho por el líder en el taller del blasón, en la ficha del gremio dentro de la Sede: forma, campo, símbolo y colores."
 } });

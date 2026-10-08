@@ -807,6 +807,8 @@ var JOGO = (typeof window !== 'undefined')
   ['criar', 'minha', 'promover', 'rebaixar', 'definirPorta', 'pedirEntrada', 'aceitarPedido', 'recusarPedido',
    'definirDizimo', 'dizimoAtual', 'definirMural', 'doarXp', 'lista', 'entrar', 'sair', 'registraTreino', 'compraBonus',
    'bonusAtivo', 'bancoDepositar', 'bancoLista', 'bancoPegar', 'bancoDevolver'].forEach(function (k) { local[k] = G[k]; });
+  // 08/10 à noite: só no servidor (a guilda local, de antes, não tem pergaminho)
+  local.renomear = local.trocarBrasao = function () { return responde({ ok: false, erro: Tx('só com a guilda no servidor') }); };
   G._local = local;
   function peloServidor(nome, fn) {
     G[nome] = function () {
@@ -869,6 +871,17 @@ var JOGO = (typeof window !== 'undefined')
     return pede('/api/guilda/doar', { xp: n, origem: 'dizimo' }).then(function (r) { if (r.ok && ficha) ficha.xp = r.xp; return r; });
   });
   peloServidor('registraTreino', function () { return pede('/api/guilda/treino', {}); });
+  // 08/10 à noite: os pergaminhos da loja do site — o líder rebatiza a guilda ou troca o brasão (um pedido por uso)
+  peloServidor('renomear', function (nome) {
+    nome = String(nome || '').trim().slice(0, 24);
+    if (!nome) return responde({ ok: false, erro: Tx('diga um nome') });
+    var recusa = nomeDeEquipe(nome);
+    if (recusa) return responde({ ok: false, erro: recusa });
+    return pede('/api/guilda/renomear', { nome: nome });
+  });
+  peloServidor('trocarBrasao', function (emblema) {
+    return pede('/api/guilda/brasao', { emblema: String(emblema || '⚑').slice(0, 64) });
+  });
   peloServidor('compraBonus', function (tipo) { return pede('/api/guilda/bonus', { tipo: tipo }); });
   peloServidor('sair', function () {
     return pede('/api/guilda/sair', {}).then(function (r) { if (r.ok) guardaFicha(null); return r; });
