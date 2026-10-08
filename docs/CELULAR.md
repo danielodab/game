@@ -325,6 +325,16 @@ Os quatro arquivos do Capacitor (`vendor/capacitor/`) são carregados pelo
 `js/app_modelos.js` e o `js/core/compra_play.js` só são escritos pelo `index.html` dentro do aplicativo: a web
 não pede nenhum dos quatro.
 
+**08/10 — os AVISOS do aparelho.** Um sexto arquivo, `vendor/capacitor/local-notifications.js`
+(`@capacitor/local-notifications`), carregado pelo `js/core/notificacoes.js` na primeira abertura
+dentro do aplicativo. São lembretes LOCAIS, sem servidor e sem Firebase: o prêmio diário às 10h, a
+semana do Eco (segunda, 12h) e "três dias sem descer" (remarcado a cada abertura, só dispara se o
+jogador sumir). O Android 13+ pergunta a permissão na primeira vez; o jogador liga e desliga em
+Configurações → "Avisos do aparelho". É um plugin NATIVO: `npm install`, copiar o `dist/plugin.js`
+para `vendor/capacitor/local-notifications.js`, `npm run sync`, somar 1 ao `versionCode` e gerar um
+AAB novo (o `AndroidManifest` ganhou `POST_NOTIFICATIONS`). Um "push" de verdade (o servidor avisando
+"sua guilda está em guerra") pediria o Firebase — não existe. Prova: `node tests/notificacoes.js`.
+
 **06/10 — "Ganhar prêmios" (o anúncio premiado).** Um quinto arquivo, `vendor/capacitor/admob.js`, mora
 na mesma pasta mas **não** entra na lista do `js/mobile.js`: quem o busca é o
 `js/core/premio_anuncio.js`, e só quando o jogador ENTRA na área (Configurações → Ganhar prêmios). A

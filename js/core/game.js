@@ -2579,6 +2579,7 @@ var JOGO = (typeof window !== 'undefined')
   // sorteio a mais só existe COM evento: sem ele, a contagem de Math.random
   // (e portanto todo o resto da sala) é a de sempre.
   var pedrasComEvento = false;
+  Game._collectStones = function (u, m, p, f) { return collectStones(u, m, p, f); };   // prova (tests/gema.js)
   function collectStones(units, monsters, prog, fPedras) {
     var ganho = {}, i, algum = false;
     pedrasComEvento = false;
@@ -2621,6 +2622,33 @@ var JOGO = (typeof window !== 'undefined')
       if (taxa > 0 && Math.random() < taxa) {
         ganho[upCfg.guardStone || 'stone-anchor'] =
           (ganho[upCfg.guardStone || 'stone-anchor'] || 0) + 1;
+        algum = true;
+      }
+    }
+    /* 08/10: os FRAGMENTOS DE GEMA (DATA.gema.drop) — só nos SEIS PORTAIS (DATA.dungeons; o
+     * Poço, o Eco, o Santuário e o PvP ficam fora): o chefe deixa sempre, o comum às vezes, o
+     * elite um a mais. Sorteados DEPOIS de tudo o que já se sorteava, para não mexer no que
+     * vinha antes; o que vem depois (itens, selos) anda — Engine.VERSAO_REGRAS subiu com isto. */
+    var gcfg = (JOGO.DATA && JOGO.DATA.gema) || null, gdrop = gcfg && gcfg.drop;
+    var dgs = (JOGO.DATA && JOGO.DATA.dungeons) || [], portalComum = false;
+    for (var di = 0; di < dgs.length; di++) if (dgs[di] && dgs[di].id === Game.dungeonId) { portalComum = true; break; }
+    if (gcfg && gdrop && gcfg.fragmento && portalComum) {
+      for (i = 0; i < units.length; i++) {
+        var uf = units[i];
+        if (uf.side !== 'enemy' || uf.alive) continue;
+        var df = monsters[uf.defId];
+        if (!df) continue;
+        var frag = 0;
+        if (df.boss) {
+          var cMin = Math.max(0, Math.floor(num(gdrop.chefeMin, 2))), cMax = Math.max(cMin, Math.floor(num(gdrop.chefeMax, cMin)));
+          frag = cMin + Math.floor(Math.random() * (cMax - cMin + 1));
+        } else if (Math.random() < num(gdrop.chance, 0)) {
+          var fMin = Math.max(0, Math.floor(num(gdrop.min, 1))), fMax = Math.max(fMin, Math.floor(num(gdrop.max, fMin)));
+          frag = fMin + Math.floor(Math.random() * (fMax - fMin + 1));
+        }
+        if (uf.elite && JOGO.Elites) frag += 1;
+        if (frag <= 0) continue;
+        ganho[gcfg.fragmento] = (ganho[gcfg.fragmento] || 0) + frag;
         algum = true;
       }
     }

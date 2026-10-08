@@ -393,7 +393,10 @@ var JOGO = (typeof window !== 'undefined')
       q = inteiro(n);
       if (!q) return false;
     }
-    return !!P.addCards(classId, q);
+    if (!P.addCards(classId, q)) return false;
+    // 08/10: a estrela é manual — no "topo" o Mestre também as compra todas
+    if (n === 'topo' && P.subirEstrela) { var guarda = 0; while (guarda++ < 9 && P.subirEstrela(classId)) {} }
+    return true;
   };
   /* os pergaminhos da loja — 'xp' (Sabedoria) e 'elemento' (Reescrita) — até o
    * teto de cada um (DATA.pergaminhos.tetoInventario): entra só o que cabe.

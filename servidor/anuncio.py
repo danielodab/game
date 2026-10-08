@@ -7,9 +7,12 @@ A REGRA DO DONO: "as propagandas só devem aparecer SOMENTE se o usuário for ne
 que ser de livre e espontânea vontade." O jogador entra na área, escolhe o prêmio
 e toca em "Assistir anúncio". Só no aplicativo: na web nada disto é carregado.
 
-DOIS PRÊMIOS, cada um com o seu limite por CONTA e por dia de Brasília:
+TRÊS PRÊMIOS, cada um com o seu limite por CONTA e por dia de Brasília:
   - 'vintens': ANUNCIO_VINTENS por anúncio visto até o fim, ANUNCIO_MAX_DIA por dia;
-  - 'barras':  ANUNCIO_BARRAS barra de ouro por anúncio, ANUNCIO_MAX_DIA por dia.
+  - 'barras':  ANUNCIO_BARRAS barra de ouro por anúncio, ANUNCIO_MAX_DIA por dia;
+  - 'fragmentos' (08/10): ANUNCIO_FRAGMENTOS Fragmentos de Gema por anúncio, ANUNCIO_MAX_DIA por
+    dia — entram como um pedido de preço 0 da loja (entrega 'pedras'), como os vinténs. As tabelas
+    novas `propaganda_*_v2` (sem o CHECK fechado de tipo) guardam os bilhetes e prêmios dele.
 O limite de um não gasta o do outro. Fechou antes do fim: não ganha nem perde.
 
 QUEM DÁ O PRÊMIO É O SERVIDOR, e só com a palavra ASSINADA da Google (a
@@ -71,9 +74,13 @@ log = logging.getLogger("soterra.anuncio")
 # ---- os números do dono (06/10) ----
 ANUNCIO_VINTENS = 50             # vinténs por anúncio visto até o fim
 ANUNCIO_BARRAS = 1               # barras de ouro por anúncio ("barra de ouro deve ser mais difícil")
+ANUNCIO_FRAGMENTOS = 3           # 08/10: Fragmentos de Gema por anúncio ("cada 1 anúncio ganha 3, máximo 5 por dia")
 ANUNCIO_MAX_DIA = 5              # por conta, por dia de Brasília, de CADA tipo
-PREMIOS = {'vintens': ANUNCIO_VINTENS, 'barras': ANUNCIO_BARRAS}
-TIPOS = ('vintens', 'barras')
+PREMIOS = {'vintens': ANUNCIO_VINTENS, 'barras': ANUNCIO_BARRAS, 'fragmentos': ANUNCIO_FRAGMENTOS}
+TIPOS = ('vintens', 'barras', 'fragmentos')
+TIPOS_V1 = ('vintens', 'barras')         # os que moram nas tabelas de 06/10 (CHECK fechado)
+SKU_FRAGMENTOS = 'anuncio-fragmentos'    # o pedido de preço 0 dos fragmentos (loja.py dá o nome)
+FRAGMENTO_ID = 'stone-gem-frag'          # js/core/data/items.js, DATA.gema.fragmento
 
 BLOCO_PADRAO = 'ca-app-pub-4989579635131748/7206484209'    # o bloco premiado do dono (público)
 URL_CHAVES = 'https://www.gstatic.com/admob/reward/verifier-keys.json'
@@ -118,7 +125,36 @@ CREATE TABLE IF NOT EXISTS propaganda_premios(
   criado_em INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS propaganda_premios_dia ON propaganda_premios(conta_id, tipo, dia);
+-- 08/10: o terceiro prêmio (os Fragmentos de Gema) não cabe no CHECK das tabelas de cima, e tabela não se
+-- altera (o rolling update): estas duas, SEM o CHECK de tipo, guardam todo tipo que não seja dos dois primeiros
+CREATE TABLE IF NOT EXISTS propaganda_bilhetes_v2(
+  bilhete   TEXT PRIMARY KEY,
+  conta_id  INTEGER NOT NULL REFERENCES contas(id) ON DELETE CASCADE,
+  tipo      TEXT NOT NULL,
+  criado_em INTEGER NOT NULL,
+  usado_em  INTEGER
+);
+CREATE INDEX IF NOT EXISTS propaganda_bilhetes_v2_em ON propaganda_bilhetes_v2(criado_em);
+CREATE TABLE IF NOT EXISTS propaganda_premios_v2(
+  id        INTEGER PRIMARY KEY,
+  transacao TEXT NOT NULL UNIQUE,
+  conta_id  INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+  bilhete   TEXT NOT NULL,
+  tipo      TEXT NOT NULL,
+  qtd       INTEGER NOT NULL CHECK (qtd > 0),
+  dia       INTEGER NOT NULL,
+  chave     TEXT,
+  criado_em INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS propaganda_premios_v2_dia ON propaganda_premios_v2(conta_id, tipo, dia);
 """
+TABELAS_V1 = ('propaganda_bilhetes', 'propaganda_premios')
+TABELAS_V2 = ('propaganda_bilhetes_v2', 'propaganda_premios_v2')
+
+
+def tabelas_de(tipo):
+    """(bilhetes, prêmios) em que um tipo de prêmio mora."""
+    return TABELAS_V1 if tipo in TIPOS_V1 else TABELAS_V2
 
 
 def dia_de(t):
@@ -248,10 +284,11 @@ class AnuncioMixin:
     def _anuncio_hoje(self, cid, t):
         """Dentro da tranca: quantos prêmios de cada tipo a conta já ganhou no dia de Brasília de `t`."""
         hoje = {tipo: 0 for tipo in TIPOS}
-        for r in self.con.execute("SELECT tipo, COUNT(*) FROM propaganda_premios WHERE conta_id = ? AND dia = ? "
-                                  "GROUP BY tipo", (cid, dia_de(t))):
-            if r[0] in hoje:
-                hoje[r[0]] = r[1]
+        for _, premios in (TABELAS_V1, TABELAS_V2):
+            for r in self.con.execute("SELECT tipo, COUNT(*) FROM %s WHERE conta_id = ? AND dia = ? "
+                                      "GROUP BY tipo" % premios, (cid, dia_de(t))):
+                if r[0] in hoje:
+                    hoje[r[0]] = r[1]
         return hoje
 
     def _anuncio_estado(self, cid, t):
@@ -300,9 +337,10 @@ class AnuncioMixin:
             for chave, _ in chaves:
                 self._anota_limite(chave, t)
             bilhete = secrets.token_urlsafe(24)
-            self.con.execute("INSERT INTO propaganda_bilhetes(bilhete, conta_id, tipo, criado_em) VALUES (?, ?, ?, ?)",
+            self.con.execute("INSERT INTO %s(bilhete, conta_id, tipo, criado_em) VALUES (?, ?, ?, ?)" % tabelas_de(tipo)[0],
                              (bilhete, cid, tipo, t))
-            self.con.execute("DELETE FROM propaganda_bilhetes WHERE criado_em < ?", (t - BILHETES_GUARDA,))
+            for bilhetes, _ in (TABELAS_V1, TABELAS_V2):
+                self.con.execute("DELETE FROM %s WHERE criado_em < ?" % bilhetes, (t - BILHETES_GUARDA,))
         return 201, {'ok': True, 'bilhete': bilhete, 'conta': self._anuncio_conta(cid), 'tipo': tipo,
                      'qtd': PREMIOS[tipo], 'vale': BILHETE_VALE, 'bloco': an.bloco}
 
@@ -333,12 +371,18 @@ class AnuncioMixin:
             return nada('bilhete')
         t = agora()
         with self._escrita():
-            if self.con.execute("SELECT 1 FROM propaganda_premios WHERE transacao = ?", (transacao,)).fetchone():
-                return nada('repetido', calado=True)      # a Google repetindo o aviso: sem linha no log
-            b = self.con.execute("SELECT * FROM propaganda_bilhetes WHERE bilhete = ?", (bilhete,)).fetchone()
+            for _, premios in (TABELAS_V1, TABELAS_V2):
+                if self.con.execute("SELECT 1 FROM %s WHERE transacao = ?" % premios, (transacao,)).fetchone():
+                    return nada('repetido', calado=True)      # a Google repetindo o aviso: sem linha no log
+            b = None
+            for tab in (TABELAS_V1, TABELAS_V2):
+                b = self.con.execute("SELECT * FROM %s WHERE bilhete = ?" % tab[0], (bilhete,)).fetchone()
+                if b is not None:
+                    break
             if b is None:
                 return nada('bilhete')
             cid, tipo = b['conta_id'], b['tipo']
+            tab_bilhetes, tab_premios = tabelas_de(tipo)
             if not hmac.compare_digest(usuario, self._anuncio_conta(cid)):
                 return nada('outra-conta', cid)
             if b['usado_em'] is not None:
@@ -349,19 +393,26 @@ class AnuncioMixin:
             if dona is None or dona['banido'] or dona['gm']:
                 return nada('conta', cid)
             # o bilhete é gasto mesmo quando o limite barra: um bilhete, um anúncio
-            self.con.execute("UPDATE propaganda_bilhetes SET usado_em = ? WHERE bilhete = ?", (t, bilhete))
+            self.con.execute("UPDATE %s SET usado_em = ? WHERE bilhete = ?" % tab_bilhetes, (t, bilhete))
             if tipo not in PREMIOS or self._anuncio_hoje(cid, t)[tipo] >= ANUNCIO_MAX_DIA:
                 return nada('limite', cid)          # sair do `with` sem erro grava o bilhete gasto
             qtd = PREMIOS[tipo]
             pid = self.con.execute(
-                "INSERT INTO propaganda_premios(transacao, conta_id, bilhete, tipo, qtd, dia, chave, criado_em) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO %s(transacao, conta_id, bilhete, tipo, qtd, dia, chave, criado_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)" % tab_premios,
                 (transacao, cid, bilhete, tipo, qtd, dia_de(t), p.get('key_id'), t)).lastrowid
-            idem = 'anuncio-%d' % pid
+            idem = 'anuncio-%s%d' % ('' if tab_premios == TABELAS_V1[1] else 'v2-', pid)
             if tipo == 'barras':
                 # o MESMO caminho da loja: o movimento no extrato e o saldo, juntos (motivo 'presente' no
                 # banco, porque o CHECK da tabela não se altera; a `ref` é que diz que foi anúncio)
                 self.barras_move(cid, qtd, 'presente', '%s%d' % (REF_BARRAS, pid), idem, t)
+            elif tipo == 'fragmentos':
+                # 08/10: os Fragmentos de Gema — o pedido de preço 0 da loja com a entrega 'pedras' (como o
+                # resgate da trilha): o jogo o aplica e o juiz o confere; sem linha em loja_creditos
+                self.con.execute("INSERT INTO loja_pedidos(conta_id, sku, entrega, preco, estado, idem, criado_em) "
+                                 "VALUES (?, ?, ?, 0, 'pendente', ?, ?)",
+                                 (cid, SKU_FRAGMENTOS, json.dumps({'tipo': 'pedras', 'alvo': FRAGMENTO_ID, 'qtd': qtd}),
+                                  idem, t))
             else:
                 # o caminho do presente de vinténs: um pedido de preço 0 que o jogo retira e o juiz confere
                 self.credita(cid, SKU_VINTENS, qtd, 'presente', idem, None, t)
@@ -369,6 +420,6 @@ class AnuncioMixin:
             dona_inteira = self.con.execute("SELECT * FROM contas WHERE id = ?", (cid,)).fetchone()
         # com a autoridade ligada os vinténs entram na conta agora, como o presente (loja.py, _loja_na_hora);
         # sem ela (ou com a conta numa luta) o pedido fica aberto e o jogo o busca — nada se perde
-        if tipo == 'vintens' and dona_inteira is not None:
+        if tipo in ('vintens', 'fragmentos') and dona_inteira is not None:
             self._loja_na_hora(dict(dona_inteira))
         return 200, {'ok': True, 'creditado': True}

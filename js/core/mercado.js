@@ -308,6 +308,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!db) return Promise.resolve({ ok: false, erro: Tx('sem conta') });
     preco = Math.floor(Number(preco));
     if (!entrada || !entrada.itemId) return Promise.resolve({ ok: false, erro: Tx('peça inválida') });
+    // 08/10: a peça com a Gema engastada fica na conta (o anúncio não guarda o bônus)
+    if (typeof entrada.extra === 'string' && entrada.extra) return Promise.resolve({ ok: false, erro: Tx('a peça com Gema engastada não vai ao mercadinho') });
     if (!isFinite(preco) || preco < 1 || preco > M.PRECO_MAX) {
       return Promise.resolve({ ok: false, erro: Tx('preço entre 1 e {PRECO_MAX}', { PRECO_MAX: M.PRECO_MAX }) });
     }

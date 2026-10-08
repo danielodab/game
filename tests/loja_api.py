@@ -62,20 +62,26 @@ PRECOS = {'boas-vindas': 250,                 # 04/10: o Pacote de Boas-Vindas, 
           'vintens-1000': 50, 'vintens-5000': 250, 'vintens-12000': 600, 'vintens-25000': 1250,
           'barras-por-vintens-10': 800, 'barras-por-vintens-50': 4000, 'barras-por-vintens-100': 8000,
           'barras-por-vintens-250': 20000,
+          'classe-sumo': 250, 'classe-curandeiro': 250,     # 08/10: as comuns (os dois primeiros heróis são livres)
           'classe-invocador': 500, 'classe-bruxo': 500, 'classe-espadachim': 1000, 'classe-arqueiro': 1250,
           'classe-minotauro': 1500,
           'bonus-xp-1': 75, 'bonus-xp-3': 195, 'bonus-xp-7': 395,
           'pedras-agua': 25, 'pedras-terra': 25, 'pedras-ar': 40, 'pedras-fogo': 40, 'pedras-neutro': 40,
           'pedras-agua-50': 110, 'pedras-terra-50': 110, 'pedras-ar-50': 180, 'pedras-fogo-50': 180,
           'pedras-neutro-50': 180,
+          'fragmentos-10': 60, 'fragmentos-50': 270, 'fragmentos-100': 500,     # 08/10: os Fragmentos de Gema
           'insignia-1': 25, 'insignias-10': 225,
           'pergaminho-elemento': 250,
-          'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 250}     # 04/10
-SECOES = (['boas-vindas'] + ['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 5 + ['bonus'] * 3 + ['pedras'] * 10
-          + ['guilda'] * 2 + ['pergaminhos'] + ['aparencia'] * 5)
-GRUPOS = {'pergaminho-elemento', 'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro',
-          'classe-minotauro',
-          'boas-vindas', 'aura-fogo', 'aura-agua', 'aura-terra', 'aura-ar', 'aura-neutra'}    # 04/10: um por conta
+          'aura-fogo': 150, 'aura-agua': 150, 'aura-terra': 150, 'aura-ar': 150, 'aura-neutra': 250,     # 04/10
+          'aura-sombra': 250, 'aura-gelo': 250, 'aura-ouro': 400,                                        # 08/10: as três novas
+          'moldura-ouro': 180, 'moldura-rubi': 180, 'moldura-esmeralda': 180, 'moldura-obsidiana': 300}  # 08/10: as molduras
+SECOES = (['boas-vindas'] + ['vintens'] * 4 + ['barras-por-vintens'] * 4 + ['personagens'] * 7 + ['bonus'] * 3 + ['pedras'] * 10
+          + ['gema'] * 3 + ['guilda'] * 2 + ['pergaminhos'] + ['aparencia'] * 12)
+GRUPOS = {'pergaminho-elemento', 'classe-sumo', 'classe-curandeiro',          # 08/10: as comuns também
+          'classe-invocador', 'classe-bruxo', 'classe-espadachim', 'classe-arqueiro', 'classe-minotauro',
+          'boas-vindas', 'aura-fogo', 'aura-agua', 'aura-terra', 'aura-ar', 'aura-neutra',    # 04/10: um por conta
+          'aura-sombra', 'aura-gelo', 'aura-ouro',                                          # 08/10
+          'moldura-ouro', 'moldura-rubi', 'moldura-esmeralda', 'moldura-obsidiana'}
 HEROI_FOGO = {'sumo': {'classId': 'sumo', 'xp': 900, 'level': 6, 'element': 'fogo', 'elements': ['fogo']}}
 
 
@@ -233,7 +239,7 @@ class ProvaDaLoja(unittest.TestCase):
                                                                    '%s barras de ouro' % loja_mod.milhar(i['qtd'])))
         itens = [i for i in itens if i['tipo'] not in ('vintens', 'barras')]
         alvos = {i['alvo'] for i in itens}
-        for fora in ('sumo', 'curandeiro', 'curandeira', 'gm', 'stone-anchor'):
+        for fora in ('curandeira', 'gm', 'stone-anchor', 'stone-gem'):      # 08/10: as comuns passaram a vender-se
             self.assertNotIn(fora, alvos)
         texto = json.dumps(itens, ensure_ascii=False)
         self.assertNotIn('ncora', texto)
@@ -242,18 +248,22 @@ class ProvaDaLoja(unittest.TestCase):
         for i in itens:
             self.assertTrue(isinstance(i['preco'], int) and i['preco'] > 0, i)
             self.assertTrue(i['nome'] and i['descricao'], i)
-            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho', 'aura', 'pacote'))
+            self.assertIn(i['tipo'], ('classe', 'bonus-xp', 'pedras', 'insignias', 'pergaminho', 'aura', 'pacote', 'moldura'))
             if i['limite'] is not None:
                 self.assertEqual(set(i['limite']), {'grupo', 'max', 'dias'})
         # só a Reescrita tem janela; as classes, compra única; o resto, nenhum (o preço é o freio)
         self.assertEqual({i['sku']: i['limite'] for i in itens if i['limite'] is not None and i['limite']['dias']},
                          {'pergaminho-elemento': {'grupo': 'pergaminho-elemento', 'max': 1, 'dias': 30}})
         for i in itens:
-            if i['tipo'] in ('classe', 'aura', 'pacote'):         # 04/10: a aura e o Pacote, um por conta
+            if i['tipo'] in ('classe', 'aura', 'pacote', 'moldura'):   # 04/10: a aura e o Pacote, um por conta; 08/10: a moldura
                 self.assertEqual(i['limite'], {'grupo': i['sku'], 'max': 1, 'dias': None})
             elif i['tipo'] != 'pergaminho':
                 self.assertIsNone(i['limite'], i['sku'])
-        pedras = [i for i in itens if i['tipo'] == 'pedras']
+        # 08/10: os Fragmentos de Gema também entram como 'pedras' (elemento 'fragmento'): 10, 50 e 100
+        fragmentos = [i for i in itens if i['tipo'] == 'pedras' and i['elemento'] == 'fragmento']
+        self.assertEqual(sorted(i['qtd'] for i in fragmentos), [10, 50, 100])
+        self.assertEqual({i['alvo'] for i in fragmentos}, {loja_mod.FRAGMENTO_GEMA})
+        pedras = [i for i in itens if i['tipo'] == 'pedras' and i['elemento'] != 'fragmento']
         self.assertEqual(sorted(i['qtd'] for i in pedras), [10] * 5 + [50] * 5)
         for i in pedras:
             dez = [j for j in pedras if j['alvo'] == i['alvo'] and j['qtd'] == 10][0]
@@ -299,7 +309,7 @@ class ProvaDaLoja(unittest.TestCase):
         self.assertEqual(Cliente(self.base).pede('POST', '/api/loja/retirar', {})[0], 401)
         c = self.novo('Erro Basico')
         for corpo, erro in (({'sku': 'ancora', 'idem': idem()}, 'produto desconhecido'),
-                            ({'sku': 'classe-sumo', 'idem': idem()}, 'produto desconhecido'),
+                            ({'sku': 'classe-gm', 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': 'pergaminho-xp', 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': 'pacote-1000', 'idem': idem()}, 'produto desconhecido'),
                             ({'sku': 'barras-50', 'idem': idem()}, 'produto desconhecido'),
@@ -324,8 +334,8 @@ class ProvaDaLoja(unittest.TestCase):
                                       'saveVersao': 0, 'saveEm': None})
         self.assertEqual(m['barras'], {'saldo': 0, 'movimentos': []})
         self.assertEqual(m['pedidos'], [])
-        self.assertEqual(m['classes'], {k: {'liberada': False, 'cartas': 0}
-                                        for k in ('invocador', 'bruxo', 'espadachim', 'arqueiro', 'minotauro')})
+        self.assertEqual(m['classes'], {k: {'liberada': False, 'cartas': 0}      # 08/10: as sete (sem save, nenhuma liberada)
+                                        for k in ('sumo', 'curandeiro', 'invocador', 'bruxo', 'espadachim', 'arqueiro', 'minotauro')})
         self.assertEqual(set(m['limites']), GRUPOS)
         self.assertEqual(m['limites']['pergaminho-elemento'], {'usados': 0, 'max': 1, 'dias': 30, 'liberaEm': None})
 
@@ -909,21 +919,24 @@ class ProvaDaLoja(unittest.TestCase):
                              'nome': re.search(r"name:\s*'([^']+)'", corpo).group(1)}
         self.assertEqual(tuple(classes), comum.CLASSES_RANK)
         vendidas = {i['alvo']: i for i in loja_mod.CATALOGO if i['tipo'] == 'classe'}
-        # à venda: exatamente as que não nascem liberadas (o gm nem é classe de classes.js)
-        self.assertEqual(set(vendidas), {k for k, v in classes.items() if not v['nasce']})
+        # à venda: as SETE (08/10: os dois primeiros heróis são escolha livre, então as comuns também se
+        # compram por quem não as escolheu; o gm nem é classe de classes.js)
+        self.assertEqual(set(vendidas), set(classes))
         self.assertEqual(set(comum.INICIAIS), {k for k, v in classes.items() if v['nasce']})
         for cid, item in vendidas.items():
             self.assertEqual(item['cartas'], custo[cid], cid)
             self.assertEqual(item['raridade'], classes[cid]['raridade'], cid)
             self.assertEqual(item['nome'], classes[cid]['nome'], cid)
             self.assertGreater(custo[cid], 0, cid)
-        # as pedras: ids e elementos de DATA.stones; a Âncora fica de fora
+        # as pedras: ids e elementos de DATA.stones; a Âncora e a Gema inteira ('gema') ficam de fora
+        # (08/10: só os FRAGMENTOS da gema se vendem, com o elemento 'fragmento' do dado)
         itens_js = self.le('js/core/data/items.js')
-        pedras = dict(re.findall(r"id: '(stone-[a-z]+)', name: '[^']+', element: '([a-z]+)'", itens_js))
+        pedras = dict(re.findall(r"id: '(stone-[a-z-]+)', name: '[^']+', element: '([a-z]+)'", itens_js))
         self.assertIn('stone-anchor', pedras)
+        self.assertEqual(pedras.get('stone-gem'), 'gema')
         vendidas = {i['alvo']: i['elemento'] for i in loja_mod.CATALOGO if i['tipo'] == 'pedras'}
-        self.assertEqual(vendidas, {k: v for k, v in pedras.items() if k != 'stone-anchor'})
-        self.assertEqual(set(vendidas.values()), set(comum.ELEMENTOS))
+        self.assertEqual(vendidas, {k: v for k, v in pedras.items() if k != 'stone-anchor' and v != 'gema'})
+        self.assertEqual(set(vendidas.values()), set(comum.ELEMENTOS) | {'fragmento'})
         # as insígnias: 10 fundam uma guilda (DATA.insignias.porGuilda, items_selos.js)
         selos = self.le('js/core/data/items_selos.js')
         casou = re.search(r'DATA\.insignias\s*=\s*\{[^}]*porGuilda\s*:\s*(\d+)', selos)

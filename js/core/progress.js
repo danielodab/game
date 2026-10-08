@@ -72,10 +72,13 @@ var JOGO = (typeof window !== 'undefined')
  *      pet só serve a um herói por vez. Bônus entram em `effectiveStats`
  *      (com o mesmo teto de +1 em pa/pp).
  *
- * [D9] CARTAS ACUMULATIVAS E ESTRELAS (§9-B — substitui o desbloqueio por
- *      carta única da v2.0). `state.cards[classId] = n`, nunca decresce.
- *      Classe liberada quando `n >= unlockCost`; as cartas EXCEDENTES ao
- *      custo sobem estrelas conforme `starCosts` acumulados (máx. 5).
+ * [D9] CARTAS E ESTRELAS (§9-B). 08/10: `state.cards[classId]` é a carta NA MÃO
+ *      e DECRESCE: liberar a classe gasta `unlockCost` e cada estrela se compra
+ *      à mão (Progress.subirEstrela) por starCosts[k] − starCosts[k−1]; as
+ *      estrelas moram em `state.estrelas[classId]` (máx. 5). O save de antes
+ *      migra no saneamento (as estrelas que a sobra dava viram estrelas, e a
+ *      sobra que faltava gastar fica na mão). As duas INICIAIS (`escolhidas`,
+ *      livres em "Quem desce") custam 0.
  *      Carta repetida NÃO vira mais XP: agora ela é progresso de estrela.
  *      Só o CHEFE derruba carta, e de forma aleatória: chance 60% (solo) /
  *      50% (dupla); a classe sai da piscina `dungeon.cardDrops` × `dropWeight`
@@ -479,6 +482,48 @@ var JOGO = (typeof window !== 'undefined')
     };
   }
 
+  /* A GEMA ENTERRADA (08/10, DATA.gema) — cópia campo a campo, com padrão. */
+  var GEMA_DEFAULT = {
+    id: 'stone-gem', fragmento: 'stone-gem-frag', porGema: 100,
+    pesos: { pa: 1, pp: 2, dano: 3, vida: 4 },
+    bonus: { pa: { pa: 1 }, pp: { pp: 1 }, dano: { power: 10 }, vida: { hp: 30 } },
+    drop: { chance: 0.08, min: 1, max: 1, chefeMin: 2, chefeMax: 4 }
+  };
+  var EXTRAS = ['pa', 'pp', 'dano', 'vida'];     // os bônus especiais, do mais difícil ao mais fácil
+  function gemaCfg() {
+    var g = D().gema;
+    if (!isObj(g)) return GEMA_DEFAULT;
+    return {
+      id: (typeof g.id === 'string') ? g.id : GEMA_DEFAULT.id,
+      fragmento: (typeof g.fragmento === 'string') ? g.fragmento : GEMA_DEFAULT.fragmento,
+      porGema: Math.max(1, Math.floor(num(g.porGema, GEMA_DEFAULT.porGema))),
+      pesos: isObj(g.pesos) ? g.pesos : GEMA_DEFAULT.pesos,
+      bonus: isObj(g.bonus) ? g.bonus : GEMA_DEFAULT.bonus,
+      drop: isObj(g.drop) ? g.drop : GEMA_DEFAULT.drop
+    };
+  }
+  Progress.gemaCfg = gemaCfg;
+  Progress.EXTRAS = EXTRAS.slice();
+  function extraValido(x) { return typeof x === 'string' && indexOf(EXTRAS, x) >= 0; }
+  /* a cópia leva o bônus especial junto: `para.extra = de.extra` quando ele vale */
+  function comExtra(para, de) {
+    if (para && de && extraValido(de.extra)) para.extra = de.extra;
+    return para;
+  }
+  /* os números de um bônus especial ({pa:1}, {hp:30}…), para a tela e para os stats */
+  Progress.extraBonus = function (x) {
+    var b = gemaCfg().bonus;
+    return (extraValido(x) && isObj(b[x])) ? b[x] : null;
+  };
+  /* a pedra é DE FORJAR? (a do elemento, ou a neutra). A Âncora, a Gema e o
+   * Fragmento moram em DATA.stones mas não forjam nada. */
+  function pedraDeForja(stoneId) {
+    var sd = stoneDefs()[stoneId];
+    if (!sd) return indexOf(elements(), stoneId) >= 0;     // mundo de prova: o nome do elemento
+    return indexOf(elements(), sd.element) >= 0;
+  }
+  Progress.pedraDeForja = pedraDeForja;
+
   /* ---- régua das estrelas de ITEM [D18]. O dado pode mandar (`DATA.upgrade`
    * .maxStars / .fuseCopies / .starBonus); sem ele valem as constantes daqui. */
   function starItemCfg() {
@@ -612,8 +657,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function freshState() {
-    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
-               petCards: {}, petXp: {}, nascimentos: [] };
+    var st = { version: 23, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
+               estrelas: {}, petCards: {}, petXp: {}, nascimentos: [] };
     var cs = classes(), id;
     for (id in cs) {
       if (!cs.hasOwnProperty(id)) continue;
@@ -625,6 +670,23 @@ var JOGO = (typeof window !== 'undefined')
     return st;
   }
 
+  /* 08/10: a conta JÁ JOGOU? (para a escolha das iniciais): algum herói com XP ou nível, peça no
+   * saco, carta, pedra ou bicho. Lê o save CRU (o saneamento ainda está montando o limpo). */
+  function contaTocada(raw) {
+    if (!isObj(raw)) return false;
+    var hs = isObj(raw.heroes) ? raw.heroes : {};
+    for (var hid in hs) {
+      if (!hs.hasOwnProperty(hid) || !isObj(hs[hid])) continue;
+      if (num(hs[hid].xp, 0) > 0 || num(hs[hid].level, 1) > 1) return true;
+    }
+    if (isArray(raw.inventory) && raw.inventory.length) return true;
+    if (isArray(raw.pets) && raw.pets.length) return true;
+    if (isObj(raw.cards) && keys(raw.cards).length) return true;
+    if (isObj(raw.stones) && keys(raw.stones).length) return true;
+    return false;
+  }
+  Progress._contaTocada = contaTocada;
+
   // o fim do bônus de XP por tempo (loja 2) é epoch em SEGUNDOS: acima disto
   // (o ano de 2096) é lixo — o sanitize e o Progress usam o mesmo teto
   var BONUS_TETO_S = 4e9;
@@ -632,8 +694,8 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------ saneamento [D2]
   function sanitize(raw) {
     if (!isObj(raw)) return null;
-    var st = { version: 22, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
-               petCards: {}, petXp: {}, nascimentos: [] };
+    var st = { version: 23, unlockedClasses: [], heroes: {}, inventory: [], pets: [], cards: {}, stones: {},
+               estrelas: {}, petCards: {}, petXp: {}, nascimentos: [] };
     var cs = classes(), i, id;
     var hasClasses = keys(cs).length > 0;
     var up = upgradeCfg();
@@ -648,10 +710,23 @@ var JOGO = (typeof window !== 'undefined')
         if (classOk(cid) && !seenClass[cid]) { seenClass[cid] = true; st.unlockedClasses.push(cid); }
       }
     }
-    for (id in cs) {
-      if (cs.hasOwnProperty(id) && cs[id] && cs[id].startsUnlocked && !seenClass[id]) {
-        seenClass[id] = true; st.unlockedClasses.push(id);
+    /* 08/10: as INICIAIS gravadas (`escolhidas`, as duas que o jogador escolheu em "Quem desce")
+     * mandam no lugar das `startsUnlocked` do dado. Save sem a escolha: valem as do dado (a conta
+     * intocada ainda escolhe em "Quem desce"; a que já jogou fica com o que tem). */
+    var inic = [], jaInic = {};
+    if (isArray(raw.escolhidas)) {
+      for (i = 0; i < raw.escolhidas.length && inic.length < 2; i++) {
+        var ce = raw.escolhidas[i];
+        if (classOk(ce) && ce !== 'gm' && !jaInic[ce]) { jaInic[ce] = true; inic.push(ce); }
       }
+    }
+    if (!inic.length) {
+      // sem escolha gravada: as do dado valem como iniciais, SEM gravar nada (o save de antes não
+      // muda de hash por causa disto; a conta que já jogou nem pode mais escolher — contaTocada)
+      for (id in cs) if (cs.hasOwnProperty(id) && cs[id] && cs[id].startsUnlocked) inic.push(id);
+    } else st.escolhidas = inic.slice();
+    for (i = 0; i < inic.length; i++) {
+      if (!seenClass[inic[i]]) { seenClass[inic[i]] = true; st.unlockedClasses.push(inic[i]); }
     }
 
     /* ---- inventário: UMA entrada por cópia [D7].
@@ -679,7 +754,7 @@ var JOGO = (typeof window !== 'undefined')
       registraNascimento(st, id, itemId, 'legado');
       return id;
     }
-    function pushItem(itemId, level, stars, count, iid) {
+    function pushItem(itemId, level, stars, count, iid, extra) {
       if (typeof itemId !== 'string' || !itemDef(itemId)) return;
       var lv = clampLevel(level);
       var sr = clampStars(stars);
@@ -689,14 +764,15 @@ var JOGO = (typeof window !== 'undefined')
       for (var c = 0; c < n; c++) {
         var s = (c === 0 && serie) ? serie : serieLegado(itemId);
         iidVistos[s] = true;
-        st.inventory.push({ itemId: itemId, level: lv, stars: sr, iid: s });
+        // 08/10: o bônus da Gema (`extra`) é da CÓPIA — a cópia campo a campo o leva
+        st.inventory.push(comExtra({ itemId: itemId, level: lv, stars: sr, iid: s }, { extra: extra }));
       }
     }
     if (isArray(raw.inventory)) {
       for (i = 0; i < raw.inventory.length; i++) {
         var entry = raw.inventory[i];
         if (typeof entry === 'string') pushItem(entry, 0, 0, 1, null);
-        else if (isObj(entry)) pushItem(entry.itemId, entry.level, entry.stars, entry.count, entry.iid);
+        else if (isObj(entry)) pushItem(entry.itemId, entry.level, entry.stars, entry.count, entry.iid, entry.extra);
       }
     }
     /* Tira do saco a melhor cópia de um item (mais estrelas, depois mais forja).
@@ -778,7 +854,7 @@ var JOGO = (typeof window !== 'undefined')
               if (!serieV) serieV = serieLegado(itId);
               iidVistos[serieV] = true;
               h.items[slot] = itId;
-              h.itemVar[slot] = { level: clampLevel(v.level), stars: clampStars(v.stars), iid: serieV };
+              h.itemVar[slot] = comExtra({ level: clampLevel(v.level), stars: clampStars(v.stars), iid: serieV }, v);
             } else {
               if (equippedSeen[itId]) continue;    // exclusividade do modelo antigo
               equippedSeen[itId] = true;
@@ -865,6 +941,27 @@ var JOGO = (typeof window !== 'undefined')
         if (!raw.cards.hasOwnProperty(id) || !classOk(id)) continue;
         var n = Math.floor(num(raw.cards[id], 0));
         if (n > 0) st.cards[id] = n;
+      }
+    }
+    // ---- as ESTRELAS (08/10): campo novo; o save de antes (sem ele) migra da sobra de cartas
+    st.estrelas = {};
+    var maxE = num(starsCfg().max, 5);
+    if (isObj(raw.estrelas)) {
+      for (id in raw.estrelas) {
+        if (!raw.estrelas.hasOwnProperty(id) || !classOk(id)) continue;
+        var ne = Math.max(0, Math.min(maxE, Math.floor(num(raw.estrelas[id], 0))));
+        if (ne > 0) st.estrelas[id] = ne;
+      }
+    } else {
+      for (id in st.cards) {
+        if (!st.cards.hasOwnProperty(id)) continue;
+        if (indexOf(st.unlockedClasses, id) < 0) continue;            // trancada: a carta segue juntando
+        var custoLib = indexOf(inic, id) >= 0 ? 0 : custoDoDado(id);
+        var sobra = Math.max(0, st.cards[id] - custoLib), custos = starCostsFor(id), est = 0;
+        for (var ke = 0; ke < custos.length && ke < maxE; ke++) if (sobra >= num(custos[ke], Infinity)) est = ke + 1;
+        if (est > 0) st.estrelas[id] = est;
+        var fica = Math.max(0, sobra - (est > 0 ? num(custos[est - 1], 0) : 0));
+        if (fica > 0) st.cards[id] = fica; else delete st.cards[id];
       }
     }
 
@@ -992,9 +1089,9 @@ var JOGO = (typeof window !== 'undefined')
           var precisaN = nivelUsoDe(idN);
           if (precisaN <= nivelN) continue;
           var vN = isObj(hN.itemVar[slotN]) ? hN.itemVar[slotN] : null;
-          st.inventory.push({ itemId: idN, level: vN ? clampLevel(vN.level) : 0,
+          st.inventory.push(comExtra({ itemId: idN, level: vN ? clampLevel(vN.level) : 0,
                               stars: vN ? clampStars(vN.stars) : 0,
-                              iid: (vN && typeof vN.iid === 'string' && vN.iid) ? vN.iid : serieLegado(idN) });
+                              iid: (vN && typeof vN.iid === 'string' && vN.iid) ? vN.iid : serieLegado(idN) }, vN));
           hN.items[slotN] = null;
           hN.itemVar[slotN] = null;
           devolvidasNivel.push({ heroId: hidN, itemId: idN, precisa: precisaN, nivel: nivelN });
@@ -1109,14 +1206,56 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ============================================ cartas, desbloqueio e estrelas
-  function unlockCostFor(classId) {
-    var def = classDef(classId);
-    if (def && def.startsUnlocked) return 0;
+  /* o custo que o DADO dá (sem olhar as iniciais) */
+  function custoDoDado(classId) {
     var cfg = cardDef(classId);
     var c = cfg ? num(cfg.unlockCost, null) : null;
     if (c === null || c < 0) return UNLOCK_COST_FALLBACK;   // dado ainda por atualizar
     return Math.floor(c);
   }
+  /* AS INICIAIS (08/10, dono: "os dois primeiros heróis livres, qualquer classe"): as duas que a conta
+   * escolheu em "Quem desce" (`state.escolhidas`) custam 0 carta. Sem escolha gravada (save de antes),
+   * valem as `startsUnlocked` do dado, como sempre foi. */
+  function iniciais() {
+    var st = Progress.state;
+    if (st && isArray(st.escolhidas) && st.escolhidas.length) return st.escolhidas;
+    var out = [], cs = classes();
+    for (var id in cs) if (cs.hasOwnProperty(id) && cs[id] && cs[id].startsUnlocked) out.push(id);
+    return out;
+  }
+  Progress.iniciais = function () { return iniciais().slice(); };
+  function unlockCostFor(classId) {
+    if (indexOf(iniciais(), classId) >= 0) return 0;
+    return custoDoDado(classId);
+  }
+  /* a conta ainda pode escolher as suas duas iniciais? (nunca escolheu e não jogou) */
+  Progress.podeEscolherIniciais = function () {
+    var st = Progress.state;
+    return !!st && !(isArray(st.escolhidas) && st.escolhidas.length) && !contaTocada(st);
+  };
+  /* A ESCOLHA: duas classes diferentes (nem o Mestre); as escolhidas entram liberadas com o herói
+   * no nível 1, e as `startsUnlocked` do dado que NÃO foram escolhidas saem (a conta é intocada —
+   * não há nada a perder). Uma vez só. Devolve true, ou false sem mexer em nada. */
+  Progress.escolheIniciais = function (ids) {
+    var st = Progress.state;
+    if (!Progress.podeEscolherIniciais()) return false;
+    if (!isArray(ids) || ids.length !== 2 || ids[0] === ids[1]) return false;
+    for (var i = 0; i < 2; i++) if (typeof ids[i] !== 'string' || ids[i] === 'gm' || !classDef(ids[i])) return false;
+    var cs = classes(), id;
+    for (id in cs) {
+      if (!cs.hasOwnProperty(id) || !cs[id] || !cs[id].startsUnlocked || indexOf(ids, id) >= 0) continue;
+      var k = indexOf(st.unlockedClasses, id);
+      if (k >= 0) st.unlockedClasses.splice(k, 1);
+      if (st.heroes[id]) delete st.heroes[id];
+    }
+    st.escolhidas = ids.slice();
+    for (i = 0; i < 2; i++) {
+      if (indexOf(st.unlockedClasses, ids[i]) < 0) st.unlockedClasses.push(ids[i]);
+      if (!st.heroes[ids[i]]) { st.heroes[ids[i]] = newHero(ids[i]); syncSpells(ids[i]); }
+    }
+    Progress.save();
+    return true;
+  };
   function starCostsFor(classId) {
     var cfg = cardDef(classId);
     if (cfg && isArray(cfg.starCosts) && cfg.starCosts.length) return cfg.starCosts;
@@ -1127,30 +1266,57 @@ var JOGO = (typeof window !== 'undefined')
     return Math.max(0, Math.floor(num(Progress.state.cards[classId], 0)));
   }
 
+  /* as estrelas COMPRADAS da classe (08/10: manuais, `state.estrelas`) */
+  function estrelasDe(classId) {
+    var st = Progress.state;
+    if (!st || !isObj(st.estrelas)) return 0;
+    return Math.max(0, Math.min(num(starsCfg().max, 5), Math.floor(num(st.estrelas[classId], 0))));
+  }
+  /* o que custa a estrela k+1 (k = as que já tem): a diferença da escada acumulada */
+  function custoDegrau(classId, k) {
+    var costs = starCostsFor(classId);
+    if (k >= costs.length) return Infinity;
+    return Math.max(1, num(costs[k], 0) - (k > 0 ? num(costs[k - 1], 0) : 0));
+  }
   Progress.cardInfo = function (classId) {
     var def = classDef(classId);
     var cost = unlockCostFor(classId);
     var owned = cardsOwned(classId);
     var costs = starCostsFor(classId);
-    var maxStars = num(starsCfg().max, 5);
-    var surplus = Math.max(0, owned - cost);
-    var stars = 0;
-    for (var i = 0; i < costs.length && i < maxStars; i++) {
-      if (surplus >= num(costs[i], Infinity)) stars = i + 1;
-    }
+    var maxStars = Math.min(num(starsCfg().max, 5), costs.length);
+    var unlocked = Progress.isClassUnlocked(classId);
+    var stars = estrelasDe(classId);
     var next = null;
-    if (stars < Math.min(maxStars, costs.length)) {
-      next = { star: stars + 1, faltam: Math.max(0, num(costs[stars], 0) - surplus) };
+    if (stars < maxStars) {
+      var custo = custoDegrau(classId, stars);
+      next = { star: stars + 1, custo: custo, faltam: Math.max(0, custo - owned) };
     }
     return {
       classId: classId,
       name: (def && def.name) || classId,
       cards: owned,
-      unlocked: Progress.isClassUnlocked(classId),
+      unlocked: unlocked,
       unlockCost: cost,
       stars: stars,
-      next: next
+      next: next,
+      // 08/10: a estrela se compra à mão — aqui diz se já dá
+      podeSubir: !!(unlocked && next && owned >= next.custo)
     };
+  };
+  /* SUBIR UMA ESTRELA (08/10, dono: "quando dropar o suficiente o jogador pode ir até o personagem e
+   * subir a estrela dele"): gasta as cartas do degrau e grava a estrela. Sem sorteio (sobe como op
+   * comum, `subirEstrela`). Devolve o cardInfo novo, ou false sem mexer em nada. */
+  Progress.subirEstrela = function (classId) {
+    var st = Progress.state;
+    if (!st || typeof classId !== 'string') return false;
+    var info = Progress.cardInfo(classId);
+    if (!info.podeSubir) return false;
+    st.cards[classId] = cardsOwned(classId) - info.next.custo;
+    if (st.cards[classId] <= 0) delete st.cards[classId];
+    if (!isObj(st.estrelas)) st.estrelas = {};
+    st.estrelas[classId] = info.stars + 1;
+    Progress.save();
+    return Progress.cardInfo(classId);
   };
 
   // soma dos bônus fixos das estrelas conquistadas pela classe [D9]
@@ -1174,12 +1340,22 @@ var JOGO = (typeof window !== 'undefined')
     return out;
   }
 
+  /* liberar pela carta GASTA o custo (08/10): a carta é moeda agora */
+  function liberaComCartas(classId) {
+    var st = Progress.state;
+    if (!st || Progress.isClassUnlocked(classId)) return false;
+    var cost = unlockCostFor(classId);
+    if (cardsOwned(classId) < cost) return false;
+    st.cards[classId] = cardsOwned(classId) - cost;
+    if (st.cards[classId] <= 0) delete st.cards[classId];
+    return Progress.unlockClass(classId);
+  }
   function syncUnlocksFromCards() {
     var st = Progress.state;
     if (!st) return;
     for (var classId in st.cards) {
       if (!st.cards.hasOwnProperty(classId)) continue;
-      if (cardsOwned(classId) >= unlockCostFor(classId)) Progress.unlockClass(classId);
+      liberaComCartas(classId);
     }
   }
 
@@ -1197,8 +1373,8 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
-  /* Soma cartas de uma classe (nunca decresce) e libera a classe ao atingir o
-   * custo. Devolve o `cardInfo` resultante. */
+  /* Soma cartas de uma classe à mão e libera a classe ao atingir o custo (gastando-o).
+   * A estrela NÃO sobe sozinha (08/10): é o jogador quem a compra. Devolve o `cardInfo`. */
   Progress.addCards = function (classId, n) {
     var st = Progress.state;
     if (!st || typeof classId !== 'string') return null;
@@ -1206,7 +1382,7 @@ var JOGO = (typeof window !== 'undefined')
     var amount = Math.floor(num(n, 0));
     if (amount > 0) {
       st.cards[classId] = cardsOwned(classId) + amount;
-      if (st.cards[classId] >= unlockCostFor(classId)) Progress.unlockClass(classId);
+      liberaComCartas(classId);
       Progress.save();
     }
     return Progress.cardInfo(classId);
@@ -1285,7 +1461,8 @@ var JOGO = (typeof window !== 'undefined')
       unlocked: depois.unlocked,
       novaClasse: !antes.unlocked && depois.unlocked,
       stars: depois.stars,
-      starUp: depois.stars - antes.stars,
+      starUp: 0,                          // 08/10: a estrela se compra à mão (podeSubir)
+      podeSubir: !!depois.podeSubir,
       next: depois.next
     }];
   };
@@ -1517,7 +1694,7 @@ var JOGO = (typeof window !== 'undefined')
     var h = Progress.hero(heroId);
     if (!h || indexOf(SLOTS, slot) < 0 || !h.items[slot]) return null;
     var v = (isObj(h.itemVar) && isObj(h.itemVar[slot])) ? h.itemVar[slot] : null;
-    return { itemId: h.items[slot], level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0 };
+    return comExtra({ itemId: h.items[slot], level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0 }, v);
   };
   /* Melhor cópia CONHECIDA do item (saco ou vestida) — usada só para exibição;
    * quem calcula stat lê a variante do próprio espaço [D18]. */
@@ -1569,7 +1746,7 @@ var JOGO = (typeof window !== 'undefined')
     var tem = 0;
     for (var i = 0; i < st.inventory.length; i++) {
       if (st.inventory[i].itemId === itemId && num(st.inventory[i].stars, 0) === alvo &&
-          num(st.inventory[i].level, 0) === 0) tem++;
+          num(st.inventory[i].level, 0) === 0 && !extraValido(st.inventory[i].extra)) tem++;
     }
     return tem >= precisa
       ? { ok: true, tem: tem, precisa: precisa }
@@ -1587,7 +1764,7 @@ var JOGO = (typeof window !== 'undefined')
     // consome de trás para frente para não embaralhar os índices
     for (var i = st.inventory.length - 1; i >= 0 && usadas < precisa; i--) {
       var e = st.inventory[i];
-      if (e.itemId === itemId && num(e.stars, 0) === alvo && num(e.level, 0) === 0) {
+      if (e.itemId === itemId && num(e.stars, 0) === alvo && num(e.level, 0) === 0 && !extraValido(e.extra)) {
         st.inventory.splice(i, 1);
         usadas++;
       }
@@ -1630,10 +1807,10 @@ var JOGO = (typeof window !== 'undefined')
     var out = [], mapa = {};
     for (var i = 0; i < st.inventory.length; i++) {
       var e = st.inventory[i];
-      var chave = e.itemId + '|' + num(e.level, 0) + '|' + num(e.stars, 0);
+      var chave = e.itemId + '|' + num(e.level, 0) + '|' + num(e.stars, 0) + '|' + (extraValido(e.extra) ? e.extra : '');
       if (mapa.hasOwnProperty(chave)) { mapa[chave].count++; mapa[chave].indices.push(i); continue; }
-      var stack = { itemId: e.itemId, level: num(e.level, 0), stars: num(e.stars, 0),
-                    count: 1, index: i, indices: [i] };
+      var stack = comExtra({ itemId: e.itemId, level: num(e.level, 0), stars: num(e.stars, 0),
+                    count: 1, index: i, indices: [i] }, e);
       mapa[chave] = stack;
       out.push(stack);
     }
@@ -1690,8 +1867,8 @@ var JOGO = (typeof window !== 'undefined')
   Progress.carimba = function (entrada, origem) {
     if (!Progress.state || !entrada || typeof entrada.itemId !== 'string') return null;
     if (typeof entrada.iid === 'string' && entrada.iid) {
-      return { itemId: entrada.itemId, level: Math.max(0, Math.floor(num(entrada.level, 0))),
-               stars: Math.max(0, Math.floor(num(entrada.stars, 0))), iid: entrada.iid };
+      return comExtra({ itemId: entrada.itemId, level: Math.max(0, Math.floor(num(entrada.level, 0))),
+               stars: Math.max(0, Math.floor(num(entrada.stars, 0))), iid: entrada.iid }, entrada);
     }
     return cunha(Progress.state, entrada.itemId, origem || 'legado', entrada.level, entrada.stars);
   };
@@ -1846,7 +2023,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!isObj(h.itemVar)) h.itemVar = emptyVars();
     devolveAoSaco(h, it.slot);                                   // o anterior fica livre
     h.items[it.slot] = itemId;
-    h.itemVar[it.slot] = { level: num(copia.level, 0), stars: num(copia.stars, 0), iid: serieDe(copia, itemId) };
+    h.itemVar[it.slot] = comExtra({ level: num(copia.level, 0), stars: num(copia.stars, 0), iid: serieDe(copia, itemId) }, copia);
     syncSpells(heroId);
     Progress.ultimaRecusa = null;
     Progress.save();
@@ -1859,10 +2036,10 @@ var JOGO = (typeof window !== 'undefined')
     var itId = h.items[slot];
     if (!itId) return false;
     var v = (isObj(h.itemVar) && isObj(h.itemVar[slot])) ? h.itemVar[slot] : null;
-    Progress.state.inventory.push({
+    Progress.state.inventory.push(comExtra({
       itemId: itId, level: v ? num(v.level, 0) : 0, stars: v ? num(v.stars, 0) : 0,
       iid: serieDe(v, itId)
-    });
+    }, v));
     h.items[slot] = null;
     if (isObj(h.itemVar)) h.itemVar[slot] = null;
     return true;
@@ -1942,7 +2119,8 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < st.inventory.length; i++) {
       if (i === invIndex) continue;
       var e = st.inventory[i];
-      if (e.itemId === alvo.itemId && num(e.stars, 0) === stars) {
+      // 08/10: a cópia com a Gema engastada não entra na fusão (a peça nova nasce sem o bônus)
+      if (e.itemId === alvo.itemId && num(e.stars, 0) === stars && !extraValido(e.extra)) {
         outras.push({ index: i, level: num(e.level, 0) });
       }
     }
@@ -1951,7 +2129,8 @@ var JOGO = (typeof window !== 'undefined')
       .concat(outras.slice(0, Math.max(0, cfg.copies - 1)));
     var copias = outras.length + 1;
     var maxed = stars >= cfg.max;
-    var pode = !maxed && copias >= cfg.copies;
+    var engastada = extraValido(alvo.extra);
+    var pode = !maxed && !engastada && copias >= cfg.copies;
     var nivelResultado = level;
     if (pode) {
       var soma = 0;
@@ -1963,6 +2142,7 @@ var JOGO = (typeof window !== 'undefined')
       copias: copias, precisa: cfg.copies,
       faltam: maxed ? 0 : Math.max(0, cfg.copies - copias),
       maxed: maxed,
+      engastada: engastada,
       proxima: maxed ? stars : stars + 1,
       pode: pode,
       escolhidas: pode ? escolhidas.slice(0, cfg.copies) : [],
@@ -2634,6 +2814,7 @@ var JOGO = (typeof window !== 'undefined')
     var guarda = upgradeCfg().guardStone;
     for (var i = 0; i < pool.length; i++) {
       if (guarda && pool[i] === guarda) continue;
+      if (!pedraDeForja(pool[i])) continue;         // 08/10: nem a Gema nem o Fragmento
       var n = Progress.stoneCount(pool[i]);
       if (n > bestN) { bestN = n; best = pool[i]; }
     }
@@ -2733,7 +2914,7 @@ var JOGO = (typeof window !== 'undefined')
     if (!fim) return false;
     if (!isObj(h.itemVar)) h.itemVar = emptyVars();
     var v = isObj(h.itemVar[slot]) ? h.itemVar[slot] : { level: 0, stars: 0 };
-    h.itemVar[slot] = { level: fim.nivel, stars: num(v.stars, 0), iid: serieDe(v, h.items[slot]) };
+    h.itemVar[slot] = comExtra({ level: fim.nivel, stars: num(v.stars, 0), iid: serieDe(v, h.items[slot]) }, v);
     Progress.save();
     return fim;
   };
@@ -2748,6 +2929,80 @@ var JOGO = (typeof window !== 'undefined')
     Progress.state.inventory[invIndex].level = fim.nivel;
     Progress.save();
     return fim;
+  };
+
+  // ============================================================ a GEMA ENTERRADA (08/10)
+  /* 100 Fragmentos de Gema viram 1 Gema Enterrada. Tudo ou nada; sem sorteio
+   * (sobe como op comum, `juntarFragmentos`). Devolve {gemas, fragmentos} ou false. */
+  Progress.juntaFragmentos = function () {
+    var st = Progress.state, g = gemaCfg();
+    if (!st) return false;
+    var tem = Progress.stoneCount(g.fragmento);
+    if (tem < g.porGema) return false;
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[g.fragmento] = tem - g.porGema;
+    st.stones[g.id] = Progress.stoneCount(g.id) + 1;
+    Progress.save();
+    return { gemas: Progress.stoneCount(g.id), fragmentos: Progress.stoneCount(g.fragmento) };
+  };
+  /* A chance de cada bônus, pelos pesos (do mais difícil ao mais fácil). */
+  Progress.gemaChances = function () {
+    var g = gemaCfg(), soma = 0, out = {}, i;
+    for (i = 0; i < EXTRAS.length; i++) soma += Math.max(0, num(g.pesos[EXTRAS[i]], 0));
+    for (i = 0; i < EXTRAS.length; i++) out[EXTRAS[i]] = soma > 0 ? Math.max(0, num(g.pesos[EXTRAS[i]], 0)) / soma : 0;
+    return out;
+  };
+  /* a cópia que o alvo aponta: {invIndex[, iid]} (saco) ou {heroId, slot} (vestida).
+   * Devolve {copia, itemId, onde:'saco'|'vestida'} ou null; com `iid` o índice tem de
+   * apontar AQUELA série (o saco pode ter mudado entre a tela e a op). */
+  function copiaDoAlvo(alvo) {
+    var st = Progress.state;
+    if (!st || !isObj(alvo)) return null;
+    if (typeof alvo.heroId === 'string') {
+      var h = Progress.hero(alvo.heroId), slot = alvo.slot;
+      if (!h || indexOf(SLOTS, slot) < 0 || !h.items[slot]) return null;
+      if (!isObj(h.itemVar)) h.itemVar = emptyVars();
+      if (!isObj(h.itemVar[slot])) h.itemVar[slot] = { level: 0, stars: 0, iid: serieLegado(h.items[slot]) };
+      return { copia: h.itemVar[slot], itemId: h.items[slot], onde: 'vestida' };
+    }
+    var idx = alvo.invIndex;
+    if (typeof idx !== 'number' || Math.floor(idx) !== idx) return null;
+    var e = st.inventory[idx];
+    if (!isObj(e) || !itemDef(e.itemId)) return null;
+    if (typeof alvo.iid === 'string' && alvo.iid && e.iid !== alvo.iid) return null;
+    return { copia: e, itemId: e.itemId, onde: 'saco' };
+  }
+  /* O que a bancada da Gema diz de um alvo: a peça, o bônus que ela já tem,
+   * quantas gemas há, se pode engastar e por que não ('ja-tem' | 'sem-gema'). */
+  Progress.gemaInfo = function (alvo) {
+    var c = copiaDoAlvo(alvo), g = gemaCfg();
+    if (!c) return null;
+    var temExtra = extraValido(c.copia.extra) ? c.copia.extra : null;
+    var gemas = Progress.stoneCount(g.id);
+    var motivo = temExtra ? 'ja-tem' : (gemas < 1 ? 'sem-gema' : null);
+    return { itemId: c.itemId, level: num(c.copia.level, 0), stars: num(c.copia.stars, 0), onde: c.onde,
+             iid: (typeof c.copia.iid === 'string') ? c.copia.iid : null,
+             extra: temExtra, gemas: gemas, fragmentos: Progress.stoneCount(g.fragmento),
+             porGema: g.porGema, chances: Progress.gemaChances(), pode: !motivo, motivo: motivo };
+  };
+  /* O ENGASTE: gasta 1 gema, sorteia o bônus pelos pesos (o dado da forja — com
+   * sessão, o do servidor) e o grava na CÓPIA. Recusa (false) sem tocar em nada:
+   * peça que já tem bônus, sem gema, alvo torto. Devolve {extra, itemId, level, stars, onde}. */
+  Progress.engastaGema = function (alvo) {
+    var info = Progress.gemaInfo(alvo);
+    if (!info || !info.pode) return false;
+    var c = copiaDoAlvo(alvo), g = gemaCfg(), st = Progress.state;
+    if (!c) return false;
+    var ch = Progress.gemaChances(), r = rolaForja(), acum = 0, sorteado = EXTRAS[EXTRAS.length - 1];
+    for (var i = 0; i < EXTRAS.length; i++) {
+      acum += ch[EXTRAS[i]];
+      if (r < acum) { sorteado = EXTRAS[i]; break; }
+    }
+    if (!isObj(st.stones)) st.stones = {};
+    st.stones[g.id] = Progress.stoneCount(g.id) - 1;
+    c.copia.extra = sorteado;
+    Progress.save();
+    return { extra: sorteado, itemId: c.itemId, level: num(c.copia.level, 0), stars: num(c.copia.stars, 0), onde: c.onde };
   };
 
   // ============================================================ a QUEBRA [D20]
@@ -2767,7 +3022,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   function mesmaVariante(a, b) {
     return isObj(a) && isObj(b) && a.itemId === b.itemId &&
-           num(a.level, 0) === num(b.level, 0) && num(a.stars, 0) === num(b.stars, 0);
+           num(a.level, 0) === num(b.level, 0) && num(a.stars, 0) === num(b.stars, 0) &&
+           (extraValido(a.extra) ? a.extra : null) === (extraValido(b.extra) ? b.extra : null);
   }
 
   /* A CONTA de uma peça, sem saco e sem estado — pura (a tela pode perguntar
@@ -2980,6 +3236,9 @@ var JOGO = (typeof window !== 'undefined')
       var vv = (isObj(h.itemVar) && isObj(h.itemVar[SLOTS[i]])) ? h.itemVar[SLOTS[i]] : null;
       var mult = Progress.itemMult(vv ? vv.level : 0, vv ? vv.stars : 0);
       applyBonuses(out, it.bonuses, true, mult);
+      // 08/10: a GEMA engastada nesta cópia — um bônus a mais, fixo (não escala com a forja
+      // nem com as estrelas) e fora do teto da peça: é outra fonte, o +1 PA dela soma ao da peça
+      if (vv && extraValido(vv.extra)) applyBonuses(out, Progress.extraBonus(vv.extra), false, 1);
     }
 
     if (_etapas) _etapas.push({ fonte: 'itens', stats: fotoStats(out) });

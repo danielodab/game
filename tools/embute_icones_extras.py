@@ -26,7 +26,8 @@ LADO = 128
 
 # pasta -> (prefixo do id, {nome torto: id})
 PASTAS = [
-    ("pedras de forja", "", {}),
+    # 08/10: a Gema Enterrada e o Fragmento (arte do dono: gema.png e fragmento.png) -> os ids de DATA.stones
+    ("pedras de forja", "", {"gema": "stone-gem", "fragmento": "stone-gem-frag"}),
     ("selos de chefe", "selo-", {}),
     ("moedas", "", {"vitem": "vintem"}),
 ]

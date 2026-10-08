@@ -803,7 +803,42 @@ JOGO.DATA = JOGO.DATA || {};
       id: 'stone-anchor', name: 'Âncora de Forja', element: 'forja',
       description: 'Um dente de bigorna arrancado inteiro, pesado como culpa. Preso à peça durante a batida, não deixa o nível escorregar para trás — só os chefes mais fundos carregam um.',
       iconKey: 'stone-anchor'
+    },
+    // 08/10: A GEMA ENTERRADA (dono: "uma pedra rara que ao levar na forja com um item dá um bônus a
+    // mais: +1 PA, +1 PM, vida ou dano"). `element: 'gema'` a tira do mapa elemento→pedra, como a
+    // Âncora: nenhuma peça a gasta como pedra de forjar. Os FRAGMENTOS ('fragmento') caem nos seis
+    // portais, vêm da loja do site e do anúncio premiado, e viram gema de 100 em 100 (DATA.gema).
+    'stone-gem': {
+      id: 'stone-gem', name: 'Gema Enterrada', element: 'gema',
+      description: 'Cem fragmentos apertados até voltarem a ser uma pedra só. Engastada numa peça, dá a ela um bônus que a forja comum não dá — e cada peça só aceita uma.',
+      iconKey: 'stone-gem'
+    },
+    'stone-gem-frag': {
+      id: 'stone-gem-frag', name: 'Fragmento de Gema', element: 'fragmento',
+      description: 'Um caco de gema que ainda lembra o brilho inteiro. Sozinho não serve para nada; cem deles, apertados, voltam a ser a Gema Enterrada.',
+      iconKey: 'stone-gem-frag'
     }
+  };
+
+  // =========================================================================
+  // A GEMA ENTERRADA (08/10) — o BÔNUS ESPECIAL da peça. Uma gema engastada na
+  // forja dá à cópia UM bônus a mais, sorteado (no servidor, com sessão) do mais
+  // difícil ao mais fácil, como o dono pediu: PA, PP, dano, vida. Cada peça
+  // aceita uma gema só; o bônus não escala com a forja nem com as estrelas e
+  // fica preso à CÓPIA (viaja com ela ao vestir, ao cofre, à quebra — e some
+  // na quebra). A peça engastada não vai ao mercadinho, à troca nem ao banco da
+  // guilda (o anúncio deles não guarda o bônus). Os FRAGMENTOS caem de monstro
+  // nos seis portais (chefe sempre; elite um a mais), e 100 viram 1 gema.
+  // ATENÇÃO: `gemaCfg()` do progress.js lê campo a campo, com padrão — todo
+  // campo novo precisa entrar lá, senão some sem erro nenhum.
+  // =========================================================================
+  DATA.gema = {
+    id: 'stone-gem',
+    fragmento: 'stone-gem-frag',
+    porGema: 100,
+    pesos: { pa: 1, pp: 2, dano: 3, vida: 4 },
+    bonus: { pa: { pa: 1 }, pp: { pp: 1 }, dano: { power: 10 }, vida: { hp: 30 } },
+    drop: { chance: 0.08, min: 1, max: 1, chefeMin: 2, chefeMax: 4 }
   };
 
   // =========================================================================

@@ -206,9 +206,13 @@ JOGO.DATA.leveling = {
  * custa 5, +10, +20, +30 e +45 cartas excedentes (acumulado 5/15/35/65/110),
  * "para conseguir estrela é difícil". E da ★3 em diante a estrela também
  * LIBERA ELEMENTO EXTRA para a classe (ver DATA.stars.elementSlots). */
+// 08/10 (o dono): os DOIS PRIMEIROS heróis são livres, qualquer classe (Progress.escolheIniciais) — as
+// duas escolhidas custam 0; as comuns, para quem não as escolheu, custam 5 cartas (ou a loja).
+// 08/10: a ESTRELA passou a ser manual — a carta fica na mão e o jogador a gasta na ficha do herói
+// (Progress.subirEstrela); `starCosts` segue acumulado, e o degrau k custa starCosts[k] − starCosts[k−1].
 JOGO.DATA.cards = {
-  sumo:       { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
-  curandeiro: { unlockCost:  0, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
+  sumo:       { unlockCost:  5, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
+  curandeiro: { unlockCost:  5, dropWeight:  6, minDungeon: 0, starCosts: [5, 15, 35, 65, 110] },
   invocador:  { unlockCost: 10, dropWeight: 16, minDungeon: 1, starCosts: [5, 15, 35, 65, 110] },
   bruxo:      { unlockCost: 10, dropWeight: 16, minDungeon: 2, starCosts: [5, 15, 35, 65, 110] },
   espadachim: { unlockCost: 20, dropWeight: 24, minDungeon: 3, starCosts: [5, 15, 35, 65, 110] },

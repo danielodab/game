@@ -116,9 +116,11 @@
   var TIPOS = { pedras: 1, classe: 1, pergaminho: 1, 'bonus-xp': 1, insignias: 1, vintens: 1, barras: 1,
                 'premio-eco': 1,     // 02/10: o prêmio da semana do Eco Primordial
                 pacote: 1, aura: 1,     // 04/10: o Pacote de Boas-Vindas e a aura da praça
+                moldura: 1,             // 08/10: a moldura premium da plaquinha
                 peca: 1 };              // 04/10: a peça de equipamento, que vai para o banco
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
-  var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra'];   // o gêmeo de loja.AURAS (servidor)
+  var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // o gêmeo de loja.AURAS (servidor); 08/10: + três
+  var MOLDURAS = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];   // 08/10: o gêmeo de loja.MOLDURAS_LOJA
   // 04/10: a 'mestre' (Chama do Mestre) não é entrega da loja — só a conta do Mestre a tem, pelo servidor
   // ...mas CHEGA na vitrine dessa conta: a ficha aceita as da loja e as do Mestre (o filtro só com AURAS a jogava fora)
   var AURAS_DA_FICHA = AURAS.concat(['mestre']);
@@ -263,7 +265,7 @@
     } catch (e) {}
     // 04/10: chegou uma aura (ou o Pacote que traz uma): a ficha do Personagem e a chamada leem de novo
     var te = (p && p.entrega && typeof p.entrega === 'object') ? p.entrega.tipo : null;
-    if (tipo === 'entregue' && (te === 'aura' || te === 'pacote')) { try { L.vitrine(true); } catch (e2) {} }
+    if (tipo === 'entregue' && (te === 'aura' || te === 'pacote' || te === 'moldura')) { try { L.vitrine(true); } catch (e2) {} }
   }
 
   /* ------------------------------------------------ A VITRINE E A AURA (04/10)
@@ -287,10 +289,16 @@
     var tem = lista(a.tem).filter(function (c) { return AURAS_DA_FICHA.indexOf(c) >= 0; });
     var todas = lista(a.todas).filter(function (x) { return x && AURAS_DA_FICHA.indexOf(x.cor) >= 0; })
       .map(function (x) { return { cor: x.cor, nome: String(x.nome || x.cor) }; });
+    // 08/10: as molduras premium, no molde das auras
+    var mo = (r.molduras && typeof r.molduras === 'object') ? r.molduras : {};
+    var temM = lista(mo.tem).filter(function (c) { return MOLDURAS.indexOf(c) >= 0; });
+    var todasM = lista(mo.todas).filter(function (x) { return x && MOLDURAS.indexOf(x.id) >= 0; })
+      .map(function (x) { return { id: x.id, nome: String(x.nome || x.id) }; });
     var of = (r.ofertas && typeof r.ofertas === 'object') ? r.ofertas : {};
     var bv = (r.boasVindas && typeof r.boasVindas === 'object') ? r.boasVindas : {};
     vit = { agora: Number(r.agora) || 0,
             auras: { tem: tem, escolhida: tem.indexOf(a.escolhida) >= 0 ? a.escolhida : null, todas: todas },
+            molduras: { tem: temM, escolhida: temM.indexOf(mo.escolhida) >= 0 ? mo.escolhida : null, todas: todasM },
             ofertas: { desconto: Number(of.desconto) || 0, fim: Number(of.fim) || 0,
                        itens: lista(of.itens).map(function (i) {
                          return { nome: String((i && i.nome) || ''), preco: Number(i && i.preco) || 0,
@@ -317,6 +325,19 @@
    * regressiva das ofertas não depende do relógio do aparelho estar certo */
   L.agoraServidor = function () { return vit ? vit.agora + Math.floor((Date.now() - vitEm) / 1000) : 0; };
   L.auraEscolhida = function () { return (vit && vit.auras.escolhida) || null; };
+  L.molduraEscolhida = function () { return (vit && vit.molduras && vit.molduras.escolhida) || null; };   // 08/10
+  /* 08/10: a moldura premium da plaquinha — uma das que a conta tem, ou null ('auto', a do título) */
+  L.escolheMoldura = function (id) {
+    if (id !== null && MOLDURAS.indexOf(id) < 0) return Promise.resolve({ ok: false, erro: 'moldura desconhecida' });
+    if (!comSessao()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
+    return Promise.resolve(pede('/api/loja/moldura', { method: 'POST', body: { moldura: id } })).then(function (r) {
+      if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('não deu para trocar a moldura agora') };
+      if (vit && r.molduras) {
+        guardaVitrine({ agora: L.agoraServidor(), auras: vit.auras, molduras: r.molduras, ofertas: vit.ofertas, boasVindas: vit.boasVindas });
+      }
+      return { ok: true, escolhida: L.molduraEscolhida() };
+    }, function (e) { return { ok: false, erro: String(e && e.message || e) }; });
+  };
   /* liga, troca ou desliga (null) a aura da praça: o SERVIDOR confere a posse e guarda a escolha */
   L.escolheAura = function (cor) {
     if (cor !== null && AURAS_DA_FICHA.indexOf(cor) < 0) return Promise.resolve({ ok: false, erro: 'aura desconhecida' });
@@ -324,7 +345,7 @@
     return Promise.resolve(pede('/api/loja/aura', { method: 'POST', body: { aura: cor } })).then(function (r) {
       if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('não deu para trocar a aura agora') };
       if (vit && r.auras) {
-        guardaVitrine({ agora: L.agoraServidor(), auras: r.auras, ofertas: vit.ofertas, boasVindas: vit.boasVindas });
+        guardaVitrine({ agora: L.agoraServidor(), auras: r.auras, molduras: vit.molduras, ofertas: vit.ofertas, boasVindas: vit.boasVindas });
       }
       return { ok: true, escolhida: L.auraEscolhida() };
     }, function (e) { return { ok: false, erro: String(e && e.message || e) }; });
@@ -335,17 +356,19 @@
     return up.guardStone || 'stone-anchor';
   }
   /* 3. a checagem SÓ DE LEITURA: nada grava aqui */
+  L._confere = function (ent) { return confere(ent); };   // prova (tests/gema.js)
   function confere(ent) {
     var prog = P();
     if (ent.tipo === 'pedras') {
       var sd = (typeof ent.alvo === 'string') ? (D().stones || {})[ent.alvo] : null;
-      if (!sd || ent.alvo === ancora() || sd.element === 'forja') return 'item-invalido';
+      // 08/10: o Fragmento de Gema se vende (e vem do anúncio); a Gema inteira, como a Âncora, não
+      if (!sd || ent.alvo === ancora() || sd.element === 'forja' || sd.element === 'gema') return 'item-invalido';
       if (!inteiroPos(ent.qtd, 999)) return 'item-invalido';
       return null;
     }
     if (ent.tipo === 'classe') {
       var cd = (typeof ent.alvo === 'string') ? (D().classes || {})[ent.alvo] : null;
-      if (!cd || cd.startsUnlocked || ent.alvo === 'gm') return 'item-invalido';
+      if (!cd || ent.alvo === 'gm') return 'item-invalido';     // 08/10: as comuns também se vendem (iniciais livres)
       if (prog.isClassUnlocked(ent.alvo)) return 'classe-ja-liberada';
       return null;
     }
@@ -404,6 +427,10 @@
     // 04/10: a aura (só a cor conhecida; nada entra no save)
     if (ent.tipo === 'aura') {
       return (AURAS.indexOf(ent.alvo) >= 0 && ent.qtd === 1) ? null : 'item-invalido';
+    }
+    // 08/10: a moldura premium (só a id conhecida; nada entra no save)
+    if (ent.tipo === 'moldura') {
+      return (MOLDURAS.indexOf(ent.alvo) >= 0 && ent.qtd === 1) ? null : 'item-invalido';
     }
     /* 04/10: o Pacote de Boas-Vindas. Cada item passa pela MESMA checagem de quando é vendido
      * avulso, e todos antes de qualquer entrega: o primeiro que não puder entrar recusa o pacote
@@ -471,6 +498,7 @@
       return;
     }
     if (ent.tipo === 'aura') return;     // 04/10: a posse da aura é do servidor; aqui só sai o aviso
+    if (ent.tipo === 'moldura') return;  // 08/10: idem a moldura premium
     if (ent.tipo === 'pacote') {         // 04/10: o Pacote de Boas-Vindas, item a item (já conferidos todos)
       for (var qi = 0; qi < ent.itens.length; qi++) entrega(ent.itens[qi]);
       return;

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>foto: as fichas (Personagem, Inventário…) no tamanho do celular deitado</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10): abre o index.html inteiro num iframe, entra na praça com a dupla
+     Bárbaro + Curandeiro e abre uma ficha — `?aba=avatar|inventario|forja|feiticos|colecao`
+     (as abas de sheetParty) ou `?ficha=<nome>` (openSheet). Com `?cartas=1` dá cartas e uma
+     peça para a ficha ter o que mostrar. Serve para medir a ficha no quadro de 844×390
+     (o aplicativo é deitado): `window.__pronto` quando a ficha está aberta. -->
+<iframe id="f" src="../index.html?foto-fichas"></iframe>
+<script>
+var f = document.getElementById('f');
+f.onload = function () {
+  if (window.__rodou) return;
+  window.__rodou = true;
+  var w = f.contentWindow, d = w.document;
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var voltas = 0;
+  (function espera() {
+    var menu = d.querySelector('.screen-menu.is-on');
+    if (!menu && ++voltas < 120) return setTimeout(espera, 800);
+    if (!menu) { document.title = 'ERRO sem menu'; window.__pronto = true; return; }
+    var P = w.JOGO.Progress, UI = w.JOGO.UI;
+    w.JOGO.DB.batizar('Fotógrafo').then(function () {
+      if (Q.cartas) {
+        try { P.addCards('sumo', 7); P.addCards('invocador', 4); } catch (e) {}
+        try { var ids = Object.keys(w.JOGO.DATA.items).slice(0, 6); ids.forEach(function (id) { P.addItem(id, 'saque'); }); } catch (e2) {}
+        try { P.addStones('stone-ember', 12); P.addStones('stone-gem-frag', 37); } catch (e3) {}
+      }
+      UI.selection(['sumo', 'curandeiro']);
+      if (Q.porta) {
+        // a PORTA da antessala: desce, anda até a porta e abre o painel dos monstros (como prova_antessala.html)
+        var G = w.JOGO.Game;
+        if (!G.startRun(['sumo', 'curandeiro'], 'greenhouse')) { document.title = 'ERRO startRun'; window.__pronto = true; return; }
+        var vA = 0;
+        (function esperaA() {
+          if (G.screen !== 'antessala' && ++vA < 150) return setTimeout(esperaA, 400);
+          try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e6) {}
+          setTimeout(function () {
+            try { w.JOGO.Hub.irPara(0, -8.0); } catch (e7) {}
+            setTimeout(function () {
+              try { w.JOGO.Hub.aoAproximar({ id: 'porta', tipo: 'porta', nome: 'Para a batalha' }); } catch (e5) {}
+              setTimeout(function () {
+                var pn = d.querySelector('.hub-painel:not(.is-off)');
+                document.title = pn ? ('PORTA painel ' + pn.scrollHeight + 'x' + pn.clientHeight + ' janela ' + w.innerWidth + 'x' + w.innerHeight) : 'PORTA SEM PAINEL';
+                window.__pronto = true;
+              }, 1500);
+            }, 2500);
+          }, 1200);
+        })();
+        return;
+      }
+      UI.showScreen('hub');
+      setTimeout(function () {
+        try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e4) {}
+        try {
+          if (Q.ficha) UI.openSheet(Q.ficha, Q.arg || undefined);
+          else UI.openSheet('party', Q.aba || 'avatar');
+        } catch (e5) { document.title = 'ERRO ' + e5; }
+        setTimeout(function () {
+          var sp = d.querySelector('.sheet-panel');
+          document.title = sp ? ('FICHA ' + sp.scrollHeight + 'x' + sp.clientHeight + ' janela ' + w.innerWidth + 'x' + w.innerHeight +
+                                 ' celular=' + (w.JOGO.Mobile && w.JOGO.Mobile.celular())) : 'SEM FICHA';
+          window.__pronto = true;
+        }, 1500);
+      }, 2500);
+    });
+  })();
+};
+</script>
+</body>
+</html>

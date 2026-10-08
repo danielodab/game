@@ -231,6 +231,13 @@ jogador. Página nova sem essa linha é bug.
 | bateria | resultado |
 |---|---|
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
+| `gema.js` (Node) | 29 / 0 (08/10: a Gema Enterrada — juntar fragmentos, o engaste sorteado pelos pesos, o `extra` que viaja com a cópia, os stats, o juiz, a loja e o saque) |
+| `prova_toque_batalha.html` | 14 / 0 (08/10, Chrome headless em tempo real pelo DevTools: o "i" fora da barra, a explicação por toque longo ou mouse parado, o lance pelo card da fila, UM laço na antessala) |
+| `premio_diario_api.py` | 4 próprias / 0 (08/10: o prêmio diário de resgate — calendário do mês, ordem só pelos resgates, barra no 10º; herda as da autoridade) |
+| `notificacoes.js` (Node) | 20 / 0 (08/10: os avisos locais do aplicativo com plugin de mentira, e a casca: package.json, empacota, manifesto) |
+| `rele_titulos_prova.py` | 3 / 0 (08/10: o título de pódio que acompanha a posição e a moldura carimbada pelo relé) |
+| `estrelas_manuais.js` (Node) | 18 / 0 (08/10: as duas iniciais livres, a carta como moeda, a estrela comprada à mão por 5/10/20/30/45, a migração do save de antes, as ops do juiz, as comuns na loja) |
+| `prova_iniciais_estrelas.html` | 14 / 0 (08/10, DevTools em tempo real: a conta nova escolhe dois heróis de qualquer classe em "Quem desce"; as cartas na mão no cartão; o botão ★ Subir na ficha gasta as cartas e a ★ aparece no retrato) |
 | `test_progress_v2.html` | **118 passaram / 56 falharam** (medido 03/10 na base `39a6ae9` e depois — iguais). O "174 / 0" que estava aqui veio de um conserto de 21/09 que nunca entrou em ramo nenhum (`git log --all -- tests/test_progress_v2.html`) |
 | `validate_fusion.html` | 6.607 checagens, **51 falhas** (3.675 composições) — saque e pedras, nenhuma de fusão; as mesmas antes e depois de 03/10 |
 | **`moderacao_api.py`** (Python, API + juiz) | 16 de 16 (03/10: a Caixa inteira para QUALQUER jogador com aviso e carta, as réguas, nada para a lápide nem para a banida, a op do jogador online que sobe por cima da entrega, e — a revisão — cartas e bicho que esperam a luta acabar, com uma sala de verdade fechada paga depois de uma entrega no meio, e a entrega que não muda nada recusada sem aviso) — banimento com prazo (403 com motivo e fim em toda rota e no login depois da senha, o prazo que vence sozinho, desbanir, o banido de antes, o `admin desbanir`), silêncio, denúncia (freios, falas como relato do cliente), a fila com a ação ligada e a carta, a auditoria, o "pôr no inventário" pelo juiz, as ferramentas do Mestre (02/10) e o histórico que diz `expirou` quando o prazo venceu antes de punir de novo ou desfazer (03/10) |

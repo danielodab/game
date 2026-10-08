@@ -97,6 +97,8 @@
     personagens: { titulo: Tx('Personagens'), sub: Tx('Libera a classe no jogo, e o herói chega no nível 1. As cartas que você já tem entram no desbloqueio, mas o preço é o mesmo: se faltam poucas, talvez valha esperar a queda.') },
     bonus: { titulo: Tx('Bônus de XP'), sub: Tx('Não soma com outro bônus de XP; comprar de novo soma os dias. O prazo corre a partir da entrega no jogo.') },
     pedras: { titulo: Tx('Pedras de forja'), sub: Tx('Pacotes de pedras para a Forja do Acampamento. A Âncora de Forja não está à venda: ela se conquista lá embaixo.') },
+    // 08/10: os Fragmentos de Gema — 100 viram a Gema Enterrada, o bônus a mais da peça
+    gema: { titulo: Tx('Fragmentos de Gema'), sub: Tx('Cem fragmentos viram uma Gema Enterrada na Forja. Engastada numa peça, a gema dá um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida — uma gema por peça. Os fragmentos também caem nos seis portais e vêm do anúncio premiado do aplicativo.') },
     guilda: { titulo: Tx('Guilda'), sub: Tx('Dez Insígnias fundam uma guilda.') },
     pergaminhos: { titulo: Tx('Pergaminhos'), sub: Tx('Chegam guardados no jogo; você lê quando quiser.') },
     // 04/10: as auras da praça — só aparência, e por isso podem se vender
@@ -599,6 +601,9 @@
       return '<div class="arte-produto arte-aura el-' + cor + '" data-aura="' + SITE.esc(it.alvo) + '">' +
         '<svg class="aura-forma" viewBox="0 0 96 72" aria-hidden="true">' + (AURA_FORMA[it.alvo] || AURA_FORMA.agua) + '</svg></div>';
     }
+    if (it.tipo === 'moldura') {   // 08/10: a moldura premium da plaquinha — uma placa com o filete dela
+      return '<div class="arte-produto arte-moldura m-' + SITE.esc(it.alvo) + '"><span class="moldura-placa">' + E(it.nome) + '</span></div>';
+    }
     if (it.tipo === 'classe') {
       var src = SITE.img('classe', it.alvo);
       var rar = proprio(RARIDADE, it.raridade) ? it.raridade : '';
@@ -607,6 +612,10 @@
         (rar ? '<span class="etiqueta selo-raridade r-' + rar + '">' + RARIDADE[rar] + '</span>' : '') +
         (src ? '<img src="' + E(src) + '" alt="' + E(it.nome) + '" loading="lazy" onerror="SITE.semFoto(this)">' : '') +
         '</div>';
+    }
+    if (it.tipo === 'pedras' && it.elemento === 'fragmento') {   // 08/10: os Fragmentos de Gema
+      return '<div class="arte-produto arte-gema"><span class="glifo">◆</span>' +
+        (Number(it.qtd) > 1 ? '<span class="qtd">×' + N(it.qtd) + '</span>' : '') + '</div>';
     }
     if (it.tipo === 'pedras') {
       var el = ELEMENTOS.indexOf(it.elemento) >= 0 ? it.elemento : 'neutro';

@@ -234,7 +234,19 @@ def ip_do_pedido(xff, endereco_socket):
 # ---- a Loja 2 (10/09) -----------------------------------------------------------------
 # as classes que já nascem liberadas (startsUnlocked em classes.js; tests/servidor_api.py
 # confere): o retrato delas é de toda conta (conta.py, o retrato do ranking)
-INICIAIS = ('sumo', 'curandeiro')
+INICIAIS = ('sumo', 'curandeiro')      # as do dado (startsUnlocked); a conta pode ter escolhido outras (08/10)
+
+
+def iniciais_de(progress):
+    """08/10: as duas classes iniciais DESTA conta — `escolhidas` do save (a escolha livre em
+    "Quem desce"), ou as do dado quando a conta é de antes da escolha."""
+    lista = progress.get('escolhidas') if isinstance(progress, dict) else None
+    if isinstance(lista, list):
+        tem = [CLASSE_RENOMEADA.get(c, c) for c in lista if isinstance(c, str)]
+        tem = [c for c in tem if c in CLASSES_RANK]
+        if tem:
+            return tuple(tem[:2])
+    return INICIAIS
 CONSULTA_MAX = 2000              # caracteres da consulta da URL (?id=, ?data.id=…)
 
 

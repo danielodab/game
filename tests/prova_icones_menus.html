@@ -461,9 +461,10 @@
       // 22/09 (a quebra): os dois modos redondos no alto — a prova inteira da
       // quebra mora em tests/quebra_hud.html; aqui só o contrato da fileira
       var modos = qa('.fg-modos [data-modo]', ficha());
-      check('forja: os dois modos redondos (Forjar aceso, Quebrar) com data-modo e o ícone de cada um',
-            mesmo(textos(modos), ['Forjar', 'Quebrar']) && modos[0].classList.contains('is-on') &&
-            !!q1('.ico-fg-forjar', modos[0]) && !!q1('.ico-fg-quebrar', modos[1]), textos(modos).join(','));
+      // 08/10: o terceiro modo, a Gema Enterrada
+      check('forja: os três modos redondos (Forjar aceso, Quebrar, Gema) com data-modo e o ícone de cada um',
+            mesmo(textos(modos), ['Forjar', 'Quebrar', 'Gema']) && modos[0].classList.contains('is-on') &&
+            !!q1('.ico-fg-forjar', modos[0]) && !!q1('.ico-fg-quebrar', modos[1]) && !!q1('.ico-fg-gema', modos[2]), textos(modos).join(','));
       contratoDosBotoes('forja');
       cabe('forja');
       toca('.slot-tabs [data-slot="casca"]');

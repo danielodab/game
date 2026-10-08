@@ -623,5 +623,41 @@ JOGO.I18n.registra('es', { erros: {
   "faltam pontos: o degrau {a} pede {b} e você tem {c}": "faltan puntos: el peldaño {a} pide {b} y tienes {c}",
   "esse degrau já foi resgatado": "ese peldaño ya fue reclamado",
   "afixo inválido": "afijo inválido",
-  "a tentativa em grupo tem no máximo 4 heróis": "el intento en grupo tiene como máximo 4 héroes"
+  "a tentativa em grupo tem no máximo 4 heróis": "el intento en grupo tiene como máximo 4 héroes",
+  // ---- 08/10: os Fragmentos de Gema na loja e no anúncio; a peça engastada presa à conta (juiz)
+  "10 Fragmentos de Gema": "10 Fragmentos de Gema",
+  "10 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "10 Fragmentos de Gema. Cien fragmentos se convierten en una Gema Enterrada en la Forja, y la gema engastada le da a la pieza una bonificación extra, sorteada: +1 PA, +1 PM, daño o vida. Cada pieza acepta una sola gema. Los fragmentos también caen en los seis portales.",
+  "50 Fragmentos de Gema": "50 Fragmentos de Gema",
+  "50 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "50 Fragmentos de Gema. Cien fragmentos se convierten en una Gema Enterrada en la Forja, y la gema engastada le da a la pieza una bonificación extra, sorteada: +1 PA, +1 PM, daño o vida. Cada pieza acepta una sola gema. Los fragmentos también caen en los seis portales.",
+  "100 Fragmentos de Gema": "100 Fragmentos de Gema",
+  "100 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "100 Fragmentos de Gema. Cien fragmentos se convierten en una Gema Enterrada en la Forja, y la gema engastada le da a la pieza una bonificación extra, sorteada: +1 PA, +1 PM, daño o vida. Cada pieza acepta una sola gema. Los fragmentos también caen en los seis portales.",
+  "a peça com Gema engastada não sai da conta: o bônus não viaja": "la pieza con Gema engastada no sale de la cuenta: la bonificación no viaja",
+  "3 Fragmentos de Gema (anúncio)": "3 Fragmentos de Gema (anuncio)",
+  "Fragmentos de Gema do anúncio": "Fragmentos de Gema del anuncio",
+  // ---- 08/10: as comuns na loja (os dois primeiros heróis são livres)
+  "Bárbaro": "Bárbaro",
+  "Curandeiro": "Curandero",
+  "Libera o Bárbaro na hora: chegam as cartas que faltam para as 5 do desbloqueio (as que você já tem contam). Chega no nível 1.": "Desbloquea al Bárbaro al instante: llegan las cartas que faltan para las 5 del desbloqueo (las que ya tienes cuentan). Llega en el nivel 1.",
+  "Libera o Curandeiro na hora: chegam as cartas que faltam para as 5 do desbloqueio (as que você já tem contam). Chega no nível 1.": "Desbloquea al Curandero al instante: llegan las cartas que faltan para las 5 del desbloqueo (las que ya tienes cuentan). Llega en el nivel 1.",
+  // ---- 08/10: o prêmio diário de resgate (premio_diario.py)
+  "o prêmio de hoje já foi resgatado; o próximo abre à meia-noite de Brasília": "el premio de hoy ya fue reclamado; el próximo abre a medianoche de Brasilia",
+  "Prêmio diário": "Premio diario",
+  "Vinténs do prêmio diário": "Vinténs del premio diario",
+  // ---- 08/10: as auras novas, as molduras premium e as recusas da moldura (loja.py)
+  "moldura desconhecida": "marco desconocido",
+  "você ainda não tem essa moldura": "aún no tienes ese marco",
+  "Aura de Sombra": "Aura de Sombra",
+  "Aura de Geada": "Aura de Escarcha",
+  "Aura Dourada": "Aura Dorada",
+  "Moldura Dourada": "Marco Dorado",
+  "Moldura de Rubi": "Marco de Rubí",
+  "Moldura de Esmeralda": "Marco de Esmeralda",
+  "Moldura de Obsidiana": "Marco de Obsidiana",
+  "Fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Humo morado y lento subiendo alrededor del cuerpo, y una mancha oscura que respira en el suelo. Alrededor de tu héroe en la plaza y en la sede del gremio: todos lo ven. Solo apariencia — no cambia nada en batalla. Se activa, se desactiva y se cambia en la ficha del Personaje, en el juego.",
+  "Anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Anillos de hielo que se abren despacio en el suelo y cristales pálidos en órbita, subiendo y desapareciendo. Alrededor de tu héroe en la plaza y en la sede del gremio: todos lo ven. Solo apariencia — no cambia nada en batalla. Se activa, se desactiva y se cambia en la ficha del Personaje, en el juego.",
+  "Fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Chispas de oro en espiral apretada subiendo del suelo y un resplandor dorado que pulsa. Alrededor de tu héroe en la plaza y en la sede del gremio: todos lo ven. Solo apariencia — no cambia nada en batalla. Se activa, se desactiva y se cambia en la ficha del Personaje, en el juego.",
+  "Filete dourado duplo com losangos nas quinas. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete dorado doble con rombos en las esquinas. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar.",
+  "Filete vermelho-rubi duplo com losangos nas quinas, sobre fundo vinho. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete rojo rubí doble con rombos en las esquinas, sobre fondo vino. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar.",
+  "Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete verde esmeralda doble con rombos en las esquinas, sobre fondo de selva. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar.",
+  "Filete violeta duplo sobre fundo quase preto, com losangos nas quinas — a mais escura. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Filete violeta doble sobre fondo casi negro, con rombos en las esquinas — el más oscuro. Vale en la placa de tu nombre en la plaza y en la sede, por encima del marco que da el título. Solo apariencia — no cambia nada en batalla. Elígelo en Personaje → Personalizar."
 } });

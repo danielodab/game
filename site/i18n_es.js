@@ -1220,5 +1220,8 @@ JOGO.I18n.registra('es', { textos: {
   "anúncio assistido no aplicativo": "anuncio visto en la aplicación",
   // ---- 06/10: o jogo no ar exige conta — quem veio do jogo sem sessão
   "Para jogar, entre na sua conta — ou crie uma, é rápido.": "Para jugar, inicia sesión en tu cuenta — o crea una, es rápido.",
-  "Para jogar, crie a sua conta — ou entre, se já tem uma.": "Para jugar, crea tu cuenta — o inicia sesión si ya tienes una."
+  "Para jogar, crie a sua conta — ou entre, se já tem uma.": "Para jugar, crea tu cuenta — o inicia sesión si ya tienes una.",
+  // ---- 08/10: a seção dos Fragmentos de Gema na loja
+  "Fragmentos de Gema": "Fragmentos de Gema",
+  "Cem fragmentos viram uma Gema Enterrada na Forja. Engastada numa peça, a gema dá um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida — uma gema por peça. Os fragmentos também caem nos seis portais e vêm do anúncio premiado do aplicativo.": "Cien fragmentos se convierten en una Gema Enterrada en la Forja. Engastada en una pieza, la gema da una bonificación extra, sorteada: +1 PA, +1 PM, daño o vida — una gema por pieza. Los fragmentos también caen en los seis portales y vienen del anuncio premiado de la aplicación."
 } });

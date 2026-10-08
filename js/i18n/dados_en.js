@@ -945,7 +945,9 @@ JOGO.I18n.registra('en', { dados: {
     "stone-root": {"name":"Bedrock Grain","description":"A stone seed from the mine's depths, pale veins running inside like roots. Heavier than it should be."},
     "stone-breath": {"name":"Bottled Breath","description":"A bubble of wind compressed into mineral. Whistles softly when someone runs past."},
     "stone-slate": {"name":"Lousa Shard","description":"A shard of the sky turned to stone. It has no element because it's all of them at once: fits any forge."},
-    "stone-anchor": {"name":"Forge Anchor","description":"A whole anvil tooth pulled out, heavy as guilt. Bound to the piece during the strike, it keeps the level from slipping back. Only the deepest bosses carry one."}
+    "stone-anchor": {"name":"Forge Anchor","description":"A whole anvil tooth pulled out, heavy as guilt. Bound to the piece during the strike, it keeps the level from slipping back. Only the deepest bosses carry one."},
+    "stone-gem": {"name": "Buried Gem", "description": "A hundred fragments pressed until they became a single stone again. Set into a piece, it gives it a bonus the common forge never does — and each piece takes only one."},
+    "stone-gem-frag": {"name": "Gem Fragment", "description": "A shard of gem that still remembers the whole shine. Alone it is good for nothing; a hundred of them, pressed together, become the Buried Gem again."}
   },
   "consumiveis": {
     "pocao-pequena": {"name":"Small Health Potion","description":"A swallow of red syrup. Heals 30 HP for the drinker."},

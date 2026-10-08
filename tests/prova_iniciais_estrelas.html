@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a escolha dos dois primeiros heróis e a estrela comprada à mão (08/10)</title>
+<style>html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px monospace}
+iframe{width:100%;height:70%;border:0}
+#summary{padding:6px 10px;margin:0}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#log div{padding:1px 10px}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (08/10), os pedidos do dono:
+       · a conta NOVA escolhe os seus dois primeiros heróis em "Quem desce", de qualquer classe:
+         as sete aparecem como cartões abertos, escolhe-se duas, confirma — e a conta fica com elas;
+       · as cartas que caem ficam na mão e aparecem no cartão do herói; com o bastante, o botão
+         "★ Subir" na ficha do herói gasta as cartas e sobe a estrela (que aparece no retrato).
+     Abre o index.html inteiro num iframe (como prova_toque_batalha.html). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<iframe id="f" src="../index.html?prova-iniciais"></iframe>
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha(erro) {
+    if (erro) check('a prova chegou ao fim', false, String(erro));
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    document.title = sum.textContent;
+    window.__done = true; window.__fail = falhas;
+  }
+  function qa(sel, raiz) { return [].slice.call((raiz || d0).querySelectorAll(sel)); }
+  function q1(sel, raiz) { return (raiz || d0).querySelector(sel); }
+  var d0 = null;
+  var f = document.getElementById('f');
+  f.onload = function () {
+    if (window.__rodou) return;
+    window.__rodou = true;
+    var w = f.contentWindow; d0 = w.document;
+    var voltas = 0;
+    (function espera() {
+      var menu = d0.querySelector('.screen-menu.is-on');
+      if (!menu && ++voltas < 120) return setTimeout(espera, 800);
+      if (!menu) return fecha('o menu não abriu');
+      try { comeca(w); } catch (e) { fecha(e && e.stack || e); }
+    })();
+  };
+  function comeca(w) {
+    var P = w.JOGO.Progress, UI = w.JOGO.UI;
+    w.JOGO.DB.batizar('Novato').then(function () {
+      check('a conta nova pode escolher as iniciais', P.podeEscolherIniciais() === true);
+      UI.showScreen('heroSelect');
+      setTimeout(function () {
+        var previas = qa('.hero-card.is-previa');
+        check('"Quem desce" mostra as SETE classes como cartões abertos (sem cadeado)', previas.length === 7 && !q1('.lock-badge'), String(previas.length));
+        var cab = q1('.screen .ui-header, .screen header') || d0.body;
+        check('o cabeçalho pede os DOIS primeiros heróis', /DOIS primeiros/.test(cab.textContent));
+        // escolhe Ladino e Minotauro (os dois épicos): qualquer classe vale
+        function escolhe(nome) {
+          var c = previas.filter(function (x) { return (q1('.hero-name', x) || {}).textContent === nome; })[0];
+          var b = c && qa('button', c).filter(function (bt) { return /Escolher/.test(bt.textContent); })[0];
+          if (b) b.click();
+          previas = qa('.hero-card.is-previa');
+        }
+        escolhe('Ladino');
+        escolhe('Minotauro');
+        var sel = qa('.hero-card.is-previa.is-sel').map(function (x) { return q1('.hero-name', x).textContent; });
+        check('dois escolhidos, marcados', sel.join(',') === 'Ladino,Minotauro', sel.join(','));
+        var conf = qa('.ui-foot button').filter(function (b) { return /Confirmar/.test(b.textContent); })[0];
+        check('o Confirmar está aceso com dois', !!conf && !conf.classList.contains('is-off'));
+        conf.click();
+        setTimeout(function () {
+          check('a conta ficou com Ladino e Minotauro (e sem Bárbaro/Curandeiro)', P.isClassUnlocked('espadachim') && P.isClassUnlocked('minotauro') &&
+                !P.isClassUnlocked('sumo') && !P.isClassUnlocked('curandeiro') && P.state.escolhidas.join() === 'espadachim,minotauro', JSON.stringify(P.state.unlockedClasses));
+          check('não se escolhe de novo', P.podeEscolherIniciais() === false);
+          estrelas(w, P, UI);
+        }, 900);
+      }, 900);
+    });
+  }
+  function estrelas(w, P, UI) {
+    // as cartas caem (5 do Ladino): o cartão de "Quem desce" mostra a mão e o botão ★ Subir
+    P.addCards('espadachim', 5);
+    UI.showScreen('heroSelect');
+    setTimeout(function () {
+      var cardL = qa('.hero-card').filter(function (x) { return (q1('.hero-name', x) || {}).textContent === 'Ladino'; })[0];
+      check('o cartão do Ladino mostra as 5 cartas na mão e o custo da ★1', !!cardL && /5.*cartas.*★1.*5/.test((q1('.hero-cartas', cardL) || {}).textContent || ''),
+            cardL ? (q1('.hero-cartas', cardL) || {}).textContent : 'sem cartão');
+      check('o cartão tem o botão ★ Subir', !!cardL && !!q1('.hero-subir', cardL));
+      // a ficha do herói: o bloco das estrelas e o botão
+      UI.openSheet('heroSheet', 'espadachim');
+      setTimeout(function () {
+        var hs = q1('.hs-stars');
+        check('a ficha mostra o bloco das estrelas com as cartas na mão', !!hs && /5/.test(hs.textContent));
+        var bt = q1('.hs-subir');
+        check('a ficha tem o botão ★ Subir estrela', !!bt);
+        var hpAntes = P.effectiveStats('espadachim').hp;
+        if (bt) bt.click();
+        setTimeout(function () {
+          var info = P.cardInfo('espadachim');
+          check('subiu: ★1, 0 cartas, +15 PV', info.stars === 1 && info.cards === 0 && P.effectiveStats('espadachim').hp === hpAntes + 15, JSON.stringify(info));
+          check('o botão some sem cartas (a ★2 custa 10)', !q1('.hs-subir') && /10/.test((q1('.hs-stars') || {}).textContent || ''));
+          UI.closeSheet();
+          UI.showScreen('heroSelect');
+          setTimeout(function () {
+            var cardL2 = qa('.hero-card').filter(function (x) { return (q1('.hero-name', x) || {}).textContent === 'Ladino'; })[0];
+            check('a estrela aparece no retrato do Ladino em "Quem desce" (★1)', !!cardL2 && (q1('.hero-estrelas', cardL2) || {}).textContent === '★1');
+            fecha();
+          }, 700);
+        }, 700);
+      }, 700);
+    }, 900);
+  }
+})();
+</script>
+</body>
+</html>

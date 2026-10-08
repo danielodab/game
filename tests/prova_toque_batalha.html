@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: a barra de ataques e os cards da fila (08/10)</title>
+<style>html,body{margin:0;height:100%;background:#0f1216;color:#e8eef6;font:12px monospace}
+iframe{width:100%;height:70%;border:0}
+#summary{padding:6px 10px;margin:0}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+#log div{padding:1px 10px}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA (08/10), os pedidos do dono na batalha e na sala de espera:
+       · o botãozinho "i" saiu de cada ataque; a explicação abre SEGURANDO o dedo
+         (~0,4 s) ou parando o mouse em cima, e o clique que o soltar dispara é engolido;
+       · com um ataque escolhido, o toque no CARD da fila lança nele (ou avisa "fora do
+         alcance" e mantém a escolha);
+       · a antessala roda UM laço de animação, mesmo depois de a HUD a repintar
+         (UI.showScreen('antessala') de novo): antes cada repintura somava um laço e o
+         boneco andava em dobro.
+     Abre o index.html inteiro num iframe (como prova_antessala.html) e escreve o
+     veredito em #summary e no título. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<iframe id="f" src="../index.html?prova-toque"></iframe>
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log'), falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fecha(erro) {
+    if (erro) check('a prova chegou ao fim', false, String(erro));
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    document.title = sum.textContent;
+    window.__done = true; window.__fail = falhas;
+  }
+  var f = document.getElementById('f');
+  f.onload = function () {
+    if (window.__rodou) return;
+    window.__rodou = true;
+    var w = f.contentWindow, d = w.document;
+    var voltas = 0;
+    (function espera() {
+      var menu = d.querySelector('.screen-menu.is-on');
+      if (!menu && ++voltas < 120) return setTimeout(espera, 800);
+      if (!menu) return fecha('o menu não abriu');
+      try { comeca(w, d); } catch (e) { fecha(e && e.stack || e); }
+    })();
+  };
+  function ev(d, alvo, tipo, extra) {
+    var o = Object.assign({ bubbles: true, cancelable: true, clientX: 10, clientY: 10 }, extra || {});
+    var e;
+    try { e = new w0.PointerEvent(tipo, o); } catch (e1) { e = new w0.MouseEvent(tipo, o); }
+    alvo.dispatchEvent(e);
+  }
+  var w0 = null;
+  function comeca(w, d) {
+    w0 = w;
+    var G = w.JOGO.Game, E = w.JOGO.Engine, Hub = w.JOGO.Hub, UI = w.JOGO.UI;
+    w.JOGO.DB.batizar('Provador').then(function () {
+      UI.selection(['sumo', 'curandeiro']);
+      var ok = G.startRun(['sumo', 'curandeiro'], 'greenhouse');
+      if (!ok) return fecha('startRun recusou');
+      // a troca de tela espera os modelos (seguraParaModelos): a antessala abre depois
+      var vA = 0;
+      (function esperaAntessala() {
+        if (G.screen !== 'antessala' && ++vA < 150) return setTimeout(esperaAntessala, 400);
+        check('a descida abre a antessala', G.screen === 'antessala', String(G.screen));
+        if (G.screen !== 'antessala') return fecha('sem antessala');
+        setTimeout(function () { try { laco(); } catch (e) { fecha(e && e.stack || e); } }, 800);
+      })();
+      function laco() {
+      // ---- o laço único da antessala: conta quantos `quadro` o rAF agenda por quadro
+      var porQuadro = {}, quadroAtual = 0, maxPorQuadro = 0, rafOrig = w.requestAnimationFrame;
+      w.requestAnimationFrame = function (fn) {
+        if (fn && fn.name === 'quadro') {
+          porQuadro[quadroAtual] = (porQuadro[quadroAtual] || 0) + 1;
+          if (porQuadro[quadroAtual] > maxPorQuadro) maxPorQuadro = porQuadro[quadroAtual];
+        }
+        return rafOrig.call(w, function (t) { quadroAtual = t; fn(t); });
+      };
+      // três repinturas da antessala (o que a HUD faz ao adotar estado, ao chegar modelo…)
+      UI.showScreen('antessala', G.salaInfo());
+      UI.showScreen('antessala', G.salaInfo());
+      UI.repaint();
+      setTimeout(function () {
+        maxPorQuadro = 0; porQuadro = {};
+        setTimeout(function () {
+          check('a antessala agenda UM `quadro` por quadro depois de 3 repinturas (antes: 2 a 4)', maxPorQuadro === 1, 'máximo ' + maxPorQuadro);
+          w.requestAnimationFrame = rafOrig;
+          entra(w, d, G, E, UI);
+        }, 1500);
+      }, 1500);
+      }
+    });
+  }
+  function entra(w, d, G, E, UI) {
+    G.entrarNaSala();
+    setTimeout(function () {
+      var opc = E.placementOptions(G.state) || [];
+      check('a batalha abre em placing com casas para marcar', G.state && G.state.phase === 'placing' && opc.length > 0, String(opc.length));
+      try { [].slice.call(d.querySelectorAll('button')).filter(function (b2) { return /Entendi/.test(b2.textContent); })[0].click(); } catch (e3) {}
+      if (opc.length) G.marcaCasa(opc[0].x, opc[0].y);
+      G.prontoPrep(true);
+      var v = 0;
+      (function esperaLuta() {
+        if (G.state && G.state.phase === 'playing') return luta(w, d, G, E, UI);
+        if (++v > 60) return fecha('a luta não começou (fase ' + (G.state && G.state.phase) + ')');
+        setTimeout(esperaLuta, 500);
+      })();
+    }, 1500);
+  }
+  function luta(w, d, G, E, UI) {
+    var v = 0;
+    (function minhaVez() {
+      var ok = false;
+      try { ok = G.isPlayerTurn(); } catch (e) {}
+      if (!ok && ++v < 80) return setTimeout(minhaVez, 400);
+      setTimeout(function () { try { barra(w, d, G, E, UI); } catch (e) { fecha(e && e.stack || e); } }, 600);
+    })();
+  }
+  function barra(w, d, G, E, UI) {
+    var spells = d.querySelectorAll('.bt-spells .spell');
+    check('a barra de ataques desenhou os botões', spells.length >= 1, String(spells.length));
+    check('o botãozinho "i" (.sp-info) saiu de todos os ataques', d.querySelectorAll('.bt-spells .sp-info').length === 0);
+    var tip = d.querySelector('.ui-tip');
+    var cell = spells[0];
+    // ---- segurar o dedo: abre o balão; soltar fecha; o clique que vem depois é engolido
+    ev(d, cell, 'pointerdown', { pointerType: 'touch', clientX: 10, clientY: 10 });
+    setTimeout(function () {
+      check('segurar o dedo ~0,6 s abre a explicação do ataque', tip && tip.classList.contains('is-on'));
+      ev(d, cell, 'pointerup', { pointerType: 'touch', clientX: 10, clientY: 10 });
+      check('soltar o dedo fecha o balão', tip && !tip.classList.contains('is-on'));
+      ev(d, cell, 'click', { pointerType: 'touch' });
+      var selDepois = !!(G.selectedSpellId);
+      check('o clique que o soltar dispara NÃO escolhe o ataque (engolido)', !selDepois, String(G.selectedSpellId));
+      // o toque curto de sempre escolhe
+      ev(d, cell, 'pointerdown', { pointerType: 'touch' });
+      ev(d, cell, 'pointerup', { pointerType: 'touch' });
+      ev(d, cell, 'click', { pointerType: 'touch' });
+      var sid = G.selectedSpellId;
+      check('o toque curto escolhe o ataque', !!sid, String(sid));
+      // ---- o mouse parado em cima abre; sair fecha
+      var cell2 = d.querySelectorAll('.bt-spells .spell')[0];
+      ev(d, cell2, 'pointerenter', { pointerType: 'mouse' });
+      setTimeout(function () {
+        check('o mouse parado em cima ~0,6 s abre a explicação', tip && tip.classList.contains('is-on'));
+        ev(d, cell2, 'pointerleave', { pointerType: 'mouse' });
+        check('o mouse saindo de cima fecha', tip && !tip.classList.contains('is-on'));
+        cards(w, d, G, E, UI, sid);
+      }, 650);
+    }, 650);
+  }
+  function cards(w, d, G, E, UI, sid) {
+    if (!sid) { try { G.selectSpell((E.activeUnit(G.state).spells || [])[0]); } catch (e) {} sid = G.selectedSpellId; }
+    var s = G.state, u = E.activeUnit(s);
+    var alvos = [];
+    try { alvos = G.alvosNaTela(u.uid, sid) || []; } catch (e) {}
+    var cardsEl = d.querySelectorAll('.bt-timeline .tl-unit');
+    check('a fila de turnos desenhou os cards', cardsEl.length >= 2, String(cardsEl.length));
+    // os cards seguem s.order a partir de activeIdx, só os vivos; acho o inimigo de cada card
+    var order = s.order || [], n = order.length, lista = [];
+    for (var i = 0; i < n && lista.length < 8; i++) {
+      var un = s.units.filter(function (x) { return x.uid === order[(s.activeIdx + i) % n]; })[0];
+      if (!un || !un.alive || un.offBoard) continue;
+      lista.push(un);
+    }
+    var alvoIdx = -1, foraIdx = -1;
+    lista.forEach(function (un, k) {
+      if (un.side !== 'enemy') return;
+      var dentro = alvos.some(function (a) { return a.x === un.x && a.y === un.y; });
+      if (dentro && alvoIdx < 0) alvoIdx = k;
+      if (!dentro && foraIdx < 0) foraIdx = k;
+    });
+    if (foraIdx >= 0) {
+      var selAntes = G.selectedSpellId;
+      cardsEl[foraIdx].click();
+      var toast = d.querySelector('.ui-toast');
+      check('card do inimigo FORA do alcance: avisa "fora do alcance" e mantém o ataque escolhido',
+            G.selectedSpellId === selAntes && !!toast && /fora do alcance/i.test(toast.textContent), toast ? toast.textContent : 'sem toast');
+    }
+    if (alvoIdx < 0) {
+      // ninguém no alcance na largada: o herói é posto AO LADO do primeiro inimigo (só para a
+      // prova) e escolhe-se o ataque que o alcança — o toque no card tem de lançar
+      var en = lista.filter(function (x) { return x.side === 'enemy'; })[0];
+      var vizinhos = [[1, 0], [-1, 0], [0, 1], [0, -1]], posto = false;
+      for (var vz = 0; vz < vizinhos.length && en && !posto; vz++) {
+        var nx = en.x + vizinhos[vz][0], ny = en.y + vizinhos[vz][1];
+        if (nx < 0 || ny < 0 || E.unitAt(s, nx, ny)) continue;
+        u.x = nx; u.y = ny; posto = true;
+      }
+      if (posto) {
+        var lista2 = (u.spells || []).slice();
+        for (var sp = 0; sp < lista2.length; sp++) {
+          G.selectSpell(null); G.selectSpell(lista2[sp]);
+          var al2 = [];
+          try { al2 = G.alvosNaTela(u.uid, lista2[sp]) || []; } catch (e) {}
+          if (al2.some(function (a) { return a.x === en.x && a.y === en.y; })) { sid = lista2[sp]; break; }
+          G.selectSpell(null);
+        }
+        if (G.selectedSpellId) { alvoIdx = lista.indexOf(en); alvos = G.alvosNaTela(u.uid, G.selectedSpellId) || []; }
+      }
+    }
+    if (alvoIdx >= 0) {
+      var alvo = lista[alvoIdx], hpAntes = alvo.hp, paAntes = u.pa;
+      cardsEl[alvoIdx].click();
+      var alvoDepois = G.state.units.filter(function (x) { return x.uid === alvo.uid; })[0];
+      var uDepois = G.state.units.filter(function (x) { return x.uid === u.uid; })[0];
+      check('card do inimigo NO alcance: o toque lança o ataque nele (PA gasto ou vida caída) e desmarca',
+            G.selectedSpellId === null && ((uDepois && uDepois.pa < paAntes) || (alvoDepois && alvoDepois.hp < hpAntes)),
+            JSON.stringify({ pa: [paAntes, uDepois && uDepois.pa], hp: [hpAntes, alvoDepois && alvoDepois.hp], sel: G.selectedSpellId }));
+    } else {
+      check('(nenhum inimigo no alcance na primeira vez — o lance pelo card fica provado só pelo "fora do alcance")', true);
+    }
+    fecha();
+  }
+})();
+</script>
+</body>
+</html>

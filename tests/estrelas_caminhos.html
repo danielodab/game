@@ -53,31 +53,35 @@ trocar o ativo troca os feitiços do caminho na hora — e a lista tem de sobrev
   P.hero(HID);                               // garante a ficha
 
   function daCartas(n) { P.state.cards[HID] = n; P.save(); }
+  function daEstrelas(n) { P.state.estrelas[HID] = n; P.save(); }
   function estrelas() { return P.cardInfo(HID).stars; }
+  function sobe() { return P.subirEstrela(HID); }
 
-  // 1. A ESCADA: 5 / 15 / 35 / 65 / 110 acumuladas (5, +10, +20, +30, +45)
-  daCartas(4);   check('4 cartas ainda não dão estrela', estrelas() === 0, '★' + estrelas());
-  daCartas(5);   check('a 1ª estrela custa 5', estrelas() === 1, '★' + estrelas());
-  daCartas(14);  check('14 não fecham a 2ª', estrelas() === 1, '★' + estrelas());
-  daCartas(15);  check('a 2ª fecha em 15 (deu +10)', estrelas() === 2, '★' + estrelas());
-  daCartas(34);  check('34 não fecham a 3ª', estrelas() === 2, '★' + estrelas());
-  daCartas(35);  check('a 3ª fecha em 35 (deu +20)', estrelas() === 3, '★' + estrelas());
-  daCartas(65);  check('a 4ª fecha em 65 (deu +30)', estrelas() === 4, '★' + estrelas());
-  daCartas(109); check('109 não fecham a 5ª', estrelas() === 4, '★' + estrelas());
-  daCartas(110); check('a 5ª fecha em 110 (deu +45)', estrelas() === 5, '★' + estrelas());
+  // 1. A ESCADA (08/10: a estrela se COMPRA à mão): cada degrau custa 5, 10, 20, 30 e 45 cartas na
+  // mão — a mesma escada acumulada 5/15/35/65/110 do dono, lida degrau a degrau
+  daCartas(4);   check('4 cartas não compram a 1ª', sobe() === false && estrelas() === 0, '★' + estrelas());
+  daCartas(5);   check('a 1ª estrela custa 5 (e as 5 saem da mão)', !!sobe() && estrelas() === 1 && P.cardInfo(HID).cards === 0, '★' + estrelas());
+  daCartas(9);   check('9 não compram a 2ª', sobe() === false && estrelas() === 1, '★' + estrelas());
+  daCartas(10);  check('a 2ª custa 10', !!sobe() && estrelas() === 2, '★' + estrelas());
+  daCartas(19);  check('19 não compram a 3ª', sobe() === false && estrelas() === 2, '★' + estrelas());
+  daCartas(20);  check('a 3ª custa 20', !!sobe() && estrelas() === 3, '★' + estrelas());
+  daCartas(30);  check('a 4ª custa 30', !!sobe() && estrelas() === 4, '★' + estrelas());
+  daCartas(44);  check('44 não compram a 5ª', sobe() === false && estrelas() === 4, '★' + estrelas());
+  daCartas(45);  check('a 5ª custa 45', !!sobe() && estrelas() === 5, '★' + estrelas());
+  check('no topo não sobe mais', sobe() === false && estrelas() === 5);
 
   // 2. AS VAGAS DE CAMINHO por estrela: 1 até ★2; ★3=2; ★4=3; ★5=4
-  daCartas(15);
+  daEstrelas(2);
   check('até a ★2 há UMA vaga de caminho', P.elementSlots(HID) === 1, String(P.elementSlots(HID)));
-  daCartas(35);
+  daEstrelas(3);
   check('a ★3 abre a 2ª vaga', P.elementSlots(HID) === 2, String(P.elementSlots(HID)));
-  daCartas(65);
+  daEstrelas(4);
   check('a ★4 abre a 3ª', P.elementSlots(HID) === 3, String(P.elementSlots(HID)));
-  daCartas(110);
+  daEstrelas(5);
   check('a ★5 abre a 4ª', P.elementSlots(HID) === 4, String(P.elementSlots(HID)));
 
   // 3. LIBERAR E TROCAR — o 1º caminho vem do nível 5 (chooseElement)
-  daCartas(35);                                          // ★3: 2 vagas
+  daEstrelas(3);                                         // ★3: 2 vagas
   check('sem o 1º caminho escolhido, não se libera extra',
         P.liberaElemento(HID, 'agua') === false);
   P.addXp(HID, 999);                                     // nível de sobra
@@ -87,7 +91,7 @@ trocar o ativo troca os feitiços do caminho na hora — e a lista tem de sobrev
   check('a lista tem os dois', P.heroElements(HID).join(',') === 'fogo,agua');
   check('repetido é recusado', P.liberaElemento(HID, 'agua') === false);
   check('a 3ª vaga NÃO abre na ★3', P.liberaElemento(HID, 'ar') === false);
-  daCartas(65);                                          // ★4: 3 vagas
+  daEstrelas(4);                                         // ★4: 3 vagas
   check('com a ★4 a 3ª vaga abre', P.liberaElemento(HID, 'ar') === true);
 
   var antes = P.spellsFor(HID).join('|');

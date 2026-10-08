@@ -157,7 +157,66 @@ SQL = ("SELECT c.id, c.nome, c.gm, c.banido, s.ultimo_uso FROM sessoes s "
 # de cima, e com erro engolido: no rolling update o relé novo pode abrir um banco que ainda não tem a
 # tabela, e isso não pode virar "banco estranho" e deixar a praça inteira sem conferência
 SQL_AURA = "SELECT aura FROM aura_escolhida WHERE conta_id = ?"
-AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
+AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
+# 08/10: a MOLDURA premium da plaquinha — a escolhida mora em `moldura_escolhida` (a API só grava a que a conta tem)
+SQL_MOLDURA = "SELECT moldura FROM moldura_escolhida WHERE conta_id = ?"
+MOLDURAS = ('ouro', 'rubi', 'esmeralda', 'obsidiana')   # o gêmeo de loja.MOLDURAS_LOJA
+# 08/10: OS TÍTULOS DE PÓDIO ACOMPANHAM A POSIÇÃO (o dono: "se ele é top 1 pvp e perde o posto, não terá mais
+# esse título; passa para o top 1 atual"). O relé lê o pódio da conta no banco (as mesmas consultas de
+# servidor/salas.py _posicoes/_posicoes_classe) e carimba o título de ranking com a posição de AGORA — ou
+# tira, quando a conta saiu do pódio. Os títulos de chefe e do Eco são para sempre e passam como vieram.
+SQL_PODIO_PVM = ("SELECT r.conta_id FROM resumos r JOIN contas c ON c.id = r.conta_id WHERE c.banido = 0 AND c.gm = 0 "
+                 "ORDER BY r.xp_total DESC, r.nivel_max DESC, r.nome COLLATE NOCASE LIMIT 3")
+SQL_PODIO_PVP = ("SELECT r.conta_id FROM resumos r JOIN contas c ON c.id = r.conta_id "
+                 "WHERE c.banido = 0 AND c.gm = 0 AND r.brasa_partidas > 0 "
+                 "ORDER BY r.brasa_pts DESC, r.nome COLLATE NOCASE LIMIT 3")
+SQL_PODIO_CLASSE = ("SELECT rc.conta_id FROM resumos_classe rc JOIN resumos r ON r.conta_id = rc.conta_id "
+                    "JOIN contas c ON c.id = rc.conta_id WHERE c.banido = 0 AND c.gm = 0 AND rc.classe = ? "
+                    "ORDER BY rc.xp DESC, rc.nivel DESC, r.nome COLLATE NOCASE LIMIT 3")
+# os nomes das classes em português, como o título os escreve ("Top 1 Xamã"): o gêmeo de DATA.classes[].name
+NOMES_CLASSE = {'sumo': 'Bárbaro', 'curandeiro': 'Curandeiro', 'invocador': 'Xamã', 'bruxo': 'Bruxo',
+                'espadachim': 'Ladino', 'arqueiro': 'Caçador', 'minotauro': 'Minotauro'}
+RE_TOP = re.compile(r'^Top ([123]) (.+)$')
+
+
+def podio_de(con, cid):
+    """{'pvm': 1|2|3|None, 'pvp': idem, 'classes': {cid_da_classe: 1|2|3}} da conta, lido do banco; None se as
+    tabelas não existem (o banco de antes)."""
+    try:
+        pvm = [r[0] for r in con.execute(SQL_PODIO_PVM)]
+        pvp = [r[0] for r in con.execute(SQL_PODIO_PVP)]
+        classes = {}
+        for classe in NOMES_CLASSE:
+            topo = [r[0] for r in con.execute(SQL_PODIO_CLASSE, (classe,))]
+            if cid in topo:
+                classes[classe] = topo.index(cid) + 1
+    except sqlite3.Error:
+        return None
+    return {'pvm': pvm.index(cid) + 1 if cid in pvm else None,
+            'pvp': pvp.index(cid) + 1 if cid in pvp else None, 'classes': classes}
+
+
+def titulo_do_podio(titulo, podio):
+    """O título de ranking como deve SAIR: a posição de agora no lugar da escolhida ('Top 1 Pvp' vira
+    'Top 2 Pvp' se a conta caiu para o 2º; '' se saiu do pódio). Título que não é de ranking, ou pódio
+    desconhecido (None), passa como veio."""
+    if not isinstance(titulo, str) or podio is None:
+        return titulo
+    m = RE_TOP.match(titulo)
+    if not m:
+        return titulo
+    resto = m.group(2)
+    if resto == 'PVM':
+        pos = podio.get('pvm')
+        return 'Top %d PVM' % pos if pos else ''
+    if resto == 'Pvp':
+        pos = podio.get('pvp')
+        return 'Top %d Pvp' % pos if pos else ''
+    for cid_c, nome in NOMES_CLASSE.items():
+        if resto == nome:
+            pos = (podio.get('classes') or {}).get(cid_c)
+            return 'Top %d %s' % (pos, nome) if pos else ''
+    return titulo
 AURAS_MESTRE = ('mestre',)   # 04/10: a Chama do Mestre — a API só a grava para a conta marcada (loja.AURAS_MESTRE)
 
 # UM APARELHO SÓ (13/09, pedido do dono: "uma conta só pode estar logada em um
@@ -249,12 +308,20 @@ def confere(caminho, token, agora=None):
         if linha is not None and linha[3] and not moderacao.banida_de_fato(con, linha[0], t):
             linha = linha[:3] + (0,) + linha[4:]
         aura = None
+        moldura = None
+        podio = None
         if linha is not None:
             try:
                 achada = con.execute(SQL_AURA, (linha[0],)).fetchone()
                 aura = achada[0] if achada is not None and (achada[0] in AURAS or achada[0] in AURAS_MESTRE) else None
             except sqlite3.Error:                    # o banco de antes de 04/10: ninguém tem aura ainda
                 aura = None
+            try:                                     # 08/10: a moldura premium escolhida
+                achada = con.execute(SQL_MOLDURA, (linha[0],)).fetchone()
+                moldura = achada[0] if achada is not None and achada[0] in MOLDURAS else None
+            except sqlite3.Error:
+                moldura = None
+            podio = podio_de(con, linha[0])          # 08/10: o pódio de agora (os títulos acompanham)
     except sqlite3.Error:
         return None, False
     finally:
@@ -267,6 +334,10 @@ def confere(caminho, token, agora=None):
     conta = {'id': int(cid), 'nome': nome, 'gm': bool(gm)}
     if aura is not None:                             # só quando há: quem compara a conta inteira não muda
         conta['aura'] = aura
+    if moldura is not None:
+        conta['moldura'] = moldura
+    if podio is not None:
+        conta['podio'] = podio
     return conta, True
 
 
@@ -679,6 +750,22 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
         elif m.get('auraCor') != aura:
             m['auraCor'] = aura
             mudou = True
+        # 08/10: a MOLDURA premium — a do banco sai; sem ela, qualquer premium que o cliente mandou vira 'auto'
+        # (as molduras dos títulos são automáticas e não viajam: cada tela as tira do próprio título)
+        mol = conta.get('moldura') if conta else None
+        if mol is not None:
+            if m.get('moldura') != mol:
+                m['moldura'] = mol
+                mudou = True
+        elif m.get('moldura') in MOLDURAS:
+            m['moldura'] = 'auto'
+            mudou = True
+        # 08/10: o título de pódio sai com a posição de AGORA (ou sai vazio, se a conta caiu do pódio)
+        if conta and isinstance(m.get('titulo'), str):
+            novo_t = titulo_do_podio(m['titulo'], conta.get('podio'))
+            if novo_t != m['titulo']:
+                m['titulo'] = novo_t
+                mudou = True
     if conta and conta.get('gm'):
         if t in COM_NOME:
             m['mestre'] = True

@@ -305,7 +305,7 @@ var JOGO = (typeof window !== 'undefined')
    *       novos e oito monstros no bestiário: a página de antes não conhece o
    *       calabouço 'elementsanctum' nem refaz uma sala dele, e o número diz
    *       ao servidor qual das duas páginas está falando. */
-  Engine.VERSAO_REGRAS = 8;
+  Engine.VERSAO_REGRAS = 9;   // 08/10: os fragmentos de Gema no saque e o bônus da Gema nos stats
 
   var DEFAULT_RIVALS = { fogo: 'agua', agua: 'fogo', terra: 'ar', ar: 'terra', neutro: null };
   var DEFAULT_WEATHERS = {

@@ -1220,5 +1220,8 @@ JOGO.I18n.registra('en', { textos: {
   "anúncio assistido no aplicativo": "ad watched in the app",
   // ---- 06/10: o jogo no ar exige conta — quem veio do jogo sem sessão
   "Para jogar, entre na sua conta — ou crie uma, é rápido.": "To play, sign in to your account — or create one, it's quick.",
-  "Para jogar, crie a sua conta — ou entre, se já tem uma.": "To play, create your account — or sign in if you already have one."
+  "Para jogar, crie a sua conta — ou entre, se já tem uma.": "To play, create your account — or sign in if you already have one.",
+  // ---- 08/10: a seção dos Fragmentos de Gema na loja
+  "Fragmentos de Gema": "Gem Fragments",
+  "Cem fragmentos viram uma Gema Enterrada na Forja. Engastada numa peça, a gema dá um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida — uma gema por peça. Os fragmentos também caem nos seis portais e vêm do anúncio premiado do aplicativo.": "A hundred fragments become a Buried Gem at the Forge. Set into a piece, the gem gives one extra bonus, drawn at random: +1 AP, +1 MP, damage or health — one gem per piece. The fragments also drop in the six portals and come from the app's rewarded ad."
 } });

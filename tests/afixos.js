@@ -52,7 +52,7 @@ const antesMeiaNoite = Date.UTC(2026, 9, 8, 2, 59, 0), depoisMeiaNoite = Date.UT
 check('a chave do dia vira às 00:00 de Brasília (03:00 UTC)',
       Af.chaveDoDia(antesMeiaNoite) === 20261007 && Af.chaveDoDia(depoisMeiaNoite) === 20261008,
       Af.chaveDoDia(antesMeiaNoite) + ' / ' + Af.chaveDoDia(depoisMeiaNoite));
-check('Engine.VERSAO_REGRAS subiu para 8 (o juiz refaz com o afixo)', E.VERSAO_REGRAS === 8, E.VERSAO_REGRAS);
+check('Engine.VERSAO_REGRAS subiu para 8 ou mais (o juiz refaz com o afixo; 9 trouxe a Gema)', E.VERSAO_REGRAS >= 8, E.VERSAO_REGRAS);
 
 // ---- o Calabouço do Dia não muda com o Poço na lista
 const diaAntes = [0, 1, 2, 3, 4, 5, 6].map((d) => J.Diario.hoje(DIA + d * 86400000).dungeonId);

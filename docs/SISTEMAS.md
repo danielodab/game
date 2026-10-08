@@ -717,6 +717,30 @@ do arquivo** a partir do conjunto — nunca escritos à mão, para não divergir
 Item sobe de nível com **pedras elementais**, até **+10**. É a trilha do poder
 bruto: o item cru vira **2,20×** ele mesmo no +10.
 
+### Forja — a Gema Enterrada (08/10)
+
+A terceira porta da Forja. A **Gema Enterrada** (`stone-gem`, `DATA.gema` em
+`js/core/data/items.js`) engasta **um** bônus a mais numa cópia de peça,
+sorteado pelos pesos 1:2:3:4 — do mais difícil ao mais fácil, como o dono
+pediu: **+1 PA**, **+1 PP**, **+10 de poder** (dano), **+30 PV** (vida). Com
+sessão do site o sorteio é do servidor (op `engastarGema`, pelo índice + série
+do saco ou pelo herói + espaço da vestida). Cada peça aceita **uma** gema; o
+bônus mora na cópia (`extra`), não escala com a forja nem com as estrelas,
+soma **fora do teto** da peça (uma peça de +1 PA com gema de PA dá +2) e viaja
+com ela: vestir, devolver ao saco, forjar vestida, cofre do Acampamento,
+saneamento do save. A cópia engastada **não funde** (a nova nasceria sem o
+bônus) e **não sai da conta** — mercadinho, troca e banco da guilda recusam
+(juiz: motivo `engastada`), porque o anúncio deles não guarda o bônus.
+
+Os **Fragmentos de Gema** (`stone-gem-frag`) viram gema de **100 em 100** (op
+`juntarFragmentos`, sem sorteio). Caem só nos **seis portais** (`DATA.gema.drop`:
+chefe sempre, 2–4; comum 8%, 1; elite um a mais), vendem-se na loja do site em
+lotes de 10/50/100 (60/270/500 barras; a gema inteira não se vende) e vêm do
+anúncio premiado do aplicativo (3 por anúncio, 5 por dia — tabelas
+`propaganda_*_v2`). Nem a gema nem o fragmento servem de pedra de forjar a
+peça neutra. `Engine.VERSAO_REGRAS` subiu para **9** (o saque e os stats
+mudaram). Prova: `node tests/gema.js`.
+
 ### Estrelas — a trilha da raridade
 
 Juntar **3 itens iguais** dá **1 estrela**. Três estrelas é o topo, e é o
@@ -821,6 +845,25 @@ Cartas de todas as classes, monstros, chefes, pets e fusões, com moldura de
 raridade. O retrato vem do **modelo 3D**, renderizado uma vez e guardado — não
 do desenho 2D antigo.
 
+### Cartas, estrelas e as duas iniciais (08/10)
+
+- **Os dois primeiros heróis são livres.** A conta nova escolhe duas classes
+  quaisquer em "Quem desce" (`Progress.escolheIniciais`, op `escolherIniciais`);
+  elas entram liberadas, no nível 1, com custo 0 de carta, e ficam gravadas em
+  `escolhidas`. As comuns do dado (Bárbaro, Curandeiro) que não foram escolhidas
+  saem da conta e passam a custar 5 cartas, ou a loja (250 barras). A conta que
+  já jogou (XP, peça, carta) não escolhe mais — o save de antes fica como está,
+  sem campo novo e sem mudar de hash.
+- **A carta é moeda.** `cards[classId]` é a carta NA MÃO e decresce: liberar
+  pela carta gasta o `unlockCost`; a estrela se compra à mão — na ficha do
+  herói, no cartão de "Quem desce" ou na aba Cartas — por 5, 10, 20, 30 e 45
+  cartas (`starCosts` lido degrau a degrau; `Progress.subirEstrela`, op
+  `subirEstrela`), e mora em `estrelas[classId]`. Nada sobe sozinho: o dono
+  queria ver as cartas e decidir quando gastar. O `cardInfo` diz `podeSubir`.
+- **Migração:** o save de antes (cartas acumuladas, estrela derivada da sobra)
+  vira, no saneamento, as estrelas que a sobra dava + o resto na mão. Uma vez.
+- Prova: `node tests/estrelas_manuais.js`; a escada em `tests/estrelas_caminhos.html`.
+
 ---
 
 ## 9-A. A semana do SOTERRA (07/10)
@@ -853,6 +896,54 @@ Eventos do mundo ganhou o bloco "A semana do SOTERRA" com os sete dias e o de ho
 "próximos 14 dias" listam o de cada dia. O site (`eventos.html`) os mostra pelo mesmo campo.
 
 Provas: `python tests/programa_api.py` (API + juiz).
+
+## 9-A.5 O prêmio diário de resgate (08/10)
+
+O dono: "prêmios diários de resgate para quem entra todos os dias; vinténs, 10
+dias seguidos barra de ouro". `servidor/premio_diario.py` + `js/core/premio_diario.js`
++ o bloco no alto do Quadro de Missões (`hud.js`, `diarioBloco`). Um resgate por
+dia de Brasília, à vontade do jogador (nada entra sozinho). A **ordem anda só
+pelos resgates** (o dono: quem resgata o 1º e some nove dias colhe o 2º, não a
+barra do 10º); pular dias não volta ao 1. Ao chegar à praça com o prêmio de hoje
+esperando, a ficha dele abre sozinha. O calendário é o **mês de Brasília** (o
+dono: "quando vira o mês ele zera e começa de novo"): no dia 1 a contagem volta
+ao 1º prêmio. Os prêmios por posição: vinténs todo dia (100 no 1º, +20 por
+resgate, 680 no 30º); Fragmentos de Gema no 3º (3) e no 7º (5)
+de cada dezena; 5 Lascas da Lousa no 5º; **1 barra de ouro no 10º e no 20º**;
+no 30º, 2 barras + 10 fragmentos. Tudo pela fila da loja, entregue na hora
+(vinténs por `credita`, pedras por pedido de preço 0 `diario`, barra por
+`barras_move` com ref `diario:<dia>`). Tabelas novas `premio_diario` e
+`premio_diario_resgates`. Ao chegar à praça com o prêmio esperando, um aviso.
+Prova: `python tests/premio_diario_api.py` (4 próprias; herda as da autoridade).
+
+## 9-A.6 Customizar: título, aura e moldura (08/10)
+
+O dono: "um painel dentro da aba do personagem onde o usuário clica para
+customizar; lá ele escolhe título, aura e moldura para o nome; crie umas
+molduras premium; conforme o título que ele possui, muda a moldura; e o título
+não pode ser fixo — quem perde o Top 1 PvP perde o título". Entrou:
+
+- **A ficha Customizar** (`openSheet('customizar')`, botão em Personagem →
+  "A sua plaquinha"): o menu do título (o de sempre), a aura e a moldura.
+- **Auras:** três novas na loja (Sombra 250, Geada 250, Dourada 400 barras;
+  `hub3d.js AURA_FORMA.sombra/gelo/ouro`). Na ficha **só aparecem as que a conta
+  tem**; as outras ficam na loja (um aviso com o link).
+- **Molduras da plaquinha** (`hub3d.js MOLDURAS`, desenhadas em `rotulo`: filete,
+  fundo e losangos nas quinas): as **dos títulos**, de graça e automáticas
+  (`molduraDoTitulo`: Arena para "Top N Pvp", Eco, Chefes, pódio de classe; o
+  pódio de XP continua acendendo o nome), e as **premium** da loja (Dourada,
+  Rubi, Esmeralda 180; Obsidiana 300), que valem por cima. A escolha é do
+  servidor (`moldura_escolhida`, `/api/loja/moldura`, posse = pedido vivo
+  `moldura-*`) e o Relé a carimba no perfil como faz com a aura.
+- **Títulos dinâmicos:** o título de pódio **acompanha a posição** — o Relé
+  (`rele_ident.titulo_do_podio`, com o pódio lido do banco a cada conferência)
+  troca "Top 1 Pvp" por "Top 2 Pvp" quando a conta cai, e tira quando sai do
+  pódio; a HUD faz o mesmo na própria plaquinha (`tituloPendurado`) e vigia o
+  ranking de 3 em 3 minutos na praça. O novo Top 1 escolhe o título na ficha.
+- **A Rede avisa `mudouVisual`** (título, aura ou moldura trocados sem sair do
+  lugar) e a praça repinta só a plaquinha e a aura (`Hub.fantasmaVisual`).
+- Provas: `tests/rele_titulos_prova.py`, `tests/auras_formas.html` 18,
+  `tests/aura_praca.html` 12, `tests/titulos.html` 33, `tests/loja_api.py` 31.
 
 ## 9-A.3 Os feitos da coleção (07/10)
 

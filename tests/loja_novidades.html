@@ -260,13 +260,14 @@ h2{font:700 12px monospace;color:#c9d4e2;margin:10px 0 2px}
     UI._secaoAura(palco);
     return ate(function () { return !!pastilha('agua'); });
   }).then(function (ok) {
-    check('a ficha mostra "Sem aura" e as cinco pastilhas', ok && palco.querySelectorAll('button[data-aura]').length === 5 && !!semAura());
+    // 08/10 (o dono: "só aparece para o jogador as que ele possui"): a ficha mostra "Sem aura" e SÓ a pastilha
+    // da aura que a conta tem; as outras ficam na loja, com um aviso e o link
+    check('a ficha mostra "Sem aura" e só a pastilha que a conta tem', ok && palco.querySelectorAll('button[data-aura]').length === 1 && !!semAura());
     check('nenhuma acesa: "Sem aura" marcada', semAura().classList.contains('is-on') && !palco.querySelector('button[data-aura].is-on'));
-    check('só a que a conta tem está viva; as outras, apagadas', !pastilha('agua').classList.contains('is-falta') &&
-          ['fogo', 'terra', 'ar', 'neutra'].every(function (c) { return pastilha(c).classList.contains('is-falta'); }));
+    check('a que a conta tem está viva; as outras nem aparecem (ficam na loja, com o link)', !pastilha('agua').classList.contains('is-falta') &&
+          ['fogo', 'terra', 'ar', 'neutra'].every(function (c) { return !pastilha(c); }) && !!palco.querySelector('.char-aura-link'));
     var n = srv.chamadas.filter(function (c) { return c.rota === '/api/loja/aura'; }).length;
-    pastilha('fogo').click();           // a que ele NÃO tem: nada vai ao servidor
-    check('tocar na aura que não é da conta não pede nada ao servidor',
+    check('sem pastilha trancada, nada vai ao servidor por engano',
           srv.chamadas.filter(function (c) { return c.rota === '/api/loja/aura'; }).length === n && srv.escolhida === null);
     pastilha('agua').click();
     return ate(function () { return L.auraEscolhida() === 'agua' && !!pastilha('agua') && pastilha('agua').classList.contains('is-on'); });

@@ -126,7 +126,10 @@ var JOGO = (typeof window !== 'undefined')
     }
     return base;
   }
-  A.elementColor = function (e) { return elemInfo(e).c; };
+  // 08/10: a Gema Enterrada e o Fragmento (DATA.stones, element 'gema'/'fragmento') não são de
+  // elemento nenhum: a cor própria, roxa, para o ícone e para as fichas que pintam pelo elemento
+  var GEMA_INFO = { c: '#b86bff', deep: '#4a1f7a', glow: '#eac8ff', name: 'Gema' };
+  A.elementColor = function (e) { return (e === 'gema' || e === 'fragmento') ? GEMA_INFO.c : elemInfo(e).c; };
 
   // 4 raridades. `lendario` (o Traje do Coração, troféu do jogo) é BRANCO-BRASA:
   // um creme quase branco com halo laranja — não é "mais um dourado", é a única
@@ -4576,11 +4579,12 @@ var JOGO = (typeof window !== 'undefined')
     var el = (sd && sd.element) || (/ember|fogo/.test(stoneId) ? 'fogo'
             : /tear|agua/.test(stoneId) ? 'agua' : /root|terra/.test(stoneId) ? 'terra'
             : /breath|\bar\b/.test(stoneId) ? 'ar' : 'neutro');
-    var ei = elemInfo(ELEM[el] ? el : 'neutro');
-    var cx = size / 2, cy = size / 2, r = size * 0.3;
+    var gema = (el === 'gema' || el === 'fragmento');
+    var ei = gema ? GEMA_INFO : elemInfo(ELEM[el] ? el : 'neutro');
+    var cx = size / 2, cy = size / 2, r = size * (el === 'fragmento' ? 0.22 : 0.3);
     setScale(RES); g.save(); g.scale(RES, RES);
     iconFrame(g, size, ei.c, null);
-    glow(g, cx, cy, r * 1.7, ei.glow, 0.42);
+    glow(g, cx, cy, r * 1.7, ei.glow, el === 'fragmento' ? 0.22 : 0.42);
     // corpo mineral: cristal facetado, sempre a mesma leitura de "pedra"
     part(g, Ppoly([cx - r * 0.9, cy + r * 0.5, cx - r * 0.66, cy - r * 0.55,
                    cx, cy - r * 1.05, cx + r * 0.72, cy - r * 0.5,
@@ -4597,7 +4601,16 @@ var JOGO = (typeof window !== 'undefined')
     else if (el === 'agua') part(g, Pdrop(cx, cy - r * 0.25, r * 0.36), ei.glow, { k: 0.18, lw: 0.8, line: lineOf(ei.deep) });
     else if (el === 'terra') part(g, Pel(cx, cy + r * 0.05, r * 0.3, r * 0.26), sh(ei.glow, -0.05), { k: 0.2, lw: 0.8, line: lineOf(ei.deep) });
     else if (el === 'ar') part(g, Pfeather(cx - r * 0.1, cy - r * 0.1, r * 0.9, -0.9), ei.glow, { k: 0.16, lw: 0.8, line: lineOf(ei.deep) });
-    else {
+    else if (el === 'gema') {
+      // a estrela de quatro pontas: a gema inteira "acesa"
+      part(g, Ppoly([cx, cy - r * 0.6, cx + r * 0.16, cy - r * 0.16, cx + r * 0.6, cy, cx + r * 0.16, cy + r * 0.16,
+                     cx, cy + r * 0.6, cx - r * 0.16, cy + r * 0.16, cx - r * 0.6, cy, cx - r * 0.16, cy - r * 0.16]),
+           '#fff4ff', { k: 0.1, lw: 0.8, line: lineOf(ei.deep) });
+    } else if (el === 'fragmento') {
+      // o caco: a rachadura atravessando o cristal pequeno
+      stroke(g, [cx - r * 0.55, cy - r * 0.7, cx - r * 0.1, cy - r * 0.1, cx + r * 0.35, cy + r * 0.6],
+             rgba(ei.deep, 0.9), 1.4, true);
+    } else {
       stroke(g, [cx - r * 0.42, cy + r * 0.2, cx + r * 0.06, cy - r * 0.34, cx + r * 0.44, cy + r * 0.14],
              rgba('#ffffff', 0.8), 1.2, true);
     }

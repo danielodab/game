@@ -53,7 +53,7 @@
   var ROTA = '/api/anuncio';
   var BLOCO_DE_TESTE = 'ca-app-pub-3940256099942544/5224354917';   // o premiado de teste oficial da Google
   var CONSULTA_A_CADA = 2000, CONSULTAS = 15;                      // ms e vezes: até ~30 s esperando a Google
-  var TIPOS = ['vintens', 'barras'];
+  var TIPOS = ['vintens', 'barras', 'fragmentos'];   // 08/10: + os Fragmentos de Gema (3 por anúncio)
 
   var st = P._st = { fase: 'parado', erro: '', premios: {}, zeraEm: 0, bloco: null, aparelhos: [], mestre: false,
                      ocupado: null, passo: '', recado: null, sdk: false };
@@ -225,7 +225,7 @@
               });
             })();
           }).then(function (chegou) {
-            if (chegou && tipo === 'vintens') { try { if (JOGO.Loja && JOGO.Loja.buscar) JOGO.Loja.buscar(); } catch (e) {} }
+            if (chegou && (tipo === 'vintens' || tipo === 'fragmentos')) { try { if (JOGO.Loja && JOGO.Loja.buscar) JOGO.Loja.buscar(); } catch (e) {} }
             return fim(chegou ? 'creditado' : 'demora');
           });
         });
@@ -239,6 +239,7 @@
   function nomeDoPremio(tipo) {
     var p = st.premios[tipo] || {};
     if (tipo === 'vintens') return Tx('{a} vinténs', { a: milhar(p.qtd) });
+    if (tipo === 'fragmentos') return Tx('{a} Fragmentos de Gema', { a: milhar(p.qtd) });
     return Number(p.qtd) === 1 ? Tx('1 barra de ouro') : Tx('{a} barras de ouro', { a: milhar(p.qtd) });
   }
   function horaDaVolta() {

@@ -71,6 +71,11 @@ function limpo(v) {
   try { return JSON.parse(JSON.stringify(v)); } catch (e) { return null; }
 }
 
+/* 08/10: a cópia com a Gema engastada (`extra`) fica presa à conta — o anúncio do mercadinho, a mesa
+ * da troca e o banco da guilda não guardam o bônus, e ele sumiria no caminho. */
+const engastada = (e) => !!(e && typeof e.extra === 'string' && e.extra);
+const FRASE_ENGASTADA = 'a peça com Gema engastada não sai da conta: o bônus não viaja';
+
 /* ------------------------------------------------------------ as operações */
 /* Cada op: (J, args, x) → resultado (ou Promise). `x` = { conta, contexto }. */
 const OPS = {
@@ -95,6 +100,15 @@ const OPS = {
   forjarPeca: (J, a) => J.Progress.upgradeItem(int(a, 'invIndex', 0, 9999), bool(a, 'usarGuarda')),
   forjarVestida: (J, a) => J.Progress.upgradeWorn(txt(a, 'heroId'), slot(a), bool(a, 'usarGuarda')),
   fundirPeca: (J, a) => J.Progress.fuseItem(int(a, 'invIndex', 0, 9999)),
+  // 08/10: a GEMA ENTERRADA — 100 fragmentos viram 1 gema (sem sorteio) e o ENGASTE sorteia o bônus
+  // aqui (o dado do servidor): a peça do saco pelo índice + série, ou a vestida pelo herói e espaço
+  juntarFragmentos: (J) => J.Progress.juntaFragmentos(),
+  // 08/10: a estrela da classe comprada com cartas, e as duas iniciais que a conta nova escolhe
+  subirEstrela: (J, a) => J.Progress.subirEstrela(txt(a, 'classId')),
+  escolherIniciais: (J, a) => J.Progress.escolheIniciais(lista(a, 'ids', 2)),
+  engastarGema: (J, a) => J.Progress.engastaGema(typeof a.heroId === 'string'
+    ? { heroId: txt(a, 'heroId'), slot: slot(a) }
+    : { invIndex: int(a, 'invIndex', 0, 9999), iid: txt(a, 'iid', true) }),
   // a QUEBRA (22/09): n cópias idênticas viram pedras do elemento, sem sorteio. `n` ausente
   // vale 1; a regra que recusa (Panóplia, cópias a menos) devolve false e o estado fica igual
   /* a quebra leva a SÉRIE que o jogador viu (índice sozinho aponta outra peça depois de
@@ -221,6 +235,7 @@ const INTERNAS = {
       if (typeof iid !== 'string') throw falha('iid inválido');
       const i = st.inventory.findIndex((e) => e && e.iid === iid);
       if (i < 0) throw recusa('a peça ' + iid + ' não está no saco', 'falta');
+      if (engastada(st.inventory[i])) throw recusa(FRASE_ENGASTADA, 'engastada');
       itens.push(st.inventory.splice(i, 1)[0]);
     }
     const saem = [];
@@ -276,6 +291,7 @@ const INTERNAS = {
     const st = J.Progress.state;
     const i = st.inventory.findIndex((e) => e && e.iid === iid);
     if (i < 0) throw recusa('a peça não está no saco', 'falta');
+    if (engastada(st.inventory[i])) throw recusa(FRASE_ENGASTADA, 'engastada');
     const item = st.inventory.splice(i, 1)[0];
     J.Progress.save();
     return { item };
@@ -364,6 +380,7 @@ const INTERNAS = {
     const st = J.Progress.state;
     const i = st.inventory.findIndex((e) => e && e.iid === iid);
     if (i < 0) throw recusa('a peça não está no saco', 'falta');
+    if (engastada(st.inventory[i])) throw recusa(FRASE_ENGASTADA, 'engastada');
     const item = st.inventory.splice(i, 1)[0];
     J.Progress.save();
     return { item };

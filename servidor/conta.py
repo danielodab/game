@@ -62,7 +62,7 @@ import time
 from comum import idioma_de
 from comum import (LOGIN_JANELA, SESSAO_DIAS, Recusa, agora, chave_do_ip, email_novo_valido, email_valido,
                    ip_e_publico, le_ip, pica_senha, senha_valida)
-from comum import CLASSES_RANK, INICIAIS, classe_do_heroi, liberadas
+from comum import CLASSES_RANK, INICIAIS, classe_do_heroi, iniciais_de, liberadas
 
 log = logging.getLogger('api')
 
@@ -296,7 +296,7 @@ def opcoes_de_avatar(progress, gm):
     os retratos do site). Sem save: as duas iniciais e a fusão delas."""
     if gm:
         return ['gm']
-    tem = set(liberadas(progress)) | set(INICIAIS)
+    tem = set(liberadas(progress)) | set(iniciais_de(progress))   # 08/10: as iniciais são as da conta
     herois = progress.get('heroes') if isinstance(progress, dict) else None
     if isinstance(herois, dict):
         tem |= {classe_do_heroi(hid, h) for hid, h in herois.items() if isinstance(h, dict)}

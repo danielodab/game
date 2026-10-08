@@ -91,6 +91,8 @@ CAPACITOR = [
     ('node_modules/@capgo/native-purchases/dist/plugin.js', 'native-purchases.js'),
     # o anuncio premiado (js/core/premio_anuncio.js): so e pedido quando o jogador ENTRA na area
     ('node_modules/@capacitor-community/admob/dist/plugin.js', 'admob.js'),
+    # 08/10: os avisos locais do aparelho (js/core/notificacoes.js): a ponte sobe na primeira ligacao
+    ('node_modules/@capacitor/local-notifications/dist/plugin.js', 'local-notifications.js'),
 ]
 
 # A Play recusa o que passa disto no download inicial. A www/ fica muito

@@ -879,6 +879,8 @@ var JOGO = (typeof window !== 'undefined')
   });
   peloServidor('bancoDepositar', function (item) {
     if (!item || !item.itemId) return responde({ ok: false });
+    // 08/10: a peça com a Gema engastada fica na conta (a vaga do banco não guarda o bônus)
+    if (typeof item.extra === 'string' && item.extra) return responde({ ok: false, erro: Tx('a peça com Gema engastada não vai ao banco da guilda') });
     return pede('/api/guilda/banco/depositar', { item: { itemId: item.itemId, level: item.level || 0,
       stars: item.stars || 0, iid: (typeof item.iid === 'string' && item.iid) ? item.iid : null } });
   });

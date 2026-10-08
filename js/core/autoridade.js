@@ -714,6 +714,7 @@ var JOGO = (typeof window !== 'undefined')
   /* As funções do jogo que mudam a economia sem sorteio: rodam aqui na hora e
    * vão para a fila. Instalado uma vez; sem sessão cada embrulho só repassa. */
   var instalado = false;
+  function isArray(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
   A.instala = function () {
     if (instalado) return;
     var p = P(), db = DB(), M = JOGO.Missoes, G = JOGO.GM;
@@ -732,6 +733,11 @@ var JOGO = (typeof window !== 'undefined')
     em(p, 'saveTraje', 'salvarTraje', function (heroId, n) { return { heroId: heroId, n: n }; });
     em(p, 'wearTraje', 'vestirTraje', function (heroId, n) { return { heroId: heroId, n: n }; });
     em(p, 'fuseItem', 'fundirPeca', function (invIndex) { return { invIndex: invIndex }; });
+    // 08/10: 100 Fragmentos de Gema viram 1 Gema Enterrada — sem sorteio, sobe como op comum
+    em(p, 'juntaFragmentos', 'juntarFragmentos', function () { return {}; });
+    // 08/10: a estrela comprada com cartas e a escolha das duas iniciais
+    em(p, 'subirEstrela', 'subirEstrela', function (cid) { return { classId: cid }; });
+    em(p, 'escolheIniciais', 'escolherIniciais', function (ids) { return { ids: isArray(ids) ? ids.slice() : [] }; });
     em(p, 'chooseElement', 'escolherElemento', function (heroId, el) { return { heroId: heroId, elemento: el }; });
     em(p, 'liberaElemento', 'liberarElemento', function (heroId, el) { return { heroId: heroId, elemento: el }; });
     em(p, 'trocaElemento', 'trocarElemento', function (heroId, el) { return { heroId: heroId, elemento: el }; });

@@ -369,6 +369,7 @@ var JOGO = (typeof window !== 'undefined')
     // que ainda por cima quebrava o empilhamento (0 e 1 não agrupam).
     var dep = { itemId: entrada.itemId, level: entrada.level || 0, stars: entrada.stars || 0 };
     if (typeof entrada.iid === 'string' && entrada.iid) dep.iid = entrada.iid;   // a série viaja junto (10/09)
+    if (typeof entrada.extra === 'string' && entrada.extra) dep.extra = entrada.extra;   // 08/10: e a Gema engastada
     d.banco.itens.push(dep);
     grava();
     return responde({ ok: true, total: d.banco.itens.length });

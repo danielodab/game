@@ -934,3 +934,16 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
   background: var(--ouro-a10); border: 1px solid var(--ouro-esc); color: var(--texto);
 }
 .aviso-traducao b { color: var(--ouro); }
+
+/* 08/10: a arte dos Fragmentos de Gema na loja — o losango roxo */
+.arte-produto.arte-gema { background: radial-gradient(circle at 50% 40%, rgba(198,120,255,.35), rgba(60,20,90,.15) 70%); }
+.arte-produto.arte-gema .glifo { color: #d9a6ff; text-shadow: 0 0 14px rgba(198,120,255,.8); font-size: 38px; }
+
+/* 08/10: as molduras premium da plaquinha na loja */
+.arte-produto.arte-moldura { background: linear-gradient(160deg, #1d232c, #0f1216); display: flex; align-items: center; justify-content: center; }
+.arte-moldura .moldura-placa { font: 600 15px Georgia, serif; color: #f0ead8; padding: 10px 18px; border: 4px double var(--mol, #c9a227);
+  border-radius: 4px; background: var(--mol-fundo, rgba(24,18,10,.9)); box-shadow: 0 0 14px color-mix(in srgb, var(--mol, #c9a227) 45%, transparent); }
+.arte-moldura.m-ouro { --mol: #ffd24a; --mol-fundo: rgba(48,34,6,.94); }
+.arte-moldura.m-rubi { --mol: #ff4d6d; --mol-fundo: rgba(50,8,18,.94); }
+.arte-moldura.m-esmeralda { --mol: #3ddc84; --mol-fundo: rgba(6,40,22,.94); }
+.arte-moldura.m-obsidiana { --mol: #9a7bff; --mol-fundo: rgba(10,6,20,.96); }

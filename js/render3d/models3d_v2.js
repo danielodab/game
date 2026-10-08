@@ -390,7 +390,9 @@ var JOGO = (typeof window !== 'undefined')
     'ash-wraith':     { model: 'ash-wraith',     scale: 1.17 },  // 2,11 m — vulto de fuligem
     'faceless-smith': { model: 'faceless-smith', scale: 1.22 },  // 2,20 m — avental sem ninguem dentro
     'chain-hauler':   { model: 'chain-hauler',   scale: 1.50 },  // 2,70 m — guindaste com o trilho as costas
-    'boss-heartforge':{ model: 'boss-heartforge', scale: 1.19 }, // 3,51 m — o forno-tita, o maior da sala
+    // 08/10: o clipe de parado deste rig do Meshy estica um braço (o dono viu o retrato "com braço bugado"
+    // nas portas); o retrato sai na pose de origem (retratoPose 'bind'), que é a limpa — ver tests/foto_retrato_boss.html
+    'boss-heartforge':{ model: 'boss-heartforge', scale: 1.19, retratoPose: 'bind' }, // 3,51 m — o forno-tita, o maior da sala
     // --- Coro dos Andaimes (Andaimes do Vento) — A ARTE E DO USUARIO (19/09).
     //
     // Os dez sairam do Meshy, Cambota incluso (tools/embute_monstros.py, lote
@@ -426,7 +428,7 @@ var JOGO = (typeof window !== 'undefined')
     'crystal-chanter':{ model: 'whistle-choir',  scale: 1.06 },  // 1,91 m — EMPRESTADO: o Coro-Assobio dos Andaimes, mesmo papel de apoio. terra sobre modelo de ar: sai verde, nao lilas
     'sinkhole-worm':  { model: 'sinkhole-worm',  scale: 1.17 },  // 2,11 m — o funil de cascalho; tambem se arrasta
     'cave-jaw':       { model: 'cave-jaw',       scale: 1.61 },  // 2,90 m — o peito e a boca do tunel
-    'boss-deepknock': { model: 'boss-deepknock', scale: 1.19 },  // 3,51 m — a rocha-mae sem rosto, o maior da mina
+    'boss-deepknock': { model: 'boss-deepknock', scale: 1.19, retratoPose: 'bind' },  // 3,51 m — a rocha-mae sem rosto, o maior da mina (08/10: idem, o idle estica o braço)
     // --- Guarda do Coracao (Coracao Partido) — A ARTE E DO USUARIO (21/09).
     //
     // OS DEZ sairam do Meshy, o Coracao incluso (tools/embute_monstros.py, lote
@@ -1416,6 +1418,7 @@ var JOGO = (typeof window !== 'undefined')
       proc: !!base.proc, procId: defId,
       loco: base.loco || null,           // 03/10: o clipe de locomoção que passa na frente (a Arraia plana)
       retrato: base.retrato || null,     // 03/10: 'inteiro' = o retrato da HUD sai de corpo inteiro (ver M.portrait)
+      retratoPose: base.retratoPose || null,   // 08/10: a POSE do retrato ('bind' ou {clip, t}) — o idle de alguns rigs do Meshy estica um braço
       scale: (base.scale || 1),          // o porte de chefe ja vem da altura-alvo
       // 02/10: a tinta da FASE (o Eco): sem tint aqui, unit() usa o elemento que o renderizador passa
       tint: tintaFase ? null : M.elementColor((md && md.element) || 'neutro'),
@@ -2194,7 +2197,7 @@ var JOGO = (typeof window !== 'undefined')
     opts = opts || {};
     var size = opts.size || 192;
     var key = defId + '|' + (opts.element || '') + '|' + (opts.elements ? opts.elements.join(',') : '') +
-              '|' + size + (opts.corpoInteiro ? '|inteiro' : '');
+              '|' + size + (opts.corpoInteiro ? '|inteiro' : '') + (opts.pose ? '|' + JSON.stringify(opts.pose) : '');
     if (portCache[key]) return portCache[key];
     if (!ready) return null;
 
@@ -2208,8 +2211,14 @@ var JOGO = (typeof window !== 'undefined')
     portraitRig(size);
     portRenderer.setSize(size, size, false);
     portScene.add(node);
-    // pose de parado, um quadro à frente para sair do bind pose
-    if (node.userData.mixer) { node.userData.play('idle', { fade: 0 }); node.userData.mixer.update(0.6); }
+    // pose de parado, um quadro à frente para sair do bind pose. 08/10: `retratoPose` no look (ou
+    // opts.pose, nas provas) troca o clipe e o instante — 'bind' deixa o rig como veio: o idle do
+    // Magno e do chefe da Mina esticava um braço no retrato (o dono viu nas portas)
+    var pose = opts.pose || look.retratoPose || null;
+    if (pose !== 'bind' && node.userData.mixer) {
+      node.userData.play((pose && pose.clip) || 'idle', { fade: 0 });
+      node.userData.mixer.update((pose && typeof pose.t === 'number') ? pose.t : 0.6);
+    }
     if (node.userData.procAnimate) node.userData.procAnimate({ moving: 0, castK: 0 }, 0.6, 0.016);
     node.updateMatrixWorld(true);
 

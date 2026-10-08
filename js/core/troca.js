@@ -275,6 +275,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   T.porItem = function (entrada) {
     if (!st || st.fase !== 'aberta' || !entrada || !entrada.itemId) return false;
+    if (typeof entrada.extra === 'string' && entrada.extra) return false;   // 08/10: a engastada não vai à mesa
     var iid = (typeof entrada.iid === 'string' && entrada.iid) ? entrada.iid : serieLivre(entrada);
     // a mesma peça (a mesma série) não vai à mesa duas vezes
     if (iid && st.minha.itens.some(function (o) { return o.iid === iid; })) return false;

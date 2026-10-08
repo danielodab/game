@@ -327,6 +327,11 @@ var JOGO = (typeof window !== 'undefined')
     cheio('M11 3.3L12.9 2.4L12.5 4.8Z') + cheio('M13.4 0.6L15.3 1.2L14 2.6Z', MEIA) +
     cheio('M9.3 0.9L10.9 1.1L10 2.4Z', MEIA));
 
+  // 08/10: a GEMA — o losango facetado, com a cinta e as duas arestas que descem ao bico
+  poe('fg-gema',
+    cheio('M12 2.4L19.6 8.6L12 21.6L4.4 8.6Z') +
+    risco('M4.4 8.6H19.6M12 2.4L8.6 8.6L12 21.6M12 2.4L15.4 8.6L12 21.6', 1.2, '.55'));
+
   // --- as abas da caixa do GM
   poe('gm-itens', ELMO);
   // o conjunto é a armadura INTEIRA: o elmo em cima da couraça, como no

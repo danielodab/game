@@ -172,7 +172,8 @@ TIPOS_TROCA = ('vintens', 'barras')          # as trocas entre moedas: fora dos 
 # lavagem de pacote pago com cartão alheio); o Pacote de Boas-Vindas é a primeira compra de cada conta
 FORA_DO_PRESENTE = TIPOS_TROCA + ('pacote',)
 # 04/10: as auras da praça (uma por elemento e a neutra) e o preço de cada uma, em barras
-AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra')
+AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra',
+         'sombra', 'gelo', 'ouro')      # 08/10 (o dono: "crie mais auras"): a Sombra, a Geada e a Dourada
 # 04/10, o dono: "quero uma aura preta com vermelho escuro e chamas, especial para o gm". Não se vende nem
 # se presenteia: só a conta marcada (contas.gm = 1) a tem, e só ela consegue escolhê-la.
 AURAS_MESTRE = ('mestre',)
@@ -180,7 +181,14 @@ AURA_MESTRE_NOME = {'mestre': 'Chama do Mestre'}
 AURA_PRECO = 150
 # 04/10 (o dono: "essa lousa é mais cara por ser mais bonita"): a Lousa custa mais que as quatro dos elementos
 # e, por isso, NÃO é uma das escolhas do Pacote de Boas-Vindas — o pacote traz uma aura de elemento
-AURA_PRECO_DE = {'neutra': 250}
+AURA_PRECO_DE = {'neutra': 250, 'sombra': 250, 'gelo': 250, 'ouro': 400}   # 08/10: as três novas, premium
+# 08/10: as MOLDURAS premium da plaquinha (o dono: "crie umas molduras premium") — só aparência, como a aura.
+# As dos títulos (arena, Eco, chefe, classe) são de graça e automáticas (js/render3d/hub3d.js, MOLDURAS)
+MOLDURAS_LOJA = ('ouro', 'rubi', 'esmeralda', 'obsidiana')
+MOLDURA_PRECO = 180
+MOLDURA_PRECO_DE = {'obsidiana': 300}
+MOLDURA_NOME = {'ouro': 'Moldura Dourada', 'rubi': 'Moldura de Rubi', 'esmeralda': 'Moldura de Esmeralda',
+                'obsidiana': 'Moldura de Obsidiana'}
 AURAS_BOAS_VINDAS = tuple(a for a in AURAS if a not in AURA_PRECO_DE)
 # 04/10: o Pacote de Boas-Vindas — uma classe rara à escolha, PEDRAS_BOAS_VINDAS pedras de cada e uma aura
 BOAS_VINDAS_SKU = 'boas-vindas'
@@ -274,6 +282,12 @@ CREATE TABLE IF NOT EXISTS aura_escolhida(
   aura          TEXT NOT NULL,
   atualizado_em INTEGER NOT NULL
 );
+-- 08/10: a MOLDURA premium escolhida para a plaquinha (a posse é o pedido 'moldura-*'; ver _molduras). O Relé lê daqui
+CREATE TABLE IF NOT EXISTS moldura_escolhida(
+  conta_id      INTEGER PRIMARY KEY REFERENCES contas(id) ON DELETE CASCADE,
+  moldura       TEXT NOT NULL,
+  atualizado_em INTEGER NOT NULL
+);
 -- 04/10: o presente a um amigo. O pedido mora na conta de quem RECEBE; esta linha diz quem pagou (o
 -- estorno volta para ele) e guarda o idem de quem deu (o de loja_pedidos é por conta de quem recebe)
 CREATE TABLE IF NOT EXISTS loja_amigos(
@@ -292,9 +306,10 @@ CREATE INDEX IF NOT EXISTS loja_amigos_de ON loja_amigos(de, criado_em);
 # linhas por hora nem nas janelas — cada um tem o teto dele
 # 02/10: e os PRÊMIOS do Eco Primordial (supremo.py, sku 'eco-…'): o fechamento da semana não pode encher
 # os 5 abertos de quem ficou no pódio e travar a compra dele até o jogo retirar
+# 08/10: e os Fragmentos de Gema do anúncio premiado (preço 0, sem linha em loja_creditos)
 SEM_EXTRA = ("id NOT IN (SELECT pedido_id FROM loja_presentes) "
              "AND id NOT IN (SELECT pedido_id FROM loja_creditos) "
-             "AND sku NOT LIKE 'eco-%'")
+             "AND sku NOT LIKE 'eco-%' AND sku NOT IN ('anuncio-fragmentos', 'diario')")
 # 04/10: o presente de um amigo CONTA no limite do produto de quem recebe (a Reescrita do mês, a aura que
 # ele já tem), mas não nos tetos de abuso dele (5 abertos, 10 compras por hora, 30 linhas por hora): quem
 # dá não pode travar a loja de quem recebe. Os tetos do presente são os de quem dá (loja_presentear)
@@ -354,6 +369,18 @@ def _pedras(elemento, alvo, nome, de, preco, qtd):
             'moeda': 'barras', 'limite': None}
 
 
+def _fragmentos(qtd, preco):
+    """08/10: os Fragmentos de Gema (dono: "esses fragmentos serão vendidos na loja do site"). Entram no
+    jogo como 'pedras' (a mesma entrega), e 100 viram a Gema Enterrada na forja — a pedra que engasta um
+    bônus a mais numa peça (+1 PA, +1 PP, dano ou vida, sorteado). A Gema inteira não se vende."""
+    return {'sku': 'fragmentos-%d' % qtd, 'secao': 'gema', 'tipo': 'pedras', 'alvo': FRAGMENTO_GEMA, 'qtd': qtd,
+            'elemento': 'fragmento', 'nome': '%d Fragmentos de Gema' % qtd,
+            'descricao': ('%d Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema '
+                          'engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça '
+                          'aceita uma gema só. Os fragmentos também caem nos seis portais.' % qtd),
+            'preco': preco, 'moeda': 'barras', 'limite': None}
+
+
 def _vintens(qtd):
     """13/09: barras → vinténs. A entrega é o crédito de vinténs de sempre; o preço, barras."""
     barras = qtd // VINTENS_POR_BARRA
@@ -377,6 +404,17 @@ def _barras_por_vintens(barras):
             'preco': vintens, 'moeda': 'vintens', 'limite': None}
 
 
+def _moldura(mid, efeito):
+    """08/10: a moldura premium da plaquinha do nome. Só aparência: a placa que todo mundo vê na praça ganha
+    o filete, o fundo e os cantos dela, por cima da moldura automática do título."""
+    return {'sku': 'moldura-' + mid, 'secao': 'aparencia', 'tipo': 'moldura', 'alvo': mid, 'qtd': 1,
+            'nome': MOLDURA_NOME[mid],
+            'descricao': ('%s Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título '
+                          'dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.' % efeito),
+            'preco': MOLDURA_PRECO_DE.get(mid, MOLDURA_PRECO), 'moeda': 'barras',
+            'limite': {'grupo': 'moldura-' + mid, 'max': 1, 'dias': None}}
+
+
 def _aura(cor, nome, efeito):
     """04/10: a aura da praça. Só aparência: nada muda em batalha, e por isso pode se vender. Cada uma é um
     efeito próprio (o dono: "não só mudar a cor") — a descrição conta o que se vê, igual ao js/render3d/hub3d.js."""
@@ -391,6 +429,10 @@ def _aura(cor, nome, efeito):
 # as dá" era de antes do Fecho de Brasa abrir (19/09) — hoje TODA pedra cai de monstro em portal aberto
 # (fogo no Fecho e na Mina; a neutra no Fecho, nos Andaimes e no Coração: `stoneDrop` em monsters.js), e o
 # Poço mistura todos. A loja só adianta; quem farma chega a tudo. Os preços mais altos ficam pela raridade
+FRAGMENTO_GEMA = 'stone-gem-frag'       # 08/10: o id do fragmento (js/core/data/items.js, DATA.gema.fragmento)
+# (quantidade, preço em barras): 100 = uma gema inteira. Caro de propósito — a gema é poder permanente
+# numa peça, e o caminho de quem farma (os seis portais, o anúncio premiado) existe
+_FRAGMENTOS = ((10, 60), (50, 270), (100, 500))
 _PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de água'), 25, 110),
            ('terra', 'stone-root', 'Grãos de Rocha-Mãe', ('da terra', 'de terra'), 25, 110),
            ('ar', 'stone-breath', 'Sopros Engarrafados', ('do ar', 'de ar'), 40, 180),
@@ -398,13 +440,18 @@ _PEDRAS = (('agua', 'stone-tear', 'Lágrimas de Cisterna', ('da água', 'de águ
            ('neutro', 'stone-slate', 'Lascas da Lousa', None, 40, 180))
 
 # Fora, de propósito: a Âncora de Forja (é o +10, o "item bom" que tem de ser
-# MUITO difícil), equipamento, cartas avulsas, estrelas, selos, giros, pets,
-# sorte de saque, bônus de guilda, XP direto e multiplicador de vinténs. As
-# classes que já nascem liberadas (sumo, curandeiro) e o gm nunca entram.
+# MUITO difícil) e a Gema Enterrada inteira (só os FRAGMENTOS, 08/10 — pedido do
+# dono), equipamento, cartas avulsas, estrelas, selos, giros, pets,
+# sorte de saque, bônus de guilda, XP direto e multiplicador de vinténs. O gm nunca
+# entra; as comuns (sumo, curandeiro) entraram em 08/10, quando os dois primeiros
+# heróis viraram escolha livre (quem não as escolheu as compra como as outras).
 # Seções na ordem da página (13/09): vintens · barras-por-vintens · personagens · bonus · pedras · guilda ·
 # pergaminhos. Os preços em barras de ouro (1 barra = 20 vinténs de pacote: a régua de antes, ÷ 20).
 CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
     _barras_por_vintens(b) for b in (10, 50, 100, 250)) + (
+    # 08/10: os dois primeiros heróis são livres (qualquer classe), então as comuns também se vendem
+    _classe('sumo', 'Bárbaro', 'comum', 5, 250),           # a régua de sempre: 50 barras por carta
+    _classe('curandeiro', 'Curandeiro', 'comum', 5, 250),
     _classe('invocador', 'Xamã', 'raro', 10, 500),
     _classe('bruxo', 'Bruxo', 'raro', 10, 500),
     _classe('espadachim', 'Ladino', 'epico', 20, 1000),
@@ -414,7 +461,8 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
     _bonus(3, 195),
     _bonus(7, 395),
 ) + tuple(_pedras(e, a, n, d, p10, 10) for e, a, n, d, p10, _ in _PEDRAS) + tuple(
-    _pedras(e, a, n, d, p50, 50) for e, a, n, d, _, p50 in _PEDRAS) + (
+    _pedras(e, a, n, d, p50, 50) for e, a, n, d, _, p50 in _PEDRAS) + tuple(
+    _fragmentos(q, p) for q, p in _FRAGMENTOS) + (
     # "pedras de guilda" = as Insígnias de Fundação (10 fundam uma guilda; só chefe derruba, 50%)
     {'sku': 'insignia-1', 'secao': 'guilda', 'tipo': 'insignias', 'alvo': 'fundacao', 'qtd': 1,
      'nome': '1 Insígnia de Fundação',
@@ -435,6 +483,14 @@ CATALOGO = tuple(_vintens(q) for q in (1000, 5000, 12000, 25000)) + tuple(
     _aura('terra', 'Aura de Raiz', 'Folhas e pétalas girando devagar em volta, e brotos que nascem do chão e recolhem.'),
     _aura('ar', 'Aura de Vento', 'Fitas de ar em espiral subindo em volta do corpo, e um rastro ao andar.'),
     _aura('neutra', 'Aura da Lousa', 'Lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida no chão.'),
+    # 08/10: as três auras novas e as quatro molduras premium
+    _aura('sombra', 'Aura de Sombra', 'Fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão.'),
+    _aura('gelo', 'Aura de Geada', 'Anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo.'),
+    _aura('ouro', 'Aura Dourada', 'Fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa.'),
+    _moldura('ouro', 'Filete dourado duplo com losangos nas quinas.'),
+    _moldura('rubi', 'Filete vermelho-rubi duplo com losangos nas quinas, sobre fundo vinho.'),
+    _moldura('esmeralda', 'Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata.'),
+    _moldura('obsidiana', 'Filete violeta duplo sobre fundo quase preto, com losangos nas quinas — a mais escura.'),
 )
 POR_SKU = {i['sku']: i for i in CATALOGO}
 # 04/10: o Pacote de Boas-Vindas. O preço cheio é a soma do que vem dentro, pelos preços do catálogo
@@ -573,6 +629,20 @@ def nome_do_pedido(sku, entrega=None, vintens=None):
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
         if isinstance(n, int) and not isinstance(n, bool) and n > 0:
             return '%s vinténs' % milhar(n)
+    # 08/10: o prêmio diário de resgate (premio_diario.py): os vinténs e as pedras/fragmentos
+    if sku == 'diario-vintens':
+        n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return '%s vinténs (prêmio diário)' % milhar(n)
+        return 'Vinténs do prêmio diário'
+    if sku == 'diario':
+        return 'Prêmio diário'
+    # 08/10: os Fragmentos de Gema do anúncio premiado (anuncio.py)
+    if sku == 'anuncio-fragmentos':
+        n = entrega.get('qtd') if isinstance(entrega, dict) else None
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return '%d Fragmentos de Gema (anúncio)' % n
+        return 'Fragmentos de Gema do anúncio'
     # 06/10: os vinténs do anúncio premiado do aplicativo (anuncio.py)
     if sku == 'anuncio-vintens':
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
@@ -618,6 +688,9 @@ def origem_do_pedido(r):
     # 07/10: o resgate de um degrau da trilha da temporada (trilha.py) — o jogo avisa "Prêmio da trilha"
     if 'sku' in chaves and r['sku'] == 'trilha':
         return 'trilha'
+    # 08/10: o prêmio diário de resgate (premio_diario.py) — o jogo avisa "Prêmio diário"
+    if 'sku' in chaves and r['sku'] in ('diario', 'diario-vintens'):
+        return 'diario'
     if 'presente' in chaves and r['presente']:
         return 'presente'
     if 'amigo' in chaves and r['amigo']:              # 04/10: o presente de um amigo (loja_amigos)
@@ -734,6 +807,7 @@ class LojaMixin:
             o que faltar vira alerta para o Mestre."""
         if estado in ('cancelado', 'estornado'):
             self._aura_poda(cid)                        # 04/10: a aura que saiu com o pedido deixa de ser vestida
+            self._moldura_poda(cid)                     # 08/10: idem para a moldura premium
         lb = self.con.execute("SELECT custo, ganho FROM loja_barras WHERE pedido_id = ?", (pid,)).fetchone()
         if lb is None:
             return
@@ -810,6 +884,9 @@ class LojaMixin:
             # tabela não se altera no rolling update); a `ref` diz a origem, e é ela que o extrato mostra
             if (r['ref'] or '').startswith('anuncio:'):
                 m['motivo'], m['nome'] = 'anuncio', 'Anúncio assistido'
+            # 08/10: a barra do prêmio diário (premio_diario.py), pela mesma porta
+            if (r['ref'] or '').startswith('diario:'):
+                m['motivo'], m['nome'] = 'diario', 'Prêmio diário'
             saida.append(m)
         return saida
 
@@ -1238,6 +1315,60 @@ class LojaMixin:
         if r is not None and r['aura'] not in self._auras(cid):
             self.con.execute("DELETE FROM aura_escolhida WHERE conta_id = ?", (cid,))
 
+    # -- as molduras premium (08/10), no molde das auras ---------------------------------------------------
+    def _molduras(self, cid):
+        """As molduras premium da conta: os pedidos VIVOS de 'moldura-*'. O Mestre tem todas."""
+        marca = self.con.execute("SELECT gm FROM contas WHERE id = ?", (cid,)).fetchone()
+        if marca is not None and marca['gm']:
+            return set(MOLDURAS_LOJA)
+        tem = set()
+        for r in self.con.execute(
+                "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado', 'entregue') "
+                "AND sku LIKE 'moldura-%'", (cid,)):
+            ent = _json(r['entrega']) or {}
+            if ent.get('tipo') == 'moldura' and ent.get('alvo') in MOLDURAS_LOJA:
+                tem.add(ent['alvo'])
+        return tem
+
+    def _moldura_poda(self, cid):
+        try:
+            r = self.con.execute("SELECT moldura FROM moldura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
+        except sqlite3.Error:
+            return
+        if r is not None and r['moldura'] not in self._molduras(cid):
+            self.con.execute("DELETE FROM moldura_escolhida WHERE conta_id = ?", (cid,))
+
+    def _molduras_publico(self, cid):
+        tem = self._molduras(cid)
+        r = self.con.execute("SELECT moldura FROM moldura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
+        return {'tem': [m for m in MOLDURAS_LOJA if m in tem],
+                'escolhida': r['moldura'] if r is not None and r['moldura'] in tem else None,
+                'todas': [{'id': m, 'sku': 'moldura-' + m, 'nome': MOLDURA_NOME[m]} for m in MOLDURAS_LOJA]}
+
+    # -- GET /api/loja/moldura · POST /api/loja/moldura {moldura: id | null} ------------------------------
+    def loja_moldura_ver(self, conta, corpo):
+        with self.tranca:
+            return 200, {'ok': True, 'molduras': self._molduras_publico(conta['id'])}
+
+    def loja_moldura_escolher(self, conta, corpo):
+        """A moldura premium na plaquinha: uma das que a conta TEM, ou null ('auto': a do título)."""
+        mid, cid, t = corpo.get('moldura'), conta['id'], agora()
+        if mid in (None, '', 'auto'):
+            mid = None
+        elif mid not in MOLDURAS_LOJA:
+            raise Recusa(400, 'moldura desconhecida')
+        with self._escrita():
+            if mid is None:
+                self.con.execute("DELETE FROM moldura_escolhida WHERE conta_id = ?", (cid,))
+            else:
+                if mid not in self._molduras(cid):
+                    raise Recusa(409, 'você ainda não tem essa moldura')
+                self.con.execute("INSERT INTO moldura_escolhida(conta_id, moldura, atualizado_em) VALUES (?, ?, ?) "
+                                 "ON CONFLICT(conta_id) DO UPDATE SET moldura = excluded.moldura, "
+                                 "atualizado_em = excluded.atualizado_em", (cid, mid, t))
+            molduras = self._molduras_publico(cid)
+        return 200, {'ok': True, 'molduras': molduras}
+
     def _auras_publico(self, cid):
         tem = self._auras(cid)
         r = self.con.execute("SELECT aura FROM aura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
@@ -1294,9 +1425,10 @@ class LojaMixin:
             save = self._loja_save(cid)
             boas = self._boas_vindas_publico(cid, save['progress'] if save else None, t)
             auras = self._auras_publico(cid)
+            molduras = self._molduras_publico(cid)       # 08/10
             barras = self._barras_saldo(cid)
         return 200, {'ok': True, 'agora': t, 'ofertas': ofertas_publico(t), 'boasVindas': boas, 'auras': auras,
-                     'barras': {'saldo': barras}}
+                     'molduras': molduras, 'barras': {'saldo': barras}}
 
     # -- o presente a um amigo (04/10) -----------------------------------------------------------------
     def _nome_publico(self, cid):

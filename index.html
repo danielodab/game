@@ -719,6 +719,9 @@
       // "Ganhar prêmios": o anúncio premiado, só para quem ENTRA na área e toca no botão. Este arquivo não
       // carrega nada de anúncio; a ponte e o SDK só sobem quando a área é aberta (js/core/premio_anuncio.js)
       document.write('<scr' + 'ipt src="' + window.__url('js/core/premio_anuncio.js') + '"><\/scr' + 'ipt>');
+      // 08/10: os AVISOS do aparelho (lembretes locais: o prêmio diário, o Eco, três dias sem descer) — a ponte
+      // do plugin só sobe na primeira ligação, dentro do aplicativo (js/core/notificacoes.js)
+      document.write('<scr' + 'ipt src="' + window.__url('js/core/notificacoes.js') + '"><\/scr' + 'ipt>');
     }
   } catch (eApp) {}
   }
@@ -759,6 +762,7 @@
       'js/core/afixos.js',             // 07/10: os afixos de sala — a regra a mais do Calabouco do Dia (o motor chama)
       'js/core/elites.js',             // 07/10: os elites de sala — um monstro comum com um traco a mais (o motor sorteia)
       'js/core/trilha.js',             // 07/10: a trilha da temporada — pontos e resgates no servidor (servidor/trilha.py)
+      'js/core/premio_diario.js',      // 08/10: o prêmio diário de resgate (servidor/premio_diario.py)
       'js/core/cronicas.js',           // 07/10: as cronicas — o que esta aberto e o que acabou de abrir (Progress.feitos)
       'js/core/agenda.js',             // os Eventos do mundo: o cache do que o Mestre ligou (10/09)
       'js/core/poco.js',               // o Poco sem Fundo: torre infinita com monstros misturados

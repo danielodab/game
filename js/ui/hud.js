@@ -341,6 +341,49 @@ var JOGO = (typeof window !== 'undefined')
     tap(node, function () { showTip(node, title, body, accent); });
     return node;
   }
+  /* 08/10: a explicação que se vê SEGURANDO (dono: "para ver o detalhe do ataque precisa manter
+   * pressionado em cima; no PC passar o mouse e deixar parado"). O toque curto continua sendo o
+   * clique do botão (tap); segurar o dedo ~0,4 s abre o balão, soltar fecha — e o clique que o
+   * soltar dispara é ENGOLIDO na captura, para a leitura não escolher o feitiço sem querer. Com o
+   * mouse, parar em cima ~0,5 s abre, sair de cima fecha; clicar fecha e segue o clique. Arrastar
+   * o dedo (rolar a barra) cancela. Nada é dono do nó: a barra é refeita a cada pintura. */
+  var SEGURA_MS = 420, PAIRA_MS = 500, SEGURA_PX = 10;
+  function seguraParaVer(node, title, body, accent) {
+    var relogio = 0, engole = false, x0 = 0, y0 = 0, aberto = false;
+    function para() { if (relogio) { clearTimeout(relogio); relogio = 0; } }
+    function mostra() { if (tipOwner !== node) showTip(node, title, body, accent); aberto = true; }
+    function fecha() { para(); if (aberto) { aberto = false; if (tipOwner === node) hideTip(); } }
+    node.addEventListener('pointerdown', function (ev) {
+      engole = false;
+      para();
+      if (ev.pointerType === 'mouse') return;
+      x0 = ev.clientX; y0 = ev.clientY;
+      relogio = setTimeout(function () { relogio = 0; engole = true; mostra(); }, SEGURA_MS);
+    });
+    node.addEventListener('pointermove', function (ev) {
+      if (relogio && ev.pointerType !== 'mouse' &&
+          (Math.abs(ev.clientX - x0) > SEGURA_PX || Math.abs(ev.clientY - y0) > SEGURA_PX)) para();
+    });
+    node.addEventListener('pointerenter', function (ev) {
+      if (ev.pointerType !== 'mouse') return;
+      para();
+      relogio = setTimeout(function () { relogio = 0; mostra(); }, PAIRA_MS);
+    });
+    node.addEventListener('pointerup', fecha);
+    node.addEventListener('pointercancel', fecha);
+    node.addEventListener('pointerleave', fecha);
+    node.addEventListener('keydown', function () { engole = false; });
+    node.addEventListener('click', function (ev) {
+      if (!engole) { fecha(); return; }
+      engole = false;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }, true);
+    node.addEventListener('contextmenu', function (ev) {
+      if (engole || relogio || aberto) ev.preventDefault();
+    });
+    return node;
+  }
 
   // ------------------------------------------------------------------- toast
   var toastEl = null, toastT = 0;
@@ -386,7 +429,14 @@ var JOGO = (typeof window !== 'undefined')
       : ((d.origem === 'pagamento' || ped.origem === 'pagamento') ? 'pagamento'
       : ((d.origem === 'eco' || ped.origem === 'eco') ? 'eco'
       : ((d.origem === 'trilha' || ped.origem === 'trilha' || ent.origem === 'trilha') ? 'trilha'
-      : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja'))));
+      : ((d.origem === 'diario' || ped.origem === 'diario' || ent.origem === 'diario') ? 'diario'
+      : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja')))));
+    // 08/10: o prêmio diário de resgate (servidor/premio_diario.py)
+    if (origem === 'diario') {
+      if (d.tipo !== 'entregue') return { texto: tr('O prêmio diário não entrou aqui: ele volta na próxima abertura'), tipo: null };
+      var nomeD = safe(function () { return JOGO.Diario.nomeDoPremio(ent); }, '') || nome;
+      return { texto: tr('Prêmio diário: {a}', { a: esc(nomeD) }), tipo: 'good' };
+    }
     // 04/10: o presente de um amigo (servidor/loja.py, loja_presentear) — o pedido traz quem mandou
     var deQuem = (origem === 'amigo' && ped.de) ? String(ped.de) : '';
     // 07/10: o prêmio de um degrau da trilha da temporada (servidor/trilha.py)
@@ -975,8 +1025,13 @@ var JOGO = (typeof window !== 'undefined')
     // personagem GM") — já escolhido, e o único cartão da tela
     var soMestre = soMestreDoFundo();
     if (soMestre) selHeroes = ['gm'];
-    s.appendChild(header(tr('Quem desce'),
-      tr('Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. Sozinho, a sorte de saque é máxima.'), 'menu'));
+    // 08/10 (o dono): a conta NOVA escolhe os seus DOIS primeiros heróis, de qualquer classe — as sete
+    // aparecem abertas, e a escolha se grava uma vez só (Progress.escolheIniciais)
+    var escolhendo = !soMestre && safe(function () { return P().podeEscolherIniciais(); }, false);
+    if (escolhendo) selHeroes = selHeroes.filter(function (c) { return !!classDef(c) && c !== 'gm'; }).slice(0, 2);
+    s.appendChild(header(tr('Quem desce'), escolhendo
+      ? tr('Bem-vindo! Escolha os seus DOIS primeiros heróis, de qualquer classe — o primeiro é o seu avatar e anda no Acampamento. As outras classes vêm depois, pelas cartas dos chefes.')
+      : tr('Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. Sozinho, a sorte de saque é máxima.'), 'menu'));
 
     var body = el('div', 'ui-body');
     var luck = el('div', 'luck-panel');
@@ -989,6 +1044,12 @@ var JOGO = (typeof window !== 'undefined')
     var foot = el('footer', 'ui-foot');
     var cnt = el('span', 'foot-count', '');
     var go = btn(tr('Confirmar'), 'btn-primary', function () {
+      if (escolhendo) {
+        if (selHeroes.length !== 2) { toast(tr('Escolha dois heróis para começar.')); return; }
+        var okE = safe(function () { return P().escolheIniciais(selHeroes.slice()); }, false);
+        if (!okE) { toast(tr('Não deu para gravar a escolha. Tente de novo.')); return; }
+        toast(tr('{a} e {b} são os seus heróis. Boa descida!', { a: esc(className(selHeroes[0])), b: esc(className(selHeroes[1])) }), 'good');
+      }
       if (!selHeroes.length) { toast(tr('Escolha ao menos um herói.')); return; }
       guardaDupla();          // 12/09: o próximo login já abre na praça com esta
       navTo('hub');
@@ -999,6 +1060,12 @@ var JOGO = (typeof window !== 'undefined')
 
     function paintFoot() {
       var n = selHeroes.length;
+      if (escolhendo) {
+        cnt.innerHTML = n < 2 ? tr('Escolha <b>{a}</b> de 2', { a: n }) : tr('<b>2 heróis</b> escolhidos — confirme');
+        go.classList.toggle('is-off', n !== 2);
+        paintLuck(luck, n);
+        return;
+      }
       cnt.innerHTML = n === 0 ? tr('Nenhum escolhido')
         : n === 1 ? tr('<b>1 herói</b> · sorte de saque <b class="luck-hi">máxima</b>')
                   : tr('<b>2 heróis</b> · sorte <b class="luck-mid">média</b>, mas podem <b>fundir</b>');
@@ -1008,7 +1075,8 @@ var JOGO = (typeof window !== 'undefined')
 
     var ids = soMestre ? ['gm'] : Object.keys(classes());
     if (!ids.length) ids = heroIds();
-    ids.forEach(function (cid) { grid.appendChild(heroCard(cid, paintFoot)); });
+    if (escolhendo) ids = ids.filter(function (c) { return c !== 'gm'; });
+    ids.forEach(function (cid) { grid.appendChild(heroCard(cid, paintFoot, escolhendo)); });
     paintFoot();
   }
 
@@ -1035,13 +1103,41 @@ var JOGO = (typeof window !== 'undefined')
     if (lk) box.style.setProperty('--luck', String(lk));
   }
 
-  function heroCard(cid, onChange) {
+  function heroCard(cid, onChange, escolhendo) {
     var def = classDef(cid) || {};
     var info = cardInfo(cid);
     var unlocked = info.unlocked;
     var h = unlocked ? hero(cid) : null;
-    var card = el('div', 'hero-card' + (unlocked ? '' : ' is-locked'));
     var idx = selHeroes.indexOf(cid);
+    // 08/10: na ESCOLHA das duas iniciais toda classe é um cartão aberto — a prévia (os números do dado,
+    // a raridade da carta) e o botão de escolher; nada de cadeado, nada de ficha
+    if (escolhendo) {
+      var cp = el('div', 'hero-card is-previa' + (idx >= 0 ? ' is-sel' : ''));
+      var picP = el('div', 'hero-pic');
+      picP.appendChild(art('unit', [cid, { element: 'neutro', dir: 0, scale: 0.62 }], 100));
+      cp.appendChild(picP);
+      cp.appendChild(el('div', 'hero-name', esc(def.name || cid)));
+      cp.appendChild(el('div', 'hero-role', esc(def.role ? tr(def.role) : '')));
+      var rarP = def.cardRarity || 'comum';
+      var chipP = el('span', 'chip hero-rar', esc(RAR_PT[rarP] || rarP));
+      chipP.style.color = rarColor(rarP);
+      cp.appendChild(chipP);
+      var stP = def.stats || {};
+      cp.appendChild(el('div', 'hero-stats',
+        tr('<span class="s-hp">{a} PV</span><span class="s-pa">{b} PA</span><span class="s-pp">{c} PP</span>', { a: stP.hp || 0, b: stP.pa || 0, c: stP.pp || 0 })));
+      var actsP = el('div', 'hero-acts');
+      actsP.appendChild(btn(idx === 0 ? tr('① Avatar') : idx > 0 ? tr('② Escolhido') : tr('Escolher'),
+                            'btn-mini ' + (idx >= 0 ? 'btn-primary' : ''), function () {
+        var i = selHeroes.indexOf(cid);
+        if (i >= 0) selHeroes.splice(i, 1);
+        else if (selHeroes.length >= 2) { toast(tr('São dois heróis: tire um para trocar.')); return; }
+        else selHeroes.push(cid);
+        buildHeroSelect();
+      }));
+      cp.appendChild(actsP);
+      return cp;
+    }
+    var card = el('div', 'hero-card' + (unlocked ? '' : ' is-locked'));
     if (idx >= 0) card.classList.add('is-sel');
 
     var pic = el('div', 'hero-pic');
@@ -1077,8 +1173,21 @@ var JOGO = (typeof window !== 'undefined')
       card.appendChild(bar('bar-xp', xi ? xi.pct : 0, xi && xi.xpNext ? 'XP ' + xi.xp + '/' + xi.xpNext : tr('nível máximo')));
       card.appendChild(el('div', 'hero-stats',
         tr('<span class="s-hp">{a} PV</span><span class="s-pa">{b} PA</span><span class="s-pp">{c} PP</span>', { a: st.hp || 0, b: st.pa || 0, c: st.pp || 0 })));
+      // 08/10: as cartas na mão e a próxima estrela — e o botão de subir, quando já dá
+      if (info.cards > 0 || info.next) {
+        var lc = el('div', 'hero-cartas' + (info.podeSubir ? ' is-pronto' : ''));
+        lc.innerHTML = info.next
+          ? tr('<b>{a}</b> cartas · ★{b} custa <b>{c}</b>', { a: info.cards, b: info.next.star, c: info.next.custo })
+          : tr('<b>{a}</b> cartas · ★ no topo', { a: info.cards });
+        card.appendChild(lc);
+      }
       var acts = el('div', 'hero-acts');
       acts.appendChild(btn(tr('Ficha'), 'btn-mini', function () { openSheet('heroSheet', cid); }));
+      if (info.podeSubir) {
+        acts.appendChild(btn(tr('★ Subir'), 'btn-mini btn-gold hero-subir', function () {
+          subirEstrela(cid, function () { buildHeroSelect(); });
+        }));
+      }
       var pick = btn(idx === 0 ? tr('① Avatar') : idx > 0 ? tr('② Escolhido') : tr('Escolher'),
                      'btn-mini ' + (idx >= 0 ? 'btn-primary' : ''), function () {
         var i = selHeroes.indexOf(cid);
@@ -1099,6 +1208,21 @@ var JOGO = (typeof window !== 'undefined')
       card.appendChild(see);
     }
     return card;
+  }
+
+  /* SUBIR UMA ESTRELA (08/10, o dono: "quando dropar o suficiente o jogador pode ir até o personagem e
+   * subir a estrela dele"): gasta as cartas do degrau (Progress.subirEstrela, que sobe como op com
+   * sessão) e avisa o bônus que entrou. `depois` redesenha a tela de quem chamou. */
+  function subirEstrela(cid, depois) {
+    var antes = cardInfo(cid);
+    if (!antes.podeSubir) { toast(tr('Ainda faltam cartas para a próxima estrela.')); return; }
+    var r = safe(function () { return P().subirEstrela(cid); }, false);
+    if (!r) { toast(tr('Não deu para subir a estrela agora.')); return; }
+    var b = safe(function () { return (starsCfg().bonuses || {})[r.stars]; }, null) || {};
+    var partes = [];
+    for (var k in b) if (b.hasOwnProperty(k) && k !== 'resists') partes.push('+' + b[k] + ' ' + (STAT_PT[k] || k));
+    toast(tr('★{a} de {b}! {c}', { a: r.stars, b: esc(className(cid)), c: partes.length ? partes.join(' · ') : '' }), 'good');
+    if (depois) depois();
   }
 
   /* AS CRÔNICAS DO MUNDO ENTERRADO (07/10, js/core/cronicas.js; o dono: "quase nada do mundo chega ao jogador").
@@ -1382,6 +1506,18 @@ var JOGO = (typeof window !== 'undefined')
     /* O SINO DOS AVISOS (06/10): no toque, as duas pílulas acima viram um sino só, com o selo da contagem
      * (montaSino). Entra antes da moeda de propósito: é pelo irmão que o css da moeda sabe onde ficar. */
     if (!sala) montaSino(s);
+    // 08/10 (o dono: "ao logar já deve aparecer a aba do prêmio diário"): a ficha do prêmio abre sozinha
+    // ao chegar à praça com o prêmio de hoje esperando — uma vez por dia nesta aba
+    if (!sala) safe(function () {
+      var Dd = JOGO.Diario;
+      if (!Dd || !Dd.ler) return;
+      Dd.ler().then(function (d) {
+        if (!d || !d.hoje || d.hoje.resgatado || diarioAvisado === d.dia) return;
+        diarioAvisado = d.dia;
+        if (sheetName) return;                   // outra ficha aberta: o Quadro de Missões ainda o mostra
+        openSheet('diario');
+      });
+    }, null);
     /* A MOEDA "PRÊMIO GRÁTIS!" (06/10): o atalho da área de prêmios, só no aplicativo (na web o
      * `JOGO.PremioAnuncio` nem existe) e só na praça. É um botão do jogo: quem o desenha, lê o que resta hoje e
      * o esconde é o js/core/premio_anuncio.js — nada de anúncio sai daqui, e a praça não é repintada por ele. */
@@ -1527,7 +1663,7 @@ var JOGO = (typeof window !== 'undefined')
           // funda/entra chama nomeia de novo só com a guilda.
           // o título passa pela régua: o de ranking cai com a posição
           estadoDosTitulos().then(function () {
-            JOGO.Hub.nomeia(j.nome || '', titExibe(tituloPendurado(j.titulo)), tier, resumoGuilda);
+            JOGO.Hub.nomeia(j.nome || '', titExibe(tituloPendurado(j.titulo)), tier, resumoGuilda, molduraDaLoja() || 'auto');
           });
         }
         // O NOME ACESO (12/09): o top 1, 2 e 3 do ranking de XP anda com o nome
@@ -1861,6 +1997,7 @@ var JOGO = (typeof window !== 'undefined')
                  resumo: safe(resumoDaConta, null),
                  aura: safe(temAuraSelos, false),
                  auraCor: auraDaLoja(),    // 04/10: a aura comprada (o relé confere no banco e carimba)
+                 moldura: molduraDaLoja() || 'auto',   // 08/10: a moldura premium (idem)
                  sala: chaveSala,          // 03/09: a antessala (null = praça)
                  x: pos.x, z: pos.z };
       }
@@ -2078,6 +2215,14 @@ var JOGO = (typeof window !== 'undefined')
             if (typeof JOGO.Hub.fantasmaCoroa === 'function') {
               safe(function () { return JOGO.Hub.fantasmaCoroa(ev.id, ev.resumo, ev.mestre === true); }, null);
             }
+          } else if (ev.tipo === 'mudouVisual') {
+            // 08/10: trocou de título, de aura ou de moldura sem sair do lugar — a plaquinha e a aura repintam
+            if (typeof JOGO.Hub.fantasmaVisual === 'function') {
+              safe(function () { return JOGO.Hub.fantasmaVisual(ev.id, ev); }, null);
+            }
+            if (JOGO.DB.placarAnota && ev.titulo !== undefined) {
+              safe(function () { return JOGO.DB.placarAnota(ev.id, { titulo: ev.titulo }); }, null);
+            }
           } else if (ev.tipo === 'alvo') {
             JOGO.Hub.fantasmaAlvo(ev.id, ev.x, ev.z);
           } else if (ev.tipo === 'pulso') {
@@ -2178,7 +2323,8 @@ var JOGO = (typeof window !== 'undefined')
    *     conta não o comprou; depois, as ofertas da semana com a contagem regressiva;
    *   - a AURA: a comprada acende no herói (Hub.aura com a cor) e viaja no perfil da Rede; a ficha do
    *     Personagem liga, desliga e troca (secaoAura). */
-  var AURA_PT = { fogo: tr('Brasa'), agua: tr('Maré'), terra: tr('Raiz'), ar: tr('Vento'), neutra: tr('Lousa'), mestre: tr('Chama do Mestre') };
+  var AURA_PT = { fogo: tr('Brasa'), agua: tr('Maré'), terra: tr('Raiz'), ar: tr('Vento'), neutra: tr('Lousa'), mestre: tr('Chama do Mestre'),
+                  sombra: tr('Sombra'), gelo: tr('Geada'), ouro: tr('Dourada') };   // 08/10: as três novas
   // o que cada aura FAZ na praça (o mesmo que o js/render3d/hub3d.js desenha e que a loja do site descreve)
   var AURA_EFEITO = {
     fogo: tr('labaredas que sobem dos pés, fagulhas que estalam e um clarão quente no chão'),
@@ -2186,8 +2332,22 @@ var JOGO = (typeof window !== 'undefined')
     terra: tr('folhas e pétalas girando devagar, e brotos que nascem do chão e recolhem'),
     ar: tr('fitas de ar em espiral subindo em volta do corpo, e um rastro ao andar'),
     neutra: tr('lascas de pedra em órbita lenta, runas no ar e um círculo rúnico de luz pálida'),
-    mestre: tr('labaredas negras com miolo carmesim, um selo de runas vermelho-sangue no chão, lâminas em órbita e brasas em espiral')
+    mestre: tr('labaredas negras com miolo carmesim, um selo de runas vermelho-sangue no chão, lâminas em órbita e brasas em espiral'),
+    sombra: tr('fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão'),
+    gelo: tr('anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita'),
+    ouro: tr('fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa')
   };
+  // 08/10: as molduras da plaquinha — as dos títulos (automáticas) e as premium (da loja)
+  var MOLDURA_PT = { auto: tr('Automática (a do título)'), arena: tr('da Arena'), eco: tr('do Eco'), chefe: tr('dos Chefes'), classe: tr('do pódio de classe'),
+                     ouro: tr('Dourada'), rubi: tr('de Rubi'), esmeralda: tr('de Esmeralda'), obsidiana: tr('de Obsidiana') };
+  function molduraDaLoja() {
+    return safe(function () { return (JOGO.Loja && JOGO.Loja.molduraEscolhida) ? JOGO.Loja.molduraEscolhida() : null; }, null);
+  }
+  /* a moldura do herói na praça: a premium escolhida, senão a automática do título */
+  function aplicaMolduraPraca() {
+    if (!JOGO.Hub || !JOGO.Hub.moldura) return;
+    safe(function () { JOGO.Hub.moldura(molduraDaLoja() || 'auto'); return true; }, false);
+  }
   function paginaLoja() {
     var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
     return raiz + 'site/loja.html';
@@ -2432,13 +2592,17 @@ var JOGO = (typeof window !== 'undefined')
   UI._sino = { monta: montaSino, abre: abreSino, fecha: fechaSino, pinta: pintaSino, aberto: function () { return sinoAberto; },
                esquece: function () { sinoMem = null; sinoAssin = null; } };   // só as provas
 
-  var reanuncioAura = null, auraAnunciada = null;
+  var reanuncioAura = null, auraAnunciada = null, molduraAnunciada = null;
   try {
     window.addEventListener('soterra:vitrine', function () {
       aplicaAuraPraca();
-      // o perfil só volta à Rede quando a aura MUDOU (a vitrine é relida a cada entrada na praça)
-      var corV = auraDaLoja();
-      if (corV !== auraAnunciada) { auraAnunciada = corV; safe(function () { reanunciaPerfil(); return true; }, false); }
+      aplicaMolduraPraca();           // 08/10
+      // o perfil só volta à Rede quando a aura (ou a moldura) MUDOU (a vitrine é relida a cada entrada na praça)
+      var corV = auraDaLoja(), molV = molduraDaLoja();
+      if (corV !== auraAnunciada || molV !== molduraAnunciada) {
+        auraAnunciada = corV; molduraAnunciada = molV;
+        safe(function () { reanunciaPerfil(); return true; }, false);
+      }
       pintaChamadaLoja();
       pintaSino();
     });
@@ -2475,7 +2639,9 @@ var JOGO = (typeof window !== 'undefined')
       var b0 = btn(tr('Sem aura'), 'btn-mini char-aura-b' + (atual ? '' : ' is-on'), function () { if (atual) escolhe(null, ''); });
       b0.setAttribute('aria-pressed', atual ? 'false' : 'true');
       fila.appendChild(b0);
-      v.auras.todas.forEach(function (a) {
+      // 08/10 (o dono: "só aparece para o jogador as que ele possui"): as trancadas ficam na loja
+      var minhas = v.auras.todas.filter(function (a) { return tem.indexOf(a.cor) >= 0; });
+      minhas.forEach(function (a) {
         var minha = tem.indexOf(a.cor) >= 0, nome = AURA_PT[a.cor] || a.cor;
         var b = btn('<span class="char-aura-cor is-' + a.cor + '"></span>' + esc(nome),
           'btn-mini char-aura-b' + (atual === a.cor ? ' is-on' : '') + (minha ? '' : ' is-falta'), function () {
@@ -2488,8 +2654,10 @@ var JOGO = (typeof window !== 'undefined')
         fila.appendChild(b);
       });
       cx.appendChild(fila);
+      var faltam = v.auras.todas.length - minhas.length;
       var dica = el('p', 'inv-dica', tem.length
-        ? tr('{a}Todo mundo na praça vê. Só aparência: não muda nada em batalha.', { a: atual && AURA_EFEITO[atual] ? tr('Aura de {a}: {b}.', { a: esc(AURA_PT[atual] || atual), b: AURA_EFEITO[atual] }) + ' ' : tr('Cada aura é um efeito diferente em volta do herói. ') })
+        ? tr('{a}Todo mundo na praça vê. Só aparência: não muda nada em batalha.', { a: atual && AURA_EFEITO[atual] ? tr('Aura de {a}: {b}.', { a: esc(AURA_PT[atual] || atual), b: AURA_EFEITO[atual] }) + ' ' : tr('Cada aura é um efeito diferente em volta do herói. ') }) +
+          (faltam > 0 ? ' ' + tr('Mais {a} aura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : '')
         : tr('Você ainda não tem aura. Elas ficam na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência — só aparência, nada de poder.'));
       var lk = dica.querySelector('a');
       if (lk) lk.href = paginaLoja();
@@ -2499,6 +2667,59 @@ var JOGO = (typeof window !== 'undefined')
     Lj.vitrine(true).then(function () { if (cx.isConnected) pinta(); });
   }
   UI._secaoAura = secaoAura;            // só as provas (tests/loja_novidades.html)
+  /* 08/10: a MOLDURA da plaquinha — "Automática" (a do título que está na placa) e as premium que a conta
+   * TEM (as outras ficam na loja). A escolha é do servidor (Loja.escolheMoldura), como a aura. */
+  function secaoMoldura(caixa, tituloVivo) {
+    var Lj = JOGO.Loja;
+    if (!Lj || !Lj.vitrine) return;
+    caixa.appendChild(el('h3', 'bk-tit', tr('Moldura da plaquinha')));
+    var cx = el('div', 'char-mol');
+    caixa.appendChild(cx);
+    function escolhe(id, nome) {
+      Lj.escolheMoldura(id).then(function (r) {
+        if (!r || !r.ok) { toast(esc((r && r.erro) || tr('Não deu para trocar a moldura agora.'))); return; }
+        aplicaMolduraPraca();
+        toast(id ? tr('Moldura {a} na sua plaquinha — os outros passam a ver em até uns 2 minutos.', { a: nome }) : tr('Moldura automática: a do seu título.'), 'good');
+        if (reanuncioAura) clearTimeout(reanuncioAura);
+        reanuncioAura = setTimeout(function () { safe(function () { reanunciaPerfil(); return true; }, false); }, 130000);
+        safe(function () { reanunciaPerfil(); return true; }, false);
+        if (cx.isConnected) pinta();
+      });
+    }
+    function pinta() {
+      clear(cx);
+      var v = Lj.vitrineAtual();
+      if (!v || !v.molduras) { cx.appendChild(el('p', 'inv-dica', tr('Buscando as suas molduras…'))); return; }
+      var tem = v.molduras.tem, atual = v.molduras.escolhida;
+      var doTitulo = safe(function () { return JOGO.Hub && JOGO.Hub.molduraDoTitulo ? JOGO.Hub.molduraDoTitulo(tituloVivo) : null; }, null);
+      var fila = el('div', 'char-aura-fila char-mol-fila');
+      var b0 = btn('<span class="char-mol-cor is-' + (doTitulo || 'simples') + '"></span>' + esc(MOLDURA_PT.auto) +
+                   (doTitulo ? ' <small>· ' + esc(MOLDURA_PT[doTitulo] || doTitulo) + '</small>' : ''),
+                   'btn-mini char-aura-b char-mol-b' + (atual ? '' : ' is-on'), function () { if (atual) escolhe(null, ''); });
+      b0.setAttribute('data-moldura', 'auto');
+      fila.appendChild(b0);
+      v.molduras.todas.filter(function (m) { return tem.indexOf(m.id) >= 0; }).forEach(function (m) {
+        var nome = MOLDURA_PT[m.id] || m.nome;
+        var b = btn('<span class="char-mol-cor is-' + m.id + '"></span>' + esc(m.nome),
+          'btn-mini char-aura-b char-mol-b' + (atual === m.id ? ' is-on' : ''), function () { if (atual !== m.id) escolhe(m.id, nome); });
+        b.setAttribute('data-moldura', m.id);
+        fila.appendChild(b);
+      });
+      cx.appendChild(fila);
+      var faltam = v.molduras.todas.length - tem.length;
+      var dica = el('p', 'inv-dica', (doTitulo
+        ? tr('Com o título de agora a placa leva a moldura {a} sozinha. ', { a: esc(MOLDURA_PT[doTitulo] || doTitulo) })
+        : tr('Sem título de pódio, a placa é a de sempre. ')) +
+        tr('A moldura premium vale por cima da automática.') +
+        (faltam > 0 ? ' ' + tr('Mais {a} moldura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : ''));
+      var lk = dica.querySelector('a');
+      if (lk) lk.href = paginaLoja();
+      cx.appendChild(dica);
+    }
+    pinta();
+    Lj.vitrine(true).then(function () { if (cx.isConnected) pinta(); });
+  }
+  UI._secaoMoldura = secaoMoldura;
 
   /* ------------------------------------------------ OS EVENTOS DO MUNDO (10/09)
    * A faixa do Acampamento, as linhas do painel do portal e os chips da tela
@@ -3485,10 +3706,39 @@ var JOGO = (typeof window !== 'undefined')
       if (some) cell.style.opacity = '0.55';
       if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
       else if (u.elite) cell.appendChild(el('span', 'tl-elite', '★'));     // 07/10: o elite da sala
-      tipOn(cell, (u.name || u.defId) + (u.elite ? ' ★ ' + esc(u.elite.nome) : ''), unitTipBody(u),
-            lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
+      // 08/10 (dono): com um ataque escolhido, o toque no CARD da fila lança nele — sem ir à casa
+      // do mapa. Só se a casa dele é alvo válido desta tela (Game.alvosNaTela); fora do alcance
+      // avisa e mantém o ataque escolhido; sem ataque escolhido, o toque abre a ficha como antes.
+      (function (u, cell, titulo, cor) {
+        tap(cell, function () {
+          if (!lancaNoCard(u)) showTip(cell, titulo, unitTipBody(u), cor);
+        });
+      })(u, cell, (u.name || u.defId) + (u.elite ? ' ★ ' + esc(u.elite.nome) : ''),
+         lado === 'inimigo' ? '#ff9a7a' : (lado === 'aliado' ? '#9cc4ff' : '#7ef0d4'));
       bt.timeline.appendChild(cell);
     }
+  }
+
+  /* O lance pelo card (08/10): devolve true se o toque foi consumido como ataque (lançado ou
+   * recusado por alcance); false quando não há ataque escolhido ou não é a vez do jogador. */
+  function lancaNoCard(u) {
+    var g = G();
+    if (!g || !u || !u.alive || u.offBoard) return false;
+    var sid = safe(function () { return g.selectedSpellId; }, null);
+    if (!sid || !safe(function () { return g.isPlayerTurn(); }, false)) return false;
+    var at = activeUnit();
+    if (!at) return false;
+    if (oculto(u)) return false;
+    var alvos = safe(function () { return g.alvosNaTela(at.uid, sid) || []; }, []);
+    var vale = false;
+    for (var i = 0; i < alvos.length; i++) if (alvos[i].x === u.x && alvos[i].y === u.y) { vale = true; break; }
+    if (!vale) { toast(tr('{a}: fora do alcance.', { a: u.name || u.defId })); return true; }
+    hideTip();
+    try { if (JOGO.Renderer && JOGO.Renderer.limpaMira) JOGO.Renderer.limpaMira(); } catch (eM) {}
+    safe(function () { g.onTileClicked(u.x, u.y); }, null);
+    battleSig = '';
+    paintBattle(true);
+    return true;
   }
 
   /* 22/09: o invisível do OUTRO lado — some desta tela (Game.ocultoNaTela) */
@@ -3678,6 +3928,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   function paintSpells(s) {
+    // a barra é refeita: um balão preso a um botão que vai sumir fecha junto
+    if (tipOwner && bt.spells && bt.spells.contains(tipOwner)) hideTip();
     clear(bt.spells);
     var u = activeUnit();
     var mine = safe(function () { return G().isPlayerTurn(); }, false);
@@ -3713,10 +3965,9 @@ var JOGO = (typeof window !== 'undefined')
         battleSig = '';
         paintBattle(true);
       });
-      // toque longo/segunda toque no nome abre a explicação
-      var q = el('span', 'sp-info', 'i');
-      tipOn(q, spellName(d2, sid), spellTipBody(d2, sid, u), d2 ? elemColor(d2.element) : '#ffd08a');
-      cell.appendChild(q);
+      // 08/10: o botãozinho "i" saiu (o dono acertava nele ao escolher o ataque); a explicação
+      // abre SEGURANDO o botão (dedo) ou parando o mouse em cima — seguraParaVer
+      seguraParaVer(cell, spellName(d2, sid), spellTipBody(d2, sid, u), d2 ? elemColor(d2.element) : '#ffd08a');
       bt.spells.appendChild(cell);
     });
     // 13/09: a barra da batalha não tem mais poção — ela se bebe fora da luta (vidaBloco, 14/09)
@@ -3882,12 +4133,13 @@ var JOGO = (typeof window !== 'undefined')
     cell.appendChild(plate);
     if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
     if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+    if (pilha.extra) cell.appendChild(el('span', 'ig-gema', '◆'));
     if (pilha.stars) cell.appendChild(starPips(pilha.stars));
     cell.appendChild(el('span', 'ig-nm', esc(it.name || pilha.itemId)));
     var nvB = nvBadge(pilha.itemId);
     if (nvB) cell.appendChild(nvB);
     tipOn(cell, it.name || pilha.itemId,
-      itemTipBody(pilha.itemId, pilha.level, pilha.stars), rarColor(it.rarity));
+      itemTipBody(pilha.itemId, pilha.level, pilha.stars, pilha.extra), rarColor(it.rarity));
 
     var draga = null;
     function limpaAlvo() {
@@ -4220,6 +4472,73 @@ var JOGO = (typeof window !== 'undefined')
     T.ler().then(pinta, function () { bloco.remove(); });
   }
 
+  /* O PRÊMIO DIÁRIO (08/10, o dono: "prêmios diários de resgate para quem entra todos os dias — vinténs,
+   * 10 dias seguidos barra de ouro"). Um bloco no alto do Quadro: a sequência, os dez dias da dezena
+   * atual como cartõezinhos (o de hoje aceso, os feitos riscados) e o botão de resgatar. Tudo vem do
+   * servidor (js/core/premio_diario.js); sem sessão o bloco nem aparece. */
+  var diarioAvisado = null;
+  /* a ficha própria do prêmio (abre sozinha ao chegar à praça; também pela Missões) */
+  function sheetDiario() {
+    sheetName = 'diario';
+    var body = sheetShell(tr('Prêmio diário'), tr('Um prêmio por dia, na ordem do calendário — resgate o de hoje e veja os próximos.'));
+    diarioBloco(body);
+    body.appendChild(btn(tr('Ver o Quadro de Missões'), 'btn-ghost btn-block', function () { openSheet('missoes'); }));
+  }
+  function diarioBloco(caixa) {
+    var Dd = JOGO.Diario;
+    if (!Dd || !Dd.ler) return;
+    var bloco = el('div', 'diario');
+    caixa.appendChild(bloco);
+    function temBarra(c) { return (c.premios || []).some(function (p) { return p.tipo === 'barras'; }); }
+    function pinta(d) {
+      if (!d) { bloco.remove(); return; }
+      clear(bloco);
+      var h = d.hoje || {};
+      var cab = el('div', 'diario-cab');
+      cab.appendChild(el('h3', 'hs-sec', tr('Prêmio diário') + ' <small>' + tr('dia {a} de {b}', { a: h.dia, b: d.ciclo }) + '</small>'));
+      cab.appendChild(el('span', 'diario-seq', d.sequencia > 0
+        ? tr('<b>{a}</b> resgate(s) neste mês', { a: d.sequencia })
+        : tr('comece hoje')));
+      bloco.appendChild(cab);
+      bloco.appendChild(el('p', 'inv-dica', tr('Um resgate por dia, na ordem: os vinténs crescem a cada resgate, fragmentos no 3º e no 7º, pedras no 5º e uma barra de ouro no 10º, no 20º e no 30º. A ordem segue de onde parou e recomeça no dia 1 de cada mês.')));
+      var ini = Math.floor((h.dia - 1) / 10) * 10;
+      var fila = el('div', 'diario-dias');
+      (d.calendario || []).slice(ini, ini + 10).forEach(function (c) {
+        var cel = el('button', 'diario-dia' + (c.feito ? ' is-feito' : '') + (c.hoje ? ' is-hoje' : '') + (temBarra(c) ? ' is-grande' : ''));
+        cel.type = 'button';
+        cel.appendChild(el('b', null, String(c.dia)));
+        var ic = temBarra(c) ? '\uD83E\uDD47'
+               : (c.premios || []).some(function (p) { return p.tipo === 'pedras' && /gem-frag/.test(p.alvo); }) ? '\u25C6'
+               : (c.premios || []).some(function (p) { return p.tipo === 'pedras'; }) ? '\u25C8' : '\u25CF';
+        cel.appendChild(el('span', 'diario-ic', ic));
+        tipOn(cel, tr('Dia {a}', { a: c.dia }), esc(Dd.nomesDoDia(c)) + (c.feito ? '<br><i>' + tr('resgatado') + '</i>' : ''), '#ffd36a');
+        fila.appendChild(cel);
+      });
+      bloco.appendChild(fila);
+      var rodape = el('div', 'diario-rodape');
+      rodape.appendChild(el('span', 'diario-hoje', tr('Hoje: <b>{a}</b>', { a: esc(Dd.nomesDoDia(h)) })));
+      if (h.resgatado) {
+        rodape.appendChild(el('span', 'chip chip-ok', tr('resgatado — volte amanhã')));
+      } else {
+        var go = btn(tr('Resgatar'), 'btn-primary btn-mini diario-go', function () {
+          go.classList.add('is-off');
+          Dd.resgatar().then(function (r) {
+            if (!r || !r.ok) {
+              toast((r && r.motivo === 'ja-resgatado') ? tr('O prêmio de hoje já foi resgatado. Volte amanhã!') : ((r && r.erro) || tr('Não deu para resgatar agora.')));
+              Dd.ler(true).then(pinta);
+              return;
+            }
+            toast(tr('Prêmio do dia {a}: {b}', { a: r.resgatou, b: esc(Dd.nomesDoDia({ premios: r.premios })) }), 'good');
+            pinta(r);
+          });
+        });
+        rodape.appendChild(go);
+      }
+      bloco.appendChild(rodape);
+    }
+    Dd.ler().then(pinta);
+  }
+
   function sheetMissoes() {
     sheetName = 'missoes';
     var body = sheetShell(tr('Quadro de Missões'),
@@ -4235,6 +4554,7 @@ var JOGO = (typeof window !== 'undefined')
       .then(function (r) {
         var quadro = r[0], jog = r[1] || {};
         clear(caixa);
+        diarioBloco(caixa);           // 08/10: o prêmio diário de resgate, no alto (só com o servidor)
         trilhaBloco(caixa);           // 07/10: a trilha da temporada, acima das diárias (só com o servidor)
         if (!quadro) { caixa.appendChild(el('p', 'inv-dica', tr('A conta local não carregou.'))); return; }
 
@@ -5929,6 +6249,125 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   }
 
+  /* o TÍTULO da plaquinha (11/09, 12/09, 13/09) — desde 08/10 mora na ficha Customizar */
+  function secaoTitulo(caixa, j, estT, tituloVivo) {
+    function refazCustomizar() { if (sheetName === 'customizar') sheetCustomizar(); else sheetChar(); }
+      caixa.appendChild(el('h3', 'bk-tit', tr('Título na plaquinha')));
+      var Tt = JOGO.Titulos;
+      if (!Tt) {
+        caixa.appendChild(el('p', 'inv-dica', tr('Os títulos não carregaram.')));
+      } else {
+        var catal = Tt.catalogo(estT);
+        var ganhos = catal.filter(function (t) { return t.ganho; });
+        // 03/10: e o pódio do Eco Primordial — sem o grupo 'eco' no menu o título ganho não tinha onde ser escolhido
+        var porFonte = { pvm: tr('Ranking de XP (PvM)'), pvp: tr('Ranking PvP'), classe: tr('Ranking por classe'),
+                         eco: tr('O Eco Primordial (pódio da semana)'), chefe: tr('Chefes, no difícil e sozinho') };
+        /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
+         * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
+         * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
+        var escolhidoT = tituloVivo || '';
+        var dropT = el('div', 'tit-drop');
+        var botaoT = document.createElement('button');
+        botaoT.type = 'button';
+        botaoT.className = 'tit-botao';
+        botaoT.setAttribute('aria-expanded', 'false');
+        botaoT.innerHTML = '<span class="tit-atual' + (escolhidoT ? '' : ' is-vazio') + '">' +
+          esc(escolhidoT || tr('— sem título —')) + '</span><span class="tit-seta">▾</span>';
+        var listaT = el('div', 'tit-lista');
+        listaT.hidden = true;
+        function abreListaT(abre) {
+          listaT.hidden = !abre;
+          botaoT.setAttribute('aria-expanded', abre ? 'true' : 'false');
+        }
+        function escolheT(valor) {
+          abreListaT(false);
+          if (valor === escolhidoT) return;
+          JOGO.DB.definirTitulo(valor || null).then(function (res) {
+            var tt = (res && res.titulo) || '';
+            if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, titExibe(tt));
+            reanunciaPerfil();        // o título aparece para todos, não só aqui
+            toast(tt ? tr('Agora você é {a}, {tt}.', { a: j.nome || tr('você'), tt: titExibe(tt) }) : tr('Sem título — só o nome.'), 'good');
+            refazCustomizar();
+          });
+        }
+        function itemT(valor, rotulo, dica, livre) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'tit-item' + (valor === escolhidoT ? ' is-on' : '');
+          b.disabled = !livre;
+          b.innerHTML = '<span class="tit-item-nm">' + esc(rotulo) + '</span>' +
+            (dica ? '<span class="tit-item-dica">' + esc(dica) + '</span>' : '');
+          if (livre) b.addEventListener('click', function () { escolheT(valor); });
+          return b;
+        }
+        listaT.appendChild(itemT('', tr('— sem título —'), '', true));
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
+          listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
+          // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
+          var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
+          if (!doGrupo.length) listaT.appendChild(itemT(null, tr('nenhum pódio de classe ainda'), '', false));
+          doGrupo.forEach(function (t) {
+            listaT.appendChild(itemT(t.titulo, titExibe(t.titulo),
+              t.ganho ? '' : (t.alvo ? t.prog + '/' + t.alvo + ' quedas' : tr('ainda não é seu')), t.ganho));
+          });
+        });
+        botaoT.addEventListener('click', function () { abreListaT(listaT.hidden); });
+        dropT.addEventListener('keydown', function (ev) {
+          ev.stopPropagation();                               // a letra não abre atalho
+          if (ev.key === 'Escape' && !listaT.hidden) { ev.preventDefault(); abreListaT(false); botaoT.focus(); }
+        });
+        dropT.appendChild(botaoT);
+        dropT.appendChild(listaT);
+        caixa.appendChild(dropT);
+        if (!ganhos.length) {
+          caixa.appendChild(el('p', 'inv-dica',
+            tr('Nenhum título ainda. Eles não vêm de missão: são pódio de ranking ou teimosia contra um chefe.')));
+        }
+
+        // como ganhar cada um — recolhido, para a aba não virar uma lista comprida
+        var comoT = document.createElement('details');
+        comoT.className = 'tit-como';
+        comoT.appendChild(el('summary', null, tr('Como ganhar cada título')));
+        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
+          comoT.appendChild(el('div', 'char-fonte',
+            '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
+          if (f === 'classe') {
+            comoT.appendChild(el('p', 'inv-dica', tr('Seja o 1º, 2º ou 3º de uma classe no ranking do site (a XP daquela classe): "Top 1 Xamã", "Top 2 Bárbaro"… Vale para cada classe e não acende o nome — o nome brilhante é só do ranking geral de XP, que soma a conta inteira.')));
+          }
+          catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); }).forEach(function (t) {
+            var linha = el('div', 'tit-linha' + (t.ganho ? ' is-ganho' : ''));
+            linha.appendChild(el('span', 'tit-nm', esc(titExibe(t.titulo))));
+            if (t.ganho) {
+              linha.appendChild(el('span', 'tit-ok', t.emprestado ? tr('seu enquanto durar') : tr('seu para sempre')));
+            } else if (t.alvo) {
+              linha.appendChild(el('span', 'tit-falta',
+                tr('{a} · <b>{prog}</b>/{alvo} quedas', { a: esc(t.de), prog: t.prog, alvo: t.alvo })));
+            } else {
+              linha.appendChild(el('span', 'tit-falta', esc(t.comoGanhar)));
+            }
+            comoT.appendChild(linha);
+          });
+        });
+        caixa.appendChild(comoT);
+      }
+  }
+  /* A FICHA CUSTOMIZAR (08/10): o título, a aura e a moldura da plaquinha, num lugar só */
+  function sheetCustomizar() {
+    sheetName = 'customizar';
+    var body = sheetShell(tr('Customizar'), tr('O que todo mundo vê na praça: o título, a aura e a moldura da sua plaquinha.'));
+    var caixa = el('div', 'ms-caixa');
+    body.appendChild(caixa);
+    if (!JOGO.DB) { caixa.appendChild(el('p', 'inv-dica', tr('A conta local não carregou.'))); return; }
+    Promise.all([JOGO.DB.jogador(), estadoDosTitulos()]).then(function (r) {
+      var j = r[0], estT = r[1];
+      clear(caixa);
+      var tituloVivo = tituloPendurado(j.titulo);
+      secaoTitulo(caixa, j, estT, tituloVivo);
+      secaoAura(caixa);
+      secaoMoldura(caixa, tituloVivo);
+      caixa.appendChild(btn(tr('Voltar ao Personagem'), 'btn-ghost btn-block', function () { openSheet('char'); }));
+    });
+  }
   function sheetChar() {
     sheetName = 'char';
     var body = sheetShell(tr('Personagem'),
@@ -6039,106 +6478,19 @@ var JOGO = (typeof window !== 'undefined')
        * apagado no próprio menu; o "como ganhar" fica recolhido embaixo. Os de
        * ranking são emprestados: some o título no dia em que a posição some,
        * sem apagar a escolha. */
-      secaoAura(caixa);                 // 04/10: a aura comprada na loja (liga, desliga, troca)
-
-      caixa.appendChild(el('h3', 'bk-tit', tr('Título na plaquinha')));
-      var Tt = JOGO.Titulos;
-      if (!Tt) {
-        caixa.appendChild(el('p', 'inv-dica', tr('Os títulos não carregaram.')));
-      } else {
-        var catal = Tt.catalogo(estT);
-        var ganhos = catal.filter(function (t) { return t.ganho; });
-        // 03/10: e o pódio do Eco Primordial — sem o grupo 'eco' no menu o título ganho não tinha onde ser escolhido
-        var porFonte = { pvm: tr('Ranking de XP (PvM)'), pvp: tr('Ranking PvP'), classe: tr('Ranking por classe'),
-                         eco: tr('O Eco Primordial (pódio da semana)'), chefe: tr('Chefes, no difícil e sozinho') };
-        /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
-         * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
-         * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
-        var escolhidoT = tituloVivo || '';
-        var dropT = el('div', 'tit-drop');
-        var botaoT = document.createElement('button');
-        botaoT.type = 'button';
-        botaoT.className = 'tit-botao';
-        botaoT.setAttribute('aria-expanded', 'false');
-        botaoT.innerHTML = '<span class="tit-atual' + (escolhidoT ? '' : ' is-vazio') + '">' +
-          esc(escolhidoT || tr('— sem título —')) + '</span><span class="tit-seta">▾</span>';
-        var listaT = el('div', 'tit-lista');
-        listaT.hidden = true;
-        function abreListaT(abre) {
-          listaT.hidden = !abre;
-          botaoT.setAttribute('aria-expanded', abre ? 'true' : 'false');
-        }
-        function escolheT(valor) {
-          abreListaT(false);
-          if (valor === escolhidoT) return;
-          JOGO.DB.definirTitulo(valor || null).then(function (res) {
-            var tt = (res && res.titulo) || '';
-            if (JOGO.Hub && JOGO.Hub.nomeia) JOGO.Hub.nomeia(undefined, titExibe(tt));
-            reanunciaPerfil();        // o título aparece para todos, não só aqui
-            toast(tt ? tr('Agora você é {a}, {tt}.', { a: j.nome || tr('você'), tt: titExibe(tt) }) : tr('Sem título — só o nome.'), 'good');
-            sheetChar();
-          });
-        }
-        function itemT(valor, rotulo, dica, livre) {
-          var b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'tit-item' + (valor === escolhidoT ? ' is-on' : '');
-          b.disabled = !livre;
-          b.innerHTML = '<span class="tit-item-nm">' + esc(rotulo) + '</span>' +
-            (dica ? '<span class="tit-item-dica">' + esc(dica) + '</span>' : '');
-          if (livre) b.addEventListener('click', function () { escolheT(valor); });
-          return b;
-        }
-        listaT.appendChild(itemT('', tr('— sem título —'), '', true));
-        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
-          listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
-          // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
-          var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
-          if (!doGrupo.length) listaT.appendChild(itemT(null, tr('nenhum pódio de classe ainda'), '', false));
-          doGrupo.forEach(function (t) {
-            listaT.appendChild(itemT(t.titulo, titExibe(t.titulo),
-              t.ganho ? '' : (t.alvo ? t.prog + '/' + t.alvo + ' quedas' : tr('ainda não é seu')), t.ganho));
-          });
-        });
-        botaoT.addEventListener('click', function () { abreListaT(listaT.hidden); });
-        dropT.addEventListener('keydown', function (ev) {
-          ev.stopPropagation();                               // a letra não abre atalho
-          if (ev.key === 'Escape' && !listaT.hidden) { ev.preventDefault(); abreListaT(false); botaoT.focus(); }
-        });
-        dropT.appendChild(botaoT);
-        dropT.appendChild(listaT);
-        caixa.appendChild(dropT);
-        if (!ganhos.length) {
-          caixa.appendChild(el('p', 'inv-dica',
-            tr('Nenhum título ainda. Eles não vêm de missão: são pódio de ranking ou teimosia contra um chefe.')));
-        }
-
-        // como ganhar cada um — recolhido, para a aba não virar uma lista comprida
-        var comoT = document.createElement('details');
-        comoT.className = 'tit-como';
-        comoT.appendChild(el('summary', null, tr('Como ganhar cada título')));
-        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
-          comoT.appendChild(el('div', 'char-fonte',
-            '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
-          if (f === 'classe') {
-            comoT.appendChild(el('p', 'inv-dica', tr('Seja o 1º, 2º ou 3º de uma classe no ranking do site (a XP daquela classe): "Top 1 Xamã", "Top 2 Bárbaro"… Vale para cada classe e não acende o nome — o nome brilhante é só do ranking geral de XP, que soma a conta inteira.')));
-          }
-          catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); }).forEach(function (t) {
-            var linha = el('div', 'tit-linha' + (t.ganho ? ' is-ganho' : ''));
-            linha.appendChild(el('span', 'tit-nm', esc(titExibe(t.titulo))));
-            if (t.ganho) {
-              linha.appendChild(el('span', 'tit-ok', t.emprestado ? tr('seu enquanto durar') : tr('seu para sempre')));
-            } else if (t.alvo) {
-              linha.appendChild(el('span', 'tit-falta',
-                tr('{a} · <b>{prog}</b>/{alvo} quedas', { a: esc(t.de), prog: t.prog, alvo: t.alvo })));
-            } else {
-              linha.appendChild(el('span', 'tit-falta', esc(t.comoGanhar)));
-            }
-            comoT.appendChild(linha);
-          });
-        });
-        caixa.appendChild(comoT);
-      }
+      /* 08/10 (o dono: "um painel dentro da aba do personagem onde o usuário clica para customizar; lá ele
+       * escolhe título, aura e moldura para o nome"): a ficha mostra o que está na placa e um botão que abre
+       * a ficha Customizar (sheetCustomizar) — o título, a aura e a moldura moram lá. */
+      caixa.appendChild(el('h3', 'bk-tit', tr('A sua plaquinha')));
+      var resumoV = el('p', 'inv-dica char-plaquinha');
+      var molV = molduraDaLoja();
+      var molAuto = safe(function () { return JOGO.Hub && JOGO.Hub.molduraDoTitulo ? JOGO.Hub.molduraDoTitulo(tituloVivo) : null; }, null);
+      resumoV.innerHTML = tr('Título: <b>{a}</b> · Aura: <b>{b}</b> · Moldura: <b>{c}</b>', {
+        a: tituloVivo ? esc(titExibe(tituloVivo)) : tr('nenhum'),
+        b: auraDaLoja() ? esc(AURA_PT[auraDaLoja()] || auraDaLoja()) : tr('nenhuma'),
+        c: molV ? esc(MOLDURA_PT[molV] || molV) : (molAuto ? esc(MOLDURA_PT[molAuto] || molAuto) + ' ' + tr('(do título)') : tr('a de sempre')) });
+      caixa.appendChild(resumoV);
+      caixa.appendChild(btn(tr('Customizar: título, aura e moldura'), 'btn-primary btn-block char-customizar', function () { openSheet('customizar'); }));
 
       /* ---- OS NÚMEROS, herói por herói. Só os que DESCERAM (11/09, pedido
        * do dono: "ao abrir a aba personagem deve trazer somente dos
@@ -6906,7 +7258,7 @@ var JOGO = (typeof window !== 'undefined')
    * dentro mantêm o nome) e, nas fichas de meta, a aba. Ficha sem entrada
    * aqui sai com o losango de sempre: nenhum cabeçalho fica sem marca. */
   var ICONE_FICHA = {
-    char: 'fc-personagem', heroSheet: 'fc-personagem', amigos: 'fc-amigos', guilda: 'fc-guilda',
+    char: 'fc-personagem', heroSheet: 'fc-personagem', customizar: 'fc-personagem', amigos: 'fc-amigos', guilda: 'fc-guilda',
     banco: 'fc-banco', missoes: 'fc-missoes', mercado: 'fc-mercado', mercadoConfirma: 'fc-mercado',
     loteria: 'fc-loteria', placar: 'fc-placar', troca: 'fc-troca', contas: 'fc-contas',
     perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
@@ -7033,6 +7385,8 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'spells') sheetParty('feiticos', arg);
     else if (name === 'avatar') sheetParty('avatar', arg);
     else if (name === 'heroSheet') sheetHero(arg);
+    else if (name === 'diario') sheetDiario();          // 08/10: o prêmio diário de resgate
+    else if (name === 'customizar') sheetCustomizar();  // 08/10: título, aura e moldura
     else if (name === 'battleMenu') sheetBattleMenu();
     else if (name === 'contas') sheetContas();
     else if (name === 'config') sheetConfig();                             // 02/10: som, tela, movimento e atalhos
@@ -7490,7 +7844,7 @@ var JOGO = (typeof window !== 'undefined')
     return 't-' + String(tierOf(level)).toLowerCase().replace('í', 'i').replace('é', 'e');
   }
 
-  function itemTipBody(itemId, level, stars) {
+  function itemTipBody(itemId, level, stars, extra) {
     var it = itemDef(itemId);
     if (!it) return tr('Item {a}', { a: esc(itemId) }) + '.';
     var lv = level == null ? safe(function () { return P().itemLevel(itemId); }, 0) : level;
@@ -7514,6 +7868,8 @@ var JOGO = (typeof window !== 'undefined')
       }
     }
     if (lines.length) out += '<br>' + lines.join(' · ');
+    // 08/10: a Gema engastada nesta cópia
+    if (extra && extraTxt(extra)) out += '<br>' + tr('◆ Gema engastada: <b>{a}</b>', { a: esc(extraTxt(extra)) });
     if (it.grantsSpell) {
       var sp = spellDef(it.grantsSpell);
       out += '<br>' +
@@ -7614,10 +7970,23 @@ var JOGO = (typeof window !== 'undefined')
                   dodge: 'esquiva', lock: tr('fixação') };
   // O que a peça dá, JÁ com forja e estrelas — texto, não balãozinho: no celular
   // ninguém passa o mouse, e esta é a informação que decide o toque.
-  function itemBonusText(it, level, stars) {
+  /* 08/10: o BÔNUS DA GEMA de uma cópia (`extra`: 'pa'|'pp'|'dano'|'vida'), escrito — "+1 PA",
+   * "+30 PV"… Lê os números do Progress (DATA.gema.bonus): sem número aqui. */
+  function extraTxt(x) {
+    var b = safe(function () { return P().extraBonus(x); }, null);
+    if (!b) return '';
+    var out = [], k;
+    for (k in b) if (b.hasOwnProperty(k) && b[k]) out.push('+' + b[k] + ' ' + (STAT_PT[k] || k));
+    return out.join(' · ');
+  }
+  function extraNome(x) {
+    return { pa: tr('PA'), pp: tr('PP'), dano: tr('dano'), vida: tr('vida') }[x] || x;
+  }
+  function itemBonusText(it, level, stars, extra) {
     if (!it) return '—';
     var mult = itemMult(level, stars);
     var b = it.bonuses || {}, out = [], k;
+    if (extra && extraTxt(extra)) out.push('◆ ' + extraTxt(extra));
     for (k in b) {
       if (!b.hasOwnProperty(k)) continue;
       if (k === 'resists') {
@@ -7954,8 +8323,46 @@ var JOGO = (typeof window !== 'undefined')
     if (!t) return '';
     var T = JOGO.Titulos;
     if (!T || !tituloEstado) return t;
-    return T.valido(t, tituloEstado) ? t : '';
+    if (T.valido(t, tituloEstado)) return t;
+    // 08/10 (o dono: "se ele é top 1 pvp e perde o posto, não terá mais esse título; passa para o top 1
+    // atual"): o título de pódio ACOMPANHA a posição — caiu para o 2º, a placa diz Top 2; saiu do pódio,
+    // some. O relé faz o mesmo para os outros (servidor/rele_ident.py, titulo_do_podio)
+    var m = /^Top [123] (.+)$/.exec(String(t));
+    if (!m) return '';
+    var resto = m[1], e = tituloEstado;
+    if (resto === 'PVM') return e.pvm ? 'Top ' + e.pvm + ' PVM' : '';
+    if (resto === 'Pvp') return e.pvp ? 'Top ' + e.pvp + ' Pvp' : '';
+    var nomes = e.classeNomes || {};
+    for (var cid in nomes) {
+      if (nomes.hasOwnProperty(cid) && nomes[cid] === resto) {
+        var pos = (e.porClasse || {})[cid];
+        return pos ? T.tituloDeClasse(pos, resto) : '';
+      }
+    }
+    return '';
   }
+  UI._tituloPendurado = tituloPendurado;   // provas
+  /* 08/10: a VIGIA do título — de 3 em 3 minutos na praça o ranking é relido e, se a posição mudou, a
+   * plaquinha e o perfil da Rede acompanham (antes só ao entrar na praça ou abrir a ficha) */
+  var tituloVigiado = null;
+  try {
+    setInterval(function () {
+      if (current !== 'hub' || !JOGO.DB || !JOGO.Hub || !JOGO.Hub.nomeia) return;
+      JOGO.DB.jogador().then(function (j) {
+        if (!j || !j.titulo) return;
+        rankingEm = 0;                                          // força a releitura do ranking
+        return estadoDosTitulos().then(function () {
+          var tt = tituloPendurado(j.titulo);
+          if (tituloVigiado === null) { tituloVigiado = tt; return; }
+          if (tt === tituloVigiado) return;
+          tituloVigiado = tt;
+          JOGO.Hub.nomeia(undefined, titExibe(tt));
+          safe(function () { reanunciaPerfil(); return true; }, false);
+          toast(tt ? tr('O seu título agora é {a}.', { a: titExibe(tt) }) : tr('Você saiu do pódio: o título de ranking saiu da plaquinha.'));
+        });
+      });
+    }, 180000);
+  } catch (eVig) {}
 
   function resumoDaConta() {
     var classes2 = {}, xps = {}, total = 0;
@@ -8262,11 +8669,12 @@ var JOGO = (typeof window !== 'undefined')
       cell.appendChild(el('span', 'pt-slot-it', it ? esc(it.name) + nvTxt(itemId) : tr('vazio')));
       if (sr) cell.appendChild(starPips(sr));
       if (it) {
-        cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, sr))));
+        cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, sr, v && v.extra))));
+        if (v && v.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
         cell.appendChild(btn(tr('Tirar'), 'btn-mini btn-warn', function () {
           var ok = safe(function () { return P().unequip(hid, slotRaw(canon)); }, false);
           if (ok) {
-            invSel = { itemId: itemId, level: lv, stars: sr };     // volta selecionada na grade
+            invSel = { itemId: itemId, level: lv, stars: sr, extra: (v && v.extra) || null };     // volta selecionada na grade
             toast(tr('Voltou para o inventário.'), 'good');
           } else if (!safe(function () { return P().bagFree(1); }, true)) {
             toast(tr('O saco está cheio — a peça fica vestida.'));
@@ -8328,6 +8736,7 @@ var JOGO = (typeof window !== 'undefined')
     ic.appendChild(art('itemIcon', [pilha.itemId, 52], 52));
     if (pilha.count > 1) ic.appendChild(el('span', 'ig-n', '×' + pilha.count));
     if (pilha.level) ic.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+    if (pilha.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
     var bsp = setBadge(pilha.itemId);
     if (bsp) ic.appendChild(bsp);
     wrap.appendChild(ic);
@@ -8347,7 +8756,7 @@ var JOGO = (typeof window !== 'undefined')
         tx.appendChild(el('div', 'inv-pick-tranca', tr('🔒 pede o nível <b>{precisa}</b> — o {a} está no {nivel}', { precisa: puP.precisa, a: esc(className((hero(hid) || {}).classId || hid)), nivel: puP.nivel })));
       }
     }
-    tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars))));
+    tx.appendChild(el('div', 'inv-pick-b', esc(itemBonusText(it, pilha.level, pilha.stars, pilha.extra))));
     var cmp = comparaComVestida(pilha.itemId, pilha.level, pilha.stars, hid);
     if (cmp) tx.appendChild(el('div', 'inv-pick-cmp', cmp));
     if (it && it.grantsSpell) {
@@ -8401,9 +8810,17 @@ var JOGO = (typeof window !== 'undefined')
         fundePronto ? tr('Levar à forja — dá ★{proxima}!', { proxima: fu.proxima }) : tr('Levar à forja'),
         'btn-mini' + (fundePronto ? ' btn-gold' : ''), function () {
           forjaModo = 'forjar';
-          forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+          forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
           sheetParty('forja');
         }));
+    }
+    // 08/10: a GEMA — a terceira porta da forja, só para a peça que ainda não tem a sua
+    if (!pilha.extra) {
+      acts.appendChild(btn(tr('◆ Engastar Gema'), 'btn-mini inv-pick-gema', function () {
+        forjaModo = 'gema';
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: null };
+        sheetParty('forja');
+      }));
     }
     // A QUEBRA (22/09): a outra porta da forja — já no modo Quebrar, com a
     // peça na bancada. Só aparece para o que se quebra (a Panóplia do Mestre
@@ -8413,7 +8830,7 @@ var JOGO = (typeof window !== 'undefined')
       acts.appendChild(btn(tr('Quebrar na forja'), 'btn-mini inv-pick-quebra', function () {
         forjaModo = 'quebrar';
         forjaQuebraN = 1;
-        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+        forgeTarget = { kind: 'bag', itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
         sheetParty('forja');
       }));
     }
@@ -8462,11 +8879,14 @@ var JOGO = (typeof window !== 'undefined')
                  : tr('Junte <b>{unlockCost}</b> cartas para liberar {nome}. Faltam <b>{f}</b>.', { unlockCost: info.unlockCost, nome: nome, f: f })) };
     }
     if (info.next) {
-      var sobra = Math.max(0, info.cards - info.unlockCost), alvo = sobra + info.next.faltam;
-      return { info: info, pct: alvo ? sobra / alvo : 0, rot: sobra + ' / ' + alvo + ' para a ★' + info.next.star,
-               faz: (info.next.faltam === 1
-                 ? tr('Junte mais <b>{faltam}</b> carta para a ★{star} de {nome}.', { faltam: info.next.faltam, star: info.next.star, nome: nome })
-                 : tr('Junte mais <b>{faltam}</b> cartas para a ★{star} de {nome}.', { faltam: info.next.faltam, star: info.next.star, nome: nome })) };
+      // 08/10: a estrela se compra à mão — a barra mostra as cartas na mão contra o custo do degrau
+      return { info: info, pct: info.next.custo ? Math.min(1, info.cards / info.next.custo) : 0,
+               rot: info.cards + ' / ' + info.next.custo + ' para a ★' + info.next.star,
+               faz: info.podeSubir
+                 ? tr('Já dá: a ★{star} de {nome} custa <b>{custo}</b> cartas — suba na ficha do herói.', { star: info.next.star, nome: nome, custo: info.next.custo })
+                 : (info.next.faltam === 1
+                   ? tr('Junte mais <b>{faltam}</b> carta para a ★{star} de {nome}.', { faltam: info.next.faltam, star: info.next.star, nome: nome })
+                   : tr('Junte mais <b>{faltam}</b> cartas para a ★{star} de {nome}.', { faltam: info.next.faltam, star: info.next.star, nome: nome })) };
     }
     return { info: info, pct: 1, rot: tr('todas as estrelas'), faz: tr('Todas as estrelas de {nome} já foram conquistadas.', { nome: nome }) };
   }
@@ -8494,7 +8914,12 @@ var JOGO = (typeof window !== 'undefined')
     t.appendChild(linha);
     t.appendChild(el('p', 'carta-det-faz', pr.faz));
     t.appendChild(bar('bar-card', pr.pct, pr.rot));
-    t.appendChild(el('p', 'carta-det-nota', tr('A carta conta sozinha: ao juntar o bastante, a classe libera e a estrela sobe na hora. Cai dos chefes; não se troca nem se vende.')));
+    t.appendChild(el('p', 'carta-det-nota', tr('A classe libera sozinha ao juntar as cartas; a estrela é você quem sobe, gastando cartas, aqui ou na ficha do herói. Cai dos chefes; não se troca nem se vende.')));
+    if (info.podeSubir) {
+      t.appendChild(btn(tr('★ Subir estrela ({a} cartas)', { a: info.next.custo }), 'btn-mini btn-gold carta-subir', function () {
+        subirEstrela(cid, function () { sheetParty('inventario'); });
+      }));
+    }
     t.appendChild(btn(tr('Ver as estrelas na Coleção'), 'btn-mini', function () { openSheet('collection', cid); }));
     cx.appendChild(t);
     return cx;
@@ -8807,7 +9232,7 @@ var JOGO = (typeof window !== 'undefined')
         mostrou++;
         var it = itemDef(pilha.itemId);
         var sel = invSel && invSel.itemId === pilha.itemId && invSel.level === pilha.level &&
-                  invSel.stars === pilha.stars;
+                  invSel.stars === pilha.stars && (invSel.extra || null) === (pilha.extra || null);
         var cell = el('button', 'ig-cell ' + starClass(pilha.stars) + (sel ? ' is-sel' : ''));
         cell.type = 'button';
         markRarity(cell, it.rarity);
@@ -8819,12 +9244,13 @@ var JOGO = (typeof window !== 'undefined')
         cell.appendChild(plate);
         if (pilha.count > 1) cell.appendChild(el('span', 'ig-n', '×' + pilha.count));
         if (pilha.level) cell.appendChild(el('span', 'ig-lv', '+' + pilha.level));
+        if (pilha.extra) cell.appendChild(el('span', 'ig-gema', '◆'));     // 08/10: a Gema engastada
         if (pilha.stars) cell.appendChild(starPips(pilha.stars));
         cell.appendChild(el('span', 'ig-nm', esc(it.name)));
         var nvG = nvBadge(pilha.itemId);
         if (nvG) cell.appendChild(nvG);
         tap(cell, function () {
-          invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars };
+          invSel = sel ? null : { itemId: pilha.itemId, level: pilha.level, stars: pilha.stars, extra: pilha.extra || null };
           sheetParty('inventario');
         });
         grid.appendChild(cell);
@@ -9049,14 +9475,14 @@ var JOGO = (typeof window !== 'undefined')
     var pilhas = safe(function () { return P().invStacks(); }, []);
     pilhas.forEach(function (s) {
       if (!itemDef(s.itemId)) return;
-      out.push({ kind: 'bag', itemId: s.itemId, level: s.level, stars: s.stars,
+      out.push({ kind: 'bag', itemId: s.itemId, level: s.level, stars: s.stars, extra: s.extra || null,
                  count: s.count, index: s.index, quem: null });
     });
     partyHeroes().forEach(function (hid) {
       SLOTS.forEach(function (canon) {
         var v = safe(function () { return P().equippedVar(hid, slotRaw(canon)); }, null);
         if (!v || !itemDef(v.itemId)) return;
-        out.push({ kind: 'worn', itemId: v.itemId, level: v.level, stars: v.stars,
+        out.push({ kind: 'worn', itemId: v.itemId, level: v.level, stars: v.stars, extra: v.extra || null,
                    count: 1, heroId: hid, slot: canon, quem: hid });
       });
     });
@@ -9065,7 +9491,7 @@ var JOGO = (typeof window !== 'undefined')
   function mesmoAlvo(a, b) {
     if (!a || !b || a.kind !== b.kind || a.itemId !== b.itemId) return false;
     if (a.kind === 'worn') return a.heroId === b.heroId && a.slot === b.slot;
-    return a.level === b.level && a.stars === b.stars;
+    return a.level === b.level && a.stars === b.stars && (a.extra || null) === (b.extra || null);
   }
   function forgeInfoDe(alvo) {
     if (!alvo) return null;
@@ -9147,8 +9573,10 @@ var JOGO = (typeof window !== 'undefined')
      * modo Quebrar poder trocá-la pela dele; a prateleira e a grade embaixo
      * são das duas, com o que muda marcado por `quebra`. */
     var quebra = forjaModo === 'quebrar';
+    var gemaModo = forjaModo === 'gema';          // 08/10: a terceira porta — a Gema Enterrada
     body.appendChild(forjaModos());
     if (quebra) quebraBancada(body, atual, alvos, aceitaDrop);
+    else if (gemaModo) gemaBancada(body, atual, alvos, aceitaDrop);
     else bancadaDeForjar();
 
     // ===== A BANCADA (de forjar)
@@ -9300,11 +9728,23 @@ var JOGO = (typeof window !== 'undefined')
     // descrição. Fica nos dois modos: é aqui que se vê o monte crescer.
     var qDestino = (quebra && atual) ? quebraInfoAlvo(atual, 1) : null;
     var pedraDestino = (qDestino && QUEBRA_NUNCA.indexOf(qDestino.motivo) < 0) ? qDestino.stoneId : null;
-    body.appendChild(el('h4', 'fg-grupo', tr('A prateleira de pedras')));
+    body.appendChild(el('h4', 'fg-grupo', gemaModo ? tr('A gema e os fragmentos') : tr('A prateleira de pedras')));
     var stock = el('div', 'forge-stock');
     for (k in defs) {
       if (!defs.hasOwnProperty(k)) continue;
+      // 08/10: a Gema e o Fragmento só aparecem no modo Gema; as pedras de forjar, nos outros dois
+      var deForja = k === anchorId || safe(function () { return P().pedraDeForja(k); }, true);
+      if (gemaModo ? deForja : !deForja) continue;
       var n = stoneCount(k);
+      if (gemaModo) {
+        var chipG = el('div', 'stone-chip is-gema' + (n ? '' : ' is-empty'));
+        chipG.appendChild(art('stoneIcon', [k, 40], 40));
+        chipG.appendChild(el('span', 'stone-n', String(n)));
+        chipG.appendChild(el('span', 'stone-nm', esc(defs[k].name)));
+        tipOn(chipG, defs[k].name, esc(defs[k].description || ''), elemColor(defs[k].element));
+        stock.appendChild(chipG);
+        continue;
+      }
       var chip = el('div', 'stone-chip' + (n ? '' : ' is-empty') + (quebra
         ? (k === pedraDestino ? ' is-destino' : '')
         : (k === pedraCerta ? ' is-certa' : '') + (k === forjaPedra ? ' is-sel' : '') +
@@ -9351,6 +9791,7 @@ var JOGO = (typeof window !== 'undefined')
       c.appendChild(plate);
       if (alvo.count > 1) c.appendChild(el('span', 'ig-n', '×' + alvo.count));
       if (alvo.level) c.appendChild(el('span', 'ig-lv', '+' + alvo.level));
+      if (alvo.extra) c.appendChild(el('span', 'ig-gema', '◆'));     // 08/10: já tem a Gema
       if (alvo.stars) c.appendChild(starPips(alvo.stars));
       var nvF = nvBadge(alvo.itemId);
       if (nvF) c.appendChild(nvF);
@@ -9401,7 +9842,7 @@ var JOGO = (typeof window !== 'undefined')
       else if (quebra) vestidasFora++;
       else vestidas.push([a, idx]);
     });
-    var paraQue = quebra ? tr('para quebrar') : tr('para forjar');
+    var paraQue = quebra ? tr('para quebrar') : gemaModo ? tr('para engastar') : tr('para forjar');
     if (!doSaco.length && !vestidas.length) {
       var oQue = [];
       if (forjaSlotFiltro !== 'todos') oQue.push(SLOT_PT[forjaSlotFiltro] || forjaSlotFiltro);
@@ -9424,8 +9865,8 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     // ===== A ESTRELA (fundir 3 cópias) — a outra trilha, só com peça na bancada
-    // (e só no Forjar: no Quebrar a peça vai embora, não sobe)
-    if (!atual || quebra) return;
+    // (e só no Forjar: no Quebrar a peça vai embora, não sobe; no Gema a bancada é outra)
+    if (!atual || quebra || gemaModo) return;
     var ce = el('div', 'forge-card fc-estrela');
     ce.appendChild(el('h4', null, tr('A Estrela<i>3 cópias iguais do saco viram ★ — no nível médio, para baixo</i>')));
     if (atual.kind === 'worn') {
@@ -9436,6 +9877,8 @@ var JOGO = (typeof window !== 'undefined')
         ce.appendChild(el('p', 'fc-nota', atual.stars >= 3
           ? tr('No topo: <b>★3</b>. Daqui não sobe mais.')
           : tr('Esta peça não funde.')));
+      } else if (fu.engastada) {
+        ce.appendChild(el('p', 'fc-nota', tr('A peça com a <b>Gema engastada</b> não funde: a cópia nova nasceria sem o bônus.')));
       } else if (fu.pode) {
         ce.appendChild(el('p', 'fc-nota', tr('Três cópias no saco: <b>+{a}</b> viram <b>★{proxima} +{nivelResultado}</b>.', { a: fu.niveisEscolhidos.join(' +'), proxima: fu.proxima, nivelResultado: fu.nivelResultado })));
         var prevE = el('div', 'forge-prev');
@@ -9487,7 +9930,10 @@ var JOGO = (typeof window !== 'undefined')
     { id: 'forjar', ico: 'fg-forjar', rot: tr('Forjar'), tit: tr('Forjar a peça'),
       sub: tr('a pedra do elemento e o martelo: a peça sobe um degrau') },
     { id: 'quebrar', ico: 'fg-quebrar', rot: tr('Quebrar'), tit: tr('Quebrar a peça em pedras'),
-      sub: tr('a peça some e vira pedras do elemento dela') }
+      sub: tr('a peça some e vira pedras do elemento dela') },
+    // 08/10 (dono): a Gema Enterrada — um bônus a mais na peça, sorteado: PA, PP, dano ou vida
+    { id: 'gema', ico: 'fg-gema', rot: tr('Gema'), tit: tr('Engastar a Gema Enterrada'),
+      sub: tr('um bônus a mais na peça: +1 PA, +1 PP, dano ou vida — sorteado') }
   ];
   var MOTIVO_QUEBRA = {
     mestre: tr('Peça do Mestre não se quebra.'),
@@ -9510,7 +9956,8 @@ var JOGO = (typeof window !== 'undefined')
       forjaQuebraN = 1;
       sheetParty('forja');
     }));
-    var m = FORJA_MODOS[forjaModo === 'quebrar' ? 1 : 0];
+    var m = FORJA_MODOS[0];
+    for (var mi = 0; mi < FORJA_MODOS.length; mi++) if (FORJA_MODOS[mi].id === forjaModo) m = FORJA_MODOS[mi];
     w.appendChild(el('h3', 'fg-modo-tit', esc(m.tit) + '<i>' + esc(m.sub) + '</i>'));
     return w;
   }
@@ -9727,6 +10174,161 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ----------------------------------------------------------------- A GEMA
+  /* A BANCADA DA GEMA (08/10, pedido do dono: "uma pedra rara que ao levar na forja
+   * com um item dá um bônus a mais: +1 PA, +1 PM, vida ou dano; cada item pode ter
+   * até 1 bônus especial; do mais difícil pro mais fácil: PA, PP, dano, vida").
+   * A mesma bancada de arrastar: A PEÇA + A GEMA → O BÔNUS (os quatro, com a
+   * chance de cada um). A conta é toda do Progress (gemaInfo, gemaChances); com
+   * sessão do site quem sorteia é o servidor ('engastarGema'). Embaixo, o botão
+   * de juntar 100 fragmentos numa gema. Vale para a peça do saco e para a vestida. */
+  var forjaEngastando = false;
+  function gemaArgs(alvo) {
+    if (!alvo) return null;
+    if (alvo.kind === 'worn') return { heroId: alvo.heroId, slot: slotRaw(alvo.slot) };
+    return { invIndex: alvo.index };
+  }
+  function gemaBancada(body, atual, alvos, aceitaDrop) {
+    var defs = stoneDefs();
+    var gcfg = safe(function () { return P().gemaCfg(); }, null) || { id: 'stone-gem', fragmento: 'stone-gem-frag', porGema: 100 };
+    var sdG = defs[gcfg.id] || { name: 'Gema Enterrada' }, sdF = defs[gcfg.fragmento] || { name: 'Fragmento de Gema' };
+    var it = atual ? itemDef(atual.itemId) : null;
+    var lv = atual ? atual.level : 0;
+    var g = atual ? safe(function () { return P().gemaInfo(gemaArgs(atual)); }, null) : null;
+    var gemas = stoneCount(gcfg.id), frags = stoneCount(gcfg.fragmento);
+    var chances = safe(function () { return P().gemaChances(); }, null) || {};
+    var extras = safe(function () { return P().EXTRAS; }, null) || ['pa', 'pp', 'dano', 'vida'];
+    var pode = !!(g && g.pode);
+
+    // ===== A BANCADA: a peça + a gema → o bônus
+    var banca = el('div', 'forge-banca2 fg-banca-gema');
+    var sPeca = el('div', 'fg-slot fg-slot-peca' + (atual ? ' has' : '') + ((g && g.motivo === 'ja-tem') ? ' is-errada' : ''));
+    if (atual) {
+      sPeca.appendChild(art('itemIcon', [atual.itemId, 56], 56));
+      sPeca.appendChild(el('b', null, esc((it && it.name) || atual.itemId) + (lv ? ' +' + lv : '')));
+      sPeca.appendChild(el('span', null, (atual.stars ? '★' + atual.stars + ' · ' : '') +
+        (atual.extra ? '<b class="fg-gema-tem">◆ ' + esc(extraTxt(atual.extra)) + '</b> ' : '') +
+        (atual.kind === 'worn'
+          ? tr('· vestida por {a}', { a: esc(className((hero(atual.heroId) || {}).classId || atual.heroId)) })
+          : tr('· no saco{a}', { a: atual.count > 1 ? ' ×' + atual.count : '' }))));
+      tap(sPeca, function () { forgeTarget = null; sheetParty('forja'); });
+      tipOn(sPeca, tr('A peça na bancada'), tr('Toque para tirar da bancada. Arraste outra da grade para trocar.'), '#e8c25a');
+    } else {
+      sPeca.appendChild(el('span', 'fg-slot-ic', '⤓'));
+      sPeca.appendChild(el('b', null, tr('A peça')));
+      sPeca.appendChild(el('span', null, tr('arraste da grade — ou toque numa')));
+    }
+    aceitaDrop(sPeca, 'peca', function (d) {
+      var alvo = alvos[d.idx];
+      if (!alvo) return;
+      forgeTarget = alvo;
+      sheetParty('forja');
+    });
+    banca.appendChild(sPeca);
+    banca.appendChild(el('span', 'fg-op', '+'));
+
+    var sGema = el('div', 'fg-slot fg-slot-gema' + (gemas > 0 ? ' has' : ''));
+    sGema.appendChild(art('stoneIcon', [gcfg.id, 56], 56));
+    sGema.appendChild(el('b', null, esc(sdG.name)));
+    sGema.appendChild(el('span', null, gemas > 0 ? tr('<b>{a}</b> na prateleira · gasta 1', { a: gemas }) : tr('nenhuma — junte {a} fragmentos', { a: gcfg.porGema })));
+    tipOn(sGema, sdG.name, esc(sdG.description || ''), elemColor('gema'));
+    banca.appendChild(sGema);
+    banca.appendChild(el('span', 'fg-op fg-seta', '→'));
+
+    var sRes = el('div', 'fg-slot fg-slot-res' + (pode ? ' has' : ''));
+    if (atual && atual.extra) {
+      sRes.appendChild(el('span', 'fg-slot-ic', '◆'));
+      sRes.appendChild(el('b', null, tr('Já engastada')));
+      sRes.appendChild(el('span', null, esc(extraTxt(atual.extra))));
+    } else {
+      sRes.appendChild(el('span', 'fg-slot-ic', '?'));
+      sRes.appendChild(el('b', null, tr('Um destes')));
+      var odds = el('ul', 'fg-gema-odds');
+      extras.forEach(function (x) {
+        odds.appendChild(el('li', null, esc(extraTxt(x)) + '<i>' + Math.round((chances[x] || 0) * 100) + '%</i>'));
+      });
+      sRes.appendChild(odds);
+    }
+    banca.appendChild(sRes);
+    body.appendChild(banca);
+
+    // ===== O ESTADO
+    var estado = el('div', 'fg-estado');
+    if (!atual) {
+      estado.appendChild(el('p', 'inv-dica', tr('Ponha uma peça na bancada: arraste da grade abaixo ou toque nela. A gema dá a ela <b>um</b> bônus a mais, sorteado — do mais difícil ao mais fácil: PA, PP, dano, vida. Cada peça aceita uma gema só.')));
+    } else if (!g) {
+      estado.appendChild(el('p', 'empty', tr('A Gema ainda não está disponível.')));
+    } else if (g.motivo === 'ja-tem') {
+      estado.appendChild(el('p', 'forge-short fg-quebra-nao', tr('Esta peça <b>já tem a sua Gema</b> ({a}). Cada peça aceita uma só.', { a: esc(extraTxt(g.extra)) })));
+    } else if (g.motivo === 'sem-gema') {
+      estado.appendChild(el('p', 'forge-short', tr('Sem Gema na prateleira. Você tem <b>{a}</b> de {b} fragmentos para a próxima — eles caem nos seis portais, vêm da loja do site e do anúncio premiado.', { a: frags, b: gcfg.porGema })));
+    } else {
+      estado.appendChild(el('p', 'inv-dica', tr('Pronto: <b>1 {a}</b> engasta um bônus nesta peça, sorteado na hora. O bônus fica na peça para sempre (vestida ou no saco) — e a peça engastada não vai ao mercadinho, à troca nem ao banco da guilda.', { a: esc(sdG.name) })));
+    }
+    body.appendChild(estado);
+
+    // ===== JUNTAR OS FRAGMENTOS: 100 viram 1 — sem sorteio
+    var juntar = el('div', 'fg-qtd');
+    juntar.appendChild(el('span', 'fg-qtd-rot', tr('{a}: <b>{b}</b> / {c}', { a: esc(sdF.name), b: frags, c: gcfg.porGema })));
+    var podeJuntar = frags >= gcfg.porGema;
+    var bJ = btn(tr('Juntar {a} → 1 gema', { a: gcfg.porGema }), 'btn-mini' + (podeJuntar ? ' btn-gold' : ' is-off'), function () {
+      if (!podeJuntar) { toast(tr('Faltam {a} fragmentos.', { a: gcfg.porGema - frags })); return; }
+      var r = safe(function () { return P().juntaFragmentos(); }, false);
+      if (r) toast(tr('Uma {a} nova na prateleira ({b}).', { a: esc(sdG.name), b: r.gemas }), 'good');
+      else toast(tr('Não deu para juntar os fragmentos.'));
+      sheetParty('forja');
+    });
+    bJ.setAttribute('data-juntar', '1');
+    juntar.appendChild(bJ);
+    body.appendChild(juntar);
+
+    // ===== O ENGASTE: pergunta antes — a gema vai embora e o bônus é sorteado
+    if (!pode) return;
+    var go = btn((forjaEngastando ? tr('Engastando…') : tr('◆ Engastar a Gema — gasta 1')),
+      'btn-primary btn-block fg-gema-go' + (forjaEngastando ? ' is-off' : ''), pergunta);
+    body.appendChild(go);
+
+    function pergunta() {
+      var qual = '<b>' + esc((it && it.name) || atual.itemId) + (lv ? ' +' + lv : '') + (atual.stars ? ' ★' + atual.stars : '') + '</b>';
+      confirmSheet(tr('Engastar a Gema?'),
+        tr('Uma {a} some e {qual} ganha <b>um</b> bônus sorteado — PA, PP, dano ou vida. Não tem volta, e a peça não aceita outra.', { a: esc(sdG.name), qual: qual }),
+        engasta, { sim: tr('Engastar'), simCls: 'btn-primary', aoCancelar: function () { sheetParty('forja'); } });
+    }
+    function refaz() { if (sheetName === 'party' && partyTab === 'forja') sheetParty('forja'); }
+    function avisa(fim) {
+      if (!fim || !fim.extra) { toast(tr('A gema não foi engastada.')); return; }
+      toast(tr('◆ A Gema deu <b>{a}</b> à peça!', { a: esc(extraTxt(fim.extra)) }), 'good');
+      forgeTarget = { kind: atual.kind, itemId: atual.itemId, level: atual.level, stars: atual.stars, extra: fim.extra,
+                      heroId: atual.heroId, slot: atual.slot };
+      if (invSel && invSel.itemId === atual.itemId && atual.kind === 'bag') {
+        invSel = { itemId: atual.itemId, level: atual.level, stars: atual.stars, extra: fim.extra };
+      }
+    }
+    function engasta() {
+      var args = gemaArgs(atual);
+      if (atual.kind === 'bag' && g.iid) args.iid = g.iid;     // a série vai junto do índice (como na quebra)
+      var AutG = JOGO.Autoridade;
+      if (AutG && AutG.ligada && AutG.ligada()) {
+        forjaEngastando = true;
+        sheetParty('forja');
+        AutG.opAgora('engastarGema', args).then(function (res) {
+          forjaEngastando = false;
+          if (!res || !res.ok) toast((res && res.foraDoAr) ? tr('O servidor não respondeu — nada foi engastado.') : ((res && res.erro) || tr('O servidor não engastou agora.')));
+          else if (!res.resultado) toast(tr('O servidor não engastou: o saco mudou. Confira a bancada.'));
+          else avisa(res.resultado);
+          refaz();
+        }, function () {
+          forjaEngastando = false;
+          toast(tr('O servidor não respondeu — nada foi engastado.'));
+          refaz();
+        });
+        return;
+      }
+      avisa(safe(function () { return P().engastaGema(args); }, false));
+      sheetParty('forja');
+    }
+  }
+
   // prévia de bônus de uma peça num certo degrau das DUAS trilhas [D18]
   function bonusPreview(it, lv, stars) {
     if (!it) return '—';
@@ -9828,12 +10430,23 @@ var JOGO = (typeof window !== 'undefined')
     col.appendChild(el('div', 'hs-stats',
       tr('<span class="s-hp">{a} PV</span><span class="s-pa">{b} PA</span><span class="s-pp">{c} PP</span><span>{d} poder</span>{e}<span>{f} inic.</span><span>{g} esq.</span><span>{h} fix.</span>', { a: stats.hp || 0, b: stats.pa || 0, c: stats.pp || 0, d: stats.power || 0, e: stats.elemPower ? '<span class="s-el">+' + stats.elemPower + ' ' + (ELEM_PT[h.element] || '') + '</span>' : '', f: stats.initiative || 0, g: stats.dodge || 0, h: stats.lock || 0 })));
     col.appendChild(el('p', 'hs-gain', perLevelText(h.element)));
-    if (info.stars) {
-      var sr = el('div', 'hs-stars');
-      sr.appendChild(starRow(info.stars, 18));
-      sr.appendChild(el('span', null, tr('bônus de estrela já contam nos números acima')));
-      col.appendChild(sr);
+    // 08/10: as estrelas da classe SEMPRE aparecem (★0 vazio), com as cartas na mão, o custo da próxima
+    // e o botão de subir — é aqui que o jogador gasta as cartas que caíram
+    var sr = el('div', 'hs-stars' + (info.podeSubir ? ' is-pronto' : ''));
+    sr.appendChild(starRow(info.stars, 18));
+    var srT = el('span', 'hs-stars-t', info.next
+      ? tr('<b>{a}</b> cartas na mão · a ★{b} custa <b>{c}</b>{d}', { a: info.cards, b: info.next.star, c: info.next.custo,
+            d: info.stars ? ' · ' + tr('bônus de estrela já contam nos números acima') : '' })
+      : tr('★ no topo · <b>{a}</b> cartas na mão · bônus de estrela já contam nos números acima', { a: info.cards }));
+    sr.appendChild(srT);
+    if (info.podeSubir) {
+      sr.appendChild(btn(tr('★ Subir estrela'), 'btn-mini btn-gold hs-subir', function () {
+        subirEstrela(cid, function () { sheetHero(heroId); });
+      }));
+    } else if (info.next) {
+      sr.appendChild(el('span', 'hs-stars-falta', tr('faltam {a} — caem dos chefes', { a: info.next.faltam })));
     }
+    col.appendChild(sr);
     // 04/10: as cartas da classe, como item — o cartão com ×N e o que falta para a próxima estrela
     if (info.cards > 0) {
       var prC = cartaProgresso(cid);
@@ -9986,9 +10599,10 @@ var JOGO = (typeof window !== 'undefined')
       // o "Nv." em linha própria: colado ao nome, as reticências o comiam
       var nvH = it ? nvBadge(itemId) : null;
       if (nvH) cell.appendChild(nvH);
-      if (it) cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, estrelas))));
+      if (it) cell.appendChild(el('span', 'pt-slot-b', esc(itemBonusText(it, lv, estrelas, v && v.extra))));
+      if (v && v.extra) ic.appendChild(el('span', 'ig-gema', '◆'));
       tipOn(ic, SLOT_PT[canon] + (it ? ' — ' + it.name : ''),
-        it ? itemTipBody(itemId, lv, estrelas) : esc(SLOT_HINT[canon]),
+        it ? itemTipBody(itemId, lv, estrelas, v && v.extra) : esc(SLOT_HINT[canon]),
         it ? rarColor(it.rarity) : '#8b93a0');
       // a troca acontece na tela "Personagens", com este herói já no carrossel
       var act = btn(it ? tr('Trocar') : tr('Equipar'), 'btn-mini', function () {
@@ -10382,6 +10996,14 @@ var JOGO = (typeof window !== 'undefined')
       chaveConfig(!!prefUi().menosMovimento, tr('Menos movimento'), function (on) {
         var p = prefUi(); p.menosMovimento = on; gravaPrefUi(p);
       })));
+    // 08/10: os AVISOS do aparelho (só no aplicativo): o prêmio diário, o Eco e a saudade de três dias
+    var Nt = JOGO.Notificacoes;
+    if (Nt && Nt.disponivel && Nt.disponivel()) {
+      tela.appendChild(linhaConfig(tr('Avisos do aparelho'), tr('Lembretes do prêmio diário (10h), do Eco Primordial (segunda, 12h) e de três dias sem descer. Nada vem de fora do aparelho.'),
+        chaveConfig(!!Nt.ativas(), tr('Avisos do aparelho'), function (on) {
+          Nt.define(on).then(function () { toast(on ? tr('Avisos ligados.') : tr('Avisos desligados.')); });
+        })));
+    }
     body.appendChild(tela);
 
     /* GRÁFICOS (04/10, o dono: "teria como um usuário conseguir definir a resolução? assim para pc ou celular
@@ -10440,7 +11062,7 @@ var JOGO = (typeof window !== 'undefined')
     if (JOGO.PremioAnuncio && JOGO.PremioAnuncio.noApp()) {
       var secPremio = el('section', 'cfg-sec');
       secPremio.appendChild(el('h3', 'bk-tit', tr('Ganhar prêmios')));
-      secPremio.appendChild(el('p', 'inv-dica', tr('Opcional: assista a um anúncio e ganhe vinténs ou uma barra de ouro. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.')));
+      secPremio.appendChild(el('p', 'inv-dica', tr('Opcional: assista a um anúncio e ganhe vinténs, uma barra de ouro ou Fragmentos de Gema. Até 5 de cada por dia. O jogo não mostra anúncio em nenhum outro lugar.')));
       secPremio.appendChild(btn(tr('Ganhar prêmios'), 'btn-ghost btn-block', function () { JOGO.PremioAnuncio.abre(); }));
       body.appendChild(secPremio);
     }

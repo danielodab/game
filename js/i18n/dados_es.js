@@ -945,7 +945,9 @@ JOGO.I18n.registra('es', { dados: {
     "stone-root": {"name":"Grano de Roca Madre","description":"Una semilla de piedra del fondo de la mina, con vetas claras corriendo por dentro como raíces. Pesa más de lo que debería."},
     "stone-breath": {"name":"Soplo Embotellado","description":"Una burbuja de viento comprimida hasta volverse mineral. Silba bajito cuando alguien pasa corriendo al lado."},
     "stone-slate": {"name":"Esquirla de la Lousa","description":"Una esquirla del cielo vuelta piedra. No es de ningún elemento porque es de todos a la vez: sirve en cualquier forja."},
-    "stone-anchor": {"name":"Ancla de Forja","description":"Un diente de yunque arrancado entero, pesado como la culpa. Pegado a la pieza durante el golpe, no deja que el nivel retroceda; solo los jefes más profundos cargan uno."}
+    "stone-anchor": {"name":"Ancla de Forja","description":"Un diente de yunque arrancado entero, pesado como la culpa. Pegado a la pieza durante el golpe, no deja que el nivel retroceda; solo los jefes más profundos cargan uno."},
+    "stone-gem": {"name": "Gema Enterrada", "description": "Cien fragmentos apretados hasta volver a ser una sola piedra. Engastada en una pieza, le da una bonificación que la forja común no da — y cada pieza acepta solo una."},
+    "stone-gem-frag": {"name": "Fragmento de Gema", "description": "Un pedazo de gema que aún recuerda el brillo entero. Solo no sirve de nada; cien de ellos, apretados, vuelven a ser la Gema Enterrada."}
   },
   "consumiveis": {
     "pocao-pequena": {"name":"Poción de Vida Pequeña","description":"Un trago de jarabe rojo. Cura 30 PV a quien lo bebe."},

@@ -623,5 +623,41 @@ JOGO.I18n.registra('en', { erros: {
   "faltam pontos: o degrau {a} pede {b} e você tem {c}": "not enough points: step {a} needs {b} and you have {c}",
   "esse degrau já foi resgatado": "that step was already claimed",
   "afixo inválido": "invalid affix",
-  "a tentativa em grupo tem no máximo 4 heróis": "the group attempt has at most 4 heroes"
+  "a tentativa em grupo tem no máximo 4 heróis": "the group attempt has at most 4 heroes",
+  // ---- 08/10: os Fragmentos de Gema na loja e no anúncio; a peça engastada presa à conta (juiz)
+  "10 Fragmentos de Gema": "10 Gem Fragments",
+  "10 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "10 Gem Fragments. A hundred fragments become a Buried Gem at the Forge, and the gem set into a piece gives it one extra bonus, drawn at random: +1 AP, +1 MP, damage or health. Each piece takes only one gem. The fragments also drop in the six portals.",
+  "50 Fragmentos de Gema": "50 Gem Fragments",
+  "50 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "50 Gem Fragments. A hundred fragments become a Buried Gem at the Forge, and the gem set into a piece gives it one extra bonus, drawn at random: +1 AP, +1 MP, damage or health. Each piece takes only one gem. The fragments also drop in the six portals.",
+  "100 Fragmentos de Gema": "100 Gem Fragments",
+  "100 Fragmentos de Gema. Cem fragmentos viram uma Gema Enterrada na Forja, e a gema engastada dá à peça um bônus a mais, sorteado: +1 PA, +1 PP, dano ou vida. Cada peça aceita uma gema só. Os fragmentos também caem nos seis portais.": "100 Gem Fragments. A hundred fragments become a Buried Gem at the Forge, and the gem set into a piece gives it one extra bonus, drawn at random: +1 AP, +1 MP, damage or health. Each piece takes only one gem. The fragments also drop in the six portals.",
+  "a peça com Gema engastada não sai da conta: o bônus não viaja": "a piece with a Gem set doesn't leave the account: the bonus doesn't travel",
+  "3 Fragmentos de Gema (anúncio)": "3 Gem Fragments (ad)",
+  "Fragmentos de Gema do anúncio": "Gem Fragments from the ad",
+  // ---- 08/10: as comuns na loja (os dois primeiros heróis são livres)
+  "Bárbaro": "Barbarian",
+  "Curandeiro": "Healer",
+  "Libera o Bárbaro na hora: chegam as cartas que faltam para as 5 do desbloqueio (as que você já tem contam). Chega no nível 1.": "Unlocks the Barbarian instantly: the cards you're missing for the 5 needed to unlock arrive (the ones you already have count). Arrives at level 1.",
+  "Libera o Curandeiro na hora: chegam as cartas que faltam para as 5 do desbloqueio (as que você já tem contam). Chega no nível 1.": "Unlocks the Healer instantly: the cards you're missing for the 5 needed to unlock arrive (the ones you already have count). Arrives at level 1.",
+  // ---- 08/10: o prêmio diário de resgate (premio_diario.py)
+  "o prêmio de hoje já foi resgatado; o próximo abre à meia-noite de Brasília": "today's reward was already claimed; the next one opens at midnight in Brasília",
+  "Prêmio diário": "Daily reward",
+  "Vinténs do prêmio diário": "Coppers from the daily reward",
+  // ---- 08/10: as auras novas, as molduras premium e as recusas da moldura (loja.py)
+  "moldura desconhecida": "unknown frame",
+  "você ainda não tem essa moldura": "you don't have that frame yet",
+  "Aura de Sombra": "Shadow Aura",
+  "Aura de Geada": "Frost Aura",
+  "Aura Dourada": "Golden Aura",
+  "Moldura Dourada": "Golden Frame",
+  "Moldura de Rubi": "Ruby Frame",
+  "Moldura de Esmeralda": "Emerald Frame",
+  "Moldura de Obsidiana": "Obsidian Frame",
+  "Fumaça roxa e lenta subindo em volta do corpo, e uma mancha escura que respira no chão. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Slow purple smoke rising around the body, and a dark stain that breathes on the ground. Around your hero in the plaza and the guild hall: everyone sees it. Looks only — changes nothing in battle. Turn it on, off and swap it in the Character panel, in the game.",
+  "Anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Ice rings slowly opening on the ground and pale crystals in orbit, rising and fading. Around your hero in the plaza and the guild hall: everyone sees it. Looks only — changes nothing in battle. Turn it on, off and swap it in the Character panel, in the game.",
+  "Fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa. Em volta do seu herói na praça e na sede da guilda: todo mundo vê. Só aparência — não muda nada em batalha. Liga, desliga e troca na ficha do Personagem, no jogo.": "Gold sparks in a tight spiral rising from the ground and a pulsing golden glow. Around your hero in the plaza and the guild hall: everyone sees it. Looks only — changes nothing in battle. Turn it on, off and swap it in the Character panel, in the game.",
+  "Filete dourado duplo com losangos nas quinas. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double golden border with diamonds at the corners. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize.",
+  "Filete vermelho-rubi duplo com losangos nas quinas, sobre fundo vinho. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double ruby-red border with diamonds at the corners, over a wine background. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize.",
+  "Filete verde-esmeralda duplo com losangos nas quinas, sobre fundo de mata. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double emerald-green border with diamonds at the corners, over a forest background. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize.",
+  "Filete violeta duplo sobre fundo quase preto, com losangos nas quinas — a mais escura. Vale na plaquinha do seu nome na praça e na sede, por cima da moldura que o título dá. Só aparência — não muda nada em batalha. Escolhe em Personagem → Customizar.": "Double violet border over a near-black background, with diamonds at the corners — the darkest one. Shows on your name plate in the plaza and the hall, over the frame your title gives. Looks only — changes nothing in battle. Pick it in Character → Customize."
 } });

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: a pose do retrato dos chefes</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px monospace}
+  #grade{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:8px}
+  .cel{text-align:center}.cel canvas{width:100%;height:auto;display:block;background:#222}
+  #st{padding:6px 10px;color:#8f8}
+</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10): o retrato de cada chefe em várias POSES (bind, idle em vários instantes,
+     walk, attack), lado a lado — para escolher a `retratoPose` do look quando o idle do rig estica um
+     braço (o dono viu no Magno e no chefe da Mina). `?chefes=boss-heartforge,boss-deepknock` -->
+<div id="st">carregando…</div>
+<div id="grade"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = [
+    'vendor/three.min.js', 'vendor/GLTFLoader.js',
+    'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js',
+    'js/core/data/progression.js', 'js/core/data/monsters.js', 'js/core/data/dungeons.js',
+    'js/core/data/fusions.js', 'js/core/data/pets.js', 'js/core/data/items.js', 'js/core/data/items_extra.js',
+    'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js', 'assets/embedded/models-meshy.js',
+    'assets/embedded/models-monsters.js', 'assets/embedded/models-bosses.js',
+    'assets/embedded/models-meshy-emberlock.js', 'assets/embedded/models-meshy-quakemine.js',
+    'js/render3d/models3d_v2.js'
+  ];
+  for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var chefes = (Q.chefes || 'boss-heartforge,boss-deepknock').split(',');
+  var poses = [['bind', 'bind'], ['idle 0.6 (hoje)', { clip: 'idle', t: 0.6 }], ['idle 1.5', { clip: 'idle', t: 1.5 }],
+               ['idle 3.0', { clip: 'idle', t: 3.0 }], ['walk 0.4', { clip: 'walk', t: 0.4 }], ['attack 0.5', { clip: 'attack', t: 0.5 }]];
+  var st = document.getElementById('st'), grade = document.getElementById('grade');
+  var t0 = Date.now();
+  (function espera() {
+    var M = JOGO.Models3D2;
+    var pronto = M && M.isReady && M.isReady();
+    if (!pronto && Date.now() - t0 < 60000) {
+      if (M && M.load) M.load(function () {});
+      return setTimeout(espera, 200);
+    }
+    if (!pronto) { st.textContent = 'ERRO modelos'; window.__pronto = true; return; }
+    var feitos = 0;
+    chefes.forEach(function (id) {
+      poses.forEach(function (p) {
+        var cel = document.createElement('div');
+        cel.className = 'cel';
+        var cv = null;
+        try { cv = M.portrait(id, { size: 220, boss: true, pose: p[1], corpoInteiro: true }); } catch (e) { cv = null; }
+        if (cv) { cel.appendChild(cv); feitos++; }
+        var rot = document.createElement('div');
+        rot.textContent = id + ' · ' + p[0];
+        cel.appendChild(rot);
+        grade.appendChild(cel);
+      });
+    });
+    st.textContent = 'retratos: ' + feitos + ' de ' + (chefes.length * poses.length);
+    document.title = st.textContent;
+    window.__pronto = true;
+  })();
+})();
+</script>
+</body>
+</html>

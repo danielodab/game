@@ -31,7 +31,7 @@ var JOGO = (typeof window !== 'undefined')
   var THREE = null;
   var renderer = null, scene = null, camera = null;
   var container = null, canvas = null;
-  var rodando = false, ultimoT = 0;
+  var rodando = false, ultimoT = 0, laco = 0;   // laco: o id do requestAnimationFrame vivo
 
   var heroi = null;                 // { node, mixer, alvo, andando, plaquinha, plaquinhaTitulo }
   var nomeJogador = null;           // o nome batizado no DB, para a plaquinha
@@ -267,25 +267,47 @@ var JOGO = (typeof window !== 'undefined')
    * pegar o carimbo. Desde 12/09 a praça é de grama e esta textura veste só
    * o pátio da ANTESSALA (30 m): a repetição é FIXA (19/09) — era RAIO_MAPA/2
    * e a lajota da antessala encolhia toda vez que a praça crescia. */
-  var texLajotas = null;
-  function texturaLajotas() {
-    if (texLajotas) return texLajotas;
+  var texLajotas = null, texLajotasTema = {};
+  /* 08/10 (dono: "queria deixar o chão da cor das salas"): com `tema`, a lajota da antessala
+   * é tingida pela paleta do calabouço (floor1/floor2 de DATA.dungeons, a mesma que pinta o
+   * tabuleiro) — uma textura por tema, guardada. Sem tema, a pedra cinza de sempre. */
+  function texturaLajotas(tema) {
+    if (!tema) {
+      if (texLajotas) return texLajotas;
+    } else if (texLajotasTema[tema]) return texLajotasTema[tema];
     var cv = document.createElement('canvas');
     cv.width = 256; cv.height = 256;
-    pintaLajotas(cv.getContext('2d'));
+    pintaLajotas(cv.getContext('2d'), tema ? coresDasLajotas(tema) : null);
     var tex = new THREE.CanvasTexture(cv);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(25, 25);
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
-    texLajotas = tex;
+    if (tema) texLajotasTema[tema] = tex; else texLajotas = tex;
     return tex;
   }
+  function hexRgb(h, reserva) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(h || ''));
+    if (!m) return reserva;
+    var n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  // as três cores da lajota de um tema: a junta (floor1 bem escura) e as duas pedras
+  // (floor1 e floor2 clareadas — a paleta é a do tabuleiro, feita para a luz de cima)
+  function coresDasLajotas(tema) {
+    var pal = null;
+    try { pal = JOGO.Models3D && JOGO.Models3D.themePalette && JOGO.Models3D.themePalette(tema); } catch (e) {}
+    var f1 = hexRgb(pal && pal.floor1, [96, 98, 101]), f2 = hexRgb(pal && pal.floor2, [122, 124, 127]);
+    function clareia(c, k) { return [Math.min(255, Math.round(c[0] * k)), Math.min(255, Math.round(c[1] * k)), Math.min(255, Math.round(c[2] * k))]; }
+    return { junta: clareia(f1, 0.55), pedras: [clareia(f1, 1.45), clareia(f2, 1.55)] };
+  }
+  Hub.coresDasLajotas = coresDasLajotas;   // prova (antessala_tema.html)
   /* 14/09: o DESENHO das lajotas saiu da textura para uma função que só pinta um canvas
    * 2D de 256 px — sem THREE e sem o Acampamento de pé. É ela que o tabuleiro da praça
    * tática (renderer3d_v2, tema 'praca') usa: a mesma pedra nos dois mapas, sem cópia. */
-  function pintaLajotas(g) {
-    g.fillStyle = '#3f4348';                       // a junta, escura
+  function pintaLajotas(g, cores) {
+    // `cores` (08/10, só a antessala): {junta:[r,g,b], pedras:[[r,g,b],[r,g,b]]} — a lajota na cor do tema
+    g.fillStyle = cores ? 'rgb(' + cores.junta.join(',') + ')' : '#3f4348';   // a junta, escura
     g.fillRect(0, 0, 256, 256);
     var NL = 4, lado = 256 / NL, junta = 5;
     for (var jj = 0; jj < NL; jj++) {
@@ -293,7 +315,12 @@ var JOGO = (typeof window !== 'undefined')
       for (var ii = -1; ii <= NL; ii++) {
         var h = ((ii * 7 + jj * 13 + 5) * 2654435761) % 100;
         var tom = 108 + (h % 26) - 12;             // cinza 96..122
-        g.fillStyle = 'rgb(' + tom + ',' + (tom + 2) + ',' + (tom + 5) + ')';
+        if (cores) {
+          // mistura das duas pedras pela mesma semente, com a variação do cinza por cima
+          var t = (h % 26) / 25, pA = cores.pedras[0], pB = cores.pedras[1], v = (h % 26) - 12;
+          var rr = Math.round(pA[0] + (pB[0] - pA[0]) * t + v), gg = Math.round(pA[1] + (pB[1] - pA[1]) * t + v), bb = Math.round(pA[2] + (pB[2] - pA[2]) * t + v);
+          g.fillStyle = 'rgb(' + Math.max(0, Math.min(255, rr)) + ',' + Math.max(0, Math.min(255, gg)) + ',' + Math.max(0, Math.min(255, bb)) + ')';
+        } else g.fillStyle = 'rgb(' + tom + ',' + (tom + 2) + ',' + (tom + 5) + ')';
         g.fillRect(ii * lado + desloca + junta / 2, jj * lado + junta / 2,
                    lado - junta, lado - junta);
         // um fio de luz na borda de cima: leitura de pedra, não de ladrilho
@@ -395,6 +422,45 @@ var JOGO = (typeof window !== 'undefined')
     bronze: { cor: '#c9793a', texto: '#ffd9b8', borrao: 15, fundo: 'rgba(38,24,12,0.92)' },
     admin:  { cor: '#ffffff', texto: '#ffffff', borrao: 26, fundo: 'rgba(18,20,26,0.94)' }
   };
+  /* AS MOLDURAS DA PLAQUINHA (08/10, o dono: "ele escolhe título, aura e moldura para o nome; crie umas
+   * molduras premium; conforme o título que ele possui, muda a moldura para aquele título"). Cada uma
+   * é o filete, o fundo e os CANTOS (losangos nas quatro quinas) da placa do nome. Dois grupos:
+   *   · as DOS TÍTULOS, de graça e automáticas ('auto'): a do pódio da arena, a do Eco, a dos chefes e
+   *     a do pódio de classe — a placa acompanha o título que está nela (molduraDoTitulo);
+   *   · as PREMIUM, da loja do site (servidor/loja.py MOLDURAS_LOJA): Dourada, Rubi, Esmeralda e
+   *     Obsidiana — escolhidas na ficha, valem por cima da automática.
+   * O pódio de XP continua ACENDENDO o nome (BRILHOS); a moldura dele é a do brilho. */
+  var MOLDURAS = {
+    arena:     { borda: '#ff6a4a', fundo: 'rgba(46,14,10,0.93)', traco: 7, cantos: true },
+    eco:       { borda: '#b48cff', fundo: 'rgba(26,14,46,0.93)', traco: 7, cantos: true },
+    chefe:     { borda: '#8fd0a0', fundo: 'rgba(10,34,20,0.93)', traco: 7, cantos: true },
+    classe:    { borda: '#7ec8ff', fundo: 'rgba(10,26,42,0.93)', traco: 6, cantos: false },
+    ouro:      { borda: '#ffd24a', fundo: 'rgba(48,34,6,0.94)', traco: 8, cantos: true, dupla: true },
+    rubi:      { borda: '#ff4d6d', fundo: 'rgba(50,8,18,0.94)', traco: 8, cantos: true, dupla: true },
+    esmeralda: { borda: '#3ddc84', fundo: 'rgba(6,40,22,0.94)', traco: 8, cantos: true, dupla: true },
+    obsidiana: { borda: '#9a7bff', fundo: 'rgba(10,6,20,0.96)', traco: 8, cantos: true, dupla: true }
+  };
+  var MOLDURAS_PREMIUM = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];
+  Hub.MOLDURAS = Object.keys(MOLDURAS);
+  Hub.MOLDURAS_PREMIUM = MOLDURAS_PREMIUM.slice();
+  /* a moldura que um TÍTULO (a chave em português) pede: null = a placa de sempre */
+  function molduraDoTitulo(titulo) {
+    var t = String(titulo || '');
+    if (!t) return null;
+    if (/^Top [123] Pvp$/.test(t)) return 'arena';
+    if (/^Top [123] PVM$/.test(t)) return null;          // o pódio de XP já acende o nome (BRILHOS)
+    if (/^Top [123] /.test(t)) return 'classe';
+    if (/^Voz do Eco/.test(t)) return 'eco';
+    if (/^o /.test(t)) return 'chefe';                   // os títulos de chefe ("o Podador da Viúva"…)
+    return null;
+  }
+  Hub.molduraDoTitulo = molduraDoTitulo;
+  /* a moldura que VALE: a escolhida (premium) se existir, senão a do título ('auto') */
+  function molduraEfetiva(escolhida, titulo) {
+    if (typeof escolhida === 'string' && escolhida !== 'auto' && MOLDURAS[escolhida]) return escolhida;
+    return molduraDoTitulo(titulo);
+  }
+  Hub.molduraEfetiva = molduraEfetiva;
   function rotulo(texto, cor, escala, op) {
     /* O BRASÃO na placa da guilda (11/09, dono: "logo tem que ser maior; o
      * retângulo do logo e nome da guilda deve ser maior, onde caiba o logo").
@@ -435,14 +501,31 @@ var JOGO = (typeof window !== 'undefined')
      * Fundo. O filete da placa vai na mesma cor (a placa de GRUPO tem
      * dourado próprio e fica com o dela — só o texto acende). */
     var bri = op && op.brilho ? BRILHOS[op.brilho] : null;
+    var mol = (op && op.moldura && MOLDURAS[op.moldura]) ? MOLDURAS[op.moldura] : null;   // 08/10
 
     if (op && op.placa) {
-      var traco = op.traco || (bri ? 7 : 5);
-      g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
+      var traco = op.traco || (mol ? mol.traco : (bri ? 7 : 5));
+      g.fillStyle = op.fundo || (mol ? mol.fundo : (bri ? bri.fundo : 'rgba(24,18,10,0.88)'));
       g.fillRect(x0, mY, larg, altPlaca);
-      g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
+      g.strokeStyle = op.borda || (mol ? mol.borda : (bri ? bri.cor : '#c9a227'));
       g.lineWidth = traco;
       g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco);
+      if (mol) {
+        // o filete DUPLO das premium: um segundo traço fino por dentro
+        if (mol.dupla) {
+          g.lineWidth = 2;
+          g.strokeRect(x0 + traco + 4, mY + traco + 4, larg - traco * 2 - 8, altPlaca - traco * 2 - 8);
+        }
+        // os CANTOS: um losango em cada quina, na cor do filete
+        if (mol.cantos) {
+          g.fillStyle = mol.borda;
+          [[x0, mY], [x0 + larg, mY], [x0, mY + altPlaca], [x0 + larg, mY + altPlaca]].forEach(function (c) {
+            g.beginPath();
+            g.moveTo(c[0], c[1] - 13); g.lineTo(c[0] + 13, c[1]); g.lineTo(c[0], c[1] + 13); g.lineTo(c[0] - 13, c[1]);
+            g.closePath(); g.fill();
+          });
+        }
+      }
     }
     
     // o escudo mora DENTRO da moldura agora, encostado na borda esquerda
@@ -467,7 +550,7 @@ var JOGO = (typeof window !== 'undefined')
     if (subtexto) {
       g.font = 'italic 600 32px Georgia, serif';
       g.shadowColor = 'rgba(0,0,0,.85)'; g.shadowBlur = 8;
-      g.fillStyle = bri ? bri.cor : '#e8c25a';
+      g.fillStyle = bri ? bri.cor : (mol ? mol.borda : '#e8c25a');
       g.fillText(subtexto, tx, ty + 42);
     }
 
@@ -615,6 +698,24 @@ var JOGO = (typeof window !== 'undefined')
       var contraluz = new THREE.DirectionalLight(0x8fb4ff, 0.55);
       contraluz.position.set(8, 16, -26);
       scene.add(contraluz);
+    }
+
+    if (salaAtual) {
+      /* 08/10: a antessala toma a LUZ do calabouço (THEME_ENV do renderer3d_v2, a mesma do
+       * tabuleiro daquele tema): céu, chão, sol e névoa na cor da sala — antes era a luz de dia
+       * da praça em cima de um chão cinza, e toda sala de espera parecia a mesma. */
+      var amb = null;
+      try { amb = JOGO.Renderer && JOGO.Renderer.ambienteDoTema && JOGO.Renderer.ambienteDoTema(salaCfg && salaCfg.tema); } catch (eA) {}
+      if (amb) {
+        var nev = new THREE.Color(amb.fog).multiplyScalar(0.55);
+        scene.background = nev;
+        scene.fog = new THREE.Fog(nev, raioAtual() * 1.6, raioAtual() * 4.0);
+        hemi.color.set(amb.sky); hemi.groundColor.set(amb.gnd); hemi.intensity = Math.max(0.8, amb.hemiI || 0.9);
+        sol.color.set(amb.sun); sol.intensity = amb.sunI || 1.05;
+        var contra = new THREE.DirectionalLight(amb.rim || 0xffffff, 0.35);
+        contra.position.set(6, 14, -20);
+        scene.add(contra);
+      }
     }
 
     if (sedeId) {
@@ -795,6 +896,33 @@ var JOGO = (typeof window !== 'undefined')
     var cat = (JOGO.CENARIO && tema) ? JOGO.CENARIO[tema] : null;
     var muros = (cat && cat.alto) || [];
     var n = 0;
+    /* 08/10: SOB DEMANDA (jogo servido, e no telefone sem pré-busca) as peças do tema podem
+     * ainda não estar abertas. Pede ao Bundle o que falta (muros e enfeites) e, quando a leva
+     * chegar, DESMONTA o que plantou e replanta a sala inteira — o bloco de reserva vira muro. */
+    var precisa = muros.concat(enfeitesDaSala(cat).map(function (e) { return e.chave; }));
+    var faltam = [];
+    precisa.forEach(function (ch) {
+      var ok = false;
+      try { ok = !!m2.rawScene(ch); } catch (eR) {}
+      if (!ok && faltam.indexOf(ch) < 0) faltam.push(ch);
+    });
+    if (faltam.length) {
+      try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(faltam); } catch (eP) {}
+      if (!salaOuve && m2.aoChegar) {
+        salaOuve = true;
+        m2.aoChegar(function () {
+          if (!salaAtual || !salaPlantada || !scene || !salaFaltam.length) return;
+          var chegou = false;
+          try { chegou = salaFaltam.some(function (ch) { return !!m2.rawScene(ch); }); } catch (eS) {}
+          if (!chegou) return;   // nada desta sala veio nesta leva
+          desplantaSala();
+          plantaSala();
+        });
+      }
+    }
+    salaFaltam = faltam;
+    salaPlantados.length = 0;
+    var salaGuarda = function (no) { if (no) salaPlantados.push(no); return no; };
     // os quatro lados, um muro a cada 4,6 m; o vão do norte é a porta e o
     // do sul é a saída
     for (var lado = 0; lado < 4; lado++) {
@@ -805,7 +933,7 @@ var JOGO = (typeof window !== 'undefined')
         var z = (lado === 0) ? -R * 0.96 : (lado === 2) ? R * 0.96 : tt;
         var rot = (lado === 0 || lado === 2) ? 0 : Math.PI / 2;
         var chave = muros.length ? muros[(n++) % muros.length] : null;
-        var no = chave ? plantaPeca(chave, 3.1, 4.8, x, z, rot) : null;
+        var no = chave ? salaGuarda(plantaPeca(chave, 3.1, 4.8, x, z, rot)) : null;
         if (!no) {
           var bloco = new THREE.Mesh(
             new THREE.BoxGeometry(4.4, 3.0, 1.0),
@@ -814,9 +942,59 @@ var JOGO = (typeof window !== 'undefined')
           bloco.position.set(x, 1.5, z);
           bloco.rotation.y = rot;
           scene.add(bloco);
+          salaGuarda(bloco);
         }
       }
     }
+    // os ENFEITES do tema (08/10, dono: "colocar alguns enfeites do tema da sala")
+    enfeitesDaSala(cat).forEach(function (e) {
+      var noE = salaGuarda(plantaPeca(e.chave, e.alt, e.teto, e.x, e.z, e.rot));
+      if (noE && e.r) marcaSolido(e.x, e.z, e.r, 'sala');
+    });
+  }
+  /* O que a antessala planta além dos muros, por VAGA fixa no pátio de 30 m: um marco do tema
+   * num canto, peças altas nos outros cantos, peças baixas encostadas nos muros e rasas no
+   * chão. As vagas ficam longe da porta (0, -10,8; raio 4,2), da saída (12,3, 4,5; raio 3,6) e
+   * do meio, por onde o herói anda. A peça de cada vaga é fixa pela ordem do catálogo: a
+   * mesma sala em toda visita. Sem catálogo (tema sem kit), lista vazia. */
+  var VAGAS_SALA = [
+    { papel: 'marco',        x: -11.6, z: 11.6,  alt: 2.6,  teto: 3.4, rot: Math.PI * 0.25,  r: 1.2 },
+    { papel: 'sotaque_alto', x: 11.6,  z: -11.6, alt: 2.6,  teto: 2.6, rot: -Math.PI * 0.75, r: 0.8 },
+    { papel: 'sotaque_alto', x: -11.6, z: -11.6, alt: 2.6,  teto: 2.6, rot: Math.PI * 0.75,  r: 0.8 },
+    { papel: 'sotaque_alto', x: 11.6,  z: 11.6,  alt: 2.6,  teto: 2.6, rot: -Math.PI * 0.25, r: 0.8 },
+    { papel: 'sotaque',      x: -12.6, z: -4.5,  alt: 1.5,  teto: 2.4, rot: Math.PI / 2,     r: 0.8 },
+    { papel: 'sotaque',      x: -12.6, z: 4.5,   alt: 1.5,  teto: 2.4, rot: Math.PI / 2,     r: 0.8 },
+    { papel: 'sotaque',      x: 12.6,  z: -4.5,  alt: 1.5,  teto: 2.4, rot: -Math.PI / 2,    r: 0.8 },
+    { papel: 'sotaque',      x: -5.0,  z: 12.6,  alt: 1.5,  teto: 2.4, rot: Math.PI,         r: 0.8 },
+    { papel: 'sotaque',      x: 5.0,   z: 12.6,  alt: 1.5,  teto: 2.4, rot: Math.PI,         r: 0.8 },
+    { papel: 'sotaque',      x: 6.0,   z: -12.6, alt: 1.5,  teto: 2.4, rot: 0,               r: 0.8 },
+    { papel: 'sotaque',      x: -6.0,  z: -12.6, alt: 1.5,  teto: 2.4, rot: 0,               r: 0.8 },
+    { papel: 'chao',         x: -7.5,  z: -6.0,  alt: 0.55, teto: 2.2, rot: 0.9,             r: 0 },
+    { papel: 'chao',         x: 7.0,   z: -7.0,  alt: 0.55, teto: 2.2, rot: 2.1,             r: 0 },
+    { papel: 'chao',         x: -7.0,  z: 7.5,   alt: 0.55, teto: 2.2, rot: 0.3,             r: 0 },
+    { papel: 'chao',         x: 4.0,   z: 9.0,   alt: 0.55, teto: 2.2, rot: 1.6,             r: 0 }
+  ];
+  function enfeitesDaSala(cat) {
+    if (!cat) return [];
+    var usados = {}, fora = [];
+    VAGAS_SALA.forEach(function (v) {
+      var lista = cat[v.papel];
+      if (!lista || !lista.length) return;
+      var k = usados[v.papel] || 0;
+      usados[v.papel] = k + 1;
+      fora.push({ chave: lista[k % lista.length], x: v.x, z: v.z, alt: v.alt, teto: v.teto, rot: v.rot, r: v.r });
+    });
+    return fora;
+  }
+  Hub.enfeitesDaSala = enfeitesDaSala;   // prova (antessala_tema.html)
+  // o que a sala plantou (muros, blocos de reserva e enfeites), para desmontar antes de replantar
+  var salaPlantados = [], salaFaltam = [], salaOuve = false;
+  function desplantaSala() {
+    salaPlantados.forEach(function (no) { try { scene.remove(no); } catch (e) {} });
+    salaPlantados.length = 0;
+    for (var i = solidos.length - 1; i >= 0; i--) if (solidos[i].dono === 'sala') solidos.splice(i, 1);
+    salaPlantada = false;
+    salaTentativas = 0;
   }
   // ============================================================ O CAMPO DE PVP (14/09)
   /* A PEDRA DO CAMPO: dois tiles de 256 px em canvas, semeados (o Campo é o mesmo em toda
@@ -1895,7 +2073,7 @@ var JOGO = (typeof window !== 'undefined')
   function montaChao() {
     if (campoAtivo) return chaoDoCampo();   // 14/09: terra e pedra escura
     if (salaAtual) {
-      var matSala = new THREE.MeshStandardMaterial({ map: texturaLajotas(), roughness: 1 });
+      var matSala = new THREE.MeshStandardMaterial({ map: texturaLajotas(salaCfg && salaCfg.tema), roughness: 1 });
       var quad = new THREE.Mesh(new THREE.PlaneGeometry(raioAtual() * 2, raioAtual() * 2), matSala);
       quad.rotation.x = -Math.PI / 2;
       return quad;
@@ -2892,7 +3070,14 @@ var JOGO = (typeof window !== 'undefined')
         // 19/09: o portão do Campo veste o catálogo do Campo, que só desce com o Fecho
         // daquele tema aberto (pré-busca); se um dia ele estiver fechado, o portão pede
         // as peças por conta própria — como a cena do Campo já faz
-        if (portao) { try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(faltam); } catch (eP) {} }
+        // 08/10: no TELEFONE a pré-busca não liga (Bundle.economiaDeDados — memória da aba), e o
+        // dono viu só os muros do PvP abrirem no celular: os seis portais ficavam pelados para
+        // sempre, porque ninguém pedia as peças deles. Quando a pré-busca está fora, cada portal
+        // pede o PRÓPRIO corredor (só a vitrine: alto/pilar/sotaque/chão, nunca monstro), como o
+        // chefe do portal já faz. No PC a pré-busca segue trazendo tudo na folga, sem pedido duplo.
+        var semPreBusca = false;
+        try { semPreBusca = !!(JOGO.Bundle && JOGO.Bundle.economiaDeDados && JOGO.Bundle.economiaDeDados()); } catch (eE) {}
+        if (portao || semPreBusca) { try { if (JOGO.Bundle && JOGO.Bundle.pede) JOGO.Bundle.pede(faltam); } catch (eP) {} }
         return;
       }
       cantinhoFeito[lg.id] = true;
@@ -3282,8 +3467,10 @@ var JOGO = (typeof window !== 'undefined')
    * ACIMA dele. A coroa do ranking flutua acima de tudo. */
   /* 11/09: `grupo` ('membro' | 'lider' | null) — o parceiro do meu grupo leva
    * a placa de borda dourada grossa, com ◆ (ou ♛ se lidera) antes do nome. */
-  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho) {
+  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho, moldura) {
     if (!corpo || !THREE) return;
+    // 08/10: a moldura da placa — a escolhida (premium) ou a do título (lida da CHAVE, antes de traduzir)
+    var molId = molduraEfetiva(moldura, titulo);
     // 05/10, os idiomas: o título viaja e é guardado em português (é chave); na plaquinha vai o do idioma de quem olha
     if (titulo && JOGO.UI && JOGO.UI.titExibe) titulo = JOGO.UI.titExibe(titulo);
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
@@ -3312,7 +3499,7 @@ var JOGO = (typeof window !== 'undefined')
                { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)',
                  brilho: brilho || null, subtexto: titulo || '' })
       : rotulo(nome, '#f0ead8', 0.42,
-               { placa: true, brilho: brilho || null, subtexto: titulo || '' });
+               { placa: true, brilho: brilho || null, subtexto: titulo || '', moldura: molId });
     sp.position.y = alto + 0.5;
     corpo.node.add(sp);
     corpo.plaquinha = sp;
@@ -3494,11 +3681,19 @@ var JOGO = (typeof window !== 'undefined')
     if (isFinite(mz)) no.position.z -= mz;
     return berco;
   }
+  var molduraDoHeroi = 'auto';       // 08/10: a moldura escolhida na ficha ('auto' = a do título)
   function pendura(nome, titulo, brasaTier, guilda) {
     // o herói nunca leva marca de grupo (ela é do PARCEIRO); leva o brilho
     penduraEm(heroi, nome, titulo, brasaTier, guilda, null,
-              brilhoDoNome(nome, souOMestre()));
+              brilhoDoNome(nome, souOMestre()), molduraDoHeroi);
   }
+  /* 08/10: a moldura do herói (a ficha escolhe; a Rede leva aos outros) */
+  Hub.moldura = function (id) {
+    molduraDoHeroi = (typeof id === 'string' && id) ? id : 'auto';
+    if (scene) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
+    return molduraDoHeroi;
+  };
+  Hub._molduraDoHeroi = function () { return molduraDoHeroi; };
   /* O BRILHO DE UM NOME: o Mestre do Fundo primeiro (branco, e ele não
    * disputa pódio com ninguém), depois a medalha do RANKING DE XP (12/09: o
    * top 1, 2 e 3 do site, casado pelo NOME — o ranking não publica id). O
@@ -3524,7 +3719,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!reg.corpo) continue;
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -3988,12 +4183,14 @@ var JOGO = (typeof window !== 'undefined')
 
   // -------------------------------------------------------------------- laço
   function quadro(t) {
-    if (!rodando) return;
-    var dt = Math.min((t - ultimoT) / 1000 || 0.016, 0.1);
+    if (!rodando) { laco = 0; return; }
+    // 08/10: o quadro que repete o mesmo `t` (dois laços no mesmo tique) não anda nada — antes o
+    // `|| 0.016` somava um passo inteiro e o boneco da antessala andava em dobro
+    var dt = Math.min(Math.max(0, (t - ultimoT) / 1000) || 0, 0.1);
     ultimoT = t;
     tique(dt);
     renderer.render(scene, camera);
-    requestAnimationFrame(quadro);
+    laco = requestAnimationFrame(quadro);
   }
 
   function ajusta() {
@@ -4077,13 +4274,20 @@ var JOGO = (typeof window !== 'undefined')
     if (!rodando) {
       rodando = true;
       ultimoT = performance.now();
-      requestAnimationFrame(quadro);
+      if (laco) cancelAnimationFrame(laco);
+      laco = requestAnimationFrame(quadro);
     }
     return true;
   };
 
   Hub.sair = function () {
-    rodando = false;               // o rAF morre sozinho no próximo quadro
+    /* 08/10: o rAF da fila é CANCELADO aqui, não deixado morrer. A HUD chama sair() e entrar() no
+     * mesmo tique ao abrir a antessala (showScreen('antessala') → buildHub): o laço velho ainda
+     * estava na fila, encontrava `rodando` de novo em true e seguia vivo — dois laços, o boneco
+     * da sala de espera andando a 2× e a cena desenhada duas vezes por quadro (o dono: "a
+     * velocidade está muito acelerada"). Cada UI.repaint() com a antessala aberta somava mais um. */
+    rodando = false;
+    if (laco) { try { cancelAnimationFrame(laco); } catch (eL) {} laco = 0; }
     ultimoPerto = null;
     // os corpos dos fantasmas saem de cena; a REDE continua ligada — ao
     // voltar ao Acampamento a HUD os reconstrói de Rede.pares()
@@ -4107,11 +4311,12 @@ var JOGO = (typeof window !== 'undefined')
    * agora atualiza só o que trouxe. `null` explícito continua limpando. */
   var brasaDoHeroi = null;         // o tier da coroa ({nivel, tam, nome})
   var guildaDoHeroi = null;        // a placa da guilda ({nome, emblema})
-  Hub.nomeia = function (nome, titulo, brasaTier, guilda) {
+  Hub.nomeia = function (nome, titulo, brasaTier, guilda, moldura) {
     if (nome !== undefined) nomeJogador = String(nome || '').trim() || null;
     if (titulo !== undefined) tituloJogador = String(titulo || '').trim() || null;
     if (brasaTier !== undefined) brasaDoHeroi = brasaTier || null;
     if (guilda !== undefined) guildaDoHeroi = guilda || null;
+    if (moldura !== undefined) molduraDoHeroi = (typeof moldura === 'string' && moldura) ? moldura : 'auto';   // 08/10
     pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
   };
   /* A AURA DO COLECIONADOR (pedido 25/08): o Traje fechado acende "um fogo
@@ -4144,7 +4349,9 @@ var JOGO = (typeof window !== 'undefined')
    * THREE.Points / numa só malha, movidas na CPU. Quem tem a aura comprada E o Traje do Colecionador
    * veste a comprada. Sem `cor` (ou com uma que esta versão não conhece) fica a branca de sempre. */
   var AURA_COR = { fogo: 0xff6a2a, agua: 0x3aa0ff, terra: 0x6fcf4a, ar: 0xbfefff, neutra: 0xe0b860,
-                   mestre: 0x8a0d14 };      // 04/10: a Chama do Mestre, só da conta do Mestre
+                   mestre: 0x8a0d14,        // 04/10: a Chama do Mestre, só da conta do Mestre
+                   // 08/10 (o dono: "crie mais auras"): a Sombra, a Geada e a Dourada — formas próprias abaixo
+                   sombra: 0x6a3fa0, gelo: 0x9fe4ff, ouro: 0xffcf4a };
   var AURA_LONGE = 26;               // m: além disto a aura do vizinho não se desenha (nem se anima)
   var AURA_K_PONTO = 2.36;           // PointsMaterial mede em "metros / tan(fov/2)": 1 / tan(23°)
   var relogioAura = 0;               // anda mais devagar com "Menos movimento" ligado
@@ -4655,6 +4862,67 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     }
   };
   /* tira a aura do corpo e solta a geometria (ela é de cada corpo; os materiais são repartidos e ficam) */
+  /* 08/10 — AS TRÊS AURAS NOVAS (o dono: "crie mais auras"). As mesmas peças das outras — pontos de um
+   * quadro do atlas e placas deitadas no chão — para custarem o mesmo (2 chamadas de desenho cada). */
+  /* SOMBRA: fumaça roxa e lenta subindo em volta do corpo, com uma mancha escura que respira no chão. */
+  AURA_FORMA.sombra = function (g, leve) {
+    var nF = leve ? 5 : 10, nM = 1;
+    var fumo = pontosAura(nF, 6, 0.9, 'fumo');
+    var mancha = placasAura(nM, 14, 'mancha');
+    g.add(fumo); g.add(mancha);
+    return { pecas: { fumo: fumo, mancha: mancha }, anima: function (t) {
+      var i, f;
+      for (i = 0; i < nF; i++) {
+        f = fracao(t * 0.22 + i / nF);
+        var a = i * 2.1 + t * 0.35, r = 0.75 + Math.sin(i * 1.7 + t * 0.6) * 0.2;
+        poePonto(fumo, i, Math.cos(a) * r, 0.2 + f * 2.3, Math.sin(a) * r, 0.52, 0.3, 0.78, Math.sin(Math.PI * f) * 0.75);
+      }
+      sujaPontos(fumo);
+      poePlaca(mancha, 0, 1.6 + Math.sin(t * 1.1) * 0.15, t * 0.2, 0.06, 0.12, 0.05, 0.22, 0.85);
+      sujaPlacas(mancha);
+    } };
+  };
+  /* GEADA: anéis de gelo que se abrem devagar no chão e cristais pálidos em órbita, subindo e sumindo. */
+  AURA_FORMA.gelo = function (g, leve) {
+    var nA = leve ? 2 : 3, nC = leve ? 4 : 8;
+    var aneis = placasAura(nA, 9, 'geada');
+    var cristais = pontosAura(nC, 0, 0.45, 'cristal');
+    g.add(aneis); g.add(cristais);
+    return { pecas: { aneis: aneis, cristais: cristais }, anima: function (t) {
+      var i, f;
+      for (i = 0; i < nA; i++) {
+        f = fracao(t * 0.2 + i / nA);
+        poePlaca(aneis, i, 0.5 + f * 2.2, i * 0.9 - t * 0.15, 0.07 + i * 0.004, 0.72, 0.92, 1, Math.min(1, Math.pow(1 - f, 1.4) * 1.1));
+      }
+      sujaPlacas(aneis);
+      for (i = 0; i < nC; i++) {
+        f = fracao(t * 0.18 + i / nC);
+        var a = -t * 0.8 + i * (Math.PI * 2 / nC);
+        poePonto(cristais, i, Math.cos(a) * 1.05, 0.3 + f * 1.9, Math.sin(a) * 1.05, 0.85, 0.96, 1, Math.sin(Math.PI * f) * 0.95);
+      }
+      sujaPontos(cristais);
+    } };
+  };
+  /* DOURADA: fagulhas de ouro em espiral apertada subindo do chão e um clarão dourado que pulsa — a
+   * aura "cara", para quem quer ser visto. */
+  AURA_FORMA.ouro = function (g, leve) {
+    var nF = leve ? 7 : 14, nM = 1;
+    var fagulhas = pontosAura(nF, 0, 0.3, 'ouro');
+    var clarao = placasAura(nM, 14, 'clarao-ouro');
+    g.add(fagulhas); g.add(clarao);
+    return { pecas: { fagulhas: fagulhas, clarao: clarao }, anima: function (t) {
+      var i, f;
+      for (i = 0; i < nF; i++) {
+        f = fracao(t * 0.5 + i / nF);
+        var a = t * 2.4 + i * 0.9, r = 0.35 + f * 0.75;
+        poePonto(fagulhas, i, Math.cos(a) * r, 0.1 + f * 2.4, Math.sin(a) * r, 1, 0.84 + f * 0.1, 0.35, Math.min(1, (1 - f) * 1.4));
+      }
+      sujaPontos(fagulhas);
+      poePlaca(clarao, 0, 1.5 + Math.sin(t * 2.2) * 0.2, t * 0.5, 0.06, 1, 0.82, 0.3, 0.55 + Math.sin(t * 2.2) * 0.2);
+      sujaPlacas(clarao);
+    } };
+  };
+
   function apagaAura(corpo) {
     if (!corpo.aura) return;
     corpo.node.remove(corpo.aura);
@@ -4804,7 +5072,7 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     if (reg && reg.corpo) {
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -5103,7 +5371,8 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     reg.guildaF = guildaF;
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
               marcasGrupo[reg.id] || null,
-              brilhoDoNome(perfil && perfil.nome, perfil && perfil.mestre === true));
+              brilhoDoNome(perfil && perfil.nome, perfil && perfil.mestre === true),
+              (perfil && perfil.moldura) || 'auto');
     // a vaidade é pública: a branca do Colecionador (perfil.aura) ou a comprada (perfil.auraCor, 04/10)
     if (perfil && (perfil.aura || perfil.auraCor)) acendeAura(corpo, true, perfil.auraCor);
     anelDoGrupo(corpo, !!marcasGrupo[reg.id]);           // 12/09: quem é do meu grupo, no chão
@@ -5210,7 +5479,27 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     reg.tierF = tierDoFantasma(pf);
     if (reg.corpo) {
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true));
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+    }
+    return true;
+  };
+  /* 08/10: o vizinho trocou de TÍTULO, de AURA ou de MOLDURA sem sair do lugar (a Rede avisa
+   * `mudouVisual`): a plaquinha repinta e a aura troca; o corpo fica. */
+  Hub.fantasmaVisual = function (id, perfil) {
+    var reg = fantasmas[id];
+    if (!reg) return false;
+    var pf = reg.perfil || {};
+    if (perfil) {
+      if (perfil.titulo !== undefined) pf.titulo = perfil.titulo || '';
+      if (perfil.moldura !== undefined) pf.moldura = perfil.moldura || 'auto';
+      if (perfil.auraCor !== undefined) pf.auraCor = perfil.auraCor || null;
+      if (perfil.aura !== undefined) pf.aura = perfil.aura === true;
+    }
+    reg.perfil = pf;
+    if (reg.corpo) {
+      penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+      acendeAura(reg.corpo, !!(pf.aura || pf.auraCor), pf.auraCor || null);
     }
     return true;
   };
