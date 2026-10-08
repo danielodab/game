@@ -180,6 +180,28 @@ const OPS = {
   comprarReescrita: (J) => J.Mercado.comprarReescrita(),
   comprarPedrasDoDia: (J) => J.Mercado.comprarPedrasDoDia(),
 
+  // ---- 08/10 à noite: A VIRADA DE TEMPORADA DA ARENA (o dono: "sempre que eu mudo de mapa, acabo uma luta,
+  // aparece 'nova temporada da arena'... não quero isso"). A HUD virava SÓ na tela (DB.brasaVirar local), e o
+  // hash da economia leva a brasa: a op seguinte não batia, o cliente adotava o estado do servidor — com a
+  // temporada velha — e a virada repetia a cada entrada na praça, com o aviso. Agora o juiz vira também.
+  // A temporada é a do RELÓGIO DO SERVIDOR (Agenda.agora), nunca a do cliente. `nivel` (a coroa que vai para a
+  // galeria) vem do cliente — o topo da arena é do placar, que o juiz não tem — mas preso aos dois degraus que
+  // os pontos de antes permitem (com e sem o topo); fora disso, a galeria fica sem a entrada.
+  virarTemporada: (J, a) => {
+    const B = J.Brasa, agora = B.temporadaDe(J.Agenda.agora());
+    const temporada = int(a, 'temporada', 1, 99999);
+    if (temporada !== agora) throw recusa('a temporada pedida (' + temporada + ') não é a de agora (' + agora + ')', 'temporada');
+    const nivel = int(a, 'nivel', 1, 99, true);
+    return J.DB.brasaVer().then((b) => {
+      if (b.temporada === temporada) return { ok: true, virou: false };
+      const soCarimbo = (b.temporada == null);
+      const sem = B.tierDe(b.pts, false), com = B.tierDe(b.pts, true);
+      const nivelOk = (nivel === sem.nivel || nivel === com.nivel) ? nivel : null;
+      return J.DB.brasaVirar({ temporada, pts: soCarimbo ? b.pts : B.comprime(b.pts), galeriaDe: soCarimbo ? null : b.temporada,
+                               nivel: (!soCarimbo && b.partidas > 0) ? nivelOk : null });
+    });
+  },
+
   // ---- o título: só o que a régua dá (o pódio vem do ranking do servidor)
   definirTitulo: (J, a, x) => {
     const t = txt(a, 'titulo', true);

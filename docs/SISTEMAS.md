@@ -1043,6 +1043,19 @@ paga a sala (`salas.py`, `grupo.py`), e a ficha da guilda (`/api/guilda/minha`, 
 fechar (`guildaMeta`) levam o estado. Na tela: a barra na ficha da guilda, acima do cofre. Só existe
 com o servidor (a guilda local-primeiro não tem meta). Prova: `python tests/guilda_meta_api.py`.
 
+## 9-A.7 A virada de temporada da arena é op do juiz (08/10 à noite)
+
+O dono: "sempre que eu mudo de mapa, acabo uma luta, aparece em verde 'nova temporada da
+arena, a coroa foi para a galeria'... não quero isso". A virada (a cada 42 dias: o Elo
+comprime, a coroa vai para a galeria) acontecia SÓ na tela, em `pintaConta` (`DB.brasaVirar`
+local). O hash da economia leva `jogador.brasa`, então a op seguinte não batia, o cliente
+adotava o estado do servidor — ainda na temporada velha — e a virada repetia a cada entrada
+na praça, com o aviso. Agora `DB.brasaVirar` é embrulhado (`autoridade.js`, op
+`virarTemporada` em `servidor/juiz/economia.js`): o juiz confere a temporada pelo relógio
+DELE (`Agenda.agora`), comprime pelo estado dele e aceita a coroa da galeria só se os pontos
+de antes a dão (com ou sem o topo da arena, que é do placar). O aviso saiu de vez: mesmo
+virando uma vez por temporada, o dono não o quer. Prova: `tests/juiz_economia.js` 52.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

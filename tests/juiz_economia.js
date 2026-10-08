@@ -320,6 +320,39 @@ async function tenta(base, ops, extra) {
   const legCli = await tenta({ progress: base.progress, db: dbLegado }, [{ nome: 'mercadoLegadoTira', args: {} }]);
   check('... e a migração pedida por um cliente cai (interna)', !legCli.ok && legCli.motivo === 'interna', JSON.stringify(legCli));
 
+  // ---- 08/10 à noite: a virada de temporada da arena é op do juiz (virarTemporada)
+  {
+    const B = est.mundoEconomico({ agoraMs: AGORA, semente: 1 }).J.Brasa;
+    const DEPOIS = AGORA + 42 * 86400000;                  // uma temporada à frente da conta de prova
+    const tAgora = B.temporadaDe(DEPOIS), tVelha = tAgora - 1;
+    const ctx = { contexto: { agoraMs: DEPOIS } };
+    const vira = conta();
+    vira.db.jogador.brasa = { pts: 1300, partidas: 4, temporada: tVelha, galeria: {} };
+    const nivel = B.tierDe(1300, false).nivel;
+    const v1 = await tenta(vira, [{ nome: 'virarTemporada', args: { temporada: tAgora, nivel } }], ctx);
+    check('virarTemporada: carimba a temporada de agora, comprime os pontos e põe a coroa na galeria',
+          v1.ok && v1.resultados[0] && v1.resultados[0].virou === true && v1.db.jogador.brasa.temporada === tAgora &&
+          v1.db.jogador.brasa.pts === B.comprime(1300) && v1.db.jogador.brasa.galeria[String(tVelha)] === nivel,
+          JSON.stringify(v1.ok ? v1.db.jogador.brasa : v1));
+    const v2 = await tenta({ progress: v1.progress, db: v1.db }, [{ nome: 'virarTemporada', args: { temporada: tAgora, nivel } }], ctx);
+    check('... virar de novo na mesma temporada não vira nem mexe no hash', v2.ok && v2.resultados[0].virou === false && v2.hash === v1.hash,
+          JSON.stringify(v2.ok ? v2.resultados : v2));
+    const v3 = await tenta(vira, [{ nome: 'virarTemporada', args: { temporada: tAgora + 1, nivel } }], ctx);
+    check('... a temporada é a do relógio do servidor: pedir outra cai', !v3.ok && v3.motivo === 'temporada', JSON.stringify(v3));
+    const v4 = await tenta(vira, [{ nome: 'virarTemporada', args: { temporada: tAgora, nivel: 10 } }], ctx);
+    check('... coroa que os pontos não dão não entra na galeria (o resto vira igual)',
+          v4.ok && v4.db.jogador.brasa.temporada === tAgora && v4.db.jogador.brasa.pts === B.comprime(1300) &&
+          Object.keys(v4.db.jogador.brasa.galeria).length === 0, JSON.stringify(v4.ok ? v4.db.jogador.brasa : v4));
+    const cli = await clienteFaz(vira, (J) => J.DB.brasaVirar({ temporada: tAgora, pts: B.comprime(1300), galeriaDe: tVelha, nivel }));
+    check('... e a tela (DB.brasaVirar com os mesmos números) chega ao mesmo hash do juiz', cli.hash === v1.hash, cli.hash + ' vs ' + v1.hash);
+    const antiga = conta();
+    antiga.db.jogador.brasa = { pts: 1300, partidas: 4, temporada: null, galeria: {} };
+    const v5 = await tenta(antiga, [{ nome: 'virarTemporada', args: { temporada: tAgora, nivel } }], ctx);
+    check('... conta de antes das temporadas ganha só o carimbo: pontos e galeria ficam',
+          v5.ok && v5.db.jogador.brasa.temporada === tAgora && v5.db.jogador.brasa.pts === 1300 &&
+          Object.keys(v5.db.jogador.brasa.galeria).length === 0, JSON.stringify(v5.ok ? v5.db.jogador.brasa : v5));
+  }
+
   console.log('\nRESUMO: ' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);
 })().catch((e) => { console.log('a prova estourou:', e && e.stack); process.exit(1); });

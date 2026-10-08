@@ -215,7 +215,6 @@ JOGO.I18n.registra('en', { textos: {
   "Amigos": "Friends",
   "Eco": "Echo",
   "Santuário": "Sanctuary",
-  "Nova temporada da arena! A coroa foi para a galeria e os pontos comprimiram.": "New arena season! The crown went to the gallery and points were compressed.",
   "esse nome é reservado à equipe do jogo — escolha outro": "that name is reserved for the game team — pick another",
   " vintém": " copper",
   " vinténs": " coppers",

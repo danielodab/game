@@ -750,6 +750,12 @@ var JOGO = (typeof window !== 'undefined')
     em(db, 'depositarMoedas', 'depositarMoedas', function (n) { return { n: Math.floor(Number(n) || 0) }; });
     em(db, 'sacarMoedas', 'sacarMoedas', function (n) { return { n: Math.floor(Number(n) || 0) }; });
     em(db, 'definirTitulo', 'definirTitulo', function (t) { return { titulo: t || null }; });
+    // 08/10 à noite: a virada de temporada da arena (hud.js, pintaConta) vai ao juiz — virada só na tela não
+    // batia o hash e o estado do servidor, com a temporada velha, voltava a cada adoção (a virada repetia)
+    em(db, 'brasaVirar', 'virarTemporada', function (v) {
+      if (!v || typeof v.temporada !== 'number') return null;
+      return { temporada: v.temporada, nivel: (typeof v.nivel === 'number') ? v.nivel : null };
+    });
     em(M, 'reivindicar', 'reivindicarMissao', function (id) { return { id: id }; });
     // 13/09: a banca do mercador — a compra roda aqui na hora e a MESMA sobe como op
     em(JOGO.Mercado, 'comprarPocao', 'comprarPocao', function (id, qtd) {

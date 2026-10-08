@@ -215,7 +215,6 @@ JOGO.I18n.registra('es', { textos: {
   "Amigos": "Amigos",
   "Eco": "Eco",
   "Santuário": "Santuario",
-  "Nova temporada da arena! A coroa foi para a galeria e os pontos comprimiram.": "¡Nueva temporada de la arena! La corona fue a la galería y los puntos se comprimieron.",
   "esse nome é reservado à equipe do jogo — escolha outro": "ese nombre está reservado al equipo del juego — elige otro",
   " vintém": " vintén",
   " vinténs": " vintenes",

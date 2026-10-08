@@ -1623,10 +1623,10 @@ var JOGO = (typeof window !== 'undefined')
               pts: soCarimbo ? brasa.pts : JOGO.Brasa.comprime(brasa.pts),
               galeriaDe: soCarimbo ? null : brasa.temporada,
               nivel: (!soCarimbo && brasa.partidas > 0 && tierAntes) ? tierAntes.nivel : null
-            }).then(function (rv) {
-              if (rv && rv.virou && !soCarimbo) {
-                toast(tr('Nova temporada da arena! A coroa foi para a galeria e os pontos comprimiram.'), 'good');
-              }
+            }).then(function () {
+              // 08/10 à noite: SEM aviso (o dono: "não quero isso"). A frase repetia a cada entrada na praça
+              // porque a virada só valia na tela e o servidor a desfazia (hoje é op do juiz, autoridade.js);
+              // mesmo virando uma vez só por temporada, o dono não quer o toast.
               pintaConta();
             });
             return;                       // repinta com a temporada carimbada
