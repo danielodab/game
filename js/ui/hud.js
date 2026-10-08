@@ -6994,7 +6994,7 @@ var JOGO = (typeof window !== 'undefined')
         });
       }, false);
       if (r === 'esperando') { bEnt.disabled = true; bEnt.textContent = tr('Abrindo a Câmara…'); return; }
-      if (!r) { toast(tr('Essa dupla não enfrenta o Eco: o Mestre fica de fora.')); return; }
+      if (!r) { toast(tr('Essa dupla não abre a Câmara do Eco agora.')); return; }
       if (sheetName === 'eco') closeSheet();
     }
     function pintaDupla() {

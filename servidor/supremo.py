@@ -65,6 +65,17 @@ import secrets
 import time
 
 from comum import Recusa, agora, classe_do_heroi
+
+
+def _classe_entra(hid, ficha):
+    """08/10 à noite: a ficha entra na Câmara se tem uma classe do jogo — inclusive a do Mestre do Fundo
+    ('gm'), que antes ficava de fora. O ranking segue sem a equipe (contas.gm) por outra régua."""
+    if classe_do_heroi(hid, ficha) is not None:
+        return True
+    c = ficha.get('classId') if isinstance(ficha, dict) else None
+    if not isinstance(c, str) or not c:
+        c = hid.split('#', 1)[0] if isinstance(hid, str) else ''
+    return c == 'gm'
 import moderacao
 from salas import LANCES_MAX, RE_BILHETE, SALA_MIN_S, SALA_S_POR_TURNO, _inteiro_puro
 from trilha import soma_trilha    # 07/10: a tentativa conferida dá pontos na trilha da temporada
@@ -439,9 +450,10 @@ class SupremoMixin:
             self._confere_herois(conta, estado['progress'], herois)
             fichas = estado['progress'].get('heroes') if isinstance(estado['progress'], dict) else {}
             for hid in herois:
-                if classe_do_heroi(hid, (fichas or {}).get(hid) or {}) is None:
-                    raise Recusa(400, 'o Mestre do Fundo não enfrenta o Eco: ele leva qualquer feitiço do jogo',
-                                 motivo='mestre')
+                # 08/10 à noite (o dono: "o Mestre também deve enfrentar o Eco; preciso testar"): a classe gm
+                # entra na Câmara — a conta da equipe já fica fora do ranking (_supremo_minha / MELHORES)
+                if not _classe_entra(hid, (fichas or {}).get(hid) or {}):
+                    raise Recusa(400, 'essa ficha não tem classe que enfrente o Eco', motivo='classe')
             # a aberta de antes vence (já contou como usada ao abrir)
             self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'outra-aberta' "
                              "WHERE conta_id = ? AND estado = 'aberta'", (t, cid))
@@ -490,8 +502,8 @@ class SupremoMixin:
             prog = estados[conta['id']]['progress']
             fichas = prog.get('heroes') if isinstance(prog, dict) else {}
             for hid in hs:
-                if classe_do_heroi(hid, (fichas or {}).get(hid) or {}) is None:
-                    raise Recusa(400, 'o Mestre do Fundo não enfrenta o Eco: ele leva qualquer feitiço do jogo', motivo='mestre')
+                if not _classe_entra(hid, (fichas or {}).get(hid) or {}):
+                    raise Recusa(400, 'essa ficha não tem classe que enfrente o Eco', motivo='classe')
         # a aberta de antes de CADA um vence (já contou como usada ao abrir)
         for conta in (lider, membro):
             self.con.execute("UPDATE supremo_tentativas SET estado = 'vencida', fechada_em = ?, motivo = 'outra-aberta' "

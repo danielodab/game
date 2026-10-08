@@ -527,7 +527,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!cfg || !cfg.arena || !validParty(heroIds)) return false;
     var cp = C();
     try { if (cp && cp.emGrupo && cp.emGrupo()) return false; } catch (e) {}
-    for (var i = 0; i < heroIds.length; i++) if (ehMestre(heroIds[i])) return false;
+    // (08/10 à noite: o Mestre do Fundo passou a enfrentar o Eco — o dono quer testar; a conta da equipe
+    // segue fora do ranking, no servidor)
     if (abrindoEco) return 'esperando';
     var A = JOGO.Autoridade;
     var oficial = !!(A && A.ligada && A.ligada() && A.abreEco);

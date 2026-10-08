@@ -172,13 +172,21 @@ class ProvaDoEco(A.ProvaDaAutoridade):
         self.assertEqual(r['restantes'], 2)
         linha = self.sql("SELECT * FROM supremo_tentativas WHERE id = ?", r['tentativa'])[0]
         self.assertEqual((linha['estado'], linha['semente'], linha['regras']), ('aberta', r['semente'], Cliente.REGRAS))
-        # o Mestre (a classe gm) não abre tentativa: o estado com a ficha dele
+        # 08/10 à noite: o Mestre (a classe gm) ABRE tentativa — a conta da equipe só não disputa o ranking
         g = self.novo('Mestrinho')
         p, d = self.estado_de_partida()
         p['heroes']['gm'] = dict(p['heroes']['sumo'], classId='gm')
         self.poe_estado(g, p, d)
         self.sql("UPDATE contas SET gm = 1 WHERE id = ?", g.conta['id'])
         st, r = g.pede('POST', '/api/supremo/abrir', {'herois': ['gm']})
+        self.assertEqual(st, 200, r)
+        self.assertTrue(isinstance(r['semente'], int), r)
+        # a ficha de classe que o jogo não tem continua caindo (numa conta nova: a de cima já subiu de versão)
+        x = self.novo('Estranho')
+        p2, d2 = self.estado_de_partida()
+        p2['heroes']['x'] = dict(p2['heroes']['sumo'], classId='nao-existe')
+        self.poe_estado(x, p2, d2)
+        st, r = x.pede('POST', '/api/supremo/abrir', {'herois': ['x']})
         self.assertEqual(st, 400, r)
 
     def test_03_tres_por_dia_e_abrir_outra_vence_a_aberta(self):
