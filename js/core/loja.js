@@ -121,6 +121,7 @@
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // o gêmeo de loja.AURAS (servidor); 08/10: + três
   var MOLDURAS = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];   // 08/10: o gêmeo de loja.MOLDURAS_LOJA
+  var MOLDURAS_DA_FICHA = MOLDURAS.concat(['mestre']);           // a do Mestre chega na vitrine da conta dele
   // 04/10: a 'mestre' (Chama do Mestre) não é entrega da loja — só a conta do Mestre a tem, pelo servidor
   // ...mas CHEGA na vitrine dessa conta: a ficha aceita as da loja e as do Mestre (o filtro só com AURAS a jogava fora)
   var AURAS_DA_FICHA = AURAS.concat(['mestre']);
@@ -291,8 +292,8 @@
       .map(function (x) { return { cor: x.cor, nome: String(x.nome || x.cor) }; });
     // 08/10: as molduras premium, no molde das auras
     var mo = (r.molduras && typeof r.molduras === 'object') ? r.molduras : {};
-    var temM = lista(mo.tem).filter(function (c) { return MOLDURAS.indexOf(c) >= 0; });
-    var todasM = lista(mo.todas).filter(function (x) { return x && MOLDURAS.indexOf(x.id) >= 0; })
+    var temM = lista(mo.tem).filter(function (c) { return MOLDURAS_DA_FICHA.indexOf(c) >= 0; });
+    var todasM = lista(mo.todas).filter(function (x) { return x && MOLDURAS_DA_FICHA.indexOf(x.id) >= 0; })
       .map(function (x) { return { id: x.id, nome: String(x.nome || x.id) }; });
     var of = (r.ofertas && typeof r.ofertas === 'object') ? r.ofertas : {};
     var bv = (r.boasVindas && typeof r.boasVindas === 'object') ? r.boasVindas : {};
@@ -328,7 +329,7 @@
   L.molduraEscolhida = function () { return (vit && vit.molduras && vit.molduras.escolhida) || null; };   // 08/10
   /* 08/10: a moldura premium da plaquinha — uma das que a conta tem, ou null ('auto', a do título) */
   L.escolheMoldura = function (id) {
-    if (id !== null && MOLDURAS.indexOf(id) < 0) return Promise.resolve({ ok: false, erro: 'moldura desconhecida' });
+    if (id !== null && MOLDURAS_DA_FICHA.indexOf(id) < 0) return Promise.resolve({ ok: false, erro: 'moldura desconhecida' });
     if (!comSessao()) return Promise.resolve({ ok: false, erro: Tx('sem sessão') });
     return Promise.resolve(pede('/api/loja/moldura', { method: 'POST', body: { moldura: id } })).then(function (r) {
       if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || Tx('não deu para trocar a moldura agora') };

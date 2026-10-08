@@ -160,7 +160,7 @@ SQL_AURA = "SELECT aura FROM aura_escolhida WHERE conta_id = ?"
 AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
 # 08/10: a MOLDURA premium da plaquinha — a escolhida mora em `moldura_escolhida` (a API só grava a que a conta tem)
 SQL_MOLDURA = "SELECT moldura FROM moldura_escolhida WHERE conta_id = ?"
-MOLDURAS = ('ouro', 'rubi', 'esmeralda', 'obsidiana')   # o gêmeo de loja.MOLDURAS_LOJA
+MOLDURAS = ('ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre')   # o gêmeo de loja.MOLDURAS_LOJA + a do Mestre (a API só a grava para o gm)
 # 08/10: OS TÍTULOS DE PÓDIO ACOMPANHAM A POSIÇÃO (o dono: "se ele é top 1 pvp e perde o posto, não terá mais
 # esse título; passa para o top 1 atual"). O relé lê o pódio da conta no banco (as mesmas consultas de
 # servidor/salas.py _posicoes/_posicoes_classe) e carimba o título de ranking com a posição de AGORA — ou

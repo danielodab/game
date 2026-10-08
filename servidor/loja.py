@@ -185,6 +185,10 @@ AURA_PRECO_DE = {'neutra': 250, 'sombra': 250, 'gelo': 250, 'ouro': 400}   # 08/
 # 08/10: as MOLDURAS premium da plaquinha (o dono: "crie umas molduras premium") — só aparência, como a aura.
 # As dos títulos (arena, Eco, chefe, classe) são de graça e automáticas (js/render3d/hub3d.js, MOLDURAS)
 MOLDURAS_LOJA = ('ouro', 'rubi', 'esmeralda', 'obsidiana')
+# 08/10, o dono: "uma moldura especial para o admin (só ele tem), preto e vermelho escuro". Não se vende nem se
+# presenteia: só a conta marcada (contas.gm = 1) a tem — e nela é a automática (hub3d molduraEfetiva)
+MOLDURAS_MESTRE = ('mestre',)
+MOLDURA_MESTRE_NOME = {'mestre': 'Moldura do Mestre'}
 MOLDURA_PRECO = 180
 MOLDURA_PRECO_DE = {'obsidiana': 300}
 MOLDURA_NOME = {'ouro': 'Moldura Dourada', 'rubi': 'Moldura de Rubi', 'esmeralda': 'Moldura de Esmeralda',
@@ -1320,7 +1324,7 @@ class LojaMixin:
         """As molduras premium da conta: os pedidos VIVOS de 'moldura-*'. O Mestre tem todas."""
         marca = self.con.execute("SELECT gm FROM contas WHERE id = ?", (cid,)).fetchone()
         if marca is not None and marca['gm']:
-            return set(MOLDURAS_LOJA)
+            return set(MOLDURAS_LOJA) | set(MOLDURAS_MESTRE)
         tem = set()
         for r in self.con.execute(
                 "SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND estado IN ('pendente', 'retirado', 'entregue') "
@@ -1341,9 +1345,11 @@ class LojaMixin:
     def _molduras_publico(self, cid):
         tem = self._molduras(cid)
         r = self.con.execute("SELECT moldura FROM moldura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
-        return {'tem': [m for m in MOLDURAS_LOJA if m in tem],
+        do_mestre = [m for m in MOLDURAS_MESTRE if m in tem]
+        return {'tem': do_mestre + [m for m in MOLDURAS_LOJA if m in tem],
                 'escolhida': r['moldura'] if r is not None and r['moldura'] in tem else None,
-                'todas': [{'id': m, 'sku': 'moldura-' + m, 'nome': MOLDURA_NOME[m]} for m in MOLDURAS_LOJA]}
+                'todas': [{'id': m, 'sku': None, 'nome': MOLDURA_MESTRE_NOME[m]} for m in do_mestre] +
+                         [{'id': m, 'sku': 'moldura-' + m, 'nome': MOLDURA_NOME[m]} for m in MOLDURAS_LOJA]}
 
     # -- GET /api/loja/moldura · POST /api/loja/moldura {moldura: id | null} ------------------------------
     def loja_moldura_ver(self, conta, corpo):
@@ -1355,7 +1361,7 @@ class LojaMixin:
         mid, cid, t = corpo.get('moldura'), conta['id'], agora()
         if mid in (None, '', 'auto'):
             mid = None
-        elif mid not in MOLDURAS_LOJA:
+        elif mid not in MOLDURAS_LOJA and mid not in MOLDURAS_MESTRE:
             raise Recusa(400, 'moldura desconhecida')
         with self._escrita():
             if mid is None:

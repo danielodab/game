@@ -2339,7 +2339,8 @@ var JOGO = (typeof window !== 'undefined')
   };
   // 08/10: as molduras da plaquinha — as dos títulos (automáticas) e as premium (da loja)
   var MOLDURA_PT = { auto: tr('Automática (a do título)'), arena: tr('da Arena'), eco: tr('do Eco'), chefe: tr('dos Chefes'), classe: tr('do pódio de classe'),
-                     ouro: tr('Dourada'), rubi: tr('de Rubi'), esmeralda: tr('de Esmeralda'), obsidiana: tr('de Obsidiana') };
+                     ouro: tr('Dourada'), rubi: tr('de Rubi'), esmeralda: tr('de Esmeralda'), obsidiana: tr('de Obsidiana'),
+                     mestre: tr('do Mestre') };
   function molduraDaLoja() {
     return safe(function () { return (JOGO.Loja && JOGO.Loja.molduraEscolhida) ? JOGO.Loja.molduraEscolhida() : null; }, null);
   }

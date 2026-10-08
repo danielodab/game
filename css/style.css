@@ -2192,6 +2192,7 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
 .char-mol-cor.is-rubi { --mol: #ff4d6d; --mol-fundo: rgba(50,8,18,.94); border-style: double; border-width: 3px; }
 .char-mol-cor.is-esmeralda { --mol: #3ddc84; --mol-fundo: rgba(6,40,22,.94); border-style: double; border-width: 3px; }
 .char-mol-cor.is-obsidiana { --mol: #9a7bff; --mol-fundo: rgba(10,6,20,.96); border-style: double; border-width: 3px; }
+.char-mol-cor.is-mestre { --mol: #8a0d14; --mol-fundo: rgba(5,3,5,.97); border-style: double; border-width: 3px; }
 .char-mol-b small { color: var(--dim); font-weight: 400; }
 .char-plaquinha b { color: var(--gold, #ffc44d); }
 .char-aura-link { color: #ffe9a8; text-decoration: underline; }

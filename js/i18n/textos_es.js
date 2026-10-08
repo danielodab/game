@@ -2828,5 +2828,7 @@ JOGO.I18n.registra('es', { textos: {
   "a de sempre": "el de siempre",
   "Customizar: título, aura e moldura": "Personalizar: título, aura y marco",
   "O seu título agora é {a}.": "Tu título ahora es {a}.",
-  "Você saiu do pódio: o título de ranking saiu da plaquinha.": "Saliste del podio: el título de ranking salió de tu placa."
+  "Você saiu do pódio: o título de ranking saiu da plaquinha.": "Saliste del podio: el título de ranking salió de tu placa.",
+  // ---- 08/10: a moldura do Mestre
+  "do Mestre": "del Maestro"
 } });

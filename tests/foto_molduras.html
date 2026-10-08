@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: as molduras da plaquinha</title>
+<style>
+  html,body{margin:0;background:#2a3a2a;color:#e8eef6;font:12px monospace}
+  #grade{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px}
+  .cel{text-align:center}.cel canvas{width:100%;height:auto;display:block}
+  #st{padding:6px 10px;color:#8f8}
+</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10): a plaquinha do nome com cada MOLDURA (hub3d.js MOLDURAS, desenhaMoldura),
+     lado a lado, do jeito que a praça a pendura — para conferir as formas sem subir a praça inteira. -->
+<div id="st">carregando…</div>
+<div id="grade"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js', 'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/dungeons.js',
+              'js/core/data/campo_pvp.js', 'js/render3d/hub3d.js'];
+  for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var st = document.getElementById('st'), grade = document.getElementById('grade');
+  var Hub = JOGO.Hub;
+  var casos = [['sem moldura', 'auto', '', null], ['Top 1 Pvp → arena', 'auto', 'Top 1 Pvp', null], ['Voz do Eco → eco', 'auto', 'Voz do Eco', null],
+               ['o Podador da Viúva → chefe', 'auto', 'o Podador da Viúva', null], ['Top 2 Xamã → classe', 'auto', 'Top 2 Xamã', null],
+               ['Top 1 PVM (brilho ouro)', 'auto', 'Top 1 PVM', 'ouro'],
+               ['Dourada', 'ouro', 'Top 1 Pvp', null], ['Rubi', 'rubi', '', null], ['Esmeralda', 'esmeralda', 'Voz do Eco', null],
+               ['Obsidiana', 'obsidiana', '', null], ['do Mestre (admin)', 'auto', '', 'admin'], ['Mestre escolhendo Rubi', 'rubi', '', 'admin']];
+  var feitos = 0;
+  casos.forEach(function (c) {
+    var cel = document.createElement('div');
+    cel.className = 'cel';
+    var cv = null;
+    try { cv = Hub.plaquinhaCanvas('Fotógrafo', c[2], c[1], c[3]); } catch (e) { cv = null; }
+    if (cv) { cel.appendChild(cv); feitos++; }
+    var rot = document.createElement('div');
+    rot.textContent = c[0];
+    cel.appendChild(rot);
+    grade.appendChild(cel);
+  });
+  st.textContent = 'placas: ' + feitos + ' de ' + casos.length;
+  document.title = st.textContent;
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

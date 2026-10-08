@@ -459,7 +459,7 @@ var JOGO = (typeof window !== 'undefined')
   var AURAS_COR = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // 08/10: + as três novas
   /* 08/10: a MOLDURA da plaquinha que viaja — só a premium escolhida ('auto' = a do título; cada tela a tira
    * do próprio título). As ids conhecidas; qualquer outra coisa que chegue pelo fio vira 'auto' */
-  var MOLDURAS_REDE = ['auto', 'ouro', 'rubi', 'esmeralda', 'obsidiana'];
+  var MOLDURAS_REDE = ['auto', 'ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre'];   // 'mestre': o relé só a deixa passar da conta do Mestre
   function molduraDe(v) { return (typeof v === 'string' && MOLDURAS_REDE.indexOf(v) >= 0) ? v : 'auto'; }
   R._molduraDe = molduraDe;         // provas
   // 04/10: 'mestre' (a Chama do Mestre) só vale em quem o relé conferiu como Mestre — `deMestre` falso derruba

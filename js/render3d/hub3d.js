@@ -430,17 +430,124 @@ var JOGO = (typeof window !== 'undefined')
    *   · as PREMIUM, da loja do site (servidor/loja.py MOLDURAS_LOJA): Dourada, Rubi, Esmeralda e
    *     Obsidiana — escolhidas na ficha, valem por cima da automática.
    * O pódio de XP continua ACENDENDO o nome (BRILHOS); a moldura dele é a do brilho. */
+  /* 08/10 (o dono, 2ª rodada): "as molduras não podem ter só filete, tem que ter FORMAS diferentes,
+   * chamativa, sem brilho, maior". Cada uma tem a sua `forma`, desenhada em canvas por desenhaMoldura:
+   *   losangos  — placa reta com losangos GRANDES nas quinas e no meio das bordas (Dourada);
+   *   espinhos  — dentes triangulares correndo a borda de cima e a de baixo (Rubi);
+   *   folhas    — cantoneiras grossas em L com uma folha em cada quina (Esmeralda);
+   *   chanfro   — placa de cantos cortados (octógono) com pontas nos lados (Obsidiana);
+   *   pontas    — placa com as duas pontas em bico, como uma lâmina (Arena);
+   *   arcos     — três arcos no alto, como as abóbadas da Câmara (Eco);
+   *   ameias    — o alto recortado em ameias de muralha (Chefes);
+   *   barras    — duas barras verticais de cada lado (pódio de classe);
+   *   chamas    — a DO MESTRE: labaredas negras de pontas vermelho-escuras no alto, preto e vermelho,
+   *               só da conta dele (loja.MOLDURAS_MESTRE; o relé só a carimba para quem a tem). */
   var MOLDURAS = {
-    arena:     { borda: '#ff6a4a', fundo: 'rgba(46,14,10,0.93)', traco: 7, cantos: true },
-    eco:       { borda: '#b48cff', fundo: 'rgba(26,14,46,0.93)', traco: 7, cantos: true },
-    chefe:     { borda: '#8fd0a0', fundo: 'rgba(10,34,20,0.93)', traco: 7, cantos: true },
-    classe:    { borda: '#7ec8ff', fundo: 'rgba(10,26,42,0.93)', traco: 6, cantos: false },
-    ouro:      { borda: '#ffd24a', fundo: 'rgba(48,34,6,0.94)', traco: 8, cantos: true, dupla: true },
-    rubi:      { borda: '#ff4d6d', fundo: 'rgba(50,8,18,0.94)', traco: 8, cantos: true, dupla: true },
-    esmeralda: { borda: '#3ddc84', fundo: 'rgba(6,40,22,0.94)', traco: 8, cantos: true, dupla: true },
-    obsidiana: { borda: '#9a7bff', fundo: 'rgba(10,6,20,0.96)', traco: 8, cantos: true, dupla: true }
+    arena:     { borda: '#ff6a4a', fundo: 'rgba(46,14,10,0.94)', traco: 8, forma: 'pontas' },
+    eco:       { borda: '#b48cff', fundo: 'rgba(26,14,46,0.94)', traco: 8, forma: 'arcos' },
+    chefe:     { borda: '#8fd0a0', fundo: 'rgba(10,34,20,0.94)', traco: 8, forma: 'ameias' },
+    classe:    { borda: '#7ec8ff', fundo: 'rgba(10,26,42,0.94)', traco: 7, forma: 'barras' },
+    ouro:      { borda: '#ffd24a', fundo: 'rgba(48,34,6,0.95)', traco: 9, forma: 'losangos' },
+    rubi:      { borda: '#ff4d6d', fundo: 'rgba(50,8,18,0.95)', traco: 9, forma: 'espinhos' },
+    esmeralda: { borda: '#3ddc84', fundo: 'rgba(6,40,22,0.95)', traco: 9, forma: 'folhas' },
+    obsidiana: { borda: '#9a7bff', fundo: 'rgba(10,6,20,0.97)', traco: 9, forma: 'chanfro' },
+    mestre:    { borda: '#8a0d14', fundo: 'rgba(5,3,5,0.97)', traco: 10, forma: 'chamas', miolo: '#2a0508' }
   };
   var MOLDURAS_PREMIUM = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];
+  var MOLDURA_FOLGA = 26;            // px a mais em volta da placa, para as formas saírem do retângulo
+  /* desenha a PLACA com a forma da moldura: `r` = {x, y, w, h} do retângulo de sempre */
+  function desenhaMoldura(g, mol, r) {
+    var cor = mol.borda, t = mol.traco || 8, x = r.x, y = r.y, w = r.w, h = r.h;
+    function retangulo() {
+      g.fillStyle = mol.fundo; g.fillRect(x, y, w, h);
+      g.strokeStyle = cor; g.lineWidth = t; g.strokeRect(x + t / 2, y + t / 2, w - t, h - t);
+    }
+    function losango(cx, cy, rr) {
+      g.beginPath(); g.moveTo(cx, cy - rr); g.lineTo(cx + rr, cy); g.lineTo(cx, cy + rr); g.lineTo(cx - rr, cy); g.closePath();
+      g.fillStyle = cor; g.fill();
+      g.strokeStyle = mol.fundo; g.lineWidth = 3; g.stroke();
+    }
+    g.save();
+    g.shadowBlur = 0;                               // sem brilho: a forma é que chama
+    if (mol.forma === 'losangos') {
+      retangulo();
+      g.lineWidth = 2; g.strokeStyle = cor; g.strokeRect(x + t + 5, y + t + 5, w - t * 2 - 10, h - t * 2 - 10);
+      [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 24); });
+      losango(x + w / 2, y, 14); losango(x + w / 2, y + h, 14);
+    } else if (mol.forma === 'espinhos') {
+      retangulo();
+      g.fillStyle = cor;
+      var passo = 34, alt = 20;
+      for (var sx = x + 10; sx + passo <= x + w - 8; sx += passo) {
+        g.beginPath(); g.moveTo(sx, y + 2); g.lineTo(sx + passo / 2, y - alt); g.lineTo(sx + passo, y + 2); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(sx, y + h - 2); g.lineTo(sx + passo / 2, y + h + alt); g.lineTo(sx + passo, y + h - 2); g.closePath(); g.fill();
+      }
+    } else if (mol.forma === 'folhas') {
+      retangulo();
+      g.fillStyle = cor;
+      var L = 42, e = 12;
+      [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(function (c) {
+        var cx = c[0], cy = c[1], dx = c[2], dy = c[3];
+        g.fillRect(Math.min(cx, cx + dx * L), Math.min(cy, cy + dy * e), L, e);     // a cantoneira em L
+        g.fillRect(Math.min(cx, cx + dx * e), Math.min(cy, cy + dy * L), e, L);
+        g.beginPath();                                                               // a folha, apontando para fora
+        g.moveTo(cx, cy); g.quadraticCurveTo(cx - dx * 30, cy - dy * 4, cx - dx * 26, cy - dy * 26);
+        g.quadraticCurveTo(cx - dx * 4, cy - dy * 30, cx, cy); g.closePath(); g.fill();
+      });
+    } else if (mol.forma === 'chanfro') {
+      var c8 = 28;
+      g.beginPath();
+      g.moveTo(x + c8, y); g.lineTo(x + w - c8, y); g.lineTo(x + w, y + c8); g.lineTo(x + w, y + h - c8);
+      g.lineTo(x + w - c8, y + h); g.lineTo(x + c8, y + h); g.lineTo(x, y + h - c8); g.lineTo(x, y + c8); g.closePath();
+      g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = cor; g.lineWidth = t; g.stroke();
+      g.fillStyle = cor;                                                             // as pontas dos lados
+      g.beginPath(); g.moveTo(x, y + h / 2 - 18); g.lineTo(x - 22, y + h / 2); g.lineTo(x, y + h / 2 + 18); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(x + w, y + h / 2 - 18); g.lineTo(x + w + 22, y + h / 2); g.lineTo(x + w, y + h / 2 + 18); g.closePath(); g.fill();
+    } else if (mol.forma === 'pontas') {
+      var p = 26;
+      g.beginPath();
+      g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w + p, y + h / 2); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.lineTo(x - p, y + h / 2); g.closePath();
+      g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = cor; g.lineWidth = t; g.stroke();
+      g.lineWidth = 3; g.beginPath(); g.moveTo(x + 12, y + 10); g.lineTo(x + w - 12, y + 10); g.stroke();     // o fio de cima
+    } else if (mol.forma === 'arcos') {
+      retangulo();
+      g.fillStyle = mol.fundo; g.strokeStyle = cor; g.lineWidth = t;
+      var ra = 22;
+      [x + w * 0.22, x + w * 0.5, x + w * 0.78].forEach(function (cx) {
+        g.beginPath(); g.arc(cx, y + 2, ra, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+      });
+      g.fillRect(x + t, y + 1, w - t * 2, 6);                                      // emenda os arcos à placa
+    } else if (mol.forma === 'ameias') {
+      retangulo();
+      g.fillStyle = cor;
+      var am = 24;
+      for (var ax = x; ax + am <= x + w + 1; ax += am * 2) g.fillRect(ax, y - 16, am, 18);
+      g.fillRect(x - 10, y - 2, 10, h + 4); g.fillRect(x + w, y - 2, 10, h + 4);  // as torres dos lados
+    } else if (mol.forma === 'barras') {
+      retangulo();
+      g.fillStyle = cor;
+      g.fillRect(x - 14, y + 8, 7, h - 16); g.fillRect(x - 26, y + 18, 7, h - 36);
+      g.fillRect(x + w + 7, y + 8, 7, h - 16); g.fillRect(x + w + 19, y + 18, 7, h - 36);
+    } else if (mol.forma === 'chamas') {
+      retangulo();
+      g.lineWidth = 3; g.strokeStyle = mol.miolo || cor; g.strokeRect(x + t + 4, y + t + 4, w - t * 2 - 8, h - t * 2 - 8);
+      // as labaredas: pretas por fora, com a ponta vermelho-escura; alturas alternadas
+      var pf = 30;
+      for (var fx = x + 6; fx + pf <= x + w - 4; fx += pf) {
+        var altF = ((fx / pf) | 0) % 2 ? 26 : 38;
+        g.fillStyle = '#060406';
+        g.beginPath(); g.moveTo(fx, y + 2); g.quadraticCurveTo(fx + pf * 0.2, y - altF * 0.5, fx + pf / 2, y - altF);
+        g.quadraticCurveTo(fx + pf * 0.8, y - altF * 0.5, fx + pf, y + 2); g.closePath(); g.fill();
+        g.fillStyle = cor;
+        g.beginPath(); g.moveTo(fx + pf * 0.3, y + 1); g.quadraticCurveTo(fx + pf * 0.4, y - altF * 0.45, fx + pf / 2, y - altF * 0.72);
+        g.quadraticCurveTo(fx + pf * 0.6, y - altF * 0.45, fx + pf * 0.7, y + 1); g.closePath(); g.fill();
+      }
+      [[x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 20); });
+    } else {
+      retangulo();
+    }
+    g.restore();
+  }
   Hub.MOLDURAS = Object.keys(MOLDURAS);
   Hub.MOLDURAS_PREMIUM = MOLDURAS_PREMIUM.slice();
   /* a moldura que um TÍTULO (a chave em português) pede: null = a placa de sempre */
@@ -456,11 +563,20 @@ var JOGO = (typeof window !== 'undefined')
   }
   Hub.molduraDoTitulo = molduraDoTitulo;
   /* a moldura que VALE: a escolhida (premium) se existir, senão a do título ('auto') */
-  function molduraEfetiva(escolhida, titulo) {
+  function molduraEfetiva(escolhida, titulo, mestre) {
     if (typeof escolhida === 'string' && escolhida !== 'auto' && MOLDURAS[escolhida]) return escolhida;
+    if (mestre) return 'mestre';                           // 08/10: a do Mestre é automática na conta dele
     return molduraDoTitulo(titulo);
   }
   Hub.molduraEfetiva = molduraEfetiva;
+  /* a placa como imagem (provas e fotos): o canvas de `rotulo` com a moldura pedida */
+  Hub.plaquinhaCanvas = function (nome, titulo, moldura, brilho) {
+    if (!THREE) THREE = (typeof window !== 'undefined' && window.THREE) || null;   // fora da praça (prova)
+    if (!THREE) return null;
+    var sp = rotulo(nome || 'Nome', '#f0ead8', 0.42, { placa: true, brilho: brilho || null, subtexto: titulo || '',
+                                                       moldura: molduraEfetiva(moldura, titulo, brilho === 'admin') });
+    return sp && sp.material && sp.material.map ? sp.material.map.image : null;
+  };
   function rotulo(texto, cor, escala, op) {
     /* O BRASÃO na placa da guilda (11/09, dono: "logo tem que ser maior; o
      * retângulo do logo e nome da guilda deve ser maior, onde caiba o logo").
@@ -475,7 +591,10 @@ var JOGO = (typeof window !== 'undefined')
      * tanto que a linha pede. */
     var temEscudo = !!(op && op.escudo);
     var subtexto = (op && op.subtexto) ? String(op.subtexto) : '';
-    var ALT = temEscudo ? 176 : (subtexto ? 168 : 128);
+    // 08/10: com moldura, a tela ganha FOLGA em volta — as formas saem do retângulo da placa
+    var molForma = (op && op.moldura && MOLDURAS[op.moldura]) ? MOLDURAS[op.moldura] : null;
+    var folga = molForma ? MOLDURA_FOLGA : 0;
+    var ALT = (temEscudo ? 176 : (subtexto ? 168 : 128)) + folga * 2;
     var ESCUDO_PX = temEscudo ? 132 : 0;
     var cv = document.createElement('canvas');
     cv.width = 512; cv.height = ALT;
@@ -489,9 +608,9 @@ var JOGO = (typeof window !== 'undefined')
       textW = Math.max(textW, Math.ceil(g.measureText(subtexto).width));
       g.font = '600 44px Georgia, serif';
     }
-    var larg = Math.min(492, textW + 56 + paddingShield);
+    var larg = Math.min(492 - folga * 2, textW + 56 + paddingShield);
     var x0 = (512 - larg) / 2;
-    var mY = temEscudo ? 12 : 18;                 // margem de cima e de baixo
+    var mY = (temEscudo ? 12 : 18) + folga;       // margem de cima e de baixo
     var altPlaca = ALT - mY * 2;
 
     /* O NOME QUE BRILHA (11/09, pedido do dono): o pódio do ranking POR
@@ -503,29 +622,16 @@ var JOGO = (typeof window !== 'undefined')
     var bri = op && op.brilho ? BRILHOS[op.brilho] : null;
     var mol = (op && op.moldura && MOLDURAS[op.moldura]) ? MOLDURAS[op.moldura] : null;   // 08/10
 
-    if (op && op.placa) {
-      var traco = op.traco || (mol ? mol.traco : (bri ? 7 : 5));
-      g.fillStyle = op.fundo || (mol ? mol.fundo : (bri ? bri.fundo : 'rgba(24,18,10,0.88)'));
+    if (op && op.placa && mol && !op.borda) {
+      // 08/10: a placa com a FORMA da moldura (a placa de grupo, com borda própria, fica como é)
+      desenhaMoldura(g, mol, { x: x0, y: mY, w: larg, h: altPlaca });
+    } else if (op && op.placa) {
+      var traco = op.traco || (bri ? 7 : 5);
+      g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
       g.fillRect(x0, mY, larg, altPlaca);
-      g.strokeStyle = op.borda || (mol ? mol.borda : (bri ? bri.cor : '#c9a227'));
+      g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
       g.lineWidth = traco;
       g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco);
-      if (mol) {
-        // o filete DUPLO das premium: um segundo traço fino por dentro
-        if (mol.dupla) {
-          g.lineWidth = 2;
-          g.strokeRect(x0 + traco + 4, mY + traco + 4, larg - traco * 2 - 8, altPlaca - traco * 2 - 8);
-        }
-        // os CANTOS: um losango em cada quina, na cor do filete
-        if (mol.cantos) {
-          g.fillStyle = mol.borda;
-          [[x0, mY], [x0 + larg, mY], [x0, mY + altPlaca], [x0 + larg, mY + altPlaca]].forEach(function (c) {
-            g.beginPath();
-            g.moveTo(c[0], c[1] - 13); g.lineTo(c[0] + 13, c[1]); g.lineTo(c[0], c[1] + 13); g.lineTo(c[0] - 13, c[1]);
-            g.closePath(); g.fill();
-          });
-        }
-      }
     }
     
     // o escudo mora DENTRO da moldura agora, encostado na borda esquerda
@@ -3470,7 +3576,7 @@ var JOGO = (typeof window !== 'undefined')
   function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho, moldura) {
     if (!corpo || !THREE) return;
     // 08/10: a moldura da placa — a escolhida (premium) ou a do título (lida da CHAVE, antes de traduzir)
-    var molId = molduraEfetiva(moldura, titulo);
+    var molId = molduraEfetiva(moldura, titulo, brilho === 'admin');
     // 05/10, os idiomas: o título viaja e é guardado em português (é chave); na plaquinha vai o do idioma de quem olha
     if (titulo && JOGO.UI && JOGO.UI.titExibe) titulo = JOGO.UI.titExibe(titulo);
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {

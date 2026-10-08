@@ -928,8 +928,12 @@ não pode ser fixo — quem perde o Top 1 PvP perde o título". Entrou:
 - **Auras:** três novas na loja (Sombra 250, Geada 250, Dourada 400 barras;
   `hub3d.js AURA_FORMA.sombra/gelo/ouro`). Na ficha **só aparecem as que a conta
   tem**; as outras ficam na loja (um aviso com o link).
-- **Molduras da plaquinha** (`hub3d.js MOLDURAS`, desenhadas em `rotulo`: filete,
-  fundo e losangos nas quinas): as **dos títulos**, de graça e automáticas
+- **Molduras da plaquinha** (`hub3d.js MOLDURAS`, `desenhaMoldura`: cada uma com
+  a sua FORMA, sem brilho — lâmina da Arena, arcos do Eco, ameias dos Chefes,
+  barras do pódio de classe, losangos grandes da Dourada, espinhos da Rubi,
+  folhas da Esmeralda, cantos cortados da Obsidiana, e as chamas pretas de ponta
+  vermelha da **Moldura do Mestre**, que só a conta marcada tem e que é a
+  automática dela): as **dos títulos**, de graça e automáticas
   (`molduraDoTitulo`: Arena para "Top N Pvp", Eco, Chefes, pódio de classe; o
   pódio de XP continua acendendo o nome), e as **premium** da loja (Dourada,
   Rubi, Esmeralda 180; Obsidiana 300), que valem por cima. A escolha é do
