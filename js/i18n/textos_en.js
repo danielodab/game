@@ -2938,5 +2938,20 @@ JOGO.I18n.registra('en', { textos: {
   // ---- 08/10 à noite: as vagas da guilda por nível
   "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up",
   "Cheia": "Full",
-  "A {nome} está cheia ({a}/{b}): ela abre mais vagas ao subir de nível.": "{nome} is full ({a}/{b}): it opens more slots as it levels up."
+  "A {nome} está cheia ({a}/{b}): ela abre mais vagas ao subir de nível.": "{nome} is full ({a}/{b}): it opens more slots as it levels up.",
+  // ---- 08/10 à noite: a sala que não rendeu — o porquê na tela de recompensa (hud.js) e a espera da conferência
+  "A sala do grupo foi conferida: a recompensa entrou.": "The party's room was verified: the reward is in.",
+  "<b>A sala não rendeu:</b> fechou rápido demais para ser de verdade — o servidor não pagou.": "<b>The room gave nothing:</b> it closed too fast to be real — the server didn't pay.",
+  "<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abram a sala de novo.": "<b>The room gave nothing:</b> the game rules changed mid-room (the server was updated) — open the room again.",
+  "<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abra a sala de novo.": "<b>The room gave nothing:</b> the game rules changed mid-room (the server was updated) — open the room again.",
+  "<b>A sala não rendeu:</b> a batalha sincronizou por foto e nenhum registro limpo chegou a tempo — o servidor não pôde conferir a vitória. Se a conexão cair de novo, espere o parceiro antes de seguir.": "<b>The room gave nothing:</b> the battle synced from a snapshot and no clean record arrived in time — the server couldn't verify the victory. If the connection drops again, wait for your partner before moving on.",
+  "<b>A sala não rendeu:</b> a sala venceu no servidor (passou da validade, ou outra foi aberta por cima) — abram de novo.": "<b>The room gave nothing:</b> the room expired on the server (it ran past its validity, or another was opened over it) — open it again.",
+  "<b>A sala não rendeu:</b> o registro que o servidor refez não chegou à vitória (parou antes do fim).": "<b>The room gave nothing:</b> the record the server replayed didn't reach the victory (it stopped before the end).",
+  "<b>A sala não rendeu:</b> sua conta entrou em outro aparelho e esta sala não foi conferida.": "<b>The room gave nothing:</b> your account signed in on another device and this room wasn't verified.",
+  "<b>A sala não rendeu:</b> o servidor não respondeu à conferência.": "<b>The room gave nothing:</b> the server didn't answer the verification.",
+  "<b>A sala não rendeu:</b> o servidor confirmou a vitória mas não mandou a recompensa.": "<b>The room gave nothing:</b> the server confirmed the victory but sent no reward.",
+  "<b>A sala não rendeu:</b> o servidor recusou a conferência da batalha ({erro}).": "<b>The room gave nothing:</b> the server refused the battle's verification ({erro}).",
+  "<b>A sala não rendeu:</b> o servidor não confirmou a vitória ({erro}).": "<b>The room gave nothing:</b> the server didn't confirm the victory ({erro}).",
+  "(até {s} s)": "(up to {s} s)",
+  "<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.": "<b>Waiting for the server's verification…</b> your battle synced from a snapshot, and it's the other player's clean record that confirms the room{ate}. The reward comes in by itself when it arrives."
 } });

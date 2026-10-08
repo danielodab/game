@@ -380,8 +380,26 @@ var JOGO = (typeof window !== 'undefined')
     return A.fechaPendente().then(function () { return api('/api/grupo/abrir', comVersao(corpo)); })
       .then(function (r) { A.notaLargada(r); return r; });
   };
-  /* e cada membro fecha com o registro do motor dele (os lances dos dois e as marcas) */
-  A.fechaGrupo = function (corpo) { return fechaEm('/api/grupo/fechar', corpo); };
+  /* e cada membro fecha com o registro do motor dele (os lances dos dois e as marcas).
+   * 08/10 à noite (o dono: "todas as XPs foram zeradas" numa sala em grupo): a resposta 'aguardando' — o registro de
+   * quem sincronizou por foto não refaz a sala; o servidor espera o registro LIMPO do outro até `esperaAte` e só então
+   * paga ou dá 'nao-conferida' — era tratada pelo jogo como "o servidor não confirmou" e a tela saía zerada na hora,
+   * mesmo com o outro membro pagando a sala segundos depois. Agora ela pergunta de novo a cada ESPERA_GRUPO_MS, como a
+   * guerra (esperaGuerra), até a resposta de vez; `aoAguardar` avisa cada volta (a tela de recompensa diz que espera).
+   * O teto de voltas passa da espera do servidor (GRUPO_ESPERA, 120 s): quem fecha a espera é o servidor. */
+  A.ESPERA_GRUPO_MS = 5000;
+  A.ESPERA_GRUPO_VEZES = 40;
+  A.fechaGrupo = function (corpo, aoAguardar) {
+    return fechaEm('/api/grupo/fechar', corpo).then(function (r) { return esperaGrupo(corpo, r, 0, aoAguardar); });
+  };
+  function esperaGrupo(corpo, r, n, aoAguardar) {
+    if (!r || !r.ok || r.fase !== 'aguardando' || parado || n >= A.ESPERA_GRUPO_VEZES) return r;
+    if (typeof aoAguardar === 'function') { try { aoAguardar(r, n); } catch (e) {} }
+    var ms = Math.max(1000, Math.min(A.ESPERA_GRUPO_MS, (typeof r.esperaMs === 'number' && isFinite(r.esperaMs) ? r.esperaMs : A.ESPERA_GRUPO_MS) + 500));
+    return new Promise(function (volta) { A._espera(ms, volta); })
+      .then(function () { return fechaEm('/api/grupo/fechar', corpo); })
+      .then(function (r2) { return esperaGrupo(corpo, r2, n + 1, aoAguardar); });
+  }
   /* O DUELO RANQUEADO: o servidor refaz a arena e muda a Brasa dos dois. 15/09: `extra.keepalive` (a desistência, que
    * sai mesmo com a página indo embora); e a resposta 'aguardando' (o lado que recebeu a desistência espera a
    * declaração do desistente; o W.O. espera a prova de queda do relé) pergunta de novo sozinha, depois de `esperaMs`,

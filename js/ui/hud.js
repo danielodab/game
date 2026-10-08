@@ -2888,6 +2888,36 @@ var JOGO = (typeof window !== 'undefined')
     return w;
   }
 
+  /* 08/10 à noite: POR QUE a sala não rendeu — pelo código do servidor (`recusadaMotivo`, js/core/game.js
+   * codigoDaRecusa), com a frase dele (`recusada`, já traduzida pelo funil) como complemento ou como última saída.
+   * A linha é fixa na tela de recompensa: o toast somia, e o dono só via "+0 XP" sem saber de quê. */
+  function porqueSemRecompensa(rw) {
+    var m = rw.recusadaMotivo || '', erro = rw.recusada ? esc(rw.recusada) : '';
+    var grupo = !!rw.rede;
+    if (m === 'rapido-demais') return tr('<b>A sala não rendeu:</b> fechou rápido demais para ser de verdade — o servidor não pagou.');
+    if (m === 'regras-mudaram') {
+      return grupo ? tr('<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abram a sala de novo.')
+                   : tr('<b>A sala não rendeu:</b> as regras do jogo mudaram no meio da sala (o servidor atualizou) — abra a sala de novo.');
+    }
+    if (m === 'fotografada' || m === 'nao-conferida') {
+      return tr('<b>A sala não rendeu:</b> a batalha sincronizou por foto e nenhum registro limpo chegou a tempo — o servidor não pôde conferir a vitória. Se a conexão cair de novo, espere o parceiro antes de seguir.');
+    }
+    if (m === 'vencida' || m === 'validade' || m === 'outra-aberta') return tr('<b>A sala não rendeu:</b> a sala venceu no servidor (passou da validade, ou outra foi aberta por cima) — abram de novo.');
+    if (m === 'perdida') return tr('<b>A sala não rendeu:</b> o registro que o servidor refez não chegou à vitória (parou antes do fim).');
+    if (m === 'outro-aparelho') return tr('<b>A sala não rendeu:</b> sua conta entrou em outro aparelho e esta sala não foi conferida.');
+    if (m === 'sem-resposta') return tr('<b>A sala não rendeu:</b> o servidor não respondeu à conferência.');
+    if (m === 'sem-recompensa') return tr('<b>A sala não rendeu:</b> o servidor confirmou a vitória mas não mandou a recompensa.');
+    if (m === 'divergiu' || m === 'vez' || m === 'unidade' || m === 'depois-do-fim' || m === 'entrada' || m === 'herois' ||
+        m === 'juiz' || m === 'recusada' || m === 'sal-faltando') {
+      return tr('<b>A sala não rendeu:</b> o servidor recusou a conferência da batalha ({erro}).', { erro: erro || esc(m) });
+    }
+    return tr('<b>A sala não rendeu:</b> o servidor não confirmou a vitória ({erro}).', { erro: erro || esc(m) || tr('sem resposta') });
+  }
+  function porqueEspera(c) {
+    var s = (c && typeof c.esperaMs === 'number') ? Math.max(0, Math.ceil(c.esperaMs / 1000)) : null;
+    var ate = s != null ? ' ' + tr('(até {s} s)', { s: s }) : '';
+    return tr('<b>Esperando a conferência do servidor…</b> a sua batalha sincronizou por foto e é o registro limpo do outro jogador que confirma a sala{ate}. A recompensa entra sozinha quando ele chegar.', { ate: ate });
+  }
   function buildRewards(name, data) {
     var s = screens[name];
     clear(s);
@@ -2964,6 +2994,12 @@ var JOGO = (typeof window !== 'undefined')
       }
       var chXp = chipsEvento('xp');          // 10/09: o evento do mundo de XP
       if (chXp) w.appendChild(chXp);
+      // 08/10 à noite (o dono: "todas as XPs foram zeradas"): a sala que o servidor NÃO pagou diz POR QUÊ aqui,
+      // numa linha fixa (antes o motivo só passava num toast que some); e a que ainda ESPERA a conferência diz que espera
+      if (lastRewards.conferindo) w.appendChild(el('div', 'rw-xp-why rw-xp-espera', porqueEspera(lastRewards.conferindo)));
+      else if (lastRewards.recusada || lastRewards.recusadaMotivo) {
+        w.appendChild(el('div', 'rw-xp-why rw-xp-recusa', porqueSemRecompensa(lastRewards)));
+      }
 
       if (algumCorte) {
         w.appendChild(el('div', 'rw-xp-why',

@@ -3111,12 +3111,27 @@ var JOGO = (typeof window !== 'undefined')
    * objeto do computeRewards, calculado lá com o estado do servidor) e o
    * estado novo, que a Autoridade já adotou. A derrota também vai (a sala
    * fecha lá), sem esperar. */
-  function recompensaVazia(motivo) {
+  /* 08/10 à noite (o dono: "fui na Cisterna dos Afogados com duas contas, 4 personagens nível 1, ativei
+   * x3 o bônus de XP e todas as XPs foram zeradas"): o juiz paga certo (tests/juiz_grupo_xp.js); o zero vem
+   * de quando o servidor NÃO confirma a vitória — e o porquê só passava num toast que some. Agora a
+   * recompensa vazia leva o `recusadaMotivo` (o código do servidor: rapido-demais, regras-mudaram,
+   * fotografada/nao-conferida, vencida, divergiu…, ou sem-resposta) e a frase dele em `recusada`; a tela
+   * de recompensa (hud.js, o bloco Experiência) imprime uma linha fixa dizendo por que a sala não rendeu. */
+  function recompensaVazia(motivo, codigo) {
     return { xpGanho: 0, xpMult: {}, xpPorHeroi: {}, levelUps: [], moedas: 0, saqueDupla: null,
              dificuldade: Game.dificuldade || 'normal', difNome: '', desafio: null, drops: [], pets: [],
              petCards: [], petXp: {}, petLevelUps: [], cards: [], stones: {}, selos: {}, insignias: 0,
              dizimo: null, eventos: [], pergaminho: null, bonusXp: null,
-             elementChoices: Game.elementChoices(), recusada: motivo || null };
+             elementChoices: Game.elementChoices(), recusada: motivo || null, recusadaMotivo: codigo || null };
+  }
+  /* o código da recusa do servidor: o `motivo` (rapido-demais, regras-mudaram, vencida, vez, divergiu, outro-aparelho…),
+   * senão a `fase` da sala já fechada (recusada, perdida, nao-conferida), senão a resposta que não veio */
+  function codigoDaRecusa(r) {
+    if (!r) return 'sem-resposta';
+    if (typeof r.motivo === 'string' && r.motivo) return r.motivo;
+    if (typeof r.fase === 'string' && r.fase && r.fase !== 'won') return r.fase;
+    if (r.ok && r.fase === 'won') return 'sem-recompensa';
+    return 'recusada';
   }
   function fechaNoServidor(fase) {
     var ata = ataSolo;
@@ -3145,12 +3160,12 @@ var JOGO = (typeof window !== 'undefined')
       if (Game.screen !== 'battle') return;            // saiu no meio (abandonou)
       returnScreen = tela;
       if (r && r.ok && r.fase === 'won') {
-        setScreen(tela, r.recompensa || recompensaVazia());
+        setScreen(tela, r.recompensa || recompensaVazia(Tx('o servidor não confirmou a vitória'), 'sem-recompensa'));
         return;
       }
       var motivo = (r && r.erro) || Tx('o servidor não confirmou a vitória');
       try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('A sala não rendeu recompensa: {motivo}', { motivo: motivo })); } catch (eT2) {}
-      setScreen(tela, recompensaVazia(motivo));
+      setScreen(tela, recompensaVazia(motivo, codigoDaRecusa(r)));   // 08/10 à noite: o porquê fica na tela
     });
   }
 
@@ -3172,26 +3187,59 @@ var JOGO = (typeof window !== 'undefined')
     try { hashFinal = E().hash(Game.state); } catch (e2) { hashFinal = 0; }
     // 15/09: a sala acabou — se a página for embora antes do recibo, o registro fecha como fim (e não como `largou`)
     try { if (JOGO.Autoridade.anotaLuta) JOGO.Autoridade.anotaLuta(reg.ata.gid, reg.lances, true); } catch (e3) {}
+    var lastRoom = ultimaSalaDe(Game.dungeonId);
+    var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
+    var mostrouEspera = false, marcaRede = null;
+    /* 08/10 à noite: a resposta 'aguardando' (o MEU registro sincronizou por foto e não refaz a sala; o servidor
+     * espera o registro limpo do outro membro até `esperaAte`) deixava a tela zerada na hora — "o servidor não
+     * confirmou a vitória do grupo" — enquanto o outro ainda ia pagar a sala para os dois. A Autoridade agora
+     * pergunta de novo até a resposta de vez (esperaGrupo); aqui, na primeira volta, a tela de recompensa sai
+     * já, dizendo que ESPERA (`conferindo`), e a resposta de vez a refaz se o jogador ainda estiver nela. */
+    var aoAguardar = function (ra) {
+      if (fase !== 'won' || mostrouEspera || Game.screen !== 'battle') return;
+      mostrouEspera = true;
+      conferindoSala = false;
+      returnScreen = tela;
+      var rwE = recompensaVazia(null, null);
+      rwE.conferindo = { motivo: (ra && ra.motivo) || 'fotografada', esperaAte: (ra && ra.esperaAte) || null,
+                         esperaMs: (ra && typeof ra.esperaMs === 'number') ? ra.esperaMs : null };
+      marcaRede = marcaRecompensaRede(rwE);
+      setScreen(tela, rwE);
+    };
     var promessa = JOGO.Autoridade.fechaGrupo({ gid: reg.ata.gid, lances: reg.lances, hashFinal: hashFinal,
-                                                fotografada: reg.fotografada, autoridade: reg.autoridade });
+                                                fotografada: reg.fotografada, autoridade: reg.autoridade }, aoAguardar);
     promessa.then(sincronizaVida);                     // 14/09: o servidor gravou a vida do fim dos dois
     if (fase !== 'won') return;
     conferindoSala = true;
-    var lastRoom = ultimaSalaDe(Game.dungeonId);
-    var tela = (Game.roomIndex >= lastRoom) ? 'dungeonComplete' : 'roomClear';
     try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('Conferindo a vitória do grupo com o servidor…')); } catch (eT) {}
     promessa.then(function (r) {
       conferindoSala = false;
-      if (Game.screen !== 'battle') return;
+      var pagou = !!(r && r.ok && r.fase === 'won' && r.recompensa);
+      // saiu no meio (abandonou) — ou, depois da espera, já foi para a próxima sala: a recompensa de vez entra
+      // sozinha no estado (a Autoridade adotou o progress) e só o aviso diz
+      if (Game.screen !== (mostrouEspera ? tela : 'battle')) {
+        if (mostrouEspera) {
+          try {
+            if (JOGO.UI && JOGO.UI.toast) {
+              JOGO.UI.toast(pagou ? Tx('A sala do grupo foi conferida: a recompensa entrou.')
+                                  : Tx('A sala não rendeu recompensa: {motivo}', { motivo: (r && r.erro) || Tx('o servidor não confirmou a vitória do grupo') }));
+            }
+          } catch (eT3) {}
+        }
+        return;
+      }
       returnScreen = tela;
       var rw;
-      if (r && r.ok && r.fase === 'won' && r.recompensa) rw = r.recompensa;
+      if (pagou) rw = r.recompensa;
       else {
         var motivo = (r && r.erro) || Tx('o servidor não confirmou a vitória do grupo');
         try { if (JOGO.UI && JOGO.UI.toast) JOGO.UI.toast(Tx('A sala não rendeu recompensa: {motivo}', { motivo: motivo })); } catch (eT2) {}
-        rw = recompensaVazia(motivo);
+        rw = recompensaVazia(motivo, codigoDaRecusa(r));   // 08/10 à noite: o porquê fica na tela
       }
-      marcaRecompensaRede(rw);
+      // a marca de rede sai uma vez só (o aoFim do Coop avisa "{a} não voltou" ao ser chamado)
+      if (marcaRede) {
+        rw.rede = true; rw.lider = marcaRede.lider; rw.parceiroVoltou = marcaRede.parceiroVoltou; rw.descidaAcabou = marcaRede.descidaAcabou;
+      } else marcaRecompensaRede(rw);
       setScreen(tela, rw);
     });
   }
