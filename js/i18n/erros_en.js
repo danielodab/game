@@ -678,5 +678,7 @@ JOGO.I18n.registra('en', { erros: {
   // ---- 08/10 à noite: o Mestre no Eco (supremo.py)
   "essa ficha não tem classe que enfrente o Eco": "that hero sheet has no class that can face the Echo",
   // ---- 08/10 à noite: o dízimo de um membro pelos oficiais
-  "só o líder e os oficiais mudam o dízimo de um membro": "only the leader and the officers change a member's tithe"
+  "só o líder e os oficiais mudam o dízimo de um membro": "only the leader and the officers change a member's tithe",
+  // ---- 08/10 à noite: as vagas da guilda por nível
+  "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up"
 } });

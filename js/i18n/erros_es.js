@@ -678,5 +678,7 @@ JOGO.I18n.registra('es', { erros: {
   // ---- 08/10 à noite: o Mestre no Eco (supremo.py)
   "essa ficha não tem classe que enfrente o Eco": "esa ficha no tiene una clase que enfrente al Eco",
   // ---- 08/10 à noite: o dízimo de um membro pelos oficiais
-  "só o líder e os oficiais mudam o dízimo de um membro": "solo el líder y los oficiales cambian el diezmo de un miembro"
+  "só o líder e os oficiais mudam o dízimo de um membro": "solo el líder y los oficiales cambian el diezmo de un miembro",
+  // ---- 08/10 à noite: as vagas da guilda por nível
+  "a guilda está cheia — ela abre mais vagas ao subir de nível": "la guilda está llena: abre más plazas al subir de nivel"
 } });

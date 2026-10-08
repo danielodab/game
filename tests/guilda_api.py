@@ -504,6 +504,33 @@ class ProvaDaGuilda(unittest.TestCase):
         self.assertEqual(self.orfas_da_guilda(gid), {})
         self.assertEqual(len(self.sql("SELECT id FROM guilda_pergaminhos_usados")), 2)
 
+    def test_07c_as_vagas_por_nivel(self):
+        """08/10 à noite: nv 1 cabe 10, nv 2 cabe 15 … nv 30 cabe 200; toda porta (entrar, pedido aceito,
+        convite) bate no teto; a guilda sobe de nível e abre vaga; a lista e a ficha dizem as vagas."""
+        self.assertEqual((guilda_mod.vagas_de(1), guilda_mod.vagas_de(2), guilda_mod.vagas_de(30)), (10, 15, 200))
+        self.assertEqual(guilda_mod.nivel_de(10 ** 9), guilda_mod.NIVEL_MAX)
+        a = self.novo('Lotado')
+        gid = self.funda(a)
+        for i in range(9):
+            self.g(self.novo('Membro%d' % i), 'entrar', {'gid': gid})
+        f = self.g(a, 'minha')['guilda']
+        self.assertEqual((len(f['membros']), f['vagas'], f['nivel']), (10, 10, 1))
+        tarde = self.novo('Tarde')
+        r = self.g(tarde, 'entrar', {'gid': gid}, 409)
+        self.assertIn('cheia', r['erro'])
+        # a porta por convite também: o pedido fica na fila e o aceitar cai no teto
+        self.g(a, 'porta', {'modo': 'convite'})
+        self.g(tarde, 'pedir', {'gid': gid})
+        self.g(a, 'pedido', {'conta': tarde.conta['id'], 'aceitar': True}, 409)
+        self.g(a, 'convidar', {'conta': tarde.conta['id']})
+        self.g(tarde, 'entrar', {'gid': gid}, 409)
+        lista = [x for x in self.g(tarde, 'lista')['guildas'] if x['id'] == gid][0]
+        self.assertEqual((lista['membros'], lista['vagas']), (10, 10))
+        # a guilda sobe para o nível 2 (60 XP): abre 15 vagas e a conta entra
+        self.sql("UPDATE guildas SET xp = 60 WHERE id = ?", gid)
+        r = self.g(tarde, 'entrar', {'gid': gid})
+        self.assertEqual((len(r['guilda']['membros']), r['guilda']['vagas'], r['guilda']['nivel']), (11, 15, 2))
+
     def test_08_o_mestre_desfaz_a_guilda_inteira(self):
         """04/10 (dono: "exclua a guilda Game Over do jogo.. vou refazer para sair os bugs"). Só o Mestre;
         pede o nome digitado; o empréstimo é recolhido, as peças do banco voltam ao dono sem a série ser

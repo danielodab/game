@@ -333,11 +333,20 @@ def soma_meta(con, cid, t):
     return meta
 
 
+NIVEL_MAX = 30                    # 08/10 à noite: a escada para no 30 (espelha JOGO.Guilda.NIVEL_MAX)
+# AS VAGAS POR NÍVEL (08/10 à noite; o dono: "a guilda deve ter limite de membro por nível: nv 1 até 10
+# membros, nv 2 15, e assim em diante; nv máximo 30 para 200 membros"). +5 por nível no começo, curvando até
+# 200 no 30: vaga(n) = 10 + 5(n−1) + (n−1)²·45/841, arredondada — a tabela fica escrita para os dois lados
+# (JOGO.Guilda.VAGAS é a mesma) lerem o mesmo número, sem conta de ponto flutuante.
+VAGAS = [10, 15, 20, 25, 31, 36, 42, 48, 53, 59, 65, 71, 78, 84, 90, 97, 104, 110, 117, 124, 131, 139, 146, 153, 161, 168, 176, 184, 192, 200]
+def vagas_de(nivel):
+    n = nivel if isinstance(nivel, int) else 1
+    return VAGAS[max(1, min(NIVEL_MAX, n)) - 1]
 def nivel_de(xp):
-    """A escada da guilda (a mesma do JOGO.Guilda.nivelDe): limiar(n) = 60·n·(n+1)/2."""
+    """A escada da guilda (a mesma do JOGO.Guilda.nivelDe): limiar(n) = 60·n·(n+1)/2, até NIVEL_MAX."""
     xp = xp if isinstance(xp, int) and xp > 0 else 0
     n = 1
-    while xp >= 60 * n * (n + 1) // 2:
+    while n < NIVEL_MAX and xp >= 60 * n * (n + 1) // 2:
         n += 1
     return n
 
@@ -407,6 +416,8 @@ class GuildaMixin:
         return {
             'id': g['id'], 'nome': g['nome'], 'emblema': g['emblema'], 'liderId': g['lider_id'],
             'membros': membros, 'xp': g['xp'], 'nivel': nivel_de(g['xp']), 'moedas': g['moedas'],
+            'vagas': None if self._g_da_equipe(g) else vagas_de(nivel_de(g['xp'])),   # 08/10 à noite: o teto do nível (a da equipe não tem)
+            'nivelMax': NIVEL_MAX,
             'bonus': {'drop': g['bonus_drop'] * 1000, 'xp': g['bonus_xp'] * 1000},
             'banco': [{'id': b['id'], 'itemId': b['item_id'], 'level': b['nivel'], 'stars': b['estrelas'],
                        'iid': b['iid'], 'dono': b['dono_id'], 'donoNome': nm.get(b['dono_id'], '?'),
@@ -526,8 +537,19 @@ class GuildaMixin:
                 raise Recusa(404, 'essa guilda não existe mais')
         return g
 
+    def _g_cheia(self, g):
+        """08/10 à noite: a guilda está nas vagas do nível dela? A da EQUIPE (líder Mestre) não tem teto."""
+        if self._g_da_equipe(g):
+            return False
+        n = self.con.execute("SELECT COUNT(*) AS n FROM guilda_membros WHERE guilda_id = ?", (g['id'],)).fetchone()['n']
+        return n >= vagas_de(nivel_de(g['xp']))
+
     def _g_entra(self, cid, gid, t):
-        """Põe a conta na guilda; a fila e os convites dela, em qualquer guilda, saem."""
+        """Põe a conta na guilda; a fila e os convites dela, em qualquer guilda, saem. 08/10 à noite: só se
+        há vaga no nível dela (toda porta passa por aqui: entrar, pedido aceito, convite, trazer)."""
+        g = self.con.execute("SELECT * FROM guildas WHERE id = ?", (gid,)).fetchone()
+        if g is not None and self._g_cheia(g):
+            raise Recusa(409, 'a guilda está cheia — ela abre mais vagas ao subir de nível')
         self.con.execute("INSERT INTO guilda_membros(conta_id, guilda_id, cargo, entrou_em) VALUES (?, ?, 'membro', ?)",
                          (cid, gid, t))
         self.con.execute("DELETE FROM guilda_pedidos WHERE conta_id = ?", (cid,))
@@ -815,7 +837,8 @@ class GuildaMixin:
                 (1 if conta['gm'] else 0, conta['id'], LISTA_MAX)).fetchall()
         return 200, {'ok': True, 'guildas': [
             {'id': r['id'], 'nome': r['nome'], 'emblema': r['emblema'], 'xp': r['xp'], 'nivel': nivel_de(r['xp']),
-             'membros': r['membros'], 'porta': r['porta']} for r in rs]}
+             'membros': r['membros'], 'porta': r['porta'],
+             'vagas': vagas_de(nivel_de(r['xp']))} for r in rs]}     # 08/10 à noite: a lista diz quantas cabem
 
     # -- a vida da guilda -----------------------------------------------------------
     def guilda_criar(self, conta, corpo):

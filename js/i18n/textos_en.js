@@ -2934,5 +2934,9 @@ JOGO.I18n.registra('en', { textos: {
   // ---- 08/10 à noite: a pergunta antes do ataque no Campo
   "Atacar {nome}?": "Attack {nome}?",
   "A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.": "The fight starts right away and <b>{nome}</b> cannot refuse. You both need to be in the Field, with your pair alive and within parity.",
-  "Atacar": "Attack"
+  "Atacar": "Attack",
+  // ---- 08/10 à noite: as vagas da guilda por nível
+  "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up",
+  "Cheia": "Full",
+  "A {nome} está cheia ({a}/{b}): ela abre mais vagas ao subir de nível.": "{nome} is full ({a}/{b}): it opens more slots as it levels up."
 } });

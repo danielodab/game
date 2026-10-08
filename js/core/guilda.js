@@ -222,12 +222,22 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   /* a escada: subir custa cada vez mais — limiar(n) = 60·n·(n+1)/2 */
+  G.NIVEL_MAX = 30;                 // 08/10 à noite: a escada para no 30 (servidor/guilda.py NIVEL_MAX)
   G.nivelDe = function (xp) {
     xp = (typeof xp === 'number' && isFinite(xp)) ? xp : 0;
     var n = 1;
-    while (xp >= 60 * n * (n + 1) / 2) n++;
+    while (n < G.NIVEL_MAX && xp >= 60 * n * (n + 1) / 2) n++;
     return n;
   };
+  /* AS VAGAS POR NÍVEL (08/10 à noite; o dono: "limite de membro por nível: nv 1 até 10, nv 2 15, e assim em
+   * diante; nv máximo 30 para 200"). A tabela é a mesma de servidor/guilda.py (VAGAS) — escrita, não calculada. */
+  G.VAGAS = [10, 15, 20, 25, 31, 36, 42, 48, 53, 59, 65, 71, 78, 84, 90, 97, 104, 110, 117, 124, 131, 139, 146, 153, 161, 168, 176, 184, 192, 200];
+  G.vagasDe = function (nivel) {
+    var n = (typeof nivel === 'number' && isFinite(nivel)) ? Math.floor(nivel) : 1;
+    return G.VAGAS[Math.max(1, Math.min(G.NIVEL_MAX, n)) - 1];
+  };
+  G.CHEIA = 'a guilda está cheia — ela abre mais vagas ao subir de nível';
+  function cheia(g) { return !!g && !escondida(g) && g.membros.length >= G.vagasDe(G.nivelDe(g.xp)); }
 
   function minhaG(d) {
     if (!conta) return null;
@@ -337,6 +347,8 @@ var JOGO = (typeof window !== 'undefined')
     if (conta && g.liderId === conta.id && !g.equipe && ehMestre()) { g.equipe = true; grava(d); }
     var f = foto(g);
     f.nivel = G.nivelDe(g.xp);
+    f.vagas = escondida(g) ? null : G.vagasDe(f.nivel);      // 08/10 à noite: o teto do nível (a da equipe não tem)
+    f.nivelMax = G.NIVEL_MAX;
     f.souLider = !!(conta && g.liderId === conta.id);
     f.meuCargo = conta ? cargoDe(g, conta.id) : null;
     // cada membro sai com o cargo RESOLVIDO (o líder pelo liderId); 13/09: e o XP
@@ -413,6 +425,7 @@ var JOGO = (typeof window !== 'undefined')
     if (d.porConta[conta.id]) return responde({ ok: false, erro: Tx('você já tem guilda') });
     var g = d.guildas[gid];
     if (!g || escondida(g)) return responde({ ok: false, erro: Tx('essa guilda não existe mais') });
+    if (cheia(g)) return responde({ ok: false, erro: Tx(G.CHEIA) });      // 08/10 à noite: as vagas do nível
     if (portaDe(g) === 'aberta') {
       // porta aberta não tem fila: pedir É entrar
       g.membros.push({ id: conta.id, nome: conta.nome });
@@ -444,6 +457,7 @@ var JOGO = (typeof window !== 'undefined')
         grava(d);
         return responde({ ok: false, erro: Tx('essa conta já entrou noutra guilda') });
       }
+      if (cheia(g)) { fila.splice(i, 0, p); return responde({ ok: false, erro: Tx(G.CHEIA) }); }   // 08/10 à noite: o pedido fica na fila
       g.membros.push({ id: p.id, nome: p.nome });
       d.porConta[p.id] = g.id;
       grava(d);
@@ -560,7 +574,7 @@ var JOGO = (typeof window !== 'undefined')
       var g = d.guildas[gid];
       if (escondida(g)) continue;                 // 04/10: a guilda da equipe só o Mestre vê
       fora.push({ id: g.id, nome: g.nome, emblema: g.emblema, xp: g.xp,
-                  nivel: G.nivelDe(g.xp), membros: g.membros.length,
+                  nivel: G.nivelDe(g.xp), membros: g.membros.length, vagas: G.vagasDe(G.nivelDe(g.xp)),
                   porta: portaDe(g) });
     }
     fora.sort(function (a, b) { return b.xp - a.xp; });
@@ -581,6 +595,7 @@ var JOGO = (typeof window !== 'undefined')
     if (portaDe(g) === 'convite' && !(op && op.convite === true)) {
       return responde({ ok: false, erro: Tx('a guilda é por convite — peça para entrar') });
     }
+    if (cheia(g)) return responde({ ok: false, erro: Tx(G.CHEIA) });      // 08/10 à noite: as vagas do nível
     g.membros.push({ id: conta.id, nome: conta.nome });
     d.porConta[conta.id] = gid;
     grava(d);

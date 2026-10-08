@@ -1221,6 +1221,24 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
   `pvp_hud` (a pergunta, o Cancelar e o Atacar; as duas falhas do quadro já existiam no HEAD),
   `sede_visita` (a grade fora do salão).
 
+## 9-A.19 As vagas da guilda por nível (08/10 à noite)
+
+O dono: "a guilda deve ter limite de membro por nível: nv 1 até 10 membros, nv 2 15, e assim em
+diante; nv máximo 30 também para 200 membros". A escada de nível para no 30 (`NIVEL_MAX`, nos dois
+lados) e cada nível tem um teto de membros, numa TABELA escrita igual em `servidor/guilda.py`
+(`VAGAS`, `vagas_de`) e em `js/core/guilda.js` (`G.VAGAS`, `G.vagasDe`): +5 por nível no começo,
+curvando até 200 no 30 — vaga(n) = 10 + 5(n−1) + (n−1)²·45/841, arredondada:
+
+| nv | 1 | 2 | 3 | 4 | 5 | 10 | 15 | 20 | 25 | 30 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| vagas | 10 | 15 | 20 | 25 | 31 | 59 | 90 | 124 | 161 | 200 |
+
+Toda porta passa por `_g_entra` (entrar, pedido aceito, convite, trazer): cheia, recusa 409 "a
+guilda está cheia — ela abre mais vagas ao subir de nível"; o pedido fica na fila. A guilda da
+EQUIPE (líder Mestre) não tem teto (`vagas: null`). A ficha e a lista trazem `vagas`, e a HUD mostra
+"12/15 membro(s)"; na lista de quem procura guilda o botão vira "Cheia". Prova: `guilda_api`
+test_07c.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

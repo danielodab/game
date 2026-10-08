@@ -12403,6 +12403,15 @@ var JOGO = (typeof window !== 'undefined')
    * caminho para o salão. A inscrição na guerra não vem para cá — ela é viva (fila, prazo,
    * confirmação) e mora nos dois painéis que se repintam: a Sede da praça e a mesa do conselho. */
   var hubEhSala = false;
+  /* 08/10 à noite: "12/15 membros" — as vagas vêm da ficha (`vagas`; null na guilda da equipe) ou da régua local */
+  function vagasDaGuilda(x) {
+    if (!x) return null;
+    if (x.vagas === null) return null;
+    if (typeof x.vagas === 'number') return x.vagas;
+    var Gd = JOGO.Guilda;
+    return (Gd && Gd.vagasDe && typeof x.nivel === 'number') ? Gd.vagasDe(x.nivel) : null;
+  }
+  function membrosDeN(n, vagas) { return vagas ? (n + '/' + vagas) : String(n); }
   function portaDaGuilda(caixa, g) {
     caixa.classList.add('guilda-porta');
     var cab = el('div', 'guilda-cab');
@@ -12411,7 +12420,7 @@ var JOGO = (typeof window !== 'undefined')
     cab.appendChild(placa);
     var ct = el('div', 'guilda-cab-t');
     ct.appendChild(el('h3', null, tr('{a} <i>nível {nivel}</i>', { a: esc(g.nome), nivel: g.nivel })));
-    ct.appendChild(el('span', 'guilda-sub', g.membros.length + ' membro(s)'));
+    ct.appendChild(el('span', 'guilda-sub', membrosDeN(g.membros.length, vagasDaGuilda(g)) + ' membro(s)'));
     cab.appendChild(ct);
     caixa.appendChild(cab);
     caixa.appendChild(el('p', 'inv-dica',
@@ -12719,7 +12728,7 @@ var JOGO = (typeof window !== 'undefined')
         var baseNivel = g.nivel > 1 ? 60 * (g.nivel - 1) * g.nivel / 2 : 0;
         ct.appendChild(bar('bar-xp', (g.xp - baseNivel) / Math.max(1, alvoNivel - baseNivel),
           tr('XP da guilda {xp} / {alvoNivel}', { xp: g.xp, alvoNivel: alvoNivel })));
-        ct.appendChild(el('span', 'guilda-sub', tr('{length} membro(s) · {treinos} treino(s) na arena', { length: g.membros.length, treinos: g.treinos })));
+        ct.appendChild(el('span', 'guilda-sub', tr('{length} membro(s) · {treinos} treino(s) na arena', { length: membrosDeN(g.membros.length, vagasDaGuilda(g)), treinos: g.treinos })));
         cab.appendChild(ct);
         caixa.appendChild(cab);
 
@@ -13137,7 +13146,7 @@ var JOGO = (typeof window !== 'undefined')
               var linhaR = el('div', 'guilda-rank' + (g && rg.id === g.id ? ' is-minha' : ''));
               if (BR() && BR().ehCodigo(rg.emblema)) linhaR.appendChild(elShield(rg.emblema, 20));
               linhaR.appendChild(el('span', null,
-                tr('<b>{a}º</b> {b} · nível {nivel} · {xp} XP · {membros} membro(s)', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, xp: rg.xp, membros: rg.membros })));
+                tr('<b>{a}º</b> {b} · nível {nivel} · {xp} XP · {membros} membro(s)', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, xp: rg.xp, membros: membrosDeN(rg.membros, vagasDaGuilda(rg)) })));
               caixa.appendChild(linhaR);
             });
           }
@@ -13153,10 +13162,13 @@ var JOGO = (typeof window !== 'undefined')
           if (BR() && BR().ehCodigo(rg.emblema)) linha.appendChild(elShield(rg.emblema, 20));
           linha.appendChild(el('span', null,
             (rg.porta === 'convite'
-              ? tr('<b>{a}º</b> {b} · nível {nivel} · {membros} membro(s) · porta por convite', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, membros: rg.membros })
-              : tr('<b>{a}º</b> {b} · nível {nivel} · {membros} membro(s) · porta aberta', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, membros: rg.membros }))));
-          linha.appendChild(btn(rg.porta === 'convite' ? tr('Pedir para entrar') : tr('Entrar'),
-            'btn-mini ' + (rg.porta === 'convite' ? 'btn-ghost' : 'btn-primary'), function () {
+              ? tr('<b>{a}º</b> {b} · nível {nivel} · {membros} membro(s) · porta por convite', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, membros: membrosDeN(rg.membros, vagasDaGuilda(rg)) })
+              : tr('<b>{a}º</b> {b} · nível {nivel} · {membros} membro(s) · porta aberta', { a: ri + 1, b: esc(txtGuilda(rg.emblema, rg.nome)), nivel: rg.nivel, membros: membrosDeN(rg.membros, vagasDaGuilda(rg)) }))));
+          // 08/10 à noite: a guilda nas vagas do nível dela não recebe mais ninguém até subir
+          var vagasR = vagasDaGuilda(rg), cheiaR = !!(vagasR && rg.membros >= vagasR);
+          linha.appendChild(btn(cheiaR ? tr('Cheia') : (rg.porta === 'convite' ? tr('Pedir para entrar') : tr('Entrar')),
+            'btn-mini ' + (cheiaR ? 'btn-ghost is-apagado' : (rg.porta === 'convite' ? 'btn-ghost' : 'btn-primary')), function () {
+              if (cheiaR) { toast(tr('A {nome} está cheia ({a}/{b}): ela abre mais vagas ao subir de nível.', { nome: rg.nome, a: rg.membros, b: vagasR })); return; }
               var op = rg.porta === 'convite' ? Gd.pedirEntrada(rg.id) : Gd.entrar(rg.id);
               op.then(function (res) {
                 if (!res.ok) { toast(res.erro || tr('não deu')); return; }
