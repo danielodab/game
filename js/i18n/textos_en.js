@@ -2927,5 +2927,8 @@ JOGO.I18n.registra('en', { textos: {
   "título à sua escolha (até 23 letras)": "a title of your choice (up to 23 letters)",
   "Usar": "Use",
   "Escreva o título.": "Write the title.",
-  "O Mestre escolhe": "The Master chooses"
+  "O Mestre escolhe": "The Master chooses",
+  "Coroa do Mestre": "Master's Crown",
+  "a coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho": "the Master's crown is fixed — only your account wears it, with the red glow",
+  "<b>{a}</b> · fixa, só do Mestre": "<b>{a}</b> · fixed, the Master's alone"
 } });

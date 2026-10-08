@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 'use strict';
-/* PROVA DA COROA DO MESTRE (05/10) — js/core/brasa.js, gm.js e rede.js num mundo de mentira do Node.
+/* PROVA DA COROA DO MESTRE (05/10, refeita em 08/10 à noite) — js/core/brasa.js, gm.js e rede.js num
+ * mundo de mentira do Node.
  *
  *   node tests/coroa_mestre.js
  *
- * O dono: "preciso que no menu do mestre ele consiga liberar [...] o ranking da coroa também".
- * O Mestre escolhe no painel qual das dez coroas carrega acima da cabeça. É só a arte. Cobra:
- *   1. a régua (Brasa.coroaDe): a escolha 7 desenha a Coroa VII com os pontos que for; 0 e lixo
- *      voltam à de verdade; a coroa escondida continua escondida por cima da escolha;
- *   2. quem escolhe (JOGO.GM): só o Mestre grava e lê — a conta comum com a marca no save lê 0;
- *   3. quem os outros veem (JOGO.Rede): o `coroaMestre` do resumo só fica em quem o relé carimbou
- *      mestre:true; forjado por conta comum, cai e a coroa dela é a dos pontos; trocar a escolha
- *      avisa `mudouCoroa` (a plaquinha repinta sem refazer o corpo).
- * O tier dos outros é o do hub3d (tierDoFantasma): coroaDe(..., perfil.mestre ? resumo.coroaMestre : 0)
- * — a mesma conta que `tierVisto` faz aqui, sobre o que a Rede entrega. O carimbo do relé está em
- * tests/rele_nomes_prova.py; o seletor do painel, em tests/painel_mestre.html. */
+ * O dono (08/10): "fiz a arte da coroa do GM que deve ser liberada somente para ele.. e o brilho no
+ * meio deve ser vermelho". Até 08/10 o Mestre escolhia no painel qual das dez coroas do ranking
+ * carregava (GM.coroa/defineCoroa, `coroaMestre` no resumo). Agora a coroa dele é a DELE, fixa:
+ * JOGO.Brasa.MESTRE, um degrau fora da escada. Cobra:
+ *   1. a régua (Brasa.coroaDe): com `mestre === true` sai a coroa do Mestre (id 'gm', modelo 'coroa_gm',
+ *      brilho inteiro e VERMELHO), que não está em TIERS — ninguém chega nela por pontos; a coroa
+ *      escondida continua escondida por cima; o número da escolha antiga não é mais lido;
+ *   2. quem é o Mestre (JOGO.GM.ativo): a conta carimbada gm; o seletor saiu (GM.coroa/defineCoroa não
+ *      existem mais) e a marca `coroa` de um save antigo não veste ninguém;
+ *   3. quem os outros veem (JOGO.Rede): o tier é o do hub3d (tierDoFantasma): coroaDe(..., perfil.mestre)
+ *      — só o `mestre: true` que o relé carimba pendura a coroa; o `coroaMestre` forjado por conta comum
+ *      segue caindo (o campo nem é lido mais, mas um cliente antigo não pode nem sujar o cartão); esconder
+ *      a coroa ainda avisa `mudouCoroa`.
+ * O carimbo do relé está em tests/rele_nomes_prova.py; a praça de verdade, em tests/foto_coroa_gm.html. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -70,29 +74,32 @@ const COMUM = { token: 'b'.repeat(64), conta: { id: 7, nome: 'Ana', gm: false } 
 (function () {
   const B = mundo(null).J.Brasa;
   const id = (t) => (t ? t.id : null);
-  check('régua: sem escolha, 1000 pontos é a Coroa I (como sempre)', id(B.coroaDe(1000, 0, false, false)) === 'n1' && id(B.coroaDe(1000, 0, false, false, 0)) === 'n1');
-  check('régua: a escolha 7 desenha a Coroa VII com os pontos que for', id(B.coroaDe(1000, 0, false, false, 7)) === 'n7');
-  check('régua: a escolha 10 desenha a Coroa X sem exigir o topo do placar', id(B.coroaDe(1000, 0, false, false, 10)) === 'n10');
-  check('régua: a coroa escondida continua escondida por cima da escolha', B.coroaDe(1000, 0, false, true, 7) === null);
-  check('régua: escolha fora de 1..10 ou que não é número inteiro volta à de verdade',
-        [11, -1, 2.5, '7', true, null, NaN, {}].every((x) => id(B.coroaDe(1000, 0, false, false, x)) === 'n1'));
-  check('régua: a escolha não mexe na conta dos pontos (tierDe segue o mesmo)', id(B.tierDe(1650, false)) === 'n7' && id(B.tierDe(1000, false)) === 'n1');
+  check('régua: sem a marca, 1000 pontos é a Coroa I (como sempre)', id(B.coroaDe(1000, 0, false, false)) === 'n1' && id(B.coroaDe(1000, 0, false, false, false)) === 'n1');
+  const M = B.coroaDe(1000, 0, false, false, true);
+  check('régua: com `mestre === true` sai a COROA DO MESTRE — id gm, modelo coroa_gm, marcada `mestre`',
+        !!M && M === B.MESTRE && M.id === 'gm' && M.modelo === 'coroa_gm' && M.mestre === true && M.nivel === 'gm', JSON.stringify(M));
+  check('régua: o brilho dela é inteiro (o da Coroa X) e VERMELHO (o dono: "o brilho no meio deve ser vermelho")',
+        M.brilho === 1 && /^#ff[0-3][0-9a-f][0-3][0-9a-f]$/i.test(M.cor), M.cor);
+  check('régua: ela é do tamanho da Coroa X (diâmetro 1.42) — imponente como a maior do ranking', M.tam === B.TIERS[9].tam);
+  check('régua: a coroa do Mestre NÃO está na escada (TIERS) — ninguém chega nela por pontos',
+        B.TIERS.every((t) => t.id !== 'gm' && t !== M) && B.TIERS.length === 10 && id(B.tierDe(99999, true)) === 'n10');
+  check('régua: a coroa escondida continua escondida por cima da marca', B.coroaDe(1000, 0, false, true, true) === null);
+  check('régua: o número da escolha antiga (05/10) não é mais lido — 7, 10 ou lixo caem na coroa dos pontos',
+        [7, 10, 11, -1, 2.5, '7', 'mestre', null, NaN, {}, 1].every((x) => id(B.coroaDe(1000, 0, false, false, x)) === 'n1'));
+  check('régua: a marca não mexe na conta dos pontos (tierDe segue o mesmo)', id(B.tierDe(1650, false)) === 'n7' && id(B.tierDe(1000, false)) === 'n1');
+  check('régua: a conta comum com muitos pontos continua na escada, nunca na do Mestre', id(B.coroaDe(1850, 40, false, false, false)) === 'n9');
 })();
 
-// ------------------------------------------------------------------ 2. quem escolhe
+// ------------------------------------------------------------------ 2. quem é o Mestre
 (function () {
   const m = mundo(MESTRE);
   const G = m.J.GM;
-  check('Mestre: nasce em "a de verdade" (0)', G.ativo() === true && G.coroa() === 0);
-  check('Mestre: escolhe a Coroa VII e ela fica gravada neste navegador',
-        G.defineCoroa(7) === true && G.coroa() === 7 && JSON.parse(m.local.get('soterra-gm-v1')).coroa === 7);
-  check('Mestre: "a de verdade" volta ao normal', G.defineCoroa(0) === true && G.coroa() === 0);
-  check('Mestre: valor fora da escada vira "a de verdade"', G.defineCoroa(42) === true && G.coroa() === 0);
+  check('Mestre: a conta carimbada gm está ativa — é ela que a HUD pendura com a coroa do Mestre', G.ativo() === true);
+  check('Mestre: o seletor de 05/10 saiu — GM.coroa e GM.defineCoroa não existem mais', G.coroa === undefined && G.defineCoroa === undefined);
 
   const c = mundo(COMUM, { ligado: true, pa: 12, pp: 8, spells: [], coroa: 10 });
-  check('conta comum com a marca forjada no save: lê 0 e não grava',
-        c.J.GM.ativo() === false && c.J.GM.coroa() === 0 && c.J.GM.defineCoroa(9) === false &&
-        JSON.parse(c.local.get('soterra-gm-v1')).coroa === 10);
+  check('conta comum com a marca antiga forjada no save (coroa: 10): não é Mestre, e a marca não veste ninguém',
+        c.J.GM.ativo() === false && c.J.GM.coroa === undefined);
 })();
 
 // ------------------------------------------------------------------ 3. quem os outros veem
@@ -106,50 +113,45 @@ const COMUM = { token: 'b'.repeat(64), conta: { id: 7, nome: 'Ana', gm: false } 
   const par = (id) => R.pares().filter((p) => p.id === id)[0];
   // a conta do hub3d (tierDoFantasma), sobre o que a Rede entrega
   const tierVisto = (p) => {
-    const t = B.coroaDe(p.resumo.brasa, p.resumo.partidas, false, p.resumo.coroaOculta === true,
-                        p.mestre === true ? p.resumo.coroaMestre : 0);
+    const t = B.coroaDe(p.resumo.brasa, p.resumo.partidas, false, p.resumo.coroaOculta === true, p.mestre === true);
     return t ? t.id : null;
   };
   const oi = (de, extra, resumo) => Object.assign({ t: 'oi', de: de, nome: 'Fulano', titulo: '', classe: 'sumo', x: 1, z: 1, sala: null, v: 2,
     resumo: Object.assign({ classes: { sumo: 3 }, total: 3, brasa: 1000, partidas: 0, coroaOculta: false }, resumo || {}) }, extra || {});
 
-  chega(oi('jmestre1', { nome: 'GM', mestre: true }, { coroaMestre: 7 }));
+  chega(oi('jmestre1', { nome: 'GM', mestre: true }, {}));
   let p = par('jmestre1');
-  check('o Mestre carimbado pelo relé com a Coroa VII: os outros o veem de Coroa VII',
-        !!p && p.mestre === true && p.resumo.coroaMestre === 7 && tierVisto(p) === 'n7', JSON.stringify(p));
+  check('o Mestre carimbado pelo relé: os outros o veem com a coroa do Mestre (gm), sem campo nenhum no resumo',
+        !!p && p.mestre === true && tierVisto(p) === 'gm', JSON.stringify(p));
 
-  chega(oi('jfalso01', { nome: 'Esperto' }, { coroaMestre: 10 }));
+  // o `mestre` que chega pelo relé É o carimbo (o cliente não o manda: rele_ident.carimba joga fora o do
+  // cliente e põe o seu só na conta gm — tests/rele_nomes_prova.py); quem vem sem ele é conta comum
+  chega(oi('jfalso01', { nome: 'Esperto' }, {}));
   p = par('jfalso01');
-  check('conta comum com o campo forjado (sem o carimbo): o campo cai e a coroa é a dos pontos dela',
+  check('conta comum (sem o carimbo do relé): a coroa é a dos pontos dela, nunca a do Mestre',
+        !!p && p.mestre === false && tierVisto(p) === 'n1', JSON.stringify(p));
+
+  chega(oi('jfalso02', { nome: 'Esperto2' }, { coroaMestre: 10 }));
+  p = par('jfalso02');
+  check('o `coroaMestre` de um cliente antigo (05/10) forjado por conta comum: cai do cartão e a coroa é a dos pontos',
         !!p && p.mestre === false && !('coroaMestre' in p.resumo) && tierVisto(p) === 'n1', JSON.stringify(p));
-  const ent = eventos.filter((e) => e.tipo === 'entrou' && e.id === 'jfalso01')[0];
+  const ent = eventos.filter((e) => e.tipo === 'entrou' && e.id === 'jfalso02')[0];
   check('...e o evento de entrada (o que o hub3d desenha) também vem sem o campo', !!ent && !('coroaMestre' in ent.resumo));
 
   eventos.length = 0;
-  chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, { coroaMestre: 3 }));
-  let mud = eventos.filter((e) => e.tipo === 'mudouCoroa');
+  chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, { coroaOculta: true }));
   p = par('jmestre1');
-  check('o Mestre troca para a Coroa III: um `mudouCoroa` (com a marca) e o tier visto vira o III',
-        mud.length === 1 && mud[0].id === 'jmestre1' && mud[0].mestre === true && mud[0].resumo.coroaMestre === 3 && tierVisto(p) === 'n3',
-        JSON.stringify(mud));
+  check('o Mestre esconde a coroa: um `mudouCoroa` (com a marca) e os outros param de vê-la',
+        eventos.filter((e) => e.tipo === 'mudouCoroa' && e.id === 'jmestre1' && e.mestre === true).length === 1 && tierVisto(p) === null,
+        JSON.stringify(eventos));
 
   eventos.length = 0;
-  chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, { coroaMestre: 3 }));
+  chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, { coroaOculta: true }));
   check('o mesmo cartão de novo não avisa nada (não repinta em laço)', eventos.filter((e) => e.tipo === 'mudouCoroa').length === 0);
 
   chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, {}));
   p = par('jmestre1');
-  check('"a de verdade": o campo some do cartão e o Mestre volta à coroa dos pontos',
-        eventos.filter((e) => e.tipo === 'mudouCoroa').length === 1 && tierVisto(p) === 'n1');
-
-  chega(oi('jmestre1', { nome: 'GM', mestre: true, t: 'eco' }, { coroaMestre: 7, coroaOculta: true }));
-  p = par('jmestre1');
-  check('esconder a coroa ainda esconde, com escolha e tudo', tierVisto(p) === null);
-
-  eventos.length = 0;
-  chega(oi('jfalso01', { nome: 'Esperto', t: 'eco' }, { coroaMestre: 9 }));
-  check('o forjado insistindo não gera nem o aviso de coroa', eventos.filter((e) => e.tipo === 'mudouCoroa').length === 0 &&
-        tierVisto(par('jfalso01')) === 'n1');
+  check('mostra de novo: `mudouCoroa` e a coroa do Mestre volta', eventos.filter((e) => e.tipo === 'mudouCoroa').length === 1 && tierVisto(p) === 'gm');
 
   eventos.length = 0;
   chega(oi('jcomum02', { nome: 'Bia' }, {}));

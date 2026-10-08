@@ -3483,20 +3483,25 @@ var JOGO = (typeof window !== 'undefined')
    * Models3D2 a abre (aoChegar), o bilhete vira a coroa 3D que gira, no mesmo
    * lugar — no herói e nos fantasmas. Em casa (file://) as dez já estão
    * abertas e nada disto acontece. */
+  /* 08/10 à noite: a COROA DO MESTRE (JOGO.Brasa.MESTRE, `modelo: 'coroa_gm'`) desce pela mesma
+   * porta — pedida só quando um Mestre está à vista (nunca no boot, e a pré-busca não a lista). */
   var ouveCoroas = false;
-  function esperaCoroa(nivel) {
+  function chaveDaCoroa(tier) {
+    return (tier && tier.modelo) || ('coroa_pvp_n' + (tier ? tier.nivel : ''));
+  }
+  function esperaCoroa(chave) {
     var m2 = M2(), Bd = JOGO.Bundle;
     if (!m2 || !m2.aoChegar) return;
     if (!ouveCoroas) {
       ouveCoroas = true;
       m2.aoChegar(function () { try { trocaCoroasQueChegaram(); } catch (eT) {} });
     }
-    try { if (Bd && Bd.pede) Bd.pede(['coroa_pvp_n' + nivel]); } catch (eP) {}
+    try { if (Bd && Bd.pede) Bd.pede([chave]); } catch (eP) {}
   }
   function trocaCoroa(corpo) {
     var e = corpo && corpo.coroaEspera;
     if (!e) return;
-    var coroa = modeloCoroa(e.nivel, e.tam);
+    var coroa = modeloCoroa(e.chave, e.tam);
     if (!coroa) return;                   // ainda não abriu: a próxima leva tenta de novo
     if (corpo.coroaPvp) {
       corpo.node.remove(corpo.coroaPvp);
@@ -3701,7 +3706,8 @@ var JOGO = (typeof window !== 'undefined')
     // (e no perfil 2D). A regra do novato mora na HUD.
     if (brasaTier && brasaTier.nivel) {
       var tamK = brasaTier.tam || 0.6;
-      var coroa = modeloCoroa(brasaTier.nivel, tamK);
+      // 08/10 à noite: a coroa do Mestre vem pela chave do modelo (`modelo`), as do ranking pela patente
+      var coroa = modeloCoroa(chaveDaCoroa(brasaTier), tamK);
       if (coroa) {
         // a coroa sobe um degrau quando há placa de guilda no caminho
         // a folga cresce com a coroa: uma Coroa X não pode sentar na placa
@@ -3732,9 +3738,9 @@ var JOGO = (typeof window !== 'undefined')
         }
         // 11/09: no jogo servido a coroa 3D pode não ter descido ainda — o
         // bilhete segura o lugar e vira a 3D quando ela abrir (esperaCoroa)
-        corpo.coroaEspera = { nivel: brasaTier.nivel, tam: tamK, tier: brasaTier,
+        corpo.coroaEspera = { nivel: brasaTier.nivel, chave: chaveDaCoroa(brasaTier), tam: tamK, tier: brasaTier,
                               base3d: topoPilha + 0.10 + tamK * 0.22 };
-        esperaCoroa(brasaTier.nivel);
+        esperaCoroa(chaveDaCoroa(brasaTier));
       }
     }
   }
@@ -3807,6 +3813,8 @@ var JOGO = (typeof window !== 'undefined')
    * `pecaUsuario`: o arquivo não promete base no zero nem centro no eixo.
    * Os materiais são do TEMPLATE (clone compartilha) — quem remover a coroa
    * não deve descartá-los, e o try/catch do cleanup já ignora Group. */
+  /* 08/10 à noite: `nivel` pode ser a PATENTE (número, 'coroa_pvp_n' + n — tests/coroas_3d.html
+   * chama assim) ou a CHAVE do modelo ('coroa_gm', a coroa do Mestre). */
   function modeloCoroa(nivel, tam) {
     var M2 = (typeof JOGO !== 'undefined') ? JOGO.Models3D2 : null;
     // `THREE` do módulo só é preenchido no init da praça; a PROVA chama esta
@@ -3814,7 +3822,7 @@ var JOGO = (typeof window !== 'undefined')
     var T = THREE || (typeof window !== 'undefined' ? window.THREE : null);
     if (!M2 || !M2.rawScene || !T) return null;
     var cena = null;
-    try { cena = M2.rawScene('coroa_pvp_n' + nivel); } catch (e) {}
+    try { cena = M2.rawScene(typeof nivel === 'string' ? nivel : 'coroa_pvp_n' + nivel); } catch (e) {}
     if (!cena) return null;
     var no = cena.clone(true);
     no.updateMatrixWorld(true);
@@ -5720,14 +5728,32 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
 
   /* A coroa de um fantasma, pelo resumo que a Rede entregou. Quem escondeu a coroa na ficha não
    * a usa aqui (a vontade viaja no resumo); sem partida é a Coroa I (04/10, a mesma régua do
-   * herói). 05/10: o Mestre conferido carrega a que escolheu no painel — a Rede já tirou o
-   * `coroaMestre` de quem não é Mestre, e aqui o `mestre` do perfil é conferido de novo. */
+   * herói). 08/10 à noite: o Mestre conferido (o `mestre: true` que SÓ o Relé carimba no perfil —
+   * a Rede derruba o campo de quem o forjar) carrega a coroa DELE, fixa (JOGO.Brasa.MESTRE);
+   * o `coroaMestre` que viajava no resumo de 05/10 a 08/10 não é mais lido. */
   function tierDoFantasma(perfil) {
     var r = perfil && perfil.resumo;
     if (!r || typeof r.brasa !== 'number' || !JOGO.Brasa || !JOGO.Brasa.coroaDe) return null;
-    return JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, r.coroaOculta === true,
-                              perfil.mestre === true ? r.coroaMestre : 0);
+    return JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, r.coroaOculta === true, perfil.mestre === true);
   }
+  /* 08/10 à noite, só as provas (tests/foto_coroa_gm.html): a coroa pendurada num vizinho — se é a
+   * 3D que gira, qual chave, e a cor do halo (o brilho da coroa do Mestre tem de ser VERMELHO). */
+  Hub._coroaFantasma = function (id) {
+    var reg = fantasmas[id], c = reg && reg.corpo;
+    if (!c) return null;
+    var k = c.coroaPvp, hl = k && k.userData && k.userData.halo;
+    var cor = null;
+    try { cor = hl ? '#' + hl.children[0].material.color.getHexString() : null; } catch (e) {}
+    return {
+      visivel: !!k, d3: !!(k && k.userData && k.userData.gira3d),
+      esperando: !!c.coroaEspera,
+      chave: c.coroaEspera ? c.coroaEspera.chave : (reg.tierF ? chaveDaCoroa(reg.tierF) : null),
+      mestre: !!(reg.tierF && reg.tierF.mestre),
+      giro: k ? +k.rotation.y.toFixed(3) : null,
+      baseY: k ? k.userData.baseY : null,
+      halo: cor, haloForca: hl ? hl.userData.forca : 0
+    };
+  };
   Hub._tierDoFantasma = tierDoFantasma;      // provas
   /* 05/10: a coroa do fantasma mudou sem ele sair do lugar (escondeu, mostrou, o Mestre trocou a
    * dele): repinta só a plaquinha, o corpo fica. */
@@ -5888,6 +5914,14 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
       titulo: tituloJogador,
       coroaVisivel: !!(heroi && heroi.coroaPvp),
       coroaNivel: brasaDoHeroi ? (brasaDoHeroi.nivel || null) : null,
+      // 08/10 à noite: a coroa do Mestre (fixa, chave 'coroa_gm') e a cor do halo dela (vermelho)
+      coroaMestre: !!(brasaDoHeroi && brasaDoHeroi.mestre),
+      coroaHalo: (function () {
+        try {
+          var hl = heroi && heroi.coroaPvp && heroi.coroaPvp.userData.halo;
+          return hl ? '#' + hl.children[0].material.color.getHexString() : null;
+        } catch (e) { return null; }
+      })(),
       // 11/09: a coroa é o modelo 3D que gira (e não o bilhete PNG de reserva)?
       coroa3d: !!(heroi && heroi.coroaPvp && heroi.coroaPvp.userData && heroi.coroaPvp.userData.gira3d),
       coroaGiro: (heroi && heroi.coroaPvp) ? +heroi.coroaPvp.rotation.y.toFixed(3) : null,

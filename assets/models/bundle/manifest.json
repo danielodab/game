@@ -1,5 +1,5 @@
 {
- "gerado": "2026-10-03T22:44:20",
+ "gerado": "2026-10-08T20:48:02",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -1313,6 +1313,14 @@
    "arquivo": "coroas-pvp-3d/coroa_pvp_n10.glb",
    "bytes": 666640,
    "hash": "0458560c01ea",
+   "grupo": "coroas"
+  },
+  {
+   "alvo": "MODELS",
+   "chave": "coroa_gm",
+   "arquivo": "coroas-pvp-3d/coroa_gm.glb",
+   "bytes": 796396,
+   "hash": "8f9e525e0e4a",
    "grupo": "coroas"
   },
   {
@@ -3690,8 +3698,8 @@
   "cenario-santuario.js": "tabelas/cenario-santuario.js",
   "cenario-sede.js": "tabelas/cenario-sede.js"
  },
- "totalBytes": 258489884,
- "totalBase64": 344653692,
+ "totalBytes": 259286280,
+ "totalBase64": 345715556,
  "grupos": {
   "base": {
    "itens": 92,
@@ -3734,8 +3742,8 @@
    "bytes": 10277312
   },
   "coroas": {
-   "itens": 10,
-   "bytes": 5496484
+   "itens": 11,
+   "bytes": 6292880
   },
   "evento:eco": {
    "itens": 3,

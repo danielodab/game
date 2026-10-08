@@ -1659,7 +1659,7 @@ var JOGO = (typeof window !== 'undefined')
         var tier = null;
         resumoCoroaOculta = j.coroaOculta === true;
         if (brasa && JOGO.Brasa) {
-          // 05/10: o Mestre carrega a que escolheu no painel (JOGO.GM.coroa; 0 = a de verdade)
+          // 08/10 à noite: o Mestre carrega a COROA DELE (JOGO.Brasa.MESTRE), fixa — a arte do dono
           tier = JOGO.Brasa.coroaDe(brasa.pts, brasa.partidas, souTopoDaArena(), resumoCoroaOculta, coroaDoMestre());
         }
         if (JOGO.Hub && JOGO.Hub.nomeia) {
@@ -6733,7 +6733,11 @@ var JOGO = (typeof window !== 'undefined')
       // que o "Mostrar a coroa acima da cabeça" pendura na praça). Antes dizia "sem coroa".
       var tierC = JOGO.Brasa ? JOGO.Brasa.coroaDe(pts, partidas, souTopoDaArena(), false, coroaDoMestre()) : null;
       var cx = el('div', 'char-arena');
-      if (tierC && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tierC.id]) {
+      if (tierC && tierC.mestre) {
+        // 08/10 à noite: a coroa do Mestre não tem bilhete PNG (é só 3D, na praça) — a ficha
+        // mostra a marca em vermelho, a cor do brilho dela
+        cx.appendChild(el('div', 'char-coroa char-coroa-mestre', '♛'));
+      } else if (tierC && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tierC.id]) {
         var imgC = document.createElement('img');
         imgC.src = 'data:image/png;base64,' + JOGO.COROAS_PVP[tierC.id];
         imgC.alt = tierC.nome;
@@ -6748,11 +6752,14 @@ var JOGO = (typeof window !== 'undefined')
       }
       var colA = el('div', 'char-col');
       colA.appendChild(el('div', 'char-coroa-nm',
-        tierC ? esc(tierC.nome) + (partidas > 0 ? '' : tr(' — a arena ainda não te viu lutar')) : tr('Arena')));
+        tierC ? esc(tierC.nome) + ((partidas > 0 || tierC.mestre) ? '' : tr(' — a arena ainda não te viu lutar')) : tr('Arena')));
       colA.appendChild(el('div', 'char-sub', (partidas === 1
         ? tr('<b>{pts}</b> pontos · {partidas} partida{a}', { pts: pts, partidas: partidas, a: JOGO.Brasa ? ' ' + tr('· temporada <b>{a}</b>', { a: JOGO.Brasa.temporadaDe(Date.now()) }) : '' })
         : tr('<b>{pts}</b> pontos · {partidas} partidas{a}', { pts: pts, partidas: partidas, a: JOGO.Brasa ? ' ' + tr('· temporada <b>{a}</b>', { a: JOGO.Brasa.temporadaDe(Date.now()) }) : '' }))));
-      if (tierC && tierC.brilho > 0) {
+      if (tierC && tierC.mestre) {
+        colA.appendChild(el('div', 'char-sub',
+          tr('a coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho')));
+      } else if (tierC && tierC.brilho > 0) {
         colA.appendChild(el('div', 'char-sub',
           tr('a coroa brilha — e o brilho cresce at\u00e9 a <b>Coroa X</b>')));
       } else if (tierC) {
@@ -8652,24 +8659,13 @@ var JOGO = (typeof window !== 'undefined')
   function souTopoDaArena() {
     return !!(topoArenaCache && topoArenaCache.souEu);
   }
-  /* A COROA DO MESTRE (05/10): a que ele escolheu no painel (aba Ferramentas), 1 a 10; 0 é "a de
-   * verdade" — e é 0 para toda conta que não é o Mestre (JOGO.GM.coroa confere). Só aparência. */
+  /* A COROA DO MESTRE (05/10 → 08/10 à noite): `true` quando esta conta é o Mestre (JOGO.GM.ativo —
+   * no ar, só a conta que o servidor marcou) e a régua (Brasa.coroaDe) devolve a coroa DELE,
+   * JOGO.Brasa.MESTRE, fixa; `false` para toda conta comum, que segue na escada dos pontos. Até
+   * 08/10 era o número da coroa do ranking escolhida no painel. Só aparência. */
   function coroaDoMestre() {
-    return (JOGO.GM && JOGO.GM.coroa) ? safe(function () { return JOGO.GM.coroa(); }, 0) : 0;
+    return !!(JOGO.GM && JOGO.GM.ativo && safe(function () { return JOGO.GM.ativo(); }, false));
   }
-  /* O painel do Mestre trocou a escolha: repinta SÓ a plaquinha do herói (Hub.nomeia; o corpo e
-   * a praça ficam como estão) e reanuncia o cartão, para os outros verem. Sem pintaConta: ela
-   * reentra na praça. */
-  UI.coroaDoMestreMudou = function () {
-    if (current !== 'hub') return false;
-    if (JOGO.Brasa && JOGO.Hub && JOGO.Hub.nomeia) {
-      var tierM = JOGO.Brasa.coroaDe(resumoBrasaPts, resumoBrasaPartidas, souTopoDaArena(), resumoCoroaOculta, coroaDoMestre());
-      safe(function () { JOGO.Hub.nomeia(undefined, undefined, tierM); return true; }, false);
-    }
-    safe(function () { reanunciaPerfil(); return true; }, false);
-    if (sheetName === 'char') safe(function () { sheetChar(); return true; }, false);
-    return true;
-  };
   function anotaTopoArena(linhas, meuId) {
     var melhor = null;
     linhas.forEach(function (e2) {
@@ -8925,10 +8921,9 @@ var JOGO = (typeof window !== 'undefined')
              // 14/09: o nível do herói mais forte da dupla da vez (a do Campo lá dentro) — a paridade do ataque
              forte: forteDaVez(),
              galeria: resumoGaleria, poco: resumoPoco, guilda: resumoGuilda };
-    // 05/10: a coroa que o Mestre escolheu viaja no resumo — o Relé a tira de quem não é Mestre
-    // conferido e a Rede de quem não veio carimbado; a conta comum nem a manda (é 0)
-    var coroaM = coroaDoMestre();
-    if (coroaM) resumo.coroaMestre = coroaM;
+    // 05/10–08/10: a coroa que o Mestre escolhia no painel viajava aqui (`coroaMestre`). Desde 08/10 à
+    // noite a coroa dele é fixa e quem a pendura nos outros é o `mestre: true` que o Relé carimba
+    // no perfil — nada mais viaja no resumo (o Relé e a Rede seguem tirando o campo de quem o forjar)
     return resumo;
   }
   /* os pontos de brasa entram no resumo por fora (são assíncronos no DB);
@@ -12022,10 +12017,16 @@ var JOGO = (typeof window !== 'undefined')
     // a coroa da arena — 04/10: em todo nível (sem partida, a Coroa I), como na plaquinha
     var tier = null;
     if (JOGO.Brasa && typeof r.brasa === 'number') {
-      // 05/10: o Mestre conferido aparece com a que escolheu (a Rede só deixa o campo passar nele)
-      tier = JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, false, par.mestre === true ? r.coroaMestre : 0);
+      // 08/10 à noite: o Mestre conferido (o `mestre` que o Relé carimba) aparece com a coroa DELE, fixa
+      tier = JOGO.Brasa.coroaDe(r.brasa, r.partidas, false, false, par.mestre === true);
     }
-    if (tier && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tier.id]) {
+    if (tier && tier.mestre) {
+      // a coroa do Mestre não tem bilhete PNG: a marca em vermelho e o nome dela
+      var lcM = el('div', 'perfil-coroa perfil-coroa-mestre');
+      lcM.appendChild(el('span', 'perfil-coroa-marca', '♛'));
+      lcM.appendChild(el('span', null, tr('<b>{a}</b> · fixa, só do Mestre', { a: esc(tier.nome) })));
+      col.appendChild(lcM);
+    } else if (tier && JOGO.COROAS_PVP && JOGO.COROAS_PVP[tier.id]) {
       var lc = el('div', 'perfil-coroa');
       var img = document.createElement('img');
       img.src = 'data:image/png;base64,' + JOGO.COROAS_PVP[tier.id];

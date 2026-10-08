@@ -2927,5 +2927,8 @@ JOGO.I18n.registra('es', { textos: {
   "título à sua escolha (até 23 letras)": "un título a tu gusto (hasta 23 letras)",
   "Usar": "Usar",
   "Escreva o título.": "Escribe el título.",
-  "O Mestre escolhe": "El Maestro elige"
+  "O Mestre escolhe": "El Maestro elige",
+  "Coroa do Mestre": "Corona del Maestro",
+  "a coroa do Mestre é fixa — só a sua conta a carrega, com o brilho vermelho": "la corona del Maestro es fija: solo tu cuenta la lleva, con el brillo rojo",
+  "<b>{a}</b> · fixa, só do Mestre": "<b>{a}</b> · fija, solo del Maestro"
 } });
