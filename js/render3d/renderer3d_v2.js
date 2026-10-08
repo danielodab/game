@@ -4327,7 +4327,14 @@ var JOGO = (typeof window !== 'undefined')
       var inTargets = false;
       if (targets) {
         for (var k = 0; k < targets.length; k++) {
-          ovTile(targets[k].x, targets[k].y, elCol, 0.34, 0.11, 0.80);
+          /* 08/10 à noite (engine.js, decisão 24 — o dono: "os jogadores podem atacar em células
+           * vazias"): o feitiço que fere aceita a casa vazia, então quase todo o alcance vira alvo.
+           * A casa com um CORPO à vista segue na cor forte de sempre ("quem dá para acertar"); a
+           * casa vazia (ou que esta tela vê vazia — a do invisível entra aqui, sem buraco) ganha a
+           * mesma cor do elemento mais fraca e num quadrado menor: lê como "o golpe sai aqui também". */
+          var corpo = safe(function () { return en.unitAt ? en.unitAt(st, targets[k].x, targets[k].y) : null; }, null);
+          var aVista = !!corpo && !ocultoTela(corpo);
+          ovTile(targets[k].x, targets[k].y, elCol, aVista ? 0.34 : 0.20, 0.11, aVista ? 0.80 : 0.66);
           if (hv && targets[k].x === hv.x && targets[k].y === hv.y) inTargets = true;
         }
       }

@@ -17,15 +17,22 @@
  *     Curta sumia antes de qualquer inimigo agir);
  *   · a invisibilidade posta num ALIADO fora do turno dele conta normal;
  *   · o golpe de dano tira das sombras, a armadilha do dono disparando não;
- *   · feitiço 'enemy' de casa única não mira o invisível do outro lado; o de
- *     casa 'any' e a área ainda pegam; o raio não salta para ele;
+ *   · 08/10 à noite (engine.js, decisão 24 — o dono: "os jogadores podem
+ *     atacar em células vazias.. não só em monstro, porque se o outro estiver
+ *     invisível ou ataque em área"): o feitiço 'enemy' de casa única que fere
+ *     ACEITA a casa vazia e a do invisível do outro lado — o invisível ali
+ *     leva o golpe (e segue invisível), sem ninguém o feitiço sai, gasta PA e
+ *     o diário diz "golpeia o vazio" (com ou sem invisível na área); a casa de
+ *     um aliado continua recusada, o 'ally' não cai no vazio, o chão livre do
+ *     needsEmptyTile segue "ocupado"; o de casa 'any' e a área ainda pegam; o
+ *     raio acerta o invisível na casa mirada e não salta para outro;
  *   · quem anda planeja pela casa dele, esbarra e para antes (sem gastar o PP do
  *     resto); a prévia não pinta âmbar por ele, mas ele ainda fixa;
  *   · pisar em armadilha do outro lado PARA o passo em cima dela e cobra só o
  *     trecho; a do próprio lado não para nem dispara;
  *   · a IA não desvia da armadilha do outro lado (antes: −60 e nunca pisava);
  *   · a marca do turno some no fim do turno e entra no hash enquanto vive;
- *   · Engine.VERSAO_REGRAS ≥ 5 (5 trouxe isto; 6 é o pacote de 03/10: equilíbrio, chão do Poço, Eco);
+ *   · Engine.VERSAO_REGRAS ≥ 10 (5 trouxe a invisibilidade; 10, a casa vazia);
  *   · a TELA: Game.ocultoNaTela / veArmadilha / eventoParaTela no solo (o lado
  *     'player' é o meu) — o monstro invisível some, a armadilha do monstro não
  *     aparece, a minha aparece, o lance de armadilha do outro lado perde a casa,
@@ -116,6 +123,7 @@ const E = J.Engine, AI = J.AI;
 
 // 02/10: a versão só SOBE (o pacote de 03/10 — equilíbrio, chão do Poço, Eco — a levou a 6)
 check('Engine.VERSAO_REGRAS é 5 ou mais (a invisibilidade e a armadilha mudaram o fim de uma sala)', E.VERSAO_REGRAS >= 5, E.VERSAO_REGRAS);
+check('Engine.VERSAO_REGRAS é 10 ou mais (08/10 à noite: atacar a casa vazia muda o fim de uma sala refeita)', E.VERSAO_REGRAS >= 10, E.VERSAO_REGRAS);
 check('Sombra Curta: invisível por 2 no dado (era 1)',
   (J.DATA.spells['espadachim-neutro-2'].effects || []).some((e) => e.type === 'invisible' && e.duration === 2));
 
@@ -200,19 +208,64 @@ for (const [id, nome] of [['espadachim-neutro-2', 'Sombra Curta'], ['espadachim-
         JSON.stringify({ traps: st.traps.length, invis: invis(E, x) }));
 })();
 
-/* 4. Mirar o invisível: casa única 'enemy' não, 'any' e área sim, raio não salta. */
+/* 4. Mirar o invisível. 08/10 à noite (decisão 24 do engine.js): casa única
+ *    'enemy' que fere ACEITA a casa vazia e a do invisível (ele apanha e segue
+ *    invisível); 'any' e área seguem pegando; o raio acerta o invisível na
+ *    casa mirada e não salta para outro. Até 07/10 a casa do invisível era
+ *    recusada ("não é alvo") — a regra velha, que estas provas cravavam. */
 (function () {
   const st = sala(E, 0, [{ classId: 'espadachim', heroId: 'h1' }]);
   const h = st.units.find((u) => u.kind === 'hero');
   const m = st.units.find((u) => u.defId === 'pv-alvo');
   ateAVezDe(E, st, h);
   h.x = 2; h.y = 3; m.x = 5; m.y = 3;
-  h.spells.push('pv-furo', 'pv-tiro', 'pv-bola', 'pv-raio');
+  h.spells.push('pv-furo', 'pv-tiro', 'pv-bola', 'pv-raio', 'pv-veu');
   m.effects.push({ type: 'invisible', duration: 3, sourceUid: m.uid });
-  check('feitiço \'enemy\' de casa única: a casa do invisível não é alvo', E.validTargetCell(st, h, J.DATA.spells['pv-furo'], 5, 3) === false);
-  check('castTargets não pinta a casa do invisível', !E.castTargets(st, h.uid, 'pv-furo').some((c) => c.x === 5 && c.y === 3));
-  h.pa = 20;
-  check('Engine.cast recusa o furo no invisível', E.cast(st, h.uid, 'pv-furo', 5, 3) === false);
+  const furo = J.DATA.spells['pv-furo'];
+  check('Engine.feiticoFere: o furo fere, o véu não', E.feiticoFere(furo) === true && E.feiticoFere(J.DATA.spells['pv-veu']) === false);
+  check('feitiço \'enemy\' de casa única: a casa do invisível É alvo (parece vazia, e a vazia vale)', E.validTargetCell(st, h, furo, 5, 3) === true);
+  check('e a casa vazia de verdade também é alvo', E.validTargetCell(st, h, furo, 4, 2) === true && E.unitAt(st, 4, 2) === null);
+  check('castTargets pinta a casa do invisível e a vazia', E.castTargets(st, h.uid, 'pv-furo').some((c) => c.x === 5 && c.y === 3) &&
+        E.castTargets(st, h.uid, 'pv-furo').some((c) => c.x === 4 && c.y === 2));
+  check('a casa de um ALIADO segue recusada no feitiço \'enemy\'', (function () {
+    const s2 = sala(E, 0, [{ classId: 'espadachim', heroId: 'h1' }, { classId: 'espadachim', heroId: 'h2' }]);
+    const hs = s2.units.filter((u) => u.kind === 'hero');
+    hs[0].x = 2; hs[0].y = 3; hs[1].x = 4; hs[1].y = 3;
+    return E.validTargetCell(s2, hs[0], furo, 4, 3) === false;
+  })());
+  check('o \'ally\' (o véu) NÃO cai na casa vazia', E.validTargetCell(st, h, J.DATA.spells['pv-veu'], 3, 3) === false &&
+        !E.castTargets(st, h.uid, 'pv-veu').some((c) => c.x === 3 && c.y === 3));
+  // o furo na casa do invisível: sai, gasta e FERE — e ele segue invisível
+  h.pa = 20; h.castsThisTurn = {}; h.cooldowns = {};
+  const hpI = m.hp;
+  E.events.length = 0;
+  check('Engine.cast aceita o furo na casa do invisível, gasta PA e fere quem está lá',
+        E.cast(st, h.uid, 'pv-furo', 5, 3) === true && h.pa === 19 && m.hp === hpI - 10, JSON.stringify({ pa: h.pa, hp: m.hp, hpI }));
+  check('o invisível ferido segue invisível (o golpe recebido não tira das sombras)', invis(E, m));
+  check('o diário diz "golpeia o vazio" MESMO tendo acertado o invisível (a falta da linha o entregaria)',
+        E.events.some((e) => e.type === 'log' && /golpeia o vazio/.test(e.text) && e.uid == null), JSON.stringify(E.events.map((e) => e.text || e.type)));
+  // o furo na casa vazia de verdade: sai, gasta e não fere ninguém
+  h.pa = 20; h.castsThisTurn = {}; h.cooldowns = {};
+  const hpV = m.hp;
+  E.events.length = 0;
+  check('o furo na casa vazia SAI: gasta PA, não fere ninguém e o diário diz "golpeia o vazio"',
+        E.cast(st, h.uid, 'pv-furo', 4, 2) === true && h.pa === 19 && m.hp === hpV &&
+        E.events.some((e) => e.type === 'log' && /golpeia o vazio/.test(e.text)) &&
+        !E.events.some((e) => e.type === 'damage'), JSON.stringify({ pa: h.pa, evs: E.events.map((e) => e.type) }));
+  check('o furo na casa vazia conta a vez por turno', (h.castsThisTurn['pv-furo'] || 0) === 1);
+  // o furo num alvo VISÍVEL não diz "vazio"
+  m.effects = [];
+  h.pa = 20; h.castsThisTurn = {}; h.cooldowns = {};
+  E.events.length = 0;
+  check('o furo num alvo à vista não diz "golpeia o vazio"',
+        E.cast(st, h.uid, 'pv-furo', 5, 3) === true && !E.events.some((e) => e.type === 'log' && /golpeia o vazio/.test(e.text)));
+  m.effects.push({ type: 'invisible', duration: 3, sourceUid: m.uid });
+  // a área largada onde não há ninguém: sai e gasta
+  h.pa = 20; h.castsThisTurn = {}; h.cooldowns = {};
+  const hpA = m.hp;
+  check('a área largada longe de todos SAI, gasta PA e não fere',
+        E.cast(st, h.uid, 'pv-bola', 2, 1) === true && h.pa === 19 && m.hp === hpA, JSON.stringify({ pa: h.pa }));
+  h.pa = 20; h.castsThisTurn = {}; h.cooldowns = {};
   const hp0 = m.hp;
   h.pa = 20;
   check('feitiço \'any\' na casa: pega às cegas', E.cast(st, h.uid, 'pv-tiro', 5, 3) === true && m.hp < hp0, m.hp + ' / ' + hp0);
@@ -234,6 +287,14 @@ for (const [id, nome] of [['espadachim-neutro-2', 'Sombra Curta'], ['espadachim-
   const saltos = E.events.filter((e) => e.type === 'chainHop').map((e) => e.uid);
   check('o raio em cadeia não salta para o invisível ao lado', saltos.indexOf(alvo.uid) >= 0 && saltos.indexOf('pv-extra') < 0,
         JSON.stringify(saltos));
+  // 08/10 à noite: o raio MIRADO na casa do invisível acerta ele (o corpo na casa), e dali salta ao visível
+  hh.pa = 20; hh.castsThisTurn = {}; hh.cooldowns = {};
+  const hpX = extra.hp;
+  E.events.length = 0;
+  E.cast(st2, hh.uid, 'pv-raio', 6, 3);
+  const saltos2 = E.events.filter((e) => e.type === 'chainHop').map((e) => e.uid);
+  check('o raio mirado na casa do invisível acerta ele e salta para o visível ao lado',
+        saltos2[0] === 'pv-extra' && saltos2.indexOf(alvo.uid) >= 0 && extra.hp < hpX && invis(E, extra), JSON.stringify(saltos2));
 })();
 
 /* 5. Andar: esbarra e para antes; a prévia não pinta âmbar por ele; ele fixa. */

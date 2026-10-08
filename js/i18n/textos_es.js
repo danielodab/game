@@ -2927,5 +2927,6 @@ JOGO.I18n.registra('es', { textos: {
   "título à sua escolha (até 23 letras)": "un título a tu gusto (hasta 23 letras)",
   "Usar": "Usar",
   "Escreva o título.": "Escribe el título.",
-  "O Mestre escolhe": "El Maestro elige"
+  "O Mestre escolhe": "El Maestro elige",
+  "{name} golpeia o vazio.": "{name} golpea el vacío."
 } });

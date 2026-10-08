@@ -1157,7 +1157,25 @@
       h.spells.push('t-only-enemy', 't-only-ally', 't-only-self');
       ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), foe.x, foe.y) === true, 'inimigo válido');
       ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), ally.x, ally.y) === false, 'aliado inválido');
-      ok(E.validTargetCell(st, h, E.spell('t-only-enemy'), 8, 6) === false, 'chão vazio inválido');
+      // 08/10 à noite (decisão 24 do engine.js, o dono: "os jogadores podem atacar em células
+      // vazias"): o 'enemy' que fere aceita a casa vazia — a casa vazia era inválida até aqui
+      ok(E.unitAt(st, 8, 6) === null && E.validTargetCell(st, h, E.spell('t-only-enemy'), 8, 6) === true, 'chão vazio VÁLIDO para o golpe que fere');
+      ok(E.castTargets(st, h.uid, 't-only-enemy').some(function (c) { return c.x === 8 && c.y === 6; }), 'castTargets traz a casa vazia');
+      ok(E.feiticoFere(E.spell('t-only-enemy')) === true && E.feiticoFere(E.spell('t-only-ally')) === false, 'feiticoFere: dano sim, cura não');
+      ok(E.validTargetCell(st, h, E.spell('t-only-ally'), 8, 6) === false, 'o \'ally\' não cai no chão vazio');
+      (function () {
+        var pa0 = h.pa;
+        E.events.length = 0;
+        ok(E.cast(st, h.uid, 't-only-enemy', 8, 6) === true && h.pa === pa0 - E.spell('t-only-enemy').paCost, 'o golpe no vazio SAI e gasta PA');
+        ok(!E.events.some(function (e) { return e.type === 'damage'; }), 'e não fere ninguém');
+        ok(E.events.some(function (e) { return e.type === 'log' && /golpeia o vazio/.test(e.text); }), 'o diário diz "golpeia o vazio"');
+        var foeHp = foe.hp;
+        foe.effects.push({ type: 'invisible', duration: 3, sourceUid: foe.uid });
+        E.events.length = 0;
+        ok(E.cast(st, h.uid, 't-only-enemy', foe.x, foe.y) === true && foe.hp < foeHp, 'a casa do invisível é "vazia" para quem mira — e ele apanha');
+        ok(E.events.some(function (e) { return e.type === 'log' && /golpeia o vazio/.test(e.text); }), 'o diário diz "golpeia o vazio" mesmo assim (não o entrega)');
+        foe.effects = [];
+      })();
       ok(E.validTargetCell(st, h, E.spell('t-only-ally'), ally.x, ally.y) === true, 'aliado válido');
       ok(E.validTargetCell(st, h, E.spell('t-only-ally'), foe.x, foe.y) === false, 'inimigo inválido');
       ok(E.validTargetCell(st, h, E.spell('t-only-self'), h.x, h.y) === true, 'próprio válido');

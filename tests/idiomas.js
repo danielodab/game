@@ -164,7 +164,7 @@ function joga(J, dungeonId, roomIndex, party, semente) {
   check('(d) ' + casos.length + ' salas: o cliente em inglês joga os MESMOS lances e chega ao MESMO hash do cliente em português', iguais === casos.length, dif);
   check('(d) o juiz refaz as salas do cliente em inglês e chega ao mesmo fim e hash', juizOk === casos.length, dif);
   check('(d) e a prova não é vazia: os nomes das unidades mudaram de idioma na batalha', nomesMudaram === casos.length);
-  check('(d) VERSAO_REGRAS segue 9', cliente('en').JOGO.Engine.VERSAO_REGRAS === 9);   // 07/10: os afixos de sala subiram a 8; 08/10: a Gema, 9
+  check('(d) VERSAO_REGRAS segue 10', cliente('en').JOGO.Engine.VERSAO_REGRAS === 10);   // 07/10: os afixos de sala subiram a 8; 08/10: a Gema, 9; 08/10 à noite: atacar a casa vazia, 10
 })();
 
 // ---- (e) a escolha do idioma

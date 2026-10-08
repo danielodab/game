@@ -1204,6 +1204,60 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
 - Provas: `node tests/palavroes.js` 12, `tests/rede.html` 17, `tests/titulos.html` 34,
   `node tests/juiz_economia.js` 53 (o Mestre passa, a conta comum cai).
 
+## 9-A.16 Atacar a casa vazia (08/10 à noite)
+
+O dono: "os jogadores podem atacar em células vazias.. não só em monstro, porque se o outro
+estiver invisível ou ataque em área". Até aqui (22/09, `VERSAO_REGRAS` 5) o feitiço `'enemy'` de
+casa única só passava com um inimigo VISÍVEL na casa: a casa do invisível do outro lado parecia
+chão para quem mirava (`Engine.ocultoDe`) e o lance era recusado sem gastar nada — o Ladino
+sumido só apanhava de área, de feitiço `'any'` ou por acaso, e o jogador não tinha como "chutar"
+onde ele estava.
+
+- **A regra, em uma frase:** o feitiço `'enemy'` que FERE aceita a casa vazia (dentro do
+  alcance, da linha e da visão de sempre); quem estiver nela leva o golpe, visível ou não; sem
+  ninguém, o feitiço sai mesmo assim, gasta PA, vezes por turno e recarga, e não acerta nada.
+- **Onde mora:** `validTargetCell` (engine.js, decisão 24 no topo do arquivo) — com
+  `targetSide: 'enemy'`, sem área, sem ocupante à vista e `Engine.feiticoFere(spell)` (ao
+  menos um efeito hostil: dano, raio, veneno, empurrão, puxão, raiz, marca, detonar, quebrar
+  escudo, maldição; hoje 102 de 102 feitiços `'enemy'` dos dados passam) a casa vale. O golpe em
+  si não mudou: `applyEffects` já batia em quem está nas casas da área sem perguntar se se vê, e
+  o invisível ferido SEGUE invisível (só o golpe que ELE dá o tira das sombras). O raio em cadeia
+  mirado na casa do invisível acerta ele (é o corpo na casa) e dali salta só para quem se vê —
+  o salto é automático, não é uma mira.
+- **O que NÃO muda, de propósito:** a casa de um ALIADO continua recusada no `'enemy'`
+  (nunca foi "qualquer casa"); `'ally'`, `'self'` e `needsEmptyTile` ficam como estavam — a
+  cura, o escudo e a bênção não caem no chão por um toque errado (PA jogado fora, e não há
+  invisível aliado a procurar: a invisibilidade nunca vai para o outro lado), e a casa do
+  invisível segue "ocupada" para invocar, saltar e armar (o aviso "há alguém que não se vê"
+  continua). A IA não muda: `validFrom` (ai.js) segue pedindo um corpo — no vazio o valor
+  seria zero, e mirar o invisível "sem ver" seria adivinhar (`castValue` já dá −1 a essa casa);
+  como a regra nova só ABRE casas, tudo o que a IA propõe o motor aceita.
+- **O diário:** `Engine.cast` escreve "{name} golpeia o vazio." (en/es) sempre que ninguém
+  VISÍVEL para quem lançou está na área do golpe — medido antes do golpe, dito depois da
+  linha "conjura". A linha sai igual com ou sem invisível ali: se só saísse quando não
+  acertou, a falta dela entregaria o escondido. A tela do outro lado continua sem a vida do
+  invisível na fila (hud.js) e sem os eventos dele (`Game.eventoParaTela`): acertar não revela.
+- **A tela (renderer3d_v2.js):** `castTargets` passa a trazer quase todo o alcance no feitiço
+  que fere, então a casa com um CORPO à vista fica na cor forte de sempre ("quem dá para
+  acertar") e a casa vazia — ou que esta tela vê vazia, a do invisível entra aqui sem buraco —
+  ganha a cor do elemento mais fraca, num quadrado menor ("o golpe sai aqui também"). O toque
+  continua em dois tempos no dedo (a mira e a confirmação), então tocar no chão por engano
+  não dispara. `Game.alvosNaTela` segue igual; a volta dela só faz diferença para quem pede
+  chão livre.
+- **A versão das regras:** `Engine.VERSAO_REGRAS` subiu para **10**. Um lance que a página de
+  antes recusava (e não gastava) agora sai, gasta e fere — a mesma lista de lances refeita
+  termina diferente. **O juiz tem de ser publicado ANTES da API** (docs/SEGURANCA.md §4.1): a
+  sala aberta com o bilhete v9 cai como `regras-mudaram`, não como fraude; a página velha que
+  ainda estiver aberta leva 409 ao abrir sala nova.
+- Provas: `node tests/invisivel_armadilha.js` 118 (era 106 — as 3 que cravavam "não é alvo"
+  viraram o contrário, e entraram a casa vazia com invisível, a vazia sem ninguém, a de aliado,
+  o `'ally'` no vazio, a área longe de todos, o raio mirado no invisível e o diário);
+  `node tests/idiomas.js` 58 (VERSAO_REGRAS 10); `tests/test_engine_v2.html` (o caso "chão
+  vazio inválido" virou "VÁLIDO para o golpe que fere", mais o lance no vazio e no invisível);
+  os demais do motor sem mudança (santuario_regras 94, regras_equilibrio 64, eco_motor 74,
+  poco_perigos 42, guerra_bancada 96, visao_mapas 274, afixos 39, elites 21, juiz_sala 9,
+  juiz_guerra 26).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

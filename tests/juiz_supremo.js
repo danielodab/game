@@ -177,13 +177,21 @@ if (jogo.meio) {
   check('a tentativa teve uma metade para provar a largada', false, 'acabou antes da 7ª rodada');
 }
 
-// o lance trocado diverge
+// o lance trocado diverge. 08/10 à noite (engine.js, decisão 24): o golpe 'enemy' mirado numa
+// casa VAZIA agora SAI — então "x + 3" já não garante um lance recusado (ok trocado → 'divergiu'):
+// o replay segue e cai mais adiante no caminho travado da rodada ('caminho-trocado'). A casa fora
+// do mapa é recusada em qualquer regra, e é ela que prova o 'divergiu' pelo `ok` do lance.
 const torto = JSON.parse(JSON.stringify(jogo.lances));
 const iCast = torto.findIndex((l) => l.a === 'c' && l.ok);
-if (iCast >= 0) torto[iCast].x = (torto[iCast].x + 3) % 18;
+if (iCast >= 0) torto[iCast].x = -1;
 const r4 = tenta(pedido(conta, HEROIS, SEMENTE, torto, jogo.hash));
 check('o lance trocado é recusado como divergência (a API não pontua)', r4 && r4.juiz && r4.motivo === 'divergiu',
       JSON.stringify(r4).slice(0, 200));
+const torto2 = JSON.parse(JSON.stringify(jogo.lances));
+if (iCast >= 0) torto2[iCast].x = (torto2[iCast].x + 3) % 18;
+const r4b = tenta(pedido(conta, HEROIS, SEMENTE, torto2, jogo.hash));
+check('o golpe trocado para outra casa (que pode sair no vazio, 08/10) TAMBÉM é recusado: divergência ou caminho travado',
+      r4b && r4b.juiz && (r4b.motivo === 'divergiu' || r4b.motivo === 'caminho-trocado'), JSON.stringify(r4b).slice(0, 200));
 const r5 = tenta(pedido(conta, HEROIS, SEMENTE, jogo.lances, jogo.hash + 1));
 check('o hash do fim mentido é recusado', r5 && r5.juiz && r5.motivo === 'divergiu', JSON.stringify(r5).slice(0, 200));
 const r6 = tenta(pedido(conta, ['bruxo'], SEMENTE, jogo.lances, jogo.hash));
