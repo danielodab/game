@@ -2830,5 +2830,7 @@ JOGO.I18n.registra('es', { textos: {
   "O seu título agora é {a}.": "Tu título ahora es {a}.",
   "Você saiu do pódio: o título de ranking saiu da plaquinha.": "Saliste del podio: el título de ranking salió de tu placa.",
   // ---- 08/10: a moldura do Mestre
-  "do Mestre": "del Maestro"
+  "do Mestre": "del Maestro",
+  // ---- 08/10: sair da conta pelo menu
+  "Sem conta do site para sair.": "No hay cuenta del sitio de la que salir."
 } });

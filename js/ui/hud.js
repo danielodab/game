@@ -987,6 +987,10 @@ var JOGO = (typeof window !== 'undefined')
       'btn-mini btn-ghost', function () { openSheet('contas'); }));
     // 02/10: a ficha das Configurações (som, tela, movimento) — antes não havia
     fichas.appendChild(btn(tr('Configurações'), 'btn-mini btn-ghost menu-config', function () { openSheet('config'); }));
+    // 08/10 (o dono): sair da conta DIRETO do menu, sem passar por Configurações → Conta e nuvem
+    if (safe(function () { return JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa(); }, false)) {
+      fichas.appendChild(btn(tr('Sair da conta'), 'btn-mini btn-ghost menu-sair-conta', function () { sairDaConta(); }));
+    }
     acts.appendChild(fichas);
     box.appendChild(acts);
 
@@ -11089,11 +11093,34 @@ var JOGO = (typeof window !== 'undefined')
     var conta = el('section', 'cfg-sec');
     conta.appendChild(el('h3', 'bk-tit', tr('Conta')));
     conta.appendChild(btn(tr('Contas e nuvem'), 'btn-ghost btn-block', function () { openSheet('contas'); }));
+    // 08/10: sair da conta sem entrar na ficha (o dono pediu o atalho direto)
+    if (safe(function () { return JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa(); }, false)) {
+      conta.appendChild(btn(tr('Sair da conta'), 'btn-ghost btn-block menu-sair-conta', function () { sairDaConta(); }));
+    }
     body.appendChild(conta);
     var ver = safe(function () { return window.SOTERRA_VERSAO.versao; }, null);
     body.appendChild(el('p', 'cfg-versao', tr('SOTERRA — Ecos do Mundo Enterrado{a}', { a: ver ? tr(' · versão {v}', { v: esc(ver) }) : '' })));
   }
 
+  /* SAIR DA CONTA (04/10, "sair é sair"; 08/10, o dono: "achei muito ruim trocar de conta: tem que ir em
+   * Configurações → Conta e nuvem → Sair — queria um botão no menu direto"): a mesma saída, num lugar só,
+   * chamada pela ficha Contas e pelo botão do menu. Pergunta antes; o save da conta sai deste navegador
+   * junto com a sessão e a página vai para a tela de entrar. */
+  function sairDaConta() {
+    var Sx = JOGO.Sessao, Nx = JOGO.Nuvem;
+    if (!Sx || !Nx || !Nx.sair) { toast(tr('Sem conta do site para sair.')); return; }
+    confirmSheet(tr('Sair da conta?'),
+      tr('Você sai desta conta neste navegador e o jogo dela fecha aqui. O progresso fica guardado no servidor: para voltar, entre de novo com a sua senha.'),
+      function () {
+        Nx.sair().then(function () {
+          if (Sx.semRecarga) { if (sheetName === 'contas') sheetContas(); return; }
+          safe(function () { return Sx.marcaVolta && Sx.marcaVolta(); }, false);   // no ar: entrar de novo volta ao jogo
+          safe(function () { window.sessionStorage.setItem(Sx.CHAVE_AVISO, Sx.FRASE_SAIU); return true; }, false);
+          safe(function () { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); return true; }, false);
+          safe(function () { location.href = Sx.paginaConta() + '#entrar'; return true; }, false);
+        });
+      });
+  }
   function sheetContas() {
     // 06/10 (somente online, "tem que exigir conta sempre"): NO AR não existe conta local — a lista, o
     // "Criar conta nova" e a conta local do Mestre são de casa e das provas (JOGO.Contas.noAr)
@@ -11161,19 +11188,7 @@ var JOGO = (typeof window !== 'undefined')
         }));
         // 04/10, "sair é sair": o save da conta sai deste navegador junto com a sessão (antes ficava, e o
         // jogo sem conta abria com ele); a página vai para a tela de entrar
-        linhaN.appendChild(btn(tr('Sair da conta'), '', function () {
-          confirmSheet(tr('Sair da conta?'),
-            tr('Você sai desta conta neste navegador e o jogo dela fecha aqui. O progresso fica guardado no servidor: para voltar, entre de novo com a sua senha.'),
-            function () {
-              Nx.sair().then(function () {
-                if (Sx.semRecarga) { sheetContas(); return; }
-                safe(function () { return Sx.marcaVolta && Sx.marcaVolta(); }, false);   // no ar: entrar de novo volta ao jogo
-                safe(function () { window.sessionStorage.setItem(Sx.CHAVE_AVISO, Sx.FRASE_SAIU); return true; }, false);
-                safe(function () { if (window.__boot && window.__boot.recarregando) window.__boot.recarregando('sessao'); return true; }, false);
-                safe(function () { location.href = Sx.paginaConta() + '#entrar'; return true; }, false);
-              });
-            });
-        }));
+        linhaN.appendChild(btn(tr('Sair da conta'), '', function () { sairDaConta(); }));
         caixaN.appendChild(linhaN);
         // 02/10: os direitos do titular (servidor/privacidade.py): os documentos, baixar os dados, excluir
         caixaN.appendChild(linksLegais());
