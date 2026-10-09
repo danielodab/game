@@ -436,7 +436,7 @@ var JOGO = (typeof window !== 'undefined')
     // 08/10: o prêmio diário de resgate (servidor/premio_diario.py)
     if (origem === 'diario') {
       if (d.tipo !== 'entregue') return { texto: tr('O prêmio diário não entrou aqui: ele volta na próxima abertura'), tipo: null };
-      var nomeD = safe(function () { return JOGO.Diario.nomeDoPremio(ent); }, '') || nome;
+      var nomeD = safe(function () { return JOGO.PremioDiario.nomeDoPremio(ent); }, '') || nome;
       return { texto: tr('Prêmio diário: {a}', { a: esc(nomeD) }), tipo: 'good' };
     }
     // 04/10: o presente de um amigo (servidor/loja.py, loja_presentear) — o pedido traz quem mandou
@@ -1515,7 +1515,7 @@ var JOGO = (typeof window !== 'undefined')
     // 08/10 (o dono: "ao logar já deve aparecer a aba do prêmio diário"): a ficha do prêmio abre sozinha
     // ao chegar à praça com o prêmio de hoje esperando — uma vez por dia nesta aba
     if (!sala) safe(function () {
-      var Dd = JOGO.Diario;
+      var Dd = JOGO.PremioDiario;          // 08/10 à noite: o prêmio diário (JOGO.Diario é o Calabouço do Dia)
       if (!Dd || !Dd.ler) return;
       Dd.ler().then(function (d) {
         if (!d || !d.hoje || d.hoje.resgatado || diarioAvisado === d.dia) return;
@@ -4674,7 +4674,7 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(btn(tr('Ver o Quadro de Missões'), 'btn-ghost btn-block', function () { openSheet('missoes'); }));
   }
   function diarioBloco(caixa) {
-    var Dd = JOGO.Diario;
+    var Dd = JOGO.PremioDiario;            // 08/10 à noite: o prêmio diário (JOGO.Diario é o Calabouço do Dia)
     if (!Dd || !Dd.ler) return;
     var bloco = el('div', 'diario');
     caixa.appendChild(bloco);

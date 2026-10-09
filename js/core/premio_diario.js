@@ -24,7 +24,10 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   var D = {};
-  JOGO.Diario = D;
+  // 08/10 à noite: o nome é PremioDiario — JOGO.Diario é o Calabouço do Dia (js/core/diario.js), e este módulo
+  // carregava DEPOIS dele e o apagava: o +50% de saque do dia sumia do cliente (o juiz seguia pagando) e o
+  // calendário do Mestre perdia o sorteio do dia (tests/gm_agenda.html foi quem acusou)
+  JOGO.PremioDiario = D;
 
   var cache = null, lidaEm = 0;
   D.CACHE_MS = 60 * 1000;

@@ -915,6 +915,9 @@ no 30º, 2 barras + 10 fragmentos. Tudo pela fila da loja, entregue na hora
 `barras_move` com ref `diario:<dia>`). Tabelas novas `premio_diario` e
 `premio_diario_resgates`. Ao chegar à praça com o prêmio esperando, um aviso.
 Prova: `python tests/premio_diario_api.py` (4 próprias; herda as da autoridade).
+**08/10 à noite:** o módulo é `JOGO.PremioDiario` — ele nascera como `JOGO.Diario` e, carregado depois
+de `diario.js`, apagava o Calabouço do Dia no cliente (o +50% de saque do dia sumia; o juiz seguia pagando;
+o calendário do Mestre perdia o sorteio do dia). `tests/gm_agenda.html` acusou.
 
 ## 9-A.6 Customizar: título, aura e moldura (08/10)
 
