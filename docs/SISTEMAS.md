@@ -1576,6 +1576,14 @@ que também encurta a trava do golpe `animLock`) — o relógio geral da cena (c
 em Configurações › Batalha › "Velocidade da batalha". Provas: `node tests/ritmo.js`, `fichas_fotos` (a opção
 na ficha e o fator ao trocar).
 
+## 9-A.25 Os menus nativos escuros (09/10)
+
+O dono, no painel do Mestre › Eventos: "esse menu do Mestre está ruim de enxergar". O `<select>` nativo abria
+a lista do sistema em branco com a letra clara do controle por cima. `html { color-scheme: dark }` em
+css/style.css faz o navegador desenhar a lista, a barra de rolagem e os `<input type=date|time>` no escuro, e
+`select option` ganha fundo e letra explícitos. O jogo é sempre escuro, então vale para tudo; o site tem o
+CSS próprio e não muda.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

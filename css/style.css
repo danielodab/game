@@ -4105,6 +4105,14 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
 
 /* Configurações · Gráficos (04/10) */
 .cfg-select { min-height: 44px; padding: 6px 10px; border-radius: 10px; font: inherit; color: #f2ead8; background: #1b2230; border: 1px solid rgba(230,181,60,.4); max-width: 100%; }
+/* 09/10 (o dono, no painel do Mestre › Eventos: "esse menu do Mestre está ruim de enxergar"): o <select> nativo
+   abria a LISTA do sistema em branco, com a letra clara do controle por cima — ilegível. `color-scheme: dark`
+   na raiz faz o Chrome, o Edge e o Firefox desenharem a lista (e a barra de rolagem, o calendário do <input
+   type=date>, o <input type=time>) no escuro; e as opções ganham fundo e letra explícitos para o que o
+   navegador ainda pintar por conta própria. O jogo é sempre escuro, então vale para tudo. */
+html { color-scheme: dark; }
+select option, select optgroup { background: #1b2230; color: #f2ead8; }
+select option:checked { background: #2c3850; color: #ffe9a8; }
 .cfg-recarrega { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .cfg-recarrega:empty { display: none; }
 
