@@ -1226,7 +1226,7 @@ class ProvaDaApi(unittest.TestCase):
             ('multiplicador 1', {'multiplicador': 1}),
             ('multiplicador True', {'multiplicador': True}),
             ('multiplicador "2"', {'multiplicador': '2'}),
-            ('multiplicador acima do teto do xp', {'multiplicador': 10.5}),
+            ('multiplicador acima do teto do xp', {'multiplicador': 20.5}),      # 09/10: o teto do XP é ×20
             ('multiplicador gigante', {'multiplicador': 10 ** 400}),
             ('vintém acima do teto', {'tipo': 'vintem', 'multiplicador': 10.01}),
             ('saque acima do teto', {'tipo': 'saque', 'multiplicador': 11}),
