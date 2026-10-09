@@ -2986,5 +2986,12 @@ JOGO.I18n.registra('en', { textos: {
   "De volta à descida com {a}.": "Back in the descent with {a}.",
   "{a} já não está nessa descida — a retomada acabou.": "{a} is no longer in that descent — the return is over.",
   "Não deu para voltar à batalha: {a} não respondeu.": "Couldn't return to the battle: {a} didn't answer.",
-  "{a} ainda está fora — a sala abre com os heróis dele marcados fora até ele voltar.": "{a} is still out — the room opens with their heroes marked out until they're back."
+  "{a} ainda está fora — a sala abre com os heróis dele marcados fora até ele voltar.": "{a} is still out — the room opens with their heroes marked out until they're back.",
+  // ---- 09/10: a velocidade da batalha (Configurações)
+  "Velocidade da batalha": "Battle speed",
+  "A pausa entre os passos dos monstros e as animações de andar e golpear. Não muda as regras nem o relógio da sua vez.": "The pause between the monsters' steps and the walking and striking animations. It changes neither the rules nor your turn clock.",
+  "Velocidade da batalha: {a}.": "Battle speed: {a}.",
+  "Rápida (×1,5)": "Fast (×1.5)",
+  "Muito rápida (×2)": "Very fast (×2)",
+  "Batalha": "Battle"
 } });

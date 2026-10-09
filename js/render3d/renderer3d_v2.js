@@ -5833,6 +5833,8 @@ var JOGO = (typeof window !== 'undefined')
     if (done) animQ.shift();
   }
 
+  function ritmoBatalha() { try { return (JOGO.Ritmo && JOGO.Ritmo.fator) ? (JOGO.Ritmo.fator() || 1) : 1; } catch (e) { return 1; } }
+  R._ritmoBatalha = ritmoBatalha;        // provas
   // ============================================================ LAÇO DE RENDER
   R.render = function (dt) {
     if (!ready || !renderer) return;
@@ -5860,10 +5862,13 @@ var JOGO = (typeof window !== 'undefined')
         if (JOGO.FX && JOGO.FX.setAmbient) { try { JOGO.FX.setAmbient(themeOf(st)); } catch (e) {} }
       }
       if (weatherId(st) !== weather.id) setWeather(weatherId(st));
-      updateAnims(dtv);
+      // 09/10: a velocidade da batalha (JOGO.Ritmo): a fila de animações e os clipes das unidades andam pelo fator;
+      // o relógio geral (nowT, o clima, a câmera) fica como está — é só o passo da luta que apressa
+      var dtb = dtv * ritmoBatalha();
+      updateAnims(dtb);
       syncUnits(st);
       applyQuality(Object.keys(unitNodes).length);
-      updateUnitNodes(st, dtv);
+      updateUnitNodes(st, dtb);
 
       var sig = overlaySignature(st);
       if (sig !== ovSig) { ovSig = sig; rebuildOverlays(st); }

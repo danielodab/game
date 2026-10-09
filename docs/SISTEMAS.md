@@ -1563,6 +1563,19 @@ lugares que o guardam — `AGENDA_TETOS` (servidor/api.py), `TETOS_AGENDA` (serv
 ("até ×20"), a leitura do servidor prende em 20 o que estiver acima, e o teto do XP comprado (×2) não muda.
 Provas: `juiz_grupo_xp` (×30 vale ×20), `agenda.html`, `servidor_api` (tetos e a linha ×90 presa em 20).
 
+## 9-A.24 A velocidade da batalha (09/10)
+
+O dono: "queria ter um modo de colocar a velocidade mais rápida um pouco dos monstros de cada luta, para
+agilizar as lutas". `js/core/ritmo.js` (`JOGO.Ritmo`): três níveis por aparelho — normal ×1, rápida ×1,5, muito
+rápida ×2 — guardados em `localStorage` `soterra-ritmo-v1` (o normal não ocupa o armário). É coisa de tela:
+o motor só conhece os lances e o juiz refaz a sala pelos lances, então nada muda de regra, nem o relógio de
+30 s da vez do jogador, nem a vez de quem caiu; em dupla cada um escolhe a sua. O fator vale em três lugares:
+a pausa entre os passos da IA (game.js, `AI_ACTION_DELAY / ritmoDaTela()`), a fila de animações e os clipes
+das unidades na batalha (renderer3d_v2 `R.render`: `dtb = dtv × fator` em `updateAnims` e `updateUnitNodes`,
+que também encurta a trava do golpe `animLock`) — o relógio geral da cena (clima, câmera) não. A opção fica
+em Configurações › Batalha › "Velocidade da batalha". Provas: `node tests/ritmo.js`, `fichas_fotos` (a opção
+na ficha e o fator ao trocar).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

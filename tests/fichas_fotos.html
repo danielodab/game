@@ -59,7 +59,7 @@
     'js/core/data/items_extra.js','js/core/data/items_selos.js','js/core/data/consumiveis.js',
     'js/core/vida.js','js/core/economia.js',
     'js/core/contas.js','js/core/sessao.js','js/core/gm.js','js/core/nomes.js','js/core/db.js',
-    'js/core/missoes.js','js/core/diario.js','js/core/agenda.js','js/core/poco.js',
+    'js/core/missoes.js','js/core/diario.js','js/core/agenda.js','js/core/ritmo.js','js/core/poco.js',
     'js/core/guilda.js','js/ui/brasao.js','js/core/mercado.js','js/core/rede.js','js/core/brasa.js',
     'js/core/titulos.js','assets/embedded/coroas-pvp.js','js/core/troca.js',
     'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
@@ -541,6 +541,23 @@
         TCfalso._cheia = false;
       });
     }).then(function () { JOGO.TelaCheia = TCvelho; }, function (e) { JOGO.TelaCheia = TCvelho; throw e; });
+
+    // ---- 09/10: a velocidade da batalha (Configurações › Batalha): o seletor existe, com os três níveis,
+    // e trocar grava por aparelho e muda o fator que a IA e o renderer leem
+    passo = passo.then(function () {
+      UI.closeSheet(); UI.openSheet('config');
+      var sel = painel().querySelector('select.cfg-ritmo'), Rt = JOGO.Ritmo;
+      check('Configurações › Batalha: o seletor da velocidade existe com os três níveis', !!sel && sel.options.length === 3 && !!Rt, sel ? sel.options.length : 'sem seletor');
+      if (!sel) return;
+      var antes = Rt.nivel();
+      sel.value = 'muito'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      check('trocar para "muito rápida" grava e o fator vira ×2', Rt.nivel() === 'muito' && Rt.fator() === 2 && localStorage.getItem(Rt.CHAVE) === 'muito', Rt.nivel() + '/' + Rt.fator());
+      sel.value = 'rapida'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      check('"rápida" dá ×1,5', Rt.fator() === 1.5);
+      sel.value = 'normal'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      check('"normal" volta a ×1 e sai do armário', Rt.fator() === 1 && localStorage.getItem(Rt.CHAVE) === null);
+      Rt.define(antes);
+    });
 
     // ---- o Tab dá a volta DENTRO da ficha (ela é diálogo modal): do último
     // controle para o primeiro, e Shift+Tab do primeiro para o último

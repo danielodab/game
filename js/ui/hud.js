@@ -11717,6 +11717,29 @@ var JOGO = (typeof window !== 'undefined')
     } else som.appendChild(el('p', 'empty', tr('O som não carregou neste aparelho.')));
     body.appendChild(som);
 
+    /* A VELOCIDADE DA BATALHA (09/10; o dono: "um modo de colocar a velocidade mais rápida um pouco dos monstros
+     * de cada luta, para agilizar as lutas"). Por aparelho (JOGO.Ritmo): a pausa entre os passos dos monstros e as
+     * animações de andar e golpear correm ×1, ×1,5 ou ×2. Não muda o motor, o juiz, nem o relógio da sua vez. */
+    var Rt = JOGO.Ritmo;
+    if (Rt && Rt.define) {
+      var bsec = el('section', 'cfg-sec');
+      bsec.appendChild(el('h3', 'bk-tit', tr('Batalha')));
+      var selR = document.createElement('select');
+      selR.className = 'cfg-select cfg-ritmo';
+      selR.setAttribute('aria-label', tr('Velocidade da batalha'));
+      Rt.ORDEM.forEach(function (n) {
+        var op = document.createElement('option'); op.value = n; op.textContent = tr(Rt.nome(n));
+        if (n === Rt.nivel()) op.selected = true;
+        selR.appendChild(op);
+      });
+      selR.addEventListener('change', function () {
+        Rt.define(selR.value);
+        toast(tr('Velocidade da batalha: {a}.', { a: tr(Rt.nome(Rt.nivel())) }), 'good');
+      });
+      selR.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+      bsec.appendChild(linhaConfig(tr('Velocidade da batalha'), tr('A pausa entre os passos dos monstros e as animações de andar e golpear. Não muda as regras nem o relógio da sua vez.'), selR));
+      body.appendChild(bsec);
+    }
     var tela = el('section', 'cfg-sec');
     tela.appendChild(el('h3', 'bk-tit', tr('Tela')));
     var TC = JOGO.TelaCheia;

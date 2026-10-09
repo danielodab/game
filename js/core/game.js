@@ -112,6 +112,10 @@ var JOGO = (typeof window !== 'undefined')
   JOGO.Game = Game;
 
   var AI_ACTION_DELAY = 0.25;   // segundos entre ações da IA (com Renderer)
+  // 09/10: A VELOCIDADE DA BATALHA (JOGO.Ritmo, por aparelho; o dono: "a velocidade mais rápida um pouco dos
+  // monstros, para agilizar as lutas"). Só a tela: a pausa entre os passos da IA encolhe pelo fator; o motor, o
+  // juiz e o relógio da vez do jogador não a conhecem
+  function ritmoDaTela() { try { return (JOGO.Ritmo && JOGO.Ritmo.fator) ? (JOGO.Ritmo.fator() || 1) : 1; } catch (e) { return 1; } }
   var PRE_SCREENS = ['menu', 'heroSelect', 'dungeonSelect', 'elementChoice'];
 
   Game.screen = 'menu';
@@ -1674,7 +1678,7 @@ var JOGO = (typeof window !== 'undefined')
     if (comTela) {
       if (ren.isBusy()) { aiTimer = 0; return; }
       aiTimer += d;
-      if (aiPlan && aiUid === u.uid && aiTimer < AI_ACTION_DELAY) return;
+      if (aiPlan && aiUid === u.uid && aiTimer < AI_ACTION_DELAY / ritmoDaTela()) return;
       if (!aiPlan || aiUid !== u.uid) { aiPlan = getPlanFor(u.uid); aiIdx = 0; aiUid = u.uid; aiTimer = 0; return; }
       iaUmaAcao(u);
       return;
