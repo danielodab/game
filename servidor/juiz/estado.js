@@ -28,7 +28,7 @@ const ECONOMIA = ['js/core/economia.js', 'js/core/progress.js', 'js/core/db.js',
 const CHAVE_SAVE = 'soterra-save-v2';
 const CHAVE_CONTA = 'soterra-conta-v1';
 const FUSO_BRASILIA_MIN = -180;
-const TETOS_AGENDA = { xp: 10, vintem: 10, pedras: 10, saque: 10, aviso: 1 };
+const TETOS_AGENDA = { xp: 20, vintem: 10, pedras: 10, saque: 10, aviso: 1 };   // 09/10: XP até ×20 (o dono: "o Mestre pode pôr evento de até ×20 de XP")
 const GUILDA_BONUS_FATOR = 1.15;       // o JOGO.Guilda.BONUS_FATOR de js/core/guilda.js (a prova confere)
 
 /* mulberry32: o mesmo gerador pequeno que o jogo já usa nas missões */

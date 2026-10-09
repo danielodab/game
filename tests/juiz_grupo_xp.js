@@ -131,8 +131,12 @@ check('o bônus ×10 sobe ainda mais', r10.ok && todosPositivos(x10) && ['ana', 
 
 const r30 = fecha({ geral: { xp: 30 } });
 const x30 = xpDe(r30);
-check('o "×30" do dono vale o TETO (×10): a mesma XP de ×10, nunca zero', r30.ok && todosPositivos(x30) && JSON.stringify(x30) === JSON.stringify(x10) &&
-      fatorAnunciado(r30) === 10, JSON.stringify({ x10, x30, fator: fatorAnunciado(r30) }));
+// 09/10 (o dono: "o Mestre pode pôr evento de até ×20 de XP"): o teto do XP é 20; o "×30" vale ×20, nunca zero
+const r20 = fecha({ geral: { xp: 20 } });
+const x20 = xpDe(r20);
+check('o "×30" do dono vale o TETO (×20): a mesma XP de ×20, mais que a de ×10, nunca zero', r30.ok && todosPositivos(x30) &&
+      JSON.stringify(x30) === JSON.stringify(x20) && ['ana', 'bia'].every((d) => ['sumo', 'curandeiro'].every((h) => x20[d][h] > x10[d][h])) &&
+      fatorAnunciado(r30) === 20, JSON.stringify({ x10, x20, x30, fator: fatorAnunciado(r30) }));
 
 // a régua do tempo mínimo desta sala (servidor/grupo.py: max(SALA_MIN_S, SALA_S_POR_TURNO × turnosJogador))
 const turnos = r1.turnosJogador;

@@ -1555,6 +1555,14 @@ intocada); o que mudou é o que a barra CONTA.
   `i.esc`, começando onde o PV acaba). A folha de foto cola as três barras em 2× e mostra a barra
   da HUD com o css do jogo.
 
+## 9-A.23 O evento de XP vai até ×20 (09/10)
+
+O dono: "o Mestre pode colocar evento de até ×20 de XP". O teto do tipo `xp` sobe de ×10 para ×20 nos três
+lugares que o guardam — `AGENDA_TETOS` (servidor/api.py), `TETOS_AGENDA` (servidor/juiz/estado.js) e `Ag.TETOS`
+(js/core/agenda.js); vintém, pedras e saque seguem em ×10. O formulário do painel lê o teto da agenda
+("até ×20"), a leitura do servidor prende em 20 o que estiver acima, e o teto do XP comprado (×2) não muda.
+Provas: `juiz_grupo_xp` (×30 vale ×20), `agenda.html`, `servidor_api` (tetos e a linha ×90 presa em 20).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

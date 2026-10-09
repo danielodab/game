@@ -61,7 +61,7 @@ recarregar sem estender o que venceu; e a escrita do Mestre vai com o token.</di
   function exemplo() {
     return {
       ok: true, agora: AGORA, fusoMin: -180, janelaDias: 14,
-      tetos: { xp: 10.0, vintem: 10.0, pedras: 10.0, saque: 10.0, aviso: 1.0 },
+      tetos: { xp: 20.0, vintem: 10.0, pedras: 10.0, saque: 10.0, aviso: 1.0 },
       ativos: [
         { id: 'e12', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2.0,
           calabouco: null, titulo: 'Quinta do XP', texto: 'Toda sala paga o dobro de experiência.',
@@ -203,7 +203,7 @@ recarregar sem estender o que venceu; e a escrita do Mestre vai com o token.</di
     Ag._injeta(resposta([ev('e1', 'xp', 90, null), ev('e2', 'drop', 3, null), ev('e3', 'vintem', 0.5, null),
                          ev('e4', 'saque', 70, 'cistern'), ev('e5', 'aviso', 5, null), ev('e6', 'pedras', 'muito', null)],
                         { fatores: { geral: { xp: 9, drop: 3, saque: 9 }, porCalabouco: {} } }));
-    check('servidor mandando XP ×90: preso no teto, dá 10', Ag.fator('xp') === 10);
+    check('servidor mandando XP ×90: preso no teto, dá 20 (09/10: o teto do XP subiu para ×20)', Ag.fator('xp') === 20);
     check('tipo desconhecido ("drop") é ignorado — nem fator, nem lista',
           Ag.fator('drop') === 1 && !Ag.ativos().some(function (e) { return e.tipo === 'drop'; }));
     check('multiplicador abaixo de 1 dá 1 (evento nunca tira)', Ag.fator('vintem') === 1);
@@ -211,7 +211,7 @@ recarregar sem estender o que venceu; e a escrita do Mestre vai com o token.</di
     check('aviso nunca multiplica', Ag.fator('aviso') === 1);
     check('multiplicador que não é número vira 1', Ag.fator('pedras') === 1);
     check('o `fatores` pronto do servidor NÃO é usado: o jogo recalcula da lista', Ag.fator('saque', 'greenhouse') === 1);
-    check('os tetos são os do contrato', JSON.stringify(Ag.TETOS) === JSON.stringify({ xp: 10, vintem: 10, pedras: 10, saque: 10, aviso: 1 }));
+    check('os tetos são os do contrato', JSON.stringify(Ag.TETOS) === JSON.stringify({ xp: 20, vintem: 10, pedras: 10, saque: 10, aviso: 1 }));
   });
 
   // 6. o relógio é o do servidor

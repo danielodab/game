@@ -2683,7 +2683,7 @@ var JOGO = (typeof window !== 'undefined')
     } catch (e) { return 1; }
   }
   // o teto do XP comprado (2,0): pergaminho/bônus e evento juntos não passam
-  // dele. 12/09: não é mais o teto do evento (que o Mestre sobe até ×10) —
+  // dele. 12/09: não é mais o teto do evento (que o Mestre sobe até ×20 desde 09/10) —
   // um evento acima de ×2 vale sozinho e o comprado pausa
   function tetoXp() {
     var t = null;

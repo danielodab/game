@@ -117,7 +117,7 @@ RANKING_CACHE = 30               # segundos que o GET /api/ranking fica guardado
 # 12/09, pedido do dono: "devo conseguir colocar o rate que eu quiser" — o
 # Mestre escolhe o número (mais de 1 até ×10); o ×10 só segura o zero a mais.
 # js/core/agenda.js tem a cópia destes números.
-AGENDA_TETOS = {'xp': 10.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0}
+AGENDA_TETOS = {'xp': 20.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0}   # 09/10: XP até ×20 (o dono)
 # A SEMANA DO SOTERRA (07/10; o dono: "quero um jogo que o jogador tenha motivo para voltar"). Um programa FIXO:
 # cada dia da semana (Brasília) tem um bônus próprio, publicado como evento do mundo (`semanais`, como a semana
 # do Eco) e pago pelo servidor (_fatores_no_ar). Os números são modestos de propósito — a economia é dura por

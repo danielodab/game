@@ -1155,7 +1155,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(status, 200, r)
         self.assertTrue(r['ok'])
         self.assertEqual((r['ativos'], r['proximos'], r['regras']), ([], [], []))
-        self.assertEqual(r['tetos'], {'xp': 10.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0})
+        self.assertEqual(r['tetos'], {'xp': 20.0, 'vintem': 10.0, 'pedras': 10.0, 'saque': 10.0, 'aviso': 1.0})   # 09/10: XP até ×20
         self.assertEqual(r['fatores'], {'geral': {}, 'porCalabouco': {}})
         self.assertEqual((r['fusoMin'], r['janelaDias']), (-180, 14))
         self.assertLessEqual(abs(r['agora'] - time.time()), 5)
@@ -1468,8 +1468,8 @@ class ProvaDaApi(unittest.TestCase):
         b.commit()
         b.close()
         g = self.agenda()
-        self.assertEqual(g['fatores']['geral'], {'xp': 10.0})
-        self.assertEqual(g['fatores']['porCalabouco']['cistern'], {'xp': 10.0, 'saque': 1.5})
+        self.assertEqual(g['fatores']['geral'], {'xp': 20.0})                      # 09/10: o teto do XP é ×20
+        self.assertEqual(g['fatores']['porCalabouco']['cistern'], {'xp': 20.0, 'saque': 1.5})
         self.assertTrue(all(1 <= e['multiplicador'] <= g['tetos'][e['tipo']] for e in g['ativos'] + g['proximos']))
         self.assertNotIn('drop', [e['tipo'] for e in g['ativos']])
         # a função pura: abaixo de 1 some, tipo desconhecido é ignorado, [inicio, fim)
@@ -1482,7 +1482,7 @@ class ProvaDaApi(unittest.TestCase):
         self.assertEqual(resolve([ev()], 100)['geral'], {'xp': 1.5})         # o início entra
         self.assertEqual(resolve([ev()], 200)['geral'], {})                   # o fim não
         self.assertEqual(resolve([ev(multiplicador=90), ev(tipo='saque', multiplicador=90)], 150)['geral'],
-                         {'xp': 10.0, 'saque': 10.0})
+                         {'xp': 20.0, 'saque': 10.0})                                   # 09/10: XP até ×20
         self.assertEqual(resolve([ev(calabouco='cistern', multiplicador=2), ev(multiplicador=1.5)], 150),
                          {'geral': {'xp': 1.5}, 'porCalabouco': {'cistern': {'xp': 2.0}}})
         self.limpa_agenda()
