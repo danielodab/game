@@ -1496,6 +1496,47 @@ Calabouço do Dia. Agora é UM MÊS por vez, em grade:
   e o botão da regra nova abrindo o seletor de calabouço) e a página de foto
   `tests/foto_calendario_gm.html` em 390 px (título `CALENDÁRIO GM n/n`).
 
+## 9-A.22 A barra de vida com o escudo em azul (09/10)
+
+O dono: "o escudo que o Minotauro dá deve somar à vida do personagem, mas a barra de vida deve
+ficar azul proporcionalmente ao tamanho da quantidade de escudo". Só a tela mudou — a regra do
+motor é a mesma (o escudo segue um efeito `shield` que absorve o dano antes do PV, `VERSAO_REGRAS`
+intocada); o que mudou é o que a barra CONTA.
+
+- **Uma barra só.** Antes a vida era a barra (hp/hpMax) e o escudo uma fita fininha azul-clara de
+  5 px em cima dela, com largura shield/hpMax — pequena, cortada em 100% e fácil de não ver. Agora
+  vida e escudo dividem a mesma barra: a escala é `total = max(hpMax, hp + escudo)`; o PV ocupa
+  `hp/total` na cor de sempre (verde do nosso lado, vermelho do inimigo, laranja abaixo de 34% —
+  **da vida**, não do total) e o escudo ocupa `escudo/total` em AZUL (`#6fb8ff`, com uma risca
+  clara separando-o do PV), encostado no fim do PV. Enquanto o escudo cabe no que falta de vida
+  ele preenche o trecho vazio; quando `hp + escudo` passa de `hpMax` a barra não corta — **estica a
+  escala** (um herói cheio de 150 com 80 de escudo mostra a vida em 150/230 e o azul no resto).
+  Sem escudo `total = hpMax` e a barra é exatamente a de antes. A fita de cima saiu.
+- **Onde mora a conta.** Duas funções gêmeas, de propósito uma em cada camada (a HUD não pode
+  depender do renderer existir): `barraVida(hp, hpMax, shield)` em `js/render3d/renderer3d_v2.js`
+  (exportada como `R.barraVida`, usada pelo `drawBar` do sprite em canvas da unidade) e
+  `fracoesVida(u)` em `js/ui/hud.js` (`UI._fracoesVida`), que devolve também `rot`, o texto do PV:
+  `"110 +30 / 150"` quando há escudo, `"110 / 150"` sem. A assinatura `sig` do `drawBar` já levava
+  o escudo, então a barra repinta quando ele entra ou cai.
+- **Toda barra de vida da batalha** segue a mesma conta: o sprite 3D (`drawBar`); o cartão da
+  unidade da vez (`barraPv(u)` = `bar('bar-hp', pv, rot, esc)` — o `bar()` da HUD ganhou o 4º
+  argumento `esc`, que acrescenta a `div.bar-esc` posicionada em `left = pv%` com `width = esc%`;
+  o chip "🛡 N" do canto saiu, e com ele o css `.shield-chip`); a fila da vez (`.tl-hp i.esc`); e o
+  painel do grupo (`.gl-vida i.esc` — `pintaGrupoLado` passou a carregar `esc` por linha, e ele
+  entra na assinatura `glSig`). O css de `.tl-hp` e `.gl-vida` ganhou `position: relative` para o
+  azul absoluto se encostar na vida. A ficha (`unitTipBody`) segue dizendo "Escudo: N" e o efeito
+  `shield` continua fora da lista de efeitos do cartão, porque já está na barra.
+- Prova: `tests/foto_escudo_barra.html` (título `ESCUDO NA BARRA n/n`, `window.__pronto`). Numa
+  sala real da Estufa o Minotauro lança o Escudo de Ombro (80) no herói ao lado; a página lê a
+  linha do meio do canvas da barra (`R._barraDe(uid)`, novo gancho só de prova) pixel a pixel e
+  cobra: vida cheia +80 estica (PV = hp/(hp+80) e azul = 80/(hp+80), sem trilho vazio, nada na
+  faixa da antiga fita); 40% +80 cabe (PV e azul em hp/total e 80/total, o resto trilho); o
+  Minotauro sem escudo mede hp/hpMax e não tem um pixel azul. Na HUD confere `UI._barraPv` pelos
+  estilos (`.bar-fill` em pv%, `.bar-esc` em left=pv% / width=esc%, o texto "hp +80 / hpMax", sem
+  `.shield-chip`) e a fila da vez pintada de verdade (`UI.update` → só o aliado com escudo tem o
+  `i.esc`, começando onde o PV acaba). A folha de foto cola as três barras em 2× e mostra a barra
+  da HUD com o css do jogo.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
