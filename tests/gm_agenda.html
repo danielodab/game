@@ -148,14 +148,85 @@ iframe{width:1100px;height:760px;border:0;display:block}
 
       clica(aba('Calendário'));
       p = painel();
-      check('Calendário: a regra da Cisterna em texto', /Todo sábado, 10:00–22:00 \(Brasília\)/.test(p.textContent));
-      var dias = [].slice.call(p.querySelectorAll('.ag-dia14'));
-      check('Calendário: 14 dias, cada um com o Calabouço do Dia', dias.length === 14 &&
-            dias.every(function (x) { return /Calabouço do Dia/.test(x.textContent); }), String(dias.length));
-      var fechados = (J.DATA.portaisFechados || []).map(function (id) { return Ag.nomeCalabouco(id); });
-      check('Calendário: o Calabouço do Dia nunca é portal fechado', dias.every(function (x) {
-        return fechados.every(function (nm) { return x.textContent.indexOf(nm) < 0; });
-      }), fechados.join(', '));
+      check('Calendário: a regra da Cisterna em texto (a lista "Toda semana")', /Todo sábado, 10:00–22:00 \(Brasília\)/.test(p.textContent));
+      // 08/10 à noite: o CALENDÁRIO EM GRADE (dono: "em formato de calendário, não em linhas") — um mês,
+      // 7 colunas, tudo em Brasília pelo relógio do servidor: setembro de 2026, o dia 10 (quinta) aceso
+      var cabs = [].slice.call(p.querySelectorAll('.ag-cal-grade .ag-cal-cab')).map(function (x) { return x.textContent; });
+      check('Calendário: a grade tem 7 colunas, de dom a sáb', cabs.join('|') === 'dom|seg|ter|qua|qui|sex|sáb', cabs.join('|'));
+      var mesEl = p.querySelector('.ag-cal-mes');
+      check('Calendário: o mês no alto é setembro de 2026 (o relógio do servidor, em Brasília)',
+            !!mesEl && mesEl.textContent === 'setembro 2026', mesEl && mesEl.textContent);
+      var celulas = [].slice.call(p.querySelectorAll('.ag-cal-dia[data-dia]'));
+      check('Calendário: 30 células de dia, de 01 a 30, cada uma na coluna do seu dia da semana',
+            celulas.length === 30 && celulas[0].getAttribute('data-dia') === '2026-09-01' && celulas[29].getAttribute('data-dia') === '2026-09-30' &&
+            p.querySelectorAll('.ag-cal-grade .ag-cal-dia.is-vazio').length === 2 + 3,   // 1/9 é terça: 2 vazias antes; 30/9 é quarta: 3 depois
+            celulas.length + ' células, ' + p.querySelectorAll('.ag-cal-grade .ag-cal-dia.is-vazio').length + ' vazias');
+      var acesos = [].slice.call(p.querySelectorAll('.ag-cal-dia.is-hoje')).map(function (x) { return x.getAttribute('data-dia'); });
+      check('Calendário: só o dia de hoje (qui 10/09) fica aceso', acesos.join(',') === '2026-09-10', acesos.join(','));
+      function cel(dia) { return p.querySelector('.ag-cal-dia[data-dia="' + dia + '"]'); }
+      var sabados = ['2026-09-05', '2026-09-12', '2026-09-19', '2026-09-26'];
+      check('Calendário: a Maré da Cisterna (todo sábado, 10:00) é um chip nos quatro sábados, com a hora e a cor do saque',
+            sabados.every(function (s) {
+              var ch = cel(s) && cel(s).querySelector('.ag-cal-chip.ag-t-saque');
+              return !!ch && ch.textContent === '10:00' && /Maré da Cisterna/.test(ch.title);
+            }));
+      check('Calendário: ... e em nenhum outro dia (a ocorrência já expandida pelo servidor não entra duas vezes)',
+            celulas.every(function (c) {
+              return sabados.indexOf(c.getAttribute('data-dia')) >= 0 || !c.querySelector('.ag-cal-chip.ag-t-saque');
+            }) && cel('2026-09-12').querySelectorAll('.ag-cal-chip').length === 1);
+      var chipXp = cel('2026-09-10') && cel('2026-09-10').querySelector('.ag-cal-chip.ag-t-xp');
+      check('Calendário: a Quinta do XP (no ar hoje) é um chip ×2 no dia 10, e só nele',
+            !!chipXp && chipXp.textContent === '×2' && !cel('2026-09-11').querySelector('.ag-cal-chip.ag-t-xp'), chipXp && chipXp.textContent);
+      // os 14 Calabouços do Dia de hoje em diante: o sorteio pela chave do dia de Brasília (diario.js), célula a célula
+      var certos = 0, errados = [];
+      for (var k = 0; k < 14; k++) {
+        var tsK = Date.UTC(2026, 8, 10 + k, 15);                   // o meio-dia de Brasília daquele dia
+        var esperado = J.Diario.hoje(tsK);
+        var cK = cel('2026-09-' + (10 + k));
+        var sg = cK && cK.querySelector('.ag-cal-cal');
+        if (cK && esperado && cK.getAttribute('data-calabouco') === esperado.dungeonId && !!sg &&
+            sg.title === 'Calabouço do Dia: ' + Ag.nomeCalabouco(esperado.dungeonId) && /^☀ [A-ZÁÉÍÓÚÂÊÔÃÕÇ]{1,3}$/.test(sg.textContent)) certos++;
+        else errados.push((10 + k) + ':' + (cK && cK.getAttribute('data-calabouco')) + '≠' + (esperado && esperado.dungeonId));
+      }
+      check('Calendário: os 14 Calabouços do Dia estão nas células certas — a sigla na célula e o nome inteiro no title', certos === 14, errados.join(' '));
+      check('Calendário: o Calabouço do Dia nunca é portal fechado', celulas.every(function (c) {
+        var id = c.getAttribute('data-calabouco');
+        return !!id && !J.DATA.portalFechado(id);
+      }));
+      // os detalhes: o dia de hoje já vem aberto embaixo da grade, com as linhas de sempre
+      var det = p.querySelector('.ag-cal-det');
+      check('Calendário: os detalhes de hoje vêm abertos — o Calabouço do Dia e a Quinta do XP no ar, com "Encerrar" desligado',
+            !!det && det.getAttribute('data-dia-det') === '2026-09-10' && /Calabouço do Dia/.test(det.textContent) &&
+            !!det.querySelector('[data-evento="e12"]') && det.querySelector('[data-evento="e12"] .ag-cancela').disabled === true,
+            det && det.textContent.slice(0, 160));
+      // o toque no sábado 12 marca a célula e abre a regra da Cisterna
+      clica(cel('2026-09-12'));
+      p = painel();
+      det = p.querySelector('.ag-cal-det');
+      check('Calendário: o toque no sábado 12 marca a célula e abre os detalhes com a regra da Cisterna (Cancelar desligado)',
+            !!det && det.getAttribute('data-dia-det') === '2026-09-12' && !!cel('2026-09-12') && cel('2026-09-12').classList.contains('is-sel') &&
+            !cel('2026-09-10').classList.contains('is-sel') && !!det.querySelector('[data-regra="3"]') &&
+            /Maré da Cisterna/.test(det.textContent) && /Todo sábado, 10:00–22:00/.test(det.textContent) &&
+            det.querySelector('[data-regra="3"] .ag-cancela').disabled === true, det && det.textContent.slice(0, 160));
+      // as setas: outubro não tem dia aceso e ganha o botão Hoje; a regra segue nos sábados de lá (3/10)
+      clica(p.querySelector('.ag-cal-prox'));
+      p = painel();
+      check('Calendário: › vai para outubro de 2026 — sem dia aceso, com o botão Hoje, e a regra segue nos sábados de lá',
+            p.querySelector('.ag-cal-mes').textContent === 'outubro 2026' && !p.querySelector('.ag-cal-dia.is-hoje') &&
+            !!p.querySelector('.ag-cal-hoje') && !!p.querySelector('.ag-cal-dia[data-dia="2026-10-03"] .ag-cal-chip.ag-t-saque') &&
+            !p.querySelector('.ag-cal-dia[data-dia="2026-10-02"] .ag-cal-chip'), p.querySelector('.ag-cal-mes').textContent);
+      clica(p.querySelector('.ag-cal-hoje'));
+      p = painel();
+      check('Calendário: "Hoje" volta a setembro, com o 10 aceso e tocado de novo',
+            p.querySelector('.ag-cal-mes').textContent === 'setembro 2026' && !!p.querySelector('.ag-cal-dia.is-hoje.is-sel[data-dia="2026-09-10"]'));
+      // o formulário da regra nova fica recolhido num botão, para a grade ter espaço
+      check('Calendário: o formulário da regra nova vem recolhido (sem o seletor de calabouço nem o "Pôr no calendário")',
+            !p.querySelector('select.ag-sel') && !p.querySelector('.ag-envia') && !!p.querySelector('.ag-cal-nova'));
+      clica(p.querySelector('.ag-cal-nova'));
+      p = painel();
+      check('Calendário: "Nova regra de toda semana" abre o formulário com os sete dias e o "Pôr no calendário" (desligado sem sessão)',
+            p.querySelectorAll('.ag-dia-b').length === 7 && !!p.querySelector('.ag-envia') && p.querySelector('.ag-envia').disabled === true &&
+            /Pôr no calendário/.test(p.querySelector('.ag-envia').textContent));
       var selCal = [].slice.call(p.querySelectorAll('select.ag-sel')).filter(function (s2) {
         return [].slice.call(s2.options).some(function (o) { return o.value === 'poco'; });
       })[0];

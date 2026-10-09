@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: o calendário em grade do Mestre em 390 px</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:390px;height:844px;border:0;display:block}</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (08/10 à noite): a sub-aba CALENDÁRIO da aba Eventos do painel único do Mestre, em
+     390 px — a grade do mês (dono: "um calendário em formato de calendário, não em linhas"). O jogo
+     abre com a chave do Mestre e o save na memória (?sandbox=1), o servidor de mentira do gancho
+     Sessao._fetch devolve o mundo de tests/gm_agenda.html (a Quinta do XP no ar, a Maré da Cisterna
+     todo sábado, a semana do SOTERRA) e o relógio é qui 10/09/2026 09:00 de Brasília. O título diz
+     quantas das cobranças da grade passaram (CALENDÁRIO GM n/n). -->
+<iframe id="tela"></iframe>
+<script>
+(function () {
+  'use strict';
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&gm=mestre-do-fundo&snap=1&graficos=baixa&foto-calendario';
+  var AGORA = 1789041600;                       // qui 10/09/2026 09:00 de Brasília
+  function mundo() {
+    return {
+      ok: true, agora: AGORA, fusoMin: -180, janelaDias: 14,
+      tetos: { xp: 10.0, vintem: 10.0, pedras: 10.0, saque: 10.0, aviso: 1.0 },
+      ativos: [{ id: 'e12', origem: 'pontual', regra: null, tipo: 'xp', multiplicador: 2.0, calabouco: null,
+                 titulo: 'Quinta do XP', texto: 'Toda sala paga o dobro de experiência.', inicio: 1789038000, fim: 1789092000 }],
+      proximos: [{ id: 'r3@1789218000', origem: 'calendario', regra: 3, tipo: 'saque', multiplicador: 1.5,
+                   calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '', inicio: 1789218000, fim: 1789261200 },
+                 { id: 'e40', origem: 'pontual', regra: null, tipo: 'pedras', multiplicador: 2.0, calabouco: 'greenhouse',
+                   titulo: 'Semana de Pedra', texto: '', inicio: AGORA + 4 * 86400, fim: AGORA + 6 * 86400 }],
+      regras: [{ id: 3, tipo: 'saque', multiplicador: 1.5, calabouco: 'cistern', titulo: 'Maré da Cisterna', texto: '',
+                 dias: [6], hora: '10:00', duracaoMin: 720, vigenteDe: null, vigenteAte: null },
+               { id: 4, tipo: 'vintem', multiplicador: 1.5, calabouco: null, titulo: 'Vintém de Terça', texto: '',
+                 dias: [2, 4], hora: '19:00', duracaoMin: 180, vigenteDe: null, vigenteAte: null }],
+      programa: [
+        { dia: 0, tipo: 'xp', multiplicador: 1.25, calabouco: null, titulo: 'Domingo de Descanso', texto: '' },
+        { dia: 1, tipo: 'vintem', multiplicador: 1.25, calabouco: null, titulo: 'Segunda do Vintém', texto: '' },
+        { dia: 2, tipo: 'pedras', multiplicador: 1.25, calabouco: null, titulo: 'Terça das Pedras', texto: '' },
+        { dia: 3, tipo: 'saque', multiplicador: 1.25, calabouco: 'dia', titulo: 'Quarta do Saque', texto: '' },
+        { dia: 4, tipo: 'xp', multiplicador: 1.25, calabouco: null, titulo: 'Quinta Forte', texto: '' },
+        { dia: 5, tipo: 'vintem', multiplicador: 1.25, calabouco: null, titulo: 'Sexta Farta', texto: '' },
+        { dia: 6, tipo: 'saque', multiplicador: 1.25, calabouco: null, titulo: 'Sábado do Saque', texto: '' }
+      ],
+      fatores: { geral: { xp: 2.0 }, porCalabouco: {} }
+    };
+  }
+  function http(st, j) {
+    return Promise.resolve({ status: st, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(j))); } });
+  }
+  var J, U, t0 = Date.now();
+  (function espera() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      var d0 = quadro.contentWindow.document;
+      pronto = !!(J && J.UI && J.UI.openSheet && J.Agenda && J.Sessao && J.GM && J.GM.ativo() && d0.querySelector('.screen-menu.is-on'));
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) { document.title = 'ERRO sem jogo'; window.__pronto = true; return; }
+      return setTimeout(espera, 250);
+    }
+    U = J.UI;
+    var S = J.Sessao, Ag = J.Agenda;
+    Ag._agora = function () { return AGORA * 1000; };
+    S._fetch = function (url, pedido) {
+      if (pedido.method === 'GET' && /\/api\/eventos$/.test(url)) return http(200, mundo());
+      return http(404, { ok: false, erro: 'rota desconhecida' });
+    };
+    S.guarda({ token: 'tok-m', conta: { id: 1, nome: 'Dono', gm: true } });
+    Ag.atualizar().then(function () {
+      U.openSheet('gmagenda');
+      var d = quadro.contentWindow.document;
+      function painel() { return d.querySelector('.pm-capa .pm-corpo'); }
+      var abaCal = [].slice.call(painel().querySelectorAll('.ag-aba')).filter(function (b) { return b.textContent.trim() === 'Calendário'; })[0];
+      if (abaCal) abaCal.click();
+      setTimeout(function () {
+        var p = painel();
+        var n = 0, de = 6;
+        if (p && p.querySelectorAll('.ag-cal-grade .ag-cal-cab').length === 7) n++;
+        if (p && p.querySelector('.ag-cal-mes') && p.querySelector('.ag-cal-mes').textContent === 'setembro 2026') n++;
+        if (p && p.querySelectorAll('.ag-cal-dia.is-hoje[data-dia="2026-09-10"]').length === 1) n++;
+        if (p && ['2026-09-05', '2026-09-12', '2026-09-19', '2026-09-26'].every(function (s) {
+          return !!p.querySelector('.ag-cal-dia[data-dia="' + s + '"] .ag-cal-chip.ag-t-saque');
+        })) n++;
+        if (p && p.querySelectorAll('.ag-cal-dia[data-dia] .ag-cal-prog').length === 30) n++;
+        if (p && p.querySelector('.ag-cal-det[data-dia-det="2026-09-10"] [data-evento="e12"]')) n++;
+        // a grade cabe na largura: nenhuma célula passa da borda do painel
+        var larguras = p ? [].slice.call(p.querySelectorAll('.ag-cal-dia[data-dia]')).map(function (c) { return c.getBoundingClientRect().right; }) : [];
+        var pr = p ? p.getBoundingClientRect().right : 0;
+        var cabe = larguras.length && larguras.every(function (r) { return r <= pr + 1; });
+        document.title = 'CALENDÁRIO GM ' + n + '/' + de + (cabe ? ' · cabe em 390' : ' · ESTOURA a largura') +
+          ' | ' + (p ? p.querySelectorAll('.ag-cal-dia[data-dia]').length + ' dias' : 'sem painel');
+        window.__pronto = true;
+      }, 600);
+    });
+  })();
+})();
+</script>
+</body>
+</html>

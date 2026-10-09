@@ -1394,6 +1394,50 @@ EQUIPE (líder Mestre) não tem teto (`vagas: null`). A ficha e a lista trazem `
 "12/15 membro(s)"; na lista de quem procura guilda o botão vira "Cheia". Prova: `guilda_api`
 test_07c.
 
+## 9-A.20 O calendário em grade no painel do Mestre (08/10 à noite)
+
+O dono: "no painel do Mestre, em Eventos, faça um calendário em formato de calendário, não em
+linhas.. melhor para visualizar". A sub-aba Calendário de `UI.gmAgendaEm` (js/ui/hud.js) era uma
+pilha de listas — toda semana, no ar, próximos 14 dias, a semana do SOTERRA e os 14 dias do
+Calabouço do Dia. Agora é UM MÊS por vez, em grade:
+
+- **A grade** (`.ag-cal-grade`): 7 colunas com as cabeças de `Ag.DIA_CURTO` (dom … sáb), uma linha
+  por semana, as células vazias antes do dia 1 e depois do último (`is-vazio`), setas ‹ › e o nome
+  do mês/ano no alto (`.ag-cal-topo`; o botão "Hoje" aparece quando se saiu do mês de hoje). Tudo
+  no relógio de BRASÍLIA lido pelo relógio do servidor (`Ag.agora() + Ag.FUSO_MIN`): é o fuso das
+  regras e o do sorteio do Calabouço do Dia (diario.js, `chaveDoDia`), então o PC com a hora torta
+  não desloca nenhum dia. O dia de hoje fica aceso (`is-hoje`, borda dourada) e o tocado marcado
+  (`is-sel`). O estado (`gmAgendaCal`: ano, mês, dia tocado, formulário aberto) vive fora da pintura.
+- **Cada célula** (`button.ag-cal-dia`, com `data-dia="AAAA-MM-DD"` e `data-calabouco`): o número;
+  a sigla do Calabouço do Dia (☀ + as iniciais do nome sem artigos — "A Cisterna dos Afogados" →
+  CA; o nome inteiro no `title`); um chip colorido por tipo para cada ocorrência de regra semanal
+  que cai naquele dia da semana (o texto é a HORA) e para cada evento agendado que toca o dia
+  (o fator — "!" no aviso), no máximo 3 e depois "+N"; e a faixa de cor no pé com o bônus fixo da
+  semana do SOTERRA daquele dia da semana (`Ag.programa()`). As cores por tipo são as do site
+  (`.ag-t-xp` ouro, vintém laranja, pedras verde-água, saque lilás, aviso cinza), com a legenda
+  embaixo da grade. Em 390 px a célula tem ~46 px: número, sigla e chips de 8,5 px.
+- **Sem contar duas vezes**: as ocorrências que o servidor já expandiu dentro da janela de 14 dias
+  (origem `calendario` e `programa`) NÃO entram pela lista de eventos — a regra (`Ag.regras()`,
+  respeitando `vigenteDe/vigenteAte`) e o programa desenham o dia delas em QUALQUER mês, inclusive
+  além da janela; da lista só vêm os pontuais e os fixos do Eco (`Ag.ativos()` + `Ag.proximos()`),
+  que só existem dentro da janela. Mês que vem, portanto, mostra as regras e o programa, não os
+  eventos pontuais que o servidor ainda não expandiu.
+- **O toque num dia** repinta a aba com os detalhes embaixo da grade (`.ag-cal-det`, com
+  `data-dia-det`): o Calabouço do Dia e o afixo daquele dia, a linha do bônus fixo, e as linhas de
+  sempre — `linhaRegra` (com Cancelar) e `linhaEvento` (Encerrar/Cancelar), as mesmas das listas
+  das outras sub-abas (`listaEventos` ganhou o 4º argumento `alvo`, o contêiner). Abaixo dos
+  detalhes segue a lista "Toda semana" com todas as regras, para ver as de vários dias de uma vez.
+- **A regra nova** fica recolhida: o botão "Nova regra de toda semana" (`.ag-cal-nova`) abre o
+  formulário de sempre (dias, hora de Brasília, duração) com o "Pôr no calendário"; o 201 recolhe
+  o formulário de novo. As sub-abas Agora e Agendar não mudam; a faixa do Acampamento segue
+  apontando o site.
+- Provas: `tests/gm_agenda.html` (as checks "Calendário: …" cobram a grade — 7 cabeças, o mês de
+  setembro de 2026, o dia 10 aceso, a Maré da Cisterna nos quatro sábados e em nenhum outro dia, os
+  14 Calabouços do Dia conferidos contra `Diario.hoje` nas células certas, nenhum portal fechado, os
+  detalhes de hoje com a Quinta do XP no ar, o toque no sábado 12 abrindo a regra, as setas de mês
+  e o botão da regra nova abrindo o seletor de calabouço) e a página de foto
+  `tests/foto_calendario_gm.html` em 390 px (título `CALENDÁRIO GM n/n`).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

@@ -13498,6 +13498,10 @@ var JOGO = (typeof window !== 'undefined')
    * agenda (xp 2 · vintém 1,5 · pedras 2 · saque 1,5 · aviso 1).
    * 03/10: é a aba Eventos do painel único do Mestre (UI.gmAgendaEm). */
   var gmAgendaAba = 'agora';
+  /* 08/10 à noite: o estado do CALENDÁRIO EM GRADE — o mês à vista (Brasília), o dia tocado (chave
+   * 'AAAA-MM-DD') e se o formulário da regra nova está aberto. Mês/dia nulos = os de hoje, decididos
+   * na pintura (o relógio do servidor pode chegar depois do primeiro desenho). */
+  var gmAgendaCal = { ano: null, mes: null, dia: null, form: false };
   var gmAgendaRasc = { tipo: 'xp', mult: 2, cal: '', titulo: '', texto: '', horas: 2,
                        ini: '', fim: '', dias: [6], hora: '10:00', durH: 12 };
   // 12/09: o multiplicador é livre (mais de 1 até o teto do tipo); estes são só os atalhos
@@ -13650,40 +13654,62 @@ var JOGO = (typeof window !== 'undefined')
       R.mult = m;
       return true;
     }
-    // uma lista de eventos; o pontual ganha "encerrar" (no ar) ou "cancelar" (futuro)
-    function listaEventos(titulo, evs, vazio) {
-      body.appendChild(el('h3', 'hs-sec', esc(titulo)));
+    // uma linha de evento; o pontual ganha "encerrar" (no ar) ou "cancelar" (futuro)
+    function linhaEvento(e) {
+      var agoraMs = Ag.agora();
+      var noArAgora = e.inicio * 1000 <= agoraMs;
+      var row = el('div', 'ms-linha ag-linha');
+      row.setAttribute('data-evento', e.id);
+      var tx = el('div', 'ms-tx');
+      tx.appendChild(el('div', 'ms-nome', '<b>' + esc(e.titulo) + '</b> <i>· ' + esc(Ag.rotulo(e)) +
+        ' · ' + esc(Ag.nomeCalabouco(e.calabouco)) + '</i>'));
+      var quando = noArAgora
+        ? tr('no ar · termina em {a} ({b})', { a: Ag.falta(e.fim * 1000 - agoraMs), b: Ag.quando(e.fim) })
+        : tr('{a} → {b} (Brasília)', { a: Ag.quando(e.inicio), b: Ag.quando(e.fim) });
+      tx.appendChild(el('div', 'ms-prog', esc(quando) + (e.origem === 'calendario' ? tr(' · da regra semanal') : '') +
+        (e.texto ? ' — ' + esc(e.texto) : '')));
+      row.appendChild(tx);
+      var alvo = Ag.alvoDe(e);
+      if (alvo && alvo.alvo === 'evento') {
+        row.appendChild(desliga(btn(noArAgora ? tr('Encerrar') : tr('Cancelar'), 'btn-mini btn-ghost ag-cancela', function () {
+          ctx.confirma(noArAgora ? tr('Encerrar o evento agora?') : tr('Cancelar o evento?'),
+            tr('<b>{a}</b> ({b}) sai do ar para todo mundo. Não há como desfazer — dá para ligar de novo.', { a: esc(e.titulo), b: esc(Ag.rotulo(e)) }),
+            function () {
+              Ag.cancelar(alvo.alvo, alvo.id).then(function (r) {
+                resposta(r, noArAgora ? tr('Evento encerrado.') : tr('Evento cancelado.'));
+              });
+            });
+        })));
+      }
+      return row;
+    }
+    // uma lista de eventos com título, em `alvo` (o corpo da aba quando não vem — 08/10: os detalhes
+    // do dia tocado no calendário em grade reaproveitam as mesmas linhas)
+    function listaEventos(titulo, evs, vazio, alvo) {
+      var onde = alvo || body;
+      onde.appendChild(el('h3', 'hs-sec', esc(titulo)));
       var caixa = el('div', 'ms-caixa ag-lista');
       if (!evs.length) caixa.appendChild(el('p', 'inv-dica', esc(vazio)));
-      var agoraMs = Ag.agora();
-      evs.forEach(function (e) {
-        var noArAgora = e.inicio * 1000 <= agoraMs;
-        var row = el('div', 'ms-linha ag-linha');
-        row.setAttribute('data-evento', e.id);
-        var tx = el('div', 'ms-tx');
-        tx.appendChild(el('div', 'ms-nome', '<b>' + esc(e.titulo) + '</b> <i>· ' + esc(Ag.rotulo(e)) +
-          ' · ' + esc(Ag.nomeCalabouco(e.calabouco)) + '</i>'));
-        var quando = noArAgora
-          ? tr('no ar · termina em {a} ({b})', { a: Ag.falta(e.fim * 1000 - agoraMs), b: Ag.quando(e.fim) })
-          : tr('{a} → {b} (Brasília)', { a: Ag.quando(e.inicio), b: Ag.quando(e.fim) });
-        tx.appendChild(el('div', 'ms-prog', esc(quando) + (e.origem === 'calendario' ? tr(' · da regra semanal') : '') +
-          (e.texto ? ' — ' + esc(e.texto) : '')));
-        row.appendChild(tx);
-        var alvo = Ag.alvoDe(e);
-        if (alvo && alvo.alvo === 'evento') {
-          row.appendChild(desliga(btn(noArAgora ? tr('Encerrar') : tr('Cancelar'), 'btn-mini btn-ghost ag-cancela', function () {
-            ctx.confirma(noArAgora ? tr('Encerrar o evento agora?') : tr('Cancelar o evento?'),
-              tr('<b>{a}</b> ({b}) sai do ar para todo mundo. Não há como desfazer — dá para ligar de novo.', { a: esc(e.titulo), b: esc(Ag.rotulo(e)) }),
-              function () {
-                Ag.cancelar(alvo.alvo, alvo.id).then(function (r) {
-                  resposta(r, noArAgora ? tr('Evento encerrado.') : tr('Evento cancelado.'));
-                });
-              });
-          })));
-        }
-        caixa.appendChild(row);
-      });
-      body.appendChild(caixa);
+      evs.forEach(function (e) { caixa.appendChild(linhaEvento(e)); });
+      onde.appendChild(caixa);
+    }
+    // uma linha de regra de toda semana, com o Cancelar (a lista "Toda semana" e os detalhes do dia)
+    function linhaRegra(rg) {
+      var row = el('div', 'ms-linha ag-linha');
+      row.setAttribute('data-regra', String(rg.id));
+      var tx = el('div', 'ms-tx');
+      tx.appendChild(el('div', 'ms-nome', '<b>' + esc(rg.titulo) + '</b> <i>· ' + esc(Ag.rotulo(rg)) +
+        ' · ' + esc(Ag.nomeCalabouco(rg.calabouco)) + '</i>'));
+      tx.appendChild(el('div', 'ms-prog', esc(Ag.textoRegra(rg))));
+      row.appendChild(tx);
+      row.appendChild(desliga(btn(tr('Cancelar'), 'btn-mini btn-ghost ag-cancela', function () {
+        ctx.confirma(tr('Tirar a regra do calendário?'),
+          tr('<b>{a}</b> para de acontecer — e a ocorrência que estiver no ar sai junto.', { a: esc(rg.titulo) }),
+          function () {
+            Ag.cancelar('regra', rg.id).then(function (r) { resposta(r, tr('Regra cancelada.')); });
+          });
+      })));
+      return row;
     }
 
     var R = gmAgendaRasc;
@@ -13731,115 +13757,218 @@ var JOGO = (typeof window !== 'undefined')
       listaEventos(tr('Agendados'), Ag.proximos().filter(function (e) { return e.origem !== 'calendario'; }),
         tr('Nada agendado.'));
     } else {
-      body.appendChild(el('h3', 'hs-sec', tr('Nova regra de toda semana')));
-      var fC = el('div', 'ag-form');
-      camposComuns(fC);
-      var dias = el('div', 'ag-dias');
-      Ag.DIA_CURTO.forEach(function (nome, d) {
-        var on = R.dias.indexOf(d) >= 0;
-        dias.appendChild(btn(nome, 'btn-mini ag-dia-b' + (on ? ' btn-gold' : ' btn-ghost'), function () {
-          var i = R.dias.indexOf(d);
-          if (i >= 0) R.dias.splice(i, 1); else R.dias.push(d);
+      /* O CALENDÁRIO EM GRADE (08/10 à noite — o dono: "no painel do Mestre, em Eventos, faça um
+       * calendário em formato de calendário, não em linhas.. melhor para visualizar"). Até aqui a
+       * sub-aba era uma pilha de listas (toda semana, no ar, próximos 14 dias, a semana do SOTERRA e os
+       * 14 dias do Calabouço do Dia). Agora é UM MÊS por vez: 7 colunas (dom … sáb), uma linha por
+       * semana, setas ‹ › e o nome do mês no alto, o dia de hoje aceso — tudo no relógio de BRASÍLIA
+       * lido pelo relógio do servidor (Ag.agora + FUSO_MIN: é o fuso das regras e o do sorteio do
+       * Calabouço do Dia em diario.js, então o PC com a hora torta não desloca nenhum dia). Cada célula
+       * é compacta, para caber em 390 px: o número, a sigla do Calabouço do Dia (☀ + iniciais), um chip
+       * colorido por tipo para cada ocorrência de regra semanal (a hora) e para cada evento agendado que
+       * toca o dia (o fator; "!" no aviso), e a faixa de cor do bônus fixo da semana do SOTERRA no pé.
+       * O toque num dia abre os detalhes embaixo da grade — as linhas de sempre (linhaRegra/linhaEvento),
+       * com Encerrar/Cancelar. As ocorrências que o servidor já expandiu (origem 'calendario' e
+       * 'programa') NÃO entram pela lista de eventos: a regra e o programa desenham o dia delas em
+       * qualquer mês, inclusive além dos 14 dias da janela do servidor; só os pontuais (e os fixos do
+       * Eco) vêm da lista — e esses só existem dentro da janela. O formulário da regra nova fica
+       * recolhido no botão "Nova regra de toda semana", para a grade ter espaço. */
+      var C = gmAgendaCal;
+      var FUSO = (typeof Ag.FUSO_MIN === 'number') ? Ag.FUSO_MIN : -180;
+      var DIA_MS = 86400000;
+      function chaveDia(a, m, d) { return a + '-' + dois(m + 1) + '-' + dois(d); }
+      // a meia-noite de Brasília de (ano, mês 0–11, dia), em ms de epoch
+      function meiaNoite(a, m, d) { return Date.UTC(a, m, d, 0, 0, 0) - FUSO * 60000; }
+      var hojeB = new Date(Ag.agora() + FUSO * 60000);                 // os campos getUTC* são os de Brasília
+      var hojeA = hojeB.getUTCFullYear(), hojeM = hojeB.getUTCMonth(), hojeD = hojeB.getUTCDate();
+      var hojeChave = chaveDia(hojeA, hojeM, hojeD);
+      if (C.ano == null || C.mes == null) { C.ano = hojeA; C.mes = hojeM; }
+      if (!C.dia) C.dia = hojeChave;
+      var MESES = [tr('janeiro'), tr('fevereiro'), tr('março'), tr('abril'), tr('maio'), tr('junho'),
+                   tr('julho'), tr('agosto'), tr('setembro'), tr('outubro'), tr('novembro'), tr('dezembro')];
+      var regrasTodas = Ag.regras();
+      var progTodo = safe(function () { return Ag.programa(); }, []) || [];
+      var pontuais = Ag.ativos().concat(Ag.proximos()).filter(function (e) {
+        return e.origem !== 'calendario' && e.origem !== 'programa';
+      });
+      // tudo o que cai num dia: as regras daquele dia da semana (vigentes), os eventos que tocam o dia,
+      // o bônus fixo, o Calabouço do Dia e o afixo (os dois sorteiam pela chave do dia de Brasília)
+      function doDiaDe(a, m, d) {
+        var ini = meiaNoite(a, m, d), fim = ini + DIA_MS;
+        var dow = new Date(ini + FUSO * 60000).getUTCDay();
+        var ts = ini + DIA_MS / 2;                                       // o meio-dia de Brasília
+        return {
+          chave: chaveDia(a, m, d), ini: ini, fim: fim, dow: dow, ts: ts,
+          calabouco: safe(function () { return JOGO.Diario.hoje(ts); }, null),
+          afixo: afixoDe(safe(function () { return JOGO.Afixos.doDia(ts); }, null)),
+          regras: regrasTodas.filter(function (rg) {
+            if (!rg.dias || rg.dias.indexOf(dow) < 0) return false;
+            if (rg.vigenteDe != null && rg.vigenteDe * 1000 >= fim) return false;
+            if (rg.vigenteAte != null && rg.vigenteAte * 1000 <= ini) return false;
+            return true;
+          }),
+          eventos: pontuais.filter(function (e) { return e.inicio * 1000 < fim && e.fim * 1000 > ini; }),
+          programa: progTodo.filter(function (p) { return p.dia === dow; })[0] || null
+        };
+      }
+      // a sigla do calabouço na célula: as iniciais sem os artigos ("A Cisterna dos Afogados" → CA)
+      var SEM_SIGLA = { a: 1, o: 1, as: 1, os: 1, de: 1, do: 1, da: 1, dos: 1, das: 1, e: 1, sem: 1,
+                        the: 1, of: 1, el: 1, la: 1, los: 1, las: 1, del: 1, sin: 1, y: 1 };
+      function sigla(nome) {
+        var ps = String(nome || '').split(/\s+/).filter(function (p) { return p && !SEM_SIGLA[p.toLowerCase()]; });
+        return ps.map(function (p) { return p.charAt(0).toUpperCase(); }).join('').slice(0, 3) || '?';
+      }
+      // o chip colorido por tipo (a cor vem do CSS: .ag-t-xp … .ag-t-aviso)
+      function chip(tipo, texto, titulo) {
+        var c = el('span', 'ag-cal-chip ag-t-' + esc(Ag.TETOS[tipo] ? tipo : 'aviso'), esc(texto));
+        if (titulo) c.title = titulo;
+        return c;
+      }
+      function mudaMes(n) {
+        var m = C.mes + n;
+        C.ano += Math.floor(m / 12);
+        C.mes = ((m % 12) + 12) % 12;
+        C.dia = (C.ano === hojeA && C.mes === hojeM) ? hojeChave : chaveDia(C.ano, C.mes, 1);
+        refaz();
+      }
+
+      // ---- a regra nova, recolhida num botão (o formulário é o de sempre)
+      body.appendChild(btn(C.form ? tr('Recolher a regra nova') : tr('Nova regra de toda semana'),
+        'btn-mini ag-cal-nova ' + (C.form ? 'btn-ghost' : 'btn-gold'), function () { C.form = !C.form; refaz(); }));
+      if (C.form) {
+        var fC = el('div', 'ag-form');
+        camposComuns(fC);
+        var dias = el('div', 'ag-dias');
+        Ag.DIA_CURTO.forEach(function (nome, d) {
+          var on = R.dias.indexOf(d) >= 0;
+          dias.appendChild(btn(nome, 'btn-mini ag-dia-b' + (on ? ' btn-gold' : ' btn-ghost'), function () {
+            var i = R.dias.indexOf(d);
+            if (i >= 0) R.dias.splice(i, 1); else R.dias.push(d);
+            refaz();
+          }));
+        });
+        var wDias = el('div', 'ag-campo');          // div, não label: o toque no rótulo apertaria o domingo
+        wDias.appendChild(el('span', 'inv-dica', tr('Dias')));
+        wDias.appendChild(dias);
+        fC.appendChild(wDias);
+        fC.appendChild(campo(tr('Hora de Brasília'), entrada('time', R.hora, function (v) { R.hora = v; })));
+        fC.appendChild(campo(tr('Duração em horas (¼ a 24)'), entrada('number', R.durH, function (v) { R.durH = v; },
+          { min: '0.25', max: '24', step: '0.25' })));
+        body.appendChild(fC);
+        body.appendChild(desliga(btn(tr('Pôr no calendário'), 'btn-gold btn-block ag-envia', function () {
+          if (!tituloOk()) return;
+          if (!R.dias.length) { ctx.aviso(tr('Escolha pelo menos um dia.')); return; }
+          if (!/^\d{2}:\d{2}$/.test(String(R.hora || ''))) { ctx.aviso(tr('A hora vai no formato 10:00.')); return; }
+          var dur = Math.round(Number(R.durH) * 60);
+          if (!(dur >= 15 && dur <= 1440)) { ctx.aviso(tr('A duração vai de 15 minutos a 24 horas.')); return; }
+          var c = corpoComum();
+          c.dias = R.dias.slice().sort(function (a, b) { return a - b; });
+          c.hora = R.hora;
+          c.duracaoMin = dur;
+          c.vigenteDe = null;
+          c.vigenteAte = null;
+          Ag.criarRegra(c).then(function (r) {
+            if (r && r.ok) C.form = false;                                // entrou: a grade volta a ter o espaço
+            resposta(r, tr('No calendário: {a}.', { a: Ag.textoRegra(c) }));
+          });
+        })));
+      }
+
+      // ---- o mês: ‹ nome ›, e "Hoje" quando se saiu do mês de hoje
+      var topo = el('div', 'ag-cal-topo');
+      topo.appendChild(btn('‹', 'btn-mini btn-ghost ag-cal-ant', function () { mudaMes(-1); }));
+      topo.appendChild(el('b', 'ag-cal-mes', esc(MESES[C.mes] + ' ' + C.ano)));
+      if (C.ano !== hojeA || C.mes !== hojeM) {
+        topo.appendChild(btn(tr('Hoje'), 'btn-mini btn-ghost ag-cal-hoje', function () {
+          C.ano = hojeA; C.mes = hojeM; C.dia = hojeChave;
           refaz();
         }));
-      });
-      var wDias = el('div', 'ag-campo');          // div, não label: o toque no rótulo apertaria o domingo
-      wDias.appendChild(el('span', 'inv-dica', tr('Dias')));
-      wDias.appendChild(dias);
-      fC.appendChild(wDias);
-      fC.appendChild(campo(tr('Hora de Brasília'), entrada('time', R.hora, function (v) { R.hora = v; })));
-      fC.appendChild(campo(tr('Duração em horas (¼ a 24)'), entrada('number', R.durH, function (v) { R.durH = v; },
-        { min: '0.25', max: '24', step: '0.25' })));
-      body.appendChild(fC);
-      body.appendChild(desliga(btn(tr('Pôr no calendário'), 'btn-gold btn-block ag-envia', function () {
-        if (!tituloOk()) return;
-        if (!R.dias.length) { ctx.aviso(tr('Escolha pelo menos um dia.')); return; }
-        if (!/^\d{2}:\d{2}$/.test(String(R.hora || ''))) { ctx.aviso(tr('A hora vai no formato 10:00.')); return; }
-        var dur = Math.round(Number(R.durH) * 60);
-        if (!(dur >= 15 && dur <= 1440)) { ctx.aviso(tr('A duração vai de 15 minutos a 24 horas.')); return; }
-        var c = corpoComum();
-        c.dias = R.dias.slice().sort(function (a, b) { return a - b; });
-        c.hora = R.hora;
-        c.duracaoMin = dur;
-        c.vigenteDe = null;
-        c.vigenteAte = null;
-        Ag.criarRegra(c).then(function (r) { resposta(r, tr('No calendário: {a}.', { a: Ag.textoRegra(c) })); });
-      })));
-
-      body.appendChild(el('h3', 'hs-sec', tr('Toda semana')));
-      var cr = el('div', 'ms-caixa ag-lista');
-      var rs = Ag.regras();
-      if (!rs.length) cr.appendChild(el('p', 'inv-dica', tr('Nenhuma regra no calendário.')));
-      rs.forEach(function (rg) {
-        var row = el('div', 'ms-linha ag-linha');
-        row.setAttribute('data-regra', String(rg.id));
-        var tx = el('div', 'ms-tx');
-        tx.appendChild(el('div', 'ms-nome', '<b>' + esc(rg.titulo) + '</b> <i>· ' + esc(Ag.rotulo(rg)) +
-          ' · ' + esc(Ag.nomeCalabouco(rg.calabouco)) + '</i>'));
-        tx.appendChild(el('div', 'ms-prog', esc(Ag.textoRegra(rg))));
-        row.appendChild(tx);
-        row.appendChild(desliga(btn(tr('Cancelar'), 'btn-mini btn-ghost ag-cancela', function () {
-          ctx.confirma(tr('Tirar a regra do calendário?'),
-            tr('<b>{a}</b> para de acontecer — e a ocorrência que estiver no ar sai junto.', { a: esc(rg.titulo) }),
-            function () {
-              Ag.cancelar('regra', rg.id).then(function (r) { resposta(r, tr('Regra cancelada.')); });
-            });
-        })));
-        cr.appendChild(row);
-      });
-      body.appendChild(cr);
-
-      listaEventos(tr('No ar agora'), Ag.ativos(), tr('Nenhum evento no ar.'));
-      listaEventos(tr('Próximos 14 dias'), Ag.proximos(), tr('Nada nos próximos 14 dias.'));
-
-      /* A SEMANA DO SOTERRA (07/10, servidor/api.py PROGRAMA_SEMANAL): os sete dias do programa fixo, com o
-       * de hoje aceso — o jogador vê o ritmo da semana inteira e sabe o que vem amanhã */
-      var prog = safe(function () { return Ag.programa(); }, []) || [];
-      if (prog.length) {
-        body.appendChild(el('h3', 'hs-sec', tr('A semana do SOTERRA')));
-        body.appendChild(el('p', 'inv-dica', tr('Todo dia da semana tem um bônus próprio, igual para todo mundo. O de hoje já está valendo nas salas.')));
-        var hojeDia = new Date(Ag.agora() + (Ag.FUSO_MIN || -180) * 60000).getUTCDay();
-        var grSem = el('div', 'ag-semana');
-        prog.slice().sort(function (a, b) { return a.dia - b.dia; }).forEach(function (p) {
-          var ln = el('div', 'ag-semana-dia' + (p.dia === hojeDia ? ' is-hoje' : ''));
-          ln.appendChild(el('b', null, esc(Ag.DIA_CURTO[p.dia] || '')));
-          ln.appendChild(el('span', 'ag-semana-tit', esc(p.titulo) + ' <i>· ' + esc(Ag.rotulo({ tipo: p.tipo, multiplicador: p.multiplicador })) +
-            (p.calabouco ? ' · ' + esc(p.calabouco === 'dia' ? tr('Calabouço do Dia') : Ag.nomeCalabouco(p.calabouco)) : '') + '</i>'));
-          if (p.texto) ln.appendChild(el('span', 'ag-semana-tx', esc(p.texto)));
-          grSem.appendChild(ln);
-        });
-        body.appendChild(grSem);
       }
+      topo.appendChild(btn('›', 'btn-mini btn-ghost ag-cal-prox', function () { mudaMes(1); }));
+      body.appendChild(topo);
 
-      // os 14 dias pelo relógio LOCAL: é por ele que o Calabouço do Dia sorteia (diario.js)
-      body.appendChild(el('h3', 'hs-sec', tr('Os próximos 14 dias')));
-      var grade = el('div', 'ag-dias14');
-      var todos = Ag.ativos().concat(Ag.proximos());
-      var meio0 = new Date(Ag.agora());
-      meio0.setHours(12, 0, 0, 0);
-      for (var d14 = 0; d14 < 14; d14++) {
-        var meio = new Date(meio0.getTime() + d14 * 86400000);
-        var ini0 = new Date(meio.getTime()); ini0.setHours(0, 0, 0, 0);
-        var fim0 = ini0.getTime() + 86400000;
-        var ts14 = meio.getTime();
-        var doDia = safe(function () { return JOGO.Diario.hoje(ts14); }, null);
-        // 07/10: e o afixo daquele dia (js/core/afixos.js), para planejar a semana
-        var afx14 = afixoDe(safe(function () { return JOGO.Afixos.doDia(ts14); }, null));
-        var evs14 = todos.filter(function (e) { return e.inicio * 1000 < fim0 && e.fim * 1000 > ini0.getTime(); });
-        var linha14 = el('div', 'ag-dia14' + (d14 === 0 ? ' is-hoje' : ''));
-        linha14.appendChild(el('b', null, Ag.DIA_CURTO[meio.getDay()] + ' ' + dois(meio.getDate()) + '/' + dois(meio.getMonth() + 1)));
-        linha14.appendChild(el('span', 'ag-dia14-dia',
-          doDia ? tr('☀ {a} — Calabouço do Dia', { a: esc(Ag.nomeCalabouco(doDia.dungeonId)) }) +
-                  (afx14 ? ' · ' + esc(afx14.icone || '✦') + ' ' + esc(afx14.nome) : '')
-                : '—'));
-        if (evs14.length) {
-          linha14.appendChild(el('span', 'ag-dia14-ev', evs14.map(function (e) {
-            return esc(Ag.rotulo(e)) + ' · ' + esc(e.titulo);
-          }).join(' | ')));
+      // ---- a grade: 7 cabeças, as células vazias antes do dia 1 e depois do último, e os dias
+      var grade = el('div', 'ag-cal-grade');
+      grade.setAttribute('data-mes', C.ano + '-' + dois(C.mes + 1));
+      Ag.DIA_CURTO.forEach(function (nome) { grade.appendChild(el('div', 'ag-cal-cab', esc(nome))); });
+      var nDias = new Date(Date.UTC(C.ano, C.mes + 1, 0)).getUTCDate();
+      var colIni = new Date(Date.UTC(C.ano, C.mes, 1)).getUTCDay();
+      var nCel = Math.ceil((colIni + nDias) / 7) * 7;
+      for (var i = 0; i < nCel; i++) {
+        var d = i - colIni + 1;
+        if (d < 1 || d > nDias) { grade.appendChild(el('div', 'ag-cal-dia is-vazio')); continue; }
+        var info = doDiaDe(C.ano, C.mes, d);
+        var cel = el('button', 'ag-cal-dia' + (info.chave === hojeChave ? ' is-hoje' : '') +
+          (info.chave === C.dia ? ' is-sel' : '') + (info.dow === 0 || info.dow === 6 ? ' is-fds' : ''));
+        cel.type = 'button';
+        cel.setAttribute('data-dia', info.chave);
+        cel.setAttribute('data-calabouco', info.calabouco ? info.calabouco.dungeonId : '');
+        cel.appendChild(el('span', 'ag-cal-num', String(d)));
+        if (info.calabouco) {
+          var nomeC = Ag.nomeCalabouco(info.calabouco.dungeonId);
+          var sC = el('span', 'ag-cal-cal', '☀ ' + esc(sigla(nomeC)));
+          sC.title = tr('Calabouço do Dia: {a}', { a: nomeC });
+          cel.appendChild(sC);
         }
-        grade.appendChild(linha14);
+        var chips = [];
+        info.regras.forEach(function (rg) {
+          chips.push(chip(rg.tipo, rg.hora || '', rg.titulo + ' · ' + Ag.rotulo(rg) + ' · ' + Ag.textoRegra(rg)));
+        });
+        info.eventos.forEach(function (e) {
+          chips.push(chip(e.tipo, e.tipo === 'aviso' ? '!' : Ag.fmtFator(e.multiplicador), e.titulo + ' · ' + Ag.rotulo(e)));
+        });
+        chips.slice(0, 3).forEach(function (c) { cel.appendChild(c); });
+        if (chips.length > 3) cel.appendChild(el('span', 'ag-cal-mais', '+' + (chips.length - 3)));
+        if (info.programa) {
+          var faixa = el('span', 'ag-cal-prog ag-t-' + esc(Ag.TETOS[info.programa.tipo] ? info.programa.tipo : 'aviso'));
+          faixa.title = info.programa.titulo + ' · ' + Ag.rotulo({ tipo: info.programa.tipo, multiplicador: info.programa.multiplicador });
+          cel.appendChild(faixa);
+        }
+        (function (ch) { tap(cel, function () { C.dia = ch; refaz(); }); })(info.chave);
+        grade.appendChild(cel);
       }
       body.appendChild(grade);
+
+      // ---- a legenda: a cor de cada tipo, a sigla e a faixa
+      var leg = el('div', 'ag-cal-legenda');
+      Ag.TIPOS.forEach(function (t) { leg.appendChild(chip(t, Ag.NOMES[t])); });
+      leg.appendChild(el('span', 'ag-cal-legenda-tx', esc(tr('☀ sigla = Calabouço do Dia · faixa no pé = a semana do SOTERRA · toque num dia para ver os detalhes'))));
+      body.appendChild(leg);
+
+      // ---- os detalhes do dia tocado: o Calabouço do Dia e o afixo, o bônus fixo, as regras e os eventos
+      var pm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(C.dia));
+      if (pm) {
+        var sel = doDiaDe(+pm[1], +pm[2] - 1, +pm[3]);
+        body.appendChild(el('h3', 'hs-sec ag-cal-det-tit',
+          esc(Ag.DIA_CURTO[sel.dow] + ' ' + pm[3] + '/' + pm[2] + '/' + pm[1]) + (sel.chave === hojeChave ? ' · ' + tr('hoje') : '')));
+        var det = el('div', 'ms-caixa ag-lista ag-cal-det');
+        det.setAttribute('data-dia-det', sel.chave);
+        det.appendChild(el('p', 'ag-cal-det-dia', sel.calabouco
+          ? tr('☀ {a} — Calabouço do Dia', { a: esc(Ag.nomeCalabouco(sel.calabouco.dungeonId)) }) +
+            (sel.afixo ? ' · ' + esc(sel.afixo.icone || '✦') + ' ' + esc(sel.afixo.nome) : '')
+          : '—'));
+        if (sel.programa) {
+          var p = sel.programa;
+          var ln = el('div', 'ag-semana-dia' + (sel.chave === hojeChave ? ' is-hoje' : ''));
+          ln.appendChild(el('b', null, esc(Ag.DIA_CURTO[p.dia] || '')));
+          ln.appendChild(el('span', 'ag-semana-tit', esc(p.titulo) + ' <i>· ' + esc(Ag.rotulo({ tipo: p.tipo, multiplicador: p.multiplicador })) +
+            (p.calabouco ? ' · ' + esc(p.calabouco === 'dia' ? tr('Calabouço do Dia') : Ag.nomeCalabouco(p.calabouco)) : '') +
+            ' · ' + esc(tr('A semana do SOTERRA')) + '</i>'));
+          if (p.texto) ln.appendChild(el('span', 'ag-semana-tx', esc(p.texto)));
+          det.appendChild(ln);
+        }
+        sel.regras.forEach(function (rg) { det.appendChild(linhaRegra(rg)); });
+        sel.eventos.forEach(function (e) { det.appendChild(linhaEvento(e)); });
+        if (!sel.regras.length && !sel.eventos.length) det.appendChild(el('p', 'inv-dica', tr('Nenhuma regra nem evento neste dia.')));
+        body.appendChild(det);
+      }
+
+      // ---- todas as regras, para ver as de vários dias de uma vez (e cancelar sem procurar o dia)
+      body.appendChild(el('h3', 'hs-sec', tr('Toda semana')));
+      var cr = el('div', 'ms-caixa ag-lista');
+      if (!regrasTodas.length) cr.appendChild(el('p', 'inv-dica', tr('Nenhuma regra no calendário.')));
+      regrasTodas.forEach(function (rg) { cr.appendChild(linhaRegra(rg)); });
+      body.appendChild(cr);
     }
 
     // ao abrir, busca de novo se a última tentativa tiver mais de 60 s
