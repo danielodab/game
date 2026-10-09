@@ -1016,6 +1016,49 @@ var JOGO = (typeof window !== 'undefined')
       });
       lista.appendChild(tb);
     });
+    /* 09/10: A CAIXA-PRETA — as salas que o juiz recusou, com o pedido inteiro para refazer em casa
+     * (tools/refaz_recusa.js). O dono: "de novo não deu XP na luta, isso é inaceitável". */
+    var cx = el('div', 'pm-cartao pm-recusas');
+    alvo.appendChild(cx);
+    cx.appendChild(el('h3', null, 'Salas recusadas pelo juiz (caixa-preta)'));
+    var lr = el('div');
+    cx.appendChild(lr);
+    carregando(lr);
+    api('/api/mestre/recusas').then(function (r) {
+      lr.textContent = '';
+      if (!r || !r.ok) { lr.appendChild(el('p', 'pm-aviso', M.erro(r, 'a caixa-preta não abriu'))); return; }
+      if (!r.recusas.length) { lr.appendChild(el('p', 'pm-dim', 'Nenhuma sala recusada registrada.')); return; }
+      lr.appendChild(el('p', 'pm-dim', 'Cada linha é um pedido de fechar que o juiz recusou, com a ata, os lances e o estado das contas. Baixe o arquivo e mande para quem conserta.'));
+      var tb2 = el('table', 'pm-tabela');
+      var cab2 = el('tr');
+      ['quando', 'tipo', 'sala', 'motivo', 'o juiz disse', ''].forEach(function (x) { cab2.appendChild(el('th', null, x)); });
+      tb2.appendChild(cab2);
+      r.recusas.forEach(function (a) {
+        var tr = el('tr');
+        tr.appendChild(el('td', null, a.quando ? M.quando(Math.floor(a.quando / 1000)) : '—'));
+        tr.appendChild(el('td', null, a.tipo || '—'));
+        tr.appendChild(el('td', null, String(a.ref || '—').slice(0, 24)));
+        tr.appendChild(el('td', null, a.motivo || '—'));
+        tr.appendChild(el('td', null, String(a.erro || '—').slice(0, 120)));
+        var td = el('td');
+        td.appendChild(bt('Baixar', 'mod-b', function () {
+          api('/api/mestre/recusa?arquivo=' + encodeURIComponent(a.arquivo)).then(function (d) {
+            if (!d || !d.ok) { aviso(M.erro(d, 'não deu para baixar')); return; }
+            try {
+              var blob = new Blob([JSON.stringify(d.registro)], { type: 'application/json' });
+              var url = URL.createObjectURL(blob);
+              var lk = document.createElement('a');
+              lk.href = url; lk.download = a.arquivo;
+              document.body.appendChild(lk); lk.click(); document.body.removeChild(lk);
+              setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+            } catch (e) { aviso('o navegador não deixou baixar'); }
+          });
+        }));
+        tr.appendChild(td);
+        tb2.appendChild(tr);
+      });
+      lr.appendChild(tb2);
+    });
   };
 
   /* ------------------------------------------------------------ Ferramentas */

@@ -1496,6 +1496,25 @@ Calabouço do Dia. Agora é UM MÊS por vez, em grade:
   e o botão da regra nova abrindo o seletor de calabouço) e a página de foto
   `tests/foto_calendario_gm.html` em 390 px (título `CALENDÁRIO GM n/n`).
 
+## 9-A.21 A sala em grupo que não pagava, e a caixa-preta (09/10)
+
+O dono: "de novo não deu XP na luta, isso é inaceitável" (Cisterna em 08/10, Andaimes do Vento em 09/10,
+duas contas, com e sem evento). A tela nova dizia: "o lance 1 deu diferente aqui". A causa, desde 21/09
+(a preparação da batalha): as casas marcadas na preparação viajavam dentro do `p` para o outro cliente
+(`paraFio`, `e`/`eu`) e o `anotaSrv` sabia guardá-las, mas `Coop.registra` e `Coop.aplicado` nunca as
+passavam — o registro que vai ao servidor tinha um `p` sem casas, o juiz colocava todo mundo ao acaso e o
+primeiro movimento já não batia. Quando ninguém marcava casa, a colocação era a mesma dos dois lados e a
+sala pagava: por isso as provas (que nunca marcam) e as descidas de teste passavam, e a do dono não. Agora
+os dois caminhos passam por `entradaSrv(l, ok, de)`, que leva `e` e `eu`. Prova: `node tests/coop_registro_p.js`.
+
+**A caixa-preta.** Toda sala que o juiz recusa (422) fica inteira em `<pasta do banco>/recusas/
+<tipo>-<ref>-<quando>.json` — a ata, os lances, o progress/db de cada conta, o contexto e a frase do juiz
+(`Api._guarda_recusa`, chamada em grupo.py e salas.py; 60 arquivos, os velhos saem). O Mestre vê a lista em
+Painel › Auditoria › "Salas recusadas pelo juiz" e baixa o arquivo (`GET /api/mestre/recusas`,
+`GET /api/mestre/recusa?arquivo=`). Em casa, `node tools/refaz_recusa.js <arquivo>` refaz a sala com o mesmo
+juiz e o rastreio ligado (`global.__traceLance` em servidor/juiz/sala.js): lance a lance, a unidade da vez,
+PA/PM, a casa, o alvo e o ocupante — e diz onde divergiu.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

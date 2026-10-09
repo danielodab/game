@@ -507,6 +507,7 @@ class GrupoMixin:
                 if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
                     self._grupo_vence_por_regras(gid, t, e.erro)            # 19/09: vence, não é fraude (410)
                 if e.status == 422:
+                    self._guarda_recusa('grupo', gid, pedido, e)         # 09/10: a caixa-preta, para refazer em casa
                     self._grupo_marca(gid, 'recusada', e.extra.get('motivo') or 'juiz', t, 'grupo-recusada', por=cid,
                                       detalhe=e.erro)
                 else:
@@ -631,6 +632,8 @@ class GrupoMixin:
         except Recusa as e:
             if e.status == 422 and e.extra.get('motivo') == 'regras-mudaram':
                 self._grupo_vence_por_regras(gid, agora(), e.erro)     # 19/09: a sala de antes do deploy vence (410)
+            if e.status == 422:
+                self._guarda_recusa('grupo-largou', gid, pedido, e)     # 09/10: a caixa-preta
             raise
         if not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str):
             raise Recusa(503, 'o juiz respondeu torto — tente de novo em instantes')

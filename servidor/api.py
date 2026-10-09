@@ -365,6 +365,8 @@ ROTAS = {
     # log do proxy). A marca é contas.gm, lida do banco a cada pedido.
     ('POST', '/api/mestre/contas'):            ('mestre_contas', True, True, FRASE_SO_MESTRE),
     ('GET',  '/api/mestre/conta'):             ('mestre_conta', True, True, FRASE_SO_MESTRE),
+    ('GET',  '/api/mestre/recusas'):           ('mestre_recusas', True, True, FRASE_SO_MESTRE),   # 09/10: a caixa-preta
+    ('GET',  '/api/mestre/recusa'):            ('mestre_recusa', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/presentear'):        ('mestre_presentear', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/presente/cancelar'): ('mestre_presente_cancelar', True, True, FRASE_SO_MESTRE),
     ('POST', '/api/mestre/barras'):            ('mestre_barras', True, True, FRASE_SO_MESTRE),   # 13/09: barras de ouro
@@ -848,6 +850,15 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
 
     def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None, anuncios=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
+        # 09/10: A CAIXA-PRETA — toda sala que o juiz recusa (422: divergiu, lance fora da vez…) deixa o pedido
+        # inteiro (a ata, os lances, o estado das contas) num JSON desta pasta, para ser refeita no computador
+        # de quem conserta (tools/refaz_recusa.js). O dono: "de novo não deu XP na luta, isso é inaceitável" —
+        # sem o registro, o "lance 1 deu diferente aqui" do juiz não diz O QUE deu diferente
+        self.pasta_recusas = os.path.join(pasta, 'recusas')
+        try:
+            os.makedirs(self.pasta_recusas, exist_ok=True)
+        except OSError:
+            pass
         os.makedirs(pasta, exist_ok=True)
         self.con = sqlite3.connect(caminho_banco, check_same_thread=False)
         self.con.row_factory = sqlite3.Row
@@ -1881,6 +1892,63 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
 
 
 # ---- o atendente HTTP ----------------------------------------------------------------
+    # ---- a caixa-preta das salas recusadas (09/10) ---------------------------------------
+    RECUSAS_MAX = 60                  # os arquivos mais velhos saem sozinhos
+
+    def _guarda_recusa(self, tipo, ref, pedido, erro):
+        """Grava o pedido que o juiz recusou (ata, lances, membros com progress/db, contexto) e a frase dele.
+        Nunca derruba o fechar: qualquer erro de disco só vai ao log."""
+        try:
+            nome = '%s-%s-%d.json' % (tipo, re.sub(r'[^0-9A-Za-z_-]', '_', str(ref))[:48], int(time.time()))
+            caminho = os.path.join(self.pasta_recusas, nome)
+            with open(caminho, 'w', encoding='utf-8') as f:
+                json.dump({'tipo': tipo, 'ref': ref, 'quando': int(time.time() * 1000),
+                           'erro': getattr(erro, 'erro', str(erro)),
+                           'motivo': (getattr(erro, 'extra', None) or {}).get('motivo'),
+                           'pedido': pedido}, f, ensure_ascii=False)
+            velhos = sorted(n for n in os.listdir(self.pasta_recusas) if n.endswith('.json'))
+            for n in velhos[:-self.RECUSAS_MAX]:
+                try:
+                    os.remove(os.path.join(self.pasta_recusas, n))
+                except OSError:
+                    pass
+            log.warning("caixa-preta: a sala recusada ficou em %s", caminho)
+        except Exception as e:                                        # pylint: disable=broad-except
+            log.warning("caixa-preta: não deu para gravar a recusa de %s %s: %s", tipo, ref, e)
+
+    def mestre_recusas(self, conta, corpo):
+        """A lista da caixa-preta: nome, tamanho, quando, tipo, referência, motivo e a frase do juiz."""
+        saida = []
+        try:
+            nomes = sorted((n for n in os.listdir(self.pasta_recusas) if n.endswith('.json')), reverse=True)
+        except OSError:
+            nomes = []
+        for n in nomes[:self.RECUSAS_MAX]:
+            caminho = os.path.join(self.pasta_recusas, n)
+            item = {'arquivo': n, 'tamanho': 0, 'quando': None, 'tipo': None, 'ref': None, 'motivo': None, 'erro': None}
+            try:
+                item['tamanho'] = os.path.getsize(caminho)
+                with open(caminho, encoding='utf-8') as f:
+                    d = json.load(f)
+                for k in ('quando', 'tipo', 'ref', 'motivo', 'erro'):
+                    item[k] = d.get(k)
+            except (OSError, ValueError):
+                pass
+            saida.append(item)
+        return 200, {'ok': True, 'recusas': saida}
+
+    def mestre_recusa(self, conta, corpo):
+        """Um arquivo da caixa-preta, inteiro (o nome como a lista deu; nada de caminho)."""
+        nome = corpo.get('arquivo')
+        if not isinstance(nome, str) or not re.fullmatch(r'[0-9A-Za-z_-]+\.json', nome):
+            raise Recusa(400, 'arquivo inválido')
+        caminho = os.path.join(self.pasta_recusas, nome)
+        if not os.path.isfile(caminho):
+            raise Recusa(404, 'esse registro não existe mais')
+        with open(caminho, encoding='utf-8') as f:
+            return 200, {'ok': True, 'arquivo': nome, 'registro': json.load(f)}
+
+
 class Atendente(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'     # keep-alive: o Caddy reaproveita a conexão
     server_version = 'SOTERRA-API/1'
@@ -1987,6 +2055,7 @@ class Atendente(BaseHTTPRequestHandler):
             self.api.registra_excecao_api(metodo, caminho, self._token())   # 02/10: o painel do Mestre vê (registros.py)
             status, resposta = 500, {'ok': False, 'erro': 'erro interno do servidor'}
         self._responde(status, resposta)
+
 
 
 if __name__ == '__main__':

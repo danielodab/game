@@ -1446,6 +1446,16 @@ var JOGO = (typeof window !== 'undefined')
    * MARCAS que mudam a batalha fora dos lances (quem caiu, quem voltou, quem
    * saiu e morreu). Uma foto de resgate troca o estado inteiro: depois dela
    * este registro não refaz mais a sala, e a marca `fotografada` avisa. */
+  /* 09/10: O QUE DE UM LANCE VAI AO SERVIDOR. O dono: "de novo não deu XP na luta, isso é inaceitável" — toda sala
+   * em grupo em que alguém MARCAVA a casa na preparação caía no juiz como "o lance 1 deu diferente aqui": desde
+   * 21/09 as casas marcadas (`e`, `eu`) viajavam no `p` para o outro cliente (paraFio) e o anotaSrv sabia guardá-las,
+   * mas o registra e o aplicado nunca as passavam — o juiz refazia a colocação com todo mundo ao acaso, e o primeiro
+   * movimento já não batia. Quando ninguém marcava casa a colocação era a mesma dos dois lados e a sala pagava: por
+   * isso as provas (que nunca marcam) e as descidas de teste passavam, e a do dono não. Um lugar só para os dois. */
+  function entradaSrv(l, ok, de) {
+    return { a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, r: l.r, e: l.e, eu: l.eu, alvo: l.alvo, ok: !!ok, de: de };
+  }
+  Coop._entradaSrv = entradaSrv;        // provas (tests/coop_registro_p.js)
   function anotaSrv(l) {
     if (!S.bid || !S.logSrv) return;
     var c = { a: l.a, ok: !!l.ok };
@@ -1498,7 +1508,7 @@ var JOGO = (typeof window !== 'undefined')
   Coop.registra = function (l, ok) {
     var g = G(), st = g && g.state;
     if (!st || !S.bid || !l) return;
-    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, r: l.r, alvo: l.alvo, ok: !!ok, de: meuId() });
+    anotaSrv(entradaSrv(l, ok, meuId()));
     var T = (typeof l.T === 'number') ? l.T : 0;
     var lista = S.log[T] || (S.log[T] = []);
     l.T = T; l.k = lista.length; l.b = S.bid; l.ok = !!ok; l.de = meuId();
@@ -1612,7 +1622,7 @@ var JOGO = (typeof window !== 'undefined')
    * meu reaplicado depois da foto). Confere o que o motor devolveu e o hash. */
   Coop.aplicado = function (l, ok, semConferir) {
     if (!l) return;
-    anotaSrv({ a: l.a, u: l.u, x: l.x, y: l.y, s: l.s, r: l.r, alvo: l.alvo, ok: !!ok, de: l.de });
+    anotaSrv(entradaSrv(l, ok, l.de));
     var T = l.T || 0;
     var lista = S.log[T] || (S.log[T] = []);
     lista.push(l);

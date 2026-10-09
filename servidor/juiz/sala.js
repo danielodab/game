@@ -285,6 +285,8 @@ function refazEm(J, entrada) {
       }
       if (l.a === 'e') { conta(); turnosJogador++; }
     }
+    // 09/10: o rastreio da caixa-preta (tools/refaz_recusa.js liga `global.__traceLance`); no servidor, nunca
+    if (typeof global !== 'undefined' && typeof global.__traceLance === 'function') global.__traceLance(i, l, st, J);
     let ok;
     try { ok = executa(J, st, l); } catch (e) { if (e && e.juiz) throw e; ok = false; }
     E.events.length = 0;

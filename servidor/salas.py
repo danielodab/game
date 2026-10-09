@@ -1066,6 +1066,7 @@ class SalasMixin:
                     raise Recusa(410, 'as regras do jogo mudaram no meio da sala — abra a sala de novo',
                                  motivo='regras-mudaram')
                 if e.status == 422:                             # o replay não fecha: a sala não paga
+                    self._guarda_recusa('sala', bilhete, pedido, e)      # 09/10: a caixa-preta, para refazer em casa
                     self._sala_recusa(cid, bilhete, e.extra.get('motivo') or 'juiz', e.erro)
                 raise
             if not isinstance(saida, dict) or saida.get('ok') is not True or not isinstance(saida.get('fase'), str):
