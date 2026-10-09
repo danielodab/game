@@ -1171,7 +1171,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       bia.J.Coop._piloto({ joga: true });
       var ret5 = bia.J.Game.retomaDescida(bia.herois.slice(), 'greenhouse', ataSala0, 'normal', function () { bia.J.Coop.retomaBatalha(ataSala0); });
       var naSala0 = tela('bia') === 'battle' && bia.J.Game.roomIndex === 0 && bia.J.Coop.sessao().retomando === true && bia.J.Coop.bloqueado() === true;
-      ate(function () { return !bia.J.Coop.sessao().retomando; }, 400, 50);
+      // (a Ana pode estar na preparação da sala 1 — 30 s —, e a foto só sai quando a batalha dela começa: passos de 250 ms)
+      ate(function () { return !bia.J.Coop.sessao().retomando; }, 400, 250);
       var hb5b = heroisDe('bia', 'bia'), tVolta5 = bia.J.Game.state ? bia.J.Game.state.turno : 0;
       check('K5b · 08/10: a Bia recarregada refaz a batalha da sala 0 pela ata guardada, entra em retomada (travada) e manda `retoma`',
             ret5 === true && naSala0, JSON.stringify({ ret: ret5, tela: tela('bia'), sala: bia.J.Game.roomIndex, ret2: bia.J.Coop.sessao().retomando }));
@@ -1204,6 +1205,7 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
        interessa. */
     ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
     ana.J.Coop.aoAviso = function (t) { ana.avisos.push(t); };
+    bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');   // (o K5b reabriu a Bia com outro cx: o `caiu` abaixo é do cx que a Ana conhece)
     desce('cistern');
     ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
     ana.J.Coop.entrar();

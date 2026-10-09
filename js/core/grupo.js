@@ -527,12 +527,15 @@ var JOGO = (typeof window !== 'undefined')
     descidaG = { dungeonId: rec.dungeonId };
     ultimoPar = null; ficouSo = null;
     vigia(st.par.id, null);
+    // a ata que se está retomando é a da sessão: fica pendurada desde já (o registro regravado pelo muda() a leva,
+    // e a Autoridade segue vendo a sala como retomável até a retomada se decidir de vez)
+    var ata = (rec.ata && typeof rec.ata === 'object' && rec.ata.dungeonId === rec.dungeonId) ? rec.ata : null;
+    ataGuardada = ata;
     muda();                                                 // o Coop fica configurado antes de a descida ser refeita
     // a `volta` sai ANTES de a descida ser refeita: o `retoma` do Coop chega a ele depois dela (ele já trocou o
     // meu cx), e o `estado` dele me diz o cx dele
     st.voltaProva = provaDe(st.chave, meuCx());
     manda('grupo', st.par.id, 'volta', { gid: st.gid, prova: st.voltaProva, retoma: true });
-    var ata = (rec.ata && typeof rec.ata === 'object' && rec.ata.dungeonId === rec.dungeonId) ? rec.ata : null;
     var ok = safe(function () {
       return G().retomaDescida(meusHerois.slice(), rec.dungeonId, ata, st.descidaDif, function () {
         var c = C();

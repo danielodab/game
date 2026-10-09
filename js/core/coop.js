@@ -2181,6 +2181,7 @@ var JOGO = (typeof window !== 'undefined')
     lembraBatalha(S.ata);
     ligaTique();
     mandaRetoma();
+    S.sincronizando = false; S.fotoPedidaEm = 0;     // o pedido desta batalha sai já (o da refeita antes não o segura)
     pedeFoto();
     avisa(Tx('Voltando à batalha com {a}…', { a: nomeParceiro() }), 'info');
     muda();
