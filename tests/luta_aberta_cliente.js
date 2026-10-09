@@ -195,6 +195,27 @@ async function algunsLances(c) {
         dois.J.UI.toasts.some((t) => /Você saiu da última luta sem terminar: os heróis dela voltam do zero/.test(t)),
         JSON.stringify(dois.J.UI.toasts.slice(-3)));
 
+  // ---- 4b. 08/10 à noite: a sala em grupo que o grupo.js ainda pode RETOMAR (a recarga no meio da batalha) não é largada
+  //          na abertura do jogo — só a chamada da abertura pergunta (`retomavel`); qualquer outro fechar é desistir de verdade
+  A.abreLuta('grupo', 'gid-retomavel-0123456789');
+  A.anotaLuta('gid-retomavel-0123456789', [{ a: 'p', x: 1, y: 1, ok: true, de: 'eu' }]);
+  dois.J.Grupo = { retomavel: (ref) => ref === 'gid-retomavel-0123456789' };
+  const antesRet = srv.pedidos.length;
+  const rRet = await A.fechaPendente({ retomavel: true });
+  check('a abertura do jogo NÃO larga a sala em grupo que o grupo.js diz retomável: nenhum fechar sai e o registro fica',
+        rRet === null && srv.pedidos.length === antesRet && !!registroDe(dois) && registroDe(dois).ref === 'gid-retomavel-0123456789',
+        JSON.stringify({ r: rRet, n: srv.pedidos.length - antesRet, reg: registroDe(dois) }));
+  const rRet2 = await A.fechaPendente();
+  check('...mas o fechar pendente de qualquer outra abertura (o jogador desistindo de verdade) a fecha como `largou`, como sempre',
+        !!rRet2 && rRet2.fase === 'largou' && srv.pedidos.slice(antesRet).some((p) => p.rota === '/api/grupo/fechar' && p.corpo.largou === true) &&
+        !registroDe(dois), JSON.stringify(rRet2));
+  dois.J.Grupo = { retomavel: () => false };
+  A.abreLuta('grupo', 'gid-nao-retomavel-01234567');
+  const rRet3 = await A.fechaPendente({ retomavel: true });
+  check('e a sala que o grupo.js não retoma (registro velho, outra sala) é largada na abertura como antes',
+        !!rRet3 && rRet3.fase === 'largou' && !registroDe(dois), JSON.stringify(rRet3));
+  delete dois.J.Grupo;
+
   // ---- 5. o duelo 'aguardando' pergunta de novo sozinho
   let vez = 0;
   srv.respostas['/api/duelo/fechar'] = () => (++vez < 3

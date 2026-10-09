@@ -434,6 +434,126 @@ var JOGO = (typeof window !== 'undefined')
   }
   zera();
 
+  /* ===================================================== A SESSÃO GUARDADA (08/10 à noite)
+   * QUEM CAI VOLTA PARA A LUTA (o dono: "loguei com duas contas, um personagem caiu na luta e quando voltou,
+   * voltou na praça e bugou na luta permanecendo lá.. tá bem errado isso. caso caia em qualquer conexão ele deve
+   * ficar na batalha [...] caso esteja em calabouço ele volta para a próxima sala que seu time concluiu").
+   * O grupo vivia só na memória: a aba recarregada (ou o aplicativo reaberto) chegava à praça sem grupo, e a
+   * luta aberta era fechada como `largou` (autoridade.js) enquanto os corpos dele seguiam na sala do parceiro.
+   * Agora, enquanto o grupo está formado e numa descida, a sessão fica no armário DA CONTA
+   * ('soterra-grupo-sessao-v1' + o sufixo das contas): gid, chave, quem lidera, o par (id, cx, nome, heróis), os
+   * meus heróis, o calabouço, a dificuldade e a ATA da sala em curso (o Coop a põe aqui, `lembraBatalha`; entre
+   * salas fica sem). Ao entrar na praça de novo (a Rede ligada: o evento `cx`, e o tique por via das dúvidas),
+   * `tentaRetomada` refaz o grupo deste registro — o par volta a ser o par, quem lidera é QUEM FICOU — e pede ao
+   * Game a descida e a batalha da ata (Game.retomaDescida); o Coop faz o resto (Coop.retomaBatalha: a foto de
+   * resgate de quem ficou, ou a sala em que o time está agora). A `volta` sai com `retoma: true`: do outro lado,
+   * quem ficou toma a liderança da descida. O registro só vale por SESSAO_VALIDADE_MS, some quando o grupo se
+   * desfaz ou a descida acaba, e — antes de a retomada ser decidida nesta aba — não é tocado (o `zera` do
+   * carregamento não pode apagar o que a aba de antes guardou). A retomada que falha (o parceiro não responde,
+   * já não está na descida, o grupo se desfez) volta à praça e deixa o grupo: só então a luta aberta fecha como
+   * `largou` (Autoridade.fechaPendente com `retomavel`). */
+  Grupo.SESSAO_CHAVE = 'soterra-grupo-sessao-v1';
+  Grupo.SESSAO_VALIDADE_MS = 30 * 60 * 1000;
+  var ataGuardada = null;          // a ata da sala em curso (o Coop conta: lembraBatalha)
+  var sessaoDecidida = false;      // a retomada desta aba já foi tentada (ou não havia o quê): daí o registro segue o grupo
+  function chaveSessao() {
+    var Cn = JOGO.Contas;
+    return Grupo.SESSAO_CHAVE + ((Cn && Cn.sufixo) ? safe(function () { return Cn.sufixo(); }, '') : '');
+  }
+  function armario() { try { return (typeof window !== 'undefined' && window.localStorage) || null; } catch (e) { return null; } }
+  function leSessao() {
+    var ls = armario();
+    if (!ls) return null;
+    try {
+      var v = JSON.parse(ls.getItem(chaveSessao()) || 'null');
+      return (v && v.v === 1 && typeof v.gid === 'string' && typeof v.chave === 'string' && v.par && v.par.id &&
+              Array.isArray(v.meus) && v.meus.length && typeof v.dungeonId === 'string') ? v : null;
+    } catch (e) { return null; }
+  }
+  function gravaSessao(v) {
+    var ls = armario();
+    if (!ls) return;
+    try { if (v) ls.setItem(chaveSessao(), JSON.stringify(v)); else ls.removeItem(chaveSessao()); } catch (e) {}
+  }
+  function sessaoFresca(rec) { return !!rec && agora() - (Number(rec.t) || 0) < Grupo.SESSAO_VALIDADE_MS; }
+  function guardaSessao() {
+    if (!sessaoDecidida) return;
+    if (!Grupo.emGrupo()) { gravaSessao(null); return; }
+    var dg = descidaG ? descidaG.dungeonId : null;
+    if (!dg || descidaAtual() === 'praca') { gravaSessao(null); return; }   // na praça não há o que retomar
+    gravaSessao({ v: 1, t: agora(), gid: st.gid, chave: st.chave, lider: st.lider, eu: eu(),
+                  par: { id: st.par.id, cx: st.par.cx || null, nome: st.par.nome || null, heroi: st.par.heroi || null,
+                         herois: (st.par.herois || []).slice() },
+                  meus: meusHerois.slice(), dungeonId: dg,
+                  dif: st.descidaDif || safe(function () { return G().dificuldade; }, null) || 'normal',
+                  ata: ataGuardada });
+  }
+  /* o Coop: a ata da sala em curso (null entre salas e fora da descida) */
+  Grupo.lembraBatalha = function (ata) {
+    ataGuardada = (ata && typeof ata === 'object') ? ata : null;
+    guardaSessao();
+  };
+  /* a Autoridade pergunta ao abrir o jogo: esta sala em grupo (o gid do servidor) ainda pode ser retomada? */
+  Grupo.retomavel = function (ref) {
+    if (!ref) return false;
+    if (Grupo.emGrupo() && ataGuardada && ataGuardada.gid === ref) return true;
+    var rec = leSessao();
+    return !!(rec && sessaoFresca(rec) && rec.ata && rec.ata.gid === ref);
+  };
+  Grupo.sessaoGuardada = function () { return leSessao(); };
+  Grupo.parSaiu = function () { return !!(Grupo.emGrupo() && st.par.saiu); };
+  function tentaRetomada() {
+    if (sessaoDecidida) return false;
+    if (!meuCx() || tela() !== 'hub') return false;          // só com a Rede ligada e na praça
+    sessaoDecidida = true;
+    var rec = leSessao();
+    if (!rec) return false;
+    if (!sessaoFresca(rec) || st.fase !== 'livre' || rec.eu !== eu() || !C() || !G() || !G().retomaDescida) {
+      gravaSessao(null);
+      return false;
+    }
+    var herois = limpaHerois(rec.par.herois, rec.par.heroi);
+    st = { fase: 'formado', gid: rec.gid, chave: rec.chave, v: 0, lider: rec.par.id,   // quem ficou lidera
+           par: { id: String(rec.par.id), cx: rec.par.cx || null, nome: rec.par.nome || nomeDe(rec.par.id),
+                  heroi: herois[0] || null, herois: herois, on: true, sumidoDesde: null, saiu: false },
+           pendente: null, descer: null, aguardaEstado: true, voltaProva: null, dissolver: null, parSubiu: null,
+           descidaAcabou: false, descidaDif: difValida(rec.dif) || 'normal', descidaEscuro: false };
+    meusHerois = rec.meus.filter(function (h) { return typeof h === 'string' && temHeroi(h); }).slice(0, MAX_HEROIS);
+    lerMeuNome();
+    if (!meusHerois.length) { gravaSessao(null); zera(); return false; }
+    descidaG = { dungeonId: rec.dungeonId };
+    ultimoPar = null; ficouSo = null;
+    vigia(st.par.id, st.par.cx);
+    muda();                                                 // o Coop fica configurado antes de a descida ser refeita
+    var ata = (rec.ata && typeof rec.ata === 'object' && rec.ata.dungeonId === rec.dungeonId) ? rec.ata : null;
+    var ok = safe(function () {
+      return G().retomaDescida(meusHerois.slice(), rec.dungeonId, ata, st.descidaDif, function () {
+        var c = C();
+        if (!c) return;
+        if (ata) { if (!c.retomaBatalha(ata)) c.retomaDescida(); } else c.retomaDescida();
+      });
+    }, false);
+    if (!ok) { gravaSessao(null); solta(st.par.id, st.par.cx); zera(); descidaG = null; muda(); return false; }
+    st.voltaProva = provaDe(st.chave, meuCx());
+    manda('grupo', st.par.id, 'volta', { gid: st.gid, prova: st.voltaProva, retoma: true });
+    muda();
+    return true;
+  }
+  Grupo.tentaRetomada = tentaRetomada;
+  /* o Coop desistiu da retomada (sem resposta, o parceiro fora da descida, o grupo desfeito): a praça, sem grupo —
+   * e só agora a luta aberta fecha como `largou` (Game.abandonar → Autoridade.fechaPendente) */
+  Grupo.retomadaFalhou = function (motivo) {
+    sessaoDecidida = true;
+    ataGuardada = null;
+    gravaSessao(null);
+    var g = G();
+    if (g && g.abandonar) safe(function () { g.abandonar(); return true; }, false);
+    if (Grupo.emGrupo()) Grupo.sair('retomada-' + (motivo || 'falhou'));
+    else { descidaG = null; muda(); }
+    return true;
+  };
+  Grupo._sessaoDecidida = function (v) { if (v !== undefined) sessaoDecidida = !!v; return sessaoDecidida; };
+
   function graca() {
     var g = safe(function () { return C().GRACA_MS; }, null);
     return (typeof g === 'number' && g > 0) ? g : Grupo.GRACA_MS;
@@ -519,6 +639,7 @@ var JOGO = (typeof window !== 'undefined')
   function muda() {
     configuraCoop();
     marcaHub();
+    guardaSessao();                   // 08/10 à noite: a sessão do grupo no armário da conta (a recarga retoma por ela)
     if (Grupo.aoMudar) { try { Grupo.aoMudar(Grupo.estado()); } catch (e) {} }
   }
 
@@ -544,7 +665,10 @@ var JOGO = (typeof window !== 'undefined')
    * heróis dele CAEM, no Coop — 12/09) e o grupo só se desfaz quando ela acabar. */
   function desfaz(texto, kind, porMim) {
     if (st.fase !== 'formado') return;
-    if (!porMim && tela() === 'battle') {
+    // 08/10 à noite: a batalha refeita de uma RETOMADA não é de verdade — o grupo se desfaz já (o Coop faz a
+    // retomada falhar e o jogo voltar à praça)
+    var retomando = safe(function () { return !!C().retomando(); }, false);
+    if (!porMim && tela() === 'battle' && !retomando) {
       if (st.par) {
         st.par.on = false;
         st.par.saiu = true;
@@ -1010,6 +1134,9 @@ var JOGO = (typeof window !== 'undefined')
       st.par.sumidoDesde = null;
       st.par.saiu = false;
       vigia(de, st.par.cx);
+      // 08/10 à noite: ele RECARREGOU e refez o grupo do registro dele (`retoma`): perdeu o estado da descida —
+      // quem ficou lidera daqui em diante (o `estado` que sai abaixo o diz); o Coop responde ao `retoma` dele
+      if (d.retoma === true && st.lider !== eu()) { st.lider = eu(); st.v++; }
       safe(function () { C().parceiroVoltou(de, st.par.cx); return true; }, false);
       if (Grupo.souLider()) mandaEstado();
       if (voltou) aviso(st.par.nome + ' voltou.', 'good');
@@ -1073,6 +1200,8 @@ var JOGO = (typeof window !== 'undefined')
   Grupo._tique = function () {
     liga();
     var t = agora();
+    // 08/10 à noite: a retomada que o `cx` não pegou (a Rede ligou antes de a praça aparecer) sai daqui
+    if (!sessaoDecidida) tentaRetomada();
     var p = st.pendente;
     if (p && t > p.expira) {
       st.pendente = null;
@@ -1145,6 +1274,8 @@ var JOGO = (typeof window !== 'undefined')
     ficouSo = null;
     assinaturaCoop = '';
     marcado = { id: null, papel: null };
+    ataGuardada = null;
+    sessaoDecidida = true;            // (as provas: a aba "já decidiu" — o registro passa a seguir o grupo)
   };
   Grupo._chaveAtual = function () { return st.chave; };
   Grupo._st = function () { return st; };
@@ -2486,7 +2617,7 @@ var JOGO = (typeof window !== 'undefined')
     ouve('batalha', revive);                     // na batalha o par só fala por lá: também prova que voltou
     ouve('ausente', aoAusente);
     ouve('religou', aoReligou);
-    ouve('cx', function () { carregaMutados(); });
+    ouve('cx', function () { carregaMutados(); tentaRetomada(); });   // 08/10 à noite: a sessão guardada volta aqui
     return true;
   }
   Grupo._liga = function () { ligadoEm = null; return liga(); };

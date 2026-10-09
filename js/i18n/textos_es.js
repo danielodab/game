@@ -2939,4 +2939,10 @@ JOGO.I18n.registra('es', { textos: {
   "{a} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.": "{a} se cayó — sus héroes se quedan, y su turno corre en el reloj hasta que vuelva.",
   "{nome} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.": "{nome} se cayó — sus héroes se quedan, y su turno corre en el reloj hasta que vuelva.",
   "<b>{a} está fora</b> — a vez dele corre no relógio… {resta}": "<b>{a} está fuera</b> — su turno corre en el reloj… {resta}",
+  "Voltando à batalha com {a}…": "Volviendo a la batalla con {a}…",
+  "Voltando à descida com {a}…": "Volviendo al descenso con {a}…",
+  "De volta à batalha!": "¡De vuelta a la batalla!",
+  "De volta à descida com {a}.": "De vuelta al descenso con {a}.",
+  "{a} já não está nessa descida — a retomada acabou.": "{a} ya no está en ese descenso — la vuelta terminó.",
+  "Não deu para voltar à batalha: {a} não respondeu.": "No se pudo volver a la batalla: {a} no respondió.",
 } });
