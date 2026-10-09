@@ -2945,4 +2945,5 @@ JOGO.I18n.registra('en', { textos: {
   "De volta à descida com {a}.": "Back in the descent with {a}.",
   "{a} já não está nessa descida — a retomada acabou.": "{a} is no longer in that descent — the return is over.",
   "Não deu para voltar à batalha: {a} não respondeu.": "Couldn't return to the battle: {a} didn't answer.",
+  "{a} ainda está fora — a sala abre com os heróis dele marcados fora até ele voltar.": "{a} is still out — the room opens with their heroes marked out until they're back."
 } });

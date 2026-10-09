@@ -1221,6 +1221,62 @@ prêmios em jogo mais escuros, e aleatoriamente passa um círculo acendendo o it
   `pvp_hud` (a pergunta, o Cancelar e o Atacar; as duas falhas do quadro já existiam no HEAD),
   `sede_visita` (a grade fora do salão).
 
+## 9-A.17 Quem cai volta para a luta (08/10 à noite)
+
+O dono: "loguei com duas contas, um personagem caiu na luta e quando voltou, voltou na praça e bugou na
+luta permanecendo lá.. tá bem errado isso. caso caia em qualquer conexão ele deve ficar na batalha e seu
+turno e tempo correr normal até ele desconectar ou perder.. caso esteja em calabouço ele volta para a próxima
+sala que seu time concluiu... por exemplo ele caiu na sala 1, aí quando voltou meu time já havia entrado na
+luta da sala dois, ele pode continuar na dois e reencontrar na sala 3".
+
+O que já existia: a queda na MESMA aba (o relé avisa `caiu`, a carência de 15 s, quem ficou assume e marca os
+heróis de quem caiu com `u.ia`; o `religou` manda a `volta` com a prova e pede a foto de resgate). O que
+quebrava: a ABA RECARREGADA (ou o aplicativo reaberto) — o grupo e a sessão da batalha vivem na memória; ao
+abrir o jogo a luta aberta da conta era fechada como `largou` e o jogador caía na praça, enquanto os corpos
+dele seguiam na sala do parceiro pela marca `ia`. E a vez do herói marcado passava no primeiro quadro.
+
+- **A vez de quem caiu corre no relógio** (`game.js`, `vezDoCaidoAcabou`; `Game.relogioCaido` para a HUD): a
+  vez de um herói de gente marcado fora corre os mesmos 30 s de uma vez normal (sem banco), no relógio de
+  parede de quem simula, e só então passa — é o tempo de uma recarga. A barra da batalha mostra "{a} está
+  fora — a vez dele corre no relógio… 0:23". A **queda confirmada** volta a passar a vez na hora
+  (`Coop.quedaConfirmada`): o parceiro fora há mais de `Coop.QUEDA_MS` (3 min, decisão minha — quem fechou o
+  jogo de vez não prende o parceiro 30 s por vez), quem SAIU de vez (`sai`, ou o `sair` do grupo na batalha —
+  `Grupo.parSaiu`). O relógio para enquanto a batalha está travada; o estado segue igual nos dois motores e o
+  juiz passa a vez marcada sem tempo nenhum. Vale no grupo e na guerra (por jogador).
+- **A sessão do grupo guardada** (`grupo.js`, `soterra-grupo-sessao-v1` + o sufixo da conta): enquanto o grupo
+  está formado numa descida, o registro guarda gid, chave, quem lidera, o par (id, cx, nome, heróis), os meus
+  heróis, o calabouço, a dificuldade e a ATA da sala em curso (`Grupo.lembraBatalha`, que o Coop chama ao
+  nascer a batalha e zera entre salas). Vale 30 min; some quando o grupo se desfaz ou a descida acaba; e não é
+  tocado pela aba nova antes de a retomada ser decidida.
+- **A retomada** (`Grupo.tentaRetomada` no `cx` da Rede, na praça): o grupo é refeito do registro com QUEM
+  FICOU liderando; `Game.retomaDescida` refaz a descida (os modelos, a antessala, a batalha da MESMA ata — o
+  mesmo estado inicial e os mesmos uids); `Coop.retomaBatalha` entra em `retomando` (cede a autoridade, trava
+  a batalha refeita, manda `retoma` a cada 3 s e pede a foto já da colocação); a `volta` vai com
+  `retoma: true` (quem ficou toma a liderança). Quem ficou responde `aqui` (a tela, a sala, o bid), toma a
+  autoridade e desmarca os corpos; a foto de resgate devolve os corpos onde estavam ("De volta à batalha!").
+- **A sala seguinte** (o "continua na dois e reencontra na sala 3"): o parceiro ainda fora no fim da sala NÃO
+  acaba mais a descida (`Coop.aoFim`); quem ficou abre a sala seguinte com os heróis guardados de quem caiu
+  e, sem o `dentro` dele (a ata sem resposta, 5 × 3 s), abre SOZINHO (`abreSozinho`) com eles marcados. Quem
+  volta: se quem ficou está noutra batalha, recebe a ata dela com `retoma: true` e a refaz
+  (`Game.retomaBatalhaDaAta`) pedindo a foto DELA; se está na recompensa da mesma sala, a foto do FIM o leva à
+  recompensa; se espera na ANTESSALA de uma sala à frente, pula para lá (`Game.retomaNaAntessala`) e manda o
+  `pronto` de sempre. A mesma pergunta (`retoma` com `leve`) sai na volta na MESMA aba (`depoisDeReligar`):
+  sem batalha refeita, sem travar e sem desistir — o time pode ter mudado de sala enquanto a conexão estava
+  fora. A luta aberta do gid velho fecha fotografada e sem lance (quem ficou paga os dois pelo registro limpo).
+- **O `largou` é só de quem desiste**: `Autoridade.fechaPendente({ retomavel: true })` é a chamada da abertura
+  (ouveNuvem) e pula a sala em grupo que `Grupo.retomavel(gid)` diz retomável; toda outra chamada (bilhete,
+  sala em grupo, duelo, Arena, Eco, abandonar) fecha como sempre. A retomada que falha (sem resposta por
+  `Coop.RETOMA_MS` = 60 s, o parceiro fora da descida, o grupo desfeito do outro lado, versões diferentes)
+  volta à praça, deixa o grupo e só então fecha a luta como `largou`.
+- O servidor não muda: a sala em grupo e a luta aberta por conta já eram o que precisavam ser; o juiz segue
+  refazendo os lances com as marcas `ia` de queda e de volta.
+- Provas: `tests/coop_motor.html` (K5: o relógio da vez de quem caiu, a queda confirmada, a líder abrindo a
+  sala seguinte sozinha; K5b: a volta na batalha da sala seguinte; K12: a volta na mesma batalha; K14: a volta
+  na antessala da sala seguinte; K7 e R1 com passos de 250 ms), `tests/grupo.html` (a sessão guardada, a
+  retomada no `cx`, a `volta` com `retoma`, a falha com `sair`, o registro velho e o de outro id),
+  `node tests/luta_aberta_cliente.js` (o `retomavel` na abertura), `node tests/juiz_grupo.js`,
+  `python tests/grupo_duelo_api.py`.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

@@ -732,7 +732,9 @@ var JOGO = (typeof window !== 'undefined')
     }
     // a ata: o líder reenvia até o `dentro`
     if (S.chamando && S.ata && souLider() && g && g.screen === 'antessala' && ag >= S.ataProx) {
-      if (S.ataEnvios >= Coop.ATA_TENTATIVAS) {
+      if (S.ataEnvios >= Coop.ATA_TENTATIVAS && parceiroFora()) {
+        abreSozinho();                   // 08/10 à noite: ele está fora — a sala abre com os heróis dele marcados
+      } else if (S.ataEnvios >= Coop.ATA_TENTATIVAS) {
         S.chamando = false; S.ataFalhou = true; S.ataFalhouEm = ag;
         avisa(Tx('{a} não respondeu.', { a: nomeParceiro() }), 'aviso');
         muda();
@@ -1406,6 +1408,33 @@ var JOGO = (typeof window !== 'undefined')
     }
     S.fase = 'placing';
     lembraBatalha(S.ata);                       // 08/10 à noite: a sessão guardada leva a ata (a recarga retoma por ela)
+    muda();
+  }
+
+  /* 08/10 À NOITE: o parceiro está FORA (caiu e ainda não voltou) e a ata não teve resposta: quem lidera abre a
+   * sala SOZINHO, com os heróis dele (os guardados da sala passada, que a ata já leva) de pé e marcados fora pelo
+   * sumiço de sempre (confereSumico → assumeParceiro, que também assume a colocação). A ata fica guardada: quando
+   * ele voltar — pela `volta` desta aba ou pela retomada da recarga — é ela que vai com `retoma` (rRetoma). */
+  function parceiroFora() {
+    if (S.sumidoDesde) return true;
+    var Gp = JOGO.Grupo, p = parceiro();
+    try {
+      return !!(Gp && Gp.estado && p && (Gp.estado().membros || []).some(function (m) { return m && m.id === p.id && m.on === false; }));
+    } catch (e) { return false; }
+  }
+  function abreSozinho() {
+    var g = G(), ata = S.ata;
+    S.chamando = false; S.ataFalhou = false;
+    if (!g || !ata || g.screen !== 'antessala') return;
+    iniciaBatalha(ata.bid);
+    S.ata = ata;
+    emprestaFichas(ata.party);
+    if (!g._criaDaAta || !g._criaDaAta(ata)) { S.bid = null; avisa(Tx('Não deu para abrir a sala.'), 'aviso'); muda(); return; }
+    S.fase = 'placing';
+    S.dentroConfirmado = true;                                        // ninguém mais para confirmar
+    if (!S.sumidoDesde) S.sumidoDesde = agora() - Coop.GRACA_MS;      // o sumiço já passou da carência: a marca é na hora
+    lembraBatalha(S.ata);
+    avisa(Tx('{a} ainda está fora — a sala abre com os heróis dele marcados fora até ele voltar.', { a: nomeParceiro() }), 'aviso');
     muda();
   }
 
@@ -2529,10 +2558,14 @@ var JOGO = (typeof window !== 'undefined')
                arena: { dungeonId: S.duelo.dungeonId, roomIndex: S.duelo.roomIndex, nome: S.duelo.nome },
                ptsMeus: S.duelo.ptsMeus, ptsDele: S.duelo.ptsDele, modo: S.duelo.modo || null };
     }
-    S.descidaAcabou = !!(S.descidaAcabou || S.parceiroSaiu || (S.parceiroIA && S.sumidoDesde));
+    /* 08/10 À NOITE: o parceiro ainda FORA no fim da sala não acaba mais a descida (o dono: "ele caiu na sala 1, aí
+     * quando voltou meu time já havia entrado na luta da sala dois, ele pode continuar na dois e reencontrar na
+     * sala 3"). Até aqui a descida morria na recompensa ("não voltou — a descida acabou"). Agora quem ficou lidera,
+     * abre a sala seguinte com os heróis guardados de quem caiu (heroisDoParceiro) e, sem o `dentro` dele, a abre
+     * SOZINHO (abreSozinho); quem caiu retoma onde o time estiver (a retomada). Só quem SAIU de vez acaba a descida. */
+    S.descidaAcabou = !!(S.descidaAcabou || S.parceiroSaiu);
     var info = { lider: souLider(), parceiroVoltou: !S.sumidoDesde && !S.parceiroSaiu,
                  descidaAcabou: S.descidaAcabou };
-    if (S.descidaAcabou && res.fase === 'won' && !S.parceiroSaiu) avisa(Tx('{a} não voltou — a descida acabou.', { a: nomeParceiro() }), 'aviso');
     muda();
     return info;
   };
@@ -3458,6 +3491,14 @@ var JOGO = (typeof window !== 'undefined')
     }
     if (S.tipo === 'grupo' && emBatalha() && !souAutoridade() && !jaRestaurou) pedeFoto();
     if (emBatalha()) envia('pede', { b: S.bid, T: st.turno || 0, k: (S.log[st.turno || 0] || []).length });
+    /* 08/10 à noite: a RETOMADA LEVE — enquanto eu estava fora o time pode ter mudado de sala. Pergunto onde ele
+     * está (`retoma` com `leve`: sem batalha refeita, sem travar esta e sem o prazo que desiste); quem ficou responde
+     * `aqui` e, se está noutra batalha, manda a ata dela (rAtaRetoma refaz a daqui); se espera na antessala de uma
+     * sala à frente, pulo para lá (rAqui). Na mesma sala nada muda: a foto de sempre. */
+    if (S.tipo === 'grupo' && Coop.emGrupo() && S.bid && (emBatalha() || (g.screen === 'roomClear'))) {
+      S.retomando = agora(); S.retomaLeve = true; S.retomaProx = 0;
+      mandaRetoma();
+    }
   }
   var desligas = [];
   Coop._liga = function () {
