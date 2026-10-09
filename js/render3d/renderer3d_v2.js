@@ -3849,6 +3849,27 @@ var JOGO = (typeof window !== 'undefined')
     return s;
   }
 
+  /* 09/10 — A BARRA DE VIDA COM O ESCUDO EM AZUL. O dono: "o escudo que o Minotauro dá deve
+   * somar à vida do personagem, mas a barra de vida deve ficar azul proporcionalmente ao tamanho
+   * da quantidade de escudo". A regra do motor não muda (o escudo segue um efeito que absorve o
+   * dano antes do PV); muda só o que a barra conta: vida e escudo são UMA barra. A escala é
+   * `total = max(hpMax, hp + escudo)` — enquanto o escudo cabe no que falta de vida ele ocupa o
+   * trecho vazio da barra; quando `hp + escudo` passa de `hpMax` a barra não corta, ESTICA a escala
+   * (um herói cheio com 80 de escudo mostra a vida ocupando 150/230 e o azul o resto). Sem escudo,
+   * total = hpMax e a barra é exatamente a de antes. O mesmo cálculo mora na HUD (hud.js,
+   * fracoesVida) para o cartão da unidade, a fila da vez e o painel do grupo; as provas chamam
+   * esta função pelo `R.barraVida`. Devolve as frações já em [0,1]. */
+  function barraVida(hp, hpMax, shield) {
+    var pv = Math.max(0, hp || 0), esc = Math.max(0, shield || 0);
+    var total = Math.max(1, hpMax || 1, pv + esc);
+    return { total: total, pv: Math.min(1, pv / total), esc: Math.min(1, esc / total),
+             baixa: pv / Math.max(1, hpMax || 1) < 0.34 };
+  }
+  R.barraVida = barraVida;
+
+  // o azul do escudo (a mesma cor nas três barras da HUD, css .bar-esc / .tl-hp .esc / .gl-vida .esc)
+  var COR_ESCUDO = '#6fb8ff', COR_ESCUDO_BORDA = 'rgba(214,240,255,0.95)';
+
   function drawBar(sp, u, stt) {
     var sig = u.hp + '/' + u.hpMax + '|' + stt.shield + '|' + stt.poison + stt.root + stt.taunt +
               stt.reflect + stt.regen + stt.invisible + '|' + stt.mark;
@@ -3861,15 +3882,25 @@ var JOGO = (typeof window !== 'undefined')
     var bw = 150, bh = 15, bx = (cv.width - bw) / 2, by = 46;
     c.fillStyle = 'rgba(10,13,18,0.80)';
     roundRect(c, bx - 3, by - 3, bw + 6, bh + 6, 7); c.fill();
-    var frac = Math.max(0, Math.min(1, u.hp / Math.max(1, u.hpMax)));
+    // 09/10: vida + escudo na mesma barra (barraVida); a cor do PV segue a de sempre —
+    // verde do nosso lado, vermelho do inimigo, laranja abaixo de 34% da vida (da vida, não do total)
+    var fr = barraVida(u.hp, u.hpMax, stt.shield);
     var col = ladoTela(u) !== 'inimigo' ? '#57d977' : '#e8574a';
-    if (frac < 0.34) col = '#ffae3a';
+    if (fr.baixa) col = '#ffae3a';
+    var wPv = Math.round(bw * fr.pv);
     c.fillStyle = col;
-    roundRect(c, bx, by, Math.max(2, bw * frac), bh, 5); c.fill();
-    if (stt.shield > 0) {
-      var sfrac = Math.min(1, stt.shield / Math.max(1, u.hpMax));
-      c.fillStyle = 'rgba(150,215,255,0.92)';
-      roundRect(c, bx, by - 5, Math.max(2, bw * sfrac), 5, 2); c.fill();
+    roundRect(c, bx, by, Math.max(2, wPv), bh, 5); c.fill();
+    if (fr.esc > 0) {
+      // o escudo encostado no fim do PV, azul claro com uma borda clara para se separar do verde
+      var wEsc = Math.max(2, Math.round(bw * fr.esc));
+      if (wPv + wEsc > bw) wEsc = bw - wPv;
+      c.save();
+      c.beginPath(); c.rect(bx + wPv, by, wEsc, bh); c.clip();
+      c.fillStyle = COR_ESCUDO;
+      roundRect(c, bx, by, wPv + wEsc, bh, 5); c.fill();
+      c.restore();
+      c.strokeStyle = COR_ESCUDO_BORDA; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(bx + wPv + 0.5, by + 1); c.lineTo(bx + wPv + 0.5, by + bh - 1); c.stroke();
     }
     c.strokeStyle = 'rgba(255,255,255,0.32)'; c.lineWidth = 1.5;
     roundRect(c, bx, by, bw, bh, 5); c.stroke();
@@ -3980,6 +4011,8 @@ var JOGO = (typeof window !== 'undefined')
   }
 
   R._visDe = function (uid) { var v = vis[uid]; return v ? { x: v.x, y: v.y } : null; };   // provas: onde o boneco está DESENHADO
+  // 09/10, provas (tests/foto_escudo_barra.html): o canvas da barra de vida da unidade, como foi pintado
+  R._barraDe = function (uid) { var n = unitNodes[uid]; return n && n.userData.bar ? n.userData.bar.userData.cv : null; };
 
   function updateUnitNodes(st, dt) {
     prepVisual(st, dt);

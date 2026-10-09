@@ -273,6 +273,14 @@ i, em { font-style: normal; color: var(--dim); }
   letter-spacing: .02em;
 }
 .bar-hp   .bar-fill { background: linear-gradient(180deg, #ff8b7a, var(--hp)); }
+/* 09/10: o ESCUDO na barra de PV — o trecho azul encostado no fim da vida (hud.js fracoesVida);
+   a mesma cor do 3D (renderer3d_v2.js COR_ESCUDO) e das barrinhas da fila e do grupo */
+.bar-esc {
+  position: absolute; top: 0; height: 100%; box-sizing: border-box;
+  background: linear-gradient(180deg, #cfe9ff, #6fb8ff);
+  border-left: 1px solid rgba(214,240,255,.95); border-radius: 0 7px 7px 0;
+  transition: width .25s ease, left .25s ease;
+}
 .bar-xp   .bar-fill { background: linear-gradient(180deg, #c8e8ff, var(--xp)); }
 .bar-card .bar-fill { background: linear-gradient(180deg, #ffe6a8, var(--gold)); }
 
@@ -746,8 +754,9 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
 .tl-unit.s-enemy { border-color: #7a3b34; }
 .tl-unit.is-now  { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 16px rgba(255,196,77,.4); }
 .tl-unit canvas { display: block; border-radius: 6px; }
-.tl-hp { height: 4px; background: #0a0d11; }
+.tl-hp { position: relative; height: 4px; background: #0a0d11; }
 .tl-hp i { display: block; height: 100%; background: var(--hp); transition: width .25s ease; }
+.tl-hp i.esc { position: absolute; top: 0; background: #6fb8ff; }   /* 09/10: o escudo em azul */
 .tl-boss { position: absolute; top: 0; right: 2px; font-size: 11px; color: var(--gold); }
 .tl-elite { position: absolute; top: 0; right: 2px; font-size: 11px; color: #9ad8ff; text-shadow: 0 0 4px rgba(154,216,255,.8); }   /* 07/10: o elite da sala */
 
@@ -773,10 +782,6 @@ html.celular.retrato .bt-top .bt-trava { min-height: 28px; height: 28px; top: 5p
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ba-hp .bar { height: 15px; margin: 3px 0; }
-.shield-chip {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  font: 700 10px var(--ui-sans); color: var(--xp);
-}
 /* PA em cima, PP embaixo (pedido do dono, 03/09) — antes lado a lado */
 .ba-res { display: flex; flex-direction: column; gap: 2px; margin-top: 3px; }
 .res { display: flex; align-items: center; gap: 5px; min-height: 22px; }
@@ -3281,8 +3286,9 @@ html.celular .hub-sino:not(.is-off), html.celular .hub-sino-painel:not(.is-off) 
 .gl-tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .gl-nome { font: 600 12.5px/1.1 var(--ui-sans); color: #f0ead8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gl-nv { font: 400 11px/1.1 var(--ui-sans); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gl-vida { height: 4px; border-radius: 999px; background: #0a0d11; overflow: hidden; }
+.gl-vida { position: relative; height: 4px; border-radius: 999px; background: #0a0d11; overflow: hidden; }
 .gl-vida i { display: block; height: 100%; background: var(--hp, #58c46b); transition: width .25s ease; }
+.gl-vida i.esc { position: absolute; top: 0; background: #6fb8ff; }   /* 09/10: o escudo em azul */
 .gl-selos { display: flex; flex-wrap: wrap; gap: 3px; }
 .gl-selo { padding: 0 5px; border-radius: 999px; border: 1px solid; font: 700 9.5px/15px var(--ui-sans); }
 .gl-selo.s-vez { color: var(--gold, #ffc44d); border-color: rgba(255,196,77,.6); }
@@ -4367,7 +4373,7 @@ html.menos-movimento *, html.menos-movimento *::before, html.menos-movimento *::
   .bt-active .ba-name { font-size: 11.5px; line-height: 13px; }
   .bt-active .ba-name .elem-dot { flex: none; width: 7px; height: 7px; margin-left: 4px; }
   .bt-active .ba-hp .bar { height: 10px; margin: 1px 0 2px; border-radius: 5px; }
-  .bt-active .ba-hp .bar-txt, .bt-active .shield-chip { font-size: 8.5px; }
+  .bt-active .ba-hp .bar-txt { font-size: 8.5px; }
   .bt-active .ba-res { flex-direction: row; gap: 7px; margin-top: 0; }
   .bt-active .res { flex: 0 1 auto; min-width: 0; min-height: 0; gap: 3px; }
   .bt-active .res-lb { font-size: 9px; line-height: 9px; }

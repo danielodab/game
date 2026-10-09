@@ -552,14 +552,43 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // ------------------------------------------------------------ barras e pips
-  function bar(cls, pct, label) {
+  /* `esc` (09/10, opcional): a fração do ESCUDO, pintada em azul (.bar-esc) encostada no fim do
+   * preenchimento — a barra de PV da batalha mostra vida + escudo como uma só (fracoesVida). */
+  function bar(cls, pct, label, esc) {
     var b = el('div', 'bar ' + cls);
     var f = el('div', 'bar-fill');
-    f.style.width = Math.max(0, Math.min(100, pct * 100)) + '%';
+    var wPv = Math.max(0, Math.min(100, pct * 100));
+    f.style.width = wPv + '%';
     b.appendChild(f);
+    if (esc > 0) {
+      var e = el('div', 'bar-esc');
+      e.style.left = wPv + '%';
+      e.style.width = Math.max(0, Math.min(100 - wPv, esc * 100)) + '%';
+      b.appendChild(e);
+    }
     if (label != null) b.appendChild(el('span', 'bar-txt', label));
     return b;
   }
+  /* 09/10 — A BARRA DE VIDA COM O ESCUDO EM AZUL (o dono: "o escudo que o Minotauro dá deve somar à
+   * vida do personagem, mas a barra de vida deve ficar azul proporcionalmente ao tamanho da
+   * quantidade de escudo"). Vida e escudo numa barra só: a escala é max(hpMax, hp + escudo) — o
+   * escudo ocupa o trecho vazio e, quando hp + escudo passa de hpMax, a barra estica em vez de
+   * cortar. Sem escudo é exatamente a barra de antes. Gêmea de `barraVida` do renderer 3D
+   * (renderer3d_v2.js, R.barraVida): as duas têm de dar o mesmo desenho. Devolve frações em [0,1]
+   * (pv, esc) e `rot`, o texto do PV ("110 +30 / 150" quando há escudo). */
+  function fracoesVida(u) {
+    var pv = Math.max(0, u.hp || 0), esc = Math.max(0, u.shield || 0), max = Math.max(1, u.hpMax || 1);
+    var total = Math.max(max, pv + esc);
+    return { pv: Math.min(1, pv / total), esc: Math.min(1, esc / total), total: total,
+             rot: u.hp + (esc > 0 ? ' +' + esc : '') + ' / ' + u.hpMax };
+  }
+  // a barra de PV da unidade na batalha (o cartão da vez); as provas (tests/foto_escudo_barra.html) a montam direto
+  function barraPv(u) {
+    var fr = fracoesVida(u);
+    return bar('bar-hp', fr.pv, fr.rot, fr.esc);
+  }
+  UI._fracoesVida = fracoesVida;
+  UI._barraPv = barraPv;
   function pips(n, max, cls) {
     var w = el('div', 'pips ' + cls);
     var total = Math.max(n, max || 0), i;
@@ -3776,11 +3805,19 @@ var JOGO = (typeof window !== 'undefined')
       // 22/09: o invisível do outro lado continua na fila (a vez é de todos),
       // mas sem a vida — ela cair entregaria que a área o pegou ali
       var some = oculto(u);
-      var hpPct = u.hpMax ? u.hp / u.hpMax : 0;
+      // 09/10: vida + escudo na mesma barrinha (fracoesVida): o escudo em azul depois do verde
+      var frv = fracoesVida(u);
       var hb = el('div', 'tl-hp');
       var hf = el('i');
-      hf.style.width = some ? '0%' : Math.max(0, Math.min(100, hpPct * 100)) + '%';
+      var wPv = some ? 0 : Math.max(0, Math.min(100, frv.pv * 100));
+      hf.style.width = wPv + '%';
       hb.appendChild(hf);
+      if (!some && frv.esc > 0) {
+        var he = el('i', 'esc');
+        he.style.left = wPv + '%';
+        he.style.width = Math.max(0, Math.min(100 - wPv, frv.esc * 100)) + '%';
+        hb.appendChild(he);
+      }
       cell.appendChild(hb);
       if (some) cell.style.opacity = '0.55';
       if (u.boss) cell.appendChild(el('span', 'tl-boss', '♛'));
@@ -3881,12 +3918,9 @@ var JOGO = (typeof window !== 'undefined')
     }
 
     var hp = el('div', 'ba-hp');
-    var hpb = bar('bar-hp', u.hpMax ? u.hp / u.hpMax : 0, u.hp + ' / ' + u.hpMax);
-    if (u.shield) {
-      var shd = el('span', 'shield-chip', '🛡 ' + u.shield);
-      hpb.appendChild(shd);
-    }
-    hp.appendChild(hpb);
+    // 09/10: o escudo deixou de ser um chip "N" com o escudinho no canto — é o trecho AZUL da
+    // própria barra (barraPv), e o texto diz "110 +30 / 150"
+    hp.appendChild(barraPv(u));
     info.appendChild(hp);
 
     var res = el('div', 'ba-res');
@@ -3951,7 +3985,7 @@ var JOGO = (typeof window !== 'undefined')
     for (i = 0; i < list.length; i++) {
       var ef = list[i];
       if (ef.type === 'mark') { marcas++; continue; }
-      if (ef.type === 'shield') continue;                 // já aparece na barra de PV
+      if (ef.type === 'shield') continue;                 // já aparece na barra de PV (o trecho azul, 09/10)
       if (ef.type === 'buff') {
         var v = (ef.value > 0 ? '+' : '') + ef.value;
         row.appendChild(chip(v + ' ' + String(ef.stat || '').toUpperCase(),
@@ -15028,8 +15062,11 @@ var JOGO = (typeof window !== 'undefined')
       var hs = (m.herois && m.herois.length) ? m.herois : (m.heroi ? [m.heroi] : []);
       var linhas = (us.length ? us : hs).map(function (x, i) {
         var u = us[i] || null, h = hs[i] || (u ? { classId: u.classId || u.defId, element: u.element, level: u.level } : {});
+        // 09/10: `pv` e `esc` em % da MESMA escala (fracoesVida): o escudo em azul depois da vida
+        var frv = u ? fracoesVida(u) : null;
         return { u: u, h: h || {},
-                 pv: u ? Math.round(100 * Math.max(0, u.hp) / Math.max(1, u.hpMax)) : null,
+                 pv: frv ? Math.round(100 * frv.pv) : null,
+                 esc: frv ? Math.round(100 * frv.esc) : 0,
                  vez: !!(u && ativa && ativa.uid === u.uid) };
       });
       return {
@@ -15042,7 +15079,7 @@ var JOGO = (typeof window !== 'undefined')
     var sig = current + (naPraca ? '@praca' : '') + '#' + cartas.map(function (c) {
       return [c.m.id, c.m.nome, c.fora, c.voltando, c.lider, c.ia, c.vez, c.semRede,
               c.linhas.map(function (l) {
-                return [l.h.classId, l.h.element, l.h.level, l.pv, l.vez ? 1 : 0].join('.');
+                return [l.h.classId, l.h.element, l.h.level, l.pv, l.esc, l.vez ? 1 : 0].join('.');
               }).join('+')].join(',');
     }).join('|');
     if (sig === glSig) return;
@@ -15078,8 +15115,15 @@ var JOGO = (typeof window !== 'undefined')
       if (l.pv === null) return;
       var vb = el('div', 'gl-vida');
       var vi = el('i');
-      vi.style.width = Math.max(0, Math.min(100, l.pv)) + '%';
+      var wPv = Math.max(0, Math.min(100, l.pv));
+      vi.style.width = wPv + '%';
       vb.appendChild(vi);
+      if (l.esc > 0) {                      // 09/10: o escudo em azul, encostado na vida
+        var ve = el('i', 'esc');
+        ve.style.left = wPv + '%';
+        ve.style.width = Math.max(0, Math.min(100 - wPv, l.esc)) + '%';
+        vb.appendChild(ve);
+      }
       tx.appendChild(vb);
     });
     var selos = el('div', 'gl-selos');
