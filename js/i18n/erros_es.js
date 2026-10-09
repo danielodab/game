@@ -680,5 +680,8 @@ JOGO.I18n.registra('es', { erros: {
   // ---- 08/10 à noite: o dízimo de um membro pelos oficiais
   "só o líder e os oficiais mudam o dízimo de um membro": "solo el líder y los oficiales cambian el diezmo de un miembro",
   // ---- 08/10 à noite: as vagas da guilda por nível
-  "a guilda está cheia — ela abre mais vagas ao subir de nível": "la guilda está llena: abre más plazas al subir de nivel"
+  "a guilda está cheia — ela abre mais vagas ao subir de nível": "la guilda está llena: abre más plazas al subir de nivel",
+  // ---- 09/10: a caixa-preta das salas recusadas
+  "arquivo inválido": "archivo inválido",
+  "esse registro não existe mais": "ese registro ya no existe"
 } });

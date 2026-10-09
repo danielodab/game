@@ -680,5 +680,8 @@ JOGO.I18n.registra('en', { erros: {
   // ---- 08/10 à noite: o dízimo de um membro pelos oficiais
   "só o líder e os oficiais mudam o dízimo de um membro": "only the leader and the officers change a member's tithe",
   // ---- 08/10 à noite: as vagas da guilda por nível
-  "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up"
+  "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up",
+  // ---- 09/10: a caixa-preta das salas recusadas
+  "arquivo inválido": "invalid file",
+  "esse registro não existe mais": "that record no longer exists"
 } });
