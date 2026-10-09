@@ -83,8 +83,14 @@
           try { eh = H._estado(); fm = H._coroaFantasma('m1'); } catch (e3) {}
           var chegou = !!(eh && eh.coroa3d && fm && fm.d3);
           if (!chegou && Date.now() - t1 < 30000) return setTimeout(esperaCoroa, 250);
-          var g1 = eh ? eh.coroaGiro : null;
-          setTimeout(function () {
+          var g1 = eh ? eh.coroaGiro : null, t2 = Date.now();
+          // o giro anda pelo quadro (rAF): no headless o relógio estrangula — espera o giro MUDAR (até 8 s), não um prazo fixo
+          (function esperaGiro() {
+            var eg = null;
+            try { eg = H._estado(); } catch (e4) {}
+            var mudou = !!(eg && g1 !== null && eg.coroaGiro !== null && eg.coroaGiro !== g1);
+            var prazo = Date.now() - t2 >= Math.max(8000, (Number(Q.t) || 2) * 1000);
+            if (!mudou && !prazo) return setTimeout(esperaGiro, 200);
             var e2 = H._estado(), m = H._coroaFantasma('m1'), c = H._coroaFantasma('c1');
             var checks = [
               ['o herói (Mestre) carrega a coroa do Mestre', !!(e2.coroaVisivel && e2.coroaMestre && e2.coroaNivel === 'gm')],
@@ -97,7 +103,7 @@
               ['a coroa do Mestre fica acima da pilha do nome (baseY acima da placa)', !!(m && typeof m.baseY === 'number' && m.baseY > 2.4)]
             ];
             fim(checks, JSON.stringify({ heroi: { halo: e2.coroaHalo, giro: e2.coroaGiro }, m1: m, c1: c }));
-          }, (Number(Q.t) || 2) * 1000);
+          })();
         })();
       })();
     });
