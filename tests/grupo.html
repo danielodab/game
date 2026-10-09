@@ -1096,8 +1096,8 @@ JOGO.DATA = {
     chega('cx', { cx: 'cxana77' });
     var vt = ult('grupo', 'volta');
     var cfgUlt = Co.cfg[Co.cfg.length - 1];
-    check('retomada · ao ligar a Rede na praça o grupo é refeito do registro: o par é o par, QUEM FICOU lidera, o Game refaz a descida com a ata e o Coop retoma a batalha',
-          Gr.emGrupo() && Gr.estado().lider === 'bia' && Gr.souLider() === false && Gr.parceiro().id === 'bia' && Gr.parceiro().cx === 'cxbia1' &&
+    check('retomada · ao ligar a Rede na praça o grupo é refeito do registro: o par é o par (sem cx: o dele pode ter mudado), QUEM FICOU lidera, o Game refaz a descida com a ata e o Coop retoma a batalha',
+          Gr.emGrupo() && Gr.estado().lider === 'bia' && Gr.souLider() === false && Gr.parceiro().id === 'bia' && Gr.parceiro().cx === null &&
           Gr.meusHerois().join() === 'sumo' && Gr.estado().descidaGrupo === 'cistern' &&
           retomadas.length === 1 && retomadas[0].dg === 'cistern' && retomadas[0].ids.join() === 'sumo' && retomadas[0].ata && retomadas[0].ata.gid === 'gid-srv-1' &&
           retomaBatalhas.length === 1 && retomaDescidas === 0 && cfgUlt && cfgUlt.lider === 'bia' && cfgUlt.parceiro.id === 'bia',
@@ -1106,12 +1106,14 @@ JOGO.DATA = {
           !!vt && vt.dados.gid === d.gid && vt.dados.retoma === true && vt.dados.prova === Du._sha256(chave + '|cxana77') && !vt.cx && !vt.dados.chave,
           JSON.stringify(vt));
     check('retomada · o registro segue no armário enquanto o grupo está de pé (a Autoridade ainda o vê como retomável)', Gr.retomavel('gid-srv-1') === true);
-    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'estado',
+    chega('grupo', { de: 'bia', cx: 'cxbia9', acao: 'estado',
                      dados: { gid: d.gid, v: 1, lider: 'bia', membros: [{ id: 'bia', heroi: { classId: 'arqueiro', element: 'ar', level: 9 } }, { id: 'ana' }] } });
-    check('retomada · o `estado` do par confirma: ele lidera', Gr.estado().lider === 'bia' && Gr.souLider() === false);
+    check('retomada · o `estado` do par confirma: ele lidera — e o cx NOVO dele fica carimbado (vigiado)',
+          Gr.estado().lider === 'bia' && Gr.souLider() === false && Gr.parceiro().cx === 'cxbia9' && vigias.indexOf('bia@cxbia9') >= 0,
+          JSON.stringify({ cx: Gr.parceiro().cx, vigias: vigias.slice(-2) }));
     chega('cx', { cx: 'cxana77' }); Gr._tique();
     check('retomada · decidida, não se repete (um segundo `cx` ou o tique não refazem nada)', retomadas.length === 1 && retomaBatalhas.length === 1);
-    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'sair', dados: { gid: d.gid, motivo: 'expirou' } });
+    chega('grupo', { de: 'bia', cx: 'cxbia9', acao: 'sair', dados: { gid: d.gid, motivo: 'expirou' } });
     check('retomada · o par já não me conhecia (`sair`): a retomada falha, o jogo volta à praça (o abandonar — a luta fecha como `largou` só agora) e o registro some',
           !Gr.emGrupo() && abandonos === 1 && !Gr.sessaoGuardada() && Gr.retomavel('gid-srv-1') === false && Gm.screen === 'hub',
           JSON.stringify({ g: Gr.emGrupo(), a: abandonos, s: Gr.sessaoGuardada(), tela: Gm.screen }));

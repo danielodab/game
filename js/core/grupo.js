@@ -513,8 +513,11 @@ var JOGO = (typeof window !== 'undefined')
       return false;
     }
     var herois = limpaHerois(rec.par.herois, rec.par.heroi);
+    // o cx dele NÃO volta do registro: a conexão dele pode ter mudado enquanto eu estava fora (e um cx velho
+    // barraria o `estado` dele e mandaria o `retoma` do Coop a uma conexão morta) — fica em branco até o
+    // primeiro envelope dele (o `estado` que responde à `volta`), que o carimba
     st = { fase: 'formado', gid: rec.gid, chave: rec.chave, v: 0, lider: rec.par.id,   // quem ficou lidera
-           par: { id: String(rec.par.id), cx: rec.par.cx || null, nome: rec.par.nome || nomeDe(rec.par.id),
+           par: { id: String(rec.par.id), cx: null, nome: rec.par.nome || nomeDe(rec.par.id),
                   heroi: herois[0] || null, herois: herois, on: true, sumidoDesde: null, saiu: false },
            pendente: null, descer: null, aguardaEstado: true, voltaProva: null, dissolver: null, parSubiu: null,
            descidaAcabou: false, descidaDif: difValida(rec.dif) || 'normal', descidaEscuro: false };
@@ -523,8 +526,12 @@ var JOGO = (typeof window !== 'undefined')
     if (!meusHerois.length) { gravaSessao(null); zera(); return false; }
     descidaG = { dungeonId: rec.dungeonId };
     ultimoPar = null; ficouSo = null;
-    vigia(st.par.id, st.par.cx);
+    vigia(st.par.id, null);
     muda();                                                 // o Coop fica configurado antes de a descida ser refeita
+    // a `volta` sai ANTES de a descida ser refeita: o `retoma` do Coop chega a ele depois dela (ele já trocou o
+    // meu cx), e o `estado` dele me diz o cx dele
+    st.voltaProva = provaDe(st.chave, meuCx());
+    manda('grupo', st.par.id, 'volta', { gid: st.gid, prova: st.voltaProva, retoma: true });
     var ata = (rec.ata && typeof rec.ata === 'object' && rec.ata.dungeonId === rec.dungeonId) ? rec.ata : null;
     var ok = safe(function () {
       return G().retomaDescida(meusHerois.slice(), rec.dungeonId, ata, st.descidaDif, function () {
@@ -533,9 +540,7 @@ var JOGO = (typeof window !== 'undefined')
         if (ata) { if (!c.retomaBatalha(ata)) c.retomaDescida(); } else c.retomaDescida();
       });
     }, false);
-    if (!ok) { gravaSessao(null); solta(st.par.id, st.par.cx); zera(); descidaG = null; muda(); return false; }
-    st.voltaProva = provaDe(st.chave, meuCx());
-    manda('grupo', st.par.id, 'volta', { gid: st.gid, prova: st.voltaProva, retoma: true });
+    if (!ok) { gravaSessao(null); Grupo.sair('retomada-falhou'); descidaG = null; muda(); return false; }
     muda();
     return true;
   }
@@ -1012,6 +1017,8 @@ var JOGO = (typeof window !== 'undefined')
       st.v = v;
       st.aguardaEstado = false;
       st.lider = (d.lider === eu()) ? eu() : de;
+      // 08/10 à noite: o par refeito do registro (a retomada) veio sem cx — o primeiro `estado` dele o carimba
+      if (!st.par.cx && ev.cx) { st.par.cx = ev.cx; vigia(de, st.par.cx); }
       // 11/09 (revisão): a dificuldade que quem lidera escolheu (quem segue a vê no portal e na porta)
       if (st.lider === de && d.dif) st.descidaDif = difValida(d.dif) || st.descidaDif;
       if (st.lider === de) st.descidaEscuro = d.escuro === true;      // 07/10: o caminho escuro de quem lidera
