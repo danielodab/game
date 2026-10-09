@@ -864,6 +864,101 @@ var JOGO = (typeof window !== 'undefined')
     return true;
   };
 
+  /* QUEM CAI VOLTA PARA A LUTA (08/10 à noite; o dono: "um personagem caiu na luta e quando voltou, voltou na
+   * praça e bugou na luta permanecendo lá... caso caia em qualquer conexão ele deve ficar na batalha"). A
+   * queda na MESMA aba já voltava pela foto de resgate; a aba recarregada (ou o aplicativo reaberto) perdia
+   * tudo: o estado do grupo e do Coop vivem na memória. Agora o grupo.js guarda a sessão do grupo por conta
+   * (gid, chave, o par, os meus heróis, a descida e a ATA da sala em curso) e, ao entrar na praça de novo,
+   * retoma: esta função refaz a descida de grupo a partir da praça — os modelos, a antessala da sala da ata,
+   * a batalha nascida da MESMA ata (o mesmo estado inicial, os mesmos uids) — e o Coop pede a foto de resgate
+   * ao parceiro, que devolve os corpos onde estiverem. Sem ata (a recarga foi fora da batalha), a descida
+   * refeita para na antessala da sala 0 e o Coop pergunta ao parceiro onde o time está (retomaNaAntessala).
+   * `pronto` é chamado quando a tela existe (os modelos podem segurar um instante). Da praça, só. */
+  Game.retomaDescida = function (heroIds, dungeonId, ata, dif, pronto) {
+    if (Game.screen !== 'hub' && Game.screen !== 'menu') return false;
+    var ids = (Object.prototype.toString.call(heroIds) === '[object Array]') ? heroIds.slice(0, 2) : [];
+    if (!validParty(ids) || !validDungeon(dungeonId)) return false;
+    if (ata && (ata.dungeonId !== dungeonId || typeof ata.roomIndex !== 'number' || ata.roomIndex < 0 ||
+                Object.prototype.toString.call(ata.party) !== '[object Array]')) return false;
+    var sala = ata ? ata.roomIndex : 0;
+    if (dungeonId === 'poco' && (!JOGO.Poco || !JOGO.Poco.preparar(sala + 2))) return false;
+    if (seguraParaModelos({ dungeonId: dungeonId, party: comParceiro(ids), duplas: duplasDaDescida(ids), sala: sala },
+        function () { Game.retomaDescida(heroIds, dungeonId, ata, dif, pronto); })) return true;
+    Game.party = ids.slice();
+    Game.dungeonId = dungeonId;
+    Game.roomIndex = sala;
+    Game.dificuldade = (dif === 'facil' || dif === 'normal' || dif === 'dificil') ? dif : ((ata && ata.dificuldade) || Game.dificuldade || 'normal');
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    carryFimRede = null;
+    ataSolo = null;
+    resetAiState();
+    resetTimer(true);
+    rede = { tipo: 'grupo', eu: meuIdRede(), lado: null, colocador: false };
+    ultimoTurno = null; timerTurno = null;
+    Game.state = null;
+    setScreen('antessala', Game.salaInfo());
+    avisaAntessala();
+    if (ata && !Game._criaDaAta(ata)) { Game.init('hub'); return false; }
+    if (pronto) { try { pronto(); } catch (e) {} }
+    return true;
+  };
+  /* ...e a sala seguinte que o time já concluiu (o dono: "caso esteja em calabouço ele volta para a próxima sala
+   * que seu time concluiu... ele caiu na sala 1, aí quando voltou meu time já havia entrado na luta da sala dois,
+   * ele pode continuar na dois e reencontrar na sala 3"): o parceiro disse (a voz `aqui`) que está na ANTESSALA
+   * da sala N; quem retoma larga a batalha refeita (ou a antessala em que parou) e vai para a antessala dessa
+   * sala, de onde manda o `pronto` de sempre — e a ata do parceiro abre a batalha para os dois. */
+  /* ...e a BATALHA em que o time está (quem ficou mandou a ata dela com `retoma`): a batalha refeita (ou a antessala
+   * em que parei) dá lugar à da ata — nascida igual nos dois motores — e o Coop pede a foto dela. `pronto` é
+   * chamado quando a tela existe. */
+  Game.retomaBatalhaDaAta = function (ata, pronto) {
+    if (!rede || rede.tipo !== 'grupo' || !ata || !Game.dungeonId || ata.dungeonId !== Game.dungeonId) return false;
+    if (Game.screen !== 'battle' && Game.screen !== 'antessala' && Game.screen !== 'roomClear') return false;
+    if (typeof ata.roomIndex !== 'number' || ata.roomIndex < Game.roomIndex) return false;
+    if (Game.dungeonId === 'poco' && (!JOGO.Poco || !JOGO.Poco.preparar(ata.roomIndex + 2))) return false;
+    if (seguraParaModelos({ dungeonId: Game.dungeonId, party: comParceiro(Game.party), duplas: duplasDaDescida(Game.party), sala: ata.roomIndex },
+        function () { Game.retomaBatalhaDaAta(ata, pronto); })) return true;
+    Game.roomIndex = ata.roomIndex;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    resetAiState();
+    resetTimer(true);
+    timerTurno = null; ultimoTurno = null;
+    Game.state = null;
+    ataSolo = null;
+    Game.screen = 'antessala';                   // a porta da sala da ata, sem a tela (a batalha vem logo atrás)
+    if (!Game._criaDaAta(ata)) { setScreen('antessala', Game.salaInfo()); avisaAntessala(); return false; }
+    if (pronto) { try { pronto(); } catch (e) {} }
+    return true;
+  };
+  Game.retomaNaAntessala = function (roomIndex) {
+    if (!rede || rede.tipo !== 'grupo' || !Game.dungeonId) return false;
+    if (Game.screen !== 'battle' && Game.screen !== 'antessala' && Game.screen !== 'roomClear') return false;
+    if (typeof roomIndex !== 'number' || roomIndex < 0 || roomIndex < Game.roomIndex) return false;
+    var d = dungeonDefDe(Game.dungeonId), n = (d && d.rooms) ? d.rooms.length : 0;
+    if (Game.dungeonId !== 'poco' && roomIndex >= n) return false;
+    if (Game.dungeonId === 'poco' && JOGO.Poco) JOGO.Poco.preparar(roomIndex + 2);
+    if (seguraParaModelos({ dungeonId: Game.dungeonId, party: comParceiro(Game.party), duplas: duplasDaDescida(Game.party), sala: roomIndex },
+        function () { Game.retomaNaAntessala(roomIndex); })) return true;
+    Game.roomIndex = roomIndex;
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    resetAiState();
+    resetTimer(true);
+    timerTurno = null; ultimoTurno = null;
+    Game.state = null;
+    ataSolo = null;
+    setScreen('antessala', Game.salaInfo());
+    avisaAntessala();
+    return true;
+  };
+
   function dungeonDefDe(dungeonId) {
     var ds = (JOGO.DATA && JOGO.DATA.dungeons) || [];
     var lista = Array.isArray(ds) ? ds : Object.keys(ds).map(function (k) { return ds[k]; });
@@ -1415,6 +1510,7 @@ var JOGO = (typeof window !== 'undefined')
   // entrar): sem poder tocar em nada, o turno não pode correr
   var relogioVisto = 0;
   function congelaRelogio() {
+    if (caido) caido.visto = agoraMs();            // 08/10 à noite: a vez de quem caiu também não corre travada
     if (!rede || timerTurno === null) return;
     var ag = agoraMs();
     if (relogioVisto) turnoIniMs += Math.max(0, ag - relogioVisto);
@@ -1506,12 +1602,46 @@ var JOGO = (typeof window !== 'undefined')
      * invocacao seguem na IA: `u.dono` so existe em heroi de gente. */
     if (u.dono && (u.kind === 'hero' || u.kind === 'fusion')) {
       resetAiState();
+      if (st.phase === 'playing' && !vezDoCaidoAcabou(st, u)) return;
+      caido = null;
       if (st.phase === 'playing') { E().endTurn(st); posMotor(); }
       if (Game.state && Game.state.phase !== 'playing' && !travadoRede()) handleBattleOver();
       return;
     }
     iaPasso(u, d, semTela);
   }
+  /* A VEZ DE QUEM CAIU CORRE NO RELÓGIO (08/10 à noite, o dono: "caso caia em qualquer conexão ele deve
+   * ficar na batalha e seu turno e tempo correr normal até ele desconectar ou perder"). Até aqui a marca
+   * `ia` num herói de gente passava a vez DELE na hora, no primeiro quadro: quem recarregou a página (ou
+   * cuja conexão piscou) voltava e encontrava os heróis com três ou quatro vezes puladas. Agora a vez do
+   * herói marcado corre pelos mesmos 30 s de uma vez normal (`turnTime`, sem banco: o banco é de quem está
+   * aqui), no relógio de PAREDE deste motor, e só então passa — é o tempo que uma recarga ou a reabertura
+   * do aplicativo leva para o dono voltar e retomar os corpos (Coop.retomaBatalha). Dois cuidados:
+   *   - o relógio PARA enquanto a batalha está travada (sincronizando): o quadro não chega aqui, e o
+   *     `visto` é empurrado em updateRede para o tempo travado não contar;
+   *   - a QUEDA CONFIRMADA (Coop.quedaConfirmada: o parceiro fora há mais de Coop.QUEDA_MS sem sinal, ou
+   *     quem SAIU de vez) volta a passar a vez na hora — quem fechou o jogo para sempre não prende o
+   *     parceiro em 30 s por vez até o fim da sala.
+   * É um relógio local de quem simula; o estado continua igual nos dois motores (os dois passam a MESMA
+   * vez, a fila por (T, k) acomoda o atraso), e o juiz passa a vez marcada sem tempo nenhum. */
+  var caido = null;          // { uid, T, gasto, visto } — a vez em curso de um herói de gente marcado fora
+  function vezDoCaidoAcabou(st, u) {
+    var c = C(), ag = agoraMs(), T = st.turno || 0;
+    var confirmada = true;
+    try { if (c && c.quedaConfirmada) confirmada = !!c.quedaConfirmada(u.dono); } catch (e) { confirmada = true; }
+    if (confirmada) return true;
+    if (!caido || caido.uid !== u.uid || caido.T !== T) caido = { uid: u.uid, T: T, gasto: 0, visto: ag };
+    caido.gasto += Math.max(0, ag - caido.visto);
+    caido.visto = ag;
+    return caido.gasto >= Game.turnTime * 1000;
+  }
+  /* a HUD: a vez de quem caiu, e quanto falta para ela passar ({ uid, resta } em ms), ou null */
+  Game.relogioCaido = function () {
+    if (!caido || !Game.state) return null;
+    var u = (Game.state.phase === 'playing') ? E().activeUnit(Game.state) : null;
+    if (!u || u.uid !== caido.uid || (Game.state.turno || 0) !== caido.T) return null;
+    return { uid: caido.uid, resta: Math.max(0, Game.turnTime * 1000 - caido.gasto) };
+  };
   // os lances do parceiro: um por quadro livre com o desenho; todos sem ele
   function aplicaFila(semTela) {
     var c = C();

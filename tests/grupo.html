@@ -1045,8 +1045,130 @@ JOGO.DATA = {
     }, 30);
   }, 80);
 
+  /* ============================================================ 08/10 à noite: a sessão guardada e a retomada */
+  function sessaoGuardada() {
+    var configuraAntes = Co.configura, abandonarAntes = Gm.abandonar, retomaDescidaAntes = Gm.retomaDescida;
+    var chaveLs = Gr.SESSAO_CHAVE;
+    reset();
+    try { localStorage.removeItem(chaveLs); } catch (e) {}
+    Gr._sessaoDecidida(true);
+    var d = formaLiderando();
+    var chave = Gr._chaveAtual();
+    check('sessão · o grupo formado na praça não deixa registro (na praça a queda desfaz o grupo)', !Gr.sessaoGuardada());
+    Gr.descer('cistern');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: d.gid, dungeonId: 'cistern', ok: true } });
+    var rec1 = Gr.sessaoGuardada();
+    check('sessão · na descida o registro da conta guarda gid, chave, quem lidera, o par (id, cx, nome, heróis), os meus heróis e o calabouço — sem ata',
+          !!rec1 && rec1.gid === d.gid && rec1.chave === chave && rec1.lider === 'ana' && rec1.eu === 'ana' && rec1.par.id === 'bia' &&
+          rec1.par.cx === 'cxbia1' && rec1.par.herois.length === 1 && rec1.meus.join() === 'sumo' && rec1.dungeonId === 'cistern' &&
+          rec1.ata === null && Gr.retomavel('gid-srv-1') === false, JSON.stringify(rec1));
+    Gr.lembraBatalha({ bid: 'b1', gid: 'gid-srv-1', dungeonId: 'cistern', roomIndex: 0, semente: 7, party: [] });
+    var rec2 = Gr.sessaoGuardada();
+    check('sessão · o Coop pendura a ata da sala em curso; a Autoridade pergunta pelo gid do servidor: retomável',
+          !!rec2 && !!rec2.ata && rec2.ata.gid === 'gid-srv-1' && Gr.retomavel('gid-srv-1') === true && Gr.retomavel('outra') === false);
+    Gr.lembraBatalha(null);
+    check('sessão · entre salas o registro fica sem ata (a sala velha deixa de ser retomável)',
+          Gr.sessaoGuardada() && Gr.sessaoGuardada().ata === null && Gr.retomavel('gid-srv-1') === false);
+    Gr.lembraBatalha({ bid: 'b1', gid: 'gid-srv-1', dungeonId: 'cistern', roomIndex: 0, semente: 7, party: [] });
+    // a aba RECARREGADA: nada na memória, o registro no armário; a Rede liga na praça
+    Gr._reset(); Gr._sessaoDecidida(false);
+    saidas.length = 0; Co.cfg.length = 0; avisos.length = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.modo = null;
+    var retomadas = [], retomaBatalhas = [], retomaDescidas = 0, abandonos = 0;
+    Gm.retomaDescida = function (ids, dg, ata, dif, pronto) {
+      retomadas.push({ ids: ids.slice(), dg: dg, ata: ata, dif: dif });
+      this.screen = 'battle'; this.dungeonId = dg; this.modo = 'grupo';
+      if (pronto) pronto();
+      return true;
+    };
+    Gm.abandonar = function () { abandonos++; this.screen = 'hub'; this.modo = null; this.dungeonId = null; return true; };
+    Co.retomaBatalha = function (ata) { retomaBatalhas.push(ata); return true; };
+    Co.retomaDescida = function () { retomaDescidas++; return true; };
+    Co.retomando = function () { return retomaBatalhas.length > 0; };
+    Co.configura = function (i) {
+      this.cfg.push(i ? JSON.parse(JSON.stringify(i)) : null);
+      // o Coop de verdade: o grupo desfeito no meio da retomada faz a retomada falhar (falhaRetomada → Grupo.retomadaFalhou)
+      if (!i && this.retomando()) { retomaBatalhas.length = 0; Gr.retomadaFalhou('grupo-desfeito'); }
+    };
+    check('sessão · antes de a retomada ser decidida nesta aba, o registro da aba de antes não é tocado',
+          !!Gr.sessaoGuardada() && Gr.retomavel('gid-srv-1') === true);
+    R._cx = 'cxana77';
+    chega('cx', { cx: 'cxana77' });
+    var vt = ult('grupo', 'volta');
+    var cfgUlt = Co.cfg[Co.cfg.length - 1];
+    check('retomada · ao ligar a Rede na praça o grupo é refeito do registro: o par é o par (sem cx: o dele pode ter mudado), QUEM FICOU lidera, o Game refaz a descida com a ata e o Coop retoma a batalha',
+          Gr.emGrupo() && Gr.estado().lider === 'bia' && Gr.souLider() === false && Gr.parceiro().id === 'bia' && Gr.parceiro().cx === null &&
+          Gr.meusHerois().join() === 'sumo' && Gr.estado().descidaGrupo === 'cistern' &&
+          retomadas.length === 1 && retomadas[0].dg === 'cistern' && retomadas[0].ids.join() === 'sumo' && retomadas[0].ata && retomadas[0].ata.gid === 'gid-srv-1' &&
+          retomaBatalhas.length === 1 && retomaDescidas === 0 && cfgUlt && cfgUlt.lider === 'bia' && cfgUlt.parceiro.id === 'bia',
+          JSON.stringify({ g: Gr.emGrupo(), lider: Gr.estado().lider, ret: retomadas.length, bat: retomaBatalhas.length, cfg: cfgUlt }));
+    check('retomada · a `volta` sai ao par pelo id (sem cx: o dele pode ter mudado) com o gid, a PROVA presa ao cx novo e `retoma: true`',
+          !!vt && vt.dados.gid === d.gid && vt.dados.retoma === true && vt.dados.prova === Du._sha256(chave + '|cxana77') && !vt.cx && !vt.dados.chave,
+          JSON.stringify(vt));
+    check('retomada · o registro segue no armário enquanto o grupo está de pé (a Autoridade ainda o vê como retomável)', Gr.retomavel('gid-srv-1') === true);
+    chega('grupo', { de: 'bia', cx: 'cxbia9', acao: 'estado',
+                     dados: { gid: d.gid, v: 1, lider: 'bia', membros: [{ id: 'bia', heroi: { classId: 'arqueiro', element: 'ar', level: 9 } }, { id: 'ana' }] } });
+    check('retomada · o `estado` do par confirma: ele lidera — e o cx NOVO dele fica carimbado (vigiado)',
+          Gr.estado().lider === 'bia' && Gr.souLider() === false && Gr.parceiro().cx === 'cxbia9' && vigias.indexOf('bia@cxbia9') >= 0,
+          JSON.stringify({ cx: Gr.parceiro().cx, vigias: vigias.slice(-2) }));
+    chega('cx', { cx: 'cxana77' }); Gr._tique();
+    check('retomada · decidida, não se repete (um segundo `cx` ou o tique não refazem nada)', retomadas.length === 1 && retomaBatalhas.length === 1);
+    chega('grupo', { de: 'bia', cx: 'cxbia9', acao: 'sair', dados: { gid: d.gid, motivo: 'expirou' } });
+    check('retomada · o par já não me conhecia (`sair`): a retomada falha, o jogo volta à praça (o abandonar — a luta fecha como `largou` só agora) e o registro some',
+          !Gr.emGrupo() && abandonos === 1 && !Gr.sessaoGuardada() && Gr.retomavel('gid-srv-1') === false && Gm.screen === 'hub',
+          JSON.stringify({ g: Gr.emGrupo(), a: abandonos, s: Gr.sessaoGuardada(), tela: Gm.screen }));
+    // sem ata (a recarga foi entre salas): a descida refeita para na antessala e o Coop pergunta onde o time está
+    reset();
+    formaLiderando();
+    Gr.descer('cistern');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'cistern', ok: true } });
+    Gr._reset(); Gr._sessaoDecidida(false);
+    retomadas.length = 0; retomaBatalhas.length = 0; retomaDescidas = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.modo = null;
+    chega('cx', { cx: 'cxana77' });
+    check('retomada · sem ata no registro (a recarga entre salas): a descida é refeita sem batalha e o Coop só pergunta onde o time está (retomaDescida)',
+          Gr.emGrupo() && retomadas.length === 1 && retomadas[0].ata === null && retomaBatalhas.length === 0 && retomaDescidas === 1,
+          JSON.stringify({ g: Gr.emGrupo(), ret: retomadas.length, ata: retomadas[0] && retomadas[0].ata, desc: retomaDescidas }));
+    // o registro de mais de 30 min não retoma
+    reset();
+    formaLiderando();
+    Gr.descer('cistern');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'cistern', ok: true } });
+    Gr.lembraBatalha({ bid: 'b3', gid: 'gid-srv-3', dungeonId: 'cistern', roomIndex: 1, semente: 7, party: [] });
+    var velho = Gr.sessaoGuardada();
+    velho.t = T - 31 * 60 * 1000;
+    try { localStorage.setItem(chaveLs, JSON.stringify(velho)); } catch (e2) {}
+    Gr._reset(); Gr._sessaoDecidida(false);
+    retomadas.length = 0; retomaBatalhas.length = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.modo = null;
+    check('retomada · o registro velho (mais de 30 min) já não é retomável para a Autoridade', Gr.retomavel('gid-srv-3') === false);
+    chega('cx', { cx: 'cxana78' });
+    check('retomada · ...e ao ligar a Rede não refaz nada: some', !Gr.emGrupo() && retomadas.length === 0 && !Gr.sessaoGuardada());
+    // o registro de OUTRA pessoa (o id da Rede mudou: outro personagem na mesma conta) também não
+    reset();
+    formaLiderando();
+    Gr.descer('cistern');
+    chega('grupo', { de: 'bia', cx: 'cxbia1', acao: 'desci', dados: { gid: Gr.estado().gid, dungeonId: 'cistern', ok: true } });
+    Gr.lembraBatalha({ bid: 'b4', gid: 'gid-srv-4', dungeonId: 'cistern', roomIndex: 0, semente: 7, party: [] });
+    Gr._reset(); Gr._sessaoDecidida(false);
+    retomadas.length = 0;
+    Gm.screen = 'hub'; Gm.dungeonId = null; Gm.modo = null;
+    R._id = 'outra';
+    chega('cx', { cx: 'cxana79' });
+    check('retomada · o registro de outro id da Rede não retoma e some', !Gr.emGrupo() && retomadas.length === 0 && !Gr.sessaoGuardada());
+    R._id = 'ana';
+    // o que foi mexido volta ao lugar
+    Co.configura = configuraAntes; delete Co.retomaBatalha; delete Co.retomaDescida; delete Co.retomando;
+    Gm.abandonar = abandonarAntes; Gm.retomaDescida = retomaDescidaAntes;
+    if (Gm.abandonar === undefined) delete Gm.abandonar;
+    if (Gm.retomaDescida === undefined) delete Gm.retomaDescida;
+    try { localStorage.removeItem(chaveLs); } catch (e3) {}
+    reset();
+  }
+
   /* ============================================================ 14/09: o Campo de PvP e a Arena */
   function modos() {
+    sessaoGuardada();                                        // 08/10 à noite
     var H = JOGO.Hub;
     function revelaComo(did, dupla) {
       var s = JSON.stringify(dupla), salX = 'fedcba9876543210fedcba9876543210';

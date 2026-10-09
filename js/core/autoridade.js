@@ -301,10 +301,22 @@ var JOGO = (typeof window !== 'undefined')
   var fechandoLuta = {};       // ref → a promessa do fechar em curso (o de sempre ou o do registro)
   /* Fecha a luta pendente e resolve quando o servidor respondeu de vez (sem rede, tenta de novo como todo fechar).
    * Resolve null sem luta pendente. Um fechar da MESMA luta que já está a caminho é esperado, não repetido. */
-  A.fechaPendente = function () {
+  A.fechaPendente = function (opts) {
     if (!A.ligada()) return Promise.resolve(null);
     var v = A.lutaAberta();
     if (!v) return Promise.resolve(null);
+    /* 08/10 À NOITE, QUEM CAI VOLTA PARA A LUTA (o dono: "um personagem caiu na luta e quando voltou, voltou na
+     * praça e bugou na luta permanecendo lá"). A sala em grupo que ficou aberta por uma RECARGA da página (ou o
+     * aplicativo reaberto) não é mais largada ao abrir o jogo: se o grupo.js guardou a sessão do grupo com essa
+     * mesma sala (Grupo.retomavel) ele a retoma ao entrar na praça — o jogador volta para a batalha, pela foto de
+     * resgate de quem ficou. `opts.retomavel` é só da chamada da ABERTURA (ouveNuvem): toda outra chamada (o
+     * bilhete novo, a sala em grupo nova, o duelo, a Arena, o Eco, o abandonar) é o jogador DESISTINDO de verdade
+     * da luta de antes, e aí fecha como sempre — o `largou` passou a ser só de quem desiste. */
+    if (opts && opts.retomavel === true && v.tipo === 'grupo' && !v.fim) {
+      var podeRetomar = false;
+      try { podeRetomar = !!(JOGO.Grupo && JOGO.Grupo.retomavel && JOGO.Grupo.retomavel(v.ref)); } catch (eR) { podeRetomar = false; }
+      if (podeRetomar) return Promise.resolve(null);
+    }
     if (fechandoLuta[v.ref]) return fechandoLuta[v.ref].then(function () { return A.lutaAberta() ? A.fechaPendente() : null; });
     var p;
     if (v.tipo === 'sala') p = A.fecha(v.ref, v.lances || [], null);
@@ -717,8 +729,9 @@ var JOGO = (typeof window !== 'undefined')
     if (!A.ligada()) return;
     puxouNaAbertura = true;
     A.puxaEstado();
-    // 15/09: a luta que ficou aberta da última vez (a aba fechada no meio) fecha já, com os lances guardados
-    try { A.fechaPendente(); } catch (eL) {}
+    // 15/09: a luta que ficou aberta da última vez (a aba fechada no meio) fecha já, com os lances guardados —
+    // 08/10 à noite: menos a sala em grupo que o grupo.js ainda pode retomar (a recarga no meio da batalha)
+    try { A.fechaPendente({ retomavel: true }); } catch (eL) {}
     // 14/09: e a vida dos heróis, que o servidor guarda (a praça já está na tela)
     try { if (JOGO.Vida && JOGO.Vida.sincroniza) JOGO.Vida.sincroniza(); } catch (eV) {}
   }

@@ -1084,10 +1084,114 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('K5 · 15 s depois do `caiu`, o herói da parceira fica marcado fora (u.ia: o turno passa) e Ana vira a autoridade',
           ana.J.Coop.sessao().parceiroIA && heroiB && heroiB.ia === true && ana.J.Coop.sessao().autoridade === 'ana' &&
           relogio.t - caiuEm >= 15000, 'depois de ' + Math.round((relogio.t - caiuEm) / 1000) + ' s');
-    ate(function () { return tela('ana') !== 'battle'; }, 6000, 50, ['ana']);
-    check('K5 · a sala termina só com Ana; sem volta, a descida acaba (nextRoom recusa)',
-          ana.J.Coop.sessao().descidaAcabou === true && ana.J.Game.nextRoom() === false, tela('ana'));
+    /* 08/10 À NOITE (o dono: "caso caia em qualquer conexão ele deve ficar na batalha e seu turno e tempo
+       correr normal até ele desconectar ou perder"): a vez do herói marcado fora CORRE no relógio de 30 s
+       (game.js, vezDoCaidoAcabou) em vez de passar no primeiro quadro; a HUD tem o relógio
+       (Game.relogioCaido). Confirmada a queda (Coop.QUEDA_MS sem sinal), a vez volta a passar na hora. */
+    function vezCaida() {
+      var s = ana.J.Game.state;
+      if (!s || s.phase !== 'playing') return null;
+      var u = ana.J.Engine.activeUnit(s);
+      return (u && u.ia && u.dono === 'bia') ? u : null;
+    }
+    ate(function () { return !!vezCaida() || tela('ana') !== 'battle'; }, 2000, 50, ['ana']);
+    var uC = vezCaida(), tC0 = relogio.t, TC = ana.J.Game.state ? ana.J.Game.state.turno : -1, rcVisto = null;
+    ate(function () {
+      var s = ana.J.Game.state;
+      if (!rcVisto) rcVisto = ana.J.Game.relogioCaido();
+      return !s || s.phase !== 'playing' || s.turno !== TC;
+    }, 2000, 50, ['ana']);
+    check('K5 · 08/10: a vez do herói de quem caiu CORRE no relógio de 30 s (não passa na hora), e a HUD tem o relógio dela',
+          !!uC && relogio.t - tC0 >= 29000 && relogio.t - tC0 <= 36000 && !!rcVisto && rcVisto.uid === uC.uid && rcVisto.resta > 0,
+          'durou ' + Math.round((relogio.t - tC0) / 1000) + ' s · relógio ' + JSON.stringify(rcVisto));
+    var quedaAntes = ana.J.Coop.QUEDA_MS, naoConfirmada = ana.J.Coop.quedaConfirmada('bia');
+    ana.J.Coop.QUEDA_MS = 1000;                       // a queda já está "confirmada": a vez passa na hora
+    var confirmada = ana.J.Coop.quedaConfirmada('bia');
+    // oito turnos cobrem uma rodada inteira (os dois heróis da Bia): com o relógio levariam 60 s ou mais
+    var tC1 = relogio.t, T1 = ana.J.Game.state ? ana.J.Game.state.turno : 0, relogioDepois = false;
+    ate(function () {
+      var s = ana.J.Game.state;
+      if (ana.J.Game.relogioCaido()) relogioDepois = true;
+      return !s || s.phase !== 'playing' || s.turno >= T1 + 8;
+    }, 1400, 50, ['ana']);
+    check('K5 · 08/10: confirmada a queda (QUEDA_MS sem sinal), a vez dele volta a passar na hora — oito turnos sem relógio de caído, em menos de 55 s',
+          naoConfirmada === false && confirmada === true && !relogioDepois && relogio.t - tC1 < 55000,
+          'antes ' + naoConfirmada + ' · depois ' + confirmada + ' · relógio ' + relogioDepois + ' · ' + Math.round((relogio.t - tC1) / 1000) + ' s');
+    ana.J.Coop.QUEDA_MS = quedaAntes;
+    ate(function () { return tela('ana') !== 'battle'; }, 6000, 250, ['ana']);
+    /* 08/10 À NOITE (o dono: "ele caiu na sala 1, aí quando voltou meu time já havia entrado na luta da sala
+       dois"): o parceiro ainda fora NÃO acaba mais a descida — quem ficou lidera, a sala seguinte nasce com os
+       heróis dele (os guardados), e sem o `dentro` dele a líder a abre SOZINHA (a ata sem resposta, 5 × 3 s). */
+    var ataSala0 = ana.J.Coop._S().ata;                // a ata da sala 0 (a Bia a tem guardada na sessão dela)
+    if (tela('ana') === 'roomClear') {
+      var seguiu5 = ana.J.Coop.sessao().descidaAcabou === false && ana.J.Game.nextRoom() === true;
+      check('K5 · 08/10: a sala termina só com Ana e a descida CONTINUA (a sala seguinte é dela com os heróis de quem caiu)',
+            seguiu5 && tela('ana') === 'antessala' && ana.J.Coop.podeEntrar().ok === true,
+            tela('ana') + ' · acabou ' + ana.J.Coop.sessao().descidaAcabou + ' · ' + JSON.stringify(ana.J.Coop.podeEntrar()));
+      var abriu5 = ana.J.Coop.entrar();
+      ate(function () { return tela('ana') === 'battle'; }, 400, 250, ['ana']);
+      var hb5 = ana.J.Game.state ? ana.J.Game.state.units.filter(function (u) { return u.dono === 'bia' && u.kind === 'hero'; }) : [];
+      ate(function () { return hb5.every(function (u) { return u.ia === true; }); }, 100, 250, ['ana']);
+      check('K5 · 08/10: sem o `dentro` de quem caiu, a líder abre a sala seguinte SOZINHA, com os heróis dele de pé e marcados fora',
+            abriu5 === true && tela('ana') === 'battle' && ana.J.Game.roomIndex === 1 && hb5.length === 2 &&
+            hb5.every(function (u) { return u.ia === true && u.alive && !u.offBoard; }),
+            tela('ana') + ' · sala ' + ana.J.Game.roomIndex + ' · ' + hb5.map(function (u) { return u.ia; }).join(','));
+    } else {
+      check('K5 · 08/10: a sala termina só com Ana e a descida CONTINUA', true, 'a sala foi perdida — não há seguinte');
+      check('K5 · 08/10: sem o `dentro` de quem caiu, a líder abre a sala seguinte SOZINHA', true, 'idem');
+    }
     bia.vivo = true;
+
+    /* A ABA RECARREGADA (08/10 à noite). `reabre(id, cx)` é o que sobra depois de recarregar a página de `id`: nada
+       na memória (Coop._reset + Game.init), um cx novo, e o que o grupo.js faz ao refazer o grupo do registro da
+       conta — o Coop configurado com QUEM FICOU liderando, e a `volta` dele (que do lado de quem ficou é o
+       parceiroVoltou com o cx novo). Daí o Game refaz a descida pela ata guardada e o Coop retoma. */
+    function reabre(id, cxNovo) {
+      var c = cli[id], outro = id === 'ana' ? 'bia' : 'ana';
+      c.J.Coop._reset(); c.J.Coop._semIntervalo = true; c.J.Coop._agora = function () { return relogio.t; };
+      c.J.Game.init();
+      c.cx = cxNovo; c.J.Rede._ident(id, cxNovo); c.vivo = true;
+      c.J.Coop.aoAviso = function (t) { c.avisos.push(t); };
+      var hs = cli[outro].herois.map(function (hid) {
+        var x = cli[outro].J.Progress.hero(hid);
+        return x ? { classId: x.classId, element: x.element, level: x.level } : null;
+      }).filter(Boolean);
+      c.J.Coop.configura({ gid: 'ana-g1', lider: outro, eu: id, parceiro: { id: outro, cx: cli[outro].cx, heroi: hs[0], herois: hs } });
+      cli[outro].J.Coop.parceiroVoltou(id, cxNovo);
+    }
+    function heroisDe(id, dono) {
+      var s = cli[id].J.Game.state;
+      return s ? s.units.filter(function (u) { return u.dono === dono && (u.kind === 'hero' || u.kind === 'fusion'); }) : [];
+    }
+    /* ---- K5b (08/10 à noite): a Bia RECARREGOU durante a sala 0 e volta com a sessão guardada (a ata da sala 0);
+       a Ana já está na luta da sala 1: responde ao `retoma` com a ata da sala 1 (`retoma: true`), a Bia refaz a
+       batalha DELA e pede a foto — o dono: "ele pode continuar na dois e reencontrar na sala 3" */
+    if (tela('ana') === 'battle' && ana.J.Game.roomIndex === 1 && ataSala0) {
+      reabre('bia', 'cxb5');
+      bia.J.Coop._piloto({ joga: true });
+      var ret5 = bia.J.Game.retomaDescida(bia.herois.slice(), 'greenhouse', ataSala0, 'normal', function () { bia.J.Coop.retomaBatalha(ataSala0); });
+      var naSala0 = tela('bia') === 'battle' && bia.J.Game.roomIndex === 0 && bia.J.Coop.sessao().retomando === true && bia.J.Coop.bloqueado() === true;
+      ate(function () { return !bia.J.Coop.sessao().retomando; }, 400, 50);
+      var hb5b = heroisDe('bia', 'bia'), tVolta5 = bia.J.Game.state ? bia.J.Game.state.turno : 0;
+      check('K5b · 08/10: a Bia recarregada refaz a batalha da sala 0 pela ata guardada, entra em retomada (travada) e manda `retoma`',
+            ret5 === true && naSala0, JSON.stringify({ ret: ret5, tela: tela('bia'), sala: bia.J.Game.roomIndex, ret2: bia.J.Coop.sessao().retomando }));
+      check('K5b · 08/10: a Ana (na sala 1) responde com a ata da sala 1: a Bia refaz ESSA batalha, recebe a foto e os corpos são dela de novo — "continua na dois"',
+            tela('bia') === 'battle' && bia.J.Game.roomIndex === 1 && bia.J.Coop.sessao().restauracoes > 0 && !bia.J.Coop.sessao().retomando &&
+            !bia.J.Coop.bloqueado() && hb5b.length === 2 && hb5b.every(function (u) { return u.ia !== true && bia.J.Game.donoDe(u) === 'eu'; }) &&
+            !ana.J.Coop.sessao().parceiroIA && heroisDe('ana', 'bia').every(function (u) { return u.ia !== true; }) &&
+            bia.avisos.some(function (t) { return /De volta à batalha/.test(t); }),
+            JSON.stringify({ tela: tela('bia'), sala: bia.J.Game.roomIndex, rest: bia.J.Coop.sessao().restauracoes, ret: bia.J.Coop.sessao().retomando,
+                             ia: hb5b.map(function (u) { return u.ia; }), avisos: bia.avisos.slice(-3) }));
+      ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000, 250);
+      var h5b = hashesIguais('ana', 'bia', tVolta5 + 1);
+      check('K5b · 08/10: da volta ao fim da sala 1 os dois hashes batem, e a descida continua para os dois',
+            !h5b.dif.length && h5b.n > 0 && final('ana') === final('bia') && ana.J.Coop.sessao().descidaAcabou === false,
+            h5b.n + ' turnos · ' + h5b.dif.slice(0, 3) + ' · ' + tela('ana') + '/' + tela('bia'));
+    } else {
+      check('K5b · 08/10: a Bia recarregada refaz a batalha da sala 0 pela ata guardada', true, 'sem a sala 1 — a sala 0 foi perdida');
+      check('K5b · 08/10: a Ana responde com a ata da sala 1', true, 'idem');
+      check('K5b · 08/10: da volta ao fim da sala 1 os dois hashes batem', true, 'idem');
+    }
 
     /* ---- K6: a parceira CAI e VOLTA. A foto a recoloca no lockstep, e o heroi
        dela fica de pe no tabuleiro com o turno PASSANDO ate ela voltar (12/09:
@@ -1156,6 +1260,89 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
       check('K6 · na sala seguinte o herói volta para a dona', hb2 && !hb2.ia && bia.J.Game.donoDe(hb2) === 'eu');
     } else check('K6 · na sala seguinte o herói volta para a dona', true, 'a sala foi perdida — não há seguinte');
 
+    /* ---- K12 (08/10 à noite): a aba RECARREGADA volta para a MESMA batalha. A Bia cai (o relé: `caiu`), a Ana
+       marca os corpos dela; a Bia reabre o jogo e refaz o grupo e a batalha pela ata guardada: o `retoma` → o `aqui`
+       da Ana (a mesma batalha) → a foto de resgate → os corpos voltam a ser dela, onde a Ana os deixou. */
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
+    bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');
+    desce('cistern');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    var ata12 = bia.J.Coop._S().ata, bid12 = bia.J.Coop.sessao().bid;
+    var graca12 = ana.J.Coop.GRACA_MS;
+    ana.J.Coop.GRACA_MS = 1000;
+    bia.vivo = false;
+    ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
+    ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
+    ate(function () { return false; }, 40, 100, ['ana']);                 // a Ana joga uns turnos sozinha
+    var marcada12 = heroisDe('ana', 'bia').every(function (u) { return u.ia === true; });
+    reabre('bia', 'cxb12');
+    bia.J.Coop._piloto({ joga: true });
+    var ret12 = bia.J.Game.retomaDescida(bia.herois.slice(), 'cistern', ata12, 'normal', function () { bia.J.Coop.retomaBatalha(ata12); });
+    var antes12 = tela('bia') === 'battle' && bia.J.Coop.sessao().bid === bid12 && bia.J.Coop.sessao().retomando === true && bia.J.Coop.bloqueado() === true &&
+                  bia.J.Coop.sessao().autoridade === 'ana' && bia.J.Coop.sessao().lider === false;
+    ate(function () { return !bia.J.Coop.sessao().retomando; }, 400, 50);
+    ana.J.Coop.GRACA_MS = graca12;
+    var hb12 = heroisDe('bia', 'bia'), tVolta12 = bia.J.Game.state ? bia.J.Game.state.turno : 0;
+    check('K12 · 08/10: a Bia recarregada refaz a MESMA batalha (o mesmo bid), travada, cedendo a autoridade a quem ficou',
+          ret12 === true && marcada12 && antes12, JSON.stringify({ ret: ret12, marcada: marcada12, tela: tela('bia'), bid: bia.J.Coop.sessao().bid === bid12,
+                                                                 aut: bia.J.Coop.sessao().autoridade }));
+    check('K12 · 08/10: a foto da Ana a recoloca no lockstep e os corpos são dela de novo (a marca sai nos dois motores)',
+          bia.J.Coop.sessao().restauracoes > 0 && !bia.J.Coop.sessao().retomando && !bia.J.Coop.bloqueado() && hb12.length === 2 &&
+          hb12.every(function (u) { return u.ia !== true && bia.J.Game.donoDe(u) === 'eu' && u.alive; }) &&
+          !ana.J.Coop.sessao().parceiroIA && heroisDe('ana', 'bia').every(function (u) { return u.ia !== true; }),
+          JSON.stringify({ rest: bia.J.Coop.sessao().restauracoes, ret: bia.J.Coop.sessao().retomando, ia: hb12.map(function (u) { return u.ia; }),
+                           iaAna: heroisDe('ana', 'bia').map(function (u) { return u.ia; }) }));
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000, 250);
+    var h12 = hashesIguais('ana', 'bia', tVolta12 + 1);
+    check('K12 · 08/10: da volta ao fim da sala os dois hashes batem; a descida continua',
+          !h12.dif.length && h12.n > 0 && final('ana') === final('bia') && ana.J.Coop.sessao().descidaAcabou === false,
+          h12.n + ' turnos · ' + h12.dif.slice(0, 3) + ' · ' + tela('ana') + '/' + tela('bia'));
+
+    /* ---- K14 (08/10 à noite): a Ana terminou a sala 0 sozinha e ESPERA NA ANTESSALA da sala 1; a Bia recarregada
+       refaz a sala 0, pergunta (`retoma`), ouve `aqui` (antessala, sala 1) e pula para lá: o `pronto` de sempre, e a
+       ata da Ana abre a sala 1 para as duas — "reencontrar na sala 3" */
+    ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
+    bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');
+    desce('greenhouse');
+    ana.J.Coop._piloto({ joga: true }); bia.J.Coop._piloto({ joga: true });
+    ana.J.Coop.entrar();
+    ate(function () { return ana.J.Game.state && ana.J.Game.state.turno >= 3 && bia.J.Game.state && bia.J.Game.state.turno >= 3; }, 400);
+    var ata14 = bia.J.Coop._S().ata;
+    var graca14 = ana.J.Coop.GRACA_MS, queda14 = ana.J.Coop.QUEDA_MS;
+    ana.J.Coop.GRACA_MS = 1000; ana.J.Coop.QUEDA_MS = 2000;          // a queda "confirmada" logo: a sala anda rápido
+    bia.vivo = false;
+    ana.J.Rede._sinal({ tipo: 'caiu', id: 'bia', cx: 'cxb' });
+    ate(function () { return ana.J.Coop.sessao().parceiroIA; }, 400, 100, ['ana']);
+    ate(function () { return tela('ana') !== 'battle'; }, 6000, 50, ['ana']);
+    ana.J.Coop.GRACA_MS = graca14; ana.J.Coop.QUEDA_MS = queda14;
+    if (tela('ana') === 'roomClear' && ana.J.Game.nextRoom() === true) {
+      ate(function () { return false; }, 10, 100, ['ana']);
+      reabre('bia', 'cxb14');
+      bia.J.Coop._piloto(null); ana.J.Coop._piloto(null);
+      var ret14 = bia.J.Game.retomaDescida(bia.herois.slice(), 'greenhouse', ata14, 'normal', function () { bia.J.Coop.retomaBatalha(ata14); });
+      var sala0_14 = tela('bia') === 'battle' && bia.J.Game.roomIndex === 0;
+      ate(function () { return !bia.J.Coop.sessao().retomando; }, 200, 50);
+      check('K14 · 08/10: a Ana espera na ANTESSALA da sala 1 — a Bia recarregada (refeita na sala 0) ouve o `aqui` e pula para a antessala da sala 1',
+            ret14 === true && sala0_14 && tela('bia') === 'antessala' && bia.J.Game.roomIndex === 1 && !bia.J.Coop.sessao().retomando &&
+            bia.avisos.some(function (t) { return /De volta à descida/.test(t); }),
+            JSON.stringify({ ret: ret14, s0: sala0_14, tela: tela('bia'), sala: bia.J.Game.roomIndex, ret2: bia.J.Coop.sessao().retomando }));
+      ate(function () { return ana.J.Coop.sessao().prontoParceiro && ana.J.Coop.podeEntrar().ok; }, 200, 100);
+      var abriu14 = ana.J.Coop.entrar();
+      ate(function () { return tela('ana') === 'battle' && tela('bia') === 'battle'; }, 60);
+      var hb14 = heroisDe('bia', 'bia');
+      check('K14 · 08/10: o `pronto` dela chega, a Ana abre a sala 1 e as duas entram juntas — os heróis da Bia são dela (sem marca)',
+            abriu14 === true && tela('ana') === 'battle' && tela('bia') === 'battle' && bia.J.Game.roomIndex === 1 && ana.J.Game.roomIndex === 1 &&
+            hb14.length === 2 && hb14.every(function (u) { return u.ia !== true && bia.J.Game.donoDe(u) === 'eu'; }) &&
+            bia.J.Engine.hash(bia.J.Game.state) === ana.J.Engine.hash(ana.J.Game.state),
+            JSON.stringify({ abriu: abriu14, telas: tela('ana') + '/' + tela('bia'), ia: hb14.map(function (u) { return u.ia; }) }));
+    } else {
+      check('K14 · 08/10: a Ana espera na ANTESSALA da sala 1 — a Bia recarregada pula para lá', true, 'a sala 0 foi perdida — não há seguinte (' + tela('ana') + ')');
+      check('K14 · 08/10: o `pronto` dela chega e as duas entram juntas', true, 'idem');
+    }
+    bia.vivo = true;
+
     // ---- K7: a LÍDER cai: a parceira vira autoridade (e líder)
     ['ana', 'bia'].forEach(function (id) { cli[id].J.Coop._reset(); cli[id].J.Coop._semIntervalo = true; cli[id].J.Coop._agora = function () { return relogio.t; }; });
     bia.cx = 'cxb'; bia.J.Rede._ident('bia', 'cxb');
@@ -1169,7 +1356,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('K7 · a líder caiu: a parceira vira autoridade e líder, e o herói da líder vai para a IA',
           bia.J.Coop.sessao().autoridade === 'bia' && bia.J.Coop.sessao().lider === true &&
           bia.J.Game.state.units.filter(function (u) { return u.dono === 'ana'; })[0].ia === true);
-    ate(function () { return tela('bia') !== 'battle'; }, 6000, 50, ['bia']);
+    // 08/10 à noite: a vez de quem caiu corre 30 s no relógio até a queda confirmada — passos de 250 ms
+    ate(function () { return tela('bia') !== 'battle'; }, 6000, 250, ['bia']);
     check('K7 · e a sala termina do lado da parceira', tela('bia') !== 'battle', tela('bia'));
     ana.vivo = true;
 
@@ -1436,7 +1624,9 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           'restaurações ' + ses('ana').restauracoes + ' · sincronizando ' + ses('ana').sincronizando + ' · ia ' + (hA1 && hA1.ia));
     var tR1 = ana.J.Game.state ? ana.J.Game.state.turno : 0;
     var nTa1 = ana.w.__telas.length, nTb1 = bia.w.__telas.length;
-    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    // 08/10 à noite: a vez da líder marcada corre 30 s no relógio nos DOIS motores (ninguém a dá por caída de
+    // vez: o prazo não é o `caiu`) — passos de 250 ms para a sala inteira caber na espera
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000, 250);
     var hR1 = hashesIguais('ana', 'bia', tR1 + 1), fA1 = telaFimDesde('ana', nTa1), fB1 = telaFimDesde('bia', nTb1);
     check('R1 · daí ao fim da sala os dois batem, e na recompensa quem abre a próxima é a parceira (só ela "lidera" a sala)',
           !hR1.dif.length && hR1.n > 0 && final('ana') === final('bia') && !!fA1 && !!fB1 && fA1.lider === false && fB1.lider === true,
