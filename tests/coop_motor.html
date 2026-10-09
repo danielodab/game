@@ -1084,7 +1084,41 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('K5 · 15 s depois do `caiu`, o herói da parceira fica marcado fora (u.ia: o turno passa) e Ana vira a autoridade',
           ana.J.Coop.sessao().parceiroIA && heroiB && heroiB.ia === true && ana.J.Coop.sessao().autoridade === 'ana' &&
           relogio.t - caiuEm >= 15000, 'depois de ' + Math.round((relogio.t - caiuEm) / 1000) + ' s');
-    ate(function () { return tela('ana') !== 'battle'; }, 6000, 50, ['ana']);
+    /* 08/10 À NOITE (o dono: "caso caia em qualquer conexão ele deve ficar na batalha e seu turno e tempo
+       correr normal até ele desconectar ou perder"): a vez do herói marcado fora CORRE no relógio de 30 s
+       (game.js, vezDoCaidoAcabou) em vez de passar no primeiro quadro; a HUD tem o relógio
+       (Game.relogioCaido). Confirmada a queda (Coop.QUEDA_MS sem sinal), a vez volta a passar na hora. */
+    function vezCaida() {
+      var s = ana.J.Game.state;
+      if (!s || s.phase !== 'playing') return null;
+      var u = ana.J.Engine.activeUnit(s);
+      return (u && u.ia && u.dono === 'bia') ? u : null;
+    }
+    ate(function () { return !!vezCaida() || tela('ana') !== 'battle'; }, 2000, 50, ['ana']);
+    var uC = vezCaida(), tC0 = relogio.t, TC = ana.J.Game.state ? ana.J.Game.state.turno : -1, rcVisto = null;
+    ate(function () {
+      var s = ana.J.Game.state;
+      if (!rcVisto) rcVisto = ana.J.Game.relogioCaido();
+      return !s || s.phase !== 'playing' || s.turno !== TC;
+    }, 2000, 50, ['ana']);
+    check('K5 · 08/10: a vez do herói de quem caiu CORRE no relógio de 30 s (não passa na hora), e a HUD tem o relógio dela',
+          !!uC && relogio.t - tC0 >= 29000 && relogio.t - tC0 <= 36000 && !!rcVisto && rcVisto.uid === uC.uid && rcVisto.resta > 0,
+          'durou ' + Math.round((relogio.t - tC0) / 1000) + ' s · relógio ' + JSON.stringify(rcVisto));
+    var quedaAntes = ana.J.Coop.QUEDA_MS, naoConfirmada = ana.J.Coop.quedaConfirmada('bia');
+    ana.J.Coop.QUEDA_MS = 1000;                       // a queda já está "confirmada": a vez passa na hora
+    var confirmada = ana.J.Coop.quedaConfirmada('bia');
+    // oito turnos cobrem uma rodada inteira (os dois heróis da Bia): com o relógio levariam 60 s ou mais
+    var tC1 = relogio.t, T1 = ana.J.Game.state ? ana.J.Game.state.turno : 0, relogioDepois = false;
+    ate(function () {
+      var s = ana.J.Game.state;
+      if (ana.J.Game.relogioCaido()) relogioDepois = true;
+      return !s || s.phase !== 'playing' || s.turno >= T1 + 8;
+    }, 1400, 50, ['ana']);
+    check('K5 · 08/10: confirmada a queda (QUEDA_MS sem sinal), a vez dele volta a passar na hora — oito turnos sem relógio de caído, em menos de 55 s',
+          naoConfirmada === false && confirmada === true && !relogioDepois && relogio.t - tC1 < 55000,
+          'antes ' + naoConfirmada + ' · depois ' + confirmada + ' · relógio ' + relogioDepois + ' · ' + Math.round((relogio.t - tC1) / 1000) + ' s');
+    ana.J.Coop.QUEDA_MS = quedaAntes;
+    ate(function () { return tela('ana') !== 'battle'; }, 6000, 250, ['ana']);
     check('K5 · a sala termina só com Ana; sem volta, a descida acaba (nextRoom recusa)',
           ana.J.Coop.sessao().descidaAcabou === true && ana.J.Game.nextRoom() === false, tela('ana'));
     bia.vivo = true;
@@ -1169,7 +1203,8 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
     check('K7 · a líder caiu: a parceira vira autoridade e líder, e o herói da líder vai para a IA',
           bia.J.Coop.sessao().autoridade === 'bia' && bia.J.Coop.sessao().lider === true &&
           bia.J.Game.state.units.filter(function (u) { return u.dono === 'ana'; })[0].ia === true);
-    ate(function () { return tela('bia') !== 'battle'; }, 6000, 50, ['bia']);
+    // 08/10 à noite: a vez de quem caiu corre 30 s no relógio até a queda confirmada — passos de 250 ms
+    ate(function () { return tela('bia') !== 'battle'; }, 6000, 250, ['bia']);
     check('K7 · e a sala termina do lado da parceira', tela('bia') !== 'battle', tela('bia'));
     ana.vivo = true;
 
@@ -1436,7 +1471,9 @@ recompensa por jogador (partySize 2) e o duelo pela Rede numa sala sorteada dos 
           'restaurações ' + ses('ana').restauracoes + ' · sincronizando ' + ses('ana').sincronizando + ' · ia ' + (hA1 && hA1.ia));
     var tR1 = ana.J.Game.state ? ana.J.Game.state.turno : 0;
     var nTa1 = ana.w.__telas.length, nTb1 = bia.w.__telas.length;
-    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000);
+    // 08/10 à noite: a vez da líder marcada corre 30 s no relógio nos DOIS motores (ninguém a dá por caída de
+    // vez: o prazo não é o `caiu`) — passos de 250 ms para a sala inteira caber na espera
+    ate(function () { return tela('ana') !== 'battle' && tela('bia') !== 'battle'; }, 6000, 250);
     var hR1 = hashesIguais('ana', 'bia', tR1 + 1), fA1 = telaFimDesde('ana', nTa1), fB1 = telaFimDesde('bia', nTb1);
     check('R1 · daí ao fim da sala os dois batem, e na recompensa quem abre a próxima é a parceira (só ela "lidera" a sala)',
           !hR1.dif.length && hR1.n > 0 && final('ana') === final('bia') && !!fA1 && !!fB1 && fA1.lider === false && fB1.lider === true,

@@ -100,6 +100,9 @@ var JOGO = (typeof window !== 'undefined')
   Coop.PEDE_MIN_MS = 2000;      // o `pede` e o `foto-pede` que chegam: um por este tempo
   Coop.PEDE_MAX = 24;           // lances reenviados por `pede`
   Coop.SAIU_VISTO_MS = 10000;   // canal de abas: `saiu` sem cx de quem falou há menos disto não vale
+  Coop.QUEDA_MS = 180000;       // 08/10 à noite: fora há tanto sem sinal, a queda é CONFIRMADA (a vez volta a passar na hora)
+  Coop.RETOMA_MS = 60000;       // 08/10 à noite: a retomada sem resposta do parceiro por tanto desiste
+  Coop.RETOMA_REP_MS = 3000;    // e o `retoma` se repete até o parceiro responder
 
   Coop._agora = function () { return Date.now(); };
   Coop._semIntervalo = false;   // provas: sem setInterval (o teste chama _tique)
@@ -838,9 +841,42 @@ var JOGO = (typeof window !== 'undefined')
     }
     for (var j = 0; j < uids.length; j++) envia('ia', { b: S.bid, u: uids[j], mot: mot });
     if (st.phase === 'placing' && g._assumeColocacao) g._assumeColocacao();
-    avisa(Tx('{a} caiu — o turno dele passa até voltar.', { a: nomeParceiro() }), 'aviso');
+    // 08/10 à noite: a vez dele CORRE no relógio (game.js, vezDoCaidoAcabou) — não passa mais na hora
+    avisa(Tx('{a} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.', { a: nomeParceiro() }), 'aviso');
     muda();
   }
+  /* A QUEDA CONFIRMADA (08/10 à noite; o dono: "seu turno e tempo correr normal até ele desconectar ou
+   * perder"). O game.js pergunta, na vez de um herói de gente marcado fora, se a vez corre no relógio
+   * (false: a queda é recente, o dono pode estar recarregando) ou passa na hora (true). Confirmada é:
+   *   - quem SAIU de vez (o grupo desfeito na batalha, a voz `sai`): os corpos dele até caem;
+   *   - o parceiro fora há mais de QUEDA_MS sem sinal nenhum — mais do que uma recarga ou a reabertura do
+   *     aplicativo levam; quem não voltou até aí fechou o jogo, e o parceiro não fica preso 30 s por vez;
+   *   - fora do grupo e da guerra (não há marca `ia` no duelo), ou sem sessão: o de antes (passa).
+   * Na guerra vale o mesmo por jogador (jogadorGuerra). O MEU herói marcado pelo outro (a conexão que
+   * engasgou, `meAssumiu`): a vez corre no relógio aqui também — o estado tem de bater com o dele. */
+  Coop.quedaConfirmada = function (dono) {
+    if (!dono || !S.bid) return true;
+    var ag = agora();
+    if (S.tipo === 'guerra') {
+      var jg = jogadorGuerra(dono);
+      if (!jg) return dono !== meuId();
+      if (jg.saiu || jg.saiuTudo) return true;
+      if (!jg.sumidoDesde) return false;
+      return ag - jg.sumidoDesde >= Coop.QUEDA_MS;
+    }
+    if (S.tipo !== 'grupo') return true;
+    var p = parceiro();
+    if (dono === meuId()) return false;
+    if (!p || dono !== p.id) return true;
+    if (S.parceiroSaiu) return true;
+    // quem saiu do GRUPO no meio da batalha (a voz `sair` do grupo.js, sem o `sai` por herói — a retomada que
+    // falhou do lado dele, por exemplo) também não volta mais a estes corpos
+    var saiuDoGrupo = false;
+    try { saiuDoGrupo = !!(JOGO.Grupo && JOGO.Grupo.parSaiu && JOGO.Grupo.parSaiu()); } catch (e) { saiuDoGrupo = false; }
+    if (saiuDoGrupo) return true;
+    if (!S.sumidoDesde) return false;
+    return ag - S.sumidoDesde >= Coop.QUEDA_MS;
+  };
   /* QUEM SAI DA BATALHA MORRE (12/09, pedido do dono: "um jogador quando
    * estiver em grupo e sair da batalha/desistir, ele deve morrer").
    *

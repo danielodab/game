@@ -1412,6 +1412,7 @@ var JOGO = (typeof window !== 'undefined')
   // entrar): sem poder tocar em nada, o turno não pode correr
   var relogioVisto = 0;
   function congelaRelogio() {
+    if (caido) caido.visto = agoraMs();            // 08/10 à noite: a vez de quem caiu também não corre travada
     if (!rede || timerTurno === null) return;
     var ag = agoraMs();
     if (relogioVisto) turnoIniMs += Math.max(0, ag - relogioVisto);
@@ -1503,12 +1504,46 @@ var JOGO = (typeof window !== 'undefined')
      * invocacao seguem na IA: `u.dono` so existe em heroi de gente. */
     if (u.dono && (u.kind === 'hero' || u.kind === 'fusion')) {
       resetAiState();
+      if (st.phase === 'playing' && !vezDoCaidoAcabou(st, u)) return;
+      caido = null;
       if (st.phase === 'playing') { E().endTurn(st); posMotor(); }
       if (Game.state && Game.state.phase !== 'playing' && !travadoRede()) handleBattleOver();
       return;
     }
     iaPasso(u, d, semTela);
   }
+  /* A VEZ DE QUEM CAIU CORRE NO RELÓGIO (08/10 à noite, o dono: "caso caia em qualquer conexão ele deve
+   * ficar na batalha e seu turno e tempo correr normal até ele desconectar ou perder"). Até aqui a marca
+   * `ia` num herói de gente passava a vez DELE na hora, no primeiro quadro: quem recarregou a página (ou
+   * cuja conexão piscou) voltava e encontrava os heróis com três ou quatro vezes puladas. Agora a vez do
+   * herói marcado corre pelos mesmos 30 s de uma vez normal (`turnTime`, sem banco: o banco é de quem está
+   * aqui), no relógio de PAREDE deste motor, e só então passa — é o tempo que uma recarga ou a reabertura
+   * do aplicativo leva para o dono voltar e retomar os corpos (Coop.retomaBatalha). Dois cuidados:
+   *   - o relógio PARA enquanto a batalha está travada (sincronizando): o quadro não chega aqui, e o
+   *     `visto` é empurrado em updateRede para o tempo travado não contar;
+   *   - a QUEDA CONFIRMADA (Coop.quedaConfirmada: o parceiro fora há mais de Coop.QUEDA_MS sem sinal, ou
+   *     quem SAIU de vez) volta a passar a vez na hora — quem fechou o jogo para sempre não prende o
+   *     parceiro em 30 s por vez até o fim da sala.
+   * É um relógio local de quem simula; o estado continua igual nos dois motores (os dois passam a MESMA
+   * vez, a fila por (T, k) acomoda o atraso), e o juiz passa a vez marcada sem tempo nenhum. */
+  var caido = null;          // { uid, T, gasto, visto } — a vez em curso de um herói de gente marcado fora
+  function vezDoCaidoAcabou(st, u) {
+    var c = C(), ag = agoraMs(), T = st.turno || 0;
+    var confirmada = true;
+    try { if (c && c.quedaConfirmada) confirmada = !!c.quedaConfirmada(u.dono); } catch (e) { confirmada = true; }
+    if (confirmada) return true;
+    if (!caido || caido.uid !== u.uid || caido.T !== T) caido = { uid: u.uid, T: T, gasto: 0, visto: ag };
+    caido.gasto += Math.max(0, ag - caido.visto);
+    caido.visto = ag;
+    return caido.gasto >= Game.turnTime * 1000;
+  }
+  /* a HUD: a vez de quem caiu, e quanto falta para ela passar ({ uid, resta } em ms), ou null */
+  Game.relogioCaido = function () {
+    if (!caido || !Game.state) return null;
+    var u = (Game.state.phase === 'playing') ? E().activeUnit(Game.state) : null;
+    if (!u || u.uid !== caido.uid || (Game.state.turno || 0) !== caido.T) return null;
+    return { uid: caido.uid, resta: Math.max(0, Game.turnTime * 1000 - caido.gasto) };
+  };
   // os lances do parceiro: um por quadro livre com o desenho; todos sem ele
   function aplicaFila(semTela) {
     var c = C();

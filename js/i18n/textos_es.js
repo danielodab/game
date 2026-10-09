@@ -2934,5 +2934,9 @@ JOGO.I18n.registra('es', { textos: {
   // ---- 08/10 à noite: a pergunta antes do ataque no Campo
   "Atacar {nome}?": "¿Atacar a {nome}?",
   "A luta começa na hora e <b>{nome}</b> não pode recusar. Vocês dois precisam estar no Campo, com a dupla viva e dentro da paridade.": "La pelea empieza al instante y <b>{nome}</b> no puede negarse. Los dos deben estar en el Campo, con la pareja viva y dentro de la paridad.",
-  "Atacar": "Atacar"
+  "Atacar": "Atacar",
+  // ---- 08/10 à noite: quem cai volta para a luta
+  "{a} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.": "{a} se cayó — sus héroes se quedan, y su turno corre en el reloj hasta que vuelva.",
+  "{nome} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.": "{nome} se cayó — sus héroes se quedan, y su turno corre en el reloj hasta que vuelva.",
+  "<b>{a} está fora</b> — a vez dele corre no relógio… {resta}": "<b>{a} está fuera</b> — su turno corre en el reloj… {resta}",
 } });

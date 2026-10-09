@@ -15225,9 +15225,12 @@ var JOGO = (typeof window !== 'undefined')
         pintaEspera();
         return bt.espera;
       }
-      // 12/09: quem caiu nao e jogado pela IA — o turno dele PASSA
+      // 12/09: quem caiu nao e jogado pela IA — o turno dele PASSA. 08/10 à noite: antes de passar, a vez
+      // dele CORRE no relógio (Game.relogioCaido): a barra mostra o tempo descendo, repintada no paintTimer
       if (u.ia && u.dono && u.dono !== meuIdRede()) {
-        return el('div', 'bt-wait', tr('{a} está fora — o turno passa.', { a: esc(nomeDoDono(u.dono)) }));
+        bt.espera = el('div', 'bt-wait bt-espera is-caido', '');
+        pintaEspera();
+        return bt.espera;
       }
       // o outro lado me deu por fora (um engasgo de conexão): o MEU turno passa
       // até a conexão se acertar — dizer isso em vez de congelar calado
@@ -15262,12 +15265,20 @@ var JOGO = (typeof window !== 'undefined')
     var ses = coopSessao();
     var u = activeUnit();
     var nome = nomeDoDono(u && u.dono);
-    var resta = '';
-    if (ses && ses.esperando && ses.esperando.prazo) {
-      var agora = safe(function () { return Cp()._agora(); }, null) || Date.now();
-      resta = ' ' + relogioTxt(ses.esperando.prazo - agora);
+    var resta = '', txt;
+    if (u && u.ia && u.dono && u.dono !== meuIdRede()) {
+      // 08/10 à noite: a vez de quem caiu corre no relógio de 30 s; confirmada a queda, passa na hora
+      var rc = safe(function () { return G().relogioCaido(); }, null);
+      txt = (rc && rc.uid === u.uid)
+        ? tr('<b>{a} está fora</b> — a vez dele corre no relógio… {resta}', { a: esc(nome), resta: relogioTxt(rc.resta) })
+        : tr('{a} está fora — o turno passa.', { a: esc(nome) });
+    } else {
+      if (ses && ses.esperando && ses.esperando.prazo) {
+        var agora = safe(function () { return Cp()._agora(); }, null) || Date.now();
+        resta = ' ' + relogioTxt(ses.esperando.prazo - agora);
+      }
+      txt = tr('<b>Vez de {a}</b> — esperando o lance…{resta}', { a: esc(nome), resta: resta });
     }
-    var txt = tr('<b>Vez de {a}</b> — esperando o lance…{resta}', { a: esc(nome), resta: resta });
     if (bt.espera._txt !== txt) { bt.espera.innerHTML = txt; bt.espera._txt = txt; }
   }
   function coopSig() {
@@ -15285,7 +15296,7 @@ var JOGO = (typeof window !== 'undefined')
                      fase: ses.fase || null } : null;
     if (ses) {
       var nome = (ses.parceiro && ses.parceiro.nome) || nomeParceiro();
-      if (!a.parceiroIA && ses.parceiroIA) toast(tr('{nome} caiu — o turno dele passa até voltar.', { nome: nome }));
+      if (!a.parceiroIA && ses.parceiroIA) toast(tr('{nome} caiu — os heróis dele ficam, e a vez deles corre no relógio até ele voltar.', { nome: nome }));
       if (!a.sincronizando && ses.sincronizando) {
         // 19/09: na guerra a foto vem de quem MANDA, que tem nome (A1, A2, B1, B2 pela ordem — pode ser da outra guilda)
         var quem = ses.tipo === 'duelo' ? nome : (ses.tipo === 'guerra' && ses.guerra ? ses.guerra.autoridadeNome : null);
