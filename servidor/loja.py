@@ -188,6 +188,10 @@ MOLDURAS_LOJA = ('ouro', 'rubi', 'esmeralda', 'obsidiana')
 # 08/10, o dono: "uma moldura especial para o admin (só ele tem), preto e vermelho escuro". Não se vende nem se
 # presenteia: só a conta marcada (contas.gm = 1) a tem — e nela é a automática (hub3d molduraEfetiva)
 MOLDURAS_MESTRE = ('mestre',)
+# 10/10: a moldura "Campeão da Arena" (docs/TORNEIO.md §1) — não se vende nem se presenteia: é da conta para
+# sempre desde a primeira conquista de torneio de PvP em chave de 8 ou 16 (torneio.py, torneio_conquistas)
+MOLDURAS_ARENA = ('arena',)
+MOLDURA_ARENA_NOME = {'arena': 'Campeão da Arena'}
 MOLDURA_MESTRE_NOME = {'mestre': 'Moldura do Mestre'}
 MOLDURA_PRECO = 180
 MOLDURA_PRECO_DE = {'obsidiana': 300}
@@ -313,7 +317,7 @@ CREATE INDEX IF NOT EXISTS loja_amigos_de ON loja_amigos(de, criado_em);
 # 08/10: e os Fragmentos de Gema do anúncio premiado (preço 0, sem linha em loja_creditos)
 SEM_EXTRA = ("id NOT IN (SELECT pedido_id FROM loja_presentes) "
              "AND id NOT IN (SELECT pedido_id FROM loja_creditos) "
-             "AND sku NOT LIKE 'eco-%' AND sku NOT IN ('anuncio-fragmentos', 'diario')")
+             "AND sku NOT LIKE 'eco-%' AND sku NOT IN ('anuncio-fragmentos', 'diario', 'torneio')")
 # 04/10: o presente de um amigo CONTA no limite do produto de quem recebe (a Reescrita do mês, a aura que
 # ele já tem), mas não nos tetos de abuso dele (5 abertos, 10 compras por hora, 30 linhas por hora): quem
 # dá não pode travar a loja de quem recebe. Os tetos do presente são os de quem dá (loja_presentear)
@@ -646,6 +650,14 @@ def nome_do_pedido(sku, entrega=None, vintens=None):
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
         if isinstance(n, int) and not isinstance(n, bool) and n > 0:
             return '%s vinténs' % milhar(n)
+    # 10/10: o prêmio do campeão do Torneio da Arena (torneio.py): os vinténs e as Gemas Enterradas
+    if sku == 'torneio-vintens':
+        n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return '%s vinténs (Torneio da Arena)' % milhar(n)
+        return 'Vinténs do Torneio da Arena'
+    if sku == 'torneio':
+        return 'Prêmio do Torneio da Arena'
     # 08/10: o prêmio diário de resgate (premio_diario.py): os vinténs e as pedras/fragmentos
     if sku == 'diario-vintens':
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
@@ -708,6 +720,9 @@ def origem_do_pedido(r):
     # 08/10: o prêmio diário de resgate (premio_diario.py) — o jogo avisa "Prêmio diário"
     if 'sku' in chaves and r['sku'] in ('diario', 'diario-vintens'):
         return 'diario'
+    # 10/10: o prêmio do campeão do Torneio da Arena (torneio.py)
+    if 'sku' in chaves and r['sku'] in ('torneio', 'torneio-vintens'):
+        return 'torneio'
     if 'presente' in chaves and r['presente']:
         return 'presente'
     if 'amigo' in chaves and r['amigo']:              # 04/10: o presente de um amigo (loja_amigos)
@@ -904,6 +919,11 @@ class LojaMixin:
             # 08/10: a barra do prêmio diário (premio_diario.py), pela mesma porta
             if (r['ref'] or '').startswith('diario:'):
                 m['motivo'], m['nome'] = 'diario', 'Prêmio diário'
+            # 10/10: as barras do campeão do Torneio da Arena (torneio.py), pela mesma porta — o contrato
+            # (docs/TORNEIO.md) fala em motivo 'torneio', e é o que o extrato mostra; no banco segue 'presente'
+            if (r['ref'] or '').startswith('torneio:'):
+                m['motivo'], m['nome'] = 'torneio', 'Torneio da Arena'
+                m['torneio'] = int(r['ref'][8:]) if r['ref'][8:].isdigit() else None
             saida.append(m)
         return saida
 
@@ -1345,6 +1365,9 @@ class LojaMixin:
             ent = _json(r['entrega']) or {}
             if ent.get('tipo') == 'moldura' and ent.get('alvo') in MOLDURAS_LOJA:
                 tem.add(ent['alvo'])
+        # 10/10: a do campeão do torneio (chave de 8 ou 16) — a posse é a conquista, lida do banco
+        if getattr(self, '_torneio_tem_moldura', lambda c: False)(cid):
+            tem.update(MOLDURAS_ARENA)
         return tem
 
     def _moldura_poda(self, cid):
@@ -1359,9 +1382,15 @@ class LojaMixin:
         tem = self._molduras(cid)
         r = self.con.execute("SELECT moldura FROM moldura_escolhida WHERE conta_id = ?", (cid,)).fetchone()
         do_mestre = [m for m in MOLDURAS_MESTRE if m in tem]
-        return {'tem': do_mestre + [m for m in MOLDURAS_LOJA if m in tem],
+        # 10/10: a "Campeão da Arena" só aparece para quem a ganhou (como a do Mestre); o grau (I a III) e as
+        # marcas (até 5) saem das conquistas de PvP — a mesma conta de js/core/titulos.js (grauDaArena)
+        da_arena = [m for m in MOLDURAS_ARENA if m in tem]
+        n = getattr(self, '_torneio_conquistas', lambda c: {'pvp': 0})(cid).get('pvp', 0) if da_arena else 0
+        return {'tem': do_mestre + da_arena + [m for m in MOLDURAS_LOJA if m in tem],
                 'escolhida': r['moldura'] if r is not None and r['moldura'] in tem else None,
                 'todas': [{'id': m, 'sku': None, 'nome': MOLDURA_MESTRE_NOME[m]} for m in do_mestre] +
+                         [{'id': m, 'sku': None, 'nome': MOLDURA_ARENA_NOME[m], 'conquistas': n,
+                           'grau': 3 if n >= 5 else 2 if n >= 3 else 1, 'marcas': max(1, min(5, n))} for m in da_arena] +
                          [{'id': m, 'sku': 'moldura-' + m, 'nome': MOLDURA_NOME[m]} for m in MOLDURAS_LOJA]}
 
     # -- GET /api/loja/moldura · POST /api/loja/moldura {moldura: id | null} ------------------------------
@@ -1374,7 +1403,7 @@ class LojaMixin:
         mid, cid, t = corpo.get('moldura'), conta['id'], agora()
         if mid in (None, '', 'auto'):
             mid = None
-        elif mid not in MOLDURAS_LOJA and mid not in MOLDURAS_MESTRE:
+        elif mid not in MOLDURAS_LOJA and mid not in MOLDURAS_MESTRE and mid not in MOLDURAS_ARENA:
             raise Recusa(400, 'moldura desconhecida')
         with self._escrita():
             if mid is None:

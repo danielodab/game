@@ -26,7 +26,8 @@ AS ROTAS
        inscrito  {desdeMs, herois, classes, nivel}
        casada    {papel: inscrito|desafiante, lado, prazoMs, confirmei, eleConfirmou, herois, classes, nivel,
                   adversario: {conta, nome, nivel, brasa, herois, classes}}
-       pronta    {did, papel, lado, herois, classes, nivel, adversario}
+       pronta    {did, papel, lado, herois, classes, nivel, adversario[, torneio: id — 10/10, a luta de um
+                  torneio (torneio.py): nasce pronta, sem quadro nem confirmação, e fica até a luta fechar]}
   O inscrito consulta o estado a cada 2-3 s; a consulta é também o "ainda estou aqui" (sem ela há ARENA_VISTO_MS,
   a inscrição sai do quadro: a aba fechada não fica esperando desafio).
 
@@ -158,10 +159,14 @@ class ArenaMixin:
         self.con.execute("DELETE FROM arena_inscritos WHERE visto_ms < ?", (agora_ms - ARENA_VISTO_MS,))
 
     def _arena_partida_de(self, cid, agora_ms):
-        """A partida viva da conta (dos dois lados): a casada, ou a pronta de há pouco (ARENA_PRONTA_MS)."""
+        """A partida viva da conta (dos dois lados): a casada, ou a pronta de há pouco (ARENA_PRONTA_MS).
+        10/10, o Torneio da Arena (torneio.py): a partida pronta que o torneio abriu aparece até a luta FECHAR —
+        ela não tem a janela de 180 s (a luta de torneio pode durar 30 min e o cliente que recarrega a página
+        precisa reencontrá-la) — e passa na frente da partida do quadro."""
         return self.con.execute(
             "SELECT * FROM arena_partidas WHERE (a_id = ? OR b_id = ?) AND (estado = 'casada' OR "
-            "(estado = 'pronta' AND pronta_ms >= ?)) ORDER BY criada_ms DESC LIMIT 1",
+            "(estado = 'pronta' AND (pronta_ms >= ? OR did IN (SELECT did FROM torneio_lutas WHERE estado = 'luta')))) "
+            "ORDER BY (did IN (SELECT did FROM torneio_lutas WHERE estado = 'luta')) DESC, criada_ms DESC LIMIT 1",
             (cid, cid, agora_ms - ARENA_PRONTA_MS)).fetchone()
 
     def _arena_brasa(self, cid):
@@ -191,6 +196,12 @@ class ArenaMixin:
                 r.update(prazoMs=p['prazo_ms'], confirmei=bool(p[eu + '_ok']), eleConfirmou=bool(p[ele + '_ok']))
             else:
                 r['did'] = p['did']
+                # 10/10: a partida pronta de um TORNEIO leva o id dele (docs/TORNEIO.md §2) — é por aqui que o
+                # cliente entrega a luta ao Duelo sabendo que ela não mexe na coroa nem na vida
+                achar = getattr(self, '_torneio_do_did', None)
+                torneio = achar(p['did']) if achar is not None else None
+                if torneio is not None:
+                    r['torneio'] = torneio
             return r
         f = self.con.execute("SELECT * FROM arena_inscritos WHERE conta_id = ?", (cid,)).fetchone()
         if f is not None:
@@ -329,6 +340,11 @@ class ArenaMixin:
             self._arena_arruma(agora_ms)
             self.con.execute("DELETE FROM arena_inscritos WHERE conta_id = ?", (cid,))
             p = self._arena_partida_de(cid, agora_ms)
+            # 10/10: a partida de um torneio não se desfaz por aqui (sair do torneio é POST /api/torneio/sair, e
+            # vale como W.O.) — sair do quadro no meio da luta do torneio não some com a luta
+            do_torneio = getattr(self, '_torneio_do_did', None)
+            if p is not None and do_torneio is not None and do_torneio(p['did']) is not None:
+                return 200, self._arena_estado(cid, agora_ms)
             if p is not None:
                 self.con.execute("UPDATE arena_partidas SET estado = 'caiu' WHERE did = ?", (p['did'],))
                 if p['estado'] == 'casada' and p['b_id'] == cid:

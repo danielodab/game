@@ -84,6 +84,8 @@ from supremo import ESQUEMA_SUPREMO, SupremoMixin   # 02/10: o Eco Primordial (a
 from supremo import FUSO_S as FUSO_S_BR, dia_de     # 07/10: o dia de Brasília do programa da semana
 from trilha import ESQUEMA_TRILHA, ROTAS_TRILHA, TrilhaMixin   # 07/10: a trilha da temporada (trilha.py)
 from premio_diario import ESQUEMA_DIARIO, ROTAS_DIARIO, DiarioMixin   # 08/10: o prêmio diário de resgate (premio_diario.py)
+# 10/10: o Torneio da Arena (torneio.py; o contrato é docs/TORNEIO.md)
+from torneio import ESQUEMA_TORNEIO, ROTAS_TORNEIO, ROTAS_TORNEIO_MESTRE, TorneioMixin, liga_torneios
 # 02/10: os direitos do titular (aceite dos termos, excluir a conta, baixar os dados) e o registro de erros
 from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
 from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
@@ -483,6 +485,10 @@ ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a 
 ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
 ROTAS.update(ROTAS_TRILHA)        # 07/10: trilha.py — a trilha da temporada (ler e resgatar)
 ROTAS.update(ROTAS_DIARIO)        # 08/10: premio_diario.py — o prêmio diário de resgate (ler e resgatar)
+# 10/10: torneio.py — o Torneio da Arena. Ler é público (o site mostra a chave); inscrever, a presença e a guilda
+# pedem conta; marcar e cancelar são do Mestre (a marca lida do banco a cada pedido, e a trilha em moderacao_auditoria)
+ROTAS.update(ROTAS_TORNEIO)
+ROTAS.update({rota: (nome, True, True, FRASE_SO_MESTRE) for rota, nome in ROTAS_TORNEIO_MESTRE.items()})
 
 
 # ---- validações miúdas (as da conta, com agora e Recusa, moram em comum.py) ------
@@ -838,7 +844,7 @@ def versao_da_regra():
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
           AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin,
-          TrilhaMixin, DiarioMixin):          # 07/10: a trilha da temporada; 08/10: o prêmio diário
+          TrilhaMixin, DiarioMixin, TorneioMixin):   # 07/10: a trilha da temporada; 08/10: o prêmio diário; 10/10: o torneio
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -882,6 +888,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         self.con.executescript(ESQUEMA_SUPREMO)   # 02/10: o Eco Primordial (supremo.py) — idem
         self.con.executescript(ESQUEMA_PRIVACIDADE + ESQUEMA_REGISTROS)   # 02/10: aceites e erros — idem
         self.con.executescript(ESQUEMA_MODERACAO)  # 02/10: a moderação (moderacao.py) — idem
+        self.con.executescript(ESQUEMA_TORNEIO)    # 10/10: o Torneio da Arena (torneio.py) — idem
         self.tranca = threading.RLock()
         self._registros_init()   # 02/10: o freio do registro de erros (registros.py), em memória
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
@@ -2101,6 +2108,7 @@ if __name__ == '__main__':
                     "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
     Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play, anuncios=anuncios)
     liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)
+    liga_torneios(Atendente.api)                      # 10/10: o relógio do Torneio da Arena, de 5 em 5 s (torneio.py)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))
     try:
