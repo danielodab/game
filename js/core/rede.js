@@ -459,9 +459,37 @@ var JOGO = (typeof window !== 'undefined')
   var AURAS_COR = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // 08/10: + as três novas
   /* 08/10: a MOLDURA da plaquinha que viaja — só a premium escolhida ('auto' = a do título; cada tela a tira
    * do próprio título). As ids conhecidas; qualquer outra coisa que chegue pelo fio vira 'auto' */
-  var MOLDURAS_REDE = ['auto', 'ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre'];   // 'mestre': o relé só a deixa passar da conta do Mestre
+  var MOLDURAS_REDE = ['auto', 'ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre',   // 'mestre': o relé só a deixa passar da conta do Mestre
+                       'arena'];                                                     // 10/10: a do Campeão da Arena (o relé só a carimba em quem a ganhou)
   function molduraDe(v) { return (typeof v === 'string' && MOLDURAS_REDE.indexOf(v) >= 0) ? v : 'auto'; }
   R._molduraDe = molduraDe;         // provas
+  /* 10/10 — O TORNEIO DA ARENA NO PERFIL (docs/TORNEIO.md, seção 3). O Relé carimba no envelope de cada um
+   * `arena: {n: <conquistas de PvP>, vigente: bool}` (o grau, as marcas e o louro da moldura do Campeão saem
+   * daí) e, na guilda do perfil, `campea: bool` e `titulos: n` (o filete discreto e as marquinhas da placa da
+   * guilda). A página NUNCA manda nenhum dos dois: o cartão daqui não os leva. O que chega torto vira null. */
+  function arenaDe(v) {
+    if (!v || typeof v !== 'object') return null;
+    var n = Math.floor(Number(v.n));
+    if (!(n >= 0)) n = 0;
+    if (n > 999) n = 999;
+    return (n > 0 || v.vigente === true) ? { n: n, vigente: v.vigente === true } : null;
+  }
+  R._arenaDe = arenaDe;             // provas
+  /* a guilda campeã: os dois campos valem onde o Relé os puser — dentro de `resumo.guilda` ou num `guilda` do
+   * próprio envelope — e a tela os lê sempre de `resumo.guilda` (é de lá que o hub3d tira a placa) */
+  function guildaCampea(resumo, m) {
+    var g = resumo && typeof resumo === 'object' ? resumo.guilda : null;
+    if (!g || typeof g !== 'object') return resumo;
+    var solta = (m && m.guilda && typeof m.guilda === 'object') ? m.guilda : null;
+    var campea = (g.campea === true) || !!(solta && solta.campea === true);
+    var tit = Math.floor(Number(solta && solta.titulos != null ? solta.titulos : g.titulos));
+    tit = (tit > 0) ? Math.min(5, tit) : 0;
+    if (g.campea === campea && (g.titulos || 0) === tit) return resumo;
+    var r2 = copia(resumo);
+    r2.guilda.campea = campea;
+    r2.guilda.titulos = tit;
+    return r2;
+  }
   // 04/10: 'mestre' (a Chama do Mestre) só vale em quem o relé conferiu como Mestre — `deMestre` falso derruba
   function corAura(v, deMestre) {
     if (v === 'mestre') return deMestre === false ? null : 'mestre';
@@ -723,6 +751,10 @@ var JOGO = (typeof window !== 'undefined')
     if (!r || typeof r !== 'object') return '';
     return (r.coroaOculta === true ? 'o' : '') + (typeof r.coroaMestre === 'number' ? r.coroaMestre : '');
   }
+  function assinaVisual(p) {
+    return [p.titulo || '', p.auraCor || '', p.moldura || 'auto', p.aura ? 1 : 0,
+            p.arena ? p.arena.n + (p.arena.vigente ? 'v' : '') : ''].join('|');
+  }
   function conhece(m) {
     var atual = pares[m.de];
     // "novo" também cobre quem foi visto SÓ por pulso (guardado sem nome,
@@ -731,17 +763,18 @@ var JOGO = (typeof window !== 'undefined')
     var salaAntes = atual ? (atual.sala || null) : null;
     var coroaAntes = atual ? coroaDoResumo(atual.resumo) : null;
     // 08/10: o VISUAL (título, aura, moldura) de antes — a troca sem sair do lugar avisa `mudouVisual`
-    var visualAntes = atual ? [atual.titulo || '', atual.auraCor || '', atual.moldura || 'auto', atual.aura ? 1 : 0].join('|') : null;
+    var visualAntes = atual ? assinaVisual(atual) : null;
     var zonaAntes = atual ? zonaDe(atual.zona) : 'praca';
     var mestre = m.mestre === true && confiaMestre();
     var vit = vitrine(m, mestre);             // 10/09: o nome reservado de quem não é Mestre sai trocado
     pares[m.de] = { nome: vit.nome || '?', titulo: vit.titulo || '',
                     classe: classeDe(m.classe, mestre),   // 10/09: o corpo do Mestre só no Mestre
-                    resumo: vit.resumo || null,
+                    resumo: guildaCampea(vit.resumo || null, m),   // 10/10: + a guilda campeã do Torneio (campea, titulos)
                     mestre: mestre,
                     nuvem: m.nuvem || null,           // a conta no cartório (10/09)
                     aura: m.aura === true, auraCor: corAura(m.auraCor, mestre),
                     moldura: molduraDe(m.moldura),      // 08/10: a moldura premium (já carimbada pelo relé)
+                    arena: arenaDe(m.arena),            // 10/10: as conquistas do Torneio da Arena (carimbadas pelo relé)
                     sala: m.sala || null,       // 03/09: a antessala em que ele está (null = praça)
                     zona: zonaDe(m.zona),       // 14/09: 'praca' | 'campo' (o Campo de PvP)
                     luta: m.luta === true,      // 14/09: numa batalha (o Campo não ataca quem já luta)
@@ -750,6 +783,7 @@ var JOGO = (typeof window !== 'undefined')
       avisa({ tipo: 'entrou', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
               resumo: pares[m.de].resumo, aura: pares[m.de].aura, auraCor: pares[m.de].auraCor, moldura: pares[m.de].moldura,
+              arena: pares[m.de].arena,
               sala: pares[m.de].sala, mestre: pares[m.de].mestre, zona: pares[m.de].zona,
               x: pares[m.de].x, z: pares[m.de].z });
     } else if (salaAntes !== pares[m.de].sala || zonaAntes !== pares[m.de].zona) {
@@ -757,16 +791,17 @@ var JOGO = (typeof window !== 'undefined')
       avisa({ tipo: 'mudouSala', id: m.de, nome: pares[m.de].nome,
               titulo: pares[m.de].titulo, classe: pares[m.de].classe,
               resumo: pares[m.de].resumo, aura: pares[m.de].aura, auraCor: pares[m.de].auraCor, moldura: pares[m.de].moldura, zona: pares[m.de].zona,
+              arena: pares[m.de].arena,
               mestre: pares[m.de].mestre,     // 05/10: quem chega de outra sala também traz a marca (a coroa do Mestre a lê)
               sala: pares[m.de].sala, x: pares[m.de].x, z: pares[m.de].z });
     } else if (coroaAntes !== coroaDoResumo(pares[m.de].resumo)) {
       // 05/10: escondeu/mostrou a coroa, ou o Mestre trocou a dele — o corpo fica, só a coroa repinta
       avisa({ tipo: 'mudouCoroa', id: m.de, resumo: pares[m.de].resumo, mestre: pares[m.de].mestre });
-    } else if (visualAntes !== null &&
-               visualAntes !== [pares[m.de].titulo || '', pares[m.de].auraCor || '', pares[m.de].moldura || 'auto', pares[m.de].aura ? 1 : 0].join('|')) {
+    } else if (visualAntes !== null && visualAntes !== assinaVisual(pares[m.de])) {
       // 08/10: trocou de título, de aura ou de moldura sem sair do lugar — a plaquinha e a aura repintam
+      // (10/10: e as conquistas do Torneio — o grau, as marcas e o louro da moldura do Campeão)
       avisa({ tipo: 'mudouVisual', id: m.de, titulo: pares[m.de].titulo, aura: pares[m.de].aura,
-              auraCor: pares[m.de].auraCor, moldura: pares[m.de].moldura });
+              auraCor: pares[m.de].auraCor, moldura: pares[m.de].moldura, arena: pares[m.de].arena });
     }
     return novo;
   }
@@ -1401,6 +1436,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!p.nome) return;             // visto só por pulso: sem apresentação ainda
       fora.push({ id: id, nome: p.nome, titulo: p.titulo, classe: p.classe,
                   resumo: p.resumo || null, aura: p.aura === true, auraCor: corAura(p.auraCor), moldura: molduraDe(p.moldura), nuvem: p.nuvem || null,
+                  arena: p.arena || null,                           // 10/10: as conquistas do Torneio da Arena
                   mestre: p.mestre === true,
                   zona: zonaDe(p.zona), luta: p.luta === true,     // 14/09: o Campo de PvP
                   sala: p.sala || null, x: p.x, z: p.z });

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>foto: a moldura do Campeão da Arena</title>
+<style>
+  html,body{margin:0;background:#2a3a2a;color:#e8eef6;font:12px monospace}
+  h2{margin:10px 10px 0;font:600 13px monospace;color:#ffd98a}
+  .grade{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px}
+  .cel{text-align:center}.cel canvas{width:100%;height:auto;display:block}
+  #st{padding:6px 10px;color:#8f8;white-space:pre-wrap}
+  #st.falhou{color:#f88}
+</style>
+</head>
+<body>
+<!-- PÁGINA DE FOTO (10/10): a moldura "Campeão da Arena" do Torneio (docs/TORNEIO.md; hub3d.js MOLDURAS
+     campeao1..3, a forma 'frontao'), do jeito que a praça a pendura — os TRÊS GRAUS (I bronze, II prata com
+     pilastras, III ouro com a coroa), as MARCAS (de 1 a 5, uma por conquista), o LOURO do campeão vigente e a
+     placa da GUILDA campeã (o filete discreto e as marquinhas permanentes). É canvas puro (Hub.plaquinhaCanvas e
+     Hub.placaGuildaCanvas): não depende de rAF nem da praça inteira, então roda igual no Chrome sem tela.
+     Além da foto, confere: o grau que cada número de conquistas dá, que o louro só aparece no vigente (conta os
+     pixels verdes da folha), que as marcas mudam o desenho de 1 a 5 e param em 5, que a moldura 'arena' do
+     pódio da Brasa (as pontas) continua a mesma, e que a placa da guilda só ganha o filete quando é a campeã. -->
+<div id="st">carregando…</div>
+<h2>Os três graus (o grau sai das conquistas)</h2>
+<div class="grade" id="graus"></div>
+<h2>As marcas (uma por conquista, até 5) e o louro do campeão vigente</h2>
+<div class="grade" id="marcas"></div>
+<h2>A placa da guilda: comum, campeã vigente, e as marquinhas permanentes</h2>
+<div class="grade" id="guildas"></div>
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['vendor/three.min.js', 'js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/dungeons.js',
+              'js/core/data/campo_pvp.js', 'js/ui/brasao.js', 'js/render3d/hub3d.js'];
+  for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var st = document.getElementById('st');
+  var Hub = JOGO.Hub;
+  var total = 0, falhas = 0, linhas = [];
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? '   [' + extra + ']' : ''));
+  }
+  function poe(gradeId, rotulo, cv) {
+    var cel = document.createElement('div');
+    cel.className = 'cel';
+    if (cv) cel.appendChild(cv);
+    var rot = document.createElement('div');
+    rot.textContent = rotulo;
+    cel.appendChild(rot);
+    document.getElementById(gradeId).appendChild(cel);
+  }
+  function placa(titulo, moldura, arena) {
+    try { return Hub.plaquinhaCanvas('Fotógrafo', titulo, moldura, null, arena); } catch (e) { return null; }
+  }
+  function guilda(g) { try { return Hub.placaGuildaCanvas(g); } catch (e) { return null; } }
+  /* quantos pixels do canvas têm a cor (±tol por canal) */
+  function conta(cv, r, g, b, tol) {
+    if (!cv) return -1;
+    var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, n = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 200 && Math.abs(d[i] - r) <= tol && Math.abs(d[i + 1] - g) <= tol && Math.abs(d[i + 2] - b) <= tol) n++;
+    }
+    return n;
+  }
+  function igual(a, b) { return !!a && !!b && a.toDataURL() === b.toDataURL(); }
+
+  // ---------------------------------------------------------------- os três graus
+  var g1 = placa('Campeão da Arena', 'arena', { n: 1, vigente: false });
+  var g2 = placa('Tricampeão da Arena', 'arena', { n: 3, vigente: false });
+  var g3 = placa('Lenda da Arena', 'arena', { n: 5, vigente: false });
+  poe('graus', 'grau I — 1 conquista (bronze, o frontão liso)', g1);
+  poe('graus', 'grau II — 3 conquistas (prata, pilastras, gema)', g2);
+  poe('graus', 'grau III — 5 conquistas (ouro, a coroa)', g3);
+  check('os três graus saem desenhados', !!g1 && !!g2 && !!g3);
+  check('o grau pelas conquistas: 1→I, 2→I, 3→II, 4→II, 5→III, 10→III (e sem número, I)',
+        [1, 2, 3, 4, 5, 10, undefined].map(Hub.grauDaArena).join() === '1,1,2,2,3,3,1', [1, 2, 3, 4, 5, 10, undefined].map(Hub.grauDaArena).join());
+  check('a vitrine chama a moldura de "arena"; na placa ela vira a do grau',
+        Hub.MOLDURA_ARENA === 'arena' && Hub.molduraEfetiva('arena', '', false, { n: 1 }) === 'campeao1' &&
+        Hub.molduraEfetiva('arena', 'Top 1 Pvp', false, { n: 4 }) === 'campeao2' && Hub.molduraEfetiva('arena', '', false, { n: 7 }) === 'campeao3' &&
+        Hub.molduraEfetiva('arena', '', false, null) === 'campeao1');
+  check('os três graus são três desenhos diferentes', !igual(g1, g2) && !igual(g2, g3) && !igual(g1, g3));
+  // a do pódio da Brasa (Top N Pvp, automática) continua sendo a das pontas
+  var podio = placa('Top 1 Pvp', 'auto', null), podio2 = placa('Top 1 Pvp', 'auto', { n: 5, vigente: true });
+  check('a moldura automática do pódio da Brasa não mudou (as conquistas não mexem nela)',
+        Hub.molduraEfetiva('auto', 'Top 1 Pvp', false, { n: 5 }) === 'arena' && igual(podio, podio2));
+  check('título do torneio sem a moldura escolhida não acende moldura nenhuma (ela é da vitrine)',
+        Hub.molduraEfetiva('auto', 'Campeão da Arena', false, { n: 1 }) === null);
+  check('a premium escolhida vale como antes', Hub.molduraEfetiva('rubi', '', false, { n: 5 }) === 'rubi');
+
+  // ---------------------------------------------------------------- as marcas e o louro
+  var porN = [];
+  [1, 2, 3, 4, 5].forEach(function (n) {
+    var cv = placa(n >= 5 ? 'Lenda da Arena' : (n >= 3 ? 'Tricampeão da Arena' : (n === 2 ? 'Bicampeão da Arena' : 'Campeão da Arena')), 'arena', { n: n, vigente: false });
+    porN.push(cv);
+    poe('marcas', n + ' marca(s) — grau ' + ['', 'I', 'II', 'III'][Hub.grauDaArena(n)], cv);
+  });
+  var v3 = placa('Tricampeão da Arena', 'arena', { n: 3, vigente: true });
+  var v1 = placa('Campeão da Arena', 'arena', { n: 1, vigente: true });
+  var v5 = placa('Imortal da Arena', 'arena', { n: 10, vigente: true });
+  poe('marcas', 'campeão VIGENTE, grau I — o louro', v1);
+  poe('marcas', 'campeão VIGENTE, grau II — o louro', v3);
+  poe('marcas', 'campeão VIGENTE, 10 conquistas — o louro e 5 marcas', v5);
+  check('cada marca muda o desenho (1 ≠ 2, 3 ≠ 4)', !igual(porN[0], porN[1]) && !igual(porN[2], porN[3]));
+  check('as marcas param em 5: 10 conquistas desenham o mesmo que 5', igual(placa('Lenda da Arena', 'arena', { n: 10, vigente: false }), placa('Lenda da Arena', 'arena', { n: 5, vigente: false })));
+  // a folha do louro é #9cc46a (156,196,106): só o vigente a tem
+  var semLouro = conta(g2, 156, 196, 106, 10), comLouro = conta(v3, 156, 196, 106, 10);
+  check('o louro só aparece no campeão vigente (pixels da folha: sem = 0, com > 150)', semLouro === 0 && comLouro > 150, semLouro + ' / ' + comLouro);
+  check('o louro vale nos três graus', conta(v1, 156, 196, 106, 10) > 150 && conta(v5, 156, 196, 106, 10) > 150);
+  check('a placa do campeão cabe na tela da textura (512 px de largura, sem estourar a folga)', g3.width === 512 && g3.height <= 240, g3.width + 'x' + g3.height);
+
+  // ---------------------------------------------------------------- a placa da guilda
+  var ESC = 'shield|1|#b40426|#1d1a14|#ffffff|sword|0|#1d3f8a';
+  var gc = guilda({ nome: 'Os Fundos', emblema: ESC });
+  var gv = guilda({ nome: 'Os Fundos', emblema: ESC, campea: true, titulos: 1 });
+  var gt = guilda({ nome: 'Os Fundos', emblema: ESC, campea: false, titulos: 3 });
+  var g5 = guilda({ nome: 'Os Fundos', emblema: ESC, campea: true, titulos: 5 });
+  var gs = guilda({ nome: 'Os Fundos', emblema: '⚑', campea: true, titulos: 2 });
+  poe('guildas', 'a placa de sempre', gc);
+  poe('guildas', 'campeã VIGENTE (filete fino + raminhos) · 1 título', gv);
+  poe('guildas', 'ex-campeã: só as 3 marquinhas', gt);
+  poe('guildas', 'campeã vigente · 5 títulos', g5);
+  poe('guildas', 'sem brasão (emblema solto), campeã · 2 títulos', gs);
+  check('a placa da guilda sai nos cinco casos', !!gc && !!gv && !!gt && !!g5 && !!gs);
+  check('a campeã ganha o filete e os raminhos; a comum fica como era', !igual(gc, gv) && conta(gc, 156, 196, 106, 10) === 0 && conta(gv, 156, 196, 106, 10) > 20,
+        conta(gc, 156, 196, 106, 10) + ' / ' + conta(gv, 156, 196, 106, 10));
+  check('a ex-campeã fica só com as marquinhas (sem louro)', !igual(gc, gt) && conta(gt, 156, 196, 106, 10) === 0);
+  check('é discreta de verdade: a placa não cresce (o mesmo tamanho de tela da comum)', gc.width === gv.width && gc.height === gv.height && gc.height === g5.height);
+  // o filete e as marcas juntos pintam pouco: menos de 6% dos pixels da placa mudam
+  (function () {
+    var a = gc.getContext('2d').getImageData(0, 0, gc.width, gc.height).data;
+    var b = g5.getContext('2d').getImageData(0, 0, g5.width, g5.height).data, dif = 0;
+    for (var i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) dif++;
+    var pct = 100 * dif / (a.length / 4);
+    check('… e pinta pouco: menos de 6% dos pixels da placa mudam com o filete e as 5 marcas', pct > 0.2 && pct < 6, pct.toFixed(2) + '%');
+  })();
+
+  st.textContent = linhas.join('\n') + '\n' + (falhas ? 'FALHOU — ' + falhas + ' de ' + total : 'tudo passou (' + total + ')');
+  if (falhas) st.className = 'falhou';
+  document.title = (total - falhas) + '/' + total + ' · foto: a moldura do Campeão da Arena';
+  window.__fail = falhas;
+  window.__pronto = true;
+})();
+</script>
+</body>
+</html>

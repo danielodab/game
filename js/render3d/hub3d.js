@@ -467,9 +467,26 @@ var JOGO = (typeof window !== 'undefined')
     rubi:      { borda: '#ff4d6d', fundo: 'rgba(50,8,18,0.95)', traco: 9, forma: 'espinhos' },
     esmeralda: { borda: '#3ddc84', fundo: 'rgba(6,40,22,0.95)', traco: 9, forma: 'folhas' },
     obsidiana: { borda: '#9a7bff', fundo: 'rgba(10,6,20,0.97)', traco: 9, forma: 'chanfro' },
-    mestre:    { borda: '#8a0d14', fundo: 'rgba(5,3,5,0.97)', traco: 10, forma: 'chamas', miolo: '#2a0508' }
+    mestre:    { borda: '#8a0d14', fundo: 'rgba(5,3,5,0.97)', traco: 10, forma: 'chamas', miolo: '#2a0508' },
+    /* 10/10 — a do CAMPEÃO DA ARENA (docs/TORNEIO.md): não se compra e não vem de título emprestado — é da conta
+     * para sempre desde o primeiro torneio vencido em chave de 8 ou 16, e a vitrine a chama de 'arena'. A forma é
+     * dela: a placa com um FRONTÃO no alto (o portal da Arena) e os cantos de baixo cortados. Três GRAUS pelas
+     * conquistas (To.grau: 1–2 → I, 3–4 → II, 5+ → III), do mais sóbrio ao mais ornado — bronze liso; prata com
+     * pilastras e gema no vértice; ouro com pilastras duplas, a coroa de três pontas e gemas nos cantos. Por cima
+     * do grau vão as MARCAS (de 1 a 5, uma por conquista, na borda de baixo) e, só no campeão VIGENTE, o LOURO
+     * deitado sobre a borda de cima. A 'arena' de cima (as pontas) segue sendo a do pódio da Brasa, automática. */
+    campeao1:  { borda: '#c98a52', fundo: 'rgba(40,16,10,0.95)', traco: 8, forma: 'frontao', grau: 1 },
+    campeao2:  { borda: '#cdd5e0', fundo: 'rgba(22,22,34,0.95)', traco: 8, forma: 'frontao', grau: 2 },
+    campeao3:  { borda: '#f2c14e', fundo: 'rgba(48,20,8,0.96)', traco: 9, forma: 'frontao', grau: 3 }
   };
   var MOLDURAS_PREMIUM = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];
+  var LOURO = { folha: '#9cc46a', veio: '#3f5f26' };
+  /* o grau da moldura do Campeão pelas conquistas (a mesma conta de JOGO.Torneio.grau) */
+  function grauDaArena(n) {
+    n = Math.floor(Number(n) || 0);
+    return n >= 5 ? 3 : (n >= 3 ? 2 : 1);
+  }
+  function marcasDaArena(n) { return Math.max(0, Math.min(5, Math.floor(Number(n) || 0))); }
   var MOLDURA_FOLGA = 26;            // px a mais em volta da placa, para as formas saírem do retângulo
   /* 08/10 à noite (o dono: "melhore as molduras"): a borda é METAL, não tinta chapada — um degradê de cima
    * para baixo (claro, a cor, escuro, a cor, claro), o fundo com um verniz (claro no alto, escuro embaixo),
@@ -482,7 +499,7 @@ var JOGO = (typeof window !== 'undefined')
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
   /* desenha a PLACA com a forma da moldura: `r` = {x, y, w, h} do retângulo de sempre */
-  function desenhaMoldura(g, mol, r) {
+  function desenhaMoldura(g, mol, r, extra) {
     var cor = mol.borda, t = mol.traco || 8, x = r.x, y = r.y, w = r.w, h = r.h;
     var metal = g.createLinearGradient(0, y - 30, 0, y + h + 30);
     metal.addColorStop(0, tomDe(cor, 0.55)); metal.addColorStop(0.35, cor); metal.addColorStop(0.62, tomDe(cor, -0.38));
@@ -589,6 +606,60 @@ var JOGO = (typeof window !== 'undefined')
         g.fillRect(b[0], b[1], b[2], b[3]); g.strokeRect(b[0], b[1], b[2], b[3]);
         g.fillRect(b[0] - 2, b[1] - 3, b[2] + 4, 4); g.fillRect(b[0] - 2, b[1] + b[3] - 1, b[2] + 4, 4);   // os capitéis
       });
+    } else if (mol.forma === 'frontao') {
+      // 10/10: a do Campeão da Arena — o frontão no alto, os cantos de baixo cortados, e o ornato pelo grau
+      var grau = mol.grau || 1, cxm = x + w / 2, ch = 12;
+      var fh = grau >= 3 ? 22 : (grau === 2 ? 18 : 14), fw = Math.min(w * 0.5, 120 + grau * 16);
+      placa(function () {
+        g.moveTo(x, y); g.lineTo(cxm - fw / 2, y); g.lineTo(cxm, y - fh); g.lineTo(cxm + fw / 2, y); g.lineTo(x + w, y);
+        g.lineTo(x + w, y + h - ch); g.lineTo(x + w - ch, y + h); g.lineTo(x + ch, y + h); g.lineTo(x, y + h - ch);
+      });
+      g.lineWidth = 2; g.strokeStyle = escuro;                                       // os fios de cima e de baixo
+      g.beginPath(); g.moveTo(x + t + 6, y + t + 5); g.lineTo(x + w - t - 6, y + t + 5);
+      g.moveTo(x + t + 6 + ch, y + h - t - 5); g.lineTo(x + w - t - 6 - ch, y + h - t - 5); g.stroke();
+      if (grau >= 2) {
+        // as pilastras dos lados (duas no grau III), com capitel e base
+        var pil = grau >= 3 ? [[x - 10, 0], [x - 20, 8], [x + w + 4, 0], [x + w + 14, 8]] : [[x - 10, 0], [x + w + 4, 0]];
+        g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 1.5;
+        pil.forEach(function (b) {
+          var py = y + 6 + b[1], ph = h - 12 - ch - b[1] * 2;
+          g.fillRect(b[0], py, 6, ph); g.strokeRect(b[0], py, 6, ph);
+          g.fillRect(b[0] - 2, py - 3, 10, 4); g.fillRect(b[0] - 2, py + ph - 1, 10, 4);
+        });
+      }
+      if (grau >= 3) {
+        // a coroa de três pontas: duas pontas menores ao lado do vértice, e gemas nos cantos de cima
+        g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
+        [-1, 1].forEach(function (d) {
+          var bx = cxm + d * fw * 0.27, by = y - fh * 0.46;
+          g.beginPath(); g.moveTo(bx - 9, by + 4); g.lineTo(bx + d * 2, by - 15); g.lineTo(bx + 9, by + 4); g.closePath(); g.fill(); g.stroke();
+        });
+        losango(x, y, 11); losango(x + w, y, 11);
+      }
+      if (grau >= 2) losango(cxm, y - fh + 2, grau >= 3 ? 11 : 8);                   // a gema do vértice
+      else {                                                                          // no grau I, só um rebite
+        g.beginPath(); g.arc(cxm, y - fh + 9, 4.5, 0, Math.PI * 2);
+        g.fillStyle = metal; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
+      }
+      // o LOURO do campeão vigente: dois ramos deitados sobre a borda de cima, do frontão para fora
+      if (extra && extra.louro) {
+        [-1, 1].forEach(function (d) {
+          var ini = cxm + d * (fw / 2 + 8), fim = d < 0 ? x + 12 : x + w - 12;
+          var passoL = 15, nL = Math.max(2, Math.min(6, Math.floor(Math.abs(fim - ini) / passoL)));
+          g.strokeStyle = LOURO.veio; g.lineWidth = 2;
+          g.beginPath(); g.moveTo(ini, y - 2); g.lineTo(ini + d * nL * passoL, y - 2); g.stroke();
+          for (var li = 0; li < nL; li++) {
+            var lx = ini + d * (li * passoL + 6);
+            g.beginPath(); g.ellipse(lx, y - 9, 8.5, 3.6, d * (-0.75), 0, Math.PI * 2);
+            g.fillStyle = LOURO.folha; g.fill(); g.strokeStyle = LOURO.veio; g.lineWidth = 1.2; g.stroke();
+            g.beginPath(); g.ellipse(lx + d * 4, y + 3, 6.5, 2.8, d * 0.55, 0, Math.PI * 2);
+            g.fillStyle = LOURO.folha; g.fill(); g.stroke();
+          }
+        });
+      }
+      // as MARCAS: uma por conquista (até 5), pequenas gemas na borda de baixo
+      var nM = extra ? marcasDaArena(extra.marcas) : 0;
+      for (var mi = 0; mi < nM; mi++) losango(cxm + (mi - (nM - 1) / 2) * 22, y + h - t / 2 + 1, 8);
     } else if (mol.forma === 'chamas') {
       retangulo();
       g.lineWidth = 3; g.strokeStyle = mol.miolo || cor; g.strokeRect(x + t + 4, y + t + 4, w - t * 2 - 8, h - t * 2 - 8);
@@ -611,6 +682,8 @@ var JOGO = (typeof window !== 'undefined')
   }
   Hub.MOLDURAS = Object.keys(MOLDURAS);
   Hub.MOLDURAS_PREMIUM = MOLDURAS_PREMIUM.slice();
+  Hub.MOLDURA_ARENA = 'arena';       // 10/10: o id que a vitrine dá à do Campeão da Arena (aqui ela vira campeao1..3)
+  Hub.grauDaArena = grauDaArena;
   /* a moldura que um TÍTULO (a chave em português) pede: null = a placa de sempre */
   function molduraDoTitulo(titulo) {
     var t = String(titulo || '');
@@ -624,18 +697,28 @@ var JOGO = (typeof window !== 'undefined')
   }
   Hub.molduraDoTitulo = molduraDoTitulo;
   /* a moldura que VALE: a escolhida (premium) se existir, senão a do título ('auto') */
-  function molduraEfetiva(escolhida, titulo, mestre) {
+  function molduraEfetiva(escolhida, titulo, mestre, arena) {
+    // 10/10: a do Campeão da Arena — a vitrine a chama 'arena'; o grau sai das conquistas (`arena.n` do perfil)
+    if (escolhida === 'arena') return 'campeao' + grauDaArena(arena && arena.n);
     if (typeof escolhida === 'string' && escolhida !== 'auto' && MOLDURAS[escolhida]) return escolhida;
     if (mestre) return 'mestre';                           // 08/10: a do Mestre é automática na conta dele
     return molduraDoTitulo(titulo);
   }
   Hub.molduraEfetiva = molduraEfetiva;
   /* a placa como imagem (provas e fotos): o canvas de `rotulo` com a moldura pedida */
-  Hub.plaquinhaCanvas = function (nome, titulo, moldura, brilho) {
+  Hub.plaquinhaCanvas = function (nome, titulo, moldura, brilho, arena) {
     if (!THREE) THREE = (typeof window !== 'undefined' && window.THREE) || null;   // fora da praça (prova)
     if (!THREE) return null;
     var sp = rotulo(nome || Tx('Nome'), '#f0ead8', 0.42, { placa: true, brilho: brilho || null, subtexto: titulo || '',
-                                                       moldura: molduraEfetiva(moldura, titulo, brilho === 'admin') });
+                                                       moldura: molduraEfetiva(moldura, titulo, brilho === 'admin', arena),
+                                                       arena: arena || null });
+    return sp && sp.material && sp.material.map ? sp.material.map.image : null;
+  };
+  /* 10/10: a placa da GUILDA como imagem (provas e fotos) — `guilda` = {nome, emblema, campea, titulos} */
+  Hub.placaGuildaCanvas = function (guilda) {
+    if (!THREE) THREE = (typeof window !== 'undefined' && window.THREE) || null;
+    if (!THREE || !guilda || !guilda.nome) return null;
+    var sp = rotuloDaGuilda(guilda);
     return sp && sp.material && sp.material.map ? sp.material.map.image : null;
   };
   function rotulo(texto, cor, escala, op) {
@@ -689,7 +772,9 @@ var JOGO = (typeof window !== 'undefined')
 
     if (op && op.placa && mol && !op.borda) {
       // 08/10: a placa com a FORMA da moldura (a placa de grupo, com borda própria, fica como é)
-      desenhaMoldura(g, mol, { x: x0, y: mY, w: larg, h: altPlaca });
+      // 10/10: a do Campeão da Arena leva as marcas (uma por conquista) e o louro do vigente
+      desenhaMoldura(g, mol, { x: x0, y: mY, w: larg, h: altPlaca },
+                     (op.arena && mol.forma === 'frontao') ? { marcas: op.arena.n, louro: op.arena.vigente === true } : null);
     } else if (op && op.placa) {
       var traco = op.traco || (bri ? 7 : 5);
       g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
@@ -697,6 +782,35 @@ var JOGO = (typeof window !== 'undefined')
       g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
       g.lineWidth = traco;
       g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco);
+      /* 10/10 — A GUILDA CAMPEÃ DO TORNEIO (docs/TORNEIO.md). O dono: "não pode ser muito chamativa para não
+       * ficar muito poluído para jogadores que já possuem molduras". Então é só isto: enquanto a guilda é a
+       * campeã VIGENTE, um segundo filete fino dourado por fora da placa, com um raminho de louro em cada canto
+       * de cima; e, para sempre, uma gema pequena por título (até 5) na borda de baixo. Sem forma nova, sem
+       * brilho, sem crescer a placa. */
+      if (op.campea) {
+        g.save();
+        g.shadowBlur = 0;
+        g.strokeStyle = '#e8c25a'; g.lineWidth = 2;
+        g.strokeRect(x0 - 5, mY - 5, larg + 10, altPlaca + 10);
+        [[x0 - 5, -1], [x0 + larg + 5, 1]].forEach(function (c) {
+          for (var fi = 0; fi < 3; fi++) {
+            g.beginPath(); g.ellipse(c[0] - c[1] * (8 + fi * 10), mY - 6, 6, 2.6, c[1] * 0.6, 0, Math.PI * 2);
+            g.fillStyle = LOURO.folha; g.fill(); g.strokeStyle = LOURO.veio; g.lineWidth = 1; g.stroke();
+          }
+        });
+        g.restore();
+      }
+      var nG = marcasDaArena(op.marcas);
+      if (nG) {
+        g.save();
+        g.shadowBlur = 0;
+        for (var gi = 0; gi < nG; gi++) {
+          var gx = x0 + larg / 2 + (gi - (nG - 1) / 2) * 16, gy = mY + altPlaca - traco / 2;
+          g.beginPath(); g.moveTo(gx, gy - 6); g.lineTo(gx + 6, gy); g.lineTo(gx, gy + 6); g.lineTo(gx - 6, gy); g.closePath();
+          g.fillStyle = '#e8c25a'; g.fill(); g.strokeStyle = '#5a4310'; g.lineWidth = 1.5; g.stroke();
+        }
+        g.restore();
+      }
     }
     
     // o escudo mora DENTRO da moldura agora, encostado na borda esquerda
@@ -3647,10 +3761,35 @@ var JOGO = (typeof window !== 'undefined')
    * ACIMA dele. A coroa do ranking flutua acima de tudo. */
   /* 11/09: `grupo` ('membro' | 'lider' | null) — o parceiro do meu grupo leva
    * a placa de borda dourada grossa, com ◆ (ou ♛ se lidera) antes do nome. */
-  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho, moldura) {
+  /* 10/10: a placa da guilda sai daqui (a praça e as provas): o brasão, as cores do escudo e — para a campeã do
+   * Torneio — o filete discreto e as marquinhas (`guilda.campea`, `guilda.titulos`, carimbados pelo Relé) */
+  function rotuloDaGuilda(guilda) {
+    var gtx = guilda.nome;
+    var codEscudo = null;
+    if (guilda.emblema && guilda.emblema.indexOf('shield|') === 0) {
+      codEscudo = guilda.emblema;
+    } else {
+      gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
+    }
+    /* A PLACA VESTE O BRASÃO (11/09): fundo e filete saem das cores do
+     * escudo (JOGO.Brasao.coresDaPlaca), que espreme a luz do fundo numa
+     * faixa escura e força contraste na borda — é o que impede que um
+     * brasão todo preto vire uma placa preta sem nome legível. Sem o
+     * módulo do brasão, a placa marrom-dourada de sempre. */
+    var Bp = (typeof JOGO !== 'undefined') ? JOGO.Brasao : null;
+    var cp = (Bp && Bp.coresDaPlaca && codEscudo) ? Bp.coresDaPlaca(codEscudo)
+                               : { fundo: null, borda: '#8a6f2e', texto: '#ffd98a' };
+    // com brasão a placa vem maior: o escudo de 132 px mora dentro dela
+    var escG = codEscudo ? 0.34 : 0.30;
+    return rotulo(gtx, cp.texto, escG,
+                  { placa: true, fundo: cp.fundo, borda: cp.borda,
+                    traco: codEscudo ? 6 : 5, escudo: codEscudo,
+                    campea: guilda.campea === true, marcas: guilda.titulos });
+  }
+  function penduraEm(corpo, nome, titulo, brasaTier, guilda, grupo, brilho, moldura, arena) {
     if (!corpo || !THREE) return;
     // 08/10: a moldura da placa — a escolhida (premium) ou a do título (lida da CHAVE, antes de traduzir)
-    var molId = molduraEfetiva(moldura, titulo, brilho === 'admin');
+    var molId = molduraEfetiva(moldura, titulo, brilho === 'admin', arena);
     // 05/10, os idiomas: o título viaja e é guardado em português (é chave); na plaquinha vai o do idioma de quem olha
     if (titulo && JOGO.UI && JOGO.UI.titExibe) titulo = JOGO.UI.titExibe(titulo);
     ['plaquinha', 'plaquinhaTitulo', 'plaquinhaGuilda'].forEach(function (campo) {
@@ -3679,7 +3818,7 @@ var JOGO = (typeof window !== 'undefined')
                { placa: true, borda: '#ffcf3f', traco: 9, fundo: 'rgba(44,32,8,0.92)',
                  brilho: brilho || null, subtexto: titulo || '' })
       : rotulo(nome, '#f0ead8', 0.42,
-               { placa: true, brilho: brilho || null, subtexto: titulo || '', moldura: molId });
+               { placa: true, brilho: brilho || null, subtexto: titulo || '', moldura: molId, arena: arena || null });
     sp.position.y = alto + 0.5;
     corpo.node.add(sp);
     corpo.plaquinha = sp;
@@ -3693,26 +3832,7 @@ var JOGO = (typeof window !== 'undefined')
     // bandeira que o corpo carrega ("com seu logo da guild e nome da guild
     // em cima"). Placa própria, um degrau menor que a do nome.
     if (temGuilda) {
-      var gtx = guilda.nome;
-      var codEscudo = null;
-      if (guilda.emblema && guilda.emblema.indexOf('shield|') === 0) {
-        codEscudo = guilda.emblema;
-      } else {
-        gtx = (guilda.emblema || '⚑') + ' ' + guilda.nome;
-      }
-      /* A PLACA VESTE O BRASÃO (11/09): fundo e filete saem das cores do
-       * escudo (JOGO.Brasao.coresDaPlaca), que espreme a luz do fundo numa
-       * faixa escura e força contraste na borda — é o que impede que um
-       * brasão todo preto vire uma placa preta sem nome legível. Sem o
-       * módulo do brasão, a placa marrom-dourada de sempre. */
-      var Bp = (typeof JOGO !== 'undefined') ? JOGO.Brasao : null;
-      var cp = (Bp && Bp.coresDaPlaca && codEscudo) ? Bp.coresDaPlaca(codEscudo)
-                                 : { fundo: null, borda: '#8a6f2e', texto: '#ffd98a' };
-      // com brasão a placa vem maior: o escudo de 132 px mora dentro dela
-      var escG = codEscudo ? 0.34 : 0.30;
-      var sg = rotulo(gtx, cp.texto, escG,
-                      { placa: true, fundo: cp.fundo, borda: cp.borda,
-                        traco: codEscudo ? 6 : 5, escudo: codEscudo });
+      var sg = rotuloDaGuilda(guilda);
       sg.position.y = topoPilha + sg.scale.y / 2 + 0.05;
       topoPilha = sg.position.y + sg.scale.y / 2;
       corpo.node.add(sg);
@@ -3868,8 +3988,19 @@ var JOGO = (typeof window !== 'undefined')
   function pendura(nome, titulo, brasaTier, guilda) {
     // o herói nunca leva marca de grupo (ela é do PARCEIRO); leva o brilho
     penduraEm(heroi, nome, titulo, brasaTier, guilda, null,
-              brilhoDoNome(nome, souOMestre()), molduraDoHeroi);
+              brilhoDoNome(nome, souOMestre()), molduraDoHeroi, arenaDoHeroi);
   }
+  /* 10/10: o que a MINHA plaquinha carrega do Torneio da Arena — {n, vigente} (a HUD lê de JOGO.Torneio.meu();
+   * o dos outros chega no perfil, carimbado pelo Relé). Só muda o desenho quando a moldura escolhida é a 'arena'. */
+  var arenaDoHeroi = null;
+  Hub.arena = function (a) {
+    var novo = (a && typeof a === 'object') ? { n: Math.max(0, Math.floor(Number(a.n) || 0)), vigente: a.vigente === true } : null;
+    var mudou = JSON.stringify(novo) !== JSON.stringify(arenaDoHeroi);
+    arenaDoHeroi = novo;
+    if (mudou && scene && nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
+    return arenaDoHeroi;
+  };
+  Hub._arenaDoHeroi = function () { return arenaDoHeroi; };
   /* 08/10: a moldura do herói (a ficha escolhe; a Rede leva aos outros) */
   Hub.moldura = function (id) {
     molduraDoHeroi = (typeof id === 'string' && id) ? id : 'auto';
@@ -3902,7 +4033,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!reg.corpo) continue;
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto', pf.arena || null);
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -5362,7 +5493,7 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     if (reg && reg.corpo) {
       var pf = reg.perfil || {};
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto', pf.arena || null);
       anelDoGrupo(reg.corpo, !!marcasGrupo[id]);
     }
     return true;
@@ -5674,7 +5805,7 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     penduraEm(corpo, (perfil && perfil.nome) || '?', (perfil && perfil.titulo) || '', tierF, guildaF,
               marcasGrupo[reg.id] || null,
               brilhoDoNome(perfil && perfil.nome, perfil && perfil.mestre === true),
-              (perfil && perfil.moldura) || 'auto');
+              (perfil && perfil.moldura) || 'auto', (perfil && perfil.arena) || null);
     // a vaidade é pública: a branca do Colecionador (perfil.aura) ou a comprada (perfil.auraCor, 04/10)
     if (perfil && (perfil.aura || perfil.auraCor)) acendeAura(corpo, true, perfil.auraCor);
     anelDoGrupo(corpo, !!marcasGrupo[reg.id]);           // 12/09: quem é do meu grupo, no chão
@@ -5799,7 +5930,7 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     reg.tierF = tierDoFantasma(pf);
     if (reg.corpo) {
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto', pf.arena || null);
     }
     return true;
   };
@@ -5812,13 +5943,14 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
     if (perfil) {
       if (perfil.titulo !== undefined) pf.titulo = perfil.titulo || '';
       if (perfil.moldura !== undefined) pf.moldura = perfil.moldura || 'auto';
+      if (perfil.arena !== undefined) pf.arena = perfil.arena || null;      // 10/10: as conquistas do Torneio (o grau, as marcas, o louro)
       if (perfil.auraCor !== undefined) pf.auraCor = perfil.auraCor || null;
       if (perfil.aura !== undefined) pf.aura = perfil.aura === true;
     }
     reg.perfil = pf;
     if (reg.corpo) {
       penduraEm(reg.corpo, pf.nome || '?', pf.titulo || '', reg.tierF || null, reg.guildaF || null,
-                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto');
+                marcasGrupo[id] || null, brilhoDoNome(pf.nome, pf.mestre === true), pf.moldura || 'auto', pf.arena || null);
       acendeAura(reg.corpo, !!(pf.aura || pf.auraCor), pf.auraCor || null);
     }
     return true;
