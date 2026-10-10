@@ -3188,5 +3188,15 @@ JOGO.I18n.registra('en', { textos: {
   "Chave de 2 não dá o título nem a marca da guilda: com 4 ou mais guildas eles valem.": "A bracket of 2 gives neither the title nor the guild mark: with 4 or more guilds they count.",
   "campeã vigente": "reigning champion",
   "{n} título(s)": "{n} title(s)",
-  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>Double XP</b> for every member until {a} (in place of the vault's +15% while it lasts)."
+  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>Double XP</b> for every member until {a} (in place of the vault's +15% while it lasts).",
+  // ---- 10/10: o painel da Arena limpo
+  "Ranqueado": "Ranked",
+  "Vale coroa. Inscreva a dupla e espere um desafio, ou desafie quem está no quadro.": "Counts for the crown. Sign up your pair and wait for a challenge, or challenge someone on the board.",
+  "Próximo: <b>{a}</b> · {b}": "Next: <b>{a}</b> · {b}",
+  "{n} de {v} vagas preenchidas": "{n} of {v} slots filled",
+  "Todo sábado (PvP) e todo domingo (guildas), às 14:00 de Brasília.": "Every Saturday (PvP) and every Sunday (guilds), at 14:00 Brasília time.",
+  "Ver os {n} torneios": "See the {n} tournaments",
+  "Ver o torneio": "See the tournament",
+  "Ver o Placar · {n} duelo(s)": "See the Scoreboard · {n} duel(s)",
+  "Desafio amistoso: toque em alguém na praça.": "Friendly challenge: tap someone in the plaza."
 } });

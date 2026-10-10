@@ -1767,6 +1767,18 @@ régua de 390 px / 44 px), `tests/foto_moldura_arena.html` (os três graus, as m
 guilda), `tests/site_torneio.html` (a página do site com dados de mentira) e a seção Torneios de
 `tests/painel_mestre.html`.
 
+## 9-A.29 O painel da Arena limpo e a prateleira da forja sem pedra errada (10/10)
+
+- **O painel da Arena** (o dono, com a foto: "está bem confuso isso, e o duelo de treino (mesmo teclado) pode
+  sair; arrume esse menu da Arena"): dois blocos com nome — **Ranqueado** (uma linha do que é, Inscrever minha
+  dupla, Ver o quadro) e **Torneio** (só o PRÓXIMO, numa linha com a data e as vagas, e um botão "Ver o torneio"
+  / "Ver os N torneios") —, o placar num botão discreto no pé já com a conta dos duelos, e a dica do amistoso
+  numa linha. O duelo de treino no mesmo teclado saiu do painel.
+- **A prateleira da forja** (o dono, com a foto do "Pedra errada: Lasca da Lousa…": "não deve nem aparecer a
+  lasca ali na forja, pra evitar confusão"): no Forjar, com a peça na bancada, a prateleira mostra só a pedra
+  do elemento dela e a Âncora, e a pedra já vai escolhida (`forjaPedra = pedraCerta`). Sem peça na bancada, e
+  no Quebrar, a prateleira inteira segue à vista. Prova: `tests/prova_forja.html?errada=1`.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

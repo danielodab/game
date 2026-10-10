@@ -64,6 +64,15 @@ f.onload = function () {
               document.title = (temPeca && certaAcesa) ? 'BANCADA OK' : ('BANCADA FALHOU peca=' + temPeca + ' certa=' + certaAcesa);
               window.__pronto = true; return;
             }
+            // 10/10 (o dono: "não deve nem aparecer a lasca ali na forja, pra evitar confusão"): com a peça na bancada a
+            // prateleira mostra SÓ a pedra dela e a Âncora, e a pedra já vai escolhida — a "pedra errada" não existe mais
+            if (Q.errada) {
+              var chips = [].slice.call(d.querySelectorAll('.forge-stock .stone-chip'));
+              var soACerta = chips.length === 2 && !!chipDe('Lágrima') && !chipDe('Brasa') && !chipDe('Lasca');
+              var jaEscolhida = !!d.querySelector('.fg-slot-pedra.has') && !d.querySelector('.fg-slot-pedra.is-errada');
+              document.title = (soACerta && jaEscolhida) ? 'BANCADA OK' : ('BANCADA FALHOU chips=' + chips.length + ' certa=' + soACerta + ' escolhida=' + jaEscolhida);
+              window.__pronto = true; return;
+            }
             // 2) a pedra: o chip da prateleira → o encaixe da pedra
             var chip = chipDe(Q.errada ? 'Brasa' : 'Lágrima');
             var slotPedra = d.querySelector('.fg-slot-pedra');

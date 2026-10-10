@@ -321,9 +321,13 @@
   // ---------------------------------------------------------------- 1. o painel da Arena e a ficha
   function fichaEAbas() {
     J.Hub.aoAproximar({ tipo: 'arena', id: 'arena', nome: 'Arena' });
-    var bT = botao(painelAberto(), /^Torneio da Arena$/);
-    check('painel · a Arena ganha o Torneio: a linha do próximo torneio e a porta', !!bT && /Torneio de PvP · nível 20 a 25/.test(painelTxt()) && /5 de 8/.test(painelTxt()),
+    // 10/10 (o painel limpo): dois blocos com nome, só o PRÓXIMO torneio numa linha e um botão; o treino saiu
+    var bT = botao(painelAberto(), /^Ver (o torneio|os \d+ torneios)$/);
+    check('painel · a Arena ganha o Torneio: a linha do próximo torneio e a porta', !!bT && /Próximo: Torneio de PvP · nível 20 a 25/.test(painelTxt()) && /5 de 8 vagas/.test(painelTxt()),
           painelTxt().slice(0, 260));
+    check('painel · limpo: os blocos Ranqueado e Torneio, uma linha de torneio só, sem o duelo de treino',
+          painelAberto().querySelectorAll('.arena-sec').length === 2 && painelAberto().querySelectorAll('.tor-linha').length === 1 &&
+          !botao(painelAberto(), /Duelo de treino/) && !!botao(painelAberto(), /Ver o Placar/), painelTxt().slice(0, 200));
     check('painel · os desafios continuam lá (inscrever no quadro, ver o quadro)', !!botao(painelAberto(), /Inscrever minha dupla/) && !!botao(painelAberto(), /Ver o quadro de inscritos/));
     bT.click();
     return ate(function () { return tituloFicha() === 'Torneio da Arena' && !!cartao(61); }, 5000).then(function (ok) {

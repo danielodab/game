@@ -3188,5 +3188,15 @@ JOGO.I18n.registra('es', { textos: {
   "Chave de 2 não dá o título nem a marca da guilda: com 4 ou mais guildas eles valem.": "La llave de 2 no da el título ni la marca del gremio: con 4 o más gremios valen.",
   "campeã vigente": "campeona vigente",
   "{n} título(s)": "{n} título(s)",
-  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>XP doble</b> para todos los miembros hasta {a} (en lugar del +15% del cofre mientras dure)."
+  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>XP doble</b> para todos los miembros hasta {a} (en lugar del +15% del cofre mientras dure).",
+  // ---- 10/10: o painel da Arena limpo
+  "Ranqueado": "Clasificatoria",
+  "Vale coroa. Inscreva a dupla e espere um desafio, ou desafie quem está no quadro.": "Vale corona. Inscribe a tu pareja y espera un desafío, o desafía a quien esté en el tablón.",
+  "Próximo: <b>{a}</b> · {b}": "Próximo: <b>{a}</b> · {b}",
+  "{n} de {v} vagas preenchidas": "{n} de {v} plazas ocupadas",
+  "Todo sábado (PvP) e todo domingo (guildas), às 14:00 de Brasília.": "Cada sábado (PvP) y cada domingo (gremios), a las 14:00 de Brasilia.",
+  "Ver os {n} torneios": "Ver los {n} torneos",
+  "Ver o torneio": "Ver el torneo",
+  "Ver o Placar · {n} duelo(s)": "Ver el Marcador · {n} duelo(s)",
+  "Desafio amistoso: toque em alguém na praça.": "Desafío amistoso: toca a alguien en la plaza."
 } });

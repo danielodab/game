@@ -1883,26 +1883,26 @@ var JOGO = (typeof window !== 'undefined')
           openSheet('mercado');
         }));
       } else if (lugar.tipo === 'arena') {
-        painel.appendChild(tituloPainel(tr('Arena de Duelos'), 'fc-duelo'));
-        painel.appendChild(el('p', 'hub-nota',
-          tr('<b>Desafio amistoso</b>: toque em alguém na praça (no mapa da praça; a coroa não muda). <b>Ranqueado</b>: inscreva a sua dupla no quadro e espere um desafio — ou desafie um inscrito.')));
+        /* O PAINEL DA ARENA LIMPO (10/10; o dono, com a foto do painel: "está bem confuso isso, e o duelo de treino
+         * (mesmo teclado) pode sair; arrume esse menu da Arena"). Eram um parágrafo comprido, dois botões, três
+         * linhas de torneio, outro botão dourado, o treino e o placar, tudo com o mesmo peso. Agora são DOIS blocos
+         * com nome — o Ranqueado (a coroa) e o Torneio (só o PRÓXIMO, numa linha) — e o placar num botão discreto
+         * no pé, já com a conta dos duelos. O duelo de treino no mesmo teclado saiu do painel (o jogo é online). */
+        painel.appendChild(tituloPainel(tr('Arena'), 'fc-duelo'));
+        painel.classList.add('arena-painel');
         painelArena(painel);          // 14/09: o quadro de inscritos da Arena
-        painelTorneio(painel);        // 10/10: o Torneio da Arena (a segunda aba da ficha)
+        painelTorneio(painel);        // 10/10: o Torneio da Arena
         // 11/09 (revisão): a volta para a ficha do duelo pela Rede que ficou para trás
         var deA = safe(function () { return Dl().estado(); }, null);
         if (deA && (deA.fase === 'escolhendo' || deA.fase === 'comprometido' || deA.fase === 'revelado')) {
           painel.appendChild(btn(tr('Voltar à escolha do duelo'), 'btn-gold btn-block', function () { openSheet('dueloRede'); }));
         }
-        painel.appendChild(btn(tr('Duelo de treino (mesmo teclado)'), 'btn-primary btn-block', function () {
-          openSheet('duelo');
-        }));
-        // o Poço sem Fundo morou aqui até 13/09 — agora tem corpo na praça
-        painel.appendChild(btn(tr('Ver o Placar'), 'btn-ghost btn-block', function () {
-          openSheet('placar');
-        }));
+        var bPlacar = btn(tr('Ver o Placar'), 'btn-ghost btn-block arena-placar', function () { openSheet('placar'); });
+        painel.appendChild(bPlacar);
         if (JOGO.DB) JOGO.DB.historicoPvp().then(function (h) {
-          painel.appendChild(el('p', 'hub-nota', tr('{length} duelo(s) na conta.', { length: h.length })));
+          if (h.length && bPlacar.isConnected) bPlacar.textContent = tr('Ver o Placar · {n} duelo(s)', { n: h.length });
         });
+        painel.appendChild(el('p', 'hub-nota arena-dica', tr('Desafio amistoso: toque em alguém na praça.')));
       } else if (lugar.tipo === 'poco') {
         // O POÇO SEM FUNDO (25/08; 13/09 saiu da Arena e ganhou a arte do dono)
         painel.appendChild(tituloPainel(tr('Poço sem Fundo'), 'fc-poco'));
@@ -10252,6 +10252,11 @@ var JOGO = (typeof window !== 'undefined')
     var pedraCerta = (info && !info.maxed) ? info.stoneId : null;
     var sdCerta = pedraCerta ? defs[pedraCerta] : null;
     if (forjaPedra && !defs[forjaPedra]) forjaPedra = null;
+    /* 10/10 (o dono, com a foto da forja dizendo "Pedra errada: Lasca da Lousa…": "não deve nem aparecer a lasca
+     * ali na forja, pra evitar confusão"). Com uma peça na bancada, a pedra que serve é UMA só — então ela já
+     * vai escolhida, e a prateleira (abaixo) mostra só ela e a Âncora. Uma pedra de outro elemento que tinha
+     * ficado escolhida de uma peça anterior sai sozinha: a "pedra errada" deixa de existir como estado. */
+    if (pedraCerta && forjaPedra !== pedraCerta) forjaPedra = pedraCerta;
 
     function dados(e) {
       try { return JSON.parse(e.dataTransfer.getData('text/plain') || 'null'); } catch (err) { return null; }
@@ -10459,6 +10464,8 @@ var JOGO = (typeof window !== 'undefined')
       // 08/10: a Gema e o Fragmento só aparecem no modo Gema; as pedras de forjar, nos outros dois
       var deForja = k === anchorId || safe(function () { return P().pedraDeForja(k); }, true);
       if (gemaModo ? deForja : !deForja) continue;
+      // 10/10: no Forjar, com a peça na bancada, só a pedra dela e a Âncora (as outras confundiam: "pedra errada")
+      if (!gemaModo && !quebra && pedraCerta && k !== pedraCerta && k !== anchorId) continue;
       var n = stoneCount(k);
       if (gemaModo) {
         var chipG = el('div', 'stone-chip is-gema' + (n ? '' : ' is-empty'));
@@ -15911,6 +15918,8 @@ var JOGO = (typeof window !== 'undefined')
     var e = A.estado();
     var caixa = el('div', 'arena-bloco');
     p.appendChild(caixa);
+    caixa.appendChild(el('h4', 'arena-sec', tr('Ranqueado')));          // 10/10: o painel em blocos com nome
+    caixa.appendChild(el('p', 'hub-nota arena-sub', tr('Vale coroa. Inscreva a dupla e espere um desafio, ou desafie quem está no quadro.')));
     if (e.desligada) { caixa.appendChild(el('p', 'hub-nota arena-off', '⚔ ' + esc(e.desligada))); return; }
     if (e.fase === 'livre') {
       caixa.appendChild(btn(tr('Inscrever minha dupla'), 'btn-gold btn-block arena-inscrever', pedeInscricao));
@@ -16213,16 +16222,20 @@ var JOGO = (typeof window !== 'undefined')
     var caixa = el('div', 'arena-bloco tor-bloco');
     p.appendChild(caixa);
     var e = T.estado();
+    caixa.appendChild(el('h4', 'arena-sec', tr('Torneio')));             // 10/10: o painel em blocos com nome
+    var nProx = 0;
     if (!e.desligado) {
       safe(function () { T.busca(); return true; }, null);
       var prox = T.proximos();
-      prox.slice(0, 3).forEach(function (t) {
+      nProx = prox.length;
+      // só o PRÓXIMO, numa linha (eram três linhas iguais; a lista inteira mora na ficha)
+      if (prox.length) {
         caixa.appendChild(el('p', 'hub-nota tor-linha',
-          '🏆 <b>' + esc(nomeTorneio(t)) + '</b> · ' + esc(quandoTorneio(t.inicioMs)) + ' · ' + esc(tr('{n} de {v}', { n: t.inscritos.length, v: t.vagas }))));
-      });
-      if (!prox.length) caixa.appendChild(el('p', 'hub-nota tor-linha', e.semRota ? esc(e.erro || '') : tr('🏆 Torneio todo sábado (PvP) e todo domingo (guildas), às 14:00 de Brasília.')));
+          tr('Próximo: <b>{a}</b> · {b}', { a: esc(nomeTorneio(prox[0])), b: esc(quandoTorneio(prox[0].inicioMs)) }) + '<br>' +
+          esc(tr('{n} de {v} vagas preenchidas', { n: prox[0].inscritos.length, v: prox[0].vagas }))));
+      } else caixa.appendChild(el('p', 'hub-nota tor-linha', e.semRota ? esc(e.erro || '') : tr('Todo sábado (PvP) e todo domingo (guildas), às 14:00 de Brasília.')));
     }
-    caixa.appendChild(btn(tr('Torneio da Arena'), 'btn-gold btn-block arena-torneio', function () { openSheet('torneio'); }));
+    caixa.appendChild(btn(nProx > 1 ? tr('Ver os {n} torneios', { n: nProx }) : tr('Ver o torneio'), 'btn-gold btn-block arena-torneio', function () { openSheet('torneio'); }));
   }
 
   // ---- a ficha do torneio

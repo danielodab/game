@@ -4495,6 +4495,11 @@ html.celular .screen-hub:has(.arena-selo) .hub-sino:not(.is-off) ~ .pan-atalho {
    ========================================================================== */
 .arena-abas { margin-bottom: 8px; }
 .tor-bloco { border-top: 1px solid var(--line2, #2b3542); padding-top: 6px; }
+/* 10/10: o painel da Arena em blocos com nome (o dono: "está bem confuso isso") */
+.arena-sec { margin: 2px 0 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold, #e6b53c); font-weight: 700; }
+.arena-sub { margin: 0; opacity: .85; }
+.arena-painel .arena-placar { margin-top: 4px; }
+.arena-dica { margin: 2px 0 0; opacity: .7; text-align: center; }
 .tor-linha { opacity: .9; }
 .tor-ficha { gap: 10px; }
 .tor-cartao {
