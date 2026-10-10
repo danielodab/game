@@ -160,7 +160,20 @@ SQL_AURA = "SELECT aura FROM aura_escolhida WHERE conta_id = ?"
 AURAS = ('fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro')    # o gêmeo de loja.AURAS (tests/loja_api.py confere)
 # 08/10: a MOLDURA premium da plaquinha — a escolhida mora em `moldura_escolhida` (a API só grava a que a conta tem)
 SQL_MOLDURA = "SELECT moldura FROM moldura_escolhida WHERE conta_id = ?"
-MOLDURAS = ('ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre')   # o gêmeo de loja.MOLDURAS_LOJA + a do Mestre (a API só a grava para o gm)
+# o gêmeo de loja.MOLDURAS_LOJA + a do Mestre (a API só a grava para o gm) + 10/10 a "Campeão da Arena" (a API só a
+# grava para quem venceu um torneio de PvP em chave de 8 ou 16 — loja.MOLDURAS_ARENA)
+MOLDURAS = ('ouro', 'rubi', 'esmeralda', 'obsidiana', 'mestre', 'arena')
+# 10/10, O TORNEIO DA ARENA (servidor/torneio.py; docs/TORNEIO.md §3): o perfil na praça leva o que a conta
+# CONQUISTOU — `arena: {n: conquistas de PvP, vigente: é o campeão do último torneio de uma faixa}` e, na guilda
+# do perfil, `campea` (a campeã vigente do torneio de guilda) e `titulos` (as marcas, até 5). Quem diz é o banco,
+# nunca a página: o que o cliente mandou nesses campos cai. Consultas À PARTE, com erro engolido (o banco de antes
+# do torneio não tem as tabelas, e isso não pode deixar a praça sem conferência)
+SQL_ARENA_N = "SELECT COUNT(*) FROM torneio_conquistas WHERE conta_id = ? AND tipo = 'pvp'"
+SQL_ARENA_VIGENTE = "SELECT 1 FROM torneio_vigentes WHERE conta_id = ? AND chave LIKE 'pvp:%' LIMIT 1"
+SQL_ARENA_GUILDA = ("SELECT g.id, g.nome FROM guilda_membros m JOIN guildas g ON g.id = m.guilda_id WHERE m.conta_id = ?")
+SQL_ARENA_GUILDA_TITULOS = "SELECT COUNT(*) FROM torneio_guilda_titulos WHERE guilda_id = ? AND titulo = 1"
+SQL_ARENA_GUILDA_CAMPEA = "SELECT 1 FROM torneio_vigentes WHERE chave = 'guilda' AND guilda_id = ? LIMIT 1"
+ARENA_MARCAS_MAX = 5
 # 08/10: OS TÍTULOS DE PÓDIO ACOMPANHAM A POSIÇÃO (o dono: "se ele é top 1 pvp e perde o posto, não terá mais
 # esse título; passa para o top 1 atual"). O relé lê o pódio da conta no banco (as mesmas consultas de
 # servidor/salas.py _posicoes/_posicoes_classe) e carimba o título de ranking com a posição de AGORA — ou
@@ -194,6 +207,58 @@ def podio_de(con, cid):
         return None
     return {'pvm': pvm.index(cid) + 1 if cid in pvm else None,
             'pvp': pvp.index(cid) + 1 if cid in pvp else None, 'classes': classes}
+
+
+def arena_de(con, cid):
+    """(arena, guilda) da conta, lidos do banco: arena = {'n', 'vigente'} ou None (nenhuma conquista e não é o
+    vigente); guilda = {'nome', 'campea', 'titulos'} ou None (sem guilda, ou a guilda não tem nada do torneio).
+    O banco de antes do torneio (sem as tabelas) = (None, None)."""
+    try:
+        n = int(con.execute(SQL_ARENA_N, (cid,)).fetchone()[0] or 0)
+        vigente = con.execute(SQL_ARENA_VIGENTE, (cid,)).fetchone() is not None
+        arena = {'n': n, 'vigente': vigente} if (n > 0 or vigente) else None
+        guilda = None
+        g = con.execute(SQL_ARENA_GUILDA, (cid,)).fetchone()
+        if g is not None:
+            titulos = int(con.execute(SQL_ARENA_GUILDA_TITULOS, (g[0],)).fetchone()[0] or 0)
+            campea = con.execute(SQL_ARENA_GUILDA_CAMPEA, (g[0],)).fetchone() is not None
+            if titulos > 0 or campea:
+                guilda = {'nome': g[1], 'campea': campea, 'titulos': min(ARENA_MARCAS_MAX, titulos)}
+    except sqlite3.Error:
+        return None, None
+    return arena, guilda
+
+
+def carimba_arena(m, conta):
+    """10/10: o `arena` do perfil e o `campea`/`titulos` da guilda do perfil saem como o BANCO diz (a conta
+    conferida os traz em conta['arena'] e conta['guildaTorneio']); o que o cliente mandou cai. A marca da guilda
+    só vale na guilda em que a conta ESTÁ (o nome do perfil confere com o do banco). True se mudou o envelope."""
+    mudou = False
+    arena = conta.get('arena') if conta else None
+    if arena is None:
+        if 'arena' in m:
+            del m['arena']
+            mudou = True
+    elif m.get('arena') != arena:
+        m['arena'] = dict(arena)
+        mudou = True
+    resumo = m.get('resumo')
+    g = resumo.get('guilda') if isinstance(resumo, dict) else None
+    if isinstance(g, dict):
+        gt = conta.get('guildaTorneio') if conta else None
+        mesma = (gt is not None and isinstance(g.get('nome'), str)
+                 and g['nome'].strip().lower() == str(gt.get('nome') or '').strip().lower())
+        campea, titulos = (bool(gt['campea']), int(gt['titulos'])) if mesma else (False, 0)
+        if campea or titulos:
+            if g.get('campea') is not campea or g.get('titulos') != titulos or type(g.get('titulos')) is not int:
+                g['campea'], g['titulos'] = campea, titulos
+                mudou = True
+        else:
+            for k in ('campea', 'titulos'):
+                if k in g:
+                    del g[k]
+                    mudou = True
+    return mudou
 
 
 def titulo_do_podio(titulo, podio):
@@ -310,6 +375,7 @@ def confere(caminho, token, agora=None):
         aura = None
         moldura = None
         podio = None
+        arena = guilda_torneio = None
         if linha is not None:
             try:
                 achada = con.execute(SQL_AURA, (linha[0],)).fetchone()
@@ -322,6 +388,7 @@ def confere(caminho, token, agora=None):
             except sqlite3.Error:
                 moldura = None
             podio = podio_de(con, linha[0])          # 08/10: o pódio de agora (os títulos acompanham)
+            arena, guilda_torneio = arena_de(con, linha[0])   # 10/10: o que a conta conquistou no Torneio da Arena
     except sqlite3.Error:
         return None, False
     finally:
@@ -338,6 +405,10 @@ def confere(caminho, token, agora=None):
         conta['moldura'] = moldura
     if podio is not None:
         conta['podio'] = podio
+    if arena is not None:                            # 10/10: só quando há, como a aura e a moldura
+        conta['arena'] = arena
+    if guilda_torneio is not None:
+        conta['guildaTorneio'] = guilda_torneio
     return conta, True
 
 
@@ -759,6 +830,9 @@ def carimba(m, conta, freio=None, agora=None, so_cache=False, anonimo=False):
                 mudou = True
         elif m.get('moldura') in MOLDURAS:
             m['moldura'] = 'auto'
+            mudou = True
+        # 10/10: o que a conta carrega do Torneio da Arena (as conquistas, o campeão vigente, a guilda campeã)
+        if carimba_arena(m, conta):
             mudou = True
         # 08/10: o título de pódio sai com a posição de AGORA (ou sai vazio, se a conta caiu do pódio)
         if conta and isinstance(m.get('titulo'), str):

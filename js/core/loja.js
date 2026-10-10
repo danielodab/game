@@ -365,7 +365,10 @@
     if (ent.tipo === 'pedras') {
       var sd = (typeof ent.alvo === 'string') ? (D().stones || {})[ent.alvo] : null;
       // 08/10: o Fragmento de Gema se vende (e vem do anúncio); a Gema inteira, como a Âncora, não
-      if (!sd || ent.alvo === ancora() || sd.element === 'forja' || sd.element === 'gema') return 'item-invalido';
+      // 10/10: a Gema INTEIRA só entra como PRÊMIO DO TORNEIO da Arena (servidor/torneio.py: a entrega nasce no
+      // servidor, congelada no banco com origem 'torneio' — nenhum produto do catálogo a leva)
+      var premioTorneio = !!sd && sd.element === 'gema' && ent.origem === 'torneio';
+      if (!sd || ent.alvo === ancora() || sd.element === 'forja' || (sd.element === 'gema' && !premioTorneio)) return 'item-invalido';
       if (!inteiroPos(ent.qtd, 999)) return 'item-invalido';
       return null;
     }

@@ -431,6 +431,10 @@ class GuildaMixin:
             'pedidos': [{'id': p['conta_id'], 'nome': nm.get(p['conta_id'], '?'), 'em': p['em'] * 1000} for p in ps],
             'souLider': g['lider_id'] == eu, 'meuCargo': cargo, 'eu': eu,
             'meta': meta_de(self.con, gid, agora()),      # 07/10: a meta da semana (salas vencidas pelos membros)
+            # 10/10, o Torneio da Arena (torneio.py): {campea, titulos (as marcas, até 5), fatorXp (2 enquanto o XP em
+            # dobro da campeã valer; senão 1), xpDobroAteMs} — o cliente mostra a placa e avisa do XP em dobro
+            'torneio': (self._torneio_da_guilda(gid, agora()) if hasattr(self, '_torneio_da_guilda')
+                        else {'campea': False, 'titulos': 0, 'fatorXp': 1, 'xpDobroAteMs': 0}),
             'pergaminhos': self._g_pergaminhos(eu),       # 08/10 à noite: os da loja do site que ESTA conta ainda tem
         }
 

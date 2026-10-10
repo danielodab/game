@@ -687,16 +687,24 @@ class GrupoMixin:
                 return 200, {'ok': True, 'carry': _objeto(r['carry'])}
             estado = self._estado_exige(cid)
             self._confere_herois(conta, estado['progress'], herois)
-            em = [x[0] for x in self.con.execute("SELECT em FROM limites WHERE chave = ? AND em > ? ORDER BY em",
-                                                 (chave, t - 3600))]
-            if len(em) >= DUELO_ABERTURAS_POR_HORA:
-                raise Recusa(429, 'duelos demais na última hora (máximo %d)' % DUELO_ABERTURAS_POR_HORA,
-                             liberaEm=em[len(em) - DUELO_ABERTURAS_POR_HORA] + 3600)
-            vidas = self._vida_ferida(cid, herois, int(time.time() * 1000))
-            self._vida_recusa_zero(vidas)
-            carry = {h: v['hp'] for h, v in vidas.items()} or None
-            self.con.execute("INSERT INTO limites(chave, em) VALUES (?, ?)", (chave, t))
-            self.con.execute("DELETE FROM limites WHERE chave = ? AND em < ?", (chave, t - 3600))
+            # 10/10, A LUTA DO TORNEIO (torneio.py; docs/TORNEIO.md §1): o did que o torneio abriu para ESTA conta
+            # começa com a vida CHEIA (carry None — o herói a 0 PV não barra, e a vida única fica como estava) e
+            # não gasta a cota de aberturas: quem cria esse did é o servidor, um por luta
+            achar = getattr(self, '_torneio_luta_do_did', None)
+            de_torneio = achar is not None and achar(did, cid) is not None
+            if de_torneio:
+                carry = None
+            else:
+                em = [x[0] for x in self.con.execute("SELECT em FROM limites WHERE chave = ? AND em > ? ORDER BY em",
+                                                     (chave, t - 3600))]
+                if len(em) >= DUELO_ABERTURAS_POR_HORA:
+                    raise Recusa(429, 'duelos demais na última hora (máximo %d)' % DUELO_ABERTURAS_POR_HORA,
+                                 liberaEm=em[len(em) - DUELO_ABERTURAS_POR_HORA] + 3600)
+                vidas = self._vida_ferida(cid, herois, int(time.time() * 1000))
+                self._vida_recusa_zero(vidas)
+                carry = {h: v['hp'] for h, v in vidas.items()} or None
+                self.con.execute("INSERT INTO limites(chave, em) VALUES (?, ?)", (chave, t))
+                self.con.execute("DELETE FROM limites WHERE chave = ? AND em < ?", (chave, t - 3600))
             self.con.execute("INSERT INTO duelo_vida(did, conta_id, herois, carry, criado_em) VALUES (?, ?, ?, ?, ?)",
                              (did, cid, json.dumps(herois), json.dumps(carry) if carry is not None else None, t))
             # 19/09: a versão das regras com que o duelo abriu — a do PRIMEIRO lado a abrir (o juiz confere ao fechar)
@@ -737,6 +745,10 @@ class GrupoMixin:
             resposta['modo'] = res['modo']
         if res.get('fim'):
             resposta['fim'] = res['fim']            # 15/09: desistencia | wo | wo-sem-prova | sem-confirmacao
+        if res.get('torneio'):
+            # 10/10: o duelo foi a luta desse torneio (o did, as contas, os heróis e o modo conferem). Com `venc`
+            # A ou B e sem `motivo`, o vencedor avançou a chave; sem vencedor, o torneio abriu a revanche
+            resposta['torneio'] = res['torneio']
         resposta.update(pub)
         # 14/09, a vida única: a vida de AGORA dos heróis de quem pede ({heroId: PV}; sem linha = cheio, fora)
         herois = (res.get('herois') or {}).get(str(cid)) if isinstance(res.get('herois'), dict) else None
@@ -756,7 +768,7 @@ class GrupoMixin:
             raise Recusa(404, 'duelo não encontrado')
         return self._duelo_resposta(cid, _objeto(r['resultado']) or {'fase': r['fase'], 'venc': r['venc']})
 
-    def _duelo_guarda(self, did, a_id, b_id, resultado, t, herois=None):
+    def _duelo_guarda(self, did, a_id, b_id, resultado, t, herois=None, por=None):
         """Dentro de _escrita: a linha do duelo (falha de chave = o outro lado guardou antes). `herois` =
         {conta: [heroId]} vai junto no resultado (14/09: a resposta devolve a vida deles)."""
         if herois:
@@ -766,6 +778,13 @@ class GrupoMixin:
         self.con.execute("INSERT INTO duelos(did, a_id, b_id, fase, venc, criado_em, resultado) VALUES (?, ?, ?, ?, ?, ?, ?)",
                          (did, a_id, b_id, resultado['fase'], resultado.get('venc') if resultado.get('ranqueado') else None,
                           t, json.dumps(resultado, ensure_ascii=False)))
+        # 10/10, O GANCHO DO TORNEIO (torneio.py): TODO desfecho guardado — com vencedor ou sem (foto, regras que
+        # mudaram, replay recusado, W.O. sem prova, a espera que venceu) — passa por aqui, na mesma transação: o
+        # torneio avança a chave com o vencedor que o juiz viu, ou abre a revanche. O did que não é de torneio sai
+        # na primeira linha de lá
+        gancho = getattr(self, '_torneio_resultado', None)
+        if gancho is not None:
+            gancho(did, a_id, b_id, resultado, por=por)
 
     def _duelo_amistoso(self, did, modo, dungeon, lados):
         """Dentro da tranca (14/09): o motivo de o duelo valer como AMISTOSO antes de olhar os estados, ou None.
@@ -902,7 +921,7 @@ class GrupoMixin:
         for _ in range(TENTATIVAS):
             t = agora()
             agora_ms = int(time.time() * 1000)
-            teto = amistoso = perdeu = fim = espera = espera_ate = motivo_espera = None
+            teto = amistoso = perdeu = fim = espera = espera_ate = motivo_espera = torneio = None
             acao = None
             with self._escrita():
                 if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
@@ -914,10 +933,15 @@ class GrupoMixin:
                     linha = self.con.execute("SELECT * FROM duelo_espera WHERE did = ?", (did,)).fetchone()
                     espera = dict(linha) if linha is not None else None
                     sem_fim = espera is not None and espera['motivo'] == 'sem-fim'
+                    # 10/10, A LUTA DO TORNEIO (torneio.py; docs/TORNEIO.md §1): o did da luta em curso de um torneio
+                    # entre ESSAS duas contas. Para ele: sem teto e sem paridade (quem manda é a faixa do torneio), a
+                    # Brasa não muda (ranqueado False), os dois entram com a vida CHEIA e a vida do fim NÃO grava
+                    achar = getattr(self, '_torneio_do_duelo', None)
+                    torneio = achar(did, a_id, b_id) if achar is not None else None
                     if fotografada:
                         # sincronizado por foto: o registro não refaz o duelo; vale como amistoso (e a vida não muda)
                         self._duelo_guarda(did, a_id, b_id, {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False,
-                                                             'motivo': 'fotografada', 'modo': modo}, t, herois_de)
+                                                             'motivo': 'fotografada', 'modo': modo}, t, herois_de, por=cid)
                         self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
                         acao = 'guardado'
                     elif sem_fim and agora_ms >= espera['primeiro_ms'] + DUELO_ESPERA_MS:
@@ -944,7 +968,7 @@ class GrupoMixin:
                         if acao is None:
                             # 14/09: o amistoso (desafio, mapa trocado, arena sem partida) nem olha os tetos
                             amistoso = self._duelo_amistoso(did, modo, dungeon, lados)
-                            teto = None if amistoso else self._duelo_teto(a_id, b_id, t)
+                            teto = None if (amistoso or torneio) else self._duelo_teto(a_id, b_id, t)
                             estados = {k: self._estado_ler(lados[k]['conta']) for k in lados}
                             faltando = [k for k in lados if estados[k] is None]
                             if faltando and teto:
@@ -956,11 +980,11 @@ class GrupoMixin:
                                              else 'a outra conta ainda não tem o estado no servidor')
                             else:
                                 # 14/09, a PARIDADE: o herói mais forte de cada lado, nos estados do servidor
-                                if not amistoso and modo in PARIDADE:
+                                if not amistoso and not torneio and modo in PARIDADE:
                                     niveis = [_nivel_forte(estados[k]['progress'], lados[k]['herois']) for k in ('A', 'B')]
                                     if abs(niveis[0] - niveis[1]) > PARIDADE[modo]:
                                         amistoso, teto = 'paridade', None
-                                vidas = {k: self._duelo_vida_guardada(did, lados[k]) for k in lados}
+                                vidas = {k: None if torneio else self._duelo_vida_guardada(did, lados[k]) for k in lados}
                                 regras_duelo = self._duelo_regras(did)          # 19/09
                                 acao = 'juiz'
             if acao == 'guardado':
@@ -987,7 +1011,8 @@ class GrupoMixin:
                         if not self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
                             self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
                             self._duelo_guarda(did, a_id, b_id, {'fase': 'vencido', 'venc': None, 'ranqueado': False,
-                                                                 'motivo': 'regras-mudaram', 'modo': modo}, t, herois_de)
+                                                                 'motivo': 'regras-mudaram', 'modo': modo}, t, herois_de,
+                                               por=cid)
                             for quem in (a_id, b_id):
                                 self._evento(quem, 'duelo-vencido', {'did': did, 'motivo': 'regras-mudaram', 'erro': e.erro})
                     log.info("duelo vencido por regras novas: %s — %.200s", did, e.erro)
@@ -1002,7 +1027,8 @@ class GrupoMixin:
                                 self._duelo_guarda_teto(did, a_id, b_id, t, herois_de)
                             else:
                                 self._duelo_guarda(did, a_id, b_id, {'fase': 'recusado', 'venc': None, 'ranqueado': False,
-                                                                     'motivo': e.extra.get('motivo') or 'juiz'}, t, herois_de)
+                                                                     'motivo': e.extra.get('motivo') or 'juiz'}, t, herois_de,
+                                                   por=cid)
                                 for quem in (a_id, b_id):
                                     self._evento(quem, 'duelo-recusado', {'did': did, 'motivo': e.extra.get('motivo'),
                                                                           'erro': e.erro})
@@ -1016,7 +1042,7 @@ class GrupoMixin:
                 perdeu = None                               # o replay acabou de verdade: vale o fim dele
                 if venc is not None:
                     fim = None
-            ranqueado = bool(saida.get('ranqueado')) and venc is not None and not teto and not amistoso
+            ranqueado = bool(saida.get('ranqueado')) and venc is not None and not teto and not amistoso and not torneio
             fins, lado_saida = {}, {}
             for k in lados:
                 s = saida.get(k)
@@ -1047,7 +1073,7 @@ class GrupoMixin:
                             if grava:                        # o W.O. que esperava a prova: agora é a desistência que espera
                                 self.con.execute("UPDATE duelo_espera SET motivo = 'sem-fim', resultado = ? WHERE did = ?",
                                                  (json.dumps(em_espera, ensure_ascii=False), did))
-                        if grava:
+                        if grava and not torneio:            # 10/10: a luta do torneio não grava a vida de ninguém
                             for k in lados:
                                 vida_fim, maximos = fins[k]
                                 self._vida_grava_fim(lados[k]['conta'],
@@ -1071,6 +1097,10 @@ class GrupoMixin:
             resultado['modo'] = modo
             if fim:
                 resultado['fim'] = fim
+            if torneio and not amistoso:
+                # o carimbo que o gancho do torneio exige (torneio.py, _torneio_resultado): o juiz refez ESTE did, entre
+                # as duas contas da luta, com os heróis inscritos e pelo modo 'arena' — só assim o vencedor avança a chave
+                resultado['torneio'] = torneio['id']
             try:
                 with self._escrita():
                     if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
@@ -1102,7 +1132,7 @@ class GrupoMixin:
                                                   (did,)).fetchone() is not None
                     agora_ms = int(time.time() * 1000)
                     for k in lados:
-                        if ja_gravada and k != perdeu:
+                        if torneio or (ja_gravada and k != perdeu):   # 10/10: a vida única fica como estava no torneio
                             continue
                         vida_fim, maximos = fins[k]
                         self._vida_grava_fim(lados[k]['conta'], {h: vida_fim[h] for h in lados[k]['herois'] if h in vida_fim},
@@ -1111,7 +1141,7 @@ class GrupoMixin:
                         self._evento(lados[perdeu]['conta'], 'duelo-' + fim, {'did': did, 'modo': modo,
                                                                              'ranqueado': resultado.get('ranqueado')})
                     self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
-                    self._duelo_guarda(did, a_id, b_id, resultado, t, herois_de)
+                    self._duelo_guarda(did, a_id, b_id, resultado, t, herois_de, por=cid)
             except EstadoMudou:
                 continue
             # os heróis de cada conta vão junto, como no guardado: a resposta traz a vida de quem pede

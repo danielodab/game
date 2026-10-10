@@ -234,6 +234,8 @@ jogador. Página nova sem essa linha é bug.
 | `gema.js` (Node) | 29 / 0 (08/10: a Gema Enterrada — juntar fragmentos, o engaste sorteado pelos pesos, o `extra` que viaja com a cópia, os stats, o juiz, a loja e o saque) |
 | `prova_toque_batalha.html` | 14 / 0 (08/10, Chrome headless em tempo real pelo DevTools: o "i" fora da barra, a explicação por toque longo ou mouse parado, o lance pelo card da fila, UM laço na antessala) |
 | `premio_diario_api.py` | 4 próprias / 0 (08/10: o prêmio diário de resgate — calendário do mês, ordem só pelos resgates, barra no 10º; herda as da autoridade) |
+| `torneio_api.py` | 14 / 0 (10/10: o Torneio da Arena no servidor, com o juiz de verdade — os da semana, as vagas até 16, o sorteio com passes, a chamada, o W.O., a revanche, o duelo sem coroa nem vida, o prêmio pago uma vez, o título, a moldura, o carimbo do relé e o torneio de guilda; o contrato é docs/TORNEIO.md) |
+| `juiz_titulos_regua.js` (Node) | 8 / 0 (10/10: a régua dos títulos do Torneio da Arena lida como o juiz a lê; `juiz_economia.js` a chama) |
 | `notificacoes.js` (Node) | 20 / 0 (08/10: os avisos locais do aplicativo com plugin de mentira, e a casca: package.json, empacota, manifesto) |
 | `rele_titulos_prova.py` | 3 / 0 (08/10: o título de pódio que acompanha a posição e a moldura carimbada pelo relé) |
 | `estrelas_manuais.js` (Node) | 18 / 0 (08/10: as duas iniciais livres, a carta como moeda, a estrela comprada à mão por 5/10/20/30/45, a migração do save de antes, as ops do juiz, as comuns na loja) |

@@ -17,6 +17,10 @@ var JOGO = (typeof window !== 'undefined')
  *           chefe, seis ao todo
  *   ECO     (02/10) o pódio (1º ao 3º) de uma semana do Eco Primordial — o
  *           chefe supremo, placar de dano conferido pelo servidor
+ *   ARENA   (10/10) o Torneio da Arena (docs/TORNEIO.md): cada torneio de PvP
+ *           vencido com chave de 4 ou mais é uma CONQUISTA, e a escada sobe
+ *           com elas (1, 2, 3, 5, 10); o representante da guilda campeã leva
+ *           "Campeão das Guildas". Para sempre, como os de chefe
  *
  * A diferença entre eles importa: os de ranking são EMPRESTADOS (perdeu a
  * posição, perdeu o título — e quem o estiver usando volta a andar só com o
@@ -92,6 +96,26 @@ var JOGO = (typeof window !== 'undefined')
     { titulo: 'Voz do Eco', de: 'o pódio de uma semana do Eco Primordial' }
   ];
 
+  /* OS TÍTULOS DO TORNEIO DA ARENA (10/10, docs/TORNEIO.md §1 e §3). "Ganhar de novo continua valendo": a
+   * escada sobe com as CONQUISTAS de PvP (um torneio vencido com chave de 4 ou mais) e os degraus de baixo
+   * seguem disponíveis. Quem conta é o SERVIDOR (servidor/torneio.py, torneio_conquistas): a régua recebe
+   * `estado.arena = {pvp, guilda}` — no jogo, do GET /api/torneio/meu; no juiz, do contexto que a API monta
+   * do banco. Para sempre, como os de chefe. O maior tem 19 letras (o teto da plaquinha é 23). */
+  T.ARENA = [
+    { n: 1,  titulo: 'Campeão da Arena' },
+    { n: 2,  titulo: 'Bicampeão da Arena' },
+    { n: 3,  titulo: 'Tricampeão da Arena' },
+    { n: 5,  titulo: 'Lenda da Arena' },
+    { n: 10, titulo: 'Imortal da Arena' }
+  ];
+  /* o do representante da guilda campeã do torneio de guilda (conquistas.guilda >= 1) */
+  T.ARENA_GUILDA = 'Campeão das Guildas';
+  /* A MOLDURA "Campeão da Arena" (da conta para sempre desde a primeira conquista em chave de 8 ou 16): o grau
+   * (1 = I, 2 = II, 3 = III; 0 sem conquista) e as marcas (uma por conquista, até 5) saem das conquistas de PvP */
+  T.ARENA_MARCAS_MAX = 5;
+  T.grauDaArena = function (n) { n = num(n); return n >= 5 ? 3 : (n >= 3 ? 2 : (n >= 1 ? 1 : 0)); };
+  T.marcasDaArena = function (n) { return Math.max(0, Math.min(T.ARENA_MARCAS_MAX, num(n))); };
+
   function num(v) { return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : 0; }
   function posValida(p) { return p === 1 || p === 2 || p === 3; }
 
@@ -120,12 +144,13 @@ var JOGO = (typeof window !== 'undefined')
 
   /* O CATÁLOGO INTEIRO com o estado de cada título, na ordem em que a ficha
    * o mostra. `estado` = { chefes: {bossId: quedas}, pvm: posição|null,
-   * pvp: posição|null, eco: [títulos do Eco já ganhos] }. Cada linha sai como:
+   * pvp: posição|null, eco: [títulos do Eco já ganhos], arena: {pvp, guilda} (as
+   * conquistas do Torneio da Arena) }. Cada linha sai como:
    *
-   *   { titulo, fonte: 'pvm'|'pvp'|'classe'|'eco'|'chefe', de, ganho, prog, alvo, comoGanhar }
+   *   { titulo, fonte: 'pvm'|'pvp'|'classe'|'eco'|'arena'|'chefe', de, ganho, prog, alvo, comoGanhar }
    *
-   * `ganho` é o que vale para pendurar; `prog`/`alvo` só existem no chefe (é
-   * o único que tem meio caminho). */
+   * `ganho` é o que vale para pendurar; `prog`/`alvo` existem no chefe e na
+   * arena (os que têm meio caminho). */
   T.catalogo = function (estado) {
     estado = estado || {};
     var chefes = estado.chefes || {};
@@ -161,6 +186,19 @@ var JOGO = (typeof window !== 'undefined')
                   emprestado: false,
                   comoGanhar: Tx('Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.') });
     });
+    // 10/10: os do Torneio da Arena — `estado.arena` = {pvp, guilda}, as conquistas contadas pelo servidor
+    var arena = (estado.arena && typeof estado.arena === 'object') ? estado.arena : {};
+    var conqPvp = Math.max(0, num(arena.pvp)), conqGuilda = Math.max(0, num(arena.guilda));
+    T.ARENA.forEach(function (d) {
+      fora.push({ titulo: d.titulo, fonte: 'arena', de: Tx('o Torneio da Arena'), ganho: conqPvp >= d.n,
+                  emprestado: false, prog: Math.min(conqPvp, d.n), alvo: d.n,
+                  comoGanhar: d.n === 1
+                    ? Tx('Vença um torneio de PvP da Arena com chave de 4 ou mais.')
+                    : Tx('Vença {vezes} torneios de PvP da Arena com chave de 4 ou mais.', { vezes: d.n }) });
+    });
+    fora.push({ titulo: T.ARENA_GUILDA, fonte: 'arena', de: Tx('o Torneio das Guildas'), ganho: conqGuilda >= 1,
+                emprestado: false, prog: Math.min(conqGuilda, 1), alvo: 1,
+                comoGanhar: Tx('Represente a sua guilda e vença o torneio de guilda com chave de 4 ou mais.') });
     T.CHEFES.forEach(function (c) {
       var n = Math.max(0, num(chefes[c.chefe]));
       fora.push({ titulo: c.titulo, fonte: 'chefe', de: Tx(c.nome), chefe: c.chefe,

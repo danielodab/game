@@ -211,6 +211,17 @@ check('a recompensa traz a lista das peças épicas para a plateia (raros, só i
       Array.isArray(rw.raros) && rw.raros.every((x) => typeof x.itemId === 'string' && ['epico', 'lendario'].indexOf(x.raridade) >= 0),
       JSON.stringify(rw.raros));
 
+// ---- 10/10: o XP EM DOBRO da guilda campeã do Torneio da Arena (docs/TORNEIO.md §1) — um fator PRÓPRIO
+// (contexto.guilda.fatorXp = 2) que entra no LUGAR do +15% do cofre, e não por cima dele
+const xpCom = (guilda) => fecha(pedido(conta, dg, ri, s, 'normal', jogo.lances, jogo.hash,
+  { contexto: { agoraMs: AGORA, fatores: {}, guilda } })).recompensa.xpGanho;
+const xp15 = xpCom({ bonusXp: true }), xp2 = xpCom({ fatorXp: 2 }), xp2e15 = xpCom({ bonusXp: true, fatorXp: 2 });
+const xp9 = xpCom({ fatorXp: 9 }), xp1 = xpCom({ fatorXp: 1 });
+check('o +15% do cofre segue como era', Math.abs(xp15 - rw.xpGanho * 1.15) <= 2, xp15 + ' × ' + rw.xpGanho);
+check('a guilda campeã paga XP em dobro', Math.abs(xp2 - rw.xpGanho * 2) <= 2, xp2 + ' × ' + rw.xpGanho);
+check('o dobro SUBSTITUI o +15% (×2, e não ×2,3)', xp2e15 === xp2, xp2e15 + ' × ' + xp2);
+check('o fator da guilda tem teto 2, e fator 1 não muda nada', xp9 === xp2 && xp1 === rw.xpGanho, [xp9, xp2, xp1, rw.xpGanho].join(' '));
+
 // ---- o bônus da guilda confere com o do jogo
 const fs = require('fs');
 const txtGuilda = fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'guilda.js'), 'utf8');

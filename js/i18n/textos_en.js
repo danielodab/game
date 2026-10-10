@@ -72,6 +72,13 @@ JOGO.I18n.registra('en', { textos: {
   "Top 2 Pvp": "Top 2 Pvp",
   "Top 3 Pvp": "Top 3 Pvp",
   "Voz do Eco": "Voice of the Echo",
+  // 10/10: os títulos do Torneio da Arena (js/core/titulos.js, T.ARENA e T.ARENA_GUILDA)
+  "Campeão da Arena": "Arena Champion",
+  "Bicampeão da Arena": "Two-Time Arena Champion",
+  "Tricampeão da Arena": "Three-Time Arena Champ",
+  "Lenda da Arena": "Arena Legend",
+  "Imortal da Arena": "Arena Immortal",
+  "Campeão das Guildas": "Champion of the Guilds",
   // ---- ETAPA 2 (05/10): as telas e os menus — a chave é o texto do código, gerada por máquina e conferida
   // (variáveis, tags, números e espaços das pontas iguais ao português). Edita-se à mão, uma linha por texto.
   "Neutro": "Neutral",
@@ -2352,6 +2359,12 @@ JOGO.I18n.registra('en', { textos: {
   "{pos}º do ranking de {classe}": "#{pos} in the {classe} ranking",
   "Seja o {pos}º do ranking de {classe} (a XP dessa classe).": "Be #{pos} in the {classe} ranking (that class's XP).",
   "Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.": "Finish in the top 3 of a week's Primordial Echo damage ranking.",
+  // 10/10: como se ganha cada título do Torneio da Arena (js/core/titulos.js)
+  "o Torneio da Arena": "the Arena Tournament",
+  "o Torneio das Guildas": "the Guild Tournament",
+  "Vença um torneio de PvP da Arena com chave de 4 ou mais.": "Win an Arena PvP tournament with a bracket of 4 or more.",
+  "Vença {vezes} torneios de PvP da Arena com chave de 4 ou mais.": "Win {vezes} Arena PvP tournaments with a bracket of 4 or more.",
+  "Represente a sua guilda e vença o torneio de guilda com chave de 4 ou mais.": "Represent your guild and win the guild tournament with a bracket of 4 or more.",
   "Derrube {nome} {vezes} vezes no DIFÍCIL e SOZINHO.": "Defeat {nome} {vezes} times on HARD and SOLO.",
   "Forjado: +{nivel} {grau}!": "Forged: +{nivel} {grau}!",
   "Top {pos} {classe}": "Top {pos} {classe}",

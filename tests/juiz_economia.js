@@ -273,6 +273,37 @@ async function tenta(base, ops, extra) {
   check('com o título do Eco no estado da conta, "' + tEco + '" entra', t6.ok && t6.db.jogador.titulo === tEco,
         JSON.stringify(t6.ok ? t6.resultados : t6));
 
+  // ---- 10/10: os títulos do Torneio da Arena (docs/TORNEIO.md) — as conquistas vêm do BANCO pela API
+  // (contexto.arena = {pvp, guilda}); a escada sobe com elas e os degraus de baixo seguem valendo
+  const tit = (titulo, arena) => tenta(base, [{ nome: 'definirTitulo', args: { titulo } }],
+                                       arena ? { contexto: { agoraMs: AGORA, arena } } : undefined);
+  const entrou = (r, titulo) => !!r.ok && r.db.jogador.titulo === titulo;
+  const caiu = (r) => !!r.ok && r.resultados[0] && r.resultados[0].ok === false && !r.db.jogador.titulo;
+  const a0 = await tit('Campeão da Arena');
+  const a1 = await tit('Campeão da Arena', { pvp: 1, guilda: 0 });
+  const a2 = await tit('Bicampeão da Arena', { pvp: 1, guilda: 0 });
+  check('"Campeão da Arena" sem conquista não entra; com uma, entra; o segundo degrau ainda não',
+        caiu(a0) && entrou(a1, 'Campeão da Arena') && caiu(a2), JSON.stringify([a0.resultados, a1.resultados, a2.resultados]));
+  const a3 = await tit('Tricampeão da Arena', { pvp: 3 });
+  const a4 = await tit('Campeão da Arena', { pvp: 3 });
+  const a5 = await tit('Lenda da Arena', { pvp: 4 });
+  const a6 = await tit('Lenda da Arena', { pvp: 5 });
+  const a7 = await tit('Imortal da Arena', { pvp: 9 });
+  const a8 = await tit('Imortal da Arena', { pvp: 10 });
+  check('a escada: 3 = Tricampeão (e o Campeão segue valendo), 5 = Lenda, 10 = Imortal',
+        entrou(a3, 'Tricampeão da Arena') && entrou(a4, 'Campeão da Arena') && caiu(a5) && entrou(a6, 'Lenda da Arena') &&
+        caiu(a7) && entrou(a8, 'Imortal da Arena'),
+        JSON.stringify([a3, a4, a5, a6, a7, a8].map((r) => r.ok && r.db.jogador.titulo)));
+  const g0 = await tit('Campeão das Guildas', { pvp: 10, guilda: 0 });
+  const g1 = await tit('Campeão das Guildas', { pvp: 0, guilda: 1 });
+  const gX = await tit('Campeão da Arena', { pvp: 'muitas', guilda: 1 });
+  check('"Campeão das Guildas" é só do representante (conquistas.guilda), e conquista torta não vale',
+        caiu(g0) && entrou(g1, 'Campeão das Guildas') && caiu(gX), JSON.stringify([g0.resultados, g1.resultados, gX.resultados]));
+  {
+    const T = require('./juiz_titulos_regua.js');
+    check('a régua: a escada, o título de guilda, a fonte "arena" no catálogo e o grau da moldura', T.ok, T.detalhe);
+  }
+
   // ---- o LOTE de pedras no mercadinho (22/09): as internas tiram e põem pedra, só com contexto.interno
   const INTERNO = { contexto: { agoraMs: AGORA, interno: true } };
   const lp1 = await tenta(base, [{ nome: 'mercadoTiraPedras', args: { stoneId: 'stone-ember', qtd: 10 } }]);
