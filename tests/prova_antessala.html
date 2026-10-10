@@ -30,6 +30,11 @@ f.onload = function () {
       w.JOGO.DB.batizar('Explorador').then(function () {
         w.JOGO.UI.selection(['sumo', 'curandeiro']);
         var ok = G.startRun(['sumo', 'curandeiro'], 'greenhouse');
+        // 09/10: a tela troca um quadro depois do startRun (a antessala abre no tique seguinte) — espera-se por ela
+        var vA = 0;
+        (function esperaAnte() { if (ok && G.screen !== 'antessala' && ++vA < 40) return setTimeout(esperaAnte, 250); depoisDaAntessala(); })();
+        return;
+        function depoisDaAntessala() {
         if (!ok || G.screen !== 'antessala') { document.title = 'ERRO sem antessala'; window.__pronto = true; return; }
         if (Q.placing) {
           // direto para a batalha em placing
@@ -91,6 +96,7 @@ f.onload = function () {
           }
           setTimeout(aguarda, 400);
         })();
+        }
       });
     } catch (e) { document.title = 'ERRO ' + e.message; window.__pronto = true; }
   })();

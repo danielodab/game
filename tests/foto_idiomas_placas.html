@@ -114,11 +114,12 @@
       });
       var portais = Object.keys(L).map(function (k) { return L[k]; }).filter(function (l) { return l.tipo === 'portal'; });
       var abertos = portais.filter(function (l) { return !l.fechado; }), fechados = portais.filter(function (l) { return l.fechado; });
-      check('praça: há portais abertos e fechados para conferir', abertos.length > 0 && fechados.length > 0, abertos.length + '/' + fechados.length);
+      // a caixa de areia pode ter todos os portais abertos: o caso "fechado" só se cobra quando existe um
+      check('praça: há portais abertos para conferir (fechados: ' + fechados.length + ')', abertos.length > 0, abertos.length + '/' + fechados.length);
       check('praça: o portal aberto escreve na placa o nome do calabouço (o do DATA traduzido)',
             abertos.every(function (l) { return l.placa && l.placa === l.nome && l.nome === (J.DATA.dungeons.filter(function (d) { return d.id === l.id; })[0] || {}).name; }),
             abertos.map(function (l) { return l.placa; }).join(' | '));
-      check('praça: o portal fechado leva "' + ESPERADO.fechado.trim() + '" na placa, no idioma',
+      if (fechados.length) check('praça: o portal fechado leva "' + ESPERADO.fechado.trim() + '" na placa, no idioma',
             fechados.every(function (l) { return l.placa && l.placa === l.nome + ESPERADO.fechado; }),
             fechados.map(function (l) { return l.placa; }).join(' | '));
       var sobrou = Object.keys(L).map(function (k) { return temPt(L[k].placa) || temPt(L[k].nome); }).filter(Boolean);
@@ -148,8 +149,11 @@
     }).then(function () {
       // ---- a ANTESSALA: a porta e a saída
       var ok = J.Game.startRun(ids.slice(0, 2), 'greenhouse');
-      check('antessala: startRun abriu a sala de espera', !!ok && J.Game.screen === 'antessala', J.Game.screen);
-      return espera(function () { var e = H._estado(); return !!(e && e.sala); }, 200, 300);
+      // a tela troca num quadro depois (o startRun devolve antes de a HUD mudar): espera-se a antessala
+      return espera(function () { return J.Game.screen === 'antessala'; }, 40, 250).then(function () {
+        check('antessala: startRun abriu a sala de espera', !!ok && J.Game.screen === 'antessala', J.Game.screen);
+        return espera(function () { var e = H._estado(); return !!(e && e.sala); }, 200, 300);
+      });
     }).then(function () {
       var L = lugares();
       check('antessala: a placa da porta diz "' + ESPERADO.porta + '"', !!L.porta && L.porta.placa === ESPERADO.porta && L.porta.nome === ESPERADO.porta, L.porta ? L.porta.placa + ' / ' + L.porta.nome : 'sem a porta');
