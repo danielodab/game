@@ -85,6 +85,8 @@
   function fichaAberta() { return doc.querySelector('.ui-sheet.is-on'); }
   function painelDaFicha() { return doc.querySelector('#ui-root .ui-sheet.is-on .sheet-panel'); }
   function tituloFicha() { var f = fichaAberta(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  var avisosVistos = [];
+  function avisoVisto(re) { return avisosVistos.some(function (t) { return re.test(t); }); }
   function toastTxt() { return (toastEl && toastEl.classList.contains('is-on')) ? toastEl.textContent : ''; }
   function botao(caixa, re) {
     var b = null;
@@ -265,6 +267,9 @@
     w = quadro.contentWindow; doc = quadro.contentDocument;
     U = J.UI;
     toastEl = doc.querySelector('.ui-toast');
+    // os avisos passam rápido e um cobre o outro (a fila da Autoridade sem rota de mentira também avisa):
+    // guarda-se TUDO o que o aviso já disse, e as cobranças de frase olham a história
+    try { new MutationObserver(function () { if (toastEl.textContent) avisosVistos.push(toastEl.textContent); }).observe(toastEl, { childList: true, characterData: true, subtree: true }); } catch (eO) {}
     diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s');
     try {
       var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
@@ -383,9 +388,9 @@
     // 1ª tentativa: o servidor recusa por nível (o estado de lá é o que vale)
     srv.recusa = { motivo: 'nivel', nivel: 27, nivelMin: 20, nivelMax: 25 };
     botao(fichaAberta(), /Inscrever a dupla/).click();
-    return ate(function () { return /nível 27/.test(toastTxt()); }, 3000).then(function (ok) {
-      check('inscrição · a recusa por nível vira frase clara, com os três números do servidor', ok && /nível 27: esta chave é do nível 20 ao 25/.test(toastTxt()) &&
-            tituloFicha() === 'Inscrição no Torneio', toastTxt());
+    return ate(function () { return avisoVisto(/nível 27/); }, 3000).then(function (ok) {
+      check('inscrição · a recusa por nível vira frase clara, com os três números do servidor', ok && avisoVisto(/nível 27: esta chave é do nível 20 ao 25/) &&
+            tituloFicha() === 'Inscrição no Torneio', avisosVistos.slice(-3).join(' | '));
       srv.recusa = { motivo: 'outra-chave' };
       botao(fichaAberta(), /Inscrever a dupla/).click();
       return ate(function () { return /outra chave/.test(toastTxt()); }, 3000);

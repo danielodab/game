@@ -330,7 +330,10 @@
     selTipoT.dispatchEvent(new Event('change', { bubbles: true }));
     selFaixaT.value = '25-30';
     selFaixaT.dispatchEvent(new Event('change', { bubbles: true }));
-    inQuandoT.value = '2031-03-15T20:30';
+    // uma data a 30 dias (o painel e o servidor recusam mais de 180 dias à frente): 20:30 de Brasília desse dia
+    var dT = new Date(Date.now() + 30 * 86400000), yT = dT.getUTCFullYear(), mT = dT.getUTCMonth(), ddT = dT.getUTCDate();
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    inQuandoT.value = yT + '-' + p2(mT + 1) + '-' + p2(ddT) + 'T20:30';
     inQuandoT.dispatchEvent(new Event('change', { bubbles: true }));
     inTituloT.value = '  Torneio de Aniversário  ';
     inTituloT.dispatchEvent(new Event('input', { bubbles: true }));
@@ -344,7 +347,7 @@
     var pm = ultimo('/api/mestre/torneio/marcar');
     check('torneios · marcar manda {tipo, faixa, inicioMs, titulo}: a hora digitada é a de Brasília (20:30 de lá = 23:30 UTC)',
           !!pm && pm.op.method === 'POST' && pm.op.body.tipo === 'pvp' && pm.op.body.faixa === '25-30' &&
-          pm.op.body.inicioMs === Date.UTC(2031, 2, 15, 23, 30) && pm.op.body.titulo === 'Torneio de Aniversário', pm && JSON.stringify(pm.op.body));
+          pm.op.body.inicioMs === Date.UTC(yT, mT, ddT, 23, 30) && pm.op.body.titulo === 'Torneio de Aniversário', pm && JSON.stringify(pm.op.body));
     check('torneios · e a lista se refaz com o novo em cima', qq('.pm-torneio').length === 4 && /Torneio de Aniversário · nº 72/.test(qq('.pm-torneio')[0].textContent));
     // o início em cima da hora nem sai daqui
     var nM = pedidos.length;
