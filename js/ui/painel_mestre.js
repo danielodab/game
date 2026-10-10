@@ -56,7 +56,7 @@ var JOGO = (typeof window !== 'undefined')
   var PM = JOGO.PainelMestre = {};
   PM.ABAS = [['caixa', 'Caixa'], ['moedas', 'Moedas'], ['jogadores', 'Jogadores'], ['guildas', 'Guildas'],
              ['denuncias', 'Denúncias'],
-             ['banimentos', 'Banimentos'], ['auditoria', 'Auditoria'], ['eventos', 'Eventos'], ['grimorio', 'Grimório'],
+             ['banimentos', 'Banimentos'], ['auditoria', 'Auditoria'], ['eventos', 'Eventos'], ['torneios', 'Torneios'], ['grimorio', 'Grimório'],
              ['ferramentas', 'Ferramentas']];
   // os nomes de antes: 'itens' (a primeira aba deste painel até 03/10) e as fichas da HUD
   var APELIDOS = { itens: 'caixa', gm: 'grimorio', gmcaixa: 'caixa', gmagenda: 'eventos' };
@@ -561,6 +561,118 @@ var JOGO = (typeof window !== 'undefined')
     var U = JOGO.UI;
     if (U && U.gmGrimorioEm) U.gmGrimorioEm(alvo, ctxDoPainel('grimorio'));
     else alvo.appendChild(el('p', 'pm-aviso', 'O grimório aparece com o jogo inteiro aberto.'));
+  };
+
+  /* ------------------------------------------------------------ Torneios (10/10)
+   * O dono: "todo sábado terá torneio de PvP e todo domingo torneio de guilda (ou quando o adm marcar)". Os da
+   * semana o servidor cria sozinho (docs/TORNEIO.md); aqui o Mestre vê TODOS (GET /api/mestre/torneios, com os
+   * cancelados), marca um extra — o tipo, a faixa de nível (só no PvP), a data e a hora de BRASÍLIA e um título —
+   * e cancela qualquer um que ainda não começou, com o botão de duas batidas. Quem valida é o servidor. */
+  var TORNEIO_ESTADO = { inscricoes: 'inscrições abertas', sorteado: 'chave sorteada', andamento: 'em andamento',
+                         encerrado: 'encerrado', cancelado: 'cancelado' };
+  var torneioForm = { tipo: 'pvp', faixa: '20-25', quando: '', titulo: '' };
+  /* o próximo sábado (PvP) ou domingo (guilda) às 14:00 de Brasília, como o servidor marca os da semana */
+  PM.proximoDiaDeTorneio = function (tipo, agoraSeg) {
+    var agora = Math.floor(Number(agoraSeg) || Date.now() / 1000);
+    var hojeTxt = M.paraBrasilia(agora).slice(0, 10);                  // o dia de hoje em Brasília
+    var hoje = M.deBrasilia(hojeTxt + 'T14:00');                       // as 14:00 de hoje, em segundos
+    var sem = new Date(hojeTxt + 'T12:00:00Z').getUTCDay();            // o dia da semana desse dia (0 = domingo)
+    var alvo = tipo === 'guilda' ? 0 : 6;
+    var mais = (alvo - sem + 7) % 7;
+    if (mais === 0 && hoje <= agora) mais = 7;                         // hoje já passou das 14:00: o da semana que vem
+    return hoje + mais * 86400;
+  };
+  ABAS.torneios = function (alvo) {
+    if (!PM.noServidor()) { semServidor(alvo, 'A lista de torneios'); return; }
+    alvo.appendChild(el('p', 'pm-dim', 'Os torneios da semana nascem sozinhos: PvP no sábado (duas chaves, 20–25 e 25–30) e guildas no ' +
+      'domingo, às 14:00 de Brasília. Aqui se marca um torneio extra e se cancela qualquer um que ainda não começou. As inscrições ' +
+      'fecham 10 minutos antes do início; com menos de 2 inscritos o servidor cancela sozinho.'));
+    // ---- marcar
+    alvo.appendChild(el('h3', null, 'Marcar um torneio'));
+    if (!torneioForm.quando) torneioForm.quando = M.paraBrasilia(PM.proximoDiaDeTorneio(torneioForm.tipo));
+    var linha = el('div', 'pm-linha pm-torneio-form');
+    var selFaixa = seletor([['20-25', 'nível 20 a 25'], ['25-30', 'nível 25 a 30']], torneioForm.faixa, function (v) { torneioForm.faixa = v; });
+    selFaixa.disabled = torneioForm.tipo === 'guilda';
+    var selTipo = seletor([['pvp', 'PvP (duplas)'], ['guilda', 'Guildas (representantes)']], torneioForm.tipo, function (v) {
+      var antes = torneioForm.tipo;
+      torneioForm.tipo = v === 'guilda' ? 'guilda' : 'pvp';
+      selFaixa.disabled = torneioForm.tipo === 'guilda';
+      // a data que ninguém mexeu acompanha o tipo: sábado para o PvP, domingo para as guildas
+      if (inQuando.value === M.paraBrasilia(PM.proximoDiaDeTorneio(antes))) {
+        inQuando.value = torneioForm.quando = M.paraBrasilia(PM.proximoDiaDeTorneio(torneioForm.tipo));
+      }
+    });
+    selTipo.classList.add('pm-torneio-tipo');
+    selFaixa.classList.add('pm-torneio-faixa');
+    var inQuando = entrada('datetime-local', torneioForm.quando, function (v) { torneioForm.quando = v; });
+    inQuando.classList.add('pm-torneio-quando');
+    var inTitulo = entrada('text', torneioForm.titulo, function (v) { torneioForm.titulo = v; }, { maxlength: '60', placeholder: 'ex.: Torneio de Aniversário' });
+    inTitulo.classList.add('pm-torneio-titulo');
+    linha.appendChild(campo('tipo', selTipo));
+    linha.appendChild(campo('faixa (só no PvP)', selFaixa));
+    linha.appendChild(campo('início (hora de Brasília)', inQuando));
+    linha.appendChild(campo('título (opcional)', inTitulo));
+    var bMarcar = bt('Marcar torneio', 'mod-b mod-b-ok pm-torneio-marcar', function () {
+      var seg = M.deBrasilia(inQuando.value);
+      if (!seg) { aviso('Escolha a data e a hora do início (hora de Brasília).'); return; }
+      if (seg * 1000 < Date.now() + 15 * 60 * 1000) { aviso('O início tem de ser daqui a pelo menos 15 minutos: as inscrições fecham 10 minutos antes.'); return; }
+      bMarcar.disabled = true;
+      var corpo = { tipo: torneioForm.tipo, faixa: torneioForm.tipo === 'guilda' ? null : selFaixa.value, inicioMs: seg * 1000,
+                    titulo: String(inTitulo.value || '').trim().slice(0, 60) };
+      api('/api/mestre/torneio/marcar', { method: 'POST', body: corpo }).then(function (r) {
+        bMarcar.disabled = false;
+        if (!r || !r.ok) { aviso(M.erro(r, 'o torneio não foi marcado')); return; }
+        torneioForm.titulo = '';
+        aviso('Torneio marcado para ' + M.quando(seg) + ' (Brasília).', 'good');
+        if (PM.aberto() && aba === 'torneios') desenha();
+      });
+    });
+    linha.appendChild(bMarcar);
+    alvo.appendChild(linha);
+    // ---- a lista
+    var lista = el('div', 'pm-torneios');
+    alvo.appendChild(lista);
+    carregando(lista);
+    api('/api/mestre/torneios').then(function (r) {
+      lista.textContent = '';
+      if (!r || !r.ok) {
+        lista.appendChild(el('p', 'pm-aviso', r && r.status === 404 ? 'O Torneio da Arena ainda não chegou a este servidor.' : M.erro(r, 'a lista não abriu')));
+        return;
+      }
+      var ts = (r.torneios || []).slice().sort(function (a, b) { return (b.inicioMs || 0) - (a.inicioMs || 0); });
+      lista.appendChild(el('h3', null, 'Torneios (' + ts.length + ')'));
+      if (!ts.length) { lista.appendChild(el('p', 'pm-dim', 'nenhum torneio no servidor')); return; }
+      ts.forEach(function (t) {
+        var row = el('div', 'pm-item pm-torneio');
+        row.setAttribute('data-torneio', String(t.id));
+        var nm = el('div', 'pm-nome');
+        var tit = el('b', null, (t.titulo || (t.tipo === 'guilda' ? 'Torneio das Guildas' : 'Torneio de PvP')) + ' · nº ' + t.id);
+        tit.appendChild(etiqueta(TORNEIO_ESTADO[t.estado] || t.estado, t.estado === 'cancelado' ? 'is-fora' : (t.estado === 'andamento' ? 'is-gm' : '')));
+        if (t.origem === 'mestre') tit.appendChild(etiqueta('marcado pelo Mestre', ''));
+        nm.appendChild(tit);
+        var n = (t.inscritos || []).length;
+        nm.appendChild(el('span', 'pm-dim', (t.tipo === 'guilda' ? 'guildas' : 'PvP · nível ' + (t.nivelMin || '?') + ' a ' + (t.nivelMax || '?')) +
+          ' · início ' + M.quando(Math.floor((t.inicioMs || 0) / 1000)) + ' (Brasília) · ' + n + ' de ' + (t.vagas || 2) + ' vaga(s)' +
+          (t.chave ? ' · chave de ' + t.chave.tamanho : '') +
+          (t.campeao ? ' · campeão: ' + ((t.tipo === 'guilda' && t.campeao.guilda && t.campeao.guilda.nome) || t.campeao.nome) : '')));
+        if (n) {
+          nm.appendChild(el('span', 'pm-dim', 'inscritos: ' + t.inscritos.slice(0, 16).map(function (x) {
+            return x.nome + ' #' + x.conta + (x.nivel ? ' (nv ' + x.nivel + ')' : '');
+          }).join(', ')));
+        }
+        row.appendChild(nm);
+        if (t.estado === 'inscricoes' || t.estado === 'sorteado') {
+          row.appendChild(confirma('Cancelar…', 'Confirmar: cancelar o torneio', function (b) {
+            api('/api/mestre/torneio/cancelar', { method: 'POST', body: { torneio: t.id } }).then(function (r2) {
+              if (!r2 || !r2.ok) { b.disabled = false; aviso(M.erro(r2, 'o torneio não foi cancelado')); return; }
+              aviso('O torneio nº ' + t.id + ' foi cancelado' + (n ? ' — os ' + n + ' inscrito(s) ficam sem a vaga.' : '.'), 'good');
+              if (PM.aberto() && aba === 'torneios') desenha();
+            });
+          }, 'mod-b mod-b-perigo pm-torneio-cancelar'));
+        }
+        lista.appendChild(row);
+      });
+    });
   };
 
   /* ------------------------------------------------------------ Moedas */

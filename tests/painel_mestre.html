@@ -105,8 +105,8 @@
     check('o painel recebe clique (pointer-events: auto; fora do #ui-root)',
           pe(capa) === 'auto' && !document.getElementById('ui-root').contains(capa));
     // 03/10: o painel ÚNICO — o de antes da tecla M (grimório, Caixa, eventos do mundo) virou as abas Caixa, Eventos e Grimório
-    check('as dez abas do painel único (04/10: Guildas)', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
-          'Caixa,Moedas,Jogadores,Guildas,Denúncias,Banimentos,Auditoria,Eventos,Grimório,Ferramentas',
+    check('as onze abas do painel único (04/10: Guildas; 10/10: Torneios)', qq('.pm-aba').map(function (x) { return x.textContent; }).join(',') ===
+          'Caixa,Moedas,Jogadores,Guildas,Denúncias,Banimentos,Auditoria,Eventos,Torneios,Grimório,Ferramentas',
           qq('.pm-aba').map(function (x) { return x.textContent; }).join(','));
     var focP = M.focaveis(capa);
     focP[focP.length - 1].focus();
@@ -287,6 +287,90 @@
     PM.abrir('grimorio');
     check('Eventos e Grimório sem a HUD: o aviso, não um erro', /eventos do mundo aparecem/.test(tEv) &&
           /grimório aparece/.test(q('.pm-corpo').textContent) && !/falhou ao desenhar/.test(tEv + q('.pm-corpo').textContent));
+
+    // ============================================================ Torneios (10/10; docs/TORNEIO.md)
+    var sab = PM.proximoDiaDeTorneio('pvp', Date.UTC(2026, 9, 7, 15, 0) / 1000);          // quarta 07/10, 12:00 de Brasília
+    var dom = PM.proximoDiaDeTorneio('guilda', Date.UTC(2026, 9, 7, 15, 0) / 1000);
+    check('torneios · o próximo dia de torneio: sábado 10/10 às 14:00 (PvP) e domingo 11/10 às 14:00 (guildas), em Brasília',
+          M.paraBrasilia(sab) === '2026-10-10T14:00' && M.paraBrasilia(dom) === '2026-10-11T14:00', M.paraBrasilia(sab) + ' / ' + M.paraBrasilia(dom));
+    check('torneios · no próprio sábado: antes das 14:00 é hoje, depois é o da semana que vem',
+          M.paraBrasilia(PM.proximoDiaDeTorneio('pvp', Date.UTC(2026, 9, 10, 16, 0) / 1000)) === '2026-10-10T14:00' &&
+          M.paraBrasilia(PM.proximoDiaDeTorneio('pvp', Date.UTC(2026, 9, 10, 18, 0) / 1000)) === '2026-10-17T14:00');
+    var inicioT = Date.now() + 3 * 86400000;
+    var listaT = [
+      { id: 71, tipo: 'pvp', faixa: '20-25', nivelMin: 20, nivelMax: 25, titulo: 'Torneio da Arena · 20 a 25', origem: 'semanal', inicioMs: inicioT,
+        inscricaoAteMs: inicioT - 600000, estado: 'inscricoes', vagas: 4, inscritos: [{ conta: 3, nome: 'Ana', nivel: 22 }, { conta: 42, nome: 'Bia', nivel: 23 }], chave: null, campeao: null },
+      { id: 70, tipo: 'guilda', faixa: null, nivelMin: 20, nivelMax: 30, titulo: 'Torneio das Guildas', origem: 'semanal', inicioMs: inicioT - 9 * 86400000,
+        estado: 'encerrado', vagas: 2, inscritos: [], chave: { tamanho: 2 }, campeao: { conta: 3, nome: 'Ana', guilda: { id: 1, nome: 'Os Fundos' } } },
+      { id: 69, tipo: 'pvp', faixa: '25-30', nivelMin: 25, nivelMax: 30, titulo: 'Extra de quinta', origem: 'mestre', inicioMs: inicioT - 20 * 86400000,
+        estado: 'cancelado', vagas: 2, inscritos: [], chave: null, campeao: null }];
+    respostas['/api/mestre/torneios'] = function () { return { ok: true, torneios: listaT }; };
+    PM.abrir('torneios');
+    await espera(30);
+    var linhasT = qq('.pm-torneio');
+    check('torneios · a aba lista TODOS (o que vem, o encerrado e o cancelado), o mais novo em cima', PM.aba() === 'torneios' && linhasT.length === 3 &&
+          linhasT[0].getAttribute('data-torneio') === '71' && linhasT[2].getAttribute('data-torneio') === '69', linhasT.length);
+    var t71 = linhasT[0] ? linhasT[0].textContent : '';
+    check('torneios · cada linha: o título, a faixa, o início em hora de Brasília, as vagas e os inscritos',
+          /Torneio da Arena · 20 a 25 · nº 71/.test(t71) && /inscrições abertas/.test(t71) && /nível 20 a 25/.test(t71) &&
+          t71.indexOf(M.quando(Math.floor(inicioT / 1000)) + ' (Brasília)') >= 0 && /2 de 4 vaga/.test(t71) && /Ana #3 \(nv 22\), Bia #42/.test(t71), t71);
+    check('torneios · o encerrado mostra o campeão (a guilda, no de guilda) e o do Mestre leva a etiqueta',
+          /campeão: Os Fundos/.test(linhasT[1].textContent) && /marcado pelo Mestre/.test(linhasT[2].textContent) && /cancelado/.test(linhasT[2].textContent));
+    check('torneios · só o que ainda não começou tem "Cancelar…"', !!botaoCom('Cancelar…', linhasT[0]) && !botaoCom('Cancelar…', linhasT[1]) && !botaoCom('Cancelar…', linhasT[2]));
+    // marcar: o tipo, a faixa, a data de Brasília e o título
+    var fT = q('.pm-torneio-form');
+    var selTipoT = q('.pm-torneio-tipo', fT), selFaixaT = q('.pm-torneio-faixa', fT), inQuandoT = q('.pm-torneio-quando', fT), inTituloT = q('.pm-torneio-titulo', fT);
+    check('torneios · o formulário nasce no próximo sábado às 14:00 de Brasília, PvP 20–25',
+          selTipoT.value === 'pvp' && selFaixaT.value === '20-25' && !selFaixaT.disabled && inQuandoT.value === M.paraBrasilia(PM.proximoDiaDeTorneio('pvp')), inQuandoT.value);
+    selTipoT.value = 'guilda';
+    selTipoT.dispatchEvent(new Event('change', { bubbles: true }));
+    check('torneios · trocar para guildas apaga a faixa e leva a data (que ninguém mexeu) para o domingo',
+          selFaixaT.disabled && inQuandoT.value === M.paraBrasilia(PM.proximoDiaDeTorneio('guilda')), inQuandoT.value);
+    selTipoT.value = 'pvp';
+    selTipoT.dispatchEvent(new Event('change', { bubbles: true }));
+    selFaixaT.value = '25-30';
+    selFaixaT.dispatchEvent(new Event('change', { bubbles: true }));
+    inQuandoT.value = '2031-03-15T20:30';
+    inQuandoT.dispatchEvent(new Event('change', { bubbles: true }));
+    inTituloT.value = '  Torneio de Aniversário  ';
+    inTituloT.dispatchEvent(new Event('input', { bubbles: true }));
+    respostas['/api/mestre/torneio/marcar'] = function (rota, op) {
+      listaT.unshift({ id: 72, tipo: op.body.tipo, faixa: op.body.faixa, nivelMin: 25, nivelMax: 30, titulo: op.body.titulo, origem: 'mestre', inicioMs: op.body.inicioMs,
+                       estado: 'inscricoes', vagas: 2, inscritos: [], chave: null, campeao: null });
+      return { ok: true, torneio: listaT[0] };
+    };
+    botaoCom('Marcar torneio', fT).click();
+    await espera(40);
+    var pm = ultimo('/api/mestre/torneio/marcar');
+    check('torneios · marcar manda {tipo, faixa, inicioMs, titulo}: a hora digitada é a de Brasília (20:30 de lá = 23:30 UTC)',
+          !!pm && pm.op.method === 'POST' && pm.op.body.tipo === 'pvp' && pm.op.body.faixa === '25-30' &&
+          pm.op.body.inicioMs === Date.UTC(2031, 2, 15, 23, 30) && pm.op.body.titulo === 'Torneio de Aniversário', pm && JSON.stringify(pm.op.body));
+    check('torneios · e a lista se refaz com o novo em cima', qq('.pm-torneio').length === 4 && /Torneio de Aniversário · nº 72/.test(qq('.pm-torneio')[0].textContent));
+    // o início em cima da hora nem sai daqui
+    var nM = pedidos.length;
+    q('.pm-torneio-quando').value = M.paraBrasilia(Math.floor(Date.now() / 1000) + 300);
+    q('.pm-torneio-quando').dispatchEvent(new Event('change', { bubbles: true }));
+    botaoCom('Marcar torneio', q('.pm-torneio-form')).click();
+    await espera(20);
+    check('torneios · início a menos de 15 minutos: avisa e não pede nada ao servidor',
+          pedidos.slice(nM).filter(function (p) { return p.rota === '/api/mestre/torneio/marcar'; }).length === 0 && /15 minutos/.test(q('.pm-toast').textContent), q('.pm-toast').textContent);
+    // cancelar: o botão de duas batidas
+    respostas['/api/mestre/torneio/cancelar'] = function (rota, op) {
+      listaT.forEach(function (t) { if (t.id === op.body.torneio) t.estado = 'cancelado'; });
+      return { ok: true, torneio: listaT[1] };
+    };
+    var bCan = botaoCom('Cancelar…', q('.pm-torneio[data-torneio="71"]'));
+    bCan.click();
+    check('torneios · cancelar pede a confirmação (a primeira batida só arma o botão)', !ultimo('/api/mestre/torneio/cancelar') && /Confirmar: cancelar o torneio/.test(bCan.textContent));
+    bCan.click();
+    await espera(40);
+    var pc = ultimo('/api/mestre/torneio/cancelar');
+    check('torneios · a segunda batida manda {torneio} e a linha volta como cancelada, sem botão',
+          !!pc && pc.op.body.torneio === 71 && /cancelado/.test(q('.pm-torneio[data-torneio="71"]').textContent) && !botaoCom('Cancelar…', q('.pm-torneio[data-torneio="71"]')));
+    respostas['/api/mestre/torneios'] = { ok: false, status: 404, erro: 'não achei' };
+    PM.abrir('torneios');
+    await espera(30);
+    check('torneios · servidor de antes do torneio (404): a aba diz que ele ainda não chegou', /ainda não chegou a este servidor/.test(q('.pm-corpo').textContent));
 
     // ============================================================ Denúncias
     respostas['/api/mestre/denuncias'] = { ok: true, contagem: { aberta: 1, 'em-analise': 0, procedente: 0, improcedente: 0 }, denuncias: [{
