@@ -337,6 +337,110 @@ function decide(chaves, lingua, busca) {
         /aviso-traducao/.test(aviso) && !!Ien.dicionario('en').textos['Tradução de cortesia.'] && !!Ies.dicionario('es').textos['Tradução de cortesia.']);
 })();
 
+// ---- (h) 09/10: o inglês nas placas 3D e nos eventos da semana (o dono, com fotos: "muita coisa em português ficou")
+(function () {
+  const mundoDe = (l) => {
+    const ctx = vm.createContext({ console }); ctx.globalThis = ctx;
+    ctx.location = { search: l === 'pt' ? '' : '?lang=' + l };
+    const roda = (f) => vm.runInContext(fs.readFileSync(path.join(RAIZ, f), 'utf8'), ctx, { filename: f });
+    roda(I18N);
+    ['js/i18n/erros_', 'js/i18n/textos_'].forEach((p) => ['en', 'es'].forEach((x) => roda(p + x + '.js')));
+    return ctx.JOGO.I18n;
+  };
+  const Ipt = mundoDe('pt'), Ien = mundoDe('en'), Ies = mundoDe('es');
+
+  /* A SEMANA DO SOTERRA vem do servidor (servidor/api.py, PROGRAMA_SEMANAL): os sete títulos e os sete textos,
+   * lidos do próprio arquivo, têm de estar nos dois erros_*.js — a mesma porta do Eco da semana. */
+  const api = fs.readFileSync(path.join(RAIZ, 'servidor', 'api.py'), 'utf8');
+  const bloco = (api.match(/PROGRAMA_SEMANAL = \(([\s\S]*?)\n\)/) || [])[1] || '';
+  const frases = [];
+  bloco.replace(/'(titulo|texto)': '((?:[^'\\]|\\.)*)'/g, (m, k, v) => { frases.push(v); return m; });
+  check('(h) o programa da semana foi lido de servidor/api.py: 7 títulos e 7 textos', frases.length === 14, frases.length + ' frases');
+  const semProg = frases.filter((f) => Ien.erro(f) === f || Ies.erro(f) === f || Ien.erro(f) === Ies.erro(f));
+  check('(h) os 14 têm inglês e espanhol, diferentes do português (js/i18n/erros_*.js)', frases.length === 14 && semProg.length === 0, semProg.join(' | '));
+  const titulos = frases.filter((f, i) => i % 2 === 0);
+  check('(h) os sete dias têm nome próprio em inglês ("Sexta do Dia" não sai em português)',
+        titulos.length === 7 && titulos.every((t) => /Domingo|Segunda|Terça|Quarta|Quinta|Sexta|Sábado/.test(t) && !/Domingo|Segunda|Terça|Quarta|Quinta|Sexta|Sábado/.test(Ien.erro(t))),
+        titulos.map((t) => Ien.erro(t)).join(' | '));
+
+  /* A resposta de /api/eventos: o que o SERVIDOR escreve (origem supremo e programa, e a tabela `programa`) é
+   * traduzido na chegada; o que o MESTRE escreve (pontual, calendario) fica como ele escreveu. */
+  const resp = () => ({ ok: true, ativos: [{ id: 'e1', origem: 'pontual', tipo: 'xp', titulo: 'Sexta do Dia', texto: 'Domingo do Poço' }],
+    proximos: [{ id: 'r1@2', origem: 'calendario', tipo: 'saque', titulo: 'Quinta do Saque' }],
+    semanais: [{ id: 'semana-saque-1', origem: 'programa', tipo: 'saque', titulo: 'Sexta do Dia', texto: 'O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).' },
+               { id: 'eco-1', origem: 'supremo', tipo: 'aviso', titulo: 'O Eco Primordial' }],
+    programa: [{ dia: 5, tipo: 'saque', multiplicador: 2, calabouco: 'dia', titulo: 'Sexta do Dia', texto: 'O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).' }] });
+  const en = Ien.resposta(resp(), '/api/eventos'), es = Ies.resposta(resp(), '/api/eventos'), ptr = Ipt.resposta(resp(), '/api/eventos');
+  check('(h) em inglês o evento da semana (origem programa) chega com título e texto traduzidos',
+        en.semanais[0].titulo !== 'Sexta do Dia' && en.semanais[0].texto !== resp().semanais[0].texto && /×2/.test(en.semanais[0].texto),
+        JSON.stringify(en.semanais[0]));
+  check('(h) o Eco da semana (origem supremo) segue traduzido', en.semanais[1].titulo === 'The Primordial Echo', en.semanais[1].titulo);
+  check('(h) a tabela `programa` (os sete dias da faixa e da ficha) também é traduzida',
+        en.programa[0].titulo !== 'Sexta do Dia' && en.programa[0].texto !== resp().programa[0].texto && en.programa[0].dia === 5 && en.programa[0].calabouco === 'dia',
+        JSON.stringify(en.programa[0]));
+  check('(h) o que o Mestre escreveu (pontual, calendário) fica como ele escreveu, mesmo que coincida com um título do programa',
+        en.ativos[0].titulo === 'Sexta do Dia' && en.ativos[0].texto === 'Domingo do Poço' && en.proximos[0].titulo === 'Quinta do Saque');
+  check('(h) espanhol: o mesmo caminho, outra língua', es.semanais[0].titulo !== 'Sexta do Dia' && es.semanais[0].titulo !== en.semanais[0].titulo && es.programa[0].titulo === es.semanais[0].titulo);
+  check('(h) em português a resposta passa intacta', JSON.stringify(ptr) === JSON.stringify(resp()));
+
+  /* AS PLACAS 3D (js/render3d/hub3d.js): os textos que a praça, a antessala e o salão da guilda escrevem no
+   * canvas passam por Tx() e têm tradução — a HUD mostra o mesmo `nome` no painel de aproximação. */
+  const hub = fs.readFileSync(path.join(RAIZ, 'js', 'render3d', 'hub3d.js'), 'utf8');
+  const PLACAS = ['Para a batalha', 'Sair do calabouço', 'Campo de PvP', 'Voltar à praça', 'Mercadinho', 'Banco', 'Arena', 'Forja',
+                  'Barraquinha da Sorte', 'Poço sem Fundo', 'Sede das Guildas', 'GUILDAS', 'Cofre da guilda', 'Mural da guilda',
+                  'Trono — a guilda', 'Mesa do conselho', 'Banco da guilda', 'Sair para a praça', '{a} — fechado', 'Nome'];
+  const semTx = PLACAS.filter((p) => hub.indexOf("Tx('" + p + "'") < 0);
+  check('(h) as ' + PLACAS.length + ' placas do hub3d passam por Tx() na hora de desenhar', semTx.length === 0, semTx.join(' | '));
+  const cru3d = PLACAS.filter((p) => new RegExp("rotulo\\('" + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'|nome: '" + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'").test(hub));
+  check('(h) nenhuma placa ficou escrita crua num rotulo() ou num `nome:`', cru3d.length === 0, cru3d.join(' | '));
+  const IGUAL_OK = { Arena: 1, Banco: 1, 'Campo de PvP': 1, Forja: 1 };       // a mesma palavra em espanhol (ou em todas)
+  const semPlaca = [];
+  PLACAS.forEach((p) => {
+    if (Ien.t(p) === p && !IGUAL_OK[p]) semPlaca.push('en:' + p);
+    if (Ies.t(p) === p && !IGUAL_OK[p]) semPlaca.push('es:' + p);
+  });
+  check('(h) toda placa tem inglês e espanhol', semPlaca.length === 0, semPlaca.join(' | '));
+  check('(h) a foto do dono: "Sede das Guildas" → "Guild Hall", "Para a batalha" → "To the battle", "Sair do calabouço" → "Leave dungeon"',
+        Ien.t('Sede das Guildas') === 'Guild Hall' && Ien.t('Para a batalha') === 'To the battle' && Ien.t('Sair do calabouço') === 'Leave dungeon' &&
+        Ien.t('{a} — fechado', { a: 'X' }) === 'X — closed');
+  check('(h) hub3d.js e renderer3d_v2.js trazem o atalho Tx com rede (rodam sem o i18n na página de prova)',
+        /function Tx\(s, v\)/.test(hub) && /function Tx\(s, v\)/.test(fs.readFileSync(path.join(RAIZ, 'js', 'render3d', 'renderer3d_v2.js'), 'utf8')));
+  check('(h) o motivo de a conjuração não sair (renderer) tem tradução com as mesmas variáveis',
+        /\(\{x\},\{y\}\)/.test(Ien.t('Sem linha de visão: muro em ({x},{y}).')) && Ien.t('Sem linha de visão.') !== 'Sem linha de visão.' &&
+        /\{n\}/.test(Ien.dicionario('en').textos['No escuro: essa casa só se mira a {n} casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.'] || ''));
+
+  /* O CACHE DA AGENDA guarda o texto já traduzido: leva o carimbo do idioma, e cache de outro idioma é
+   * descartado na leitura (senão a faixa mostraria a língua de antes até a busca seguinte). */
+  function agendaCom(cache, idioma) {
+    const m = new Map();
+    if (cache) m.set('soterra-agenda-v1', JSON.stringify(cache));
+    const ctx = {
+      console,
+      localStorage: { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); },
+                      key: (i) => Array.from(m.keys())[i] || null, get length() { return m.size; } },
+      navigator: { language: 'pt-BR' }, location: { search: idioma === 'pt' ? '' : '?lang=' + idioma }
+    };
+    ctx.window = ctx; ctx.globalThis = ctx;
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(path.join(RAIZ, I18N), 'utf8'), ctx);
+    vm.runInContext(fs.readFileSync(path.join(RAIZ, 'js', 'core', 'agenda.js'), 'utf8'), ctx);
+    return { Ag: ctx.JOGO.Agenda, armario: m };
+  }
+  const prog = [{ dia: 5, tipo: 'saque', multiplicador: 2, calabouco: null, titulo: 'Daily Dungeon Friday', texto: '' }];
+  check('(h) cache gravado em inglês não é lido pelo jogo em português (e vice-versa)',
+        agendaCom({ v: 1, idioma: 'en', lista: [], regras: [], programa: prog }, 'pt').Ag.programa().length === 0 &&
+        agendaCom({ v: 1, idioma: 'pt', lista: [], regras: [], programa: prog }, 'en').Ag.programa().length === 0);
+  check('(h) cache do mesmo idioma é lido; o de antes do carimbo (sem `idioma`) vale como português',
+        agendaCom({ v: 1, idioma: 'en', lista: [], regras: [], programa: prog }, 'en').Ag.programa().length === 1 &&
+        agendaCom({ v: 1, lista: [], regras: [], programa: prog }, 'pt').Ag.programa().length === 1 &&
+        agendaCom({ v: 1, lista: [], regras: [], programa: prog }, 'en').Ag.programa().length === 0);
+  const a2 = agendaCom(null, 'es');
+  a2.Ag._injeta({ ok: true, ativos: [], proximos: [], semanais: [], programa: prog, agora: Math.floor(Date.now() / 1000) });
+  let gravado = null;
+  try { gravado = JSON.parse(a2.armario.get('soterra-agenda-v1')); } catch (e) {}
+  check('(h) o cache novo sai com o carimbo do idioma da tela', !!gravado && gravado.idioma === 'es' && gravado.programa.length === 1, JSON.stringify(gravado));
+})();
+
 console.log('\n' + (total - falhas) + ' de ' + total + ' passaram' +
   ' · textos de dados traduzidos: en ' + contagem.en + ', es ' + contagem.es);
 process.exit(falhas ? 1 : 0);

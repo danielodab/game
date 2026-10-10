@@ -2993,5 +2993,29 @@ JOGO.I18n.registra('es', { textos: {
   "Velocidade da batalha: {a}.": "Velocidad de la batalla: {a}.",
   "Rápida (×1,5)": "Rápida (×1,5)",
   "Muito rápida (×2)": "Muy rápida (×2)",
-  "Batalha": "Batalla"
+  "Batalha": "Batalla",
+  // ---- 09/10: as placas 3D da praça, da antessala e do salão da guilda (js/render3d/hub3d.js)
+  "Para a batalha": "A la batalla",
+  "Trono — a guilda": "Trono — el gremio",
+  "Sair para a praça": "Salir a la plaza",
+  "{a} — fechado": "{a} — cerrado",
+  "Banco": "Banco",
+  "Mercadinho": "Mercadito",
+  "GUILDAS": "GREMIOS",
+  // o motivo de a conjuração não sair (js/render3d/renderer3d_v2.js, R.explainNoCast)
+  "Sem linha de visão: muro em ({x},{y}).": "Sin línea de visión: muro en ({x},{y}).",
+  "Sem linha de visão.": "Sin línea de visión.",
+  "No escuro: essa casa só se mira a {n} casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.": "En la oscuridad: esa casilla solo se apunta a {n} casillas — enciende un brasero con un golpe de Fuego, o lleva a alguien del camino del Fuego.",
+  // a faixa de eventos, o banco, o mercadinho, a guilda e a conta (a varredura do inglês)
+  "<b>{n}</b> evento": "<b>{n}</b> evento",
+  "<b>{n}</b> eventos": "<b>{n}</b> eventos",
+  "+{n} outros": "+{n} más",
+  "recentrar a camera": "recentrar la cámara",
+  "quantia": "cantidad",
+  "digite a quantia": "escribe la cantidad",
+  "recebe <b>{a}v</b><small>taxa {b}v</small>": "recibes <b>{a}v</b><small>tasa {b}v</small>",
+  "total <b>{a}v</b>": "total <b>{a}v</b>",
+  "Arena — a Brasa": "Arena — la Brasa",
+  "excluindo…": "eliminando…",
+  "{a} membro(s)": "{a} miembro(s)"
 } });

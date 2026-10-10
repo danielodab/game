@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>prova: as placas 3D e a faixa de eventos em inglês</title>
+<style>html,body{margin:0;height:100%;background:#0f1216}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<!-- PÁGINA DE PROVA E FOTO (09/10): O INGLÊS NAS PLACAS 3D E NA FAIXA DE EVENTOS. O dono, com três fotos do
+     jogo em inglês: "coloquei para inglês e muita coisa em português ficou". Abre o jogo de verdade com
+     ?lang=en (o `?lang=` manda naquela abertura e não grava — docs/IDIOMAS.md) e cobra, na ordem:
+       · na PRAÇA, as placas 3D dos lugares (o texto escrito na textura, Hub._lugares().placa) e o `nome` que
+         a HUD mostra no painel saem em inglês: "Guild Hall", "Little Market", "Bank", "Forge", "Lucky Booth",
+         "Bottomless Pit", "PvP Field", "Arena"; o portal fechado leva "— closed"; e nenhum lugar ficou com o
+         português das fotos ("Sede das Guildas", "Barraquinha da Sorte", "Poço sem Fundo"…);
+       · a FAIXA DE EVENTOS: uma resposta de /api/eventos com a Sexta do Dia (origem 'programa') e os sete
+         dias da semana passa pelo funil (JOGO.I18n.resposta, o que o Sessao.api faz na chegada) e a faixa
+         diz "Daily Dungeon Friday", "only in The Buried Greenhouse" e os sete dias em inglês — sem "Sexta do
+         Dia" nem "Domingo do Poço";
+       · na ANTESSALA (startRun na Estufa), as placas da porta e da saída: "To the battle" e "Leave dungeon";
+         o painel da saída também fala inglês.
+     O título diz quantas das cobranças passaram (PLACAS EN n/n) e o que falhou; `window.__pronto` sobe no
+     fim. ?lang=es troca o idioma da prova (as cobranças de texto passam a ser as do espanhol). O boot é o de
+     tests/foto_coroa_gm.html; `?dist=`, `?tilt=` enquadram a foto. -->
+<iframe id="tela"></iframe>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/[?&]([^=&]+)=([^&]*)/g, function (_, k, v) { Q[k] = decodeURIComponent(v); });
+  var LG = Q.lang === 'es' ? 'es' : 'en';
+  // o que cada placa tem de dizer, por lugar (id) e por idioma
+  var ESPERADO = {
+    en: { sede: 'Guild Hall', mercado: 'Little Market', banco: 'Bank', forja: 'Forge', loteria: 'Lucky Booth',
+          poco: 'Bottomless Pit', campo: 'PvP Field', arena: 'Arena', porta: 'To the battle', saida: 'Leave dungeon',
+          fechado: ' — closed', sexta: 'Daily Dungeon Friday', soEm: 'only in', domingo: 'Pit Sunday', evento: '1</b> event' },
+    es: { sede: 'Sede de los Gremios', mercado: 'Mercadito', banco: 'Banco', forja: 'Forja', loteria: 'Puesto de la Suerte',
+          poco: 'Pozo sin Fondo', campo: 'Campo de PvP', arena: 'Arena', porta: 'A la batalla', saida: 'Salir de la mazmorra',
+          fechado: ' — cerrado', sexta: 'Viernes del Día', soEm: 'solo', domingo: 'Domingo del Pozo', evento: '1</b> evento' }
+  }[LG];
+  // o português das fotos do dono — nada disto pode aparecer fora do português
+  var PT = ['Sede das Guildas', 'Barraquinha da Sorte', 'Poço sem Fundo', 'Mercadinho', 'Campo de PvP', 'Para a batalha',
+            'Sair do calabouço', 'Sexta do Dia', 'Domingo do Poço', 'Segunda dos Vinténs', 'Terça das Pedras', 'Quarta da Descida',
+            'Quinta do Saque', 'Sábado Cheio', ' — fechado'];
+  if (LG === 'es') PT = PT.filter(function (p) { return p !== 'Campo de PvP'; });     // a mesma palavra em espanhol
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?sandbox=1&snap=1&graficos=alta&lang=' + LG + '&foto-idiomas-placas';
+  var J, U, H, D, t0 = Date.now();
+  var checks = [];
+  function check(nome, ok, extra) { checks.push([nome + (ok || extra === undefined ? '' : ' (' + extra + ')'), !!ok]); }
+  function fim(extra) {
+    var ok = checks.filter(function (c) { return c[1]; }).length;
+    var falhas = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+    document.title = 'PLACAS ' + LG.toUpperCase() + ' ' + ok + '/' + checks.length + (falhas.length ? ' | FALHOU: ' + falhas.join('; ') : ' | tudo passou') +
+                     (extra ? ' | ' + extra : '');
+    window.__checks = checks;
+    window.__fail = checks.length - ok;
+    window.__pronto = true;
+  }
+  function temPt(txt) {
+    var s = String(txt || '');
+    for (var i = 0; i < PT.length; i++) if (s.indexOf(PT[i]) >= 0) return PT[i];
+    return null;
+  }
+  // esperas por TENTATIVAS (o relógio do headless é virtual)
+  function espera(cond, voltas, passo) {
+    return new Promise(function (ok, nao) {
+      var n = 0;
+      (function tenta() {
+        var r = false;
+        try { r = cond(); } catch (e) {}
+        if (r) return ok(r);
+        if (++n > voltas) return nao(new Error('esperou demais'));
+        setTimeout(tenta, passo || 300);
+      })();
+    });
+  }
+  function lugares() {
+    var m = {};
+    (H._lugares() || []).forEach(function (l) { m[l.id] = l; });
+    return m;
+  }
+  (function abre() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Renderer && J.Renderer.isReady() && J.UI && J.Hub && J.Rede && J.DB && J.Agenda && J.I18n && J.Game);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) { document.title = 'ERRO sem jogo'; window.__pronto = true; return; }
+      return setTimeout(abre, 250);
+    }
+    U = J.UI; H = J.Hub; D = quadro.contentWindow.document;
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      quadro.contentWindow.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    check('o jogo abriu em ' + LG + ' (?lang= manda nesta abertura)', J.I18n.idioma === LG, J.I18n.idioma);
+    var ids = J.Progress.heroIds().filter(function (h) { return h !== 'gm'; });
+    U.selection(ids.slice(0, 2));
+    J.Rede.entrar = function () { return true; };
+    J.Rede.pares = function () { return []; };
+    J.Rede.mover = function () {};
+    J.DB.batizar('Explorer').then(function () {
+      U.showScreen('hub');
+      return espera(function () { var e = H._estado(); return !!(e && e.pos && !e.sala); }, 160, 250);
+    }).then(function () {
+      // ---- a PRAÇA: as placas 3D e o nome do painel
+      var L = lugares();
+      ['sede', 'mercado', 'banco', 'forja', 'loteria', 'poco', 'campo', 'arena'].forEach(function (id) {
+        var l = L[id];
+        check('praça: a placa de "' + id + '" diz "' + ESPERADO[id] + '"', !!l && l.placa === ESPERADO[id], l ? l.placa : 'sem o lugar');
+        check('praça: o nome do painel de "' + id + '" é o mesmo da placa', !!l && l.nome === ESPERADO[id], l ? l.nome : 'sem o lugar');
+      });
+      var portais = Object.keys(L).map(function (k) { return L[k]; }).filter(function (l) { return l.tipo === 'portal'; });
+      var abertos = portais.filter(function (l) { return !l.fechado; }), fechados = portais.filter(function (l) { return l.fechado; });
+      check('praça: há portais abertos e fechados para conferir', abertos.length > 0 && fechados.length > 0, abertos.length + '/' + fechados.length);
+      check('praça: o portal aberto escreve na placa o nome do calabouço (o do DATA traduzido)',
+            abertos.every(function (l) { return l.placa && l.placa === l.nome && l.nome === (J.DATA.dungeons.filter(function (d) { return d.id === l.id; })[0] || {}).name; }),
+            abertos.map(function (l) { return l.placa; }).join(' | '));
+      check('praça: o portal fechado leva "' + ESPERADO.fechado.trim() + '" na placa, no idioma',
+            fechados.every(function (l) { return l.placa && l.placa === l.nome + ESPERADO.fechado; }),
+            fechados.map(function (l) { return l.placa; }).join(' | '));
+      var sobrou = Object.keys(L).map(function (k) { return temPt(L[k].placa) || temPt(L[k].nome); }).filter(Boolean);
+      check('praça: nenhuma placa ficou com o português das fotos', sobrou.length === 0, sobrou.join(', '));
+
+      // ---- a FAIXA DE EVENTOS: a semana do SOTERRA pelo funil dos pedidos
+      var agora = Math.floor(Date.now() / 1000);
+      var dias = [['Domingo do Poço', 'pedras', 1.5, 'poco'], ['Segunda dos Vinténs', 'vintem', 1.5, null], ['Terça das Pedras', 'pedras', 1.5, null],
+                  ['Quarta da Descida', 'xp', 1.25, null], ['Quinta do Saque', 'saque', 1.25, null], ['Sexta do Dia', 'saque', 2, 'dia'], ['Sábado Cheio', 'xp', 1.5, null]];
+      var resp = { ok: true, agora: agora, ativos: [], proximos: [], regras: [],
+        semanais: [{ id: 'semana-saque-1', origem: 'programa', regra: null, tipo: 'saque', multiplicador: 2, calabouco: 'greenhouse',
+                     titulo: 'Sexta do Dia', texto: 'O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).', inicio: agora - 3600, fim: agora + 3600 }],
+        programa: dias.map(function (d, i) { return { dia: i, tipo: d[1], multiplicador: d[2], calabouco: d[3], titulo: d[0], texto: d[0] + '.' }; }) };
+      J.I18n.resposta(resp, '/api/eventos');          // o que o Sessao.api faz com toda resposta
+      J.Agenda._injeta(resp);
+      return espera(function () { var f = D.querySelector('.hub-evento'); return !!(f && !f.classList.contains('is-off') && f.textContent.length > 10) && f; }, 40, 200).then(function (faixa) {
+        var html = faixa.innerHTML, txt = faixa.textContent;
+        check('faixa: o evento da semana sai como "' + ESPERADO.sexta + '"', txt.indexOf(ESPERADO.sexta) >= 0, txt.slice(0, 160));
+        check('faixa: o lugar do evento sai no idioma ("' + ESPERADO.soEm + '" + o nome traduzido do calabouço)',
+              txt.indexOf(ESPERADO.soEm) >= 0 && txt.indexOf('Buried Greenhouse') >= 0 === (LG === 'en'), txt.slice(0, 160));
+        check('faixa: a pílula conta "' + ESPERADO.evento.replace('</b>', '') + '"', html.indexOf(ESPERADO.evento) >= 0, html.slice(0, 120));
+        var sem = faixa.querySelectorAll('.hub-evento-dia');
+        check('faixa: os sete dias da semana estão na linha', sem.length === 7, String(sem.length));
+        check('faixa: o domingo diz "' + ESPERADO.domingo + '"', sem.length === 7 && sem[0].textContent.indexOf(ESPERADO.domingo) >= 0, sem.length ? sem[0].textContent : '');
+        check('faixa: nada da semana ficou em português', !temPt(txt), temPt(txt));
+      }, function () { check('faixa: a faixa de eventos apareceu com a semana injetada', false, 'não apareceu'); });
+    }).then(function () {
+      // ---- a ANTESSALA: a porta e a saída
+      var ok = J.Game.startRun(ids.slice(0, 2), 'greenhouse');
+      check('antessala: startRun abriu a sala de espera', !!ok && J.Game.screen === 'antessala', J.Game.screen);
+      return espera(function () { var e = H._estado(); return !!(e && e.sala); }, 200, 300);
+    }).then(function () {
+      var L = lugares();
+      check('antessala: a placa da porta diz "' + ESPERADO.porta + '"', !!L.porta && L.porta.placa === ESPERADO.porta && L.porta.nome === ESPERADO.porta, L.porta ? L.porta.placa + ' / ' + L.porta.nome : 'sem a porta');
+      check('antessala: a placa da saída diz "' + ESPERADO.saida + '"', !!L.saida && L.saida.placa === ESPERADO.saida && L.saida.nome === ESPERADO.saida, L.saida ? L.saida.placa + ' / ' + L.saida.nome : 'sem a saída');
+      // o painel da saída: a HUD escreve o título dela por tr() — tem de bater com a placa
+      try { H.aoAproximar({ id: 'saida', tipo: 'saida', nome: L.saida ? L.saida.nome : '' }); } catch (e) {}
+      var h3 = D.querySelector('.hub-painel:not(.is-off) h3');
+      check('antessala: o painel da saída fala o idioma da placa', !!h3 && h3.textContent.trim() === ESPERADO.saida, h3 ? h3.textContent : 'sem painel');
+      try { if (H._cam && (Q.dist || Q.tilt)) H._cam({ dist: Number(Q.dist) || 9, tilt: Number(Q.tilt) || 0.6 }); } catch (e2) {}
+      // os muros do tema chegam por sonda: um respiro para a foto
+      setTimeout(function () { fim(); }, 1500);
+    }).catch(function (e) {
+      check('a prova andou até o fim', false, e && e.message);
+      fim();
+    });
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1584,6 +1584,47 @@ css/style.css faz o navegador desenhar a lista, a barra de rolagem e os `<input 
 `select option` ganha fundo e letra explícitos. O jogo é sempre escuro, então vale para tudo; o site tem o
 CSS próprio e não muda.
 
+## 9-A.26 O inglês nas placas 3D e nos eventos da semana (09/10)
+
+O dono, com três fotos do jogo em inglês: "coloquei para inglês e muita coisa em português ficou". As fotos
+mostravam três sobras da etapa 2 dos idiomas (docs/IDIOMAS.md), que tinha deixado o 3D de fora de propósito:
+
+- **As placas 3D** da praça ("Sede das Guildas", "Banco", "Mercadinho", "Barraquinha da Sorte", "Forja", "Arena",
+  "Campo de PvP", "Poço sem Fundo", o portal "— fechado", a bandeirola "GUILDAS"), da antessala ("Para a batalha",
+  "Sair do calabouço"), do Campo ("Voltar à praça") e do salão da guilda (cofre, mural, trono, mesa, banco, saída).
+  `js/render3d/hub3d.js` ganhou o atalho `Tx()` de todo módulo e cada `rotulo(…)` e o `nome` do mesmo lugar passam
+  por ele **na hora de desenhar** (a placa é canvas → textura, feita uma vez em `Hub.entrar`; o `i18n.js` e o
+  `textos_<idioma>.js` já desceram muito antes, pela ordem do `index.html`). O `id`/`tipo` de cada lugar é chave e
+  fica em português — a HUD nunca comparou pelo nome (`aoAproximar` lê `lugar.tipo`; os painéis escrevem o próprio
+  título por `tr()`), só mostra `lugar.nome` no painel do portal. O nome do calabouço no portal já vinha traduzido
+  do DATA (`aplicaDados`); o sufixo virou frase (`{a} — fechado`), não pedaço. Para as provas, o sprite guarda
+  `userData.textoDaPlaca` e `Hub._lugares()` devolve `nome` e `placa`.
+- **A semana do SOTERRA** na faixa de eventos: os títulos ("Sexta do Dia", "Domingo do Poço"…) e os textos vêm
+  do **servidor** (`PROGRAMA_SEMANAL`, `servidor/api.py`) e a HUD os mostrava crus. A tradução é no cliente, pela
+  mesma porta do Eco da semana: `JOGO.I18n.resposta` (o funil do `Sessao.api`) traduz título e texto de todo evento
+  de `origem` `'supremo'` **ou `'programa'`** e da tabela `programa` da resposta (os sete dias da linha da faixa e da
+  ficha). As 14 frases moram em `js/i18n/erros_*.js`, com as outras frases do servidor; `tools/erros_servidor.py`
+  passou a colhê-las (um dicionário com `titulo`/`texto` e `dia`), então o `i18n_falta` cobra a tradução de uma
+  frase nova do programa. O que o **Mestre** escreve (origem `pontual`/`calendario`) fica como ele escreveu, mesmo
+  que coincida com um título do programa. O cache da agenda (`soterra-agenda-v1`) guarda o texto já traduzido,
+  então ganhou o carimbo `idioma`: cache de outro idioma é descartado na leitura (sem carimbo = português) — trocar
+  o idioma não mostra mais a faixa na língua de antes até a busca seguinte.
+- **A varredura** do que mais chegava à tela fora do `tr()`/`Tx()`: a pílula "<b>N</b> evento(s)" e o "+N outros"
+  da faixa, "{a} membro(s)" da porta da guilda, o `title` "recentrar a camera", o `placeholder` "quantia" e o aviso
+  "digite a quantia" do banco, "recebe <b>…v</b> taxa …v" e "total <b>…v</b>" do mercadinho, "Arena — a Brasa",
+  "excluindo…" da exclusão de conta, e no renderizador da batalha o motivo de a conjuração não sair ("Sem linha de
+  visão: muro em (x,y).", "No escuro: …"), que vai ao registro — `renderer3d_v2.js` também ganhou o `Tx()`.
+
+O que ficou em português **de propósito**: o painel do Mestre (`painel_mestre.js`, `debug.js`, `gm.js`); os
+`console`/`throw`; as chaves de rede (`rede.js`, `contas.js`); o nome de jogador, de guilda e o chat (balão da praça
+incluído); `tierOf()` (classe de CSS); os `'Enter'`/`'Escape'`/`'Tab'`; o seletor "Idioma · Language · Idioma"
+(trilíngue de propósito); e os eventos que o Mestre escreve. Provas: `node tests/idiomas.js` 76 (a seção (h): os 14
+do programa em en/es lidos do próprio `api.py`, o funil com origem programa/supremo/pontual e a tabela `programa`,
+as 20 placas por `Tx()` com tradução, o `Tx` do 3D, o carimbo do cache); `node tools/i18n_falta.js` zero;
+`tests/foto_idiomas_placas.html` (abre o jogo com `?lang=en`: as placas e os nomes da praça, o portal fechado, a
+faixa com a Sexta do Dia e os sete dias injetados pelo funil, as placas da antessala e o painel da saída; `?lang=es`
+prova o espanhol).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

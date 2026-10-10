@@ -110,8 +110,10 @@ def colhe():
                 for k, v in zip(no.keys, no.values):
                     if isinstance(k, ast.Constant) and k.value in ('erro', 'motivo'):
                         alvos.append(v)
-                    # o evento que o próprio servidor escreve na agenda do mundo (o Eco da semana, supremo.py)
-                    elif isinstance(k, ast.Constant) and k.value in ('titulo', 'texto') and 'origem' in chaves:
+                    # o evento que o próprio servidor escreve na agenda do mundo: o Eco da semana (supremo.py, com
+                    # `origem`) e, desde 09/10, os sete dias de PROGRAMA_SEMANAL (api.py, com `dia`) — o cliente os
+                    # traduz pelo título (JOGO.I18n.resposta); o que o Mestre escreve é dele e não passa aqui
+                    elif isinstance(k, ast.Constant) and k.value in ('titulo', 'texto') and ('origem' in chaves or 'dia' in chaves):
                         alvos.append(v)
                 # a frase que entra por argumento e sai num Recusa lá dentro (`_confere_senha(conta, s, 'senha errada', …)`)
                 if nm == '_confere_senha':

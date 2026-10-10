@@ -108,11 +108,20 @@ var JOGO = (typeof window !== 'undefined')
     try { return (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null; }
     catch (e) { return null; }
   }
+  /* 09/10: o título e o texto dos eventos do servidor (o Eco, a semana do SOTERRA) chegam JÁ TRADUZIDOS
+   * pelo funil dos pedidos (JOGO.I18n.resposta) e é assim que o cache os guarda. Trocar o idioma recarrega a
+   * página: sem este carimbo, a faixa mostraria o cache na língua de antes até a busca seguinte. Cache de
+   * outro idioma é descartado na leitura — a busca da entrada na praça o refaz. Sem carimbo = português
+   * (o cache de antes desta data). */
+  function idiomaDaTela() {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    return (I && typeof I.idioma === 'string') ? I.idioma : 'pt';
+  }
   function gravaCache() {
     var s = armazem();
     if (!s) return;
     try {
-      s.setItem(Ag.CHAVE, JSON.stringify({ v: 1, lista: lista, regras: regras, programa: programa, desvio: desvio, buscaEm: buscaOk }));
+      s.setItem(Ag.CHAVE, JSON.stringify({ v: 1, idioma: idiomaDaTela(), lista: lista, regras: regras, programa: programa, desvio: desvio, buscaEm: buscaOk }));
     } catch (e) { /* cheio ou negado: a memória segue valendo */ }
   }
   /* Lê o que a última sessão guardou. NÃO poda os vencidos aqui: a janela é
@@ -123,6 +132,7 @@ var JOGO = (typeof window !== 'undefined')
     var d = null;
     try { d = JSON.parse((s && s.getItem(Ag.CHAVE)) || 'null'); } catch (e) { d = null; }
     if (!d || typeof d !== 'object' || d.v !== 1) return false;
+    if ((typeof d.idioma === 'string' ? d.idioma : 'pt') !== idiomaDaTela()) return false;   // 09/10: cache de outro idioma
     lista = (isArr(d.lista) ? d.lista : []).map(normaliza).filter(Boolean);
     regras = (isArr(d.regras) ? d.regras : []).map(normalizaRegra).filter(Boolean);
     programa = (isArr(d.programa) ? d.programa : []).filter(function (p) {

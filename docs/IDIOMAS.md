@@ -21,7 +21,7 @@ save, no servidor e no juiz. O idioma é uma camada por cima, no navegador.
 - Nada de idioma entra no save, no hash da batalha (`Engine.hash` não tem nome nenhum) nem vai ao
   servidor. `Engine.VERSAO_REGRAS` não muda por causa de tradução.
 - Não se traduz o arquivo de dados: traduz-se **por cima** dele (`js/i18n/dados_*.js`).
-- `node tests/idiomas.js` prova tudo isso (58 checagens, poucos segundos). Rode depois de qualquer mexida.
+- `node tests/idiomas.js` prova tudo isso (76 checagens, poucos segundos). Rode depois de qualquer mexida.
 - O **servidor fala português**. As recusas (`{"erro": "…"}`) saem em português e quem traduz é o cliente. A
   única coisa que o servidor escreve em outra língua é o **e-mail** (ver a etapa 3).
 
@@ -117,7 +117,11 @@ toast(tr('Faltam {n} vinténs.', { n: n }), 'bad')
   "Guilda" viajam pelo relé como nome de reserva.
 - `js/core/registro_erros.js` (o relato que vai para a equipe) e os `throw new Error('…')` de
   `js/core/loja.js` e do `engine.js`: são para quem lê o registro, não para o jogador.
-- O painel do Mestre, o `debug.js`, o `gm.js`, o 3D (`js/render*`).
+- O painel do Mestre, o `debug.js`, o `gm.js`. O 3D (`js/render*`) ficou de fora na etapa 2, mas em **09/10**
+  (o dono, com fotos do jogo em inglês) o `hub3d.js` passou a traduzir **as placas** dos lugares (praça, antessala,
+  Campo, salão da guilda) por `Tx()` na hora de desenhar — o `id`/`tipo` do lugar segue chave — e o
+  `renderer3d_v2.js` o motivo de a conjuração não sair (`R.explainNoCast`). O resto do 3D não escreve frase
+  (ver `docs/SISTEMAS.md` 9-A.26).
 
 ### Texto que é chave e só se traduz NA TELA
 
@@ -217,8 +221,12 @@ funil dos pedidos — `JOGO.I18n.resposta(j, rota)`, chamado em `js/core/sessao.
   qualquer objeto da resposta são trocados pela frase (catálogo, pedidos, extrato). Preço, sku e regra ficam como
   vieram. É por frase e não por SKU de propósito: se o dono muda a descrição de um produto no servidor, ela
   aparece em português até ser traduzida — nunca uma tradução velha dizendo outra coisa;
-- **a agenda**: em `/api/eventos`, só o evento que o próprio servidor escreve (`origem: 'supremo'`, o Eco da
-  semana) é traduzido; o que o Mestre escreve é dele;
+- **a agenda**: em `/api/eventos`, só o que o próprio servidor escreve é traduzido — o Eco da semana
+  (`origem: 'supremo'`) e, desde 09/10, a semana do SOTERRA (`origem: 'programa'`, os sete dias de
+  `PROGRAMA_SEMANAL` em `servidor/api.py`, e a tabela `programa` da resposta); as frases moram em
+  `js/i18n/erros_*.js` e a `tools/erros_servidor.py` as colhe. O que o Mestre escreve é dele. O cache da
+  agenda no jogo (`soterra-agenda-v1`) guarda o texto já traduzido e leva o carimbo `idioma`: cache de outro
+  idioma é descartado na leitura;
 - em português nada disso roda.
 
 `tools/erros_servidor.py` colhe as frases do código (`Recusa(status, 'frase')`, `{'erro': …}`, as `FRASE_*`, as

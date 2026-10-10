@@ -2828,7 +2828,8 @@ var JOGO = (typeof window !== 'undefined')
      * continuam no DOM (só escondidas), então quem lê o texto dela — as provas da agenda — lê o mesmo de antes. */
     if (faixaEvAberta) faixa.classList.remove('is-mini'); else faixa.classList.add('is-mini');
     var temBonus = ativos.some(function (e) { return e.tipo !== 'aviso'; });
-    var pil = el('button', 'hub-evento-pilula', (temBonus ? '✦ ' : '📣 ') + '<b>' + ativos.length + '</b> ' + (ativos.length === 1 ? 'evento' : 'eventos') +
+    var pil = el('button', 'hub-evento-pilula', (temBonus ? '✦ ' : '📣 ') +
+      (ativos.length === 1 ? tr('<b>{n}</b> evento', { n: ativos.length }) : tr('<b>{n}</b> eventos', { n: ativos.length })) +
       '<span class="hub-evento-seta">' + (faixaEvAberta ? ' ▴' : ' ▾') + '</span>');
     pil.type = 'button';
     pil.setAttribute('aria-expanded', faixaEvAberta ? 'true' : 'false');
@@ -2840,7 +2841,7 @@ var JOGO = (typeof window !== 'undefined')
     ativos.slice(0, 3).forEach(function (e) {
       faixa.appendChild(el('span', 'hub-evento-item', linhaEvento(e, agoraMs, true)));
     });
-    if (ativos.length > 3) faixa.appendChild(el('span', 'hub-evento-item', '+' + (ativos.length - 3) + ' outros'));
+    if (ativos.length > 3) faixa.appendChild(el('span', 'hub-evento-item', tr('+{n} outros', { n: ativos.length - 3 })));
     /* A SEMANA DO SOTERRA (07/10): com a faixa aberta, os sete dias do programa fixo numa linha só, o de hoje
      * aceso — o jogador comum vê o que vem amanhã sem abrir o site (a ficha dos eventos é do Mestre) */
     var prog = safe(function () { return Ag.programa ? Ag.programa() : []; }, []) || [];
@@ -3493,7 +3494,7 @@ var JOGO = (typeof window !== 'undefined')
     // jogador REALMENTE mexeu: botao que nunca faz nada ensina a ser ignorado.
     if (JOGO.Renderer && JOGO.Renderer.recentrar) {
       bt.cam = btn('⌖', 'bt-cam', function () { JOGO.Renderer.recentrar(); });
-      bt.cam.title = 'recentrar a camera';
+      bt.cam.title = tr('recentrar a camera');
       bt.cam.classList.add('is-off');
       top.appendChild(bt.cam);
     }
@@ -4412,7 +4413,7 @@ var JOGO = (typeof window !== 'undefined')
       var meio = el('div', 'bk-meio bk2-meio');
       var campo = document.createElement('input');
       campo.type = 'number'; campo.min = '1'; campo.step = '1';
-      campo.placeholder = 'quantia';
+      campo.placeholder = tr('quantia');
       campo.className = 'bk2-qtd';
       campo.value = bancoQtd;
       campo.addEventListener('input', function () { bancoQtd = campo.value; });
@@ -4420,7 +4421,7 @@ var JOGO = (typeof window !== 'undefined')
 
       function quantia() {
         var n2 = Math.floor(Number(campo.value));
-        if (!isFinite(n2) || n2 <= 0) { toast('digite a quantia'); campo.focus(); return 0; }
+        if (!isFinite(n2) || n2 <= 0) { toast(tr('digite a quantia')); campo.focus(); return 0; }
         return n2;
       }
       function moveMoedas(op, valorDeposito) {
@@ -5403,7 +5404,7 @@ var JOGO = (typeof window !== 'undefined')
             var preco = Math.floor(Number(campo.value || sugerido)) || 0;
             if (preco <= 0) { taxaEl.textContent = ''; return; }
             var tx = mcTaxa(preco);
-            taxaEl.innerHTML = 'recebe <b>' + (preco - tx) + 'v</b><small>taxa ' + tx + 'v</small>';
+            taxaEl.innerHTML = tr('recebe <b>{a}v</b><small>taxa {b}v</small>', { a: preco - tx, b: tx });
           }
           campo.addEventListener('input', mostraTaxa);
           mostraTaxa();
@@ -5631,7 +5632,7 @@ var JOGO = (typeof window !== 'undefined')
       function mostra() {
         var q = qtd();
         if (q > 0) mcPocaoQtd[d.id] = q;
-        totalEl.innerHTML = 'total <b>' + (q * d.preco) + 'v</b>';
+        totalEl.innerHTML = tr('total <b>{a}v</b>', { a: q * d.preco });
         var motivo = porque(q);
         // apagado mas TOCÁVEL: o is-off engole o toque (tap), e no celular não há title — o
         // toque no botão apagado diz por que não compra
@@ -6011,7 +6012,7 @@ var JOGO = (typeof window !== 'undefined')
           function mostraTaxa() {
             var preco = Math.floor(Number(campo.value || sugerido)) || 0;
             if (preco <= 0) { taxaEl.textContent = ''; return; }
-            taxaEl.innerHTML = 'recebe <b>' + (preco - mcTaxa(preco)) + 'v</b><small>taxa ' + mcTaxa(preco) + 'v</small>';
+            taxaEl.innerHTML = tr('recebe <b>{a}v</b><small>taxa {b}v</small>', { a: preco - mcTaxa(preco), b: mcTaxa(preco) });
           }
           campo.addEventListener('input', mostraTaxa);
           mostraTaxa();
@@ -7052,7 +7053,7 @@ var JOGO = (typeof window !== 'undefined')
         });
       }
 
-      caixa.appendChild(el('h3', 'bk-tit', 'Arena — a Brasa'));
+      caixa.appendChild(el('h3', 'bk-tit', tr('Arena — a Brasa')));
       JOGO.DB.brasaVer().then(function (bz) {
         var arena = [{ id: eu2.id, nome: (eu2.nome || tr('Você')), sou: true,
                        pts: bz ? bz.pts : 1000, partidas: (bz && bz.partidas) || 0 }];
@@ -12049,7 +12050,7 @@ var JOGO = (typeof window !== 'undefined')
       if (desligado() || !Sx || !Sx.excluir) return;   // 03/10 (revisão): o apagado não dispara
       ocupado = true;
       confere();
-      aviso.textContent = 'excluindo…';
+      aviso.textContent = tr('excluindo…');
       Sx.excluir(nome.value.trim(), senha.value).then(function (r) {
         ocupado = false;
         senha.value = '';
@@ -12514,7 +12515,7 @@ var JOGO = (typeof window !== 'undefined')
     cab.appendChild(placa);
     var ct = el('div', 'guilda-cab-t');
     ct.appendChild(el('h3', null, tr('{a} <i>nível {nivel}</i>', { a: esc(g.nome), nivel: g.nivel })));
-    ct.appendChild(el('span', 'guilda-sub', membrosDeN(g.membros.length, vagasDaGuilda(g)) + ' membro(s)'));
+    ct.appendChild(el('span', 'guilda-sub', tr('{a} membro(s)', { a: membrosDeN(g.membros.length, vagasDaGuilda(g)) })));
     cab.appendChild(ct);
     caixa.appendChild(cab);
     caixa.appendChild(el('p', 'inv-dica',

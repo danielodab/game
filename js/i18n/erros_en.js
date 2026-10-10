@@ -683,5 +683,20 @@ JOGO.I18n.registra('en', { erros: {
   "a guilda está cheia — ela abre mais vagas ao subir de nível": "the guild is full — it opens more slots as it levels up",
   // ---- 09/10: a caixa-preta das salas recusadas
   "arquivo inválido": "invalid file",
-  "esse registro não existe mais": "that record no longer exists"
+  "esse registro não existe mais": "that record no longer exists",
+  // ---- 09/10: a SEMANA DO SOTERRA (servidor/api.py PROGRAMA_SEMANAL) — o cliente traduz pelo título, como o Eco
+  "Domingo do Poço": "Pit Sunday",
+  "As pedras do Poço sem Fundo ×1,5 — e o recorde da semana fecha à meia-noite.": "Bottomless Pit stones ×1.5 — and the week's record closes at midnight.",
+  "Segunda dos Vinténs": "Copper Monday",
+  "Toda sala paga vinténs ×1,5. O Eco Primordial abre a semana.": "Every room pays coppers ×1.5. The Primordial Echo opens the week.",
+  "Terça das Pedras": "Stone Tuesday",
+  "As pedras de forja de todo calabouço ×1,5.": "Forge stones from every dungeon ×1.5.",
+  "Quarta da Descida": "Descent Wednesday",
+  "XP ×1,25 em toda sala.": "XP ×1.25 in every room.",
+  "Quinta do Saque": "Loot Thursday",
+  "O saque de toda sala ×1,25.": "Loot from every room ×1.25.",
+  "Sexta do Dia": "Daily Dungeon Friday",
+  "O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).": "The Daily Dungeon pays loot ×2 (instead of the usual ×1.5).",
+  "Sábado Cheio": "Full Saturday",
+  "XP ×1,5 em toda sala — o dia de descer com a guilda.": "XP ×1.5 in every room — the day to descend with your guild."
 } });

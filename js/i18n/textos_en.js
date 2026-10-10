@@ -2993,5 +2993,29 @@ JOGO.I18n.registra('en', { textos: {
   "Velocidade da batalha: {a}.": "Battle speed: {a}.",
   "Rápida (×1,5)": "Fast (×1.5)",
   "Muito rápida (×2)": "Very fast (×2)",
-  "Batalha": "Battle"
+  "Batalha": "Battle",
+  // ---- 09/10: as placas 3D da praça, da antessala e do salão da guilda (js/render3d/hub3d.js)
+  "Para a batalha": "To the battle",
+  "Trono — a guilda": "Throne — the guild",
+  "Sair para a praça": "Out to the plaza",
+  "{a} — fechado": "{a} — closed",
+  "Banco": "Bank",
+  "Mercadinho": "Little Market",
+  "GUILDAS": "GUILDS",
+  // o motivo de a conjuração não sair (js/render3d/renderer3d_v2.js, R.explainNoCast)
+  "Sem linha de visão: muro em ({x},{y}).": "No line of sight: wall at ({x},{y}).",
+  "Sem linha de visão.": "No line of sight.",
+  "No escuro: essa casa só se mira a {n} casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.": "In the dark: that tile can only be targeted from {n} tiles away — light a brazier with a Fire hit, or bring someone of the Fire path.",
+  // a faixa de eventos, o banco, o mercadinho, a guilda e a conta (a varredura do inglês)
+  "<b>{n}</b> evento": "<b>{n}</b> event",
+  "<b>{n}</b> eventos": "<b>{n}</b> events",
+  "+{n} outros": "+{n} more",
+  "recentrar a camera": "recenter the camera",
+  "quantia": "amount",
+  "digite a quantia": "enter the amount",
+  "recebe <b>{a}v</b><small>taxa {b}v</small>": "you get <b>{a}v</b><small>fee {b}v</small>",
+  "total <b>{a}v</b>": "total <b>{a}v</b>",
+  "Arena — a Brasa": "Arena — the Ember",
+  "excluindo…": "deleting…",
+  "{a} membro(s)": "{a} member(s)"
 } });

@@ -32,6 +32,17 @@ var JOGO = (typeof window !== 'undefined')
 
 (function () {
   'use strict';
+  /* O TEXTO NO IDIOMA DO JOGADOR (09/10, docs/IDIOMAS.md): o 3D quase não escreve frase, mas o motivo de a
+   * conjuração não sair (R.explainNoCast) vai ao registro da batalha. A chave é o próprio português; sem o
+   * JOGO.I18n (página de prova que não o carrega) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
   if (typeof THREE === 'undefined') {
     if (typeof console !== 'undefined') console.error('[Renderer3D] THREE ausente (vendor/three.min.js)');
     return;
@@ -3643,14 +3654,14 @@ var JOGO = (typeof window !== 'undefined')
     for (var i = 0; i < lista.length; i++) {
       if (lista[i].x !== x || lista[i].y !== y) continue;
       var m = lista[i].muro;
-      return 'Sem linha de visão' + (m ? ': muro em (' + m.x + ',' + m.y + ')' : '') + '.';
+      return m ? Tx('Sem linha de visão: muro em ({x},{y}).', { x: m.x, y: m.y }) : Tx('Sem linha de visão.');
     }
     // 03/10: a casa no alcance que o ESCURO do Santuário não deixa mirar de longe
     var breu = safe(function () { return en.casasNoEscuro ? en.casasNoEscuro(st, u.uid, spellId) : null; }, null) || [];
     for (var b = 0; b < breu.length; b++) {
       if (breu[b].x === x && breu[b].y === y) {
-        return 'No escuro: essa casa só se mira a ' + (((DATA().santuario || {}).escuro || {}).visao || 2) +
-               ' casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.';
+        return Tx('No escuro: essa casa só se mira a {n} casas — acenda um braseiro com um golpe de Fogo, ou leve quem é do caminho do Fogo.',
+                  { n: ((DATA().santuario || {}).escuro || {}).visao || 2 });
       }
     }
     return null;

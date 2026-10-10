@@ -221,18 +221,30 @@ var JOGO = (typeof window !== 'undefined')
       // A LOJA: o catálogo, os pedidos e o extrato trazem o nome e a descrição do produto em português
       // (servidor/loja.py). Troca-se na chegada, pela frase — preço, sku e o resto ficam como vieram.
       if (/^\/api\/(loja|pagamento|play)\//.test(String(rota || ''))) daLoja(j, 0);
-      // A AGENDA DO MUNDO: o evento que o PRÓPRIO servidor escreve (o Eco da semana, `origem: 'supremo'`) tem
-      // título e texto em português; o que o Mestre escreve é dele e fica como foi escrito.
+      // A AGENDA DO MUNDO: o evento que o PRÓPRIO servidor escreve tem título e texto em português e é
+      // traduzido aqui — o Eco da semana (`origem: 'supremo'`, servidor/supremo.py) e, desde 09/10, a semana
+      // do SOTERRA (`origem: 'programa'`, os sete dias de PROGRAMA_SEMANAL em servidor/api.py; a tabela
+      // `programa` da mesma resposta é a que a faixa e a ficha mostram). O que o Mestre escreve (origem
+      // 'pontual' ou 'calendario') é dele e fica como foi escrito. As chaves moram em js/i18n/erros_*.js,
+      // com as outras frases do servidor (tools/erros_servidor.py as colhe; o i18n_falta cobra).
       if (/^\/api\/eventos/.test(String(rota || ''))) {
         var listas = ['ativos', 'proximos', 'semanais'], q, w, ev;
         for (q = 0; q < listas.length; q++) {
           if (!Array.isArray(j[listas[q]])) continue;
           for (w = 0; w < j[listas[q]].length; w++) {
             ev = j[listas[q]][w];
-            if (ev && ev.origem === 'supremo') {
+            if (ev && (ev.origem === 'supremo' || ev.origem === 'programa')) {
               if (typeof ev.titulo === 'string') ev.titulo = I.erro(ev.titulo);
               if (typeof ev.texto === 'string') ev.texto = I.erro(ev.texto);
             }
+          }
+        }
+        if (Array.isArray(j.programa)) {
+          for (w = 0; w < j.programa.length; w++) {
+            ev = j.programa[w];
+            if (!ev || typeof ev !== 'object') continue;
+            if (typeof ev.titulo === 'string') ev.titulo = I.erro(ev.titulo);
+            if (typeof ev.texto === 'string') ev.texto = I.erro(ev.texto);
           }
         }
       }

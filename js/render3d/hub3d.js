@@ -28,6 +28,22 @@ var JOGO = (typeof window !== 'undefined')
   var Hub = {};
   JOGO.Hub = Hub;
 
+  /* O TEXTO DAS PLACAS NO IDIOMA DO JOGADOR (09/10; o dono, com fotos do jogo em inglês: "muita coisa em
+   * português ficou"). As placas 3D ("Sede das Guildas", "Para a batalha"…) são desenhadas UMA vez num
+   * canvas e viram textura — então o idioma é lido na hora de desenhar, e não na carga do arquivo. O
+   * js/core/i18n.js e o textos_<idioma>.js já desceram antes deste arquivo (index.html), e a praça só é
+   * montada em Hub.entrar, muito depois. O `id`/`tipo` de cada lugar é chave e fica em português; só o
+   * texto da placa e o `nome` que a HUD mostra no painel passam por aqui (docs/IDIOMAS.md). Sem o
+   * JOGO.I18n (página de prova que não o carrega) volta o português, com as {variáveis}. */
+  function Tx(s, v) {
+    var I = (typeof JOGO !== 'undefined' && JOGO) ? JOGO.I18n : null;
+    if (I && I.t) return I.t(s, v);
+    if (!v) return s;
+    return String(s).replace(/\{([A-Za-z_]\w*)\}/g, function (m, k) {
+      return Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
+
   var THREE = null;
   var renderer = null, scene = null, camera = null;
   var container = null, canvas = null;
@@ -618,7 +634,7 @@ var JOGO = (typeof window !== 'undefined')
   Hub.plaquinhaCanvas = function (nome, titulo, moldura, brilho) {
     if (!THREE) THREE = (typeof window !== 'undefined' && window.THREE) || null;   // fora da praça (prova)
     if (!THREE) return null;
-    var sp = rotulo(nome || 'Nome', '#f0ead8', 0.42, { placa: true, brilho: brilho || null, subtexto: titulo || '',
+    var sp = rotulo(nome || Tx('Nome'), '#f0ead8', 0.42, { placa: true, brilho: brilho || null, subtexto: titulo || '',
                                                        moldura: molduraEfetiva(moldura, titulo, brilho === 'admin') });
     return sp && sp.material && sp.material.map ? sp.material.map.image : null;
   };
@@ -713,6 +729,7 @@ var JOGO = (typeof window !== 'undefined')
     tex.needsUpdate = true;
     if (THREE.sRGBEncoding != null) tex.encoding = THREE.sRGBEncoding;
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.userData.textoDaPlaca = texto;        // 09/10: o que foi ESCRITO na textura (a prova dos idiomas lê)
     var e = escala || 1;
     // a altura do sprite segue a da tela (512 px = 6.4 de mundo): tela mais
     // alta, placa mais alta — nunca esticada
@@ -952,14 +969,15 @@ var JOGO = (typeof window !== 'undefined')
     );
     base.position.y = 0.25;
     g.add(base);
-    var r = rotulo('Para a batalha', '#f0ead8');
+    var nomePorta = Tx('Para a batalha');
+    var r = rotulo(nomePorta, '#f0ead8');
     r.position.y = 5.0;              // 13/09: acima do topo do aro (4,06), não em cima dele
     g.add(r);
     g.position.set(0, 0, -R * 0.72);
     g.lookAt(0, 0, 0);
     g.scale.setScalar(1.3);
     scene.add(g);
-    lugares.push({ id: 'porta', tipo: 'porta', nome: 'Para a batalha',
+    lugares.push({ id: 'porta', tipo: 'porta', nome: nomePorta,
                    pos: new THREE.Vector3(0, 0, -R * 0.72), raio: 4.2, node: g, miolo: miolo });
     /* A SAÍDA: UM PORTAL, NÃO UMA ESCADA (12/09, pedido do dono: "as salas de
      * espera, ao invés de ter uma escada, deve ter um portal de saída").
@@ -998,7 +1016,8 @@ var JOGO = (typeof window !== 'undefined')
     // do lado do herói) ele enchia a tela — menor, e a saída vai para o LESTE,
     // fora da linha câmera→herói→porta. 13/09: EM CIMA do aro — a 3,6 o
     // sprite (~1 de altura) ficava atrás do arco, cujo topo está em 4,06
-    var r2 = rotulo('Sair do calabouço', '#ffd2cb');
+    var nomeSaida = Tx('Sair do calabouço');
+    var r2 = rotulo(nomeSaida, '#ffd2cb');
     r2.position.y = 4.9;
     r2.scale.multiplyScalar(0.62);
     s.add(r2);
@@ -1008,7 +1027,7 @@ var JOGO = (typeof window !== 'undefined')
     s.lookAt(0, 0, 0);
     s.scale.setScalar(0.78);
     scene.add(s);
-    lugares.push({ id: 'saida', tipo: 'saida', nome: 'Sair do calabouço',
+    lugares.push({ id: 'saida', tipo: 'saida', nome: nomeSaida,
                    pos: new THREE.Vector3(R * 0.82, 0, R * 0.30), raio: 3.6,
                    node: s, miolo: mioloS });
     salaPlantada = false;
@@ -1390,7 +1409,7 @@ var JOGO = (typeof window !== 'undefined')
     // 15/09 (foto): o redemoinho tingido lia CLARO sobre a grama e a calçada, quase azul;
     // o disco chapado vermelho (o da saída da antessala) é o que diz "vermelho" de longe
     var a = arcoPortal({ aro: 0x5a5348, aroBrilho: 0x3a0806, cor: 0xe0352b, filme: false, brilhoChao: true,
-                         texto: 'Campo de PvP', corTexto: '#ff9a8a' });
+                         texto: Tx('Campo de PvP'), corTexto: '#ff9a8a' });
     a.g.position.set(pp.x, 0, pp.z);
     a.g.lookAt(0, 0, 0);
     a.g.scale.setScalar(1.3);
@@ -1404,7 +1423,7 @@ var JOGO = (typeof window !== 'undefined')
      * `portao` + `tema` que plantaCantinhos o reconhece. O corredor do portão é aberto no
      * fim (CORREDOR.portao). O aro de pedra e a base de cilindro são só o provisório de
      * antes de o GLB abrir. */
-    lugares.push({ id: 'campo', tipo: 'campo', nome: 'Campo de PvP', portao: true,
+    lugares.push({ id: 'campo', tipo: 'campo', nome: Tx('Campo de PvP'), portao: true,
                    tema: campoCfg().tema,
                    pos: new THREE.Vector3(pp.x, 0, pp.z), raio: 6.4, node: a.g, miolo: a.miolo });
   }
@@ -1917,12 +1936,12 @@ var JOGO = (typeof window !== 'undefined')
     vesteCampo();
     var sd = C.saida;
     var s = arcoPortal({ aro: 0x9a2320, aroBrilho: 0x4a0a08, cor: 0xe0352b, brilhoChao: true,
-                         texto: 'Voltar à praça', corTexto: '#ffd2cb', rotuloEsc: 0.8 });
+                         texto: Tx('Voltar à praça'), corTexto: '#ffd2cb', rotuloEsc: 0.8 });
     s.g.position.set(sd.x, 0, sd.z);
     if (Math.hypot(sd.x, sd.z) > 0.5) s.g.lookAt(0, 0, 0);
     s.g.scale.setScalar(0.9);
     scene.add(s.g);
-    lugares.push({ id: 'campo-saida', tipo: 'campo-saida', nome: 'Voltar à praça',
+    lugares.push({ id: 'campo-saida', tipo: 'campo-saida', nome: Tx('Voltar à praça'),
                    pos: new THREE.Vector3(sd.x, 0, sd.z), raio: 3.8, node: s.g, miolo: s.miolo });
   }
   /* ============================================== A SEDE DA GUILDA POR DENTRO (04/10)
@@ -2081,11 +2100,11 @@ var JOGO = (typeof window !== 'undefined')
     }
     estandarte(-5.8, -9.9, 0);
     estandarte(5.8, -9.9, 0);
-    ponto('sede-cofre', 'Cofre da guilda', peca('sd_bau', 3.3, -9.3, 0, { alt: 1.0, teto: 1.5, solido: 0.8 }), 3.3, -9.3, 2.3, 0.8, 2.0);
-    ponto('sede-mural', 'Mural da guilda', estandarte(8.7, -9.7, 0), 8.7, -9.7, 2.3, 0.5, 5.2);
+    ponto('sede-cofre', Tx('Cofre da guilda'), peca('sd_bau', 3.3, -9.3, 0, { alt: 1.0, teto: 1.5, solido: 0.8 }), 3.3, -9.3, 2.3, 0.8, 2.0);
+    ponto('sede-mural', Tx('Mural da guilda'), estandarte(8.7, -9.7, 0), 8.7, -9.7, 2.3, 0.5, 5.2);
     // 04/10 (dono: "a personalização da guilda deve ser dentro do salão"): o trono abre a ficha de gestão.
     // Vem DEPOIS do cofre na lista: quem está entre os dois fala com o baú, que é o menor (o primeiro no raio vence)
-    ponto('sede-trono', 'Trono — a guilda', trono, 0, -9.5, 2.9, 1.7, 4.5);
+    ponto('sede-trono', Tx('Trono — a guilda'), trono, 0, -9.5, 2.9, 1.7, 4.5);
 
     // ---- o meio: a mesa do conselho (comprida no eixo da porta) e os bancos corridos
     var mesa = peca('sd_mesa', 0, -1, Math.PI / 2, { larg: 5, alt: 1.2, prof: 2.6 });
@@ -2093,7 +2112,7 @@ var JOGO = (typeof window !== 'undefined')
       [-1.3, 1.3].forEach(function (dz) { peca('sd_banco', sx * 1.95, -1 + dz, Math.PI / 2, { larg: 2.3 }); });
     });
     caixas.push({ x: 0, z: -1, hx: 2.3, hz: 2.6, rot: 0, alt: 1.2 });
-    ponto('sede-guerra', 'Mesa do conselho', mesa, 0, -1, 4.6, 3.0, 2.2);
+    ponto('sede-guerra', Tx('Mesa do conselho'), mesa, 0, -1, 4.6, 3.0, 2.2);
 
     // ---- oeste: a lareira acesa, entre armadura e cavalete
     var lar = peca('sd_lareira', -9.8, -2, Math.PI / 2, { larg: 4.2, alt: 2.6, prof: 1.9 });
@@ -2116,7 +2135,7 @@ var JOGO = (typeof window !== 'undefined')
 
     // ---- leste: o baú do banco, entre armadura e cavalete
     peca('sd_armadura', 10.1, -6.8, -Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
-    ponto('sede-banco', 'Banco da guilda', peca('sd_bau', 9.8, -1.8, -Math.PI / 2, { alt: 1.1, teto: 1.7, solido: 0.9 }), 9.8, -1.8, 2.5, 0.9, 2.1);
+    ponto('sede-banco', Tx('Banco da guilda'), peca('sd_bau', 9.8, -1.8, -Math.PI / 2, { alt: 1.1, teto: 1.7, solido: 0.9 }), 9.8, -1.8, 2.5, 0.9, 2.1);
     peca('sd_bau', 9.9, -3.6, -Math.PI / 2, { alt: 0.8, teto: 1.2, solido: 0.6 });
     peca('sd_rack_armas', 10.1, 2.8, -Math.PI / 2, { alt: 2.4, teto: 2.0, solido: 0.8 });
     peca('sd_armadura', 10.1, 6.8, -Math.PI / 2, { alt: 3.2, teto: 1.5, solido: 0.7 });
@@ -2129,7 +2148,7 @@ var JOGO = (typeof window !== 'undefined')
       new THREE.MeshBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.08, depthWrite: false }));
     soleira.position.set(sd.x, 1.3, sd.z + 1.0);
     scene.add(soleira);
-    ponto('sede-saida', 'Sair para a praça', soleira, sd.x, sd.z, 1.9, 0, 3.2);
+    ponto('sede-saida', Tx('Sair para a praça'), soleira, sd.x, sd.z, 1.9, 0, 3.2);
 
     vesteSede();
   }
@@ -2326,7 +2345,8 @@ var JOGO = (typeof window !== 'undefined')
           g.add(barra);
         });
       }
-      var r = rotulo((dg.name || dg.id) + (fechado ? ' — fechado' : ''), fechado ? '#ff8a8a' : '#f0ead8');
+      // 09/10: o nome já vem traduzido do DATA (aplicaDados); o "— fechado" é frase, não pedaço
+      var r = rotulo(fechado ? Tx('{a} — fechado', { a: dg.name || dg.id }) : (dg.name || dg.id), fechado ? '#ff8a8a' : '#f0ead8');
       r.position.y = 4.4;
       g.add(r);
 
@@ -2435,12 +2455,12 @@ var JOGO = (typeof window !== 'undefined')
         if (garrafa) { garrafa.position.set(0.15, 0.7, 0.1); g.add(garrafa); }
       } catch (e) {}
     }
-    var r = rotulo('Mercadinho', '#9bd06a');
+    var r = rotulo(Tx('Mercadinho'), '#9bd06a');
     r.position.y = 3.2;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    lugares.push({ id: 'mercado', tipo: 'mercado', nome: 'Mercadinho',
+    lugares.push({ id: 'mercado', tipo: 'mercado', nome: Tx('Mercadinho'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
@@ -2463,12 +2483,12 @@ var JOGO = (typeof window !== 'undefined')
         if (tocha) { tocha.position.set(1.4, 0, 0.8); g.add(tocha); }
       } catch (e) {}
     }
-    var r = rotulo('Banco', '#e8c25a');
+    var r = rotulo(Tx('Banco'), '#e8c25a');
     r.position.y = 3.2;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    lugares.push({ id: 'banco', tipo: 'banco', nome: 'Banco',
+    lugares.push({ id: 'banco', tipo: 'banco', nome: Tx('Banco'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
@@ -2495,14 +2515,14 @@ var JOGO = (typeof window !== 'undefined')
         var b2 = kit.buildProp('garden', 'barrier', 9); if (b2) { b2.position.set(2.6, 0, -1.4); g.add(b2); }
       } catch (e) {}
     }
-    var r = rotulo('Arena', '#e08098');
+    var r = rotulo(Tx('Arena'), '#e08098');
     r.position.y = 3.2;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
     // o raio acompanha o coliseu de 24 m: 13 do centro = um passo da parede (a parede
     // é 11,76; o coliseu só passou a ter os 24 m de fato em 22/09 — antes media 17,3)
-    lugares.push({ id: 'arena', tipo: 'arena', nome: 'Arena',
+    lugares.push({ id: 'arena', tipo: 'arena', nome: Tx('Arena'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 13.0, node: g });
   }
 
@@ -2525,12 +2545,12 @@ var JOGO = (typeof window !== 'undefined')
         if (barril2) { barril2.position.set(1.6, 0, -0.8); g.add(barril2); }
       } catch (e) {}
     }
-    var r = rotulo('Forja', '#e0955a');
+    var r = rotulo(Tx('Forja'), '#e0955a');
     r.position.y = 3.2;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    lugares.push({ id: 'forja', tipo: 'forja', nome: 'Forja',
+    lugares.push({ id: 'forja', tipo: 'forja', nome: Tx('Forja'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 5.0, node: g });
   }
 
@@ -2571,14 +2591,14 @@ var JOGO = (typeof window !== 'undefined')
     roda.rotation.x = Math.PI / 2;
     roda.position.set(0, 1.9, -0.3);
     g.add(roda);
-    var r = rotulo('Barraquinha da Sorte', '#ffd98a');
+    var r = rotulo(Tx('Barraquinha da Sorte'), '#ffd98a');
     r.position.y = 4.4;
     g.add(r);
     g.position.set(px, 0, pz);
     // sem girar o grupo: a obra do dono encara o centro pelo montaObra, como
     // as outras construções (a roda das primitivas já nasce virada para lá)
     scene.add(g);
-    lugares.push({ id: 'loteria', tipo: 'loteria', nome: 'Barraquinha da Sorte',
+    lugares.push({ id: 'loteria', tipo: 'loteria', nome: Tx('Barraquinha da Sorte'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 4.0, node: g, roda: roda });
   }
 
@@ -2599,12 +2619,12 @@ var JOGO = (typeof window !== 'undefined')
     fundo.rotation.x = -Math.PI / 2;
     fundo.position.y = 0.3;
     g.add(fundo);
-    var r = rotulo('Poço sem Fundo', '#b9a8ff');
+    var r = rotulo(Tx('Poço sem Fundo'), '#b9a8ff');
     r.position.y = 3.4;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    lugares.push({ id: 'poco', tipo: 'poco', nome: 'Poço sem Fundo',
+    lugares.push({ id: 'poco', tipo: 'poco', nome: Tx('Poço sem Fundo'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 6.0, node: g });
   }
 
@@ -2800,19 +2820,19 @@ var JOGO = (typeof window !== 'undefined')
     g2.font = '700 44px Georgia';
     g2.fillText('⚑', 128, 52);
     g2.font = '700 30px Georgia';
-    g2.fillText('GUILDAS', 128, 100);
+    g2.fillText(Tx('GUILDAS'), 128, 100);
     var bandeira = new THREE.Mesh(
       new THREE.PlaneGeometry(2.4, 1.2),
       new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv),
         side: THREE.DoubleSide, transparent: true }));
     bandeira.position.set(1.25, 3.6, 0);
     g.add(bandeira);
-    var r = rotulo('Sede das Guildas', '#d8b25e');
+    var r = rotulo(Tx('Sede das Guildas'), '#d8b25e');
     r.position.y = 5.0;
     g.add(r);
     g.position.set(px, 0, pz);
     scene.add(g);
-    lugares.push({ id: 'sede', tipo: 'sede', nome: 'Sede das Guildas',
+    lugares.push({ id: 'sede', tipo: 'sede', nome: Tx('Sede das Guildas'),
                    pos: new THREE.Vector3(px, 0, pz), raio: 6.5, node: g });
   }
 
@@ -5370,9 +5390,21 @@ var ds = 5.4 + pulso * 0.5; sombra.scale.set(ds, ds, 1);
   /* quais portais já ganharam corredor (a prova e a depuração perguntam) */
   Hub._corredores = function () { return Object.keys(cantinhoFeito); };
   /* os lugares da praça, para as provas medirem parede e raio de conversa */
+  /* 09/10: o texto escrito na placa 3D de um lugar (o primeiro sprite de `rotulo` dentro do nó) — a prova
+   * tests/foto_idiomas_placas.html confere que a praça e a antessala falam o idioma do jogador */
+  function textoDaPlaca(node) {
+    var achou = null;
+    try {
+      if (node && node.traverse) node.traverse(function (o) {
+        if (achou === null && o && o.userData && typeof o.userData.textoDaPlaca === 'string') achou = o.userData.textoDaPlaca;
+      });
+    } catch (e) {}
+    return achou;
+  }
   Hub._lugares = function () {
     return lugares.map(function (l) {
       return { id: l.id, tipo: l.tipo, x: l.pos.x, z: l.pos.z,
+               nome: l.nome || null, placa: textoDaPlaca(l.node),                // 09/10: o nome do painel e o texto desenhado na placa 3D
                tema: l.tema || null, fechado: !!l.fechado, portao: !!l.portao,   // 19/09: o portão do Campo tem corredor
                raio: l.raio || 0, solido: l.solido || 0 };
     });

@@ -683,5 +683,20 @@ JOGO.I18n.registra('es', { erros: {
   "a guilda está cheia — ela abre mais vagas ao subir de nível": "la guilda está llena: abre más plazas al subir de nivel",
   // ---- 09/10: a caixa-preta das salas recusadas
   "arquivo inválido": "archivo inválido",
-  "esse registro não existe mais": "ese registro ya no existe"
+  "esse registro não existe mais": "ese registro ya no existe",
+  // ---- 09/10: a SEMANA DO SOTERRA (servidor/api.py PROGRAMA_SEMANAL) — o cliente traduz pelo título, como o Eco
+  "Domingo do Poço": "Domingo del Pozo",
+  "As pedras do Poço sem Fundo ×1,5 — e o recorde da semana fecha à meia-noite.": "Las piedras del Pozo sin Fondo ×1,5 — y el récord de la semana cierra a medianoche.",
+  "Segunda dos Vinténs": "Lunes de los Vintenes",
+  "Toda sala paga vinténs ×1,5. O Eco Primordial abre a semana.": "Toda sala paga vintenes ×1,5. El Eco Primordial abre la semana.",
+  "Terça das Pedras": "Martes de las Piedras",
+  "As pedras de forja de todo calabouço ×1,5.": "Las piedras de forja de toda mazmorra ×1,5.",
+  "Quarta da Descida": "Miércoles del Descenso",
+  "XP ×1,25 em toda sala.": "XP ×1,25 en toda sala.",
+  "Quinta do Saque": "Jueves del Botín",
+  "O saque de toda sala ×1,25.": "El botín de toda sala ×1,25.",
+  "Sexta do Dia": "Viernes del Día",
+  "O Calabouço do Dia paga saque ×2 (no lugar do ×1,5 de sempre).": "La Mazmorra del Día paga botín ×2 (en lugar del ×1,5 de siempre).",
+  "Sábado Cheio": "Sábado Lleno",
+  "XP ×1,5 em toda sala — o dia de descer com a guilda.": "XP ×1,5 en toda sala — el día de bajar con el gremio."
 } });
