@@ -947,3 +947,59 @@ button.link:hover { color: var(--ouro); text-decoration: underline; }
 .arte-moldura.m-rubi { --mol: #ff4d6d; --mol-fundo: rgba(50,8,18,.94); }
 .arte-moldura.m-esmeralda { --mol: #3ddc84; --mol-fundo: rgba(6,40,22,.94); }
 .arte-moldura.m-obsidiana { --mol: #9a7bff; --mol-fundo: rgba(10,6,20,.96); }
+
+/* ---- 10/10: O TORNEIO DA ARENA (site/torneio.html; docs/TORNEIO.md) ----------
+ * Os cartões dos torneios, a lista de inscritos e a CHAVE: uma coluna por
+ * rodada, com o horário previsto de cada luta. No celular a chave rola para os
+ * lados dentro da caixa dela; a página não. */
+.torneios { display: flex; flex-direction: column; gap: 18px; }
+.torneio {
+  background: var(--fundo-2); border: 1px solid var(--linha); border-left: 3px solid var(--ouro-esc);
+  border-radius: var(--raio); padding: 16px 18px; min-width: 0;
+}
+.torneio.andamento, .torneio.sorteado { border-left-color: var(--ouro); }
+.torneio.guilda { border-left-color: #7ea6e0; }
+.torneio h3 { font-size: 20px; overflow-wrap: anywhere; }
+.torneio h4 { font: 600 13px/1 var(--sans, system-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ouro-2); margin: 18px 0 8px; }
+.tor-topo { display: flex; gap: 8px 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.tor-quando { margin: 8px 0 4px; font-size: 15px; }
+.tor-quando .falta { color: var(--ouro-2); font-weight: 600; margin-left: 8px; }
+.tor-linha { margin: 4px 0; font-size: 14.5px; color: var(--texto-2); overflow-wrap: anywhere; }
+.tor-linha b { color: var(--texto); }
+.tor-dica { font-size: 13.5px; margin: 0 0 8px; }
+.tor-inscritos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); font-size: 14.5px; }
+.tor-inscritos li { overflow-wrap: anywhere; }
+.tor-vazio { margin: 0; font-size: 14px; }
+.tor-chave { display: flex; gap: 12px; align-items: stretch; overflow-x: auto; padding: 4px 2px 12px; max-width: 100%; scrollbar-width: thin; }
+.tor-chave:focus-visible { outline: 2px solid var(--ouro); outline-offset: 2px; }
+.tor-col { display: flex; flex-direction: column; justify-content: space-around; gap: 10px; flex: 0 0 190px; min-width: 0; }
+.tor-col-tit { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--texto-2); text-align: center; }
+.tor-col.na-vez .tor-col-tit { color: var(--ouro); }
+.tor-luta { border: 1px solid var(--linha); border-radius: 9px; background: var(--fundo-3); overflow: hidden; }
+.tor-luta.chamada, .tor-luta.luta { border-color: var(--ouro-a30); }
+.tor-lado { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; padding: 4px 10px; font-size: 14px; border-bottom: 1px solid var(--linha); }
+.tor-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tor-nome small { color: var(--texto-2); }
+.tor-nome .emblema-brasao { vertical-align: -3px; }
+.tor-lado.venceu { font-weight: 700; background: var(--ouro-a10); }
+.tor-lado.caiu { color: var(--texto-2); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .25); }
+.tor-lado.vazio { color: var(--texto-2); font-style: italic; }
+.tor-ok { flex: none; color: var(--certo); font-size: 13px; }
+.tor-pe { padding: 3px 10px 4px; font-size: 12px; color: var(--texto-2); text-align: right; min-height: 16px; }
+.tor-luta.wo .tor-pe, .tor-luta.sorteio .tor-pe, .tor-luta.desistencia .tor-pe { color: #e8b86a; }
+.tor-luta.bye .tor-pe { color: #8fb5e0; }
+.tor-luta.chamada .tor-pe, .tor-luta.luta .tor-pe { color: var(--ouro); font-weight: 600; }
+.tor-col-campeao { justify-content: center; }
+.tor-campeao { padding: 12px 10px; border-radius: 9px; text-align: center; font: 700 15px/1.3 var(--serif); color: var(--ouro);
+  border: 1px solid var(--ouro-esc); background: var(--ouro-a10); overflow-wrap: anywhere; }
+details.torneio > summary { cursor: pointer; font-size: 15.5px; min-height: 32px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; }
+details.torneio > summary::marker { color: var(--ouro-2); }
+details.torneio[open] > summary { margin-bottom: 10px; }
+.tor-campeao-nome { font: 600 17px var(--serif); color: var(--ouro); overflow-wrap: anywhere; }
+.tor-sub { margin: 28px 0 6px; }
+.tor-regras { margin-bottom: 8px; }
+.tabela-premios td, .tabela-premios th { padding: 8px 12px; }
+@media (max-width: 600px) {
+  .torneio { padding: 12px 12px; }
+  .tor-col { flex-basis: 164px; }
+}

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torneio da Arena — SOTERRA</title>
+<meta name="description" content="O Torneio da Arena do SOTERRA: PvP todo sábado em duas faixas de nível, guildas todo domingo. Os próximos torneios, os inscritos, a chave sorteada com o horário de cada luta e os campeões.">
+<script>
+  // a folha e os scripts com o hash do build (o mapa de js/versao.js); sem
+  // mapa (em casa), o carimbo ?t= do instante: ver o comentário em site/index.html
+  if (location.protocol !== 'file:') {
+    document.write('<script src="../js/versao.js?t=' + Date.now() + '"><\/script>');
+  }
+</script>
+<script>
+  window.SITE_URL = function (s) {
+    var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
+    var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
+    var chave = s.indexOf('../') === 0 ? s.slice(3) : 'site/' + s;
+    return s + (mapa && tem.call(mapa, chave) ? '?v=' + mapa[chave] : '?t=' + Date.now());
+  };
+  document.write('<link rel="stylesheet" href="' + SITE_URL('site.css') + '">');
+  // os idiomas (docs/IDIOMAS.md): o mesmo js/core/i18n.js do jogo decide (a chave soterra-idioma é uma só) e o
+  // site/i18n.js traduz esta página por cima; em português nada muda. A lista de scripts do fim passa por SITE_LISTA.
+  document.write('<script src="' + SITE_URL('../js/core/i18n.js') + '"><\/script><script src="' + SITE_URL('i18n.js') + '"><\/script>');
+  window.SITE_LISTA = function (a) { return window.SITE_I18N ? window.SITE_I18N.lista(a) : a; };
+</script>
+<noscript><link rel="stylesheet" href="site.css"></noscript>
+<!--
+  O Torneio da Arena (10/10; docs/TORNEIO.md é o contrato). O dono: "os desafios serão sorteios e ficarão
+  públicos no site, o horário do desafio de cada". Tudo vem de GET /api/torneios (público, sem conta):
+    - os torneios em andamento e os próximos, cada um com a data no relógio de QUEM VÊ, a contagem, as vagas
+      (que abrem aos pares: 2 → 4 → 8 → 16), o prêmio do tamanho de agora, os inscritos e — depois do sorteio —
+      a CHAVE: uma coluna por rodada, quem passou, W.O./passe/sorteio marcados e o horário previsto de cada luta;
+    - os últimos campeões, cada um com a chave do torneio dele para abrir.
+  A página se atualiza sozinha: a cada 30 s com torneio sorteado, em andamento ou a menos de uma hora de
+  começar; a cada 5 min fora disso. A contagem anda sem pedir nada ao servidor. O relógio é o do servidor
+  (agoraMs de cada resposta). Sem servidor (ou com o servidor de antes do torneio) fica a explicação de baixo.
+-->
+</head>
+<body>
+
+<header class="topo">
+  <div class="miolo">
+    <a class="marca" href="index.html">SOTERRA</a>
+    <nav>
+      <a href="index.html">Início</a>
+      <a href="eventos.html">Eventos</a>
+      <a href="torneio.html" aria-current="page">Torneio</a>
+      <a href="wiki.html">Wiki</a>
+      <a href="ranking.html">Ranking</a>
+      <a href="loja.html">Loja</a>
+      <a href="conta.html">Conta</a>
+      <a class="jogar" href="../index.html">Jogar</a>
+    </nav>
+    <div class="sessao" id="sessao"></div>
+  </div>
+</header>
+
+<section class="secao">
+  <div class="miolo">
+    <h2>Torneio da Arena</h2>
+    <p class="sub">Todo sábado, PvP em duas faixas de nível; todo domingo, as guildas. As chaves são sorteadas pelo servidor e ficam aqui, com o horário de cada luta. Os horários estão no relógio do seu aparelho.
+      <button type="button" class="btn btn-mini" id="bt-atualizar">atualizar</button></p>
+    <div class="aviso" id="tor-aviso"></div>
+    <div class="torneios" id="tor-agora"><div class="estado">carregando…</div></div>
+  </div>
+</section>
+
+<section class="secao" id="campeoes">
+  <div class="miolo">
+    <h2>Últimos campeões</h2>
+    <p class="sub">Os torneios que já terminaram. Abra um para ver a chave inteira, luta por luta.</p>
+    <div class="torneios" id="tor-campeoes"><div class="estado">carregando…</div></div>
+  </div>
+</section>
+
+<section class="secao" id="como-funciona">
+  <div class="miolo">
+    <h2>Como funciona</h2>
+    <p class="sub">A inscrição é dentro do jogo, na Arena da praça. Aqui fica o que é público: quem entrou, a chave e os horários.</p>
+    <ul class="lista-regras tor-regras">
+      <li class="regra"><b>Quando.</b> <p>PvP todo sábado e guildas todo domingo, às 14:00 de Brasília — e sempre que o Mestre do Fundo marcar um torneio extra.</p></li>
+      <li class="regra"><b>Quem entra no PvP.</b> <p>Cada conta inscreve uma dupla de heróis. Vale o nível do herói mais forte: uma chave é do nível 20 ao 25, a outra do 25 ao 30. Uma conta, uma chave por sábado.</p></li>
+      <li class="regra"><b>As vagas abrem aos pares.</b> <p>A chave nasce com 2 vagas; encheu, dobra: 2, 4, 8, 16. Com 16 inscritos a inscrição fecha.</p></li>
+      <li class="regra"><b>O sorteio.</b> <p>As inscrições fecham 10 minutos antes do início. O servidor sorteia as posições e os passes livres, e a chave aparece aqui na hora. Com menos de 2 inscritos o torneio é cancelado.</p></li>
+      <li class="regra"><b>As lutas.</b> <p>A primeira rodada começa no horário marcado; cada rodada seguinte, 2 minutos depois de a anterior acabar. Na hora da luta os dois são chamados e têm 3 minutos para dizer "estou aqui": quem não aparece perde por W.O. A luta começa com a vida cheia dos dois lados e não mexe na coroa.</p></li>
+      <li class="regra"><b>O torneio de guilda.</b> <p>Qualquer membro de nível 20 a 30 se voluntaria com a dupla dele, e o líder ou um oficial escolhe quem representa a guilda. A guilda campeã ganha experiência em dobro para todos os membros por 7 dias.</p></li>
+    </ul>
+    <h3 class="tor-sub">O prêmio do campeão</h3>
+    <p class="apoio">Pelo tamanho da chave sorteada. Ganhar de novo continua valendo: as barras, os vinténs e as gemas não diminuem na repetição.</p>
+    <div class="tabela-caixa">
+      <table class="tabela-premios">
+        <thead><tr><th>Chave</th><th class="num">Barras de ouro</th><th class="num">Vinténs</th><th class="num">Gemas Enterradas</th><th>Conta como conquista</th><th>Moldura</th></tr></thead>
+        <tbody>
+          <tr><td>16</td><td class="num">20</td><td class="num">5000</td><td class="num">2</td><td>sim</td><td>sim</td></tr>
+          <tr><td>8</td><td class="num">10</td><td class="num">2500</td><td class="num">1</td><td>sim</td><td>sim</td></tr>
+          <tr><td>4</td><td class="num">5</td><td class="num">1250</td><td class="num">0</td><td>sim</td><td>não</td></tr>
+          <tr><td>2</td><td class="num">2</td><td class="num">600</td><td class="num">0</td><td>não</td><td>não</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota-forte">Cada torneio de PvP vencido com chave de 4 ou mais soma uma conquista à conta, para sempre: com 1 o título é Campeão da Arena, com 2 Bicampeão, com 3 Tricampeão, com 5 Lenda da Arena e com 10 Imortal da Arena. A moldura Campeão da Arena vem com a primeira vitória em chave de 8 ou 16 e ganha um grau a mais com 3 e com 5 conquistas.</p>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="miolo"><span class="marca">SOTERRA</span>Ecos do Mundo Enterrado
+    <br><a href="termos.html">Termos de Uso</a> · <a href="privacidade.html">Privacidade</a></div>
+</footer>
+
+<script>
+/* o brasão das guildas é o mesmo do jogo (../js/ui/brasao.js), com o hash do conteúdo (SITE_URL, no topo) */
+(function () {
+  SITE_LISTA(['site.js', '../js/ui/brasao.js']).forEach(function (s) {
+    document.write('<script src="' + SITE_URL(s) + '"><\/script>');
+  });
+})();
+</script>
+<script>
+(function () {
+  var Tx = SITE.Tx;      // o texto no idioma do visitante (site/i18n.js; docs/IDIOMAS.md)
+  var E = SITE.esc;
+  var resposta = null;          // a última resposta boa de /api/torneios
+  var lida = false;             // já houve ao menos uma tentativa
+  var VIVO_MS = 30000, CALMO_MS = 5 * 60 * 1000;
+  /* o prêmio do campeão pelo tamanho da chave (a tabela de docs/TORNEIO.md) — para mostrar o do torneio cheio */
+  var PREMIOS = { 16: { barras: 20, vintens: 5000, gemas: 2, conquista: true, moldura: true, xpGuilda: 600 },
+                  8: { barras: 10, vintens: 2500, gemas: 1, conquista: true, moldura: true, xpGuilda: 300 },
+                  4: { barras: 5, vintens: 1250, gemas: 0, conquista: true, moldura: false, xpGuilda: 150 },
+                  2: { barras: 2, vintens: 600, gemas: 0, conquista: false, moldura: false, xpGuilda: 60 } };
+  function $(id) { return document.getElementById(id); }
+  function seg(ms) { return Number(ms) / 1000; }
+  function lista(v) { return Array.isArray(v) ? v : []; }
+
+  function aviso(texto) {
+    var a = $('tor-aviso');
+    a.className = 'aviso' + (texto ? ' erro' : '');
+    a.textContent = texto || '';
+  }
+  function nomeTorneio(t) {
+    if (t.origem === 'mestre' && t.titulo) return t.titulo;
+    return t.tipo === 'guilda' ? Tx('Torneio das Guildas')
+                               : Tx('Torneio de PvP · nível {a} a {b}', { a: t.nivelMin, b: t.nivelMax });
+  }
+  function tamanhoCom(n) { var t = 2; while (t < n && t < 16) t *= 2; return t; }
+  function tamanhoDe(t) { return t.chave ? t.chave.tamanho : tamanhoCom(lista(t.inscritos).length); }
+  function textoVagas(t) {
+    var n = lista(t.inscritos).length, v = t.vagas || 2;
+    if (v >= 16) return n >= 16 ? Tx('{n} de 16 — cheio', { n: n }) : Tx('{n} de 16 — é o teto', { n: n });
+    return Tx('{n} de {v} — enche e abrem mais {v}', { n: n, v: v });
+  }
+  function textoPremio(p, t, cheio) {
+    p = p || {};
+    var partes = [];
+    if (p.barras) partes.push(Tx('{n} barra(s) de ouro', { n: p.barras }));
+    if (p.vintens) partes.push(Tx('{n} vinténs', { n: p.vintens }));
+    if (p.gemas) partes.push(Tx('{n} Gema(s) Enterrada(s)', { n: p.gemas }));
+    if (t.tipo === 'guilda') {
+      if (p.xpGuilda) partes.push(Tx('{n} XP para a guilda', { n: p.xpGuilda }));
+      if (!cheio) partes.push(Tx('XP em dobro para todos os membros por 7 dias'));
+    } else {
+      if (p.conquista) partes.push(Tx('conta como conquista (título)'));
+      if (p.moldura) partes.push(Tx('a moldura Campeão da Arena'));
+    }
+    return partes.length ? partes.join(' · ') : Tx('sem prêmio');
+  }
+  function nomeNaChave(t, p) {
+    if (!p) return '';
+    return (t.tipo === 'guilda' && p.guilda && p.guilda.nome) ? p.guilda.nome : p.nome;
+  }
+  function nomeDaRodada(tamanho, rodada) {
+    var lutas = tamanho / Math.pow(2, rodada + 1);
+    if (lutas <= 1) return Tx('Final');
+    if (lutas === 2) return Tx('Semifinal');
+    if (lutas === 4) return Tx('Quartas');
+    return Tx('Oitavas');
+  }
+  /* a etiqueta e a linha do que o torneio está fazendo agora */
+  function etiquetaDe(t) {
+    if (t.estado === 'andamento') return '<span class="etiqueta aberto">' + Tx('Em andamento') + '</span>';
+    if (t.estado === 'sorteado') return '<span class="etiqueta escavacao">' + Tx('Chave sorteada') + '</span>';
+    if (t.estado === 'encerrado') return '<span class="etiqueta">' + Tx('Encerrado') + '</span>';
+    if (t.estado === 'cancelado') return '<span class="etiqueta">' + Tx('Cancelado') + '</span>';
+    return seg(t.inscricaoAteMs) > SITE.agora() ? '<span class="etiqueta aberto">' + Tx('Inscrições abertas') + '</span>'
+                                               : '<span class="etiqueta">' + Tx('Inscrições fechadas') + '</span>';
+  }
+  function contagemDe(t) {
+    if (t.estado === 'andamento') return E(nomeDaRodada(tamanhoDe(t), t.chave ? t.chave.rodada : 0));
+    if (t.estado === 'sorteado') return E(SITE.falta(seg(t.inicioMs), Tx('começa em')));
+    if (t.estado === 'inscricoes') {
+      return seg(t.inscricaoAteMs) > SITE.agora() ? E(SITE.falta(seg(t.inscricaoAteMs), Tx('as inscrições fecham em')))
+                                                  : E(Tx('o sorteio sai em instantes'));
+    }
+    return '';
+  }
+
+  /* um lado de uma luta da chave */
+  function ladoHtml(t, l, lado) {
+    var p = l[lado];
+    var venceu = l.vencedor === lado, caiu = !!l.vencedor && !venceu;
+    var passe = !p && l.rodada === 0 && (l.como === 'bye' || l.estado === 'decidida');
+    var nome = p ? nomeNaChave(t, p) : (passe ? Tx('— passe —') : Tx('a definir'));
+    var escudo = (p && p.guilda && p.guilda.emblema && t.tipo === 'guilda') ? SITE.emblema(p.guilda.emblema, 18) + ' ' : '';
+    return '<div class="tor-lado' + (venceu ? ' venceu' : '') + (caiu ? ' caiu' : '') + (!p ? ' vazio' : '') + '">' +
+      '<span class="tor-nome">' + escudo + E(nome) +
+      ((p && t.tipo === 'guilda' && p.guilda && p.guilda.nome) ? ' <small>' + E(p.nome) + '</small>' : '') + '</span>' +
+      (venceu ? '<span class="tor-ok" aria-label="' + E(Tx('passou')) + '">✔</span>' : '') + '</div>';
+  }
+  /* o pé de uma luta: como foi decidida, ou o HORÁRIO previsto dela (no relógio de quem vê) */
+  function peDaLuta(l) {
+    if (l.estado === 'decidida') {
+      return { luta: Tx('decidida na luta'), wo: Tx('W.O.'), bye: Tx('passe livre'), sorteio: Tx('decidida por sorteio'),
+               desistencia: Tx('desistência') }[l.como] || '';
+    }
+    if (l.estado === 'chamada') return Tx('chamando os dois agora');
+    if (l.estado === 'luta') return Tx('lutando agora');
+    if (!l.previstoMs) return '';
+    var ts = seg(l.previstoMs);
+    var hoje = SITE.inicioDoDia(SITE.agora(), 0), amanha = SITE.inicioDoDia(SITE.agora(), 1);
+    return (ts >= hoje && ts < amanha) ? Tx('previsão {a}', { a: SITE.hora(ts) }) : Tx('previsão {a}', { a: SITE.quando(ts) });
+  }
+  function chaveHtml(t) {
+    var c = t.chave;
+    if (!c || !Array.isArray(c.rodadas)) return '';
+    var html = '<div class="tor-chave" tabindex="0" role="group" aria-label="' + E(Tx('A chave do torneio')) + '">';
+    c.rodadas.forEach(function (rd, ri) {
+      var naVez = t.estado === 'andamento' && ri === c.rodada;
+      html += '<div class="tor-col' + (naVez ? ' na-vez' : '') + '" data-rodada="' + ri + '">' +
+        '<div class="tor-col-tit">' + E(nomeDaRodada(c.tamanho, ri)) + '</div>';
+      lista(rd).forEach(function (l, li) {
+        l = l || {};
+        l.rodada = ri;
+        html += '<div class="tor-luta ' + E(String(l.estado || 'aguarda')) + (l.como ? ' ' + E(String(l.como)) : '') + '" data-pos="' + (l.pos != null ? Number(l.pos) : li) + '">' +
+          ladoHtml(t, l, 'a') + ladoHtml(t, l, 'b') +
+          '<div class="tor-pe">' + E(peDaLuta(l)) + '</div></div>';
+      });
+      html += '</div>';
+    });
+    if (t.campeao) {
+      html += '<div class="tor-col tor-col-campeao"><div class="tor-col-tit">' + Tx('Campeão') + '</div>' +
+        '<div class="tor-campeao">🏆 ' + E(nomeNaChave(t, t.campeao)) + '</div></div>';
+    }
+    return html + '</div>';
+  }
+  function inscritosHtml(t) {
+    var ins = lista(t.inscritos);
+    if (!ins.length) return '<p class="apoio tor-vazio">' + Tx('Ninguém inscrito ainda.') + '</p>';
+    return '<ul class="tor-inscritos">' + ins.map(function (x) {
+      x = x || {};
+      var g = x.guilda && x.guilda.nome ? ' <span class="apoio">· ' + SITE.emblema(x.guilda.emblema, 16) + ' ' + E(x.guilda.nome) + '</span>' : '';
+      return '<li><b>' + E(x.nome || '?') + '</b>' + (x.nivel ? ' <span class="apoio">' + Tx('nv {a}', { a: Number(x.nivel) }) + '</span>' : '') + g + '</li>';
+    }).join('') + '</ul>';
+  }
+  /* o cartão de um torneio que está no ar ou vem aí */
+  function cartao(t) {
+    var tam = tamanhoDe(t);
+    var html = '<article class="torneio ' + E(t.tipo) + ' ' + E(t.estado) + '" data-torneio="' + E(t.id) + '">' +
+      '<div class="tor-topo"><h3>🏆 ' + E(nomeTorneio(t)) + '</h3>' + etiquetaDe(t) + '</div>' +
+      '<p class="tor-quando"><b>' + E(SITE.quando(seg(t.inicioMs))) + '</b> <span class="falta">' + contagemDe(t) + '</span></p>';
+    if (t.estado === 'inscricoes') html += '<p class="tor-linha">' + Tx('Vagas: <b>{a}</b>', { a: E(textoVagas(t)) }) + '</p>';
+    else html += '<p class="tor-linha">' + Tx('Chave de <b>{a}</b> · {n} inscrito(s)', { a: tam, n: lista(t.inscritos).length }) + '</p>';
+    html += '<p class="tor-linha">' + Tx('Prêmio de agora (chave de {a}): <b>{b}</b>', { a: tam, b: E(textoPremio(t.premio, t, false)) }) + '</p>';
+    if (tam < 16 && t.estado === 'inscricoes') {
+      var cheio = { barras: PREMIOS[16].barras, vintens: PREMIOS[16].vintens, gemas: PREMIOS[16].gemas, conquista: true, moldura: true, xpGuilda: PREMIOS[16].xpGuilda };
+      if (t.tipo === 'guilda' && !(t.premio && t.premio.barras)) { cheio.barras = 0; cheio.vintens = 0; cheio.gemas = 0; }
+      html += '<p class="tor-linha apoio">' + Tx('Com o torneio cheio (16): <b>{a}</b>', { a: E(textoPremio(cheio, t, true)) }) + '</p>';
+    }
+    if (t.chave) {
+      html += '<h4>' + Tx('A chave ({a})', { a: Number(t.chave.tamanho) }) + '</h4>' +
+        '<p class="apoio tor-dica">' + Tx('O horário de cada luta é a previsão: cada rodada começa 2 minutos depois de a anterior acabar.') + '</p>' + chaveHtml(t);
+    }
+    html += '<h4>' + Tx('Inscritos ({n})', { n: lista(t.inscritos).length }) + '</h4>' + inscritosHtml(t);
+    return html + '</article>';
+  }
+  /* um torneio que acabou: o campeão à vista e a chave para abrir */
+  function cartaoEncerrado(t, aberto) {
+    var camp = t.campeao ? nomeNaChave(t, t.campeao) : '';
+    var escudo = (t.campeao && t.tipo === 'guilda' && t.campeao.guilda) ? SITE.emblema(t.campeao.guilda.emblema, 20) + ' ' : '';
+    return '<details class="torneio encerrado ' + E(t.tipo) + '" data-torneio="' + E(t.id) + '"' + (aberto ? ' open' : '') + '>' +
+      '<summary><span class="tor-campeao-nome">🏆 ' + escudo + E(camp || Tx('sem campeão')) + '</span>' +
+      '<span class="apoio"> · ' + E(nomeTorneio(t)) + ' · ' + E(SITE.quando(seg(t.inicioMs))) + '</span></summary>' +
+      '<p class="tor-linha">' + Tx('Chave de <b>{a}</b> · {n} inscrito(s)', { a: tamanhoDe(t), n: lista(t.inscritos).length }) + ' · ' +
+        Tx('Prêmio do campeão: <b>{a}</b>', { a: E(textoPremio(t.premio, t, false)) }) + '</p>' +
+      chaveHtml(t) + '</details>';
+  }
+
+  var ORDEM = { andamento: 0, sorteado: 1, inscricoes: 2 };
+  function desenha() {
+    var ts = lista(resposta && resposta.torneios).filter(function (t) { return t && t.id != null; });
+    var vivos = ts.filter(function (t) { return ORDEM[t.estado] !== undefined; }).sort(function (a, b) {
+      return (ORDEM[a.estado] - ORDEM[b.estado]) || (a.inicioMs - b.inicioMs) || (String(a.faixa || '~') < String(b.faixa || '~') ? -1 : 1);
+    });
+    var fim = ts.filter(function (t) { return t.estado === 'encerrado'; }).sort(function (a, b) { return b.inicioMs - a.inicioMs; });
+    // a chave de um campeão que o visitante abriu continua aberta depois da atualização
+    var abertos = {};
+    [].forEach.call(document.querySelectorAll('#tor-campeoes details[open]'), function (d) { abertos[d.getAttribute('data-torneio')] = true; });
+    var rolagens = {};
+    [].forEach.call(document.querySelectorAll('.torneio[data-torneio] .tor-chave'), function (c) {
+      rolagens[c.parentNode.getAttribute('data-torneio')] = c.scrollLeft;
+    });
+    $('tor-agora').innerHTML = vivos.length ? vivos.map(cartao).join('')
+      : '<div class="estado">' + (!lida ? Tx('carregando…') : resposta ? Tx('Nenhum torneio marcado agora. O próximo aparece aqui assim que o servidor o criar.')
+                                                                     : Tx('Sem a lista de torneios do servidor.')) + '</div>';
+    $('tor-campeoes').innerHTML = fim.length ? fim.map(function (t) { return cartaoEncerrado(t, !!abertos[String(t.id)]); }).join('')
+      : '<div class="estado">' + (!lida ? Tx('carregando…') : Tx('Nenhum torneio terminou ainda.')) + '</div>';
+    [].forEach.call(document.querySelectorAll('.torneio[data-torneio] .tor-chave'), function (c) {
+      var r = rolagens[c.parentNode.getAttribute('data-torneio')];
+      if (r) c.scrollLeft = r;
+    });
+  }
+  /* de quanto em quanto a lista é buscada de novo: 30 s com a chave andando (ou a menos de 1 h do início) */
+  function ritmo() {
+    var agora = SITE.agora();
+    var vivo = lista(resposta && resposta.torneios).some(function (t) {
+      if (!t) return false;
+      if (t.estado === 'andamento' || t.estado === 'sorteado') return true;
+      return t.estado === 'inscricoes' && seg(t.inicioMs) - agora < 3600;
+    });
+    return vivo ? VIVO_MS : CALMO_MS;
+  }
+  var buscaEm = 0, buscando = false;
+  function carrega() {
+    var bt = $('bt-atualizar');
+    bt.disabled = true;
+    buscando = true;
+    buscaEm = Date.now();
+    return SITE.api('/api/torneios', { semToken: true }).then(function (r) {
+      bt.disabled = false;
+      buscando = false;
+      lida = true;
+      if (r && r.ok) {
+        if (typeof r.agoraMs === 'number') SITE.acertaRelogio(r.agoraMs / 1000);
+        resposta = r;
+        aviso('');
+      } else {
+        // a última resposta boa fica na tela: a chave de há um minuto vale mais que uma página vazia
+        aviso(!r || r.status === 0 ? Tx('O servidor está fora — a lista dos torneios volta com ele.')
+          : r.status === 404 ? Tx('O Torneio da Arena ainda não chegou a este servidor. As regras estão logo abaixo.')
+          : (r.erro || Tx('Não deu para ler os torneios.')));
+      }
+      desenha();
+      return r;
+    });
+  }
+  /* o tique de 10 s: a contagem anda (redesenho), e a lista é buscada de novo no ritmo de agora */
+  function tique() {
+    if (buscando) return;
+    if (document.hidden) return;                       // aba escondida: não pede nem redesenha
+    if (Date.now() - buscaEm >= ritmo()) carrega();
+    else desenha();
+  }
+  // as provas (tests/site_torneio.html): o servidor de mentira entra por SITE.api e a página é relida por aqui
+  window.SITE_TORNEIO = { carrega: carrega, desenha: desenha, ritmo: ritmo, VIVO_MS: VIVO_MS, CALMO_MS: CALMO_MS };
+
+  $('bt-atualizar').addEventListener('click', carrega);
+  desenha();
+  carrega();
+  setInterval(tique, 10000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tique(); });
+})();
+</script>
+</body>
+</html>

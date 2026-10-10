@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a página do Torneio no site (dados de mentira)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:100%;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  #log{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<!-- A PÁGINA PÚBLICA DO TORNEIO (site/torneio.html, 10/10) num quadro de 390 px, com o servidor de mentira: a
+     página abre de verdade (o primeiro pedido dela pode falhar — não há servidor aqui), e daí o SITE.api do quadro
+     é trocado e a página é relida por SITE_TORNEIO.carrega(). O dono: "os desafios serão sorteios e ficarão
+     públicos no site, o horário do desafio de cada". Cobra: os próximos torneios com data, contagem, vagas e
+     prêmios; os inscritos; a chave de 8 com o HORÁRIO de cada luta, os passes e o W.O.; o campeão e os últimos
+     campeões (a chave deles abre e continua aberta na atualização); o ritmo de 30 s durante o torneio; o
+     servidor fora e o de antes do torneio; e que nada estoura a coluna de 390 px (a chave rola dentro da caixa). -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0;
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    document.title = (total - falhas) + '/' + total + ' · a página do Torneio no site';
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 8000)) return r(false);
+        setTimeout(volta, 60);
+      })();
+    });
+  }
+  var quadro = document.getElementById('tela');
+  quadro.src = '../site/torneio.html?prova=' + Date.now();
+  var w, doc, pedidos = [], resposta = null;
+  function P(conta, nome, g) { return { conta: conta, nome: nome, guilda: g || null }; }
+  function ins(conta, nome, nivel, g) { return { conta: conta, nome: nome, nivel: nivel, classes: [{ classId: 'sumo', nivel: nivel }], guilda: g || null }; }
+  function dd(n) { return (n < 10 ? '0' : '') + n; }
+  function hora(ms) { var d = new Date(ms); return dd(d.getHours()) + ':' + dd(d.getMinutes()); }
+  var agora = Date.now();
+  var INI = agora + 26 * 3600000;                       // amanhã
+  var G1 = { id: 1, nome: 'Os Fundos', emblema: 'shield|1|#b40426|#1d1a14|#ffffff|sword|0|#1d3f8a' }, G2 = { id: 2, nome: 'Lanternas', emblema: '⚑' };
+  function lista() {
+    return [
+      { id: 61, tipo: 'pvp', faixa: '20-25', nivelMin: 20, nivelMax: 25, titulo: 'Torneio da Arena — níveis 20 a 25', origem: 'semanal', inicioMs: INI, inscricaoAteMs: INI - 600000,
+        estado: 'inscricoes', vagas: 8, inscritos: [ins(1, 'Ana', 22, G1), ins(2, 'Bia', 23), ins(3, 'Caio', 24), ins(4, 'Duda', 21), ins(5, '<b>Edu</b>', 25)], chave: null, campeao: null,
+        premio: { barras: 10, vintens: 2500, gemas: 1, conquista: true, moldura: true, xpGuilda: 0 } },
+      { id: 62, tipo: 'pvp', faixa: '25-30', nivelMin: 25, nivelMax: 30, titulo: 'Torneio da Arena — níveis 25 a 30', origem: 'semanal', inicioMs: INI, inscricaoAteMs: INI - 600000,
+        estado: 'inscricoes', vagas: 2, inscritos: [], chave: null, campeao: null, premio: { barras: 2, vintens: 600, gemas: 0, conquista: false, moldura: false, xpGuilda: 0 } },
+      { id: 63, tipo: 'guilda', faixa: null, nivelMin: 20, nivelMax: 30, titulo: 'Torneio das Guildas', origem: 'semanal', inicioMs: INI + 86400000, inscricaoAteMs: INI + 86400000 - 600000,
+        estado: 'inscricoes', vagas: 2, inscritos: [ins(1, 'Ana', 22, G1)], chave: null, campeao: null, premio: { barras: 2, vintens: 600, gemas: 0, conquista: false, moldura: false, xpGuilda: 60 } },
+      { id: 50, tipo: 'guilda', faixa: null, nivelMin: 20, nivelMax: 30, titulo: 'Torneio das Guildas', origem: 'semanal', inicioMs: agora - 6 * 86400000, inscricaoAteMs: agora - 6 * 86400000 - 600000,
+        estado: 'encerrado', vagas: 2, inscritos: [ins(1, 'Ana', 22, G1), ins(9, 'Zeca', 24, G2)], campeao: P(1, 'Ana', G1), premio: { barras: 2, vintens: 600, gemas: 0, conquista: false, moldura: false, xpGuilda: 60 },
+        chave: { tamanho: 2, rodada: 0, rodadas: [[{ pos: 0, a: P(1, 'Ana', G1), b: P(9, 'Zeca', G2), estado: 'decidida', vencedor: 'a', como: 'luta', previstoMs: agora - 6 * 86400000 }]] } }
+    ];
+  }
+  function chaveDe8() {
+    return { tamanho: 8, rodada: 1, rodadas: [
+      [{ pos: 0, a: P(1, 'Ana'), b: P(4, 'Duda'), estado: 'decidida', vencedor: 'a', como: 'wo', previstoMs: agora - 1500000 },
+       { pos: 1, a: P(2, 'Bia'), b: null, estado: 'decidida', vencedor: 'a', como: 'bye', previstoMs: agora - 1500000 },
+       { pos: 2, a: P(3, 'Caio'), b: P(5, '<b>Edu</b>'), estado: 'decidida', vencedor: 'b', como: 'luta', previstoMs: agora - 1500000 },
+       { pos: 3, a: P(6, 'Fabi'), b: null, estado: 'decidida', vencedor: 'a', como: 'bye', previstoMs: agora - 1500000 }],
+      [{ pos: 0, a: P(1, 'Ana'), b: P(2, 'Bia'), estado: 'luta', vencedor: null, como: null, previstoMs: agora - 300000 },
+       { pos: 1, a: P(5, '<b>Edu</b>'), b: P(6, 'Fabi'), estado: 'aguarda', vencedor: null, como: null, previstoMs: agora + 240000 }],
+      [{ pos: 0, a: null, b: null, estado: 'aguarda', vencedor: null, como: null, previstoMs: agora + 900000 }]] };
+  }
+  function cartao(id) { return doc.querySelector('#tor-agora .torneio[data-torneio="' + id + '"]'); }
+  function semEstouro() { return doc.documentElement.scrollWidth <= doc.documentElement.clientWidth + 1; }
+
+  var t0 = Date.now();
+  (function aguarda() {
+    var ok = false;
+    try { w = quadro.contentWindow; doc = quadro.contentDocument; ok = !!(w && w.SITE && w.SITE_TORNEIO && doc.getElementById('tor-agora')); } catch (e) {}
+    if (!ok) {
+      if (Date.now() - t0 > 30000) return fim('a página do site não abriu em 30 s');
+      return setTimeout(aguarda, 150);
+    }
+    w.SITE.api = function (rota, op) {
+      pedidos.push({ rota: rota, op: op || {} });
+      return Promise.resolve(typeof resposta === 'function' ? resposta() : resposta);
+    };
+    roda().then(function () { fim(); }, function (e) { fim('erro: ' + (e && e.stack || e)); });
+  })();
+
+  async function roda() {
+    var ST = w.SITE_TORNEIO;
+    check('o menu do site tem o Torneio, marcado como a página de agora', !!doc.querySelector('.topo nav a[href="torneio.html"][aria-current="page"]'));
+    check('as regras e a tabela do prêmio estão na página mesmo sem servidor', /As vagas abrem aos pares/.test(doc.body.textContent) && doc.querySelectorAll('.tabela-premios tbody tr').length === 4);
+    // ---- o servidor fora e o de antes do torneio
+    resposta = { ok: false, status: 0 };
+    await ST.carrega();
+    check('servidor fora: o aviso diz que a lista volta com ele, e a página não quebra', /servidor está fora/.test(doc.getElementById('tor-aviso').textContent) && !!doc.getElementById('tor-agora').firstChild);
+    resposta = { ok: false, status: 404, erro: 'não achei' };
+    await ST.carrega();
+    check('servidor de antes do torneio (404): "ainda não chegou a este servidor"', /ainda não chegou a este servidor/.test(doc.getElementById('tor-aviso').textContent));
+    // ---- as inscrições abertas
+    var L = lista();
+    resposta = function () { return { ok: true, status: 200, agoraMs: Date.now(), torneios: JSON.parse(JSON.stringify(L)) }; };
+    await ST.carrega();
+    var p = pedidos[pedidos.length - 1];
+    check('a página lê GET /api/torneios, público (sem o token da conta)', p.rota === '/api/torneios' && p.op.semToken === true && !p.op.method);
+    check('o aviso some e aparecem os três torneios que vêm, o de 20–25 primeiro', doc.getElementById('tor-aviso').textContent === '' &&
+          [].map.call(doc.querySelectorAll('#tor-agora .torneio'), function (x) { return x.getAttribute('data-torneio'); }).join() === '61,62,63');
+    var c = cartao(61), tx = c.textContent;
+    check('o nome sai do tipo e da faixa (não da frase do servidor): "Torneio de PvP · nível 20 a 25"', /Torneio de PvP · nível 20 a 25/.test(tx) && !/níveis 20 a 25/.test(tx), tx.slice(0, 80));
+    check('a data no relógio de quem vê e a contagem das inscrições', tx.indexOf(w.SITE.quando(INI / 1000)) >= 0 && /as inscrições fecham em 1 dia e 1 h|as inscrições fecham em 1 dia/.test(tx) && /Inscrições abertas/.test(tx), tx.slice(0, 200));
+    check('as vagas: "5 de 8 — enche e abrem mais 8"', /Vagas: 5 de 8 — enche e abrem mais 8/.test(tx));
+    check('o prêmio de agora (chave de 8) e o do torneio cheio (16)', /Prêmio de agora \(chave de 8\): 10 barra\(s\) de ouro · 2500 vinténs · 1 Gema\(s\) Enterrada\(s\)/.test(tx) &&
+          /Com o torneio cheio \(16\): 20 barra\(s\) de ouro · 5000 vinténs · 2 Gema\(s\) Enterrada\(s\)/.test(tx));
+    var li = c.querySelectorAll('.tor-inscritos li');
+    check('os cinco inscritos com o nível e a guilda (o brasão vira imagem)', li.length === 5 && /Ana/.test(li[0].textContent) && /nv 22/.test(li[0].textContent) && /Os Fundos/.test(li[0].textContent) &&
+          !!li[0].querySelector('img.emblema-brasao'), li.length);
+    check('nome de jogador com HTML sai como texto (nada de tag injetada)', /<b>Edu<\/b>/.test(li[4].textContent) && !li[4].querySelector('b b'));
+    check('antes do sorteio não há chave', !c.querySelector('.tor-chave'));
+    check('o de guilda: o XP da guilda e o XP em dobro', /Torneio das Guildas/.test(cartao(63).textContent) && /60 XP para a guilda · XP em dobro para todos os membros por 7 dias/.test(cartao(63).textContent));
+    check('com as inscrições a um dia do início, a página se atualiza de 5 em 5 minutos', ST.ritmo() === ST.CALMO_MS);
+    check('nada estoura a coluna de 390 px', semEstouro(), doc.documentElement.scrollWidth + ' > ' + doc.documentElement.clientWidth);
+    // ---- os últimos campeões
+    var enc = doc.querySelector('#tor-campeoes details.torneio[data-torneio="50"]');
+    check('os últimos campeões: a guilda campeã (Os Fundos) com o brasão, fechado até abrir', !!enc && !enc.open && /Os Fundos/.test(enc.querySelector('summary').textContent) && !!enc.querySelector('summary img.emblema-brasao'));
+    enc.open = true;
+    check('aberto, mostra a chave daquele torneio (a final, o campeão no fim)', enc.querySelectorAll('.tor-luta').length === 1 && /Os Fundos/.test(enc.querySelector('.tor-campeao').textContent) &&
+          /decidida na luta/.test(enc.textContent) && /Ana/.test(enc.querySelector('.tor-lado.venceu').textContent));
+    // ---- o sorteio e o torneio andando
+    L[0].estado = 'andamento'; L[0].inicioMs = agora - 1500000; L[0].inscricaoAteMs = agora - 2100000; L[0].vagas = 8;
+    L[0].inscritos.push(ins(6, 'Fabi', 20));
+    L[0].chave = chaveDe8();
+    await ST.carrega();
+    c = cartao(61);
+    var cv = c.querySelector('.tor-chave'), cols = cv ? cv.querySelectorAll('.tor-col') : [];
+    check('em andamento: a etiqueta, a rodada em curso e a chave de 8 em três colunas (Quartas, Semifinal, Final)', /Em andamento/.test(c.textContent) && cols.length === 3 &&
+          /quartas/i.test(cols[0].textContent) && /semifinal/i.test(cols[1].querySelector('.tor-col-tit').textContent) && cols[1].classList.contains('na-vez'));
+    check('sete lutas; os dois passes ("— passe —", "passe livre") e o W.O. marcados', cv.querySelectorAll('.tor-luta').length === 7 && cv.querySelectorAll('.tor-luta.bye').length === 2 &&
+          /— passe —/.test(cv.querySelector('.tor-luta.bye').textContent) && /passe livre/.test(cv.querySelector('.tor-luta.bye .tor-pe').textContent) &&
+          /W\.O\./.test(cv.querySelector('.tor-luta.wo .tor-pe').textContent) && /Duda/.test(cv.querySelector('.tor-luta.wo .tor-lado.caiu').textContent));
+    check('quem passou com ✔ e quem caiu riscado', /Edu/.test(cols[0].querySelector('.tor-luta[data-pos="2"] .tor-lado.venceu').textContent) && !!cols[0].querySelector('.tor-luta[data-pos="2"] .tor-ok'));
+    var semi = cols[1].querySelectorAll('.tor-luta');
+    check('O HORÁRIO DE CADA LUTA: a que está lutando diz "lutando agora"; a seguinte e a final trazem a previsão no relógio de quem vê',
+          /lutando agora/.test(semi[0].textContent) && semi[1].textContent.indexOf('previsão ' + hora(agora + 240000)) >= 0 &&
+          cols[2].textContent.indexOf('previsão ' + hora(agora + 900000)) >= 0 && /a definir/.test(cols[2].textContent), semi[1].textContent + ' | ' + cols[2].textContent);
+    check('a chave rola para os lados dentro da caixa dela; a página não', cv.scrollWidth > cv.clientWidth + 20 && semEstouro(), cv.scrollWidth + ' / ' + cv.clientWidth);
+    check('durante o torneio a página se atualiza sozinha a cada 30 s', ST.ritmo() === ST.VIVO_MS && ST.VIVO_MS === 30000);
+    check('a chave que o visitante abriu nos campeões continua aberta depois da atualização', doc.querySelector('#tor-campeoes details[data-torneio="50"]').open === true);
+    // ---- o fim
+    L[0].estado = 'encerrado'; L[0].campeao = P(1, 'Ana'); L[0].chave.rodada = 2;
+    L[0].chave.rodadas[1][0].estado = 'decidida'; L[0].chave.rodadas[1][0].vencedor = 'a'; L[0].chave.rodadas[1][0].como = 'luta';
+    L[0].chave.rodadas[1][1].estado = 'decidida'; L[0].chave.rodadas[1][1].vencedor = 'b'; L[0].chave.rodadas[1][1].como = 'sorteio';
+    L[0].chave.rodadas[2][0] = { pos: 0, a: P(1, 'Ana'), b: P(6, 'Fabi'), estado: 'decidida', vencedor: 'a', como: 'desistencia', previstoMs: agora + 900000 };
+    await ST.carrega();
+    var fim61 = doc.querySelector('#tor-campeoes details[data-torneio="61"]');
+    check('encerrado: sai dos que vêm e entra nos últimos campeões, o mais novo em cima (Ana)', !cartao(61) && !!fim61 && /Ana/.test(fim61.querySelector('summary').textContent) &&
+          doc.querySelector('#tor-campeoes details').getAttribute('data-torneio') === '61');
+    fim61.open = true;
+    check('a chave fechada: o sorteio e a desistência escritos, e o prêmio do campeão', /decidida por sorteio/.test(fim61.textContent) && /desistência/.test(fim61.textContent) &&
+          /Prêmio do campeão: 10 barra\(s\) de ouro/.test(fim61.textContent) && /Ana/.test(fim61.querySelector('.tor-campeao').textContent));
+    check('no fim, nada estoura a coluna de 390 px', semEstouro());
+  }
+})();
+</script>
+</body>
+</html>
