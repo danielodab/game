@@ -402,7 +402,14 @@ class SalasMixin:
                              "WHERE m.conta_id = ?", (cid,)).fetchone()
         if g is None:
             return {'bonusXp': False, 'bonusDrop': False, 'dizimo': 0}
-        return {'bonusXp': g['bonus_xp'] > t, 'bonusDrop': g['bonus_drop'] > t, 'dizimo': limita(g['dizimo'], 0, 100)}
+        fora = {'bonusXp': g['bonus_xp'] > t, 'bonusDrop': g['bonus_drop'] > t, 'dizimo': limita(g['dizimo'], 0, 100)}
+        # 10/10, O XP EM DOBRO DA GUILDA CAMPEÃ (torneio.py; docs/TORNEIO.md §1): por 7 dias depois do torneio de
+        # guilda, um fator PRÓPRIO que o juiz põe no lugar do +15% do cofre (servidor/juiz/estado.js, Guilda.fatorXp).
+        # A chave só viaja quando vale: o contexto de quem não é da campeã segue byte a byte o de antes
+        fator = getattr(self, '_torneio_fator_xp', None)
+        if fator is not None and fator(cid, t) > 1:
+            fora['fatorXp'] = 2
+        return fora
 
     # -- o juiz --------------------------------------------------------------------------------
     @staticmethod
@@ -439,6 +446,8 @@ class SalasMixin:
         with self.tranca:
             pvm, pvp = self._posicoes(conta['id'])
             por_classe = self._posicoes_classe(conta['id'])
+            conquistas = getattr(self, '_torneio_conquistas', None)
+            arena = conquistas(conta['id']) if conquistas is not None else {'pvp': 0, 'guilda': 0}
             # 13/09: as cópias emprestadas do banco da guilda que estão com esta conta — o juiz
             # recusa op do jogador que as faça sumir do estado (a fusão consumiria a cópia)
             try:
@@ -450,7 +459,10 @@ class SalasMixin:
                  'progress': estado['progress'], 'db': estado['db'], 'ops': ops,
                  'semente': secrets.randbits(31),
                  'contexto': {'agoraMs': int(time.time() * 1000), 'pvm': pvm, 'pvp': pvp, 'interno': bool(interno),
-                              'bloqueados': bloqueados, 'porClasse': por_classe}}
+                              'bloqueados': bloqueados, 'porClasse': por_classe,
+                              # 10/10: as conquistas do Torneio da Arena ({pvp, guilda}, torneio.py) — a régua dos
+                              # títulos "Campeão da Arena"… e "Campeão das Guildas" (js/core/titulos.js, estado.arena)
+                              'arena': arena}}
         return self._confere_saida(self.juiz.pede('POST', '/op', corpo))
 
     def _estado_grava(self, conta, lido, saida, t, poupar=()):

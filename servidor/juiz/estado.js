@@ -30,6 +30,7 @@ const CHAVE_CONTA = 'soterra-conta-v1';
 const FUSO_BRASILIA_MIN = -180;
 const TETOS_AGENDA = { xp: 20, vintem: 10, pedras: 10, saque: 10, aviso: 1 };   // 09/10: XP até ×20 (o dono: "o Mestre pode pôr evento de até ×20 de XP")
 const GUILDA_BONUS_FATOR = 1.15;       // o JOGO.Guilda.BONUS_FATOR de js/core/guilda.js (a prova confere)
+const GUILDA_FATOR_XP_MAX = 2;         // 10/10: o teto do fator da guilda campeã do torneio (a API manda 2; mais que isso não passa)
 
 /* mulberry32: o mesmo gerador pequeno que o jogo já usa nas missões */
 function gerador(semente) {
@@ -96,6 +97,12 @@ function mundoEconomico(opts) {
       Guilda: {
         BONUS_FATOR: GUILDA_BONUS_FATOR,
         bonusAtivo: (tipo) => (tipo === 'xp' ? !!guilda.bonusXp : tipo === 'drop' ? !!guilda.bonusDrop : false),
+        /* 10/10, o Torneio da Arena (docs/TORNEIO.md §1): a guilda CAMPEÃ dá XP em DOBRO aos membros por 7 dias — um
+         * fator PRÓPRIO (contexto.guilda.fatorXp = 2, lido do banco em servidor/salas.py _guilda_contexto) que
+         * SUBSTITUI o +15% do cofre enquanto durar (não soma: ×2, e não ×2,3). O funil da recompensa
+         * (js/core/game.js, fatorGuildaXp) lê por aqui; sem o dobro, é o +15% de sempre ou 1. */
+        fatorXp: () => ((typeof guilda.fatorXp === 'number' && isFinite(guilda.fatorXp) && guilda.fatorXp > 1)
+          ? Math.min(GUILDA_FATOR_XP_MAX, guilda.fatorXp) : (guilda.bonusXp ? GUILDA_BONUS_FATOR : 1)),
         dizimoAtual: () => (typeof guilda.dizimo === 'number' ? guilda.dizimo : 0),
         doarXp: (n) => { const v = Math.floor(Number(n)); if (v > 0) anotado.guildaXp += v; return true; }
       }

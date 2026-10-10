@@ -72,6 +72,13 @@ JOGO.I18n.registra('es', { textos: {
   "Top 2 Pvp": "Top 2 Pvp",
   "Top 3 Pvp": "Top 3 Pvp",
   "Voz do Eco": "Voz del Eco",
+  // 10/10: os títulos do Torneio da Arena (js/core/titulos.js, T.ARENA e T.ARENA_GUILDA)
+  "Campeão da Arena": "Campeón de la Arena",
+  "Bicampeão da Arena": "Bicampeón de la Arena",
+  "Tricampeão da Arena": "Tricampeón de la Arena",
+  "Lenda da Arena": "Leyenda de la Arena",
+  "Imortal da Arena": "Inmortal de la Arena",
+  "Campeão das Guildas": "Campeón de los Gremios",
   // ---- ETAPA 2 (05/10): as telas e os menus — a chave é o texto do código, gerada por máquina e conferida
   // (variáveis, tags, números e espaços das pontas iguais ao português). Edita-se à mão, uma linha por texto.
   "Neutro": "Neutro",
@@ -2352,6 +2359,12 @@ JOGO.I18n.registra('es', { textos: {
   "{pos}º do ranking de {classe}": "{pos}.º del ranking de {classe}",
   "Seja o {pos}º do ranking de {classe} (a XP dessa classe).": "Sé el {pos}.º del ranking de {classe} (la XP de esa clase).",
   "Fique entre os 3 primeiros do ranking de dano de uma semana do Eco Primordial.": "Queda entre los 3 primeros del ranking de daño de una semana del Eco Primordial.",
+  // 10/10: como se ganha cada título do Torneio da Arena (js/core/titulos.js)
+  "o Torneio da Arena": "el Torneo de la Arena",
+  "o Torneio das Guildas": "el Torneo de los Gremios",
+  "Vença um torneio de PvP da Arena com chave de 4 ou mais.": "Gana un torneo de PvP de la Arena con llave de 4 o más.",
+  "Vença {vezes} torneios de PvP da Arena com chave de 4 ou mais.": "Gana {vezes} torneos de PvP de la Arena con llave de 4 o más.",
+  "Represente a sua guilda e vença o torneio de guilda com chave de 4 ou mais.": "Representa a tu gremio y gana el torneo de gremios con llave de 4 o más.",
   "Derrube {nome} {vezes} vezes no DIFÍCIL e SOZINHO.": "Derrota a {nome} {vezes} veces en DIFÍCIL y EN SOLITARIO.",
   "Forjado: +{nivel} {grau}!": "¡Forjado: +{nivel} {grau}!",
   "Top {pos} {classe}": "Top {pos} {classe}",

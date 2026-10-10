@@ -217,8 +217,13 @@ const OPS = {
       // 03/10: o título do pódio do Eco Primordial mora no PRÓPRIO estado da conta (Progress.titulosEco, entregue
       // pela fila da loja) — sem esta linha a régua não o via e o servidor recusava "Voz do Eco" a quem o ganhou
       const eco = (J.Progress && J.Progress.titulosEco) ? J.Progress.titulosEco() : [];
+      // 10/10: as conquistas do Torneio da Arena ({pvp, guilda}) vêm do BANCO, pela API (contexto.arena — o
+      // cliente não as escolhe): a escada "Campeão da Arena" … "Imortal da Arena" e o "Campeão das Guildas"
+      const ar = (x.contexto.arena && typeof x.contexto.arena === 'object') ? x.contexto.arena : {};
+      const conq = (v) => ((typeof v === 'number' && isFinite(v) && v > 0) ? Math.floor(v) : 0);
       const estado = { chefes: chefes || {}, pvm: x.contexto.pvm || null, pvp: x.contexto.pvp || null,
                        porClasse: pc, classeNomes: nomesClasse, eco,
+                       arena: { pvp: conq(ar.pvp), guilda: conq(ar.guilda) },
                        mestre: !!(x.conta && x.conta.gm) };     // 08/10 à noite: o Mestre escolhe o título que quiser
       if (!J.Titulos || !J.Titulos.valido(t, estado)) return { ok: false, erro: 'título não conquistado' };
       return J.DB.definirTitulo(t);
@@ -616,7 +621,8 @@ function acha(nome, x) {
   throw recusa('operação desconhecida: ' + String(nome), 'desconhecida');
 }
 
-/* corpo = { conta: {id, gm}, progress, db, ops: [{nome, args}], semente, contexto: {agoraMs, pvm, pvp, interno} } */
+/* corpo = { conta: {id, gm}, progress, db, ops: [{nome, args}], semente,
+ *           contexto: {agoraMs, pvm, pvp, porClasse, arena: {pvp, guilda}, interno} } */
 async function executa(corpo) {
   const c = corpo || {};
   const ops = Array.isArray(c.ops) ? c.ops : null;

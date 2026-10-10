@@ -2895,8 +2895,10 @@ var JOGO = (typeof window !== 'undefined')
     var fatorPoco = (Game.dungeonId === 'poco' && JOGO.Poco)
       ? JOGO.Poco.fator(Game.roomIndex + 1) : 1;
     // o BÔNUS DE GUILDA comprado pelo líder (25/08): +15% de XP por 24h
-    var fatorGuildaXp = (JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('xp'))
-      ? JOGO.Guilda.BONUS_FATOR : 1;
+    // 10/10, o Torneio da Arena: a guilda CAMPEÃ dá XP em dobro por 7 dias — um fator próprio, que entra no LUGAR
+    // do +15% (JOGO.Guilda.fatorXp(), que já devolve o +15% ou 1 quando não há dobro); sem a função, o de sempre
+    var fatorGuildaXp = (JOGO.Guilda && typeof JOGO.Guilda.fatorXp === 'function') ? JOGO.Guilda.fatorXp()
+      : ((JOGO.Guilda && JOGO.Guilda.bonusAtivo && JOGO.Guilda.bonusAtivo('xp')) ? JOGO.Guilda.BONUS_FATOR : 1);
     /* O EVENTO DO MUNDO de XP (10/09) entra no mesmo produto, por ÚLTIMO: o
      * corte por herói, o dízimo e a fatia do pet herdam sozinhos. Sem evento
      * o fator é 1, e ×1 no fim do produto não mexe em bit nenhum. */
