@@ -855,6 +855,26 @@ class GrupoMixin:
         self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
         self._duelo_guarda(did, a_id, b_id, resultado, t, herois_de)
 
+    def _duelo_fecho_torneio(self, did, a_id, b_id, cid, tipo, base, t, herois_de, agora_ms):
+        """Dentro de _escrita — 10/10, A BRECHA FECHADA (docs/SEGURANCA.md §4.10): no did de um torneio, o
+        fechamento SEM vencedor vindo de UM lado (foto, replay que o juiz recusa, W.O. sem prova, outro modo, o
+        replay limpo sem fim) não decide nada na hora — quem está perdendo fecharia assim para forçar a revanche e
+        o sorteio. O torneio anota e responde (torneio.py, _torneio_fecho): espera o outro lado; os dois sem
+        vencedor = guarda `base` (o gancho abre a revanche); o replay recusado contra um registro limpo = derrota
+        de quem o mandou (guarda o resultado com o vencedor, e o gancho avança a chave por W.O.).
+        Devolve ('aguarda', até_ms) ou ('guardado', None)."""
+        veredito, extra = self._torneio_fecho(did, a_id, b_id, cid, tipo, agora_ms)
+        if veredito == 'aguarda':
+            return 'aguarda', extra
+        self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
+        if veredito == 'vence':
+            resultado = {'fase': 'recusado', 'venc': 'A' if extra == a_id else 'B', 'ranqueado': False, 'fim': 'wo',
+                         'modo': base.get('modo'), 'torneio': self._torneio_do_did(did)}
+            self._duelo_guarda(did, a_id, b_id, resultado, t, herois_de, por=cid)
+        else:
+            self._duelo_guarda(did, a_id, b_id, base, t, herois_de, por=cid)
+        return 'guardado', None
+
     def duelo_fechar(self, conta, corpo):
         """Corpo {did, modo, dungeonId, roomIndex, semente, A:{conta, dono, herois}, B:{…}, lances, hashFinal,
         fotografada, desistiu?, lado?, wo?}. Ranqueado = o juiz viu um fim (venc não nulo) E o modo deixa (14/09:
@@ -922,6 +942,7 @@ class GrupoMixin:
             t = agora()
             agora_ms = int(time.time() * 1000)
             teto = amistoso = perdeu = fim = espera = espera_ate = motivo_espera = torneio = None
+            fora_de_hora = False
             acao = None
             with self._escrita():
                 if self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
@@ -938,16 +959,28 @@ class GrupoMixin:
                     # Brasa não muda (ranqueado False), os dois entram com a vida CHEIA e a vida do fim NÃO grava
                     achar = getattr(self, '_torneio_do_duelo', None)
                     torneio = achar(did, a_id, b_id) if achar is not None else None
+                    # o did que um torneio abriu mas que NÃO é mais a luta em curso (decidida por W.O., sorteio, a
+                    # janela que venceu): fechá-lo depois não ranqueia nem grava vida — vale como amistoso
+                    do_torneio = getattr(self, '_torneio_do_did', None)
+                    fora_de_hora = torneio is None and do_torneio is not None and do_torneio(did) is not None
                     if fotografada:
                         # sincronizado por foto: o registro não refaz o duelo; vale como amistoso (e a vida não muda)
-                        self._duelo_guarda(did, a_id, b_id, {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False,
-                                                             'motivo': 'fotografada', 'modo': modo}, t, herois_de, por=cid)
-                        self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
-                        acao = 'guardado'
+                        foto = {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False, 'motivo': 'fotografada', 'modo': modo}
+                        if torneio:
+                            # 10/10: no torneio a foto de UM lado espera o registro do outro (a brecha fechada)
+                            acao, espera_ate = self._duelo_fecho_torneio(did, a_id, b_id, cid, 'fotografada', foto, t,
+                                                                         herois_de, agora_ms)
+                            motivo_espera = 'torneio'
+                        else:
+                            self._duelo_guarda(did, a_id, b_id, foto, t, herois_de, por=cid)
+                            self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
+                            acao = 'guardado'
                     elif sem_fim and agora_ms >= espera['primeiro_ms'] + DUELO_ESPERA_MS:
                         self._duelo_encerra_espera(did, a_id, b_id, espera, t, herois_de)   # a declaração não veio
                         acao = 'guardado'
-                    elif sem_fim and not desistiu and not wo:
+                    elif sem_fim and not desistiu and not wo and not (torneio and espera['conta_id'] != cid):
+                        # (10/10: no torneio, o registro do OUTRO lado vai ao juiz mesmo com a espera aberta — quem
+                        # fechou primeiro com um replay cortado não tranca o registro inteiro de quem venceu)
                         acao, espera_ate, motivo_espera = 'aguarda', espera['primeiro_ms'] + DUELO_ESPERA_MS, 'desistencia'
                     else:
                         if desistiu:
@@ -968,10 +1001,24 @@ class GrupoMixin:
                         if acao is None:
                             # 14/09: o amistoso (desafio, mapa trocado, arena sem partida) nem olha os tetos
                             amistoso = self._duelo_amistoso(did, modo, dungeon, lados)
+                            if amistoso is None and fora_de_hora:
+                                amistoso = 'torneio'
                             teto = None if (amistoso or torneio) else self._duelo_teto(a_id, b_id, t)
                             estados = {k: self._estado_ler(lados[k]['conta']) for k in lados}
                             faltando = [k for k in lados if estados[k] is None]
-                            if faltando and teto:
+                            if torneio and (amistoso or fim == 'wo-sem-prova'):
+                                # 10/10 (a brecha fechada): o did do torneio fechado FORA dele (outro modo, outros
+                                # heróis) ou com um W.O. que o relé não prova não vai ao juiz nem decide nada sozinho
+                                causa = amistoso or fim
+                                base = {'fase': 'nao-conferido', 'venc': None, 'ranqueado': False, 'modo': modo}
+                                base['motivo'] = causa
+                                if fim:
+                                    base['fim'] = fim
+                                acao, espera_ate = self._duelo_fecho_torneio(did, a_id, b_id, cid,
+                                                                             'fora' if amistoso else 'wo-sem-prova', base, t,
+                                                                             herois_de, agora_ms)
+                                motivo_espera = 'torneio'
+                            elif faltando and teto:
                                 # sem o estado de um lado o juiz não refaz: o teto vale como antes, sem a vida
                                 self._duelo_guarda_teto(did, a_id, b_id, t, herois_de)
                                 acao = 'guardado'
@@ -1020,15 +1067,23 @@ class GrupoMixin:
                 if e.status == 422:
                     with self._escrita():
                         if not self.con.execute("SELECT 1 FROM duelos WHERE did = ?", (did,)).fetchone():
-                            self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
-                            if teto:
+                            recusado = {'fase': 'recusado', 'venc': None, 'ranqueado': False,
+                                        'motivo': e.extra.get('motivo') or 'juiz'}
+                            if torneio:
+                                # 10/10 (a brecha fechada): o replay recusado de UM lado não derruba a luta do torneio
+                                # — espera o registro do outro; contra um registro limpo, é derrota de quem o mandou
+                                self._duelo_fecho_torneio(did, a_id, b_id, cid, 'recusado', dict(recusado, modo=modo), t,
+                                                          herois_de, int(time.time() * 1000))
+                                self._evento(cid, 'duelo-recusado', {'did': did, 'motivo': e.extra.get('motivo'),
+                                                                     'erro': e.erro, 'torneio': torneio['id']})
+                            elif teto:
                                 # acima do teto o duelo já não ranqueava: segue 'teto', como antes de o teto chamar
                                 # o juiz (a vida não é gravada: o replay divergiu)
+                                self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
                                 self._duelo_guarda_teto(did, a_id, b_id, t, herois_de)
                             else:
-                                self._duelo_guarda(did, a_id, b_id, {'fase': 'recusado', 'venc': None, 'ranqueado': False,
-                                                                     'motivo': e.extra.get('motivo') or 'juiz'}, t, herois_de,
-                                                   por=cid)
+                                self.con.execute("DELETE FROM duelo_espera WHERE did = ?", (did,))
+                                self._duelo_guarda(did, a_id, b_id, recusado, t, herois_de, por=cid)
                                 for quem in (a_id, b_id):
                                     self._evento(quem, 'duelo-recusado', {'did': did, 'motivo': e.extra.get('motivo'),
                                                                           'erro': e.erro})
@@ -1073,14 +1128,24 @@ class GrupoMixin:
                             if grava:                        # o W.O. que esperava a prova: agora é a desistência que espera
                                 self.con.execute("UPDATE duelo_espera SET motivo = 'sem-fim', resultado = ? WHERE did = ?",
                                                  (json.dumps(em_espera, ensure_ascii=False), did))
-                        if grava and not torneio:            # 10/10: a luta do torneio não grava a vida de ninguém
+                        if grava and not torneio and not fora_de_hora:   # 10/10: a luta do torneio não grava a vida de ninguém
                             for k in lados:
                                 vida_fim, maximos = fins[k]
                                 self._vida_grava_fim(lados[k]['conta'],
                                                      {h: vida_fim[h] for h in lados[k]['herois'] if h in vida_fim},
                                                      maximos, agora_ms)
+                        feito = None
+                        if torneio:
+                            # 10/10 (a brecha fechada): o registro limpo sem fim também fica anotado no torneio — contra
+                            # o replay RECUSADO do outro lado é vitória; contra a foto dele, os dois sem vencedor
+                            base = dict(em_espera)
+                            base['motivo'] = 'sem-confirmacao'
+                            feito, _ate = self._duelo_fecho_torneio(did, a_id, b_id, cid, 'sem-fim', base, t, herois_de,
+                                                                    agora_ms)
                 except EstadoMudou:
                     continue
+                if feito == 'guardado':
+                    return self._duelo_guardado(cid, did)
                 return self._duelo_aguarda(cid, primeiro + DUELO_ESPERA_MS, agora_ms, herois_de, 'desistencia')
             if teto:
                 resultado = dict(TETO)
@@ -1132,7 +1197,7 @@ class GrupoMixin:
                                                   (did,)).fetchone() is not None
                     agora_ms = int(time.time() * 1000)
                     for k in lados:
-                        if torneio or (ja_gravada and k != perdeu):   # 10/10: a vida única fica como estava no torneio
+                        if torneio or fora_de_hora or (ja_gravada and k != perdeu):   # 10/10: a vida única fica como estava no torneio
                             continue
                         vida_fim, maximos = fins[k]
                         self._vida_grava_fim(lados[k]['conta'], {h: vida_fim[h] for h in lados[k]['herois'] if h in vida_fim},

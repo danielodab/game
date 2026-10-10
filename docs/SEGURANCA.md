@@ -533,12 +533,28 @@ por isso NADA nele sai da palavra do cliente:
   disparam é uma transação de escrita e por isso tem freio: no máximo uma por segundo por processo vinda de
   leitura. Elas mostram o id da conta, o nome público e a guilda de cada inscrito — nada além do ranking.
 
-**Em aberto.** Fechar o duelo SEM vencedor é barato para quem está perdendo: uma foto falsa ou um replay
-torto vira revanche, e de novo vira sorteio (50%). É a regra do contrato ("a chave não para"), e hoje o que
-há é a trilha — o evento `torneio-sem-vencedor` guarda `por` (a conta que fechou) e o porquê, para o Mestre
-ver quem repete. O aperto possível, se virar hábito: o fechamento sem vencedor de UM lado esperar o registro
-limpo do outro (como a sala em grupo espera, §5) antes de abrir a revanche. E o contêiner velho do rolling
-update não conhece o torneio: publicar no meio de um torneio pode fechar uma luta como duelo ranqueado comum.
+**A brecha fechada (10/10): um lado só não fecha "sem vencedor".** Na primeira versão, fechar o duelo SEM
+vencedor era barato para quem estava perdendo: uma foto falsa, um replay torto (422) ou um replay cortado no
+meio virava revanche, e de novo virava sorteio (50%) — num torneio que paga 20 barras de ouro. Agora, só no did
+de torneio (`grupo.py`, `_duelo_fecho_torneio`; `torneio.py`, `_torneio_fecho` e a tabela `torneio_fechos`):
+
+- o fechamento sem vencedor vindo de UM lado (`fotografada`, replay recusado, W.O. sem prova, o did fechado
+  por outro modo ou com outros heróis) NÃO guarda nada nem decide nada: fica `aguardando` o registro do outro
+  por 90 s (`SOTERRA_TORNEIO_FECHO_S`). O registro LIMPO do outro com vencedor vale inteiro — inclusive por cima
+  da espera aberta pelo replay cortado do adversário;
+- a revanche só abre com os DOIS lados sem vencedor, ou com a janela vencida (o passo do relógio);
+- o replay que o juiz recusa de um lado, contra um registro que o juiz aceitou do outro, é DERROTA de quem o
+  mandou (W.O.), não "sem vencedor" — forjar deixou de ser neutro;
+- quem fecha sem vencedor por escolha na luta E na revanche, com o outro limpo ou calado, perde por W.O. em
+  vez de ir ao sorteio; o evento `torneio-sem-vencedor` guarda `por` (a lista de quem fechou assim);
+- o did de torneio já decidido, fechado depois, vale como amistoso: não ranqueia nem grava vida.
+
+O que sobra: os dois lados combinados fechando sem vencedor vão à revanche e ao sorteio — mas aí não há lado
+lesado. E o replay cortado de quem perde, se o vencedor NUNCA mandar o registro dele (fechou a aba antes de o
+jogo fechar o duelo), ainda cai na espera de 120 s e na revanche: o vencedor honesto só precisa fechar.
+
+**Em aberto.** O contêiner velho do rolling update não conhece o torneio: publicar no meio de um torneio pode
+fechar uma luta como duelo ranqueado comum.
 
 ## 5. O juiz (Node, só 127.0.0.1)
 
