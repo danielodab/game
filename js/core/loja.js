@@ -122,7 +122,8 @@
   var TETO_PECAS = 20;            // cópias de uma peça numa entrega
   var AURAS = ['fogo', 'agua', 'terra', 'ar', 'neutra', 'sombra', 'gelo', 'ouro'];   // o gêmeo de loja.AURAS (servidor); 08/10: + três
   var MOLDURAS = ['ouro', 'rubi', 'esmeralda', 'obsidiana'];   // 08/10: o gêmeo de loja.MOLDURAS_LOJA
-  var MOLDURAS_DA_FICHA = MOLDURAS.concat(['mestre']);           // a do Mestre chega na vitrine da conta dele
+  var MOLDURAS_DA_FICHA = MOLDURAS.concat(['mestre',             // a do Mestre chega na vitrine da conta dele
+                                           'arena']);            // 10/10: a do Campeão da Arena — ganha no Torneio, não se compra (docs/TORNEIO.md)
   // 04/10: a 'mestre' (Chama do Mestre) não é entrega da loja — só a conta do Mestre a tem, pelo servidor
   // ...mas CHEGA na vitrine dessa conta: a ficha aceita as da loja e as do Mestre (o filtro só com AURAS a jogava fora)
   var AURAS_DA_FICHA = AURAS.concat(['mestre']);

@@ -3987,9 +3987,19 @@ var JOGO = (typeof window !== 'undefined')
   var molduraDoHeroi = 'auto';       // 08/10: a moldura escolhida na ficha ('auto' = a do título)
   function pendura(nome, titulo, brasaTier, guilda) {
     // o herói nunca leva marca de grupo (ela é do PARCEIRO); leva o brilho
+    // 10/10: a minha guilda no Torneio (campeã vigente, os títulos) entra na placa dela — Hub.guildaCampea
+    if (guilda && guildaTorneioDoHeroi) {
+      guilda = { nome: guilda.nome, emblema: guilda.emblema, campea: guildaTorneioDoHeroi.campea, titulos: guildaTorneioDoHeroi.titulos };
+    }
     penduraEm(heroi, nome, titulo, brasaTier, guilda, null,
               brilhoDoNome(nome, souOMestre()), molduraDoHeroi, arenaDoHeroi);
   }
+  var guildaTorneioDoHeroi = null;
+  Hub.guildaCampea = function (g) {
+    guildaTorneioDoHeroi = (g && typeof g === 'object') ? { campea: g.campea === true, titulos: Math.max(0, Math.min(5, Math.floor(Number(g.titulos) || 0))) } : null;
+    if (scene && nomeJogador) pendura(nomeJogador, tituloJogador, brasaDoHeroi, guildaDoHeroi);
+    return guildaTorneioDoHeroi;
+  };
   /* 10/10: o que a MINHA plaquinha carrega do Torneio da Arena — {n, vigente} (a HUD lê de JOGO.Torneio.meu();
    * o dos outros chega no perfil, carimbado pelo Relé). Só muda o desenho quando a moldura escolhida é a 'arena'. */
   var arenaDoHeroi = null;

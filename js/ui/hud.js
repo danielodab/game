@@ -668,6 +668,12 @@ var JOGO = (typeof window !== 'undefined')
     pedidoEl.setAttribute('role', 'status');
     pedidoEl.setAttribute('aria-live', 'polite');
     root.appendChild(pedidoEl);
+    // 10/10: a CHAMADA do Torneio da Arena — outro cartão fora das telas e por cima das fichas: enquanto a luta
+    // está sendo chamada ele não some, esteja o jogador onde estiver (pintaChamada)
+    torneioEl = el('div', 'ui-torneio');
+    torneioEl.setAttribute('role', 'alert');
+    torneioEl.setAttribute('aria-live', 'assertive');
+    root.appendChild(torneioEl);
     document.addEventListener('visibilitychange', voltaDoFundo);
     window.addEventListener('focus', voltaDoFundo);
     window.addEventListener('pageshow', voltaDoFundo);
@@ -1873,6 +1879,7 @@ var JOGO = (typeof window !== 'undefined')
         painel.appendChild(el('p', 'hub-nota',
           tr('<b>Desafio amistoso</b>: toque em alguém na praça (no mapa da praça; a coroa não muda). <b>Ranqueado</b>: inscreva a sua dupla no quadro e espere um desafio — ou desafie um inscrito.')));
         painelArena(painel);          // 14/09: o quadro de inscritos da Arena
+        painelTorneio(painel);        // 10/10: o Torneio da Arena (a segunda aba da ficha)
         // 11/09 (revisão): a volta para a ficha do duelo pela Rede que ficou para trás
         var deA = safe(function () { return Dl().estado(); }, null);
         if (deA && (deA.fase === 'escolhendo' || deA.fase === 'comprometido' || deA.fase === 'revelado')) {
@@ -2403,6 +2410,7 @@ var JOGO = (typeof window !== 'undefined')
     ouro: tr('moedas de ouro girando em espiral, uma coroa de sol no chão e brilhos que piscam em volta do corpo')
   };
   // 08/10: as molduras da plaquinha — as dos títulos (automáticas) e as premium (da loja)
+  var MOLDURA_CAMPEAO = tr('Campeão da Arena');      // 10/10: a do Torneio (a vitrine a chama 'arena'; a automática do pódio é a "da Arena")
   var MOLDURA_PT = { auto: tr('Automática (a do título)'), arena: tr('da Arena'), eco: tr('do Eco'), chefe: tr('dos Chefes'), classe: tr('do pódio de classe'),
                      ouro: tr('Dourada'), rubi: tr('de Rubi'), esmeralda: tr('de Esmeralda'), obsidiana: tr('de Obsidiana'),
                      mestre: tr('do Mestre') };
@@ -2764,15 +2772,28 @@ var JOGO = (typeof window !== 'undefined')
                    'btn-mini char-aura-b char-mol-b' + (atual ? '' : ' is-on'), function () { if (atual) escolhe(null, ''); });
       b0.setAttribute('data-moldura', 'auto');
       fila.appendChild(b0);
-      v.molduras.todas.filter(function (m) { return tem.indexOf(m.id) >= 0; }).forEach(function (m) {
-        var nome = MOLDURA_PT[m.id] || m.nome;
-        var b = btn('<span class="char-mol-cor is-' + m.id + '"></span>' + esc(m.nome),
+      /* 10/10 — a do CAMPEÃO DA ARENA (docs/TORNEIO.md): não é da loja — vem com o primeiro torneio vencido em
+       * chave de 8 ou 16 e fica na conta para sempre; a vitrine a chama de 'arena'. O grau (I, II, III) sai das
+       * conquistas. Se a vitrine ainda não a lista mas o Torneio diz que a conta a tem, o botão aparece do mesmo
+       * jeito (quem confere a posse na hora de escolher é o servidor). */
+      var arP = safe(function () { return JOGO.Torneio.arenaDoPerfil(); }, null) || { n: 0, vigente: false, moldura: false };
+      var grauA = safe(function () { return JOGO.Torneio.grau(Math.max(1, arP.n)); }, 1) || 1;
+      var lista = v.molduras.todas.filter(function (m) { return tem.indexOf(m.id) >= 0; });
+      if ((tem.indexOf('arena') >= 0 || arP.moldura) && !lista.some(function (m) { return m.id === 'arena'; })) {
+        lista.push({ id: 'arena', nome: 'Campeão da Arena' });
+      }
+      lista.forEach(function (m) {
+        var daArena = m.id === 'arena';
+        var nome = daArena ? MOLDURA_CAMPEAO + ' ' + ['I', 'I', 'II', 'III'][grauA] : (MOLDURA_PT[m.id] || m.nome);
+        var b = btn('<span class="char-mol-cor is-' + (daArena ? 'campeao' + grauA : m.id) + '"></span>' + esc(daArena ? nome : m.nome),
           'btn-mini char-aura-b char-mol-b' + (atual === m.id ? ' is-on' : ''), function () { if (atual !== m.id) escolhe(m.id, nome); });
         b.setAttribute('data-moldura', m.id);
+        if (daArena) b.title = tr('{n} conquista(s) no Torneio da Arena{a}', { n: arP.n, a: arP.vigente ? tr(' · campeão vigente (o louro)') : '' });
         fila.appendChild(b);
       });
       cx.appendChild(fila);
-      var faltam = v.molduras.todas.length - tem.length;
+      // as que faltam são as da LOJA que a conta não tem (a do Campeão da Arena não se compra: fica fora da conta)
+      var faltam = v.molduras.todas.filter(function (m) { return m.id !== 'arena' && tem.indexOf(m.id) < 0; }).length;
       var dica = el('p', 'inv-dica', (doTitulo
         ? tr('Com o título de agora a placa leva a moldura {a} sozinha. ', { a: esc(MOLDURA_PT[doTitulo] || doTitulo) })
         : tr('Sem título de pódio, a placa é a de sempre. ')) +
@@ -6628,7 +6649,27 @@ var JOGO = (typeof window !== 'undefined')
         var ganhos = catal.filter(function (t) { return t.ganho; });
         // 03/10: e o pódio do Eco Primordial — sem o grupo 'eco' no menu o título ganho não tinha onde ser escolhido
         var porFonte = { pvm: tr('Ranking de XP (PvM)'), pvp: tr('Ranking PvP'), classe: tr('Ranking por classe'),
+                         arena: tr('Torneio da Arena'),
                          eco: tr('O Eco Primordial (pódio da semana)'), chefe: tr('Chefes, no difícil e sozinho') };
+        /* 10/10 — os títulos do TORNEIO DA ARENA (docs/TORNEIO.md): a escada das conquistas (Campeão, Bicampeão,
+         * Tricampeão, Lenda, Imortal) e o Campeão das Guildas, permanentes. A régua é a do js/core/titulos.js
+         * (fonte 'arena', lida com estado.arena = {pvp, guilda}); se o catálogo desta página ainda não os traz
+         * (o titulos.js de antes), a ficha mostra a escada mesmo assim, só para ler — escolher, só o que a régua dá. */
+        if (!catal.some(function (t) { return t.fonte === 'arena'; })) {
+          var arE = (estT && estT.arena) || { pvp: 0, guilda: 0 };
+          var escada = (Tt.ARENA && Tt.ARENA.length) ? Tt.ARENA
+            : [{ n: 1, titulo: 'Campeão da Arena' }, { n: 2, titulo: 'Bicampeão da Arena' }, { n: 3, titulo: 'Tricampeão da Arena' },
+               { n: 5, titulo: 'Lenda da Arena' }, { n: 10, titulo: 'Imortal da Arena' }];
+          escada.forEach(function (d) {
+            var alvoA = Math.max(1, Math.floor(Number(d.n != null ? d.n : d.conquistas) || 1));
+            catal.push({ titulo: d.titulo, fonte: 'arena', de: tr('Torneio da Arena'), ganho: false, emprestado: false, soLeitura: true,
+                         prog: Math.min(arE.pvp || 0, alvoA), alvo: alvoA,
+                         comoGanhar: tr('Vença {n} torneio(s) de PvP da Arena com chave de 4 ou mais.', { n: alvoA }) });
+          });
+          catal.push({ titulo: Tt.ARENA_GUILDA || 'Campeão das Guildas', fonte: 'arena', de: tr('Torneio das Guildas'), ganho: false, emprestado: false,
+                       soLeitura: true, prog: Math.min(arE.guilda || 0, 1), alvo: 1,
+                       comoGanhar: tr('Seja o representante da guilda campeã do torneio de guilda.') });
+        }
         /* 13/09, dono: "esse menu branco está ruim". O <select> nativo abria a
          * lista BRANCA do sistema; agora é um menu nosso, escuro, que abre
          * embaixo do botão (dentro da ficha, sem ser cortado pela rolagem). */
@@ -6687,14 +6728,17 @@ var JOGO = (typeof window !== 'undefined')
           listaT.appendChild(el('div', 'tit-grupo', tr('O Mestre escolhe')));
           listaT.appendChild(livreT);
         }
-        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
-          listaT.appendChild(el('div', 'tit-grupo', esc(porFonte[f])));
+        ['pvm', 'pvp', 'classe', 'arena', 'eco', 'chefe'].forEach(function (f) {
+          var gT = el('div', 'tit-grupo', esc(porFonte[f]));
+          gT.setAttribute('data-fonte', f);
+          listaT.appendChild(gT);
           // os pódios de classe são 21 (três por classe): no menu entram só os que já são seus
           var doGrupo = catal.filter(function (t) { return t.fonte === f && (f !== 'classe' || t.ganho); });
           if (!doGrupo.length) listaT.appendChild(itemT(null, tr('nenhum pódio de classe ainda'), '', false));
           doGrupo.forEach(function (t) {
             listaT.appendChild(itemT(t.titulo, titExibe(t.titulo),
-              t.ganho ? '' : (t.alvo ? t.prog + '/' + t.alvo + ' quedas' : tr('ainda não é seu')), t.ganho));
+              t.ganho ? '' : (t.alvo ? (f === 'arena' ? tr('{a}/{b} conquista(s)', { a: t.prog || 0, b: t.alvo }) : t.prog + '/' + t.alvo + ' quedas')
+                                     : tr('ainda não é seu')), t.ganho));
           });
         });
         botaoT.addEventListener('click', function () { abreListaT(listaT.hidden); });
@@ -6714,9 +6758,12 @@ var JOGO = (typeof window !== 'undefined')
         var comoT = document.createElement('details');
         comoT.className = 'tit-como';
         comoT.appendChild(el('summary', null, tr('Como ganhar cada título')));
-        ['pvm', 'pvp', 'classe', 'eco', 'chefe'].forEach(function (f) {
+        ['pvm', 'pvp', 'classe', 'arena', 'eco', 'chefe'].forEach(function (f) {
           comoT.appendChild(el('div', 'char-fonte',
             '<span class="char-fonte-nm">' + esc(porFonte[f]) + '</span>'));
+          if (f === 'arena') {
+            comoT.appendChild(el('p', 'inv-dica', tr('Cada torneio de PvP vencido com chave de 4 ou mais soma uma conquista, para sempre. Os títulos mais baixos seguem seus; a moldura Campeão da Arena vem com a primeira vitória em chave de 8 ou 16.')));
+          }
           if (f === 'classe') {
             comoT.appendChild(el('p', 'inv-dica', tr('Seja o 1º, 2º ou 3º de uma classe no ranking do site (a XP daquela classe): "Top 1 Xamã", "Top 2 Bárbaro"… Vale para cada classe e não acende o nome — o nome brilhante é só do ranking geral de XP, que soma a conta inteira.')));
           }
@@ -6725,6 +6772,9 @@ var JOGO = (typeof window !== 'undefined')
             linha.appendChild(el('span', 'tit-nm', esc(titExibe(t.titulo))));
             if (t.ganho) {
               linha.appendChild(el('span', 'tit-ok', t.emprestado ? tr('seu enquanto durar') : tr('seu para sempre')));
+            } else if (t.alvo && f === 'arena') {
+              linha.appendChild(el('span', 'tit-falta',
+                tr('<b>{prog}</b>/{alvo} conquista(s)', { prog: t.prog || 0, alvo: t.alvo })));
             } else if (t.alvo) {
               linha.appendChild(el('span', 'tit-falta',
                 tr('{a} · <b>{prog}</b>/{alvo} quedas', { a: esc(t.de), prog: t.prog, alvo: t.alvo })));
@@ -6881,7 +6931,7 @@ var JOGO = (typeof window !== 'undefined')
       resumoV.innerHTML = tr('Título: <b>{a}</b> · Aura: <b>{b}</b> · Moldura: <b>{c}</b>', {
         a: tituloVivo ? esc(titExibe(tituloVivo)) : tr('nenhum'),
         b: auraDaLoja() ? esc(AURA_PT[auraDaLoja()] || auraDaLoja()) : tr('nenhuma'),
-        c: molV ? esc(MOLDURA_PT[molV] || molV) : (molAuto ? esc(MOLDURA_PT[molAuto] || molAuto) + ' ' + tr('(do título)') : tr('a de sempre')) });
+        c: molV ? esc(molV === 'arena' ? MOLDURA_CAMPEAO : (MOLDURA_PT[molV] || molV)) : (molAuto ? esc(MOLDURA_PT[molAuto] || molAuto) + ' ' + tr('(do título)') : tr('a de sempre')) });
       caixa.appendChild(resumoV);
       caixa.appendChild(btn(tr('Customizar: título, aura e moldura'), 'btn-primary btn-block char-customizar', function () { openSheet('customizar'); }));
 
@@ -7655,7 +7705,8 @@ var JOGO = (typeof window !== 'undefined')
     banco: 'fc-banco', missoes: 'fc-missoes', mercado: 'fc-mercado', mercadoConfirma: 'fc-mercado',
     loteria: 'fc-loteria', placar: 'fc-placar', troca: 'fc-troca', contas: 'fc-contas',
     perfil: 'fc-perfil', duelo: 'fc-duelo', dueloRede: 'fc-duelo', escolheDupla: 'fc-duelo',
-    arenaQuadro: 'fc-duelo', sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
+    arenaQuadro: 'fc-duelo', torneio: 'fc-duelo', torneioCampeao: 'fc-duelo',
+    sussurro: 'fc-mensagem', battleMenu: 'fc-pausa', config: 'fc-config',
     confirm: 'fc-alerta',
     eco: 'fc-eco',  // 03/10, a junção com a frente do Eco Primordial
     santuario: 'fc-santuario'   // 03/10: o Santuário dos Elementos
@@ -7796,6 +7847,8 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'dueloRede') sheetDueloRede();                       // 11/09: o duelo pela Rede
     else if (name === 'escolheDupla') sheetEscolheDupla(arg);              // 14/09: escolha os dois heróis (Arena, Campo…)
     else if (name === 'arenaQuadro') sheetArenaQuadro();                   // 14/09: o quadro de inscritos da Arena
+    else if (name === 'torneio') sheetTorneio(arg);                        // 10/10: o Torneio da Arena
+    else if (name === 'torneioCampeao') sheetTorneioCampeao(arg);          // 10/10: a tela do campeão
     else if (name === 'sussurro') sheetSussurro(arg && arg.id, arg && arg.nome);   // 11/09: a mensagem particular
     else closeSheet();
     pintaPedido();                 // 06/10: o cartão da mesa de troca fechada sai quando uma ficha abre
@@ -8904,6 +8957,8 @@ var JOGO = (typeof window !== 'undefined')
         });
         tituloEstado = {
           chefes: chefes,
+          // 10/10: as conquistas do Torneio da Arena ({pvp, guilda}) — o MEU do torneio as traz; sem ele, zero
+          arena: safe(function () { var cq = JOGO.Torneio.meu().conquistas; return { pvp: cq.pvp || 0, guilda: cq.guilda || 0 }; }, { pvp: 0, guilda: 0 }),
           // 02/10: o título do pódio do Eco Primordial é da conta, para sempre (Progress.titulosEco)
           eco: safe(function () { return P().titulosEco ? P().titulosEco() : []; }, []),
           porClasse: porClasseEu,
@@ -15774,11 +15829,15 @@ var JOGO = (typeof window !== 'undefined')
     var rot = (op.rotulo || tr('Pronto')) + (pronto ? '' : ' (' + escolhaDupla.ids.length + '/' + precisa + ')');
     caixa.appendChild(btn(rot, 'btn-primary btn-block dupla-pronto' + (pronto ? '' : ' is-off'), function () {
       if (!pronto) { toast(precisa > 1 ? tr('Escolha os dois heróis.') : tr('Escolha o herói.')); return; }
-      var ev = safe(function () { return G().esperaVida(escolhaDupla.ids.slice()); }, null);
+      // 10/10: `semVida` — a inscrição no Torneio não espera a vida (a luta de lá começa com a vida cheia)
+      var ev = op.semVida ? null : safe(function () { return G().esperaVida(escolhaDupla.ids.slice()); }, null);
       if (ev) { toast(tr('{a} — ou beba uma poção.', { a: textoEsperaVida(ev) })); return; }
       if (typeof op.aoEscolher === 'function') safe(function () { return op.aoEscolher(escolhaDupla.ids.slice()); }, null);
     }));
-    caixa.appendChild(btn(tr('Cancelar'), 'btn-ghost btn-block', closeSheet));
+    // 10/10: `aoCancelar` — quem abriu a escolha de dentro de outra ficha (o Torneio) volta para ela
+    caixa.appendChild(btn(tr('Cancelar'), 'btn-ghost btn-block', function () {
+      if (typeof op.aoCancelar === 'function') op.aoCancelar(); else closeSheet();
+    }));
   }
   UI.escolheDupla = function (op) { openSheet('escolheDupla', op); };
   function cartaDupla(hid, ordem, aoTocar) {
@@ -15861,6 +15920,7 @@ var JOGO = (typeof window !== 'undefined')
     var A = Ar();
     var body = sheetShell(tr('Quadro da Arena'), tr('Quem espera desafio. Vale coroa: até {a} níveis entre os heróis mais fortes de cada lado.', { a: paridadeArena() }));
     sheetName = 'arenaQuadro';
+    abasArena(body, 'arenaQuadro');      // 10/10: a Arena tem duas abas — os desafios e o Torneio
     var caixa = el('div', 'ms-caixa arena-quadro');
     body.appendChild(caixa);
     var e = A ? A.estado() : { desligada: tr('A Arena não carregou.') };
@@ -16007,6 +16067,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   function tiqueArenaTela() {
     pintaSeloArena();
+    safe(function () { tiqueTorneioTela(); return true; }, null);     // 10/10: a chamada do Torneio e as contagens
     var agora = agoraArena();
     [].forEach.call(document.querySelectorAll('.arena-relogio[data-desde]'), function (x) {
       x.textContent = relogioTxt(agora - Number(x.getAttribute('data-desde')));
@@ -16023,6 +16084,569 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  /* ======================================================= 10/10: O TORNEIO DA ARENA NA TELA
+   * O dono: "a arena é o maior item do mapa e tem que ir além de procurar desafios, deve ter torneio; todo sábado
+   * terá torneio de PvP e todo domingo torneio de guilda (ou quando o adm marcar)". Quem decide é o servidor e o
+   * JOGO.Torneio (js/core/torneio.js) é o cliente dele (docs/TORNEIO.md é o contrato); aqui só se desenha:
+   *   · a ficha 'torneio' — a segunda aba da Arena (a primeira é o quadro de desafios): os próximos torneios
+   *     (as duas faixas do PvP e o de guilda) com a data no fuso do jogador, a contagem, as vagas que abrem aos
+   *     pares, o prêmio de agora e o do torneio cheio, os inscritos, inscrever/trocar/sair; depois do sorteio, a
+   *     CHAVE (uma coluna por rodada, quem passou, W.O./passe/sorteio marcados, a previsão de cada luta, a minha
+   *     linha destacada); para a guilda, os voluntários e a escolha do representante;
+   *   · a CHAMADA — um cartão fora das telas e por cima das fichas, que não some enquanto a luta está sendo
+   *     chamada: "Sua luta do torneio: contra X — Estou aqui", os 3 minutos correndo, quem já confirmou, e o
+   *     aviso de que a luta vai começar (a luta em si é o duelo de sempre, pela Arena);
+   *   · o fim: a tela do campeão (o prêmio recebido) e um aviso para os outros. */
+  function Tn() { return JOGO.Torneio || null; }
+  var torneioHud = { sel: null, sig: '', lutaSig: '', pendente: null, t: 0, guildaSig: '' };
+  var torneioEl = null;
+  function agoraTorneio() { return safe(function () { return Tn().agora(); }, Date.now()); }
+  function minhaContaTorneio() { return safe(function () { return JOGO.Sessao.contaId(); }, null); }
+  function doisT(n) { return (n < 10 ? '0' : '') + n; }
+  /* a data e a hora no fuso do APARELHO (o servidor marca em Brasília; quem joga de fora lê a sua hora) */
+  function quandoTorneio(ms) {
+    var d = new Date(ms);
+    var dias = [tr('dom'), tr('seg'), tr('ter'), tr('qua'), tr('qui'), tr('sex'), tr('sáb')];
+    return dias[d.getDay()] + ' ' + doisT(d.getDate()) + '/' + doisT(d.getMonth() + 1) + ' · ' + horaTorneio(ms);
+  }
+  function horaTorneio(ms) { var d = new Date(ms); return doisT(d.getHours()) + ':' + doisT(d.getMinutes()); }
+  function faltaTorneio(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return tr('{d} d {h} h', { d: d, h: h });
+    if (h > 0) return tr('{h} h {m} min', { h: h, m: m });
+    if (m > 0) return tr('{m} min', { m: m });
+    return tr('menos de 1 min');
+  }
+  function nomeTorneio(t) {
+    if (t.origem === 'mestre' && t.titulo) return t.titulo;
+    return t.tipo === 'guilda' ? tr('Torneio das Guildas')
+                               : tr('Torneio de PvP · nível {a} a {b}', { a: t.nivelMin, b: t.nivelMax });
+  }
+  /* "5 de 8 — enche e abrem mais 8": as vagas abrem aos pares (2 → 4 → 8 → 16, o teto) */
+  function textoVagas(t) {
+    var n = t.inscritos.length;
+    if (t.vagas >= 16) return n >= 16 ? tr('{n} de 16 — cheio', { n: n }) : tr('{n} de 16 — é o teto', { n: n });
+    return tr('{n} de {v} — enche e abrem mais {v}', { n: n, v: t.vagas });
+  }
+  function textoPremio(p, t, cheio) {
+    var partes = [];
+    if (p.barras) partes.push(tr('{n} barra(s) de ouro', { n: p.barras }));
+    if (p.vintens) partes.push(tr('{n} vinténs', { n: p.vintens }));
+    if (p.gemas) partes.push(tr('{n} Gema(s) Enterrada(s)', { n: p.gemas }));
+    if (t.tipo === 'guilda') {
+      if (p.xpGuilda) partes.push(tr('{n} XP para a guilda', { n: p.xpGuilda }));
+      if (!cheio) partes.push(tr('XP em dobro para todos os membros por 7 dias'));
+    } else {
+      if (p.conquista) partes.push(tr('conta como conquista (título)'));
+      if (p.moldura) partes.push(tr('a moldura Campeão da Arena'));
+    }
+    return partes.length ? partes.join(' · ') : tr('sem prêmio');
+  }
+  /* o que o torneio está fazendo agora, com a contagem (o <b> anda a cada segundo: tiqueTorneioTela) */
+  function linhaEstado(t) {
+    var agora = agoraTorneio();
+    if (t.estado === 'cancelado') return tr('Cancelado.');
+    if (t.estado === 'encerrado') return t.campeao ? tr('Encerrado — campeão: <b>{a}</b>', { a: esc(nomeNaChave(t, t.campeao)) }) : tr('Encerrado.');
+    if (t.estado === 'andamento') {
+      return tr('Em andamento — {a}', { a: esc(Tn().nomeDaRodada(t.chave ? t.chave.tamanho : 2, t.chave ? t.chave.rodada : 0)) });
+    }
+    if (t.estado === 'sorteado') {
+      return tr('Chave sorteada — começa em <b class="tor-rel" data-ate="{ms}">{a}</b>', { ms: t.inicioMs, a: faltaTorneio(t.inicioMs - agora) });
+    }
+    if (t.inscricaoAteMs > agora) {
+      return tr('Inscrições abertas — fecham em <b class="tor-rel" data-ate="{ms}">{a}</b>', { ms: t.inscricaoAteMs, a: faltaTorneio(t.inscricaoAteMs - agora) });
+    }
+    return tr('Inscrições fechadas — o sorteio sai em instantes.');
+  }
+  function nomeNaChave(t, p) {
+    if (!p) return '';
+    return (t.tipo === 'guilda' && p.guilda && p.guilda.nome) ? p.guilda.nome : p.nome;
+  }
+  /* as duas abas da Arena: o quadro de desafios e o torneio */
+  function abasArena(body, qual) {
+    var abas = el('div', 'abas-fila arena-abas');
+    [['arenaQuadro', tr('Desafios')], ['torneio', tr('Torneio')]].forEach(function (a) {
+      var on = qual === a[0];
+      var b = btn(a[1], 'btn-tab' + (on ? ' is-on' : ''), function () { if (!on) openSheet(a[0]); });
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.setAttribute('data-aba', a[0]);
+      abas.appendChild(b);
+    });
+    body.appendChild(abas);
+  }
+  /* o bloco do painel da Arena (o lugar da praça): o próximo torneio numa linha e a porta para a ficha */
+  function painelTorneio(p) {
+    var T = Tn();
+    if (!T) return;
+    var caixa = el('div', 'arena-bloco tor-bloco');
+    p.appendChild(caixa);
+    var e = T.estado();
+    if (!e.desligado) {
+      safe(function () { T.busca(); return true; }, null);
+      var prox = T.proximos();
+      prox.slice(0, 3).forEach(function (t) {
+        caixa.appendChild(el('p', 'hub-nota tor-linha',
+          '🏆 <b>' + esc(nomeTorneio(t)) + '</b> · ' + esc(quandoTorneio(t.inicioMs)) + ' · ' + esc(tr('{n} de {v}', { n: t.inscritos.length, v: t.vagas }))));
+      });
+      if (!prox.length) caixa.appendChild(el('p', 'hub-nota tor-linha', e.semRota ? esc(e.erro || '') : tr('🏆 Torneio todo sábado (PvP) e todo domingo (guildas), às 14:00 de Brasília.')));
+    }
+    caixa.appendChild(btn(tr('Torneio da Arena'), 'btn-gold btn-block arena-torneio', function () { openSheet('torneio'); }));
+  }
+
+  // ---- a ficha do torneio
+  function sheetTorneio(arg) {
+    var T = Tn();
+    if (arg && typeof arg === 'object' && arg.id !== undefined) torneioHud.sel = arg.id;
+    else if (arg === 'lista') torneioHud.sel = null;
+    // o redesenho no lugar (arg === true: a lista mudou com a ficha aberta) não joga a rolagem para o topo
+    var rolagem = (arg === true && sheetEl) ? safe(function () { return sheetEl.querySelector('.sheet-body').scrollTop; }, 0) : 0;
+    var body = sheetShell(tr('Torneio da Arena'), tr('Todo sábado, PvP em duas faixas de nível; todo domingo, as guildas. As chaves são sorteadas e ficam públicas no site.'));
+    sheetName = 'torneio';
+    abasArena(body, 'torneio');
+    var caixa = el('div', 'ms-caixa tor-ficha');
+    body.appendChild(caixa);
+    if (!T) { caixa.appendChild(el('p', 'empty', tr('O Torneio não carregou.'))); return; }
+    var e = T.estado();
+    if (e.desligado) { caixa.appendChild(el('p', 'empty arena-off', esc(e.desligado))); return; }
+    if (!e.lido) {
+      caixa.appendChild(el('p', 'empty', e.erro ? esc(e.erro) : tr('Lendo os torneios…')));
+      if (arg !== true) atualizaTorneio(true);
+      return;
+    }
+    var sel = torneioHud.sel != null ? T.torneio(torneioHud.sel) : null;
+    if (torneioHud.sel != null && !sel) torneioHud.sel = null;
+    if (sel) fichaDeUmTorneio(caixa, sel, e);
+    else listaDeTorneios(caixa, e);
+    if (arg !== true) atualizaTorneio(false);
+    if (rolagem) safe(function () { sheetEl.querySelector('.sheet-body').scrollTop = rolagem; return true; }, null);
+  }
+  function atualizaTorneio(forca) {
+    var T = Tn();
+    if (!T) return;
+    torneioHud.t = Date.now();
+    safe(function () { T.busca(forca); return true; }, null);
+    safe(function () { T.consulta(); return true; }, null);
+  }
+  function listaDeTorneios(caixa, e) {
+    var T = Tn();
+    var prox = T.proximos();
+    if (!prox.length) {
+      caixa.appendChild(el('p', 'empty', e.erro ? esc(e.erro) : tr('Nenhum torneio marcado agora. O próximo aparece aqui assim que o servidor o criar.')));
+    }
+    prox.forEach(function (t) { caixa.appendChild(cartaoTorneio(t, e)); });
+    var ult = T.encerrados();
+    if (ult.length) {
+      caixa.appendChild(el('h3', 'bk-tit', tr('Últimos campeões')));
+      var lista = el('div', 'aq-lista tor-ultimos');
+      ult.forEach(function (t) {
+        var ln = el('button', 'aq-linha tor-ultimo');
+        ln.type = 'button';
+        ln.setAttribute('data-torneio', String(t.id));
+        var tx = el('div', 'aq-tx');
+        tx.appendChild(el('b', 'aq-nome', '🏆 ' + esc(t.campeao ? nomeNaChave(t, t.campeao) : tr('sem campeão'))));
+        tx.appendChild(el('span', 'aq-desde', esc(nomeTorneio(t)) + ' · ' + esc(quandoTorneio(t.inicioMs))));
+        ln.appendChild(tx);
+        ln.appendChild(el('span', 'aq-tag', tr('ver a chave')));
+        tap(ln, function () { openSheet('torneio', { id: t.id }); });
+        lista.appendChild(ln);
+      });
+      caixa.appendChild(lista);
+    }
+  }
+  /* o cartão de um torneio na lista: quando, a contagem, as vagas, os dois prêmios, a minha situação */
+  function cartaoTorneio(t, e) {
+    var T = Tn();
+    var c = el('div', 'tor-cartao is-' + t.tipo + ' is-' + t.estado);
+    c.setAttribute('data-torneio', String(t.id));
+    c.appendChild(el('h3', 'tor-tit', '🏆 ' + esc(nomeTorneio(t))));
+    c.appendChild(el('p', 'tor-quando', '<b>' + esc(quandoTorneio(t.inicioMs)) + '</b> <small>' + tr('(no horário do seu aparelho)') + '</small>'));
+    c.appendChild(el('p', 'tor-estado', linhaEstado(t)));
+    var tam = t.chave ? t.chave.tamanho : T.tamanhoCom(t.inscritos.length);
+    if (t.estado === 'inscricoes') c.appendChild(el('p', 'tor-vagas', tr('Vagas: <b>{a}</b>', { a: esc(textoVagas(t)) })));
+    else c.appendChild(el('p', 'tor-vagas', tr('Chave de <b>{a}</b> · {n} inscrito(s)', { a: tam, n: t.inscritos.length })));
+    c.appendChild(el('p', 'tor-premio', tr('Prêmio de agora (chave de {a}): <b>{b}</b>', { a: tam, b: esc(textoPremio(t.premio, t, false)) })));
+    if (tam < 16 && t.estado === 'inscricoes') {
+      var cheio = T.premioDe(16);
+      if (t.tipo === 'guilda' && !t.premio.barras) { cheio.barras = 0; cheio.vintens = 0; cheio.gemas = 0; }
+      c.appendChild(el('p', 'tor-premio is-cheio', tr('Com o torneio cheio (16): <b>{a}</b>', { a: esc(textoPremio(cheio, t, true)) })));
+    }
+    blocoMinhaVez(c, t, e);
+    c.appendChild(btn(t.chave ? tr('Ver a chave e os inscritos') : tr('Ver os inscritos ({n})', { n: t.inscritos.length }),
+      'btn-ghost btn-block tor-ver', function () { openSheet('torneio', { id: t.id }); }));
+    return c;
+  }
+  /* a MINHA situação num torneio: inscrito (trocar/sair), inscrever, ou — no de guilda — os voluntários */
+  function blocoMinhaVez(c, t, e) {
+    var T = Tn();
+    if (t.tipo === 'guilda') { blocoGuildaTorneio(c, t, e); return; }
+    var minha = T.inscricao(t.id);
+    var aberto = t.estado === 'inscricoes' && t.inscricaoAteMs > agoraTorneio();
+    if (minha) {
+      c.appendChild(el('p', 'hub-nota tor-inscrito', tr('Você está inscrito com <b>{a}</b>.', { a: esc(nomesDupla(minha.classes)) })));
+      if (aberto) {
+        var duo = el('div', 'pn-duplo');
+        duo.appendChild(btn(tr('Trocar a dupla'), 'btn-ghost tor-trocar', function () { pedeInscricaoTorneio(t); }));
+        duo.appendChild(btn(tr('Sair do torneio'), 'btn-warn tor-sair', function () {
+          confirmSheet(tr('Sair do torneio?'), tr('A sua vaga fica livre. Você pode se inscrever de novo até o fechamento das inscrições.'), function () {
+            T.sair(t.id).then(function (r) {
+              toast(r.ok ? tr('Você saiu do torneio.') : T.textoRecusa(r), r.ok ? 'good' : undefined);
+              openSheet('torneio');
+            });
+          }, { sim: tr('Sair'), simCls: 'btn-warn', aoCancelar: function () { openSheet('torneio'); } });
+        }));
+        c.appendChild(duo);
+      }
+      return;
+    }
+    if (!aberto) return;
+    if (t.inscritos.length >= 16) { c.appendChild(el('p', 'hub-nota', tr('O torneio está cheio: os 16 lugares já têm dono.'))); return; }
+    var nv = forteDeIds(selHeroes);
+    var cabe = T.cabeNaFaixa(t, nv);
+    if (!cabe) {
+      c.appendChild(el('p', 'hub-nota tor-fora', tr('A dupla escolhida na praça chega a <b>nv {nv}</b>: esta chave é do nível {a} ao {b}. Com outra dupla pode dar — quem confere é o servidor.', { nv: nv, a: t.nivelMin, b: t.nivelMax })));
+    }
+    c.appendChild(btn(tr('Inscrever minha dupla'), (cabe ? 'btn-gold' : 'btn-ghost') + ' btn-block tor-inscrever', function () { pedeInscricaoTorneio(t); }));
+  }
+  function pedeInscricaoTorneio(t) {
+    var T = Tn();
+    var minha = T.inscricao(t.id);
+    openSheet('escolheDupla', { titulo: tr('Inscrição no Torneio'), rotulo: tr('Inscrever a dupla'), semVida: true,
+      sub: tr('Escolha os dois heróis, em ordem. Vale o nível do mais forte: esta chave é do nível {a} ao {b}. A luta do torneio começa com a vida cheia.', { a: t.nivelMin, b: t.nivelMax }),
+      inicial: (minha && minha.herois.length) ? minha.herois.slice() : selHeroes.slice(),
+      aoCancelar: function () { openSheet('torneio'); },
+      aoEscolher: function (ids) {
+        return T.inscrever(t.id, ids).then(function (r) {
+          if (r.ok) { toast(tr('A sua dupla está no torneio. Esteja na praça na hora: você terá 3 minutos para dizer "estou aqui".'), 'good'); openSheet('torneio'); }
+          else toast(T.textoRecusa(r));
+          return r;
+        });
+      } });
+  }
+  /* O TORNEIO DE GUILDA: qualquer membro de nível 20 a 30 se voluntaria com a dupla; o líder ou um oficial
+   * escolhe o representante entre os voluntários (sem escolha, vai o voluntário de maior nível) */
+  function blocoGuildaTorneio(c, t, e) {
+    var T = Tn();
+    var g = e.meu.guilda;
+    var aberto = t.estado === 'inscricoes' && t.inscricaoAteMs > agoraTorneio();
+    if (!g || String(g.torneio) !== String(t.id)) {
+      if (aberto) c.appendChild(el('p', 'hub-nota tor-fora', tr('Uma vaga por guilda: quem é de uma guilda se voluntaria com a dupla, e o líder ou um oficial escolhe quem a representa. Entre numa guilda para participar.')));
+      return;
+    }
+    var eu = minhaContaTorneio();
+    var cx = el('div', 'tor-guilda');
+    c.appendChild(cx);
+    cx.appendChild(el('p', 'hub-nota', g.voluntarios.length
+      ? tr('Voluntários da sua guilda: <b>{n}</b>. {a}', { n: g.voluntarios.length, a: g.representante != null ? tr('O representante já foi escolhido.') : tr('Sem escolha, vai o voluntário de maior nível.') })
+      : tr('Ninguém da sua guilda se voluntariou ainda. Guilda sem voluntário não entra.')));
+    var lista = el('div', 'aq-lista tor-voluntarios');
+    g.voluntarios.forEach(function (v) {
+      var rep = g.representante != null && g.representante === v.conta;
+      var ln = el('div', 'aq-linha tor-voluntario' + (rep ? ' is-eu' : ''));
+      ln.setAttribute('data-conta', String(v.conta));
+      ln.appendChild(art('portrait', [((v.classes[0] || {}).classId) || 'sumo', { element: 'neutro', size: 48 }], 36));
+      var tx = el('div', 'aq-tx');
+      tx.appendChild(el('b', 'aq-nome', esc(v.nome) + ' <small>nv ' + (v.nivel || '?') + (v.conta === eu ? ' · ' + tr('você') : '') + '</small>'));
+      tx.appendChild(el('span', 'aq-dupla', esc(nomesDupla(v.classes))));
+      ln.appendChild(tx);
+      if (rep) ln.appendChild(el('span', 'aq-tag', tr('representante')));
+      if (g.possoEscolher && aberto) {
+        ln.appendChild(btn(rep ? tr('Desfazer') : tr('Escolher'), 'btn-mini ' + (rep ? 'btn-ghost' : 'btn-gold') + ' tor-escolher', function () {
+          T.representante(t.id, rep ? null : v.conta).then(function (r) {
+            toast(r.ok ? (rep ? tr('Escolha desfeita: sem escolha, vai o voluntário de maior nível.') : tr('{a} representa a guilda no torneio.', { a: v.nome })) : T.textoRecusa(r), r.ok ? 'good' : undefined);
+            if (sheetName === 'torneio') sheetTorneio(true);
+          });
+        }));
+      }
+      lista.appendChild(ln);
+    });
+    if (g.voluntarios.length) cx.appendChild(lista);
+    if (!aberto) return;
+    if (g.souVoluntario) {
+      var duo = el('div', 'pn-duplo');
+      duo.appendChild(btn(tr('Trocar a dupla'), 'btn-ghost tor-trocar', function () { pedeVoluntario(t); }));
+      duo.appendChild(btn(tr('Retirar meu nome'), 'btn-warn tor-desvoluntariar', function () {
+        T.desvoluntariar(t.id).then(function (r) {
+          toast(r.ok ? tr('Você não é mais voluntário.') : T.textoRecusa(r), r.ok ? 'good' : undefined);
+          if (sheetName === 'torneio') sheetTorneio(true);
+        });
+      }));
+      cx.appendChild(duo);
+    } else {
+      cx.appendChild(btn(tr('Voluntariar minha dupla'), 'btn-gold btn-block tor-voluntariar', function () { pedeVoluntario(t); }));
+    }
+  }
+  function pedeVoluntario(t) {
+    var T = Tn();
+    openSheet('escolheDupla', { titulo: tr('Voluntário da guilda'), rotulo: tr('Voluntariar a dupla'), semVida: true,
+      sub: tr('Escolha os dois heróis, em ordem. O herói mais forte tem de estar entre o nível {a} e o {b}. Se a guilda te escolher, é você quem luta por ela.', { a: t.nivelMin, b: t.nivelMax }),
+      inicial: selHeroes.slice(),
+      aoCancelar: function () { openSheet('torneio'); },
+      aoEscolher: function (ids) {
+        return T.voluntariar(t.id, ids).then(function (r) {
+          if (r.ok) { toast(tr('Você é voluntário da guilda no torneio.'), 'good'); openSheet('torneio'); }
+          else toast(T.textoRecusa(r));
+          return r;
+        });
+      } });
+  }
+  /* um torneio aberto: os inscritos e, depois do sorteio, a chave */
+  function fichaDeUmTorneio(caixa, t, e) {
+    var T = Tn();
+    var eu = minhaContaTorneio();
+    caixa.appendChild(btn(tr('‹ Todos os torneios'), 'btn-ghost tor-voltar', function () { openSheet('torneio', 'lista'); }));
+    var cab = el('div', 'tor-cartao is-' + t.tipo + ' is-' + t.estado + ' is-aberto');
+    cab.setAttribute('data-torneio', String(t.id));
+    cab.appendChild(el('h3', 'tor-tit', '🏆 ' + esc(nomeTorneio(t))));
+    cab.appendChild(el('p', 'tor-quando', '<b>' + esc(quandoTorneio(t.inicioMs)) + '</b> <small>' + tr('(no horário do seu aparelho)') + '</small>'));
+    cab.appendChild(el('p', 'tor-estado', linhaEstado(t)));
+    if (t.estado === 'encerrado' && t.campeao) {
+      cab.appendChild(el('p', 'tor-premio', tr('Prêmio do campeão: <b>{a}</b>', { a: esc(textoPremio(t.premio, t, false)) })));
+    }
+    caixa.appendChild(cab);
+    if (t.chave) {
+      caixa.appendChild(el('h3', 'bk-tit', tr('A chave ({a})', { a: t.chave.tamanho })));
+      caixa.appendChild(el('p', 'inv-dica tor-dica', tr('Cada rodada começa 2 minutos depois de a anterior acabar; a hora de cada luta é a previsão. Deslize para os lados para ver as rodadas.')));
+      caixa.appendChild(desenhaChave(t, eu));
+    }
+    caixa.appendChild(el('h3', 'bk-tit', tr('Inscritos ({n})', { n: t.inscritos.length })));
+    var lista = el('div', 'aq-lista tor-inscritos');
+    if (!t.inscritos.length) lista.appendChild(el('p', 'empty', tr('Ninguém inscrito ainda. Seja o primeiro!')));
+    t.inscritos.forEach(function (x) {
+      var ln = el('div', 'aq-linha' + (x.conta === eu ? ' is-eu' : ''));
+      ln.setAttribute('data-conta', String(x.conta));
+      ln.appendChild(art('portrait', [((x.classes[0] || {}).classId) || 'sumo', { element: 'neutro', size: 48 }], 36));
+      var tx = el('div', 'aq-tx');
+      tx.appendChild(el('b', 'aq-nome', esc(x.nome) + ' <small>nv ' + (x.nivel || '?') + '</small>'));
+      tx.appendChild(el('span', 'aq-dupla', esc(nomesDupla(x.classes))));
+      if (x.guilda && x.guilda.nome) tx.appendChild(el('span', 'aq-desde', '⚑ ' + esc(x.guilda.nome)));
+      ln.appendChild(tx);
+      if (x.conta === eu) ln.appendChild(el('span', 'aq-tag', tr('você')));
+      lista.appendChild(ln);
+    });
+    caixa.appendChild(lista);
+    if (t.estado !== 'encerrado' && t.estado !== 'cancelado') {
+      var minha = el('div', 'tor-cartao tor-minha');
+      blocoMinhaVez(minha, t, e);
+      if (minha.firstChild) caixa.appendChild(minha);
+    }
+  }
+  /* A CHAVE: uma coluna por rodada (rola para os lados no celular), cada luta com os dois lados, quem passou
+   * marcado, como foi decidida (W.O., passe, sorteio, desistência) ou a previsão da hora, e a minha linha destacada */
+  function desenhaChave(t, eu) {
+    var T = Tn();
+    var cx = el('div', 'tor-chave');
+    cx.tabIndex = 0;                                   // quem navega pelo teclado rola a chave com as setas
+    cx.setAttribute('role', 'group');
+    cx.setAttribute('aria-label', tr('A chave do torneio'));
+    t.chave.rodadas.forEach(function (rd, ri) {
+      var naVez = t.estado === 'andamento' && ri === t.chave.rodada;
+      var col = el('div', 'tor-col' + (naVez ? ' is-vez' : ''));
+      col.setAttribute('data-rodada', String(ri));
+      col.appendChild(el('div', 'tor-col-tit', esc(T.nomeDaRodada(t.chave.tamanho, ri))));
+      rd.forEach(function (l) { col.appendChild(lutaDaChave(t, l, eu)); });
+      cx.appendChild(col);
+    });
+    if (t.campeao) {
+      var fim = el('div', 'tor-col tor-col-campeao');
+      fim.appendChild(el('div', 'tor-col-tit', tr('Campeão')));
+      fim.appendChild(el('div', 'tor-campeao' + (eu != null && t.campeao.conta === eu ? ' is-eu' : ''), '🏆 ' + esc(nomeNaChave(t, t.campeao))));
+      cx.appendChild(fim);
+    }
+    return cx;
+  }
+  var COMO_LUTA = null;
+  function lutaDaChave(t, l, eu) {
+    if (!COMO_LUTA) COMO_LUTA = { luta: tr('na luta'), wo: tr('W.O.'), bye: tr('passe livre'), sorteio: tr('por sorteio'), desistencia: tr('desistência') };
+    var meu = eu != null && ((l.a && l.a.conta === eu) || (l.b && l.b.conta === eu));
+    var d = el('div', 'tor-luta is-' + l.estado + (meu ? ' is-eu' : '') + (l.como ? ' is-' + l.como : ''));
+    d.setAttribute('data-pos', String(l.pos));
+    ['a', 'b'].forEach(function (lado) {
+      var p = l[lado];
+      var venceu = l.vencedor === lado, caiu = !!l.vencedor && !venceu;
+      var passe = !p && l.rodada === 0 && (l.como === 'bye' || l.estado === 'decidida');
+      var ln = el('div', 'tor-lado' + (venceu ? ' is-venceu' : '') + (caiu ? ' is-caiu' : '') + (!p ? ' is-vazio' : '') +
+                         (p && eu != null && p.conta === eu ? ' is-meu' : ''));
+      var nome = p ? nomeNaChave(t, p) : (passe ? tr('— passe —') : tr('a definir'));
+      ln.appendChild(el('span', 'tor-nome', esc(nome) + ((p && t.tipo === 'guilda' && p.guilda && p.guilda.nome) ? ' <small>' + esc(p.nome) + '</small>' : '')));
+      if (venceu) ln.appendChild(el('span', 'tor-ok', '✔'));
+      d.appendChild(ln);
+    });
+    var pe = '';
+    if (l.estado === 'decidida') pe = COMO_LUTA[l.como] || '';
+    else if (l.estado === 'chamada') pe = tr('chamando…');
+    else if (l.estado === 'luta') pe = tr('lutando agora');
+    else if (l.previstoMs) pe = tr('previsão {a}', { a: horaTorneio(l.previstoMs) });
+    d.appendChild(el('div', 'tor-pe', esc(pe)));
+    return d;
+  }
+
+  // ---- a chamada: o cartão que não some
+  function pintaChamada() {
+    if (!torneioEl) return;
+    var T = Tn();
+    var l = T ? safe(function () { return T.luta(); }, null) : null;
+    // a luta já abriu: o cartão sai da frente enquanto se luta (volta se a luta do torneio seguir de pé depois)
+    var some = !l || (l.entregue && (current === 'battle' || current === 'duelFim'));
+    var sig = some ? '' : [l.torneio, l.rodada, l.pos, l.presente, l.elePresente, l.did, l.entregue, l.bloqueio, l.prazoMs].join('|');
+    if (sig !== torneioHud.lutaSig) { torneioHud.lutaSig = sig; desenhaChamada(some ? null : l); }
+    var rel = torneioEl.querySelector('.tc-rel');
+    if (rel) rel.textContent = relogioTxt(Number(rel.getAttribute('data-prazo')) - agoraTorneio());
+  }
+  function desenhaChamada(l) {
+    clear(torneioEl);
+    if (!l) { torneioEl.className = 'ui-torneio'; return; }
+    var T = Tn();
+    torneioEl.className = 'ui-torneio is-on' + (l.did ? ' is-pronta' : (l.presente ? ' is-presente' : ' is-chamando'));
+    var ad = l.adversario || { classes: [] };
+    var t = T.torneio(l.torneio);
+    var cab = el('div', 'pd-cab');
+    cab.appendChild(art('portrait', [((ad.classes[0] || {}).classId) || 'sumo', { element: 'neutro', size: 48 }], 40));
+    var tx = el('div', 'pd-tx');
+    tx.appendChild(el('span', 'pd-tit', tr('Sua luta do torneio: contra <b>{a}</b>', { a: esc(ad.nome) })));
+    var rodada = t && t.chave ? T.nomeDaRodada(t.chave.tamanho, l.rodada) : '';
+    tx.appendChild(el('span', 'pd-sub', (rodada ? esc(rodada) + ' · ' : '') + (ad.nivel ? 'nv ' + ad.nivel + ' · ' : '') + esc(nomesDupla(ad.classes))));
+    cab.appendChild(tx);
+    if (!l.did) {
+      var rel = el('span', 'pd-rel tc-rel', relogioTxt(l.prazoMs - agoraTorneio()));
+      rel.setAttribute('data-prazo', String(l.prazoMs));
+      cab.appendChild(rel);
+    }
+    torneioEl.appendChild(cab);
+    if (l.did) {
+      var txt = l.bloqueio === 'fora-da-praca' ? tr('Os dois confirmaram: a luta está pronta. <b>Volte à praça</b> para ela abrir.')
+              : l.bloqueio === 'ocupado' ? tr('Os dois confirmaram: a luta está pronta. Feche o duelo aberto para ela começar.')
+              : tr('Os dois confirmaram — <b>a luta vai começar!</b> Vida cheia para os dois lados.');
+      torneioEl.appendChild(el('p', 'pd-nota tc-nota', txt));
+      return;
+    }
+    torneioEl.appendChild(barraPrazo(l.prazoMs, agoraTorneio));
+    if (!l.presente) {
+      torneioEl.appendChild(el('p', 'pd-nota tc-nota', (l.elePresente ? tr('<b>{a} já confirmou.</b> ', { a: esc(ad.nome) }) : '') +
+        tr('Você tem 3 minutos para dizer que está aqui. Sem a sua confirmação, a vitória vai para o outro lado por W.O.')));
+      var acts = el('div', 'pd-acts');
+      var bAqui = btn(tr('Estou aqui'), 'btn-primary tc-aqui', function () {
+        bAqui.classList.add('is-off');
+        T.presente(l.torneio).then(function (r) {
+          if (!r.ok) { bAqui.classList.remove('is-off'); toast(T.textoRecusa(r)); }
+        });
+      });
+      acts.appendChild(bAqui);
+      torneioEl.appendChild(acts);
+    } else {
+      torneioEl.appendChild(el('p', 'pd-nota tc-nota', l.elePresente
+        ? tr('<b>Você confirmou.</b> {a} também — a luta abre em instantes.', { a: esc(ad.nome) })
+        : tr('<b>Você confirmou.</b> Esperando {a}… Se o prazo acabar sem a confirmação, você passa por W.O.', { a: esc(ad.nome) })));
+    }
+  }
+
+  // ---- o fim: a tela do campeão e o aviso para os outros
+  function aoTorneioCampeao(t, quem) {
+    if (!t) return;
+    if (quem && quem.eu) {
+      torneioHud.pendente = t;
+      abreCampeaoPendente();
+      return;
+    }
+    var nome = t.campeao ? nomeNaChave(t, t.campeao) : '';
+    if (nome) toast(tr('🏆 {a} venceu o {b}!', { a: nome, b: nomeTorneio(t) }), 'good');
+  }
+  /* a tela do campeão abre na praça, sem passar por cima de outra ficha (espera a vez no tique) */
+  function abreCampeaoPendente() {
+    if (!torneioHud.pendente || current !== 'hub' || (sheetName && sheetName !== 'torneio')) return;
+    var t = torneioHud.pendente;
+    torneioHud.pendente = null;
+    openSheet('torneioCampeao', t);
+  }
+  function sheetTorneioCampeao(t) {
+    var T = Tn();
+    t = t || {};
+    var body = sheetShell(tr('Campeão do Torneio!'), esc(nomeTorneio(t)));
+    sheetName = 'torneioCampeao';
+    torneioHud.campeaoT = t;          // a lista e o MEU chegam em pedidos separados: a tela se refaz quando as conquistas chegam
+    var caixa = el('div', 'ms-caixa tor-campeao-ficha');
+    body.appendChild(caixa);
+    var p = t.premio || {};
+    var tam = t.chave ? t.chave.tamanho : 2;
+    caixa.appendChild(el('p', 'tor-trofeu', '🏆'));
+    caixa.appendChild(el('p', 'tor-campeao-txt', tr('Você venceu a chave de <b>{a}</b>. O prêmio já está na sua conta:', { a: tam })));
+    var lista = el('div', 'tor-premios');
+    function linha(txt) { lista.appendChild(el('div', 'tor-premio-linha', txt)); }
+    if (p.barras) linha(tr('<b>+{n}</b> barra(s) de ouro', { n: p.barras }));
+    if (p.vintens) linha(tr('<b>+{n}</b> vinténs', { n: p.vintens }));
+    if (p.gemas) linha(tr('<b>+{n}</b> Gema(s) Enterrada(s)', { n: p.gemas }));
+    if (t.tipo === 'guilda') {
+      if (p.xpGuilda) linha(tr('<b>+{n}</b> XP para a guilda', { n: p.xpGuilda }));
+      linha(tr('<b>XP em dobro</b> para todos os membros da guilda por 7 dias'));
+      linha(tr('O título <b>Campeão das Guildas</b> (em Customizar)'));
+      linha(tr('A placa da guilda com o filete da campeã até o próximo torneio de guilda'));
+    } else {
+      var m = T ? T.meu() : { conquistas: { pvp: 0 } };
+      if (p.conquista) linha(tr('Uma <b>conquista</b> a mais: são {n} — os títulos estão em Customizar', { n: Math.max(1, m.conquistas.pvp) }));
+      else linha(tr('Chave de 2 não conta como conquista: com 4 ou mais inscritos ela vale título.'));
+      if (p.moldura) linha(tr('A moldura <b>Campeão da Arena</b> (em Customizar › Moldura)'));
+      linha(tr('O <b>louro</b> do campeão vigente na sua plaquinha, até o próximo torneio desta faixa acabar'));
+    }
+    caixa.appendChild(lista);
+    caixa.appendChild(btn(tr('Customizar a plaquinha'), 'btn-primary btn-block tor-customizar', function () { openSheet('customizar'); }));
+    caixa.appendChild(btn(tr('Ver a chave'), 'btn-ghost btn-block', function () { openSheet('torneio', { id: t.id }); }));
+  }
+
+  // ---- os ganchos e o relógio
+  /* a minha guilda no torneio: campeã vigente e quantos títulos tem — da ficha da guilda quando o servidor os
+   * manda; senão, a campeã sai do último torneio de guilda encerrado (pelo nome) */
+  function guildaNoTorneio() {
+    if (!resumoGuilda) return null;
+    var f = safe(function () { return JOGO.Guilda._ficha(); }, null) || {};
+    var campea = f.campea === true, titulos = Math.max(0, Math.floor(Number(f.titulos != null ? f.titulos : f.guildaTitulos) || 0));
+    if (f.campea === undefined) {
+      var ult = safe(function () { return Tn().encerrados().filter(function (t) { return t.tipo === 'guilda' && t.campeao; })[0]; }, null);
+      var gc = ult && ult.campeao.guilda;
+      campea = !!(gc && ((f.id != null && gc.id === f.id) || (f.id == null && gc.nome === resumoGuilda.nome)));
+      if (campea && !titulos) titulos = 1;
+    }
+    return { campea: campea, titulos: Math.min(5, titulos) };
+  }
+  function aplicaTorneioPraca() {
+    var T = Tn(), H = JOGO.Hub;
+    if (!T || !H) return;
+    if (H.arena) safe(function () { H.arena(T.arenaDoPerfil()); return true; }, null);
+    if (H.guildaCampea) {
+      var g = guildaNoTorneio();
+      var sig = g ? (g.campea ? 'c' : '') + g.titulos : '';
+      if (sig !== torneioHud.guildaSig) { torneioHud.guildaSig = sig; safe(function () { H.guildaCampea(g); return true; }, null); }
+    }
+  }
+  function aoTorneioMudou() {
+    pintaChamada();
+    aplicaTorneioPraca();
+    // as conquistas mudaram (ou acabaram de ser lidas): a régua dos títulos é refeita e a plaquinha confere o dela
+    var cq = safe(function () { var c = Tn().meu().conquistas; return c.pvp + '|' + c.guilda; }, '');
+    if (cq !== torneioHud.conqSig) {
+      torneioHud.conqSig = cq;
+      if (JOGO.DB && current === 'hub') safe(function () {
+        estadoDosTitulos().then(function () { return JOGO.DB.jogador(); }).then(function (j) {
+          if (j && JOGO.Hub && JOGO.Hub.nomeia && current === 'hub') JOGO.Hub.nomeia(undefined, titExibe(tituloPendurado(j.titulo)));
+        });
+        return true;
+      }, null);
+    }
+    if (painelModo === 'lugar' && painelLugar && painelLugar.tipo === 'arena') repintaLugar();
+    if (sheetName === 'torneio') sheetTorneio(true);
+    else if (sheetName === 'torneioCampeao' && torneioHud.campeaoT) sheetTorneioCampeao(torneioHud.campeaoT);
+  }
+  function tiqueTorneioTela() {
+    pintaChamada();
+    abreCampeaoPendente();
+    var agora = agoraTorneio();
+    [].forEach.call(document.querySelectorAll('.tor-rel[data-ate]'), function (x) {
+      var txt = faltaTorneio(Number(x.getAttribute('data-ate')) - agora);
+      if (x.textContent !== txt) x.textContent = txt;
+    });
+    // com a ficha aberta a lista é relida a cada 10 s (a chave anda, as vagas enchem)
+    if (sheetName === 'torneio' && Date.now() - torneioHud.t > 10000) atualizaTorneio(true);
+  }
+  UI._torneio = function () { return { sel: torneioHud.sel, chamada: !!(torneioEl && torneioEl.classList.contains('is-on')) }; };   // provas
   // ---- a guerra de guilda 2×2 (15/09): o bloco da Sede, a escolha das duplas, os adversários, o topo e o fim
   /* O dono: "a guerra de guild que é 2x2 de cada guild é na sede de guild, isso dá pontos de experiência para guild".
    * Quem decide é o JOGO.Guerra (grupo.js: a fila no servidor) e a batalha é do Coop; aqui só se desenha. */
@@ -16439,6 +17063,13 @@ var JOGO = (typeof window !== 'undefined')
     } else if (tipo === 'sede-guerra') {
       p.appendChild(tituloPainel(tr('Mesa do conselho'), 'fc-guilda'));
       painelGuerra(p);
+      // 10/10: o torneio de guilda também se resolve daqui — os voluntários e a escolha do representante
+      if (Tn()) {
+        p.appendChild(btn(tr('Torneio das Guildas'), 'btn-ghost btn-block sede-torneio', function () {
+          var tg = safe(function () { return Tn().proximos().filter(function (t) { return t.tipo === 'guilda'; })[0]; }, null);
+          openSheet('torneio', tg ? { id: tg.id } : 'lista');
+        }));
+      }
     } else if (tipo === 'sede-saida') {
       p.appendChild(el('h3', null, tr('Sair da sede')));
       p.appendChild(el('p', 'hub-nota', tr('A porta dá na praça, em frente à Sede das Guildas.')));
@@ -16518,8 +17149,14 @@ var JOGO = (typeof window !== 'undefined')
     var ar = data.arena || {};
     box.appendChild(el('p', 'game-sub', (ar.nome ? tr('Arena: {a}', { a: esc(ar.nome) }) + ' · ' : '') + 'clima: ' + esc(nomeClima(data.clima))));
     // 14/09: o que valeu depende do modo — o desafio nunca mexe na coroa; a Arena e o Campo o servidor confere
+    // 10/10: a luta do Torneio da Arena é um duelo no modo 'arena' que NÃO mexe na coroa nem na vida única
+    var doTorneio = data.modo === 'arena' && !!safe(function () {
+      var le = JOGO.Torneio.lutaEntregue(data.did || undefined);
+      return le && (data.did || Date.now() - le.t < 45 * 60 * 1000);
+    }, false);
     box.appendChild(el('p', 'du-valeria', data.modo === 'desafio'
       ? tr('Desafio amistoso — a coroa não muda.')
+      : doTorneio ? tr('Luta do Torneio da Arena — o servidor confere a luta e a chave anda; a coroa não muda e a vida fica como estava antes da luta.')
       : (data.modo === 'arena' || data.modo === 'campo')
         ? (data.modo === 'arena'
           ? tr('Arena ranqueada — o servidor confere a luta e a coroa muda (o aviso chega em instantes).')
@@ -16592,6 +17229,17 @@ var JOGO = (typeof window !== 'undefined')
     if (Aq) {
       Aq.aoMudar = aoArenaMudou;
       Aq.aoCasou = mostraArenaCasada;
+      if (!arenaRelogio) arenaRelogio = setInterval(function () { safe(function () { tiqueArenaTela(); return true; }, null); }, 1000);
+    }
+    // 10/10: o Torneio da Arena — a ficha, a chamada que não some e a tela do campeão
+    var Tq = Tn();
+    if (Tq) {
+      Tq.aoMudar = aoTorneioMudou;
+      Tq.aoCampeao = aoTorneioCampeao;
+      Tq.aoChamada = function (l) {
+        pintaChamada();
+        if (l && l.adversario) toast(tr('Torneio: a sua luta contra {a} foi chamada — diga que está aqui!', { a: l.adversario.nome }), 'good');
+      };
       if (!arenaRelogio) arenaRelogio = setInterval(function () { safe(function () { tiqueArenaTela(); return true; }, null); }, 1000);
     }
     // 15/09: a guerra de guilda — o painel da Sede, os adversários encontrados e o fim que o servidor confere

@@ -4486,3 +4486,115 @@ html.celular .screen-hub .arena-selo { right: calc(var(--sa-r, 0px) + 8px); top:
 html.celular .screen-hub:has(.arena-selo) .hub-sino { top: calc(var(--sa-t, 0px) + 112px); }
 html.celular .screen-hub:has(.arena-selo) .pan-atalho { top: calc(var(--sa-t, 0px) + 114px); }
 html.celular .screen-hub:has(.arena-selo) .hub-sino:not(.is-off) ~ .pan-atalho { top: calc(var(--sa-t, 0px) + 164px); }
+
+/* ==========================================================================
+   O TORNEIO DA ARENA (10/10; docs/TORNEIO.md): as duas abas da Arena, a ficha
+   do torneio (os cartões, os inscritos, a CHAVE que rola para os lados no
+   celular), a CHAMADA — o cartão que não some enquanto a luta é chamada — e a
+   tela do campeão. Tudo cabe na coluna de 390 px e todo controle mede 44 px.
+   ========================================================================== */
+.arena-abas { margin-bottom: 8px; }
+.tor-bloco { border-top: 1px solid var(--line2, #2b3542); padding-top: 6px; }
+.tor-linha { opacity: .9; }
+.tor-ficha { gap: 10px; }
+.tor-cartao {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--rad-s, 8px);
+  border: 1px solid var(--line2, #2b3542); background: rgba(255,255,255,.03); min-width: 0;
+}
+.tor-cartao.is-andamento, .tor-cartao.is-sorteado { border-color: rgba(232,194,90,.5); }
+.tor-cartao.is-guilda { background: rgba(110,150,220,.05); }
+.tor-cartao p { margin: 0; font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.tor-cartao p small { color: var(--dim); }
+.tor-tit { margin: 0; font: 600 15px/1.25 var(--ui-serif, Georgia); color: #f0ead8; overflow-wrap: anywhere; }
+.tor-estado b, .tor-vagas b { color: var(--gold, #e8c25a); font-variant-numeric: tabular-nums; }
+.tor-premio b { color: #f0ead8; font-weight: 600; }
+.tor-premio.is-cheio { color: var(--dim); }
+.tor-fora { color: #e8b86a; opacity: 1; }
+.tor-inscrito { opacity: 1; color: #bfe6c8; }
+.tor-voltar { align-self: flex-start; }
+.tor-minha { border-style: dashed; }
+.tor-guilda { display: flex; flex-direction: column; gap: 6px; }
+.tor-voluntario .btn-mini { flex: none; }
+/* a linha de um campeão passado é um botão inteiro: a pele da linha, o alvo de 44 px */
+button.tor-ultimo {
+  width: 100%; min-height: var(--tap, 44px); font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+button.tor-ultimo:hover { border-color: rgba(232,194,90,.45); }
+
+/* A CHAVE: uma coluna por rodada; no celular a caixa rola para os lados (a ficha não) */
+.tor-chave {
+  display: flex; gap: 10px; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px;
+  max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+}
+.tor-chave:focus-visible { outline: 2px solid var(--gold, #e8c25a); outline-offset: 2px; }
+.tor-col { display: flex; flex-direction: column; justify-content: space-around; gap: 8px; flex: 0 0 152px; min-width: 0; }
+.tor-col-tit { font: 600 11px/1 var(--ui-sans, system-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); text-align: center; }
+.tor-col.is-vez .tor-col-tit { color: var(--gold, #e8c25a); }
+.tor-luta {
+  display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line2, #2b3542); background: rgba(0,0,0,.25);
+}
+.tor-luta.is-chamada, .tor-luta.is-luta { border-color: rgba(232,194,90,.6); }
+.tor-luta.is-eu { border-color: var(--gold, #e8c25a); box-shadow: 0 0 0 1px rgba(232,194,90,.35) inset; }
+.tor-lado {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 26px; padding: 3px 8px;
+  font-size: 12.5px; color: #e8eef6; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.tor-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tor-nome small { color: var(--dim); font-weight: 400; }
+.tor-lado.is-venceu { font-weight: 700; color: #f0ead8; background: rgba(232,194,90,.1); }
+.tor-lado.is-caiu { color: var(--dim); text-decoration: line-through; text-decoration-color: rgba(255,255,255,.25); }
+.tor-lado.is-vazio { color: var(--dim); font-style: italic; }
+.tor-lado.is-meu .tor-nome { color: var(--gold, #e8c25a); }
+.tor-ok { flex: none; color: #8fd0a0; font-size: 12px; }
+.tor-pe { padding: 2px 8px 3px; font-size: 10.5px; color: var(--dim); text-align: right; min-height: 14px; }
+.tor-luta.is-wo .tor-pe, .tor-luta.is-sorteio .tor-pe, .tor-luta.is-desistencia .tor-pe { color: #e8b86a; }
+.tor-luta.is-bye .tor-pe { color: #8fb5e0; }
+.tor-luta.is-chamada .tor-pe, .tor-luta.is-luta .tor-pe { color: var(--gold, #e8c25a); }
+.tor-col-campeao { justify-content: center; }
+.tor-campeao {
+  padding: 10px 8px; border-radius: 8px; text-align: center; font: 700 13px/1.3 var(--ui-serif, Georgia); color: #ffe7a6;
+  border: 1px solid var(--gold, #e8c25a); background: rgba(232,194,90,.12); overflow-wrap: anywhere;
+}
+.tor-campeao.is-eu { box-shadow: 0 0 14px rgba(232,194,90,.35); }
+
+/* A CHAMADA: fora das telas e por cima das fichas, logo abaixo do cartão dos pedidos (se os dois estiverem na tela) */
+.ui-torneio {
+  position: absolute; left: 50%; top: calc(var(--sa-t, 0px) + 56px); transform: translateX(-50%);
+  width: min(400px, calc(100% - 24px)); z-index: 82;
+  display: none; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(22,12,10,.97); border: 1px solid rgba(255,140,90,.6);
+  box-shadow: 0 8px 26px rgba(0,0,0,.55);
+  pointer-events: auto;
+}
+.ui-torneio.is-on { display: flex; }
+.ui-torneio.is-presente { border-color: rgba(143,208,160,.55); }
+.ui-torneio.is-pronta { border-color: var(--gold, #e8c25a); }
+.ui-pedido.is-on ~ .ui-torneio { top: calc(var(--sa-t, 0px) + 196px); }
+.tc-nota { margin: 0; }
+.tc-nota b { color: #f0ead8; }
+@media (orientation: portrait) and (max-width: 600px) {
+  .ui-torneio { top: calc(var(--sa-t, 0px) + 112px); }
+  .ui-pedido.is-on ~ .ui-torneio { top: calc(var(--sa-t, 0px) + 252px); }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .ui-torneio { top: calc(var(--sa-t, 0px) + 50px); padding: 8px 10px; gap: 6px; }
+  .ui-torneio.is-presente .tc-nota { display: none; }
+}
+
+/* a tela do campeão */
+.tor-campeao-ficha { align-items: stretch; text-align: center; }
+.tor-trofeu { margin: 0; font-size: 56px; line-height: 1.1; }
+.tor-campeao-txt { margin: 0; font-size: 14px; line-height: 1.45; }
+.tor-premios { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.tor-premio-linha {
+  padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+  border: 1px solid var(--line2, #2b3542); background: rgba(232,194,90,.06);
+}
+.tor-premio-linha b { color: var(--gold, #e8c25a); }
+
+/* a pastilha da moldura do Campeão da Arena na ficha Customizar: o metal de cada grau */
+.char-mol-cor.is-campeao1 { --mol: #c98a52; --mol-fundo: rgba(40,16,10,.95); border-top-width: 4px; }
+.char-mol-cor.is-campeao2 { --mol: #cdd5e0; --mol-fundo: rgba(22,22,34,.95); border-top-width: 4px; }
+.char-mol-cor.is-campeao3 { --mol: #f2c14e; --mol-fundo: rgba(48,20,8,.96); border-top-width: 4px; border-style: double; }

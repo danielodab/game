@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — o Torneio da Arena na HUD (390x844)</title>
+<style>
+  html,body{margin:0;background:#0b0d10;color:#e8eef6;font:12px/1.5 system-ui,Segoe UI,sans-serif;overflow:hidden}
+  #tela{position:fixed;left:0;top:0;width:390px;height:844px;border:0;background:#000}
+  #saida{position:fixed;left:390px;top:0;right:0;bottom:0;overflow:auto;
+         border-left:1px solid #2b3542;padding:8px;font:11px/1.5 monospace}
+  #summary{padding:5px 8px;border-radius:5px;background:#1b222c;color:#cdd6e2;margin-bottom:6px}
+  .allpass{background:#16241b !important;color:#7fe08a !important} .fail{background:#3d1414 !important;color:#f77 !important}
+  #log{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<!-- O TORNEIO DA ARENA NA TELA (10/10; docs/TORNEIO.md). O index.html de verdade num quadro de 390x844 com o
+     save na memória (?sandbox=1). A Rede é um dublê, a Sessão do site é de mentira e o SERVIDOR DO TORNEIO é
+     de mentira: as rotas /api/torneios, /api/torneio/* e /api/arena/estado respondem daqui, de um estado que a
+     prova vai mudando (inscrições abertas → sorteado → andamento → encerrado). Cobra, na tela:
+       - o painel da Arena ganha o Torneio (a linha do próximo e a porta) e a ficha tem as duas abas;
+       - a ficha: as duas faixas do PvP e o de guilda, a data no fuso do aparelho, a contagem, as vagas
+         ("5 de 8 — enche e abrem mais 8"), o prêmio de agora e o do torneio cheio;
+       - a inscrição pela MESMA ficha de escolher os dois heróis; a recusa por nível em frase clara; as vagas
+         que andam; trocar e sair;
+       - os inscritos; depois do sorteio, a CHAVE de 8 (três colunas, sete lutas), os passes e o W.O. marcados,
+         a previsão de cada luta, quem passou e a minha linha destacada;
+       - a CHAMADA: o cartão por cima de tudo (com ficha aberta também), os 3 minutos, o "Estou aqui", quem já
+         confirmou, e a partida pronta entregue ao Duelo pela Arena de sempre; a praça remontada não o tira;
+       - o torneio de guilda: voluntariar, a lista, o líder escolhendo o representante;
+       - o fim: a tela do campeão (o prêmio recebido) e o aviso para os outros;
+       - Customizar: o grupo "Torneio da Arena" nos títulos e a moldura "Campeão da Arena" com o grau;
+       - a régua das fichas (tools/fotos_fichas.py): tudo cabe na coluna de 390 px e todo controle mede 44 px. -->
+<iframe id="tela"></iframe>
+<div id="saida"><div id="summary">rodando…</div><pre id="log"></pre></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NL = String.fromCharCode(10);
+  var linhas = [], falhas = 0, total = 0, T0 = Date.now();
+  function pinta() { document.getElementById('log').textContent = linhas.join(NL); }
+  function diz(t) { linhas.push('  · ' + t); pinta(); }
+  function check(nome, ok, extra) {
+    total++; if (!ok) falhas++;
+    linhas.push((ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined && extra !== '' ? '   [' + extra + ']' : ''));
+    pinta();
+  }
+  function fim(motivo) {
+    if (motivo) { total++; falhas++; linhas.push('FALHOU · ' + motivo); }
+    linhas.push('(' + Math.round((Date.now() - T0) / 1000) + ' s no relógio da página)');
+    pinta();
+    var s = document.getElementById('summary');
+    s.className = falhas ? 'fail' : 'allpass';
+    s.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    document.title = (total - falhas) + '/' + total + ' · o Torneio da Arena na HUD';
+    window.__fail = falhas;
+    window.__pronto = true;
+  }
+  function ate(cond, ms) {
+    var t1 = Date.now();
+    return new Promise(function (r) {
+      (function volta() {
+        var ok = false;
+        try { ok = !!cond(); } catch (e) {}
+        if (ok) return r(true);
+        if (Date.now() - t1 > (ms || 8000)) return r(false);
+        setTimeout(volta, 60);
+      })();
+    });
+  }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var quadro = document.getElementById('tela');
+  quadro.src = '../index.html?mobile=1&sandbox=1&snap=1&torneio-hud';
+  var w, doc, J, R, U, To, toastEl;
+  var saidas = [], pedidos = [], ids = [];
+  var perfilBia = { id: 'bia', nome: 'Bia', titulo: '', classe: 'arqueiro', sala: null, x: 1.2, z: 6.4, nuvem: 22,
+                    zona: 'praca', luta: false, resumo: { forte: 23, brasa: 1210 } };
+
+  function telaAberta() { return doc.querySelector('#ui-root .ui-screen.is-on'); }
+  function painelAberto() { var s = telaAberta(); return s ? s.querySelector('.hub-painel') : null; }
+  function painelTxt() { var p = painelAberto(); return (p && !p.classList.contains('is-off')) ? p.textContent : ''; }
+  function fichaAberta() { return doc.querySelector('.ui-sheet.is-on'); }
+  function painelDaFicha() { return doc.querySelector('#ui-root .ui-sheet.is-on .sheet-panel'); }
+  function tituloFicha() { var f = fichaAberta(); var h = f && f.querySelector('h2'); return h ? h.textContent : ''; }
+  function toastTxt() { return (toastEl && toastEl.classList.contains('is-on')) ? toastEl.textContent : ''; }
+  function botao(caixa, re) {
+    var b = null;
+    [].forEach.call(caixa ? caixa.querySelectorAll('button') : [], function (x) { if (!b && re.test(x.textContent || '')) b = x; });
+    return b;
+  }
+  function cartao(id) { var f = fichaAberta(); return f ? f.querySelector('.tor-cartao[data-torneio="' + id + '"]') : null; }
+  function chamada() { return doc.querySelector('.ui-torneio.is-on'); }
+  function ultPedido(rota) { for (var i = pedidos.length - 1; i >= 0; i--) if (pedidos[i].rota === rota) return pedidos[i]; return null; }
+  function ultSaida(acao) { for (var i = saidas.length - 1; i >= 0; i--) if (saidas[i].acao === acao) return saidas[i]; return null; }
+
+  // ------------------------------------------------------------ a régua das fichas (a de tests/fichas_fotos.html)
+  function qa(s, r) { return [].slice.call((r || doc).querySelectorAll(s)); }
+  function visivel(n) {
+    var r = n.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    var cs = w.getComputedStyle(n);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+  var CONTROLES = 'button, a[href], input:not([type="hidden"]), select, textarea, summary, [role="switch"], [tabindex]:not(.sheet-panel)';
+  function pequenos(raiz) {
+    var ruins = [];
+    qa(CONTROLES, raiz).forEach(function (n) {
+      if (!visivel(n) || (n.tagName === 'A' && !n.classList.contains('btn'))) return;
+      var r = n.getBoundingClientRect();
+      if (r.height < 43.5 || r.width < 43.5) {
+        var c = typeof n.className === 'string' ? n.className.split(/\s+/).slice(0, 3).join('.') : '';
+        ruins.push(n.tagName.toLowerCase() + (c ? '.' + c : '') + ' ' + Math.round(r.width) + '×' + Math.round(r.height) +
+                   ' "' + (n.textContent || n.value || '').trim().slice(0, 18) + '"');
+      }
+    });
+    return ruins;
+  }
+  function vazam(f) {
+    var fora = [];
+    var lim = f.getBoundingClientRect();
+    qa('*', f).forEach(function (n) {
+      var r = n.getBoundingClientRect();
+      if (!r.width) return;
+      if (r.right > lim.right + 1.5 || r.left < lim.left - 1.5) {
+        var p = n.parentNode, rola = false;
+        while (p && p !== f) {
+          var ov = w.getComputedStyle(p).overflowX;
+          if (ov === 'auto' || ov === 'scroll' || ov === 'hidden') { rola = true; break; }
+          p = p.parentNode;
+        }
+        if (!rola) fora.push(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className || n.tagName));
+      }
+    });
+    return fora;
+  }
+  function regua(nome) {
+    var p = painelDaFicha();
+    if (!p) { check(nome + ': a ficha está aberta', false); return; }
+    var ruins = pequenos(p), fora = vazam(p);
+    var lim = p.getBoundingClientRect();
+    check(nome + ': cabe na coluna de 390 px (o painel não passa da tela)', lim.width <= 390.5 && lim.left >= -0.5, Math.round(lim.left) + '..' + Math.round(lim.right));
+    check(nome + ': todo controle visível mede ao menos 44×44', ruins.length === 0, ruins.slice(0, 4).join(' | '));
+    check(nome + ': nada vaza pelos lados', fora.length === 0, fora.slice(0, 4).join(' | '));
+  }
+
+  // ------------------------------------------------------------ o servidor de mentira
+  var EU = 11;
+  function agora() { return Date.now(); }
+  function P(conta, nome, g) { return { conta: conta, nome: nome, guilda: g || null }; }
+  function ins(conta, nome, nivel, c1, c2) {
+    return { conta: conta, nome: nome, nivel: nivel, classes: [{ classId: c1 || 'sumo', nivel: nivel }, { classId: c2 || 'arqueiro', nivel: Math.max(1, nivel - 1) }], guilda: null };
+  }
+  var PREMIO = { 2: { barras: 2, vintens: 600, gemas: 0, conquista: false, moldura: false, xpGuilda: 0 },
+                 4: { barras: 5, vintens: 1250, gemas: 0, conquista: true, moldura: false, xpGuilda: 0 },
+                 8: { barras: 10, vintens: 2500, gemas: 1, conquista: true, moldura: true, xpGuilda: 0 },
+                 16: { barras: 20, vintens: 5000, gemas: 2, conquista: true, moldura: true, xpGuilda: 0 } };
+  var INICIO = agora() + 50 * 3600000 + 20 * 60000;          // daqui a 2 dias e pouco
+  var srv = {
+    torneios: [],
+    meu: { inscricoes: [], luta: null, conquistas: { pvp: 0, guilda: 0 }, moldura: false, vigente: false, guilda: null },
+    recusa: null,                 // a próxima inscrição é recusada com isto
+    arena: { fase: 'livre' }
+  };
+  function torneio(id, extra) {
+    var t = { id: id, tipo: 'pvp', faixa: '20-25', nivelMin: 20, nivelMax: 25, titulo: 'Torneio da Arena · 20 a 25', origem: 'semanal',
+              inicioMs: INICIO, inscricaoAteMs: INICIO - 600000, estado: 'inscricoes', vagas: 2, inscritos: [], chave: null, campeao: null, premio: PREMIO[2] };
+    Object.keys(extra || {}).forEach(function (k) { t[k] = extra[k]; });
+    return t;
+  }
+  function acha(id) { for (var i = 0; i < srv.torneios.length; i++) if (srv.torneios[i].id === id) return srv.torneios[i]; return null; }
+  function tamanhoCom(n) { var t = 2; while (t < n && t < 16) t *= 2; return t; }
+  function vagasCom(n) { var v = 2; while (n >= v && v < 16) v *= 2; return v; }
+  function respostaMeu() { var r = JSON.parse(JSON.stringify(srv.meu)); r.ok = true; r.status = 200; r.agoraMs = agora(); return r; }
+  var rotas = {
+    '/api/torneios': function () { return { ok: true, status: 200, agoraMs: agora(), torneios: JSON.parse(JSON.stringify(srv.torneios)) }; },
+    '/api/torneio/meu': respostaMeu,
+    '/api/torneio/inscrever': function (op) {
+      if (srv.recusa) { var x = srv.recusa; srv.recusa = null; x.ok = false; x.status = 409; x.erro = 'a frase do servidor'; return x; }
+      var t = acha(op.body.torneio);
+      t.inscritos = t.inscritos.filter(function (i) { return i.conta !== EU; });
+      t.inscritos.push(ins(EU, 'Ana', 22, 'sumo', 'curandeiro'));
+      t.vagas = vagasCom(t.inscritos.length);
+      t.premio = PREMIO[tamanhoCom(t.inscritos.length)];
+      srv.meu.inscricoes = [{ torneio: t.id, herois: op.body.herois, classes: [{ classId: 'sumo', nivel: 22 }, { classId: 'curandeiro', nivel: 21 }], nivel: 22 }];
+      return { ok: true, status: 200, torneio: JSON.parse(JSON.stringify(t)) };
+    },
+    '/api/torneio/sair': function (op) {
+      var t = acha(op.body.torneio);
+      t.inscritos = t.inscritos.filter(function (i) { return i.conta !== EU; });
+      srv.meu.inscricoes = [];
+      return { ok: true, status: 200, torneio: JSON.parse(JSON.stringify(t)) };
+    },
+    '/api/torneio/presente': function () { if (srv.meu.luta) srv.meu.luta.presente = true; return respostaMeu(); },
+    '/api/torneio/voluntariar': function (op) {
+      var g = srv.meu.guilda;
+      g.voluntarios = g.voluntarios.filter(function (v) { return v.conta !== EU; });
+      g.voluntarios.push({ conta: EU, nome: 'Ana', nivel: 22, classes: [{ classId: 'sumo', nivel: 22 }, { classId: 'curandeiro', nivel: 21 }], desdeMs: agora() });
+      g.souVoluntario = true;
+      return { ok: true, status: 200 };
+    },
+    '/api/torneio/desvoluntariar': function () {
+      var g = srv.meu.guilda;
+      g.voluntarios = g.voluntarios.filter(function (v) { return v.conta !== EU; });
+      g.souVoluntario = false;
+      if (g.representante === EU) g.representante = null;
+      return { ok: true, status: 200 };
+    },
+    '/api/torneio/representante': function (op) { srv.meu.guilda.representante = op.body.conta; return { ok: true, status: 200 }; },
+    '/api/arena/estado': function () { var r = JSON.parse(JSON.stringify(srv.arena)); r.ok = true; r.status = 200; r.agoraMs = agora(); return r; },
+    '/api/arena/sair': function () { return { ok: true, status: 200 }; }
+  };
+
+  function dubles() {
+    R = J.Rede;
+    R.entrar = function () { return true; };
+    R.meuId = function () { return 'ana'; };
+    R.meuCx = function () { return 'cxana'; };
+    R.minhaSala = function () { return null; };
+    R.pares = function () { return [perfilBia]; };
+    R.nomeDe = function (id) { return id === 'bia' ? 'Bia' : 'Aventureiro'; };
+    R.privado = function () { return true; };
+    R.dirige = function (tipo, para, acao, dados) { saidas.push({ tipo: tipo, para: para, acao: acao, dados: dados }); return true; };
+    R.sussurrar = function () { return true; };
+    R.ultimaRecusa = function () { return null; };
+    R.vigia = function () {}; R.solta = function () {};
+    R.falar = function () { return true; };
+    R.mover = function () {};
+    R.estadoConexao = function () { return 'ligado'; };
+    R.transporte = function () { return 'ws'; };
+    R._tique = function () { return false; };
+    J.Sessao.ativa = function () { return true; };
+    J.Sessao.contaId = function () { return EU; };
+    J.Sessao.api = function (rota, op) {
+      pedidos.push({ rota: rota, metodo: (op && op.method) || 'GET', corpo: op && op.body ? JSON.parse(JSON.stringify(op.body)) : null });
+      var r = rotas[rota];
+      return Promise.resolve(typeof r === 'function' ? r(op || {}) : { ok: false, status: 404, erro: 'rota de mentira' });
+    };
+    if (J.Autoridade) {
+      J.Autoridade.ligada = function () { return true; };
+      J.Autoridade.abreDuelo = function () { return Promise.resolve({ ok: true, carry: null }); };
+    }
+    J.Arena.CONSULTA_MS = 300;
+    To = J.Torneio;
+    To.MEU_RAPIDO_MS = 400;
+    To.ENTREGA_MS = 200;
+  }
+  /* relê a lista e o MEU e espera a tela se acertar */
+  function rele() { return Promise.all([To.busca(true), To.consulta()]).then(function () { return espera(80); }); }
+
+  var t0 = Date.now();
+  (function aguarda() {
+    var pronto = false;
+    try {
+      J = quadro.contentWindow.JOGO;
+      pronto = !!(J && J.Models3D2 && J.Models3D2.isReady() && J.Models3D && J.Models3D.isReady() &&
+                  J.Renderer && J.Renderer.isReady() && J.UI && J.Game && J.Grupo && J.Duelo && J.Arena && J.Hub && J.DB && J.Sessao && J.Torneio);
+    } catch (e) {}
+    if (!pronto) {
+      if (Date.now() - t0 > 110000) return fim('o jogo não abriu dentro do quadro em 110 s (ou falta JOGO.Torneio)');
+      return setTimeout(aguarda, 250);
+    }
+    w = quadro.contentWindow; doc = quadro.contentDocument;
+    U = J.UI;
+    toastEl = doc.querySelector('.ui-toast');
+    diz('o jogo abriu em ' + Math.round((Date.now() - t0) / 1000) + ' s');
+    try {
+      var suf = (J.Contas && J.Contas.sufixo) ? J.Contas.sufixo() : '';
+      w.localStorage.setItem('soterra-tutor-v1' + suf, JSON.stringify({ vistos: {}, off: true }));
+    } catch (e) {}
+    var Pg = J.Progress;
+    ids = Pg.heroIds().filter(function (h) { return h !== 'gm'; });
+    while (ids.length < 2) { Pg.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = Pg.heroIds().filter(function (h) { return h !== 'gm'; }); }
+    ids = ids.slice(0, 2);
+    U.selection(ids.slice());
+    dubles();
+    // o servidor começa com as três chaves da semana: 5 de 8 na de 20–25, vazia a de 25–30, e a de guilda
+    srv.torneios = [
+      torneio(61, { vagas: 8, premio: PREMIO[8], inscritos: [ins(22, 'Bia', 23, 'arqueiro', 'sumo'), ins(33, 'Caio', 24), ins(44, 'Duda', 21), ins(55, 'Edu', 25), ins(66, 'Fabi', 20)] }),
+      torneio(62, { faixa: '25-30', nivelMin: 25, nivelMax: 30, titulo: 'Torneio da Arena · 25 a 30' }),
+      torneio(63, { tipo: 'guilda', faixa: null, nivelMin: 20, nivelMax: 30, titulo: 'Torneio das Guildas', inicioMs: INICIO + 86400000, inscricaoAteMs: INICIO + 86400000 - 600000,
+                    premio: { barras: 0, vintens: 0, gemas: 0, conquista: false, moldura: false, xpGuilda: 60 } }),
+      torneio(50, { estado: 'encerrado', inicioMs: agora() - 7 * 86400000, inscricaoAteMs: agora() - 7 * 86400000 - 600000, vagas: 4,
+                    inscritos: [ins(77, 'Gil', 22), ins(88, 'Hugo', 23), ins(99, 'Ivo', 24)], campeao: P(88, 'Hugo'), premio: PREMIO[4],
+                    chave: { tamanho: 4, rodada: 1, rodadas: [
+                      [{ pos: 0, a: P(77, 'Gil'), b: P(88, 'Hugo'), estado: 'decidida', vencedor: 'b', como: 'luta', previstoMs: agora() - 7 * 86400000 },
+                       { pos: 1, a: P(99, 'Ivo'), b: null, estado: 'decidida', vencedor: 'a', como: 'bye', previstoMs: agora() - 7 * 86400000 }],
+                      [{ pos: 0, a: P(88, 'Hugo'), b: P(99, 'Ivo'), estado: 'decidida', vencedor: 'a', como: 'luta', previstoMs: agora() - 7 * 86400000 + 1200000 }]] } })
+    ];
+    J.DB.batizar('Ana').then(function () {
+      U.showScreen('hub');
+      return ate(function () { return !!painelAberto(); }, 20000);
+    }).then(function (ok) {
+      check('(a praça abriu)', ok);
+      return rele();
+    }).then(passo('o painel e a ficha', fichaEAbas))
+      .then(passo('a inscrição', inscricao))
+      .then(passo('os inscritos e a chave', chave))
+      .then(passo('a chamada', aChamada))
+      .then(passo('a guilda', guilda))
+      .then(passo('o campeão', campeao))
+      .then(passo('Customizar', customizar))
+      .then(function () { fim(); }, function (e) { fim('erro: ' + (e && e.stack || e)); });
+  })();
+  /* cada passo dentro de um try: um erro num deles vira falha e os seguintes ainda rodam */
+  function passo(nome, fn) {
+    return function () {
+      diz('— ' + nome);
+      return Promise.resolve().then(fn).then(null, function (e) { check(nome + ': o passo terminou sem erro', false, String(e && e.stack || e).slice(0, 300)); });
+    };
+  }
+  function nivela(nv) { ids.forEach(function (h) { var x = J.Progress.hero(h); if (x) x.level = nv; }); }
+
+  // ---------------------------------------------------------------- 1. o painel da Arena e a ficha
+  function fichaEAbas() {
+    J.Hub.aoAproximar({ tipo: 'arena', id: 'arena', nome: 'Arena' });
+    var bT = botao(painelAberto(), /^Torneio da Arena$/);
+    check('painel · a Arena ganha o Torneio: a linha do próximo torneio e a porta', !!bT && /Torneio de PvP · nível 20 a 25/.test(painelTxt()) && /5 de 8/.test(painelTxt()),
+          painelTxt().slice(0, 260));
+    check('painel · os desafios continuam lá (inscrever no quadro, ver o quadro)', !!botao(painelAberto(), /Inscrever minha dupla/) && !!botao(painelAberto(), /Ver o quadro de inscritos/));
+    bT.click();
+    return ate(function () { return tituloFicha() === 'Torneio da Arena' && !!cartao(61); }, 5000).then(function (ok) {
+      var f = fichaAberta();
+      check('ficha · abre "Torneio da Arena" com os três cartões: 20–25, 25–30 e as guildas', ok && !!cartao(62) && !!cartao(63) && !cartao(50), tituloFicha());
+      var abas = f ? f.querySelectorAll('.arena-abas .btn-tab') : [];
+      check('ficha · as duas abas da Arena: Desafios e Torneio (esta acesa)', abas.length === 2 && /Desafios/.test(abas[0].textContent) && /Torneio/.test(abas[1].textContent) &&
+            abas[1].classList.contains('is-on') && !abas[0].classList.contains('is-on'));
+      var c = cartao(61), tx = c ? c.textContent : '';
+      var d = new Date(INICIO), dd = function (n) { return (n < 10 ? '0' : '') + n; };
+      var data = dd(d.getDate()) + '/' + dd(d.getMonth() + 1) + ' · ' + dd(d.getHours()) + ':' + dd(d.getMinutes());
+      check('ficha · a data e a hora no fuso do aparelho', tx.indexOf(data) >= 0 && /horário do seu aparelho/.test(tx), data + ' em: ' + tx.slice(0, 120));
+      var rel = c && c.querySelector('.tor-rel');
+      check('ficha · a contagem regressiva das inscrições ("fecham em 2 d 2 h")', /Inscrições abertas — fecham em/.test(tx) && !!rel && /^2 d \d+ h$/.test(rel.textContent), rel && rel.textContent);
+      check('ficha · as vagas: "5 de 8 — enche e abrem mais 8"', /Vagas: 5 de 8 — enche e abrem mais 8/.test(tx), tx.slice(0, 260));
+      check('ficha · o prêmio do tamanho de agora (chave de 8): 10 barras, 2500 vinténs, 1 Gema, conquista e moldura',
+            /Prêmio de agora \(chave de 8\): 10 barra\(s\) de ouro · 2500 vinténs · 1 Gema\(s\) Enterrada\(s\) · conta como conquista \(título\) · a moldura Campeão da Arena/.test(tx), tx);
+      check('ficha · e o do torneio cheio (16): 20 barras, 5000 vinténs, 2 Gemas', /Com o torneio cheio \(16\): 20 barra\(s\) de ouro · 5000 vinténs · 2 Gema\(s\) Enterrada\(s\)/.test(tx));
+      var c2 = cartao(62).textContent;
+      check('ficha · a chave vazia: "0 de 2 — enche e abrem mais 2" e o prêmio de 2 (sem conquista)', /0 de 2 — enche e abrem mais 2/.test(c2) && /chave de 2\): 2 barra\(s\) de ouro · 600 vinténs/.test(c2) &&
+            !/chave de 2\)[^C]*conquista/.test(c2), c2.slice(0, 260));
+      var c3 = cartao(63).textContent;
+      check('ficha · o de guilda: o XP da guilda e o XP em dobro por 7 dias; sem guilda, o porquê de não haver botão',
+            /Torneio das Guildas/.test(c3) && /60 XP para a guilda · XP em dobro para todos os membros por 7 dias/.test(c3) && /Entre numa guilda para participar/.test(c3) &&
+            !botao(cartao(63), /Voluntariar/), c3.slice(0, 300));
+      check('ficha · os últimos campeões embaixo (Hugo)', !!f.querySelector('.tor-ultimo[data-torneio="50"]') && /Hugo/.test(f.querySelector('.tor-ultimo').textContent));
+      regua('a ficha do Torneio');
+      // a aba Desafios leva ao quadro, e o quadro tem a mesma fila de abas para voltar
+      rotas['/api/arena/quadro'] = function () { return { ok: true, status: 200, agoraMs: agora(), paridade: 3, inscritos: [] }; };
+      abas[0].click();
+      return ate(function () { return tituloFicha() === 'Quadro da Arena'; }, 3000);
+    }).then(function (ok) {
+      var f = fichaAberta();
+      var abas = f ? f.querySelectorAll('.arena-abas .btn-tab') : [];
+      check('abas · "Desafios" abre o quadro de sempre, com as mesmas duas abas (Desafios acesa)', ok && abas.length === 2 && abas[0].classList.contains('is-on'));
+      regua('o quadro com as abas');
+      if (abas[1]) abas[1].click();
+      return ate(function () { return tituloFicha() === 'Torneio da Arena' && !!cartao(61); }, 3000);
+    }).then(function (ok) { check('abas · "Torneio" volta para a ficha do torneio', ok); });
+  }
+
+  // ---------------------------------------------------------------- 2. a inscrição
+  function inscricao() {
+    nivela(3);
+    U.openSheet('torneio');
+    var c = cartao(61);
+    check('inscrição · com a dupla da praça fora da faixa, o cartão diz qual é a faixa — e ainda deixa tentar (quem confere é o servidor)',
+          !!c && /chega a nv 3: esta chave é do nível 20 ao 25/.test(c.textContent) && !!botao(c, /Inscrever minha dupla/), c && c.textContent.slice(-260));
+    nivela(22);
+    U.openSheet('torneio');
+    c = cartao(61);
+    var bI = botao(c, /Inscrever minha dupla/);
+    check('inscrição · com a dupla na faixa (nv 22) o botão vem dourado e sem aviso', !!bI && bI.classList.contains('btn-gold') && !/chega a nv/.test(c.textContent));
+    bI.click();
+    var f = fichaAberta();
+    check('inscrição · abre a MESMA ficha de escolher os dois heróis, com a faixa escrita', tituloFicha() === 'Inscrição no Torneio' &&
+          f.querySelectorAll('.av-carta[data-heroi]').length >= 2 && /do nível 20 ao 25/.test(f.textContent) && /vida cheia/.test(f.textContent), tituloFicha());
+    regua('a escolha da dupla');
+    [].forEach.call(f.querySelectorAll('.av-carta.is-on'), function (x) { x.click(); });
+    fichaAberta().querySelector('.av-carta[data-heroi="' + ids[1] + '"]').click();
+    fichaAberta().querySelector('.av-carta[data-heroi="' + ids[0] + '"]').click();
+    // 1ª tentativa: o servidor recusa por nível (o estado de lá é o que vale)
+    srv.recusa = { motivo: 'nivel', nivel: 27, nivelMin: 20, nivelMax: 25 };
+    botao(fichaAberta(), /Inscrever a dupla/).click();
+    return ate(function () { return /nível 27/.test(toastTxt()); }, 3000).then(function (ok) {
+      check('inscrição · a recusa por nível vira frase clara, com os três números do servidor', ok && /nível 27: esta chave é do nível 20 ao 25/.test(toastTxt()) &&
+            tituloFicha() === 'Inscrição no Torneio', toastTxt());
+      srv.recusa = { motivo: 'outra-chave' };
+      botao(fichaAberta(), /Inscrever a dupla/).click();
+      return ate(function () { return /outra chave/.test(toastTxt()); }, 3000);
+    }).then(function (ok) {
+      check('inscrição · "outra-chave": uma conta, uma chave por sábado', ok, toastTxt());
+      botao(fichaAberta(), /Inscrever a dupla/).click();
+      return ate(function () { return tituloFicha() === 'Torneio da Arena' && cartao(61) && /Você está inscrito com/.test(cartao(61).textContent); }, 4000);
+    }).then(function (ok) {
+      var p = ultPedido('/api/torneio/inscrever');
+      check('inscrição · aceita: o POST leva o torneio e os DOIS na ordem dos toques', ok && p && p.corpo.torneio === 61 && p.corpo.herois.join() === [ids[1], ids[0]].join(), JSON.stringify(p && p.corpo));
+      var c = cartao(61), tx = c ? c.textContent : '';
+      check('inscrição · a ficha volta com "Você está inscrito com …", Trocar a dupla e Sair do torneio', /Você está inscrito com/.test(tx) && !!botao(c, /Trocar a dupla/) && !!botao(c, /Sair do torneio/), tx.slice(-200));
+      check('inscrição · as vagas andaram: "6 de 8 — enche e abrem mais 8"', /6 de 8 — enche e abrem mais 8/.test(tx), tx.slice(0, 240));
+      regua('a ficha com a inscrição');
+      botao(c, /Sair do torneio/).click();
+      check('sair · pede confirmação antes', /Sair do torneio\?/.test(tituloFicha()) && !ultPedido('/api/torneio/sair'), tituloFicha());
+      botao(fichaAberta(), /^Sair$/).click();
+      return ate(function () { return !!ultPedido('/api/torneio/sair') && tituloFicha() === 'Torneio da Arena' && cartao(61) && /5 de 8/.test(cartao(61).textContent); }, 4000);
+    }).then(function (ok) {
+      check('sair · confirmado: o POST sai, a vaga volta ("5 de 8") e o botão de inscrever reaparece', ok && !!botao(cartao(61), /Inscrever minha dupla/));
+      // inscreve de novo para o resto da prova
+      botao(cartao(61), /Inscrever minha dupla/).click();
+      botao(fichaAberta(), /Inscrever a dupla/).click();
+      return ate(function () { return tituloFicha() === 'Torneio da Arena' && cartao(61) && /Você está inscrito com/.test(cartao(61).textContent); }, 4000);
+    }).then(function (ok) { check('inscrição · de novo, para a chave', ok); });
+  }
+
+  // ---------------------------------------------------------------- 3. os inscritos e a chave
+  function chave() {
+    botao(cartao(61), /Ver os inscritos \(6\)/).click();
+    return ate(function () { var f = fichaAberta(); return f && f.querySelectorAll('.tor-inscritos .aq-linha').length === 6; }, 3000).then(function (ok) {
+      var f = fichaAberta();
+      var eu = f && f.querySelector('.tor-inscritos .aq-linha[data-conta="' + EU + '"]');
+      check('inscritos · a lista com os seis (nome, nível, a dupla) e a minha linha marcada', ok && !!eu && eu.classList.contains('is-eu') && /Ana/.test(eu.textContent) &&
+            /Bia/.test(f.querySelector('.tor-inscritos').textContent) && /nv 23/.test(f.querySelector('.tor-inscritos').textContent));
+      check('inscritos · antes do sorteio não há chave', !f.querySelector('.tor-chave') && !!botao(f, /Todos os torneios/));
+      // O SORTEIO: 6 inscritos = chave de 8 com 2 passes; depois a 1ª rodada anda com um W.O.
+      var t = acha(61), h = INICIO;
+      t.estado = 'andamento';
+      t.inscricaoAteMs = agora() - 1000;
+      t.premio = PREMIO[8];
+      t.chave = { tamanho: 8, rodada: 1, rodadas: [
+        [{ pos: 0, a: P(EU, 'Ana'), b: P(66, 'Fabi'), estado: 'decidida', vencedor: 'a', como: 'wo', previstoMs: h },
+         { pos: 1, a: P(22, 'Bia'), b: null, estado: 'decidida', vencedor: 'a', como: 'bye', previstoMs: h },
+         { pos: 2, a: P(33, 'Caio'), b: P(44, 'Duda'), estado: 'decidida', vencedor: 'b', como: 'luta', previstoMs: h },
+         { pos: 3, a: P(55, 'Edu'), b: null, estado: 'decidida', vencedor: 'a', como: 'bye', previstoMs: h }],
+        [{ pos: 0, a: P(EU, 'Ana'), b: P(22, 'Bia'), estado: 'chamada', vencedor: null, como: null, previstoMs: h + 20 * 60000 },
+         { pos: 1, a: P(44, 'Duda'), b: P(55, 'Edu'), estado: 'aguarda', vencedor: null, como: null, previstoMs: h + 20 * 60000 }],
+        [{ pos: 0, a: null, b: null, estado: 'aguarda', vencedor: null, como: null, previstoMs: h + 40 * 60000 }]] };
+      return rele();
+    }).then(function () {
+      return ate(function () { var f = fichaAberta(); return f && f.querySelector('.tor-chave'); }, 3000);
+    }).then(function (ok) {
+      var f = fichaAberta(), cv = f && f.querySelector('.tor-chave');
+      var cols = cv ? cv.querySelectorAll('.tor-col') : [];
+      check('chave · com a ficha aberta, o sorteio aparece sozinho: três colunas — Quartas, Semifinal, Final', ok && cols.length === 3 &&
+            /quartas/i.test(cols[0].textContent) && /semifinal/i.test(cols[1].textContent) && /final/i.test(cols[2].querySelector('.tor-col-tit').textContent),
+            [].map.call(cols, function (c) { return (c.querySelector('.tor-col-tit') || {}).textContent; }).join());
+      var lutas = cv ? cv.querySelectorAll('.tor-luta') : [];
+      check('chave · de 8: sete lutas (4 + 2 + 1)', lutas.length === 7 && cols[0].querySelectorAll('.tor-luta').length === 4 && cols[1].querySelectorAll('.tor-luta').length === 2, lutas.length);
+      var passes = cv ? cv.querySelectorAll('.tor-luta.is-bye') : [];
+      check('chave · os dois passes livres marcados ("— passe —" no lugar do adversário e "passe livre" no pé)', passes.length === 2 &&
+            /— passe —/.test(passes[0].textContent) && /passe livre/.test(passes[0].querySelector('.tor-pe').textContent) && !!passes[0].querySelector('.tor-lado.is-venceu'));
+      var wo = cv && cv.querySelector('.tor-luta.is-wo');
+      check('chave · o W.O. marcado na luta em que o outro não apareceu, com quem passou em destaque', !!wo && /W\.O\./.test(wo.querySelector('.tor-pe').textContent) &&
+            /Ana/.test(wo.querySelector('.tor-lado.is-venceu').textContent) && /Fabi/.test(wo.querySelector('.tor-lado.is-caiu').textContent) && !!wo.querySelector('.tor-ok'));
+      var luta = cols[0] && cols[0].querySelector('.tor-luta[data-pos="2"]');
+      check('chave · a luta decidida na arena: "na luta", a vencedora (Duda) com ✔ e quem caiu riscado', !!luta && /na luta/.test(luta.textContent) &&
+            /Duda/.test(luta.querySelector('.tor-lado.is-venceu').textContent) && /Caio/.test(luta.querySelector('.tor-lado.is-caiu').textContent));
+      var minhas = cv ? cv.querySelectorAll('.tor-luta.is-eu') : [];
+      check('chave · a minha linha destacada nas duas rodadas em que estou (e o meu nome em ouro)', minhas.length === 2 && !!minhas[1].querySelector('.tor-lado.is-meu') &&
+            /Ana/.test(minhas[1].querySelector('.tor-lado.is-meu').textContent), minhas.length);
+      check('chave · a rodada em curso acesa e a minha luta "chamando…"', cols[1].classList.contains('is-vez') && /chamando…/.test(minhas[1].querySelector('.tor-pe').textContent));
+      var d1 = new Date(INICIO + 20 * 60000), d2 = new Date(INICIO + 40 * 60000), dd = function (n) { return (n < 10 ? '0' : '') + n; };
+      var prev1 = 'previsão ' + dd(d1.getHours()) + ':' + dd(d1.getMinutes()), prev2 = 'previsão ' + dd(d2.getHours()) + ':' + dd(d2.getMinutes());
+      check('chave · a previsão da hora de cada luta que ainda não começou (início + rodada × 20 min)',
+            cols[1].querySelectorAll('.tor-luta')[1].textContent.indexOf(prev1) >= 0 && cols[2].textContent.indexOf(prev2) >= 0 && /a definir/.test(cols[2].textContent), prev1 + ' / ' + prev2);
+      check('chave · no celular ela rola para os lados DENTRO da caixa (a ficha não)', cv.scrollWidth > cv.clientWidth + 20 && cv.getBoundingClientRect().right <= 390.5,
+            cv.scrollWidth + ' > ' + cv.clientWidth);
+      check('chave · o cabeçalho diz "Em andamento — Semifinal"', /Em andamento — Semifinal/.test(f.textContent));
+      regua('a ficha com a chave');
+      // um torneio que já acabou: a chave inteira e o campeão no fim
+      botao(f, /Todos os torneios/).click();
+      var ult = fichaAberta().querySelector('.tor-ultimo[data-torneio="50"]');
+      ult.click();
+      return ate(function () { var g = fichaAberta(); return g && g.querySelector('.tor-campeao'); }, 3000);
+    }).then(function (ok) {
+      var f = fichaAberta();
+      check('chave · a de um torneio encerrado: a coluna do Campeão no fim (Hugo) e o prêmio que ele levou', ok && /Hugo/.test(f.querySelector('.tor-campeao').textContent) &&
+            /Prêmio do campeão: 5 barra\(s\) de ouro · 1250 vinténs/.test(f.textContent) && f.querySelectorAll('.tor-luta').length === 3);
+      regua('a chave encerrada');
+      U.closeSheet();
+    });
+  }
+
+  // ---------------------------------------------------------------- 4. a chamada
+  function aChamada() {
+    check('chamada · sem luta chamada não há cartão', !chamada());
+    srv.meu.luta = { torneio: 61, rodada: 1, pos: 0, lado: 'A', adversario: { conta: 22, nome: 'Bia', nivel: 23, classes: [{ classId: 'arqueiro', nivel: 23 }, { classId: 'sumo', nivel: 22 }] },
+                     prazoMs: agora() + 180000, presente: false, elePresente: false };
+    return To.consulta().then(function () {
+      return ate(function () { return !!chamada(); }, 3000);
+    }).then(function (ok) {
+      var c = chamada(), tx = c ? c.textContent : '';
+      check('chamada · o cartão aparece na praça: "Sua luta do torneio: contra Bia", a rodada e a dupla dela', ok && /Sua luta do torneio: contra Bia/.test(tx) && /Semifinal/.test(tx) && /nv 23/.test(tx), tx.slice(0, 200));
+      var rel = c && c.querySelector('.tc-rel');
+      check('chamada · os 3 minutos correndo (2:5x ou 3:00) e a barra do prazo', !!rel && /^(3:00|2:5\d)$/.test(rel.textContent) && !!c.querySelector('.conv-prazo'), rel && rel.textContent);
+      var bA = botao(c, /^Estou aqui$/);
+      var r = bA ? bA.getBoundingClientRect() : { width: 0, height: 0 };
+      check('chamada · o botão "Estou aqui" (≥ 44 px) e o aviso do W.O.', !!bA && r.height >= 43.5 && r.width >= 43.5 && /W\.O\./.test(tx), Math.round(r.width) + '×' + Math.round(r.height));
+      var rc = c.getBoundingClientRect();
+      check('chamada · o cartão cabe na coluna de 390 px', rc.left >= 0 && rc.right <= 390.5, Math.round(rc.left) + '..' + Math.round(rc.right));
+      check('chamada · a praça avisa também num toque de texto', /sua luta contra Bia foi chamada/.test(toastTxt()), toastTxt());
+      // com uma ficha aberta o cartão continua na frente (é ele que recebe o toque)
+      U.openSheet('char');
+      return ate(function () { return /Personagem/.test(tituloFicha()); }, 3000);
+    }).then(function () {
+      var c = chamada(), bA = c && botao(c, /^Estou aqui$/);
+      var r = bA ? bA.getBoundingClientRect() : null;
+      var alvo = r ? doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null;
+      check('chamada · não some com uma ficha aberta por cima: o toque no "Estou aqui" cai nele', !!c && !!alvo && c.contains(alvo), alvo && alvo.className);
+      U.closeSheet();
+      // a praça remontada do zero (UI.repaint) não leva o cartão embora
+      U.repaint();
+      return espera(300);
+    }).then(function () {
+      check('chamada · a praça remontada (UI.repaint) não tira o cartão', !!chamada() && !!botao(chamada(), /^Estou aqui$/));
+      botao(chamada(), /^Estou aqui$/).click();
+      return ate(function () { return !!ultPedido('/api/torneio/presente') && chamada() && /Você confirmou/.test(chamada().textContent); }, 3000);
+    }).then(function (ok) {
+      var c = chamada(), tx = c ? c.textContent : '';
+      check('chamada · "Estou aqui": o POST sai com o torneio e o cartão passa a "Você confirmou. Esperando Bia…"', ok && ultPedido('/api/torneio/presente').corpo.torneio === 61 &&
+            /Esperando Bia/.test(tx) && !botao(c, /^Estou aqui$/) && c.classList.contains('is-presente'), tx.slice(0, 200));
+      check('chamada · o relógio segue na tela enquanto o outro não confirma', !!c.querySelector('.tc-rel'));
+      // a Bia confirma: quem já confirmou aparece
+      srv.meu.luta.elePresente = true;
+      return To.consulta().then(function () { return ate(function () { return /Bia também/.test(chamada().textContent); }, 3000); });
+    }).then(function (ok) {
+      check('chamada · quando o outro confirma: "Você confirmou. Bia também — a luta abre em instantes."', ok, chamada() && chamada().textContent.slice(0, 200));
+      // o servidor cria a partida PRONTA na Arena, com o did do torneio
+      srv.arena = { fase: 'pronta', did: 'tor-61-1-0', lado: 'A', papel: 'inscrito', torneio: 61, herois: [ids[1], ids[0]], classes: [{ classId: 'sumo', nivel: 22 }], nivel: 22,
+                    adversario: { conta: 22, nome: 'Bia', nivel: 23, brasa: 1210, herois: ['arqueiro'], classes: [{ classId: 'arqueiro', nivel: 23 }] } };
+      srv.meu.luta.did = 'tor-61-1-0';
+      saidas.length = 0;
+      return To.consulta().then(function () { return ate(function () { return J.Duelo.estado().did === 'tor-61-1-0'; }, 5000); });
+    }).then(function (ok) {
+      var de = J.Duelo.estado(), ch = ultSaida('arena');
+      check('luta · o did aparece: a Arena de sempre entrega ao Duelo (modo "arena", o did do torneio) e o lado A chama a Bia pela Rede',
+            ok && de.modo === 'arena' && !!ch && ch.para === 'bia' && ch.dados.did === 'tor-61-1-0', JSON.stringify(de) + ' · ' + JSON.stringify(ch && ch.dados));
+      check('luta · o Duelo sabe que é do torneio (a vida cheia)', J.Duelo._st().arena && J.Duelo._st().arena.torneio === 61);
+      return ate(function () { return chamada() && /a luta vai começar/.test(chamada().textContent); }, 3000);
+    }).then(function (ok) {
+      check('luta · o cartão avisa: "a luta vai começar!" (sem relógio, sem botão)', ok && !chamada().querySelector('.tc-rel') && !chamada().querySelector('button') && To.luta().entregue === true,
+            chamada() && chamada().textContent.slice(0, 160));
+      // a luta acaba (aqui, o duelo é desfeito) e o servidor tira a chamada
+      J.Duelo.cancelar('x');
+      J.Duelo._reset();
+      J.Arena._reset();
+      srv.arena = { fase: 'livre' };
+      srv.meu.luta = null;
+      return To.consulta().then(function () { return ate(function () { return !chamada(); }, 3000); });
+    }).then(function (ok) {
+      check('luta · decidida: o cartão sai e o mesmo did não é entregue de novo', ok && J.Duelo.estado().fase === 'livre');
+    });
+  }
+
+  // ---------------------------------------------------------------- 5. o torneio de guilda
+  function guilda() {
+    srv.meu.guilda = { torneio: 63, voluntarios: [{ conta: 44, nome: 'Duda', nivel: 21, classes: [{ classId: 'bruxo', nivel: 21 }], desdeMs: agora() - 60000 }],
+                       representante: null, souVoluntario: false, possoEscolher: true };
+    return rele().then(function () {
+      U.openSheet('torneio', 'lista');
+      return ate(function () { var c = cartao(63); return c && c.querySelector('.tor-voluntario'); }, 3000);
+    }).then(function (ok) {
+      var c = cartao(63);
+      check('guilda · quem é de guilda vê os voluntários (Duda) e "Voluntariar minha dupla"', ok && /Voluntários da sua guilda: 1/.test(c.textContent) && /Duda/.test(c.textContent) &&
+            /Sem escolha, vai o voluntário de maior nível/.test(c.textContent) && !!botao(c, /Voluntariar minha dupla/), c && c.textContent.slice(-300));
+      botao(c, /Voluntariar minha dupla/).click();
+      check('guilda · voluntariar usa a mesma ficha dos dois heróis', tituloFicha() === 'Voluntário da guilda', tituloFicha());
+      botao(fichaAberta(), /Voluntariar a dupla/).click();
+      return ate(function () { var k = cartao(63); return k && k.querySelectorAll('.tor-voluntario').length === 2; }, 4000);
+    }).then(function (ok) {
+      var p = ultPedido('/api/torneio/voluntariar'), c = cartao(63);
+      check('guilda · o POST leva o torneio e a dupla; a lista passa a ter os dois, comigo marcado "você"', ok && p.corpo.torneio === 63 && p.corpo.herois.length === 2 &&
+            /você/.test(c.querySelector('.tor-voluntario[data-conta="' + EU + '"]').textContent) && !!botao(c, /Retirar meu nome/));
+      var bE = botao(c.querySelector('.tor-voluntario[data-conta="44"]'), /^Escolher$/);
+      check('guilda · o líder (ou oficial) tem "Escolher" em cada voluntário', !!bE && c.querySelectorAll('.tor-escolher').length === 2);
+      regua('a ficha com a guilda');
+      bE.click();
+      return ate(function () { var k = cartao(63); var l = k && k.querySelector('.tor-voluntario[data-conta="44"]'); return l && /representante/.test(l.textContent); }, 4000);
+    }).then(function (ok) {
+      var p = ultPedido('/api/torneio/representante'), c = cartao(63);
+      check('guilda · escolher: o POST leva a conta, a linha vira "representante" e o botão vira "Desfazer"', ok && p.corpo.conta === 44 &&
+            !!botao(c.querySelector('.tor-voluntario[data-conta="44"]'), /^Desfazer$/) && /O representante já foi escolhido/.test(c.textContent));
+      botao(c.querySelector('.tor-voluntario[data-conta="44"]'), /^Desfazer$/).click();
+      return ate(function () { var q = ultPedido('/api/torneio/representante'); return q && q.corpo.conta === null; }, 3000);
+    }).then(function (ok) {
+      check('guilda · desfazer manda conta: null', ok);
+      srv.meu.guilda.possoEscolher = false;
+      return rele();
+    }).then(function () {
+      return ate(function () { var k = cartao(63); return k && !k.querySelector('.tor-escolher'); }, 3000);
+    }).then(function (ok) {
+      check('guilda · o membro comum não tem o botão de escolher (só a lista e o próprio nome)', ok && !!botao(cartao(63), /Retirar meu nome/));
+      botao(cartao(63), /Retirar meu nome/).click();
+      return ate(function () { var k = cartao(63); return !!ultPedido('/api/torneio/desvoluntariar') && k && k.querySelectorAll('.tor-voluntario').length === 1; }, 4000);
+    }).then(function (ok) {
+      check('guilda · retirar o nome: o POST sai e a lista volta a um', ok);
+      U.closeSheet();
+    });
+  }
+
+  // ---------------------------------------------------------------- 6. o fim
+  function campeao() {
+    // os OUTROS: um torneio em que participei e a Bia venceu
+    var t2 = torneio(62, { faixa: '25-30', nivelMin: 25, nivelMax: 30, titulo: 'Torneio da Arena · 25 a 30', estado: 'andamento', vagas: 4,
+                           inscritos: [ins(22, 'Bia', 26), ins(EU, 'Ana', 25)] });
+    srv.torneios[1] = t2;
+    return rele().then(function () {
+      t2.estado = 'encerrado'; t2.campeao = P(22, 'Bia'); t2.premio = PREMIO[2];
+      return rele();
+    }).then(function () {
+      return ate(function () { return /Bia venceu/.test(toastTxt()); }, 3000);
+    }).then(function (ok) {
+      check('fim · para os outros: um aviso ("Bia venceu o Torneio de PvP · nível 25 a 30!"), sem ficha', ok && tituloFicha() === '', toastTxt());
+      // EU campeã: a chave de 8 termina
+      var t = acha(61);
+      t.estado = 'encerrado'; t.campeao = P(EU, 'Ana'); t.premio = PREMIO[8];
+      t.chave.rodada = 2;
+      t.chave.rodadas[1][0].estado = 'decidida'; t.chave.rodadas[1][0].vencedor = 'a'; t.chave.rodadas[1][0].como = 'luta';
+      t.chave.rodadas[1][1].estado = 'decidida'; t.chave.rodadas[1][1].vencedor = 'b'; t.chave.rodadas[1][1].como = 'sorteio';
+      t.chave.rodadas[2][0] = { pos: 0, a: P(EU, 'Ana'), b: P(55, 'Edu'), estado: 'decidida', vencedor: 'a', como: 'desistencia', previstoMs: INICIO + 40 * 60000 };
+      srv.meu.conquistas = { pvp: 3, guilda: 0 };
+      srv.meu.moldura = true; srv.meu.vigente = true;
+      return rele();
+    }).then(function () {
+      return ate(function () { return tituloFicha() === 'Campeão do Torneio!'; }, 4000);
+    }).then(function (ok) {
+      var f = fichaAberta(), tx = f ? f.textContent : '';
+      check('fim · a tela do campeão abre sozinha na praça', ok, tituloFicha());
+      check('fim · o prêmio recebido: +10 barras, +2500 vinténs, +1 Gema, a conquista (são 3), a moldura e o louro',
+            /\+10 barra\(s\) de ouro/.test(tx) && /\+2500 vinténs/.test(tx) && /\+1 Gema\(s\) Enterrada\(s\)/.test(tx) && /são 3/.test(tx) &&
+            /moldura Campeão da Arena/.test(tx) && /louro/.test(tx), tx.slice(0, 400));
+      regua('a tela do campeão');
+      botao(f, /^Ver a chave$/).click();
+      return ate(function () { var g = fichaAberta(); return g && g.querySelector('.tor-campeao'); }, 3000);
+    }).then(function (ok) {
+      var f = fichaAberta();
+      check('fim · a chave fechada: Ana campeã (destacada), o sorteio e a desistência marcados', ok && f.querySelector('.tor-campeao').classList.contains('is-eu') &&
+            !!f.querySelector('.tor-luta.is-sorteio') && /por sorteio/.test(f.querySelector('.tor-luta.is-sorteio').textContent) &&
+            !!f.querySelector('.tor-luta.is-desistencia') && /desistência/.test(f.querySelector('.tor-luta.is-desistencia').textContent));
+      U.closeSheet();
+      return rele();
+    }).then(function () {
+      return espera(1300);
+    }).then(function () {
+      check('fim · a tela do campeão não abre de novo na leitura seguinte', tituloFicha() === '', tituloFicha());
+      check('fim · a plaquinha recebe as conquistas e o vigente (o grau e o louro da moldura)', J.Hub._arenaDoHeroi() && J.Hub._arenaDoHeroi().n === 3 && J.Hub._arenaDoHeroi().vigente === true,
+            JSON.stringify(J.Hub._arenaDoHeroi()));
+    });
+  }
+
+  // ---------------------------------------------------------------- 7. Customizar: os títulos e a moldura
+  function customizar() {
+    var Lj = J.Loja;
+    var vit = { agora: 0, auras: { tem: [], escolhida: null, todas: [] }, molduras: { tem: ['arena'], escolhida: null, todas: [{ id: 'ouro', nome: 'Dourada' }] } };
+    var escolhidas = [];
+    Lj.vitrine = function () { return Promise.resolve(vit); };
+    Lj.vitrineAtual = function () { return vit; };
+    Lj.molduraEscolhida = function () { return vit.molduras.escolhida; };
+    Lj.auraEscolhida = function () { return null; };
+    Lj.escolheMoldura = function (id) { escolhidas.push(id); vit.molduras.escolhida = id; return Promise.resolve({ ok: true, escolhida: id }); };
+    U.openSheet('customizar');
+    return ate(function () { var f = fichaAberta(); return f && f.querySelector('.tit-grupo[data-fonte="arena"]') && f.querySelector('.char-mol-b[data-moldura="arena"]'); }, 6000).then(function (ok) {
+      var f = fichaAberta();
+      var grupo = f && f.querySelector('.tit-grupo[data-fonte="arena"]');
+      check('títulos · a ficha Customizar tem o grupo "Torneio da Arena"', ok && !!grupo && /Torneio da Arena/.test(grupo.textContent));
+      var itens = f ? [].map.call(f.querySelectorAll('.tit-lista .tit-item'), function (b) { return b.textContent; }).join(' | ') : '';
+      check('títulos · a escada das conquistas está no menu (Campeão, Bicampeão, Tricampeão, Lenda, Imortal) e o Campeão das Guildas',
+            /Campeão da Arena/.test(itens) && /Bicampeão da Arena/.test(itens) && /Tricampeão da Arena/.test(itens) && /Lenda da Arena/.test(itens) &&
+            /Imortal da Arena/.test(itens) && /Campeão das Guildas/.test(itens), itens.slice(0, 400));
+      var catalogoNovo = !!(J.Titulos && J.Titulos.catalogo({ arena: { pvp: 3, guilda: 0 } }).some(function (t) { return t.fonte === 'arena'; }));
+      check('títulos · o que falta diz quanto falta em conquistas (a Lenda: 3/5)', /Lenda da Arena\s*3\/5 conquista/.test(itens) || (catalogoNovo && /Lenda da Arena\s*ainda não é seu/.test(itens)),
+            itens.slice(0, 400));
+      diz('o titulos.js desta página ' + (catalogoNovo ? 'JÁ traz a fonte "arena": os três primeiros têm de estar liberados' : 'ainda NÃO traz a fonte "arena": a escada aparece só para ler'));
+      if (catalogoNovo) {
+        var livres = [].filter.call(f.querySelectorAll('.tit-lista .tit-item'), function (b) { return !b.disabled && /da Arena/.test(b.textContent); }).length;
+        check('títulos · com 3 conquistas, três títulos da Arena liberados (Campeão, Bi e Tri)', livres === 3, livres);
+      }
+      var bM = f.querySelector('.char-mol-b[data-moldura="arena"]');
+      check('moldura · a "Campeão da Arena" aparece entre as molduras da conta, com o grau das conquistas (3 → II)', !!bM && /Campeão da Arena II$/.test(bM.textContent.trim()) &&
+            !!bM.querySelector('.char-mol-cor.is-campeao2'), bM && bM.textContent);
+      var rM = bM.getBoundingClientRect();
+      check('moldura · o botão dela mede ao menos 44×44 e não sai da coluna', rM.height >= 43.5 && rM.width >= 43.5 && rM.right <= 390.5, Math.round(rM.width) + '×' + Math.round(rM.height));
+      bM.click();
+      return ate(function () { return escolhidas.length === 1; }, 3000);
+    }).then(function (ok) {
+      check('moldura · escolher manda "arena" à vitrine (a posse quem confere é o servidor)', ok && escolhidas[0] === 'arena');
+      check('moldura · a praça passa a pendurar a do Campeão com o grau II (hub3d: molduraEfetiva)', J.Hub._molduraDoHeroi() === 'arena' &&
+            J.Hub.molduraEfetiva(J.Hub._molduraDoHeroi(), '', false, J.Hub._arenaDoHeroi()) === 'campeao2', J.Hub._molduraDoHeroi());
+      U.closeSheet();
+    });
+  }
+})();
+</script>
+</body>
+</html>
