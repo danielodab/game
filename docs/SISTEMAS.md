@@ -1678,6 +1678,93 @@ diferente (ou decidiu onde o texto calava) está na seção 4 de lá. Aqui fica 
   `node tests/juiz_recompensa.js` (o XP em dobro no lugar do +15%). O que o servidor não acredita do cliente:
   docs/SEGURANCA.md §4.10.
 
+## 9-A.28 O Torneio da Arena — o cliente, o site e o painel (10/10)
+
+O dono: "a arena é o maior item do mapa e tem que ir além de procurar desafios, deve ter torneio; todo sábado
+terá torneio de PvP e todo domingo torneio de guilda (ou quando o adm marcar)". O contrato é `docs/TORNEIO.md`
+(as regras, as rotas e, na seção 4, o que o servidor decidiu); o servidor está em 9-A.27. Aqui fica quem
+DESENHA e quem PEDE.
+
+**O módulo — `js/core/torneio.js` (`JOGO.Torneio`).** A lista pública (`GET /api/torneios`, cache de 60 s; 15 s
+com chave andando), o MEU (`GET /api/torneio/meu`: inscrições, a luta chamada, as conquistas, o lado da guilda)
+e os pedidos (`inscrever`, `sair`, `presente`, `voluntariar`, `desvoluntariar`, `representante`). O MEU é relido
+a cada ~20 s na praça com inscrição ou torneio do dia, a cada 3 s com chamada ou luta, e de 5 em 5 min sem nada
+(as conquistas mudam pouco); fora da praça, só com luta. O relógio é o do servidor (`To.agora()`, o desvio
+medido a cada resposta). `To.textoRecusa(r)` transforma cada `motivo` em frase; motivo desconhecido mostra a
+frase do servidor. Servidor de antes do torneio (404): a lista fica vazia, a aba diz que ele ainda não chegou e
+o MEU nem é pedido.
+
+**A luta não é do módulo.** Quando `luta.did` aparece, ele chama `JOGO.Arena.consulta()`: a Arena de sempre lê
+`fase: 'pronta'` (o servidor a marca com `torneio: <id>`) e entrega ao Duelo pela Rede, no modo `arena`. Um
+`did` é entregue UMA vez (a revanche vem com outro); fora da praça ou com outro duelo aberto a entrega espera e
+`luta.bloqueio` diz o porquê. Em `js/core/grupo.js` entrou só o necessário: a pronta passa `torneio` ao
+`Duelo.iniciaArena`, que o guarda em `dst.arena.torneio`, e o `Duelo.escolher` deixa o herói a 0 PV entrar e
+não manda o carry local quando a luta é do torneio ("começa com a vida CHEIA dos dois lados"); o duelo comum
+segue recusando por `vida-zero`.
+
+**A tela — `js/ui/hud.js`.**
+- A Arena tem duas abas (`abasArena`): **Desafios** (o quadro) e **Torneio** (a ficha `torneio`). O painel do
+  lugar mostra a linha do próximo torneio e a porta.
+- A ficha: um cartão por torneio que vem (as duas faixas do PvP e o de guilda) — a data no fuso do aparelho, a
+  contagem (anda a cada segundo), as vagas ("5 de 8 — enche e abrem mais 8"), o prêmio do tamanho de agora e o do
+  torneio cheio, a minha situação (inscrito com tal dupla, trocar, sair). A inscrição usa a ficha de escolher os
+  dois heróis do quadro (`sheetEscolheDupla`, com `semVida` e `aoCancelar`). A dupla da praça fora da faixa só
+  AVISA: quem confere o nível é o servidor.
+- A chave (`desenhaChave`): uma coluna por rodada (Oitavas, Quartas, Semifinal, Final), quem passou com ✔, quem
+  caiu riscado, W.O./passe livre/sorteio/desistência no pé de cada luta, a previsão da hora das que faltam, a
+  rodada em curso acesa e a minha linha com a borda de ouro. No celular a CAIXA rola para os lados; a ficha não.
+- A guilda: voluntariar a dupla, a lista de voluntários, o líder ou oficial escolhendo (e desfazendo) o
+  representante. Também pela Mesa do conselho do salão ("Torneio das Guildas"). A ficha da guilda mostra
+  "campeã vigente · N título(s)" e "XP em dobro até …" (`JOGO.Guilda.torneio()` / `fatorXp()`, que o game.js
+  usa na prévia do XP).
+- A chamada (`.ui-torneio`, `pintaChamada`): um cartão FORA das telas e por cima das fichas, como o dos
+  pedidos — "Sua luta do torneio: contra X", a rodada, os 3 minutos com a barra, o "Estou aqui", quem já
+  confirmou, e "a luta vai começar!" (ou "volte à praça"). A praça remontada não o tira; ele só sai da frente
+  enquanto a própria luta acontece. Na revanche o cartão diz que é revanche.
+- O fim: a tela do campeão abre sozinha na praça com o prêmio recebido; os outros recebem um aviso, e a plateia
+  (`tipo: 'torneio'`) escreve a linha no chat de todos. O prêmio que chega pela fila da loja sai como "Prêmio do
+  torneio". O fim do duelo do torneio diz que a coroa não muda.
+- Customizar: o grupo "Torneio da Arena" nos títulos (a régua é a do `js/core/titulos.js`, com
+  `estado.arena = {pvp, guilda}` vindo do MEU) e a moldura "Campeão da Arena" com o grau.
+
+**A moldura e a placa da guilda — `js/render3d/hub3d.js`.** A vitrine chama a moldura de `arena`; na placa ela
+vira `campeao1..3` pelo `arena.n` do perfil (1–2 → I bronze liso; 3–4 → II prata com pilastras e gema; 5+ → III
+ouro com pilastras duplas e a coroa de três pontas). A forma é dela: um FRONTÃO no alto e os cantos de baixo
+cortados. Por cima vão as marcas (1 a 5, uma por conquista) e, só no campeão vigente, o louro deitado sobre a
+borda de cima. A `arena` automática do pódio da Brasa (as pontas, "Top N Pvp") não mudou, e título do torneio
+sem a moldura escolhida não acende moldura nenhuma. A placa da GUILDA campeã é discreta de propósito (o dono:
+"não pode ser muito chamativa"): um segundo filete fino dourado e um raminho de louro em cada canto enquanto é
+a vigente, e uma gema pequena por título (até 5) para sempre — sem forma nova, sem crescer a placa. O `arena`
+dos outros chega no perfil pela Rede (`js/core/rede.js` só o deixa passar, limpo); o do próprio herói entra por
+`Hub.arena()` e `Hub.guildaCampea()`. A página nunca manda `arena`: quem carimba é o Relé.
+
+**O painel do Mestre — `js/ui/painel_mestre.js`, aba Torneios.** A lista de todos (com os cancelados e o
+motivo), o formulário de marcar (tipo, faixa só no PvP, data e hora de BRASÍLIA, título opcional de 3 a 60
+letras; nasce no próximo sábado/domingo às 14:00) e o cancelar em duas batidas para o que ainda não começou.
+
+**O site — `site/torneio.html`.** O dono: "os desafios serão sorteios e ficarão públicos no site, o horário do
+desafio de cada". A página lê `GET /api/torneios` sem conta: os torneios que vêm com data, contagem, vagas,
+prêmios e inscritos; a chave com o HORÁRIO previsto de cada luta; os últimos campeões com a chave para abrir; e
+as regras com a tabela do prêmio. Atualiza sozinha a cada 30 s com torneio sorteado, em andamento ou a menos de
+uma hora do início; a cada 5 min fora disso. O menu de todas as páginas ganhou "Torneio".
+
+**Armadilhas.**
+- O nome dos torneios da semana sai do `tipo` e da `faixa`, NÃO do `titulo` (que vem em português do servidor);
+  só o torneio do Mestre mostra o título como foi escrito.
+- A lista e o MEU chegam em pedidos separados: a tela do campeão se refaz quando as conquistas chegam.
+- As frases do HTML do site têm de estar em `site/i18n_<idioma>.js` mesmo quando já existem no dicionário do
+  jogo: o HTML é traduzido ANTES de o `textos_<idioma>.js` descer. E o menu inteiro é UMA frase — mexer nele
+  troca a chave nas dez páginas.
+- A faixa de eventos da praça ainda não cita o torneio do dia (era opcional).
+
+**Provas.** Node: `tests/torneio_cliente.js` (70 — o módulo e o grupo.js de verdade: o ritmo da consulta, os
+pedidos, as recusas, a entrega à Arena, o did que não repete, a revanche, a vida, o campeão),
+`tests/torneio_perfil.js` (12 — a Rede: o `arena` do perfil e a guilda campeã). Navegador:
+`tests/torneio_hud.html` (a ficha, a inscrição, a chave de 8, a chamada, a guilda, o campeão, Customizar e a
+régua de 390 px / 44 px), `tests/foto_moldura_arena.html` (os três graus, as marcas, o louro, a placa da
+guilda), `tests/site_torneio.html` (a página do site com dados de mentira) e a seção Torneios de
+`tests/painel_mestre.html`.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
