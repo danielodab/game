@@ -60,6 +60,13 @@ TORNEIO_ENTRE_MS = int(_do_ambiente('SOTERRA_TORNEIO_ENTRE_S', 120) * 1000)     
 TORNEIO_LUTA_MAX_MS = int(_do_ambiente('SOTERRA_TORNEIO_LUTA_MAX_S', 1800) * 1000)  # a luta que passa de 30 min: sorteio
 TORNEIO_PREVISAO_MS = int(_do_ambiente('SOTERRA_TORNEIO_PREVISAO_S', 1200) * 1000)  # a previsão pública: 20 min por rodada
 TORNEIO_DOBRO_S = int(_do_ambiente('SOTERRA_TORNEIO_DOBRO_S', 7 * 86400))         # o XP em dobro da guilda campeã
+# 10/10 (a brecha fechada, docs/SEGURANCA.md §4.10): o fechamento SEM vencedor vindo de UM lado (foto, replay que o
+# juiz recusa, W.O. sem prova, o did fechado por outro modo) não decide nada na hora — espera tanto o registro do
+# OUTRO lado. No espírito do GRUPO_ESPERA da sala em grupo e do DUELO_ESPERA_MS do duelo
+TORNEIO_FECHO_MS = int(_do_ambiente('SOTERRA_TORNEIO_FECHO_S', 90) * 1000)
+# os fechamentos sem vencedor que são ESCOLHA de quem fecha (o lado que está perdendo os usaria): contam na
+# reincidência. 'sem-fim' (o replay limpo que parou no meio) e 'wo-sem-prova' não são culpa de quem fecha
+FECHOS_CULPOSOS = ('fotografada', 'recusado', 'fora')
 TORNEIO_PASSO_S = _do_ambiente('SOTERRA_TORNEIO_PASSO_S', 5)                      # o laço do relógio
 # as LEITURAS (as duas públicas, o /meu e a lista do Mestre) dão o passo no máximo uma vez a cada tanto por
 # processo: o passo é uma transação de escrita, e uma rota sem conta não pode virar um jeito de segurar a
@@ -182,6 +189,16 @@ CREATE TABLE IF NOT EXISTS torneio_dids(
   pos        INTEGER NOT NULL,
   revanche   INTEGER NOT NULL DEFAULT 0,
   criado_ms  INTEGER NOT NULL
+);
+-- 10/10 (a brecha fechada): o fechamento SEM vencedor de cada lado de cada did — 'fotografada' | 'recusado' (o juiz
+-- recusou o replay) | 'fora' (outro modo, outros heróis) | 'wo-sem-prova' | 'sem-fim' (o replay limpo sem fim). Um
+-- lado só não decide: espera o outro (TORNEIO_FECHO_MS). É também a ficha da reincidência (a luta e a revanche)
+CREATE TABLE IF NOT EXISTS torneio_fechos(
+  did       TEXT NOT NULL,
+  conta_id  INTEGER NOT NULL,
+  tipo      TEXT NOT NULL,
+  em_ms     INTEGER NOT NULL,
+  PRIMARY KEY (did, conta_id)
 );
 -- quem saiu depois do fechamento: perde por W.O. toda luta que ainda tiver
 CREATE TABLE IF NOT EXISTS torneio_desistentes(
@@ -624,6 +641,13 @@ class TorneioMixin:
                 elif l['estado'] == 'luta' and agora_ms >= (l['luta_ms'] or 0) + TORNEIO_LUTA_MAX_MS:
                     self._torneio_decide(t, l, self._sorteia_lado(), 'sorteio', agora_ms)
                     mexeu = True
+                elif l['estado'] == 'luta':
+                    # um lado fechou sem vencedor e a janela venceu sem o registro limpo do outro: agora sim, revanche
+                    primeiro = self.con.execute("SELECT MIN(em_ms) FROM torneio_fechos WHERE did = ? AND tipo != 'sem-fim'",
+                                                (l['did'],)).fetchone()[0]
+                    if primeiro is not None and agora_ms >= primeiro + TORNEIO_FECHO_MS:
+                        self._torneio_revanche(t, l, agora_ms, causa='janela')
+                        mexeu = True
             if mexeu:
                 continue
             if any(l['estado'] != 'decidida' for l in lutas):
@@ -764,11 +788,27 @@ class TorneioMixin:
         tid = t['id']
         if l['did']:
             self.con.execute("UPDATE arena_partidas SET estado = 'jogada' WHERE did = ? AND estado = 'pronta'", (l['did'],))
+        # `por`: quem fechou ESTE did sem vencedor por escolha (foto, replay recusado, fora do torneio) — a lista das
+        # contas; sem nenhuma, quem o duelo_fechar apontou (a espera que venceu, as regras que mudaram: ninguém)
+        culpados = [r['conta_id'] for r in self.con.execute(
+            "SELECT conta_id FROM torneio_fechos WHERE did = ? AND tipo IN (%s) ORDER BY em_ms" % ','.join('?' * len(FECHOS_CULPOSOS)),
+            (l['did'],) + FECHOS_CULPOSOS)] if l['did'] else []
+        por = culpados or ([por] if por is not None else [])
         for quem in (l['a_id'], l['b_id']):
             self._evento(quem, 'torneio-sem-vencedor', {'torneio': tid, 'rodada': l['rodada'], 'pos': l['pos'], 'did': l['did'],
                                                          'revanche': bool(l['revanche']), 'por': por, 'porque': causa})
         if l['revanche']:
-            self._torneio_decide(t, l, self._sorteia_lado(), 'sorteio', agora_ms)
+            # A REINCIDÊNCIA: quem fechou sem vencedor por escolha nas DUAS (a luta e a revanche), com o outro lado
+            # limpo ou calado, perde por W.O. em vez de ir ao sorteio. Os dois reincidentes, ou nenhum: sorteio
+            vezes = {r['conta_id']: r['n'] for r in self.con.execute(
+                "SELECT f.conta_id, COUNT(DISTINCT f.did) AS n FROM torneio_fechos f JOIN torneio_dids d ON d.did = f.did "
+                "WHERE d.torneio_id = ? AND d.rodada = ? AND d.pos = ? AND f.tipo IN (%s) GROUP BY f.conta_id"
+                % ','.join('?' * len(FECHOS_CULPOSOS)), (tid, l['rodada'], l['pos']) + FECHOS_CULPOSOS)}
+            reincide = {k: vezes.get(l[k + '_id'], 0) >= 2 for k in ('a', 'b')}
+            if reincide['a'] != reincide['b']:
+                self._torneio_decide(t, l, 'b' if reincide['a'] else 'a', 'wo', agora_ms)
+            else:
+                self._torneio_decide(t, l, self._sorteia_lado(), 'sorteio', agora_ms)
             return
         self.con.execute("UPDATE torneio_lutas SET estado = 'chamada', revanche = 1, did = NULL, luta_ms = NULL, a_presente = 0, "
                          "b_presente = 0, prazo_ms = ? WHERE torneio_id = ? AND rodada = ? AND pos = ?",
@@ -867,6 +907,37 @@ class TorneioMixin:
         if l is None or {l['a_id'], l['b_id']} != {a_id, b_id}:
             return None
         return {'id': l['torneio_id'], 'rodada': l['rodada'], 'pos': l['pos']}
+
+    def _torneio_fecho(self, did, a_id, b_id, cid, tipo, agora_ms):
+        """Dentro de _escrita, para o duelo_fechar (grupo.py): a conta `cid` fechou o did de um torneio SEM vencedor
+        (`tipo`: 'fotografada' | 'recusado' | 'fora' | 'wo-sem-prova' | 'sem-fim'). Anota e diz o que fazer:
+          ('aguarda', até_ms)   um lado só não decide — espera o registro do outro (até_ms None no 'sem-fim', que
+                                tem a espera própria do duelo). O registro LIMPO do outro com vencedor vale inteiro
+          ('vence', conta)      o replay que o juiz RECUSOU de um lado, com o registro limpo do outro: é derrota de
+                                quem o mandou, não "sem vencedor"
+          ('sem-vencedor', None) os DOIS fecharam sem vencedor (e não são dois registros limpos sem fim): revanche
+          ('nada', None)        o did não é a luta em curso de um torneio entre essas contas"""
+        l = self._torneio_luta_do_did(did)
+        if l is None or {l['a_id'], l['b_id']} != {a_id, b_id} or cid not in (a_id, b_id):
+            return 'nada', None
+        atual = self.con.execute("SELECT tipo FROM torneio_fechos WHERE did = ? AND conta_id = ?", (did, cid)).fetchone()
+        if atual is None:
+            self.con.execute("INSERT INTO torneio_fechos(did, conta_id, tipo, em_ms) VALUES (?, ?, ?, ?)", (did, cid, tipo, agora_ms))
+        elif atual['tipo'] not in FECHOS_CULPOSOS and tipo != atual['tipo'] and (tipo in FECHOS_CULPOSOS or atual['tipo'] == 'sem-fim'):
+            self.con.execute("UPDATE torneio_fechos SET tipo = ?, em_ms = ? WHERE did = ? AND conta_id = ?", (tipo, agora_ms, did, cid))
+        linhas = {r['conta_id']: r for r in self.con.execute("SELECT * FROM torneio_fechos WHERE did = ?", (did,))}
+        outro = b_id if cid == a_id else a_id
+        meu, dele = linhas[cid]['tipo'], (linhas[outro]['tipo'] if outro in linhas else None)
+        if dele is not None:
+            if meu == 'recusado' and dele == 'sem-fim':
+                return 'vence', outro
+            if meu == 'sem-fim' and dele == 'recusado':
+                return 'vence', cid
+            if not (meu == 'sem-fim' and dele == 'sem-fim'):
+                return 'sem-vencedor', None
+        if meu == 'sem-fim':
+            return 'aguarda', None
+        return 'aguarda', min(r['em_ms'] for r in linhas.values() if r['tipo'] != 'sem-fim') + TORNEIO_FECHO_MS
 
     def _torneio_resultado(self, did, a_id, b_id, resultado, por=None):
         """O GANCHO (grupo.py, _duelo_guarda — dentro de _escrita): TODO desfecho guardado de um duelo passa aqui.

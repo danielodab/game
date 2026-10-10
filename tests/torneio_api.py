@@ -698,14 +698,35 @@ class ProvaDoTorneio(unittest.TestCase):
         self.assertEqual(json.loads(self.sql("SELECT entrega FROM loja_pedidos WHERE conta_id = ? AND sku = 'torneio-vintens'",
                                              venc.conta['id'])[0]['entrega'])['qtd'], 600)
 
+    def foto(self, c, a, b, did):
+        return c.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, None, 999, fotografada=True))
+
+    def vence_janela(self, did):
+        """A janela em que o fechamento sem vencedor de UM lado espera o registro do outro (90 s) — adiantada."""
+        self.sql("UPDATE torneio_fechos SET em_ms = em_ms - 91000 WHERE did = ?", did)
+
+    def sem_vencedor_de(self, c):
+        ev = self.sql("SELECT dados FROM eventos WHERE tipo = 'torneio-sem-vencedor' AND conta_id = ? ORDER BY id DESC LIMIT 1",
+                      c.conta['id'])
+        return json.loads(ev[0]['dados']) if ev else None
+
     def test_10_revanche_e_o_sorteio_depois_dela(self):
+        """A foto de UM lado não decide nada: espera o outro. Só os DOIS sem vencedor (ou a janela vencida) abrem a
+        revanche; e na revanche, os dois de novo sem vencedor = sorteio."""
         tid, a, b, did = self.dupla_na_final('25-30', 27)
-        # o duelo fecha SEM vencedor (sincronizou por foto): UMA revanche — did novo, mais 3 minutos de chamada
-        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, None, 999, fotografada=True))
+        status, r = self.foto(a, a, b, did)
+        self.assertEqual((status, r['fase'], r.get('motivo'), r['venc']), (200, 'aguardando', 'torneio', None), r)
+        self.assertTrue(0 < r['esperaMs'] <= 90000, r)
+        self.assertEqual(self.final_de(tid)['estado'], 'luta', 'um lado só fechando sem vencedor NÃO abre a revanche')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM duelos WHERE did = ?", did)[0]['n'], 0)
+        self.assertEqual(self.foto(a, a, b, did)[1]['fase'], 'aguardando', 'pedir de novo não muda nada')
+        # o OUTRO lado também fecha por foto: os dois sem vencedor — UMA revanche (did novo, mais 3 minutos)
+        status, r = self.foto(b, a, b, did)
         self.assertEqual((status, r['venc'], r['motivo']), (200, None, 'fotografada'), r)
         t = self.T(tid)
         final = t['chave']['rodadas'][0][0]
         self.assertEqual((t['estado'], final['estado'], final['vencedor']), ('andamento', 'chamada', None), t)
+        self.assertEqual(sorted(self.sem_vencedor_de(a)['por']), sorted([a.conta['id'], b.conta['id']]))
         ma = self.meu(a)['luta']
         self.assertEqual((ma['presente'], ma['elePresente'], ma['revanche']), (False, False, True), ma)
         self.assertNotIn('did', ma)
@@ -716,32 +737,125 @@ class ProvaDoTorneio(unittest.TestCase):
         self.assertNotEqual(did2, did)
         self.assertEqual(b.pede('GET', '/api/arena/estado')[1].get('did'), did2)
         # fechar de novo o did VELHO não mexe na revanche
-        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, None, 999, fotografada=True))
+        status, r = self.foto(b, a, b, did)
         self.assertEqual(status, 200, r)
-        self.assertEqual(self.T(tid)['chave']['rodadas'][0][0]['estado'], 'luta')
-        # a revanche também sem vencedor: decide por sorteio, e o torneio acaba
-        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did2, None, 999, fotografada=True))
+        self.assertEqual(self.final_de(tid)['estado'], 'luta')
+        # a revanche: os dois sem vencedor de novo (os dois reincidentes) = sorteio, e o torneio acaba
+        self.assertEqual(self.foto(b, a, b, did2)[1]['fase'], 'aguardando')
+        status, r = self.foto(a, a, b, did2)
         self.assertEqual((status, r['venc']), (200, None), r)
         t = self.T(tid)
         final = t['chave']['rodadas'][0][0]
         self.assertEqual((t['estado'], final['estado'], final['como']), ('encerrado', 'decidida', 'sorteio'), t)
         self.assertIn(final['vencedor'], ('a', 'b'))
         self.assertEqual(len(self.sql("SELECT 1 FROM torneio_dids WHERE torneio_id = ?", tid)), 2)
-        self.assertGreaterEqual(len(self.sql("SELECT 1 FROM eventos WHERE tipo = 'torneio-sem-vencedor' AND conta_id = ?",
-                                             a.conta['id'])), 2, 'fica na trilha quem fechou sem vencedor')
         # a luta que passa de 30 minutos decide por sorteio
         tid, a, b, did = self.dupla_na_final('25-30', 28)
         self.sql("UPDATE torneio_lutas SET luta_ms = luta_ms - 1800001 WHERE torneio_id = ?", tid)
         t = self.T(tid)
         self.assertEqual((t['estado'], t['chave']['rodadas'][0][0]['como']), ('encerrado', 'sorteio'), t)
         self.assertEqual(self.sql("SELECT estado FROM arena_partidas WHERE did = ?", did)[0]['estado'], 'jogada')
-        # o did de torneio fechado por fora do torneio (o modo errado) não dá vitória a ninguém: revanche
-        tid, a, b, did = self.dupla_na_final('25-30', 29)
+        # o did decidido assim, fechado DEPOIS como duelo da Arena: não ranqueia nem grava vida (amistoso 'torneio')
         jogo = self.joga(a, b, 999)
-        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999, modo='desafio'))
-        self.assertEqual((status, r.get('motivo'), r.get('torneio')), (200, 'amistoso', None), r)
-        self.assertEqual(self.T(tid)['chave']['rodadas'][0][0]['estado'], 'chamada')
-        self.sql("UPDATE torneios SET estado = 'cancelado' WHERE id = ?", tid)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999))
+        self.assertEqual((status, r['ranqueado'], r.get('motivo')), (200, False, 'torneio'), r)
+        self.assertEqual((self.brasa(a).get('partidas'), self.vidas(a, b)), (0, []))
+
+    def test_10a_a_brecha_fechada(self):
+        """Quem está perdendo fecha sem vencedor para forçar a revanche e o sorteio: não mais."""
+        # 1. um lado FORJA (o juiz recusa: 422) e o outro fecha LIMPO com o duelo inteiro: vale o limpo, como 'luta'
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.abre_os_dois(a, b, did)
+        jogo = sem = None
+        for s in (999, 17, 41, 77, 123, 5):
+            jogo, sem = self.joga(a, b, s), s
+            if jogo['fase'] in ('won', 'lost'):
+                break
+        self.assertIn(jogo['fase'], ('won', 'lost'))
+        perde, ganha = (b, a) if jogo['fase'] == 'won' else (a, b)
+        status, r = perde.pede('POST', '/api/duelo/fechar',
+                               self.corpo_duelo(a, b, did, jogo, sem, hashFinal=(jogo['hash'] + 1) % (2 ** 32)))
+        self.assertEqual(status, 422, r)
+        self.assertEqual(self.final_de(tid)['estado'], 'luta', 'o replay recusado de UM lado não derruba a luta')
+        self.assertEqual(self.sql("SELECT COUNT(*) AS n FROM duelos WHERE did = ?", did)[0]['n'], 0)
+        status, r = perde.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, None, sem, fotografada=True))
+        self.assertEqual((status, r['fase']), (200, 'aguardando'), 'nem a foto dele por cima')
+        status, r = ganha.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, sem))
+        self.assertEqual((status, r['venc'], r.get('torneio'), r.get('motivo')), (200, 'A' if ganha is a else 'B', tid, None), r)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['vencedor'], final['como']),
+                         ('decidida', 'a' if ganha is a else 'b', 'luta'), final)
+        self.assertEqual(self.T(tid)['campeao']['conta'], ganha.conta['id'])
+        # 2. o replay recusado contra o registro limpo SEM fim do outro: é DERROTA de quem o mandou (W.O.)
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.abre_os_dois(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999, hashFinal=(jogo['hash'] + 1) % (2 ** 32)))
+        self.assertEqual(status, 422, r)
+        self.assertEqual(self.final_de(tid)['estado'], 'luta')
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999))
+        self.assertEqual((status, r['venc'], r.get('fim'), r.get('torneio')), (200, 'B', 'wo', tid), r)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['vencedor'], final['como']), ('decidida', 'b', 'wo'), final)
+        self.assertEqual((self.vidas(a, b), self.brasa(a).get('partidas')), ([], 0))
+        # ...e na outra ordem: o limpo fecha primeiro (espera), o forjado chega depois e perde
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.abre_os_dois(a, b, did)
+        jogo = self.joga_cortado(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999))
+        self.assertEqual((status, r['fase']), (200, 'aguardando'), r)
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999, hashFinal=(jogo['hash'] + 1) % (2 ** 32)))
+        self.assertEqual(status, 422, r)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['vencedor'], final['como']), ('decidida', 'a', 'wo'), final)
+        # 3. o replay CORTADO de quem perde não tranca o registro inteiro de quem venceu
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.abre_os_dois(a, b, did)
+        jogo = sem = None
+        for s in (999, 17, 41, 77, 123, 5):
+            jogo, sem = self.joga(a, b, s), s
+            if jogo['fase'] in ('won', 'lost'):
+                break
+        perde, ganha = (b, a) if jogo['fase'] == 'won' else (a, b)
+        cortado = self.joga_cortado(a, b, semente=sem)
+        status, r = perde.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, cortado, sem))
+        self.assertEqual((status, r['fase']), (200, 'aguardando'), r)
+        status, r = ganha.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, sem))
+        self.assertEqual((status, r['venc'], r.get('torneio')), (200, 'A' if ganha is a else 'B', tid), r)
+        self.assertEqual(self.final_de(tid)['como'], 'luta')
+        # 4. a janela vence sem o registro do outro: revanche, com QUEM fechou na trilha; o REINCIDENTE (sem vencedor
+        #    na luta e na revanche, com o outro calado) perde por W.O. em vez de ir ao sorteio
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.assertEqual(self.foto(a, a, b, did)[1]['fase'], 'aguardando')
+        self.assertEqual(self.T(tid)['chave']['rodadas'][0][0]['estado'], 'luta')
+        self.vence_janela(did)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['vencedor']), ('chamada', None), final)
+        ev = self.sem_vencedor_de(b)
+        self.assertEqual((ev['por'], ev['porque'], ev['revanche']), ([a.conta['id']], 'janela', False), ev)
+        self.presente(a, tid)
+        did2 = self.presente(b, tid)['luta']['did']
+        self.abre_os_dois(a, b, did2)
+        jogo = self.joga_cortado(a, b)
+        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did2, jogo, 999, modo='desafio'))
+        self.assertEqual((status, r['fase'], r.get('motivo')), (200, 'aguardando', 'torneio'), 'o did fechado por outro modo também espera')
+        self.assertEqual(self.final_de(tid)['estado'], 'luta')
+        self.vence_janela(did2)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['vencedor'], final['como']), ('decidida', 'b', 'wo'), final)
+        self.assertEqual(self.T(tid)['campeao']['conta'], b.conta['id'])
+        self.assertEqual(self.sem_vencedor_de(b)['por'], [a.conta['id']])
+        # 5. quem fechou sem vencedor só UMA vez não é reincidente: a revanche sem vencedor vai ao sorteio
+        tid, a, b, did = self.dupla_na_final('20-25', 23)
+        self.foto(a, a, b, did)
+        self.vence_janela(did)
+        self.assertEqual(self.final_de(tid)['estado'], 'chamada')
+        self.presente(a, tid)
+        did2 = self.presente(b, tid)['luta']['did']
+        self.foto(b, a, b, did2)
+        self.vence_janela(did2)
+        final = self.final_de(tid)
+        self.assertEqual((final['estado'], final['como']), ('decidida', 'sorteio'), final)
 
     def joga_cortado(self, a, b, corta=6, semente=999):
         """O duelo parado no meio (a IA joga os dois lados até `corta` lances e pára na vez de gente)."""
@@ -797,7 +911,7 @@ class ProvaDoTorneio(unittest.TestCase):
         final = self.final_de(tid)
         self.assertEqual((final['estado'], final['vencedor'], final['como']), ('decidida', 'a', 'wo'), final)
         self.assertEqual(self.vidas(a, b), [])
-        # 3. o W.O. sem prova nenhuma não dá vitória: sem vencedor = revanche
+        # 3. o W.O. que o relé não prova não dá vitória — e, sozinho, também não abre a revanche: espera o outro lado
         tid, a, b, did = self.dupla_na_final('25-30', 26)
         self.abre_os_dois(a, b, did)
         self.sql("UPDATE duelo_vida SET criado_em = criado_em - 300 WHERE did = ?", did)
@@ -805,9 +919,12 @@ class ProvaDoTorneio(unittest.TestCase):
         self.sql("INSERT INTO rele_presenca(conta_id, evento, em_ms) VALUES (?, 'caiu', ?)", b.conta['id'], self.agora_ms() - 90000)
         self.sql("INSERT INTO rele_presenca(conta_id, evento, em_ms) VALUES (?, 'voltou', ?)", b.conta['id'], self.agora_ms() - 80000)
         status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999, wo=True))
-        self.assertEqual((status, r['venc'], r.get('motivo'), r.get('torneio')), (200, None, 'wo-sem-prova', tid), r)
+        self.assertEqual((status, r['fase'], r['venc'], r.get('motivo')), (200, 'aguardando', None, 'torneio'), r)
+        self.assertEqual(self.final_de(tid)['estado'], 'luta')
+        status, r = b.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, None, 999, fotografada=True))
+        self.assertEqual((status, r['venc'], r.get('motivo')), (200, None, 'fotografada'), r)
         final = self.final_de(tid)
-        self.assertEqual((final['estado'], final['vencedor']), ('chamada', None), 'o W.O. que o relé não prova abre a revanche')
+        self.assertEqual((final['estado'], final['vencedor']), ('chamada', None), 'os DOIS sem vencedor: revanche')
         self.assertEqual(self.vidas(a, b), [])
         self.sql("UPDATE torneios SET estado = 'cancelado' WHERE id = ?", tid)
         # 4. a espera pela declaração que vence (120 s): fecha sem vencedor = revanche
@@ -821,18 +938,18 @@ class ProvaDoTorneio(unittest.TestCase):
         self.assertEqual((status, r['venc'], r.get('fim')), (200, None, 'sem-confirmacao'), r)
         self.assertEqual(self.final_de(tid)['estado'], 'chamada')
         self.sql("UPDATE torneios SET estado = 'cancelado' WHERE id = ?", tid)
-        # 5. o replay forjado: o juiz recusa (422), o duelo fica 'recusado' — ninguém vence por ele: revanche
+        # 5. os DOIS replays recusados pelo juiz (a divergência honesta dos dois lados): sem vencedor = revanche
         tid, a, b, did = self.dupla_na_final('25-30', 26)
         self.abre_os_dois(a, b, did)
         jogo = self.joga_cortado(a, b)
-        status, r = a.pede('POST', '/api/duelo/fechar', self.corpo_duelo(a, b, did, jogo, 999, desistiu=True,
-                                                                          hashFinal=(jogo['hash'] + 1) % (2 ** 32)))
-        self.assertEqual(status, 422, r)
+        torto = self.corpo_duelo(a, b, did, jogo, 999, hashFinal=(jogo['hash'] + 1) % (2 ** 32))
+        self.assertEqual(a.pede('POST', '/api/duelo/fechar', torto)[0], 422)
+        self.assertEqual(self.final_de(tid)['estado'], 'luta')
+        self.assertEqual(b.pede('POST', '/api/duelo/fechar', torto)[0], 422)
         final = self.final_de(tid)
         self.assertEqual((final['estado'], final['vencedor']), ('chamada', None), final)
-        ev = self.sql("SELECT dados FROM eventos WHERE tipo = 'torneio-sem-vencedor' AND conta_id = ? ORDER BY id DESC LIMIT 1",
-                      b.conta['id'])
-        self.assertEqual(json.loads(ev[0]['dados']).get('por'), a.conta['id'], 'fica na trilha QUEM fechou sem vencedor')
+        self.assertEqual(sorted(self.sem_vencedor_de(b)['por']), sorted([a.conta['id'], b.conta['id']]),
+                         'fica na trilha QUEM fechou sem vencedor')
         self.sql("UPDATE torneios SET estado = 'cancelado' WHERE id = ?", tid)
 
     def test_11_sair_depois_do_fechamento_e_wo(self):

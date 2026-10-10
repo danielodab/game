@@ -45,7 +45,13 @@ passa (a chave não para). A luta do torneio:
 - tem vencedor pelo juiz de sempre (o replay dos lances). Desistência declarada e W.O. provado pelo relé
   valem como no duelo. Duelo que fecha SEM vencedor (sincronizou por foto, regras mudaram, sem prova): o
   servidor abre UMA revanche (um `did` novo, mais 3 minutos de chamada); a revanche sem vencedor decide por
-  sorteio. Luta que passa de 30 minutos decide por sorteio.
+  sorteio. Luta que passa de 30 minutos decide por sorteio. **Um lado só não fecha "sem vencedor"** (10/10, a
+  brecha fechada — §4.5): o fechamento sem vencedor vindo de UM lado (foto, replay que o juiz recusa, W.O. sem
+  prova) fica `aguardando` o registro do OUTRO por 90 s; se o outro fecha com um registro limpo que o juiz
+  refaz até um vencedor, vale esse (`como: 'luta'`). A revanche só abre quando os DOIS fecharam sem vencedor ou
+  a janela venceu. O replay que o juiz recusa de um lado, com o registro limpo do outro, é DERROTA de quem o
+  mandou (`como: 'wo'`). E quem fecha sem vencedor na luta E na revanche, com o outro limpo ou calado, perde
+  por W.O. em vez de ir ao sorteio.
 
 **O prêmio do campeão**, pelo tamanho da chave SORTEADA:
 
@@ -142,7 +148,7 @@ onde o cliente entrega a luta ao Duelo.
 ## 4. Notas da implementação (o servidor, 10/10)
 
 O servidor é `servidor/torneio.py` (o mixin `TorneioMixin`, as tabelas `torneio*`, o laço `liga_torneios`). A
-prova é `python tests/torneio_api.py` (14 provas, com o juiz de verdade). O que segue é TUDO o que saiu
+prova é `python tests/torneio_api.py` (15 provas, com o juiz de verdade). O que segue é TUDO o que saiu
 diferente do texto acima, ou que o texto deixava em aberto — o cliente, o site e o painel leem daqui.
 
 **4.1 O que não deu para fazer como estava escrito**
@@ -232,8 +238,36 @@ diferente do texto acima, ou que o texto deixava em aberto — o cliente, o site
 
 **4.4 O que fica em aberto**
 
-- Quem está perdendo pode fechar o duelo SEM vencedor de propósito (foto, replay torto) e ganhar a
-  revanche — e, repetindo, o sorteio. É a regra do contrato; a trilha diz quem fechou (`torneio-sem-vencedor`,
-  `por`), e docs/SEGURANCA.md §4.10 conta o que dá para apertar.
 - O contêiner VELHO do rolling update não conhece o torneio: um deploy no meio de um torneio pode fechar
   uma luta como duelo ranqueado comum (a Brasa mudaria). Não publicar sábado/domingo às 14:00.
+
+**4.5 A brecha fechada: um lado só não fecha "sem vencedor" (10/10, o segundo commit do servidor)**
+
+Como estava, quem perdia a luta fechava o duelo sem vencedor (declarava `fotografada`, mandava um replay torto
+que dava 422, cortava o replay no meio) e ganhava a revanche — e, repetindo, o sorteio de 50%. Agora, SÓ para
+o did de torneio (o duelo comum não mudou em nada):
+
+- **O fechamento sem vencedor de UM lado espera.** `fotografada`, o W.O. que o relé não prova e o did fechado
+  fora do torneio (outro `modo`, outros heróis) respondem 200 `{fase: 'aguardando', motivo: 'torneio',
+  esperaAte, esperaMs}` e NADA é guardado; o replay recusado segue respondendo 422 a quem o mandou, também sem
+  guardar nada. A janela é de 90 s desde o primeiro fechamento assim (`SOTERRA_TORNEIO_FECHO_S`; a tabela nova
+  `torneio_fechos` guarda quem fechou como). O cliente pergunta de novo depois de `esperaMs`, como já faz na
+  espera da desistência.
+- **O registro limpo do outro lado vale inteiro.** Se o outro fecha com os lances que o juiz refaz até um
+  vencedor, é esse o resultado (`como: 'luta'`) — mesmo com a espera `sem-fim` aberta por um replay cortado do
+  adversário (no torneio, o registro do OUTRO lado vai ao juiz em vez de só esperar).
+- **Revanche**: só quando os DOIS lados fecharam sem vencedor, ou quando a janela venceu sem o registro limpo
+  (quem dá esse passo é o relógio do torneio; `porque: 'janela'` no evento). Seguem abrindo a revanche na
+  hora os desfechos que não são palavra de um lado: as regras que mudaram no deploy, o empate que o juiz viu e
+  a espera da desistência que venceu (120 s, `sem-confirmacao`).
+- **O replay recusado contra o registro limpo é derrota**: um lado com 422 e o outro com um registro que o
+  juiz aceitou (mesmo sem fim) = vence o limpo, `como: 'wo'`; o duelo guardado sai com `venc`, `fim: 'wo'` e
+  `torneio`. Os DOIS recusados (a divergência honesta) = sem vencedor.
+- **A reincidência**: quem fechou sem vencedor POR ESCOLHA (`fotografada`, replay recusado, fora do torneio)
+  na luta E na revanche, enquanto o outro não fez o mesmo nas duas, perde por W.O. (`como: 'wo'`) em vez de ir
+  ao sorteio. Os dois reincidentes, ou nenhum: sorteio. O replay limpo sem fim e o W.O. sem prova não contam
+  como escolha.
+- **O evento `torneio-sem-vencedor`** agora leva `por` como LISTA das contas que fecharam aquele did sem
+  vencedor por escolha (vazia quando ninguém escolheu: regras, empate, espera vencida).
+- **O did de torneio que já não é a luta em curso** (decidida por W.O., sorteio ou pela janela), fechado
+  depois como duelo da Arena, vale como amistoso (`motivo: 'torneio'`): não ranqueia nem grava vida.

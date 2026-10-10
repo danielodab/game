@@ -1655,7 +1655,9 @@ diferente (ou decidiu onde o texto calava) está na seção 4 de lá. Aqui fica 
   e TODO desfecho guardado (`_duelo_guarda`) chama o gancho `_torneio_resultado` na mesma transação — vencedor
   A/B com o carimbo do torneio avança a chave (`como`: `luta`, `desistencia` ou `wo`), e todo o resto (foto,
   regras que mudaram, replay recusado, W.O. sem prova, a espera que venceu, empate) abre a revanche; a revanche
-  sem vencedor e a luta de mais de 30 minutos decidem por sorteio.
+  sem vencedor e a luta de mais de 30 minutos decidem por sorteio. Um lado só NÃO fecha "sem vencedor": a foto,
+  o replay recusado e o W.O. sem prova de um lado esperam 90 s o registro do outro (`torneio_fechos`); o
+  recusado contra o limpo é derrota, e o reincidente perde por W.O. (docs/TORNEIO.md §4.5).
 - **O prêmio** sai na transação que encerra o torneio: as barras por `barras_move` (ref `torneio:<id>`), os
   vinténs por `credita` e as Gemas Enterradas por um pedido de preço 0 — a mesma fila do Eco e do prêmio diário,
   com a entrega na hora pelo juiz (`servidor/loja.py` dá o nome e a origem `torneio`; `js/core/loja.js` deixa a
