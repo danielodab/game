@@ -1625,6 +1625,59 @@ as 20 placas por `Tx()` com tradução, o `Tx` do 3D, o carimbo do cache); `node
 faixa com a Sexta do Dia e os sete dias injetados pelo funil, as placas da antessala e o painel da saída; `?lang=es`
 prova o espanhol).
 
+## 9-A.27 O Torneio da Arena — o servidor (10/10)
+
+O dono: "a arena é o maior item do mapa e tem que ir além de procurar desafios, deve ter torneio; todo sábado
+terá torneio de PvP e todo domingo torneio de guilda (ou quando o adm marcar)". O CONTRATO — as regras, a
+tabela de prêmios, a progressão, as rotas e os formatos — é **docs/TORNEIO.md**; o que o servidor fez de
+diferente (ou decidiu onde o texto calava) está na seção 4 de lá. Aqui fica só o mapa de onde cada coisa mora.
+
+- **`servidor/torneio.py`** (`TorneioMixin`, entra na `Api` como os outros): as tabelas `torneios`,
+  `torneio_inscritos`, `torneio_voluntarios`, `torneio_representantes`, `torneio_lutas` (uma linha por luta de
+  cada rodada), `torneio_dids` (todo did que o torneio abriu), `torneio_desistentes`, `torneio_pagos` (a trava do
+  "nada se paga duas vezes"), `torneio_conquistas`, `torneio_guilda_titulos` e `torneio_vigentes` — todas NOVAS,
+  nenhum ALTER. As rotas `/api/torneios`, `/api/torneio` (públicas), `/api/torneio/meu`, `/inscrever`, `/sair`,
+  `/presente`, `/voluntariar`, `/desvoluntariar`, `/representante` e as três do Mestre (`/api/mestre/torneios`,
+  `/torneio/marcar`, `/torneio/cancelar`, com a trilha em `moderacao_auditoria` como toda ação dele).
+- **O relógio** é `_torneio_passo`, idempotente: cria os três da semana (sábado 14:00 as duas faixas, domingo
+  14:00 o de guilda, horário de Brasília com o deslocamento fixo de sempre; o seguinte só nasce quando o anterior
+  da mesma vaga acaba, e nunca a menos de 6 dias), fecha as inscrições e sorteia (`secrets`; passes só na
+  primeira rodada, cada um numa luta diferente), chama as lutas, vence os prazos de presença, abre a rodada
+  seguinte e paga. Roda numa thread do servidor a cada 5 s (`liga_torneios`, no molde da varredura da Google
+  Play) e em toda rota do torneio; tudo o que ele decide está no banco, então os dois contêineres do rolling
+  update dão o mesmo passo. As durações saem do ambiente (`SOTERRA_TORNEIO_FECHA_S`, `_CHAMADA_S`, `_ENTRE_S`,
+  `_LUTA_MAX_S`, `_PREVISAO_S`, `_DOBRO_S`, `_PASSO_S`, `_PASSO_MIN_S`) — as provas adiantam os relógios no banco.
+- **A luta** reaproveita o que já existia. Os dois presentes: uma linha em `arena_partidas` JÁ `'pronta'` com o
+  did `torneio-…` (`servidor/arena.py`: a partida de torneio aparece no `GET /api/arena/estado` com
+  `torneio: <id>` até a luta fechar, e não só pelos 180 s do quadro). O duelo é o de sempre
+  (`servidor/grupo.py`): no `duelo/abrir` o did de torneio entra com a vida CHEIA (os heróis a 0 PV não barram);
+  no `duelo/fechar` ele não tem teto nem paridade, nunca ranqueia (a Brasa não muda) e não grava a vida do fim;
+  e TODO desfecho guardado (`_duelo_guarda`) chama o gancho `_torneio_resultado` na mesma transação — vencedor
+  A/B com o carimbo do torneio avança a chave (`como`: `luta`, `desistencia` ou `wo`), e todo o resto (foto,
+  regras que mudaram, replay recusado, W.O. sem prova, a espera que venceu, empate) abre a revanche; a revanche
+  sem vencedor e a luta de mais de 30 minutos decidem por sorteio.
+- **O prêmio** sai na transação que encerra o torneio: as barras por `barras_move` (ref `torneio:<id>`), os
+  vinténs por `credita` e as Gemas Enterradas por um pedido de preço 0 — a mesma fila do Eco e do prêmio diário,
+  com a entrega na hora pelo juiz (`servidor/loja.py` dá o nome e a origem `torneio`; `js/core/loja.js` deixa a
+  Gema inteira passar só com `origem: 'torneio'`).
+- **A progressão**: `torneio_conquistas` conta para sempre. Os títulos são `js/core/titulos.js`
+  (`T.ARENA`, `T.ARENA_GUILDA`, fonte `arena`, `estado.arena = {pvp, guilda}`) e o juiz os confere com as
+  conquistas que a API lê do banco (`contexto.arena` em `servidor/salas.py`, `definirTitulo` em
+  `servidor/juiz/economia.js`). A moldura `arena` entra em `molduras.tem` (`servidor/loja.py`) de quem venceu
+  em chave de 8 ou 16, e o Relé (`servidor/rele_ident.py`) carimba `arena: {n, vigente}` no perfil e
+  `campea`/`titulos` na guilda do perfil — do banco, nunca da página.
+- **A guilda campeã**: o XP em dobro é um fator próprio — `_guilda_contexto` manda `fatorXp: 2` ao juiz por 7
+  dias e `Guilda.fatorXp()` (`servidor/juiz/estado.js`) o põe no LUGAR do +15% do cofre (a única linha mexida em
+  `js/core/game.js` é a que lê esse fator); o XP da guilda soma em `guildas.xp`; a ficha da guilda leva
+  `torneio: {campea, titulos, fatorXp, xpDobroAteMs}`.
+- **Provas**: `python tests/torneio_api.py` (14, com o juiz de verdade: os da semana, as públicas, o Mestre, a
+  inscrição e as recusas, as vagas até 16 e o `cheio`, o cancelamento, a chave de 16 e a de 8 com 3 passes, a
+  chamada, o W.O., o sorteio, a partida pronta, o duelo sem coroa nem vida, a revanche, a desistência, o W.O. do
+  relé, o replay forjado, o prêmio pago uma vez, o título, a moldura, o carimbo, o torneio de guilda);
+  `node tests/juiz_economia.js` (os títulos no juiz), `node tests/juiz_titulos_regua.js` (a régua) e
+  `node tests/juiz_recompensa.js` (o XP em dobro no lugar do +15%). O que o servidor não acredita do cliente:
+  docs/SEGURANCA.md §4.10.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

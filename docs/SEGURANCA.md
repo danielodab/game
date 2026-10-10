@@ -496,6 +496,50 @@ nunca ALTER. Um advogado revisa os textos antes de abrir ao público (`docs/REVI
   (`site/mestre_erros.js`). O cliente é `js/core/registro_erros.js`, o PRIMEIRO script do
   `index.html`; em `file://` não faz nada.
 
+### 4.10 O Torneio da Arena (10/10, `servidor/torneio.py`)
+
+O contrato é docs/TORNEIO.md; o mapa do código, docs/SISTEMAS.md §9-A.27. O torneio paga barras de ouro, e
+por isso NADA nele sai da palavra do cliente:
+
+- **O nível da dupla** é o do herói mais forte no estado do SERVIDOR, lido na inscrição e DE NOVO no
+  fechamento (quem subiu para fora da faixa nesse meio sai da chave). O cliente manda só os ids dos heróis.
+- **A presença** ("estou aqui") é o `POST /api/torneio/presente` da própria conta, dentro do prazo que o
+  servidor marcou; consultar não marca. Ninguém marca a presença do outro, e o W.O. por ausência é do relógio.
+- **O sorteio** (as posições, os passes, quem passa quando ninguém aparece, o desempate depois da revanche)
+  é `secrets` no servidor; a chave fica pública na hora, e não há rota que a mexa.
+- **O vencedor** é o que o JUIZ viu no replay dos lances — o duelo de sempre (§5). O gancho do torneio só
+  aceita o resultado que o `duelo_fechar` carimbou com o id do torneio: o did que o torneio abriu, EM CURSO,
+  entre as duas contas da luta, com os heróis inscritos (a partida pronta em `arena_partidas`) e pelo modo
+  `arena`. O mesmo did fechado de outro jeito (outro modo, outros heróis, por foto) não dá vitória a
+  ninguém. A desistência só vale da conta de quem desiste, e o W.O. só com a queda provada pelo Relé
+  (`servidor/presenca.py`) — as regras do duelo, sem exceção para o torneio.
+- **A coroa e a vida ficam fora**: o duelo de torneio nunca ranqueia (a Brasa não muda nem com o `modo`
+  certo), não conta nos tetos do dia, entra com a vida cheia e não grava a vida do fim — não há como usar o
+  torneio para subir de coroa nem para curar ou zerar um herói.
+- **O prêmio** sai na MESMA transação que encerra o torneio, uma vez: a linha em `torneio_pagos` (chave =
+  o torneio) é a trava, e cada peça ainda tem o `idem` dela (`torneio-<id>-b`, `-v`, `-g`). O tamanho é o da
+  chave SORTEADA, que mora no banco. A Gema inteira só passa na fila da loja com a entrega de
+  `origem: 'torneio'`, que só o servidor escreve (`loja_pedidos.entrega` é congelada na criação).
+- **As conquistas, o título e a moldura**: `torneio_conquistas` é escrita só no pagamento. O juiz valida o
+  título com as conquistas que a API lê do banco (`contexto.arena`); a moldura `arena` só se escolhe com a
+  conquista em chave de 8 ou 16 (`POST /api/loja/moldura` → 409 sem ela); e o Relé carimba `arena`,
+  `campea` e `titulos` do banco — o que a página mandou nesses campos cai, e a marca da guilda só sai na
+  guilda em que a conta está.
+- **O XP em dobro** é um fator que a API manda ao juiz (`contexto.guilda.fatorXp`), lido de
+  `torneio_guilda_titulos` — o cliente não o informa — com teto 2 no próprio juiz.
+- **O Mestre** marca e cancela pelas rotas `so_mestre` (a marca lida do banco a cada pedido) e não joga: a
+  conta dele não se inscreve nem se voluntaria, e a guilda da equipe não entra.
+- **As rotas públicas** (`GET /api/torneios`, `GET /api/torneio`) só leem. O passo do relógio que elas
+  disparam é uma transação de escrita e por isso tem freio: no máximo uma por segundo por processo vinda de
+  leitura. Elas mostram o id da conta, o nome público e a guilda de cada inscrito — nada além do ranking.
+
+**Em aberto.** Fechar o duelo SEM vencedor é barato para quem está perdendo: uma foto falsa ou um replay
+torto vira revanche, e de novo vira sorteio (50%). É a regra do contrato ("a chave não para"), e hoje o que
+há é a trilha — o evento `torneio-sem-vencedor` guarda `por` (a conta que fechou) e o porquê, para o Mestre
+ver quem repete. O aperto possível, se virar hábito: o fechamento sem vencedor de UM lado esperar o registro
+limpo do outro (como a sala em grupo espera, §5) antes de abrir a revanche. E o contêiner velho do rolling
+update não conhece o torneio: publicar no meio de um torneio pode fechar uma luta como duelo ranqueado comum.
+
 ## 5. O juiz (Node, só 127.0.0.1)
 
 ### 5.1 `GET /saude` → `{ok, versao}`; `GET /regras` → `{versao, calaboucos: {id: nSalas}}`

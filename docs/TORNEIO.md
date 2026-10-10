@@ -138,3 +138,102 @@ onde o cliente entrega a luta ao Duelo.
   `Titulos.ARENA_GUILDA = 'Campeão das Guildas'`; fonte `arena` no catálogo; `estado.arena = {pvp, guilda}`.
 - **A moldura** `arena` na vitrine (`molduras.tem`) de quem a ganhou; o grau sai de `arena.n`.
 - **A plateia**: o campeão é anunciado no chat de todos (`plateia`, tipo `torneio`).
+
+## 4. Notas da implementação (o servidor, 10/10)
+
+O servidor é `servidor/torneio.py` (o mixin `TorneioMixin`, as tabelas `torneio*`, o laço `liga_torneios`). A
+prova é `python tests/torneio_api.py` (14 provas, com o juiz de verdade). O que segue é TUDO o que saiu
+diferente do texto acima, ou que o texto deixava em aberto — o cliente, o site e o painel leem daqui.
+
+**4.1 O que não deu para fazer como estava escrito**
+
+- **As barras: o motivo no banco é `presente`, não `torneio`.** A tabela `barras_movimentos` tem um CHECK na
+  coluna `motivo` e não se altera (o rolling update divide o banco) — é a mesma saída do anúncio e do prêmio
+  diário: `barras_move(cid, n, 'presente', 'torneio:<id>', 'torneio-<id>-b', …)`. O EXTRATO que a conta lê
+  (`GET /api/loja/minha` → `barras.movimentos[]`) mostra `motivo: 'torneio'`, `nome: 'Torneio da Arena'` e
+  `torneio: <id>`, que é o que o contrato pedia para a tela.
+- **A Gema inteira não passava na fila da loja.** O `confere` de `js/core/loja.js` (a mesma régua no juiz)
+  recusa a entrega de `pedras` com uma pedra do elemento `gema`. Ganhou UMA exceção: a entrega com
+  `origem: 'torneio'` (que só o servidor escreve, congelada em `loja_pedidos`). Os pedidos do prêmio são
+  `sku: 'torneio-vintens'` (`{tipo: 'vintens', alvo: 'carteira', qtd}`) e `sku: 'torneio'`
+  (`{tipo: 'pedras', alvo: 'stone-gem', qtd, origem: 'torneio'}`), os dois de preço 0 e entregues NA HORA
+  quando o juiz está ligado; a origem do pedido na fila é `'torneio'` (o `origemDe` de `js/core/loja.js`
+  ainda a lê como `'loja'` — o aviso "Prêmio do torneio" é do cliente).
+
+**4.2 O que o texto deixava em aberto (decisões do servidor)**
+
+- **O representante da guilda campeã também recebe o prêmio do campeão** (barras, vinténs e gemas da
+  tabela, pelo tamanho da chave): a tabela do prêmio não distingue o tipo, e `T.premio` tem os dois lados.
+  No de guilda `premio.moldura` é sempre `false` (a moldura "Campeão da Arena" é do PvP) e no de PvP
+  `premio.xpGuilda` é sempre `0`.
+- **"Conta como conquista" vale para os dois tipos**: com chave de 2, o representante NÃO ganha o título
+  "Campeão das Guildas" e a guilda NÃO ganha a marca permanente (`titulos`). O XP em dobro por 7 dias, o XP
+  da guilda (60) e a placa de campeã vigente valem com qualquer tamanho.
+- **`T.premio` antes do sorteio** é o do tamanho que a chave teria agora: a menor potência de 2 que cabe os
+  inscritos (no mínimo 2). **`T.vagas` depois do sorteio** é o tamanho da chave.
+- **`T.inscritos` no torneio de guilda, antes do fechamento**, é UM por guilda com voluntário: o
+  representante de agora (o escolhido, ou o voluntário de maior nível). É o que conta nas `vagas`.
+- **O nível é conferido de novo no fechamento** (só no PvP): quem saiu da faixa entre a inscrição e o
+  fechamento (subiu de nível) sai da chave, com o evento `torneio-fora` na trilha da conta.
+- **`outra-chave` é por DIA de Brasília do início**: vale também para os torneios do Mestre, e a recusa
+  leva `torneio: <o id da chave em que a conta já está>`.
+- **Sair depois do fechamento** (`POST /api/torneio/sair` em `sorteado` ou `andamento`) é desistência:
+  a luta chamada ou em curso vai para o adversário com `como: 'wo'`, e toda luta seguinte da conta também
+  (os dois desistentes na mesma luta: `sorteio`). `como: 'desistencia'` é só a desistência DECLARADA dentro
+  do duelo (`desistiu: true` no `POST /api/duelo/fechar`). No torneio de guilda, `sair` durante as
+  inscrições é 400 `tipo` (o caminho é `desvoluntariar`).
+- **Empate no duelo** (`venc: 'empate'`) conta como "sem vencedor": revanche, e sorteio depois dela.
+- **O duelo com o did do torneio mas fora dele** (outro `modo`, outros heróis, o mapa do desafio) não dá a
+  vitória a ninguém: fecha sem vencedor (revanche).
+- **A luta de 30 minutos conta por duelo**: a revanche tem os 30 minutos dela.
+- **`GET /api/torneio/meu` NÃO marca presença**: só o `POST /api/torneio/presente` vale como "estou aqui".
+  O `/meu` é a consulta que o cliente repete enquanto espera (não há "visto" que vença no torneio).
+- **O laço e as leituras**: o passo roda a cada 5 s numa thread do servidor e em toda rota do torneio; as
+  LEITURAS (`/api/torneios`, `/api/torneio`, `/api/torneio/meu`, `/api/mestre/torneios`) dão o passo no
+  máximo uma vez por segundo por processo — a resposta pode estar até ~1 s atrás do relógio.
+- **Os títulos dos semanais** são `Torneio da Arena — níveis 20 a 25`, `Torneio da Arena — níveis 25 a 30` e
+  `Torneio das Guildas` (em português; quem traduz é o cliente, pelo `tipo` e pela `faixa`).
+
+**4.3 Campos e respostas a mais (nada foi renomeado nem tirado)**
+
+- `GET /api/torneio/meu`: `luta.revanche: bool`; `luta.prazoMs` durante a luta é `luta_ms + 30 min` (o teto
+  dela); o bloco `guilda` fala do torneio de guilda VIVO MAIS PRÓXIMO — `GET /api/torneio/meu?torneio=<id>`
+  escolhe outro (o Mestre pode ter marcado um extra junto com o da semana). `guilda.representante` é o
+  ESCOLHIDO (`null` = vale o padrão, o de maior nível); depois do fechamento, quem de fato vai.
+- `POST /api/torneio/voluntariar`, `/desvoluntariar` e `/representante` respondem o corpo de
+  `/api/torneio/meu` (com o bloco `guilda` DESSE torneio) mais `torneio: T`.
+- Recusas além das do contrato (todas com `motivo`): `dois` (400, a conta com dois heróis manda a dupla),
+  `mestre` (400 também para o herói Mestre do Fundo; 403 para a conta do Mestre), `sem-inscricao` (409, sair
+  sem estar), `sem-guilda` (409), `equipe` (403, a guilda da equipe), `cargo` (403, representante por quem
+  não é líder nem oficial), `sem-voluntario` (409). Torneio que não existe: 404. Sem o juiz: 503. O teto de
+  pedidos por hora é o da Arena (429, o mesmo balde).
+- `GET /api/mestre/torneios`: `{ok, agoraMs, torneios: [T + motivo]}` — `motivo` é o do cancelamento
+  (`'poucos'` | `'mestre'` | `null`); os 100 mais recentes. `marcar`: `titulo` é opcional (3 a 60
+  caracteres; sem ele, o padrão do tipo), `inicioMs` tem de deixar as inscrições abertas (mais de 10 min à
+  frente) e no máximo 180 dias; até 30 torneios do Mestre vivos. `cancelar` devolve `T + motivo`.
+- `POST /api/duelo/fechar` responde `torneio: <id>` quando o duelo foi a luta do torneio (com `venc` A/B e
+  sem `motivo`, o vencedor avançou; sem vencedor, abriu a revanche). `POST /api/arena/sair` com a partida
+  de um torneio não desfaz nada (devolve o estado, ainda `pronta`).
+- A ficha da guilda (`GET /api/guilda/minha` e toda resposta com `guilda`) ganhou
+  `torneio: {campea, titulos, fatorXp, xpDobroAteMs}`. O juiz aplica o `fatorXp` sozinho (o contexto da sala
+  leva `guilda.fatorXp = 2`); para a PRÉVIA na tela bater, `JOGO.Guilda.fatorXp()` precisa existir no cliente
+  (`js/core/game.js` já o lê quando existe; sem ele mostra o +15% de sempre e adota o XP do servidor).
+- A vitrine (`molduras.todas`) traz a linha `{id: 'arena', sku: null, nome: 'Campeão da Arena', conquistas,
+  grau: 1|2|3, marcas: 1..5}` só para quem a tem. `js/core/titulos.js` ganhou `T.grauDaArena(n)` e
+  `T.marcasDaArena(n)` (a mesma conta).
+- O carimbo do Relé só viaja quando há o que dizer: `arena` falta no perfil de quem não tem conquista nem é
+  o vigente (não vem `{n: 0, vigente: false}`), e `campea`/`titulos` faltam na guilda que não tem nenhum dos
+  dois — e só saem na guilda em que a conta ESTÁ (o nome do perfil confere com o do banco).
+- A plateia: `{t: 'plateia', tipo: 'torneio', nome, dados: {torneio, tipo, faixa, tamanho, titulo, guilda:
+  <nome da guilda campeã> | null}}`.
+- Os eventos na trilha da conta (`eventos`): `torneio-inscrito`, `-saiu`, `-desistiu`, `-fora`, `-sorteado`,
+  `-chamada`, `-luta`, `-sem-vencedor` (com `por`: quem fechou o duelo sem vencedor), `-campeao`,
+  `-cancelado`, `-voluntario`, `-representante`; do Mestre, `-marcado` e `-cancelou`.
+
+**4.4 O que fica em aberto**
+
+- Quem está perdendo pode fechar o duelo SEM vencedor de propósito (foto, replay torto) e ganhar a
+  revanche — e, repetindo, o sorteio. É a regra do contrato; a trilha diz quem fechou (`torneio-sem-vencedor`,
+  `por`), e docs/SEGURANCA.md §4.10 conta o que dá para apertar.
+- O contêiner VELHO do rolling update não conhece o torneio: um deploy no meio de um torneio pode fechar
+  uma luta como duelo ranqueado comum (a Brasa mudaria). Não publicar sábado/domingo às 14:00.

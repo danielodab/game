@@ -41,7 +41,9 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
   // ---- conta nova: nada ganho
   var zerado = T.catalogo({ chefes: {}, pvm: null, pvp: null });
   // 02/10: + os do Eco Primordial (T.ECO) — o catálogo é a soma das fontes, não um número cravado
-  check('o catálogo tem 3 + 3 + 6 títulos + os do Eco', zerado.length === 12 + T.ECO.length && T.ECO.length >= 1,
+  // 10/10: + os do Torneio da Arena (T.ARENA, a escada, e o T.ARENA_GUILDA)
+  check('o catálogo tem 3 + 3 + 6 títulos + os do Eco + os do Torneio da Arena',
+        zerado.length === 12 + T.ECO.length + T.ARENA.length + 1 && T.ECO.length >= 1 && T.ARENA.length === 5,
         zerado.length);
   check('conta nova não tem título nenhum', T.ganhos({}).length === 0);
   check('nenhum título repete', (function () {
@@ -136,6 +138,36 @@ emprestados (a posição foi, o título vai); os de chefe são para sempre.</p>
         T.catalogo({ eco: [tituloEco] }).filter(function (t) { return t.fonte === 'eco'; })[0].emprestado === false);
   check('o título do Eco não se passa pela equipe (nada de Mestre, Fundo, GM)',
         !/mestre|fundo|gm|admin/i.test(tituloEco), tituloEco);
+
+  // ---- 10/10: os títulos do Torneio da Arena (docs/TORNEIO.md) — as conquistas são contadas pelo servidor
+  // (estado.arena = {pvp, guilda}); a escada sobe com elas e os degraus de baixo seguem valendo, para sempre
+  check('a escada da Arena é a do contrato (1, 2, 3, 5 e 10 conquistas)',
+        T.ARENA.map(function (d) { return d.n + ':' + d.titulo; }).join('|') ===
+        '1:Campeão da Arena|2:Bicampeão da Arena|3:Tricampeão da Arena|5:Lenda da Arena|10:Imortal da Arena' &&
+        T.ARENA_GUILDA === 'Campeão das Guildas');
+  check('sem conquista nenhum título da Arena vale; com uma, só o primeiro',
+        T.valido('Campeão da Arena', {}) === false && T.valido('Campeão da Arena', { arena: { pvp: 1 } }) === true &&
+        T.valido('Bicampeão da Arena', { arena: { pvp: 1 } }) === false);
+  check('ganhar de novo continua valendo: com 5, os quatro primeiros degraus (e o Imortal ainda não)',
+        T.ganhos({ arena: { pvp: 5 } }).join('|') === 'Campeão da Arena|Bicampeão da Arena|Tricampeão da Arena|Lenda da Arena',
+        T.ganhos({ arena: { pvp: 5 } }).join(' · '));
+  check('"Campeão das Guildas" é do representante (conquistas.guilda), não de quem só venceu no PvP',
+        T.valido(T.ARENA_GUILDA, { arena: { pvp: 10, guilda: 0 } }) === false &&
+        T.valido(T.ARENA_GUILDA, { arena: { pvp: 0, guilda: 1 } }) === true);
+  (function () {
+    var linhasArena = T.catalogo({ arena: { pvp: 3, guilda: 0 } }).filter(function (t) { return t.fonte === 'arena'; });
+    check('no catálogo: fonte arena, para sempre, com o meio do caminho (a Lenda em 3 de 5)',
+          linhasArena.length === 6 && linhasArena.every(function (t) { return t.emprestado === false; }) &&
+          linhasArena[3].titulo === 'Lenda da Arena' && linhasArena[3].prog === 3 && linhasArena[3].alvo === 5,
+          linhasArena.map(function (t) { return t.titulo + ' ' + t.prog + '/' + t.alvo; }).join(' · '));
+  })();
+  check('o grau da moldura "Campeão da Arena" (1-2 = I, 3-4 = II, 5+ = III) e as marcas (até 5)',
+        [0, 1, 2, 3, 4, 5, 10].map(T.grauDaArena).join('') === '0112233' &&
+        [0, 1, 4, 5, 12].map(T.marcasDaArena).join('') === '01455');
+  check('nenhum título da Arena passa de 23 letras nem se passa pela equipe',
+        T.ARENA.concat([{ titulo: T.ARENA_GUILDA }]).every(function (d) {
+          return d.titulo.length <= 23 && !/mestre|fundo|gm|admin/i.test(d.titulo);
+        }));
 
   // ---- tudo junto
   var cheio = { chefes: { 'boss-gardener': 10, 'boss-riftheart': 12 }, pvm: 1, pvp: 3 };
