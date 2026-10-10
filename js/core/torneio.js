@@ -320,6 +320,7 @@ var JOGO = (typeof window !== 'undefined')
              lado: l.lado === 'B' ? 'B' : 'A',
              adversario: { conta: ad.conta, nome: String(ad.nome || '?'), nivel: inteiro(ad.nivel, null), classes: limpaClasses(ad.classes) },
              prazoMs: num(l.prazoMs, 0), presente: l.presente === true, elePresente: l.elePresente === true,
+             revanche: l.revanche === true,       // o duelo fechou sem vencedor: o servidor abriu UMA revanche (outro did)
              did: (typeof l.did === 'string' && l.did) ? l.did : null };
   }
   function limpaGuilda(g) {
@@ -472,9 +473,18 @@ var JOGO = (typeof window !== 'undefined')
       acertaRelogio(r);
       if (r.torneio) trocaNaLista(r.torneio);
       if (depois) depois(r);
+      var feito = { ok: true, torneio: r.torneio ? To.torneio(r.torneio.id) : null };
+      /* voluntariar, desvoluntariar e representante respondem o corpo do MEU (com o bloco `guilda` DAQUELE
+       * torneio, docs/TORNEIO.md §4.3): adota-se direto, sem outra ida ao servidor */
+      if (r.conquistas && typeof r.conquistas === 'object' && r.inscricoes) {
+        st.meuEm = relogio();
+        adotaMeu(r);
+        avisaMudou();
+        return feito;
+      }
       avisaMudou();
-      // o MEU muda com todo pedido: relê (a inscrição nova, a saída, o voluntário)
-      return To.consulta().then(function () { return { ok: true, torneio: r.torneio ? To.torneio(r.torneio.id) : null }; });
+      // inscrever e sair devolvem só o torneio: o MEU é relido (a inscrição nova, a saída)
+      return To.consulta().then(function () { return feito; });
     });
   }
   /* inscreve (ou troca) a dupla: 1 ou 2 heróis, em ordem */
@@ -562,9 +572,10 @@ var JOGO = (typeof window !== 'undefined')
         ? Tx('O herói mais forte da dupla está no nível {nivel}: esta chave é do nível {min} ao {max}.', { nivel: r.nivel, min: r.nivelMin, max: r.nivelMax })
         : Tx('O nível do herói mais forte da dupla está fora da faixa desta chave.');
     }
-    if (m === 'outra-chave') return Tx('A sua conta já está na outra chave deste sábado: uma conta, uma chave. Saia de lá para trocar.');
+    if (m === 'outra-chave') return Tx('A sua conta já está em outra chave deste dia: uma conta, uma chave. Saia de lá para trocar.');
     if (m === 'mestre') return Tx('A conta do Mestre não entra no Torneio.');
     if (m === 'tipo') return Tx('Este torneio é de guilda: a inscrição é pelos voluntários da guilda, não pelo quadro.');
+    if (m === 'dois') return Tx('A sua conta tem dois heróis que podem lutar: inscreva a dupla, os dois.');
     // os de guilda e os de quem pede sem estar inscrito (nomes que o cliente assume; fora deles vale a frase do servidor)
     if (m === 'sem-guilda') return Tx('Você precisa estar numa guilda para o torneio de guilda.');
     if (m === 'cargo') return Tx('Só o líder ou um oficial escolhe o representante da guilda.');

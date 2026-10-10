@@ -3043,7 +3043,6 @@ JOGO.I18n.registra('es', { textos: {
   "O torneio está cheio: os 16 lugares já têm dono.": "El torneo está lleno: los 16 lugares ya tienen dueño.",
   "O herói mais forte da dupla está no nível {nivel}: esta chave é do nível {min} ao {max}.": "El héroe más fuerte de la pareja está en el nivel {nivel}: esta llave es del nivel {min} al {max}.",
   "O nível do herói mais forte da dupla está fora da faixa desta chave.": "El nivel del héroe más fuerte de la pareja está fuera del rango de esta llave.",
-  "A sua conta já está na outra chave deste sábado: uma conta, uma chave. Saia de lá para trocar.": "Tu cuenta ya está en la otra llave de este sábado: una cuenta, una llave. Sal de allí para cambiar.",
   "A conta do Mestre não entra no Torneio.": "La cuenta del Maestro no entra en el Torneo.",
   "Este torneio é de guilda: a inscrição é pelos voluntários da guilda, não pelo quadro.": "Este torneo es de gremio: la inscripción es por los voluntarios del gremio, no por el tablón.",
   "Você precisa estar numa guilda para o torneio de guilda.": "Necesitas estar en un gremio para el torneo de gremios.",
@@ -3055,12 +3054,6 @@ JOGO.I18n.registra('es', { textos: {
   "Escolha a dupla: um ou dois heróis.": "Elige la pareja: uno o dos héroes.",
   "Esse herói não está na sua conta do servidor.": "Ese héroe no está en tu cuenta del servidor.",
   // ---- 10/10: o Torneio da Arena na HUD (a ficha, a chave, a chamada, o campeão, os títulos e a moldura)
-  "Campeão da Arena": "Campeón de la Arena",
-  "Bicampeão da Arena": "Bicampeón de la Arena",
-  "Tricampeão da Arena": "Tricampeón de la Arena",
-  "Lenda da Arena": "Leyenda de la Arena",
-  "Imortal da Arena": "Inmortal de la Arena",
-  "Campeão das Guildas": "Campeón de los Gremios",
   "{n} conquista(s) no Torneio da Arena{a}": "{n} conquista(s) en el Torneo de la Arena{a}",
   " · campeão vigente (o louro)": " · campeón vigente (el laurel)",
   "Torneio da Arena": "Torneo de la Arena",
@@ -3180,5 +3173,20 @@ JOGO.I18n.registra('es', { textos: {
   "Customizar a plaquinha": "Personalizar la placa",
   "Ver a chave": "Ver la llave",
   "Luta do Torneio da Arena — o servidor confere a luta e a chave anda; a coroa não muda e a vida fica como estava antes da luta.": "Pelea del Torneo de la Arena — el servidor comprueba la pelea y la llave avanza; la corona no cambia y la vida queda como estaba antes de la pelea.",
-  "Torneio: a sua luta contra {a} foi chamada — diga que está aqui!": "Torneo: tu pelea contra {a} fue llamada — ¡di que estás aquí!"
+  "Torneio: a sua luta contra {a} foi chamada — diga que está aqui!": "Torneo: tu pelea contra {a} fue llamada — ¡di que estás aquí!",
+  // ---- 10/10: o Torneio contra o servidor de verdade (revanche, o prêmio pela fila, a plateia, a guilda campeã)
+  "A sua conta já está em outra chave deste dia: uma conta, uma chave. Saia de lá para trocar.": "Tu cuenta ya está en otra llave de este día: una cuenta, una llave. Sal de allí para cambiar.",
+  "A sua conta tem dois heróis que podem lutar: inscreva a dupla, os dois.": "Tu cuenta tiene dos héroes que pueden pelear: inscribe la pareja, los dos.",
+  "O prêmio do torneio não entrou aqui: ele volta na próxima abertura": "El premio del torneo no entró aquí: vuelve en la próxima apertura",
+  "Prêmio do torneio: {a} vinténs": "Premio del torneo: {a} vinténs",
+  "Prêmio do torneio: {n} Gema(s) Enterrada(s)": "Premio del torneo: {n} Gema(s) Enterrada(s)",
+  "Prêmio do torneio: {a}": "Premio del torneo: {a}",
+  "🏆 {guilda} venceu o {torneio} — {nome} lutou por ela!": "🏆 ¡{guilda} ganó el {torneio} — {nome} peleó por él!",
+  "Revanche do torneio: contra <b>{a}</b>": "Revancha del torneo: contra <b>{a}</b>",
+  "A luta fechou sem vencedor: esta é a revanche (sem vencedor de novo, decide o sorteio). ": "La pelea cerró sin ganador: esta es la revancha (sin ganador otra vez, decide el sorteo). ",
+  "o título Campeão das Guildas e a marca na placa": "el título Campeón de los Gremios y la marca en la placa",
+  "Chave de 2 não dá o título nem a marca da guilda: com 4 ou mais guildas eles valem.": "La llave de 2 no da el título ni la marca del gremio: con 4 o más gremios valen.",
+  "campeã vigente": "campeona vigente",
+  "{n} título(s)": "{n} título(s)",
+  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>XP doble</b> para todos los miembros hasta {a} (en lugar del +15% del cofre mientras dure)."
 } });

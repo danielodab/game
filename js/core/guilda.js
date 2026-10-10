@@ -964,6 +964,23 @@ var JOGO = (typeof window !== 'undefined')
     if (!g || g.liderId !== conta.id || g.migrada) return null;
     return { nome: g.nome, emblema: g.emblema };
   };
+  /* 10/10 — O TORNEIO DA ARENA NA GUILDA (docs/TORNEIO.md §4.3). A ficha do servidor traz
+   * `torneio: {campea, titulos, fatorXp, xpDobroAteMs}`: a campeã do torneio de guilda dá XP em DOBRO a todos os
+   * membros por 7 dias, um fator próprio que entra no LUGAR do +15% do cofre. `G.fatorXp()` é o que o game.js
+   * lê para a prévia da recompensa bater com o juiz (SÍNCRONO, como o bonusAtivo): o dobro enquanto
+   * `xpDobroAteMs` não passou; senão o +15% quando ativo; senão 1. */
+  G.torneio = function () {
+    var t = (G.noServidor() && ficha && ficha.torneio && typeof ficha.torneio === 'object') ? ficha.torneio : null;
+    if (!t) return null;
+    return { campea: t.campea === true, titulos: Math.max(0, Math.floor(Number(t.titulos) || 0)),
+             fatorXp: Number(t.fatorXp) || 1, xpDobroAteMs: Number(t.xpDobroAteMs) || 0 };
+  };
+  G.fatorXp = function () {
+    var t = G.torneio();
+    if (t && t.fatorXp > 1 && t.xpDobroAteMs > Date.now()) return t.fatorXp;
+    return G.bonusAtivo('xp') ? G.BONUS_FATOR : 1;
+  };
+
   G.migrarLocal = function () {
     var a = G.guildaLocalLiderada();
     if (!a) return responde({ ok: false, erro: Tx('nada para trazer') });

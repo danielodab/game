@@ -3043,7 +3043,6 @@ JOGO.I18n.registra('en', { textos: {
   "O torneio está cheio: os 16 lugares já têm dono.": "The tournament is full: all 16 spots are taken.",
   "O herói mais forte da dupla está no nível {nivel}: esta chave é do nível {min} ao {max}.": "Your pair's strongest hero is level {nivel}: this bracket is for levels {min} to {max}.",
   "O nível do herói mais forte da dupla está fora da faixa desta chave.": "Your pair's strongest hero is outside this bracket's level range.",
-  "A sua conta já está na outra chave deste sábado: uma conta, uma chave. Saia de lá para trocar.": "Your account is already in this Saturday's other bracket: one account, one bracket. Leave it to switch.",
   "A conta do Mestre não entra no Torneio.": "The Master's account doesn't enter the Tournament.",
   "Este torneio é de guilda: a inscrição é pelos voluntários da guilda, não pelo quadro.": "This is a guild tournament: entry is through the guild's volunteers, not the board.",
   "Você precisa estar numa guilda para o torneio de guilda.": "You need to be in a guild for the guild tournament.",
@@ -3055,12 +3054,6 @@ JOGO.I18n.registra('en', { textos: {
   "Escolha a dupla: um ou dois heróis.": "Pick your pair: one or two heroes.",
   "Esse herói não está na sua conta do servidor.": "That hero isn't in your server account.",
   // ---- 10/10: o Torneio da Arena na HUD (a ficha, a chave, a chamada, o campeão, os títulos e a moldura)
-  "Campeão da Arena": "Arena Champion",
-  "Bicampeão da Arena": "Two-Time Arena Champion",
-  "Tricampeão da Arena": "Three-Time Arena Champion",
-  "Lenda da Arena": "Legend of the Arena",
-  "Imortal da Arena": "Immortal of the Arena",
-  "Campeão das Guildas": "Champion of the Guilds",
   "{n} conquista(s) no Torneio da Arena{a}": "{n} Arena Tournament win(s){a}",
   " · campeão vigente (o louro)": " · reigning champion (the laurel)",
   "Torneio da Arena": "Arena Tournament",
@@ -3180,5 +3173,20 @@ JOGO.I18n.registra('en', { textos: {
   "Customizar a plaquinha": "Customize the nameplate",
   "Ver a chave": "See the bracket",
   "Luta do Torneio da Arena — o servidor confere a luta e a chave anda; a coroa não muda e a vida fica como estava antes da luta.": "Arena Tournament fight — the server checks the fight and the bracket moves on; the crown doesn't change and health stays as it was before the fight.",
-  "Torneio: a sua luta contra {a} foi chamada — diga que está aqui!": "Tournament: your fight against {a} has been called — say you're here!"
+  "Torneio: a sua luta contra {a} foi chamada — diga que está aqui!": "Tournament: your fight against {a} has been called — say you're here!",
+  // ---- 10/10: o Torneio contra o servidor de verdade (revanche, o prêmio pela fila, a plateia, a guilda campeã)
+  "A sua conta já está em outra chave deste dia: uma conta, uma chave. Saia de lá para trocar.": "Your account is already in another bracket on this day: one account, one bracket. Leave it to switch.",
+  "A sua conta tem dois heróis que podem lutar: inscreva a dupla, os dois.": "Your account has two heroes that can fight: sign up the pair, both of them.",
+  "O prêmio do torneio não entrou aqui: ele volta na próxima abertura": "The tournament prize didn't land here: it comes back next time you open the game",
+  "Prêmio do torneio: {a} vinténs": "Tournament prize: {a} vinténs",
+  "Prêmio do torneio: {n} Gema(s) Enterrada(s)": "Tournament prize: {n} Buried Gem(s)",
+  "Prêmio do torneio: {a}": "Tournament prize: {a}",
+  "🏆 {guilda} venceu o {torneio} — {nome} lutou por ela!": "🏆 {guilda} won the {torneio} — {nome} fought for it!",
+  "Revanche do torneio: contra <b>{a}</b>": "Tournament rematch: against <b>{a}</b>",
+  "A luta fechou sem vencedor: esta é a revanche (sem vencedor de novo, decide o sorteio). ": "The fight ended with no winner: this is the rematch (no winner again and a draw decides). ",
+  "o título Campeão das Guildas e a marca na placa": "the Champion of the Guilds title and the mark on the plate",
+  "Chave de 2 não dá o título nem a marca da guilda: com 4 ou mais guildas eles valem.": "A bracket of 2 gives neither the title nor the guild mark: with 4 or more guilds they count.",
+  "campeã vigente": "reigning champion",
+  "{n} título(s)": "{n} title(s)",
+  "<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).": "<b>Double XP</b> for every member until {a} (in place of the vault's +15% while it lasts)."
 } });

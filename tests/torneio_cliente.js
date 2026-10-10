@@ -243,6 +243,21 @@ respostas['/api/torneio/meu'] = function () {
   check('representante com null desfaz a escolha (o null viaja)', r.ok && ult('/api/torneio/representante').corpo.conta === null && To.meu().guilda.representante === null);
   r = await To.desvoluntariar(8);
   check('desvoluntariar tira da lista', r.ok && !To.meu().guilda.souVoluntario && To.meu().guilda.voluntarios.length === 0);
+  // o servidor de verdade responde o corpo do MEU nestas três rotas (docs/TORNEIO.md §4.3): adota-se sem outra ida
+  respostas['/api/torneio/voluntariar'] = function (op) {
+    guildaSrv.voluntarios = [{ conta: 11, nome: 'Ana', nivel: 22, classes: [{ classId: 'sumo', nivel: 22 }], desdeMs: srv() }];
+    guildaSrv.souVoluntario = true;
+    var x = clone(meuServidor); x.ok = true; x.status = 200; x.agoraMs = srv(); x.torneio = listaServidor[1];
+    return x;
+  };
+  m0 = conta('/api/torneio/meu');
+  r = await To.voluntariar(8, ['h1', 'h2']);
+  check('a resposta com o corpo do MEU é adotada direto (sem um GET /api/torneio/meu a mais)',
+        r.ok && To.meu().guilda.souVoluntario && conta('/api/torneio/meu') === m0 && r.torneio && r.torneio.id === 8, conta('/api/torneio/meu') - m0);
+  var MAIS = [[{ motivo: 'dois' }, /os dois/], [{ motivo: 'sem-guilda' }, /numa guilda/], [{ motivo: 'cargo' }, /líder ou um oficial/],
+              [{ motivo: 'sem-voluntario' }, /voluntários/], [{ motivo: 'equipe' }, /guilda da equipe/], [{ motivo: 'sem-inscricao' }, /não está inscrito/]];
+  check('os motivos a mais do servidor (dois, sem-guilda, cargo, sem-voluntario, equipe, sem-inscricao) têm cada um a sua frase',
+        MAIS.every(function (c) { return c[1].test(To.textoRecusa(c[0])); }), MAIS.map(function (c) { return To.textoRecusa(c[0]); }).join(' | '));
   meuServidor.guilda = null;
 
   // ============================================================ a chamada e a entrega
@@ -320,7 +335,10 @@ respostas['/api/torneio/meu'] = function () {
   respostas['/api/arena/estado'] = function () { return prontaArena('tor-6-0-1-r'); };
   meuServidor.luta.did = 'tor-6-0-1-r';
   await passa(8000);
+  meuServidor.luta.revanche = true;
+  await passa(8000);
   check('a revanche (outro did) é entregue de novo', Du.estado().did === 'tor-6-0-1-r' && Du.estado().modo === 'arena' && prontas.length === 2, Du.estado().did);
+  check('… e a luta diz que é revanche', To.luta().revanche === true);
   check('… e a chamada não é anunciada outra vez (é a mesma luta da chave)', chamadas.length === 1, chamadas.length);
   Du._reset(); Ar._reset();
   // passou de rodada: outra luta, outra chamada

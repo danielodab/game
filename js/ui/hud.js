@@ -433,6 +433,14 @@ var JOGO = (typeof window !== 'undefined')
       : ((d.origem === 'trilha' || ped.origem === 'trilha' || ent.origem === 'trilha') ? 'trilha'
       : ((d.origem === 'diario' || ped.origem === 'diario' || ent.origem === 'diario') ? 'diario'
       : ((d.origem === 'amigo' || ped.origem === 'amigo') ? 'amigo' : 'loja')))));
+    // 10/10: o prêmio do campeão do Torneio da Arena (servidor/torneio.py: os vinténs e as Gemas Enterradas
+    // chegam pela fila da loja com origem 'torneio') — "Prêmio do torneio", e não "Chegou da loja"
+    if (d.origem === 'torneio' || ped.origem === 'torneio' || ent.origem === 'torneio' || /^torneio(-|$)/.test(String(ped.sku || ''))) {
+      if (d.tipo !== 'entregue') return { texto: tr('O prêmio do torneio não entrou aqui: ele volta na próxima abertura'), tipo: null };
+      return { texto: ent.tipo === 'vintens' ? tr('Prêmio do torneio: {a} vinténs', { a: lojaMilhar(ent.qtd) })
+                    : ent.tipo === 'pedras' ? tr('Prêmio do torneio: {n} Gema(s) Enterrada(s)', { n: Math.max(1, Math.floor(Number(ent.qtd) || 1)) })
+                    : tr('Prêmio do torneio: {a}', { a: esc(nome) }), tipo: 'good' };
+    }
     // 08/10: o prêmio diário de resgate (servidor/premio_diario.py)
     if (origem === 'diario') {
       if (d.tipo !== 'entregue') return { texto: tr('O prêmio diário não entrou aqui: ele volta na próxima abertura'), tipo: null };
@@ -1995,6 +2003,15 @@ var JOGO = (typeof window !== 'undefined')
         var T = (JOGO.Brasa && JOGO.Brasa.TIERS) || [];
         var t = T[Math.max(0, Math.min(T.length - 1, Math.floor(Number(d.nivel) || 1) - 1))];
         return t ? tr('{nome} chegou à {coroa} na Arena!', { nome: nome, coroa: t.nome }) : '';
+      }
+      // 10/10: o campeão do Torneio da Arena — o nome do torneio sai do tipo e da faixa (o título só vale no do Mestre)
+      if (ev.feito === 'torneio') {
+        var fx = /^(\d+)-(\d+)$/.exec(String(d.faixa || ''));
+        var qual = d.tipo === 'guilda' ? tr('Torneio das Guildas')
+                 : fx ? tr('Torneio de PvP · nível {a} a {b}', { a: fx[1], b: fx[2] }) : tr('Torneio da Arena');
+        return (d.tipo === 'guilda' && d.guilda)
+          ? tr('🏆 {guilda} venceu o {torneio} — {nome} lutou por ela!', { guilda: String(d.guilda), torneio: qual, nome: nome })
+          : tr('🏆 {a} venceu o {b}!', { a: nome, b: qual });
       }
       return '';
     }
@@ -13085,6 +13102,19 @@ var JOGO = (typeof window !== 'undefined')
           caixa.appendChild(fp);
         }
 
+        /* 10/10 — A CAMPEÃ DO TORNEIO DE GUILDA: XP em dobro para todos os membros por 7 dias (entra no lugar
+         * do +15% do cofre enquanto durar) e os títulos que a guilda já soma */
+        var gt = safe(function () { return JOGO.Guilda.torneio(); }, null);
+        if (gt && (gt.campea || gt.titulos > 0 || gt.xpDobroAteMs > Date.now())) {
+          var cxT = el('div', 'guilda-meta guilda-torneio' + (gt.xpDobroAteMs > Date.now() ? ' is-cumprida' : ''));
+          cxT.appendChild(el('div', 'guilda-meta-cab', '<b>' + tr('Torneio das Guildas') + '</b>' +
+            '<span>' + (gt.campea ? tr('campeã vigente') : '') + (gt.titulos ? (gt.campea ? ' · ' : '') + tr('{n} título(s)', { n: gt.titulos }) : '') + '</span>'));
+          if (gt.xpDobroAteMs > Date.now()) {
+            cxT.appendChild(el('p', 'inv-dica', tr('<b>XP em dobro</b> para todos os membros até {a} (no lugar do +15% do cofre enquanto durar).', { a: esc(quandoTorneio(gt.xpDobroAteMs)) })));
+          }
+          caixa.appendChild(cxT);
+        }
+
         /* A META DA SEMANA (07/10, servidor/guilda.py soma_meta): as salas que os membros vencem enchem a
          * barra; cheia, +15% de XP e de saque para todos até domingo e XP para a guilda. Só vem do servidor. */
         if (g.meta && typeof g.meta.alvo === 'number') {
@@ -16137,6 +16167,7 @@ var JOGO = (typeof window !== 'undefined')
     if (t.tipo === 'guilda') {
       if (p.xpGuilda) partes.push(tr('{n} XP para a guilda', { n: p.xpGuilda }));
       if (!cheio) partes.push(tr('XP em dobro para todos os membros por 7 dias'));
+      if (p.conquista) partes.push(tr('o título Campeão das Guildas e a marca na placa'));
     } else {
       if (p.conquista) partes.push(tr('conta como conquista (título)'));
       if (p.moldura) partes.push(tr('a moldura Campeão da Arena'));
@@ -16488,7 +16519,7 @@ var JOGO = (typeof window !== 'undefined')
     var l = T ? safe(function () { return T.luta(); }, null) : null;
     // a luta já abriu: o cartão sai da frente enquanto se luta (volta se a luta do torneio seguir de pé depois)
     var some = !l || (l.entregue && (current === 'battle' || current === 'duelFim'));
-    var sig = some ? '' : [l.torneio, l.rodada, l.pos, l.presente, l.elePresente, l.did, l.entregue, l.bloqueio, l.prazoMs].join('|');
+    var sig = some ? '' : [l.torneio, l.rodada, l.pos, l.presente, l.elePresente, l.did, l.entregue, l.bloqueio, l.prazoMs, l.revanche].join('|');
     if (sig !== torneioHud.lutaSig) { torneioHud.lutaSig = sig; desenhaChamada(some ? null : l); }
     var rel = torneioEl.querySelector('.tc-rel');
     if (rel) rel.textContent = relogioTxt(Number(rel.getAttribute('data-prazo')) - agoraTorneio());
@@ -16503,7 +16534,8 @@ var JOGO = (typeof window !== 'undefined')
     var cab = el('div', 'pd-cab');
     cab.appendChild(art('portrait', [((ad.classes[0] || {}).classId) || 'sumo', { element: 'neutro', size: 48 }], 40));
     var tx = el('div', 'pd-tx');
-    tx.appendChild(el('span', 'pd-tit', tr('Sua luta do torneio: contra <b>{a}</b>', { a: esc(ad.nome) })));
+    tx.appendChild(el('span', 'pd-tit', l.revanche ? tr('Revanche do torneio: contra <b>{a}</b>', { a: esc(ad.nome) })
+                                                  : tr('Sua luta do torneio: contra <b>{a}</b>', { a: esc(ad.nome) })));
     var rodada = t && t.chave ? T.nomeDaRodada(t.chave.tamanho, l.rodada) : '';
     tx.appendChild(el('span', 'pd-sub', (rodada ? esc(rodada) + ' · ' : '') + (ad.nivel ? 'nv ' + ad.nivel + ' · ' : '') + esc(nomesDupla(ad.classes))));
     cab.appendChild(tx);
@@ -16522,7 +16554,8 @@ var JOGO = (typeof window !== 'undefined')
     }
     torneioEl.appendChild(barraPrazo(l.prazoMs, agoraTorneio));
     if (!l.presente) {
-      torneioEl.appendChild(el('p', 'pd-nota tc-nota', (l.elePresente ? tr('<b>{a} já confirmou.</b> ', { a: esc(ad.nome) }) : '') +
+      torneioEl.appendChild(el('p', 'pd-nota tc-nota', (l.revanche ? tr('A luta fechou sem vencedor: esta é a revanche (sem vencedor de novo, decide o sorteio). ') : '') +
+        (l.elePresente ? tr('<b>{a} já confirmou.</b> ', { a: esc(ad.nome) }) : '') +
         tr('Você tem 3 minutos para dizer que está aqui. Sem a sua confirmação, a vitória vai para o outro lado por W.O.')));
       var acts = el('div', 'pd-acts');
       var bAqui = btn(tr('Estou aqui'), 'btn-primary tc-aqui', function () {
@@ -16578,7 +16611,8 @@ var JOGO = (typeof window !== 'undefined')
     if (t.tipo === 'guilda') {
       if (p.xpGuilda) linha(tr('<b>+{n}</b> XP para a guilda', { n: p.xpGuilda }));
       linha(tr('<b>XP em dobro</b> para todos os membros da guilda por 7 dias'));
-      linha(tr('O título <b>Campeão das Guildas</b> (em Customizar)'));
+      if (p.conquista) linha(tr('O título <b>Campeão das Guildas</b> (em Customizar)'));
+      else linha(tr('Chave de 2 não dá o título nem a marca da guilda: com 4 ou mais guildas eles valem.'));
       linha(tr('A placa da guilda com o filete da campeã até o próximo torneio de guilda'));
     } else {
       var m = T ? T.meu() : { conquistas: { pvp: 0 } };
@@ -16598,6 +16632,9 @@ var JOGO = (typeof window !== 'undefined')
   function guildaNoTorneio() {
     if (!resumoGuilda) return null;
     var f = safe(function () { return JOGO.Guilda._ficha(); }, null) || {};
+    // a ficha do servidor traz `torneio: {campea, titulos, fatorXp, xpDobroAteMs}` (docs/TORNEIO.md §4.3)
+    var ft = safe(function () { return JOGO.Guilda.torneio(); }, null);
+    if (ft) return { campea: ft.campea, titulos: Math.min(5, ft.titulos) };
     var campea = f.campea === true, titulos = Math.max(0, Math.floor(Number(f.titulos != null ? f.titulos : f.guildaTitulos) || 0));
     if (f.campea === undefined) {
       var ult = safe(function () { return Tn().encerrados().filter(function (t) { return t.tipo === 'guilda' && t.campeao; })[0]; }, null);

@@ -616,9 +616,12 @@ var JOGO = (typeof window !== 'undefined')
       var seg = M.deBrasilia(inQuando.value);
       if (!seg) { aviso('Escolha a data e a hora do início (hora de Brasília).'); return; }
       if (seg * 1000 < Date.now() + 15 * 60 * 1000) { aviso('O início tem de ser daqui a pelo menos 15 minutos: as inscrições fecham 10 minutos antes.'); return; }
+      if (seg * 1000 > Date.now() + 180 * 86400000) { aviso('O início pode ficar no máximo 180 dias à frente.'); return; }
+      var titT = String(inTitulo.value || '').trim().slice(0, 60);
+      if (titT && titT.length < 3) { aviso('O título tem de ter de 3 a 60 letras (ou fique em branco para o padrão do tipo).'); return; }
       bMarcar.disabled = true;
-      var corpo = { tipo: torneioForm.tipo, faixa: torneioForm.tipo === 'guilda' ? null : selFaixa.value, inicioMs: seg * 1000,
-                    titulo: String(inTitulo.value || '').trim().slice(0, 60) };
+      var corpo = { tipo: torneioForm.tipo, faixa: torneioForm.tipo === 'guilda' ? null : selFaixa.value, inicioMs: seg * 1000 };
+      if (titT) corpo.titulo = titT;           // sem título, o servidor põe o padrão do tipo
       api('/api/mestre/torneio/marcar', { method: 'POST', body: corpo }).then(function (r) {
         bMarcar.disabled = false;
         if (!r || !r.ok) { aviso(M.erro(r, 'o torneio não foi marcado')); return; }
@@ -647,7 +650,9 @@ var JOGO = (typeof window !== 'undefined')
         row.setAttribute('data-torneio', String(t.id));
         var nm = el('div', 'pm-nome');
         var tit = el('b', null, (t.titulo || (t.tipo === 'guilda' ? 'Torneio das Guildas' : 'Torneio de PvP')) + ' · nº ' + t.id);
-        tit.appendChild(etiqueta(TORNEIO_ESTADO[t.estado] || t.estado, t.estado === 'cancelado' ? 'is-fora' : (t.estado === 'andamento' ? 'is-gm' : '')));
+        tit.appendChild(etiqueta((TORNEIO_ESTADO[t.estado] || t.estado) +
+          (t.estado === 'cancelado' ? (t.motivo === 'poucos' ? ' · menos de 2 inscritos' : t.motivo === 'mestre' ? ' · pelo Mestre' : '') : ''),
+          t.estado === 'cancelado' ? 'is-fora' : (t.estado === 'andamento' ? 'is-gm' : '')));
         if (t.origem === 'mestre') tit.appendChild(etiqueta('marcado pelo Mestre', ''));
         nm.appendChild(tit);
         var n = (t.inscritos || []).length;
