@@ -1526,6 +1526,8 @@ var JOGO = (typeof window !== 'undefined')
                   heroisDele: (Object.prototype.toString.call(p.heroisDele) === '[object Array]' ? p.heroisDele : [])
                     .slice(0, MAX_HEROIS).map(function (h) { return String(h).slice(0, 64); }) };
     if (!dst.arena.herois.length) { zeraDuelo(); return { ok: false, motivo: 'sem-heroi' }; }
+    // 10/10: a luta do Torneio da Arena (o id do torneio, ou null) — ela começa com a vida CHEIA dos dois lados
+    dst.arena.torneio = (p.torneio == null || p.torneio === false) ? null : p.torneio;
     dst.dupla = dst.arena.herois.slice();
     dst.prazo = agoraD() + Duelo.PRAZO_MS;
     if (p.lado === 'A') {
@@ -1576,7 +1578,10 @@ var JOGO = (typeof window !== 'undefined')
     }
     var Vd = JOGO.Vida;
     var z = safe(function () { return (Vd && Vd.zerado) ? Vd.zerado(ids) : null; }, null);
-    if (z) return { ok: false, motivo: 'vida-zero', heroi: z.heroId, esperaS: z.esperaS };
+    // 10/10: no Torneio a vida única não vale (docs/TORNEIO.md: "começa com a vida CHEIA dos dois lados") — herói a
+    // 0 PV entra, e o carry que o servidor devolve no abrir é quem diz a vida (sem carry = cheio)
+    var doTorneio = !!(dst.modo === 'arena' && dst.arena && dst.arena.torneio != null);
+    if (z && !doTorneio) return { ok: false, motivo: 'vida-zero', heroi: z.heroId, esperaS: z.esperaS };
     var A = JOGO.Autoridade;
     if (A && A.abreDuelo && safe(function () { return A.ligada(); }, false)) {
       var eraDst = dst, did = dst.did;
@@ -1608,7 +1613,7 @@ var JOGO = (typeof window !== 'undefined')
       mudaD();
       return { ok: true, esperando: true };
     }
-    return comprometeDupla(ids, pls, safe(function () { return (Vd && Vd.carry) ? Vd.carry(ids) : null; }, null));
+    return comprometeDupla(ids, pls, doTorneio ? null : safe(function () { return (Vd && Vd.carry) ? Vd.carry(ids) : null; }, null));
   };
   function comprometeDupla(ids, pls, carry) {
     pls.forEach(function (pl) {
@@ -2120,8 +2125,9 @@ var JOGO = (typeof window !== 'undefined')
       ast.entregue = r.did;
       ast.entregueEm = Arena._agora();
       var ad = r.adversario || {};
+      // 10/10: a partida do TORNEIO nasce pronta aqui também (o servidor a marca com `torneio: <id>`, docs/TORNEIO.md)
       var res = Duelo.iniciaArena({ did: r.did, lado: r.lado, conta: ad.conta, nome: ad.nome,
-                                    herois: r.herois, heroisDele: ad.herois });
+                                    herois: r.herois, heroisDele: ad.herois, torneio: r.torneio });
       if (!res || !res.ok) {
         aviso(Tx('A partida da Arena caiu: {a}', { a: Grupo.textoMotivo(res ? res.motivo : 'ocupado', null).toLowerCase() }));
         Arena.sair();
