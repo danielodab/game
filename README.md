@@ -360,8 +360,8 @@ igual no main `6773161` (conferido lá): Node — `juiz_poco` 1/7, `luta_aberta_
 `autoridade_ponta` 3/11, `guerra_bancada` 7/96 (a régua do bloco B2 envelheceu com as classes); API — `guilda_api`
 1 (o nome Mestre), `mestre_api` 3 (as iniciais livres de 08/10 e a codificação do log — com `PYTHONUTF8=1` passa),
 `moderacao_api` 1 (`test_16`, idem), `pagamento_api` 3 e `pagamento_play_api` 1 (sem as chaves no ambiente),
-`pocoes_api` 1, `torneio_api` (um timeout de socket com a máquina cheia); navegador — `coroa_praca`, `balao_praca`,
-`guerra_hud` (tempo real sob carga), `arvore_feiticos` 4, `prova_icones_menus` 4, `cartas_item` 3, `grupo_hud` 2,
+`pocoes_api` 1 (`torneio_api` caiu por timeout com a máquina cheia e passou 15/15 vazia); navegador — `coroa_praca`,
+`balao_praca`, `guerra_hud` 12/33 (iguais no main também com a máquina vazia — a guerra da partida pronta não abre), `arvore_feiticos` 4, `prova_icones_menus` 4, `cartas_item` 3, `grupo_hud` 2,
 `eco_hud` 2, `quebra_hud` 3, `pocoes_hud` 1, `torneio_hud` 1 (janela larga), `ui_screens` (não fecha). Voltaram a
 verde nesta noite: `validate_world` 8.791/0, `validate_classes` 7.095/0, `validate_fusion` 6.664/0, `art_gallery`,
 `icones_extras` (réguas acertadas às decisões do dono), `app_modelos` 41/41 e `efeitos_um_a_um` (passava vazia).

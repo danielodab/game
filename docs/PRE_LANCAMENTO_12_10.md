@@ -60,7 +60,8 @@ mudaram a resposta — e `test_trilha_e_log`, que é só codificação: o "—" 
 UTF-8; com `PYTHONUTF8=1` passa), `moderacao_api` 1 (`test_16`, as cartas de classe liberada dão 422
 `nada-mudou`), `pagamento_api` 3 (sem as chaves do Mercado Pago no ambiente), `pagamento_play_api` 1 (a conta de
 serviço), `pocoes_api` 1 (`prova_03_fim_de_luta_grava_a_vida`; no main o `setUpClass` nem sobe),
-`torneio_api` (um `TimeoutError` de socket no `test_05` com a máquina cheia, e o resto em cascata — ver §2.4).
+`torneio_api` (um `TimeoutError` de socket no `test_05` com a máquina cheia, e o resto em cascata — repetido com a
+máquina vazia no fim da noite: **15 de 15, 75 s**; `pocoes_api` repetido vazio segue com a mesma 1).
 
 ### 2.3 Navegador (Chrome headless, pela vez da máquina)
 
@@ -82,8 +83,11 @@ campo_pvp 52, desafios 11, grupo 246, prova_forja, prova_inventario_dupla, foto_
 no main (conferido lá na mesma noite): `grupo_hud` 2 de 40 (o item 28, do README), `torneio_hud` 1 de 101 (o
 botão da moldura mede 182×36 numa janela de 1500 px — a prova é de 375 px), `eco_hud` 2 de 50, `quebra_hud` 3 de
 61 (as mesmas três do commit de 10/10), `pocoes_hud` 1 de 44 ("quem enche sai do registro", do README),
-`guerra_hud` 12 de 33 (oscila sob carga — a nota de 03/10) e `ui_screens` que não fecha (não fecha o placar,
-também do README).
+`guerra_hud` 12 de 33 — repetido com a máquina VAZIA, nesta branch e no main: 12 de 33 nos dois, a partida pronta
+não abre a guerra no Salão da Sede ("[menu · guerra]"); não é a oscilação sob carga de 03/10, é um cenário que
+quebrou entre 03/10 (33/33) e 10/10, com cara de vir do fluxo da partida pronta do torneio — fica para o seu
+olho, é regra de guerra, não desta noite — e `ui_screens` que não fecha (não fecha o placar, também do README).
+`coroa_praca` e `balao_praca` também falham vazios (4/10 e 3/10) e iguais no main.
 
 ### 2.4 O que é da máquina, não do código
 
