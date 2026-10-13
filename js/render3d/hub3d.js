@@ -493,73 +493,187 @@ var JOGO = (typeof window !== 'undefined')
    * um fio fino por dentro na cor escurecida, rebites nos cantos e gemas lapidadas (a faceta clara) nos
    * losangos. Continua SEM brilho: é forma e metal, nada de luz. */
   function tomDe(hex, k) {   // k > 0 mistura com branco, k < 0 com preto
+    if (!/^#[0-9a-fA-F]{6}$/.test(String(hex))) return hex;   // 12/10: a placa da guilda pode trazer rgba(); fica como veio
     var n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
     var alvo = k > 0 ? 255 : 0, f = Math.abs(k);
     r = Math.round(r + (alvo - r) * f); g = Math.round(g + (alvo - g) * f); b = Math.round(b + (alvo - b) * f);
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
   /* desenha a PLACA com a forma da moldura: `r` = {x, y, w, h} do retângulo de sempre */
-  function desenhaMoldura(g, mol, r, extra) {
-    var cor = mol.borda, t = mol.traco || 8, x = r.x, y = r.y, w = r.w, h = r.h;
+  /* 12/10 (o dono: "melhore os detalhes que ficam em volta dos nomes, dá para melhorar e muito"). A borda deixou
+   * de ser uma faixa de degradê: ganhou BISEL (um aro claro em cima e à esquerda, escuro embaixo e à direita, por
+   * dentro; um fio escuro por fora), um brilho diagonal correndo o metal, CONTAS gravadas no fio de dentro e uma
+   * ROSETA em cada canto; as gemas são lapidadas em quatro facetas com a cintilação; os rebites têm luz. E cada
+   * forma ganhou o ornamento dela: volutas na Dourada, espinhos sombreados na Rubi, a vinha correndo a borda na
+   * Esmeralda, runas angulosas na Obsidiana, arcos góticos com pilastras no Eco, ameias com juntas e torres com
+   * telhado no Chefe, o medalhão com a estrela no pódio de classe. Continua SEM brilho: é forma e metal. */
+  function bordaBiselada(g, caminho, cor, t, fundo, x, y, w, h) {
     var metal = g.createLinearGradient(0, y - 30, 0, y + h + 30);
     metal.addColorStop(0, tomDe(cor, 0.55)); metal.addColorStop(0.35, cor); metal.addColorStop(0.62, tomDe(cor, -0.38));
     metal.addColorStop(0.85, cor); metal.addColorStop(1, tomDe(cor, 0.3));
-    var escuro = tomDe(cor, -0.45);
+    var bisel = g.createLinearGradient(x, y, x + w, y + h);
+    bisel.addColorStop(0, 'rgba(255,255,255,0.75)'); bisel.addColorStop(0.42, 'rgba(255,255,255,0.1)');
+    bisel.addColorStop(0.58, 'rgba(0,0,0,0.12)'); bisel.addColorStop(1, 'rgba(0,0,0,0.7)');
+    var lustre = g.createLinearGradient(x, y, x + w, y + h);
+    lustre.addColorStop(0, 'rgba(255,255,255,0.28)'); lustre.addColorStop(0.5, 'rgba(255,255,255,0.0)');
+    lustre.addColorStop(0.72, 'rgba(0,0,0,0.0)'); lustre.addColorStop(1, 'rgba(0,0,0,0.26)');
+    g.save();
+    g.beginPath(); caminho(); g.closePath();
+    if (fundo) { g.fillStyle = fundo; g.fill(); }
+    // o aro de DENTRO: desenhado com a placa recortada, só sobra a parte que invade o miolo (1,5 px)
+    g.save(); g.clip(); g.strokeStyle = bisel; g.lineWidth = t + 3; g.stroke(); g.restore();
+    // o fio escuro de FORA, pela mesma lógica ao contrário
+    g.save(); g.beginPath(); g.rect(x - 60, y - 60, w + 120, h + 120); caminho(); g.closePath(); g.clip('evenodd');
+    g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = t + 3; g.stroke(); g.restore();
+    g.beginPath(); caminho(); g.closePath();
+    g.strokeStyle = metal; g.lineWidth = t; g.stroke();
+    g.strokeStyle = lustre; g.lineWidth = Math.max(2, t - 2); g.stroke();
+    g.restore();
+    return metal;
+  }
+  function desenhaMoldura(g, mol, r, extra) {
+    var cor = mol.borda, t = mol.traco || 8, x = r.x, y = r.y, w = r.w, h = r.h;
+    var escuro = tomDe(cor, -0.45), claro = tomDe(cor, 0.5);
+    var metal = null;
     var verniz = g.createLinearGradient(0, y, 0, y + h);
     verniz.addColorStop(0, 'rgba(255,255,255,0.13)'); verniz.addColorStop(0.5, 'rgba(255,255,255,0.02)'); verniz.addColorStop(1, 'rgba(0,0,0,0.2)');
-    /* o fundo com verniz dentro de um caminho (o retângulo ou o polígono da forma) e a borda de metal por cima */
+    /* o fundo com verniz e vinhete dentro de um caminho (o retângulo ou o polígono da forma) e a borda biselada por cima */
     function placa(caminho) {
       g.beginPath(); caminho(); g.closePath();
       g.fillStyle = mol.fundo; g.fill();
-      g.save(); g.clip(); g.fillStyle = verniz; g.fillRect(x - 40, y - 40, w + 80, h + 80); g.restore();
-      g.strokeStyle = metal; g.lineWidth = t; g.stroke();
+      g.save(); g.clip();
+      g.fillStyle = verniz; g.fillRect(x - 40, y - 40, w + 80, h + 80);
+      var vin = g.createRadialGradient(x + w / 2, y + h / 2, h * 0.25, x + w / 2, y + h / 2, w * 0.72);
+      vin.addColorStop(0, 'rgba(255,255,255,0.05)'); vin.addColorStop(1, 'rgba(0,0,0,0.26)');
+      g.fillStyle = vin; g.fillRect(x - 40, y - 40, w + 80, h + 80);
+      g.restore();
+      metal = bordaBiselada(g, caminho, cor, t, null, x, y, w, h);
     }
     function retangulo() { placa(function () { g.rect(x + t / 2, y + t / 2, w - t, h - t); }); }
-    function fio(d) {   // o fio fino por dentro
+    function fio(d) {   // o fio fino por dentro, com um segundo fio claro meio pixel abaixo (gravado)
       g.lineWidth = 2; g.strokeStyle = escuro; g.strokeRect(x + t + d, y + t + d, w - t * 2 - d * 2, h - t * 2 - d * 2);
+      g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,0.14)'; g.strokeRect(x + t + d + 1.5, y + t + d + 1.5, w - t * 2 - d * 2 - 3, h - t * 2 - d * 2 - 3);
+    }
+    function contas(d, passo) {   // as contas gravadas ao longo do fio de dentro (em cima e embaixo)
+      passo = passo || 11;
+      var x1 = x + t + d + 14, x2 = x + w - t - d - 14, yy1 = y + t + d, yy2 = y + h - t - d;
+      g.fillStyle = 'rgba(255,255,255,0.3)';
+      for (var cx = x1; cx <= x2; cx += passo) {
+        g.beginPath(); g.arc(cx, yy1, 1.5, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(cx, yy2, 1.5, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      for (var cx2 = x1 + passo / 2; cx2 <= x2; cx2 += passo) {
+        g.beginPath(); g.arc(cx2, yy1 + 1, 1.0, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(cx2, yy2 + 1, 1.0, 0, Math.PI * 2); g.fill();
+      }
+    }
+    function roseta(cx, cy, rr) {   // a roseta de quatro pétalas nos cantos de dentro
+      g.save();
+      g.fillStyle = metal || cor; g.strokeStyle = escuro; g.lineWidth = 1.2;
+      for (var k = 0; k < 4; k++) {
+        var a = k * Math.PI / 2;
+        g.beginPath(); g.ellipse(cx + Math.cos(a) * rr * 0.55, cy + Math.sin(a) * rr * 0.55, rr * 0.5, rr * 0.3, a, 0, Math.PI * 2);
+        g.fill(); g.stroke();
+      }
+      g.beginPath(); g.arc(cx, cy, rr * 0.3, 0, Math.PI * 2); g.fillStyle = claro; g.fill(); g.stroke();
+      g.restore();
+    }
+    function rosetas(d) {
+      var dd = t + d + 9;
+      [[x + dd, y + dd], [x + w - dd, y + dd], [x + dd, y + h - dd], [x + w - dd, y + h - dd]].forEach(function (c) { roseta(c[0], c[1], 6); });
     }
     function rebites() {
       [[x + t + 8, y + t + 8], [x + w - t - 8, y + t + 8], [x + t + 8, y + h - t - 8], [x + w - t - 8, y + h - t - 8]].forEach(function (c) {
         g.beginPath(); g.arc(c[0], c[1], 4.5, 0, Math.PI * 2);
-        g.fillStyle = metal; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = metal || cor; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
+        g.beginPath(); g.arc(c[0] - 1.4, c[1] - 1.4, 1.6, 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,0.7)'; g.fill();
       });
     }
-    function losango(cx, cy, rr) {
+    function losango(cx, cy, rr) {   // a gema lapidada: quatro facetas, o fio escuro e a cintilação
       g.beginPath(); g.moveTo(cx, cy - rr); g.lineTo(cx + rr, cy); g.lineTo(cx, cy + rr); g.lineTo(cx - rr, cy); g.closePath();
-      g.fillStyle = metal; g.fill();
+      g.fillStyle = metal || cor; g.fill();
       g.strokeStyle = escuro; g.lineWidth = 3; g.stroke();
-      // a faceta clara de cima: a gema lapidada
-      g.beginPath(); g.moveTo(cx, cy - rr + 5); g.lineTo(cx + rr - 5, cy); g.lineTo(cx, cy); g.closePath();
-      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fill();
+      var fac = [[[cx, cy - rr], [cx + rr, cy], [cx, cy], 'rgba(255,255,255,0.42)'], [[cx, cy - rr], [cx - rr, cy], [cx, cy], 'rgba(255,255,255,0.22)'],
+                 [[cx, cy + rr], [cx - rr, cy], [cx, cy], 'rgba(0,0,0,0.22)'], [[cx, cy + rr], [cx + rr, cy], [cx, cy], 'rgba(0,0,0,0.4)']];
+      fac.forEach(function (f) {
+        g.beginPath(); g.moveTo(f[0][0], f[0][1]); g.lineTo(f[1][0], f[1][1]); g.lineTo(f[2][0], f[2][1]); g.closePath();
+        g.fillStyle = f[3]; g.fill();
+      });
+      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(cx - rr, cy); g.lineTo(cx + rr, cy); g.moveTo(cx, cy - rr); g.lineTo(cx, cy + rr); g.stroke();
+      g.beginPath(); g.arc(cx - rr * 0.28, cy - rr * 0.38, Math.max(1.5, rr * 0.12), 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,0.9)'; g.fill();
+    }
+    function voluta(cx, cy, d, lado) {   // a voluta em S, na horizontal, apontando para `d` (1 direita, -1 esquerda)
+      g.save(); g.strokeStyle = metal || cor; g.lineWidth = 3; g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(cx, cy); g.quadraticCurveTo(cx + d * 10, cy - lado * 9, cx + d * 20, cy);
+      g.quadraticCurveTo(cx + d * 30, cy + lado * 9, cx + d * 40, cy);
+      g.stroke();
+      g.beginPath(); g.arc(cx + d * 44, cy - lado * 2, 3.2, 0, Math.PI * 2); g.fillStyle = metal || cor; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.2; g.stroke();
+      g.restore();
+    }
+    function folha(cx, cy, ang, tam, cheia) {   // uma folha com nervura
+      g.save(); g.translate(cx, cy); g.rotate(ang);
+      g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(tam * 0.5, -tam * 0.45, tam, 0); g.quadraticCurveTo(tam * 0.5, tam * 0.45, 0, 0); g.closePath();
+      g.fillStyle = cheia || (metal || cor); g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.3; g.stroke();
+      g.beginPath(); g.moveTo(tam * 0.12, 0); g.lineTo(tam * 0.85, 0); g.strokeStyle = escuro; g.lineWidth = 1; g.stroke();
+      g.restore();
     }
     g.save();
     g.shadowBlur = 0;                               // sem brilho: a forma é que chama
     if (mol.forma === 'losangos') {
-      retangulo(); fio(5);
+      retangulo(); fio(5); contas(5); rosetas(5);
+      // as volutas entre as gemas, em cima e embaixo
+      [y, y + h].forEach(function (yy, i) {
+        voluta(x + 34, yy, 1, i ? -1 : 1); voluta(x + w / 2 - 22, yy, -1, i ? 1 : -1);
+        voluta(x + w / 2 + 22, yy, 1, i ? -1 : 1); voluta(x + w - 34, yy, -1, i ? 1 : -1);
+      });
       [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 24); });
       losango(x + w / 2, y, 14); losango(x + w / 2, y + h, 14);
     } else if (mol.forma === 'espinhos') {
-      retangulo(); fio(5);
+      retangulo(); fio(5); contas(5); rosetas(5);
       var passo = 34, alt = 20;
-      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
       for (var sx = x + 10; sx + passo <= x + w - 8; sx += passo) {
-        g.beginPath(); g.moveTo(sx, y + 2); g.lineTo(sx + passo / 2, y - alt); g.lineTo(sx + passo, y + 2); g.closePath(); g.fill(); g.stroke();
-        g.beginPath(); g.moveTo(sx, y + h - 2); g.lineTo(sx + passo / 2, y + h + alt); g.lineTo(sx + passo, y + h - 2); g.closePath(); g.fill(); g.stroke();
+        [[y + 2, -1], [y + h - 2, 1]].forEach(function (b) {
+          var yb = b[0], d = b[1];
+          g.beginPath(); g.moveTo(sx, yb); g.lineTo(sx + passo / 2, yb + d * alt); g.lineTo(sx + passo, yb); g.closePath();
+          g.fillStyle = metal || cor; g.fill(); g.strokeStyle = escuro; g.lineWidth = 2; g.stroke();
+          // a face sombreada do espinho e o fio de luz da outra
+          g.beginPath(); g.moveTo(sx + passo / 2, yb + d * alt); g.lineTo(sx + passo, yb); g.lineTo(sx + passo / 2, yb); g.closePath();
+          g.fillStyle = 'rgba(0,0,0,0.3)'; g.fill();
+          g.beginPath(); g.moveTo(sx + 3, yb); g.lineTo(sx + passo / 2, yb + d * (alt - 3)); g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1.2; g.stroke();
+        });
       }
       [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 13); });   // os rubis dos cantos
     } else if (mol.forma === 'folhas') {
-      retangulo(); fio(5);
+      retangulo(); fio(5); contas(5);
+      // a vinha correndo as bordas de cima e de baixo, com folhinhas alternadas
+      [y, y + h].forEach(function (yy, i) {
+        g.save(); g.strokeStyle = metal || cor; g.lineWidth = 2.5; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(x + 44, yy);
+        for (var vx = x + 44; vx < x + w - 44; vx += 28) g.quadraticCurveTo(vx + 14, yy + (((vx / 28) | 0) % 2 ? 6 : -6), vx + 28, yy);
+        g.stroke(); g.restore();
+        for (var fx2 = x + 58; fx2 < x + w - 50; fx2 += 28) {
+          var lado = ((fx2 / 28) | 0) % 2 ? 1 : -1;
+          folha(fx2, yy + lado * 2, lado * (i ? 0.9 : -0.9) + (lado < 0 ? Math.PI : 0), 14);
+        }
+      });
       var L = 42, e = 12;
       [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(function (c) {
         var cx = c[0], cy = c[1], dx = c[2], dy = c[3];
-        g.fillStyle = metal;
+        g.fillStyle = metal || cor;
         g.fillRect(Math.min(cx, cx + dx * L), Math.min(cy, cy + dy * e), L, e);     // a cantoneira em L
         g.fillRect(Math.min(cx, cx + dx * e), Math.min(cy, cy + dy * L), e, L);
+        g.strokeStyle = escuro; g.lineWidth = 1.5;
+        g.strokeRect(Math.min(cx, cx + dx * L), Math.min(cy, cy + dy * e), L, e); g.strokeRect(Math.min(cx, cx + dx * e), Math.min(cy, cy + dy * L), e, L);
         g.beginPath();                                                               // a folha, apontando para fora
         g.moveTo(cx, cy); g.quadraticCurveTo(cx - dx * 30, cy - dy * 4, cx - dx * 26, cy - dy * 26);
-        g.quadraticCurveTo(cx - dx * 4, cy - dy * 30, cx, cy); g.closePath(); g.fill();
+        g.quadraticCurveTo(cx - dx * 4, cy - dy * 30, cx, cy); g.closePath(); g.fillStyle = metal || cor; g.fill();
         g.strokeStyle = escuro; g.lineWidth = 2; g.stroke();
         g.beginPath(); g.moveTo(cx - dx * 3, cy - dy * 3); g.lineTo(cx - dx * 22, cy - dy * 22); g.stroke();   // a nervura
+        g.beginPath(); g.moveTo(cx - dx * 9, cy - dy * 9); g.lineTo(cx - dx * 16, cy - dy * 6); g.moveTo(cx - dx * 13, cy - dy * 13); g.lineTo(cx - dx * 8, cy - dy * 18);
+        g.lineWidth = 1; g.stroke();
       });
     } else if (mol.forma === 'chanfro') {
       var c8 = 28;
@@ -572,9 +686,23 @@ var JOGO = (typeof window !== 'undefined')
       g.moveTo(x + d8 + c9, y + d8); g.lineTo(x + w - d8 - c9, y + d8); g.lineTo(x + w - d8, y + d8 + c9); g.lineTo(x + w - d8, y + h - d8 - c9);
       g.lineTo(x + w - d8 - c9, y + h - d8); g.lineTo(x + d8 + c9, y + h - d8); g.lineTo(x + d8, y + h - d8 - c9); g.lineTo(x + d8, y + d8 + c9);
       g.closePath(); g.stroke();
-      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;                  // as pontas dos lados
+      // as runas angulosas gravadas nas bordas de cima e de baixo
+      g.save(); g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1.6; g.lineCap = 'round';
+      [y + t / 2, y + h - t / 2].forEach(function (yy) {
+        for (var rx = x + c8 + 10; rx < x + w - c8 - 14; rx += 24) {
+          var k = ((rx / 24) | 0) % 3;
+          g.beginPath();
+          if (k === 0) { g.moveTo(rx, yy + 2.5); g.lineTo(rx + 5, yy - 2.5); g.lineTo(rx + 10, yy + 2.5); }
+          else if (k === 1) { g.moveTo(rx, yy - 2.5); g.lineTo(rx + 10, yy - 2.5); g.moveTo(rx + 5, yy - 2.5); g.lineTo(rx + 5, yy + 2.5); }
+          else { g.moveTo(rx, yy - 2.5); g.lineTo(rx + 10, yy + 2.5); g.moveTo(rx, yy + 2.5); g.lineTo(rx + 10, yy - 2.5); }
+          g.stroke();
+        }
+      });
+      g.restore();
+      g.fillStyle = metal || cor; g.strokeStyle = escuro; g.lineWidth = 2;                  // as pontas dos lados
       g.beginPath(); g.moveTo(x, y + h / 2 - 18); g.lineTo(x - 22, y + h / 2); g.lineTo(x, y + h / 2 + 18); g.closePath(); g.fill(); g.stroke();
       g.beginPath(); g.moveTo(x + w, y + h / 2 - 18); g.lineTo(x + w + 22, y + h / 2); g.lineTo(x + w, y + h / 2 + 18); g.closePath(); g.fill(); g.stroke();
+      losango(x - 9, y + h / 2, 7); losango(x + w + 9, y + h / 2, 7);
     } else if (mol.forma === 'pontas') {
       var p = 26;
       placa(function () {
@@ -582,30 +710,60 @@ var JOGO = (typeof window !== 'undefined')
       });
       g.lineWidth = 2; g.strokeStyle = escuro;                                       // os fios de cima e de baixo
       g.beginPath(); g.moveTo(x + 12, y + t + 5); g.lineTo(x + w - 12, y + t + 5); g.moveTo(x + 12, y + h - t - 5); g.lineTo(x + w - 12, y + h - t - 5); g.stroke();
+      contas(5);
+      roseta(x + t + 16, y + t + 14, 6); roseta(x + w - t - 16, y + t + 14, 6); roseta(x + t + 16, y + h - t - 14, 6); roseta(x + w - t - 16, y + h - t - 14, 6);
       losango(x - p + 4, y + h / 2, 10); losango(x + w + p - 4, y + h / 2, 10);     // as pontas levam uma gema
     } else if (mol.forma === 'arcos') {
-      retangulo(); fio(5); rebites();
-      var ra = 22;
+      retangulo(); fio(5); contas(5); rebites();
+      // os arcos GÓTICOS (em ogiva) sobre pilastras, com a pedra de fecho no vértice
+      var ra = 22, alto = 30;
       [x + w * 0.22, x + w * 0.5, x + w * 0.78].forEach(function (cx) {
-        g.beginPath(); g.arc(cx, y + 2, ra, Math.PI, 0); g.closePath();
-        g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = metal; g.lineWidth = t; g.stroke();
-        g.beginPath(); g.arc(cx, y - ra + 3, 4, 0, Math.PI * 2); g.fillStyle = escuro; g.fill();   // a pedra de fecho
+        g.beginPath(); g.moveTo(cx - ra, y + 2); g.quadraticCurveTo(cx - ra, y - alto * 0.55, cx, y - alto);
+        g.quadraticCurveTo(cx + ra, y - alto * 0.55, cx + ra, y + 2); g.closePath();
+        g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = metal || cor; g.lineWidth = t; g.stroke();
+        g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.5; g.stroke();
+        g.beginPath(); g.moveTo(cx - ra + 5, y + 2); g.quadraticCurveTo(cx - ra + 5, y - alto * 0.5, cx, y - alto + 7);
+        g.quadraticCurveTo(cx + ra - 5, y - alto * 0.5, cx + ra - 5, y + 2); g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 1.2; g.stroke();
+        losango(cx, y - alto + 4, 5);                                                 // a pedra de fecho
+        [cx - ra, cx + ra].forEach(function (px) {                                    // as pilastras
+          g.fillStyle = metal || cor; g.fillRect(px - 3.5, y - 4, 7, 10); g.strokeStyle = escuro; g.lineWidth = 1; g.strokeRect(px - 3.5, y - 4, 7, 10);
+        });
       });
       g.fillStyle = mol.fundo; g.fillRect(x + t, y + 1, w - t * 2, 6);              // emenda os arcos à placa
     } else if (mol.forma === 'ameias') {
-      retangulo(); fio(5); rebites();
+      retangulo(); fio(5); contas(5); rebites();
       var am = 24;
-      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
-      for (var ax = x; ax + am <= x + w + 1; ax += am * 2) { g.fillRect(ax, y - 16, am, 18); g.strokeRect(ax, y - 16, am, 18); }
-      g.fillRect(x - 10, y - 2, 10, h + 4); g.fillRect(x + w, y - 2, 10, h + 4);  // as torres dos lados
-      g.strokeRect(x - 10, y - 2, 10, h + 4); g.strokeRect(x + w, y - 2, 10, h + 4);
+      for (var ax = x; ax + am <= x + w + 1; ax += am * 2) {
+        g.fillStyle = metal || cor; g.fillRect(ax, y - 16, am, 18); g.strokeStyle = escuro; g.lineWidth = 2; g.strokeRect(ax, y - 16, am, 18);
+        g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;                         // as juntas da cantaria
+        g.beginPath(); g.moveTo(ax + 2, y - 7); g.lineTo(ax + am - 2, y - 7); g.moveTo(ax + am / 2, y - 16); g.lineTo(ax + am / 2, y - 7); g.moveTo(ax + am * 0.25, y - 7); g.lineTo(ax + am * 0.25, y + 1); g.moveTo(ax + am * 0.75, y - 7); g.lineTo(ax + am * 0.75, y + 1); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.moveTo(ax + 2, y - 14.5); g.lineTo(ax + am - 2, y - 14.5); g.stroke();
+      }
+      [[x - 12, -1], [x + w, 1]].forEach(function (tw) {                             // as torres dos lados, com telhado e seteira
+        var tx = tw[0];
+        g.fillStyle = metal || cor; g.fillRect(tx, y - 8, 12, h + 16); g.strokeStyle = escuro; g.lineWidth = 2; g.strokeRect(tx, y - 8, 12, h + 16);
+        g.beginPath(); g.moveTo(tx - 3, y - 8); g.lineTo(tx + 6, y - 24); g.lineTo(tx + 15, y - 8); g.closePath(); g.fillStyle = escuro; g.fill();
+        g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(tx + 4.5, y + h * 0.3, 3, h * 0.4);
+        g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1; g.beginPath();
+        for (var jy = y + 4; jy < y + h; jy += 14) { g.moveTo(tx + 1, jy); g.lineTo(tx + 11, jy); }
+        g.stroke();
+      });
     } else if (mol.forma === 'barras') {
-      retangulo(); fio(5); rebites();
-      g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 1.5;
+      retangulo(); fio(5); contas(5); rebites();
+      g.fillStyle = metal || cor; g.strokeStyle = escuro; g.lineWidth = 1.5;
       [[x - 14, y + 8, 7, h - 16], [x - 26, y + 18, 7, h - 36], [x + w + 7, y + 8, 7, h - 16], [x + w + 19, y + 18, 7, h - 36]].forEach(function (b) {
         g.fillRect(b[0], b[1], b[2], b[3]); g.strokeRect(b[0], b[1], b[2], b[3]);
         g.fillRect(b[0] - 2, b[1] - 3, b[2] + 4, 4); g.fillRect(b[0] - 2, b[1] + b[3] - 1, b[2] + 4, 4);   // os capitéis
+        g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(b[0] + 1.5, b[1] + 2, 1.5, b[3] - 4); g.fillStyle = metal || cor;   // a caneluras
       });
+      // o medalhão do pódio no alto, com a estrela, pousado sobre a borda
+      var mx0 = x + w / 2, my0 = y;
+      g.beginPath(); g.arc(mx0, my0, 17, 0, Math.PI * 2); g.fillStyle = mol.fundo; g.fill(); g.strokeStyle = metal || cor; g.lineWidth = 5; g.stroke();
+      g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.2; g.stroke();
+      g.beginPath();
+      for (var k5 = 0; k5 < 10; k5++) { var a5 = -Math.PI / 2 + k5 * Math.PI / 5, r5 = k5 % 2 ? 4.5 : 11; g.lineTo(mx0 + Math.cos(a5) * r5, my0 + Math.sin(a5) * r5); }
+      g.closePath(); g.fillStyle = claro; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1; g.stroke();
+      g.fillStyle = metal || cor; g.fillRect(mx0 - 44, my0 - 2.5, 20, 5); g.fillRect(mx0 + 24, my0 - 2.5, 20, 5);
     } else if (mol.forma === 'frontao') {
       // 10/10: a do Campeão da Arena — o frontão no alto, os cantos de baixo cortados, e o ornato pelo grau
       var grau = mol.grau || 1, cxm = x + w / 2, ch = 12;
@@ -617,10 +775,11 @@ var JOGO = (typeof window !== 'undefined')
       g.lineWidth = 2; g.strokeStyle = escuro;                                       // os fios de cima e de baixo
       g.beginPath(); g.moveTo(x + t + 6, y + t + 5); g.lineTo(x + w - t - 6, y + t + 5);
       g.moveTo(x + t + 6 + ch, y + h - t - 5); g.lineTo(x + w - t - 6 - ch, y + h - t - 5); g.stroke();
+      contas(5);
       if (grau >= 2) {
         // as pilastras dos lados (duas no grau III), com capitel e base
         var pil = grau >= 3 ? [[x - 10, 0], [x - 20, 8], [x + w + 4, 0], [x + w + 14, 8]] : [[x - 10, 0], [x + w + 4, 0]];
-        g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 1.5;
+        g.fillStyle = metal || cor; g.strokeStyle = escuro; g.lineWidth = 1.5;
         pil.forEach(function (b) {
           var py = y + 6 + b[1], ph = h - 12 - ch - b[1] * 2;
           g.fillRect(b[0], py, 6, ph); g.strokeRect(b[0], py, 6, ph);
@@ -629,7 +788,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       if (grau >= 3) {
         // a coroa de três pontas: duas pontas menores ao lado do vértice, e gemas nos cantos de cima
-        g.fillStyle = metal; g.strokeStyle = escuro; g.lineWidth = 2;
+        g.fillStyle = metal || cor; g.strokeStyle = escuro; g.lineWidth = 2;
         [-1, 1].forEach(function (d) {
           var bx = cxm + d * fw * 0.27, by = y - fh * 0.46;
           g.beginPath(); g.moveTo(bx - 9, by + 4); g.lineTo(bx + d * 2, by - 15); g.lineTo(bx + 9, by + 4); g.closePath(); g.fill(); g.stroke();
@@ -639,7 +798,7 @@ var JOGO = (typeof window !== 'undefined')
       if (grau >= 2) losango(cxm, y - fh + 2, grau >= 3 ? 11 : 8);                   // a gema do vértice
       else {                                                                          // no grau I, só um rebite
         g.beginPath(); g.arc(cxm, y - fh + 9, 4.5, 0, Math.PI * 2);
-        g.fillStyle = metal; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = metal || cor; g.fill(); g.strokeStyle = escuro; g.lineWidth = 1.5; g.stroke();
       }
       // o LOURO do campeão vigente: dois ramos deitados sobre a borda de cima, do frontão para fora
       if (extra && extra.louro) {
@@ -663,6 +822,7 @@ var JOGO = (typeof window !== 'undefined')
     } else if (mol.forma === 'chamas') {
       retangulo();
       g.lineWidth = 3; g.strokeStyle = mol.miolo || cor; g.strokeRect(x + t + 4, y + t + 4, w - t * 2 - 8, h - t * 2 - 8);
+      contas(5);
       // as labaredas: pretas por fora, com a ponta vermelho-escura; alturas alternadas
       var pf = 30;
       for (var fx = x + 6; fx + pf <= x + w - 4; fx += pf) {
@@ -670,13 +830,13 @@ var JOGO = (typeof window !== 'undefined')
         g.fillStyle = '#060406';
         g.beginPath(); g.moveTo(fx, y + 2); g.quadraticCurveTo(fx + pf * 0.2, y - altF * 0.5, fx + pf / 2, y - altF);
         g.quadraticCurveTo(fx + pf * 0.8, y - altF * 0.5, fx + pf, y + 2); g.closePath(); g.fill();
-        g.fillStyle = metal;
+        g.fillStyle = metal || cor;
         g.beginPath(); g.moveTo(fx + pf * 0.3, y + 1); g.quadraticCurveTo(fx + pf * 0.4, y - altF * 0.45, fx + pf / 2, y - altF * 0.72);
         g.quadraticCurveTo(fx + pf * 0.6, y - altF * 0.45, fx + pf * 0.7, y + 1); g.closePath(); g.fill();
       }
       [[x, y + h], [x + w, y + h]].forEach(function (c) { losango(c[0], c[1], 20); });
     } else {
-      retangulo(); fio(5); rebites();
+      retangulo(); fio(5); contas(5); rebites();
     }
     g.restore();
   }
@@ -777,11 +937,19 @@ var JOGO = (typeof window !== 'undefined')
                      (op.arena && mol.forma === 'frontao') ? { marcas: op.arena.n, louro: op.arena.vigente === true } : null);
     } else if (op && op.placa) {
       var traco = op.traco || (bri ? 7 : 5);
-      g.fillStyle = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
-      g.fillRect(x0, mY, larg, altPlaca);
-      g.strokeStyle = op.borda || (bri ? bri.cor : '#c9a227');
-      g.lineWidth = traco;
-      g.strokeRect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco);
+      var corBorda = op.borda || (bri ? bri.cor : '#c9a227');
+      var fundoPlaca = op.fundo || (bri ? bri.fundo : 'rgba(24,18,10,0.88)');
+      // 12/10: a placa comum também ganhou o bisel e o fio de fora (bordaBiselada) e, a do jogador, as cantoneiras
+      bordaBiselada(g, function () { g.rect(x0 + traco / 2, mY + traco / 2, larg - traco, altPlaca - traco); },
+                    corBorda, traco, fundoPlaca, x0, mY, larg, altPlaca);
+      if (placaDoJogador) {
+        g.save(); g.strokeStyle = corBorda; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath();
+        [[x0 + traco + 5, mY + traco + 5, 1, 1], [x0 + larg - traco - 5, mY + traco + 5, -1, 1],
+         [x0 + traco + 5, mY + altPlaca - traco - 5, 1, -1], [x0 + larg - traco - 5, mY + altPlaca - traco - 5, -1, -1]].forEach(function (c) {
+          g.moveTo(c[0] + c[2] * 12, c[1]); g.lineTo(c[0], c[1]); g.lineTo(c[0], c[1] + c[3] * 12);
+        });
+        g.stroke(); g.restore();
+      }
       /* 10/10 — A GUILDA CAMPEÃ DO TORNEIO (docs/TORNEIO.md). O dono: "não pode ser muito chamativa para não
        * ficar muito poluído para jogadores que já possuem molduras". Então é só isto: enquanto a guilda é a
        * campeã VIGENTE, um segundo filete fino dourado por fora da placa, com um raminho de louro em cada canto
