@@ -663,8 +663,8 @@ var JOGO = (typeof window !== 'undefined')
     neutro: ['magic',         1.58, 1.73, 1.32]
   };
 
-  var ANIM_TEX = {}, ANIM_N = 4, filmes = [];
-  var MAX_FILMES = 14;        // mesmo espirito do teto de placas
+  var ANIM_TEX = {}, ANIM_N = 4, filmes = [], preparou = false;
+  var MAX_FILMES = 24;        // mesmo espirito do teto de placas (12/10: dois ou tres filmes por lance)
 
   function animTexture(chave) {
     if (ANIM_TEX[chave] !== undefined) return ANIM_TEX[chave];
@@ -695,10 +695,42 @@ var JOGO = (typeof window !== 'undefined')
   FX.temFilme = function (tipo, el) {
     var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
     var t = TINTA[el || 'neutro'] || TINTA.neutro;
-    // a MESMA queda do filme(): folha por paleta, senão a assinada `:unico`
-    return !!(A && (A[tipo + ':' + t[0]] || A[tipo + ':unico']));
+    // a MESMA queda do filme(): a folha BRANCA do Blender, senão a da paleta, senão a assinada `:unico`
+    return !!(A && (A[tipo + ':branco'] || A[tipo + ':' + t[0]] || A[tipo + ':unico']));
   };
+  /* 12/10 — a cor de um filme BRANCO: a do elemento puxada para o branco (o núcleo da folha é
+   * branco de verdade, e a mistura aditiva faz o resto; a cor cheia deixava o golpe opaco e sujo) */
+  function corBranca(el, k) {
+    var c = new THREE.Color(hexInt(ecol(el)));
+    c.lerp(new THREE.Color(1, 1, 1), k == null ? 0.34 : k);   // medido na foto da sala: a 0,42 o golpe saía quase branco
+    return c;
+  }
   FX.tintaDe = function (el) { return TINTA[el] || TINTA.neutro; };
+  /* 12/10 — A FOLHA QUE AINDA NÃO ABRIU. `animTexture` cria a imagem na primeira vez que o tipo é pedido e
+   * ela decodifica DEPOIS (data URI, assíncrona); até lá o three desenha o plano com o mapa vazio — um
+   * quadrado da cor do elemento, do tamanho do filme (fotografado em tests/fx_sala.html: um disco branco de
+   * 4 m no chão). Duas defesas: as folhas do Blender são pedidas ao ligar o FX (preparaFilmes), e todo filme
+   * nasce invisível até a imagem da folha dele estar completa (imagemPronta, conferida a cada quadro). */
+  function imagemPronta(tex) {
+    var im = tex && tex.image;
+    return !!(im && im.complete && im.naturalWidth > 0);
+  }
+  FX.preparaFilmes = function () {
+    var A = (typeof JOGO !== 'undefined') ? JOGO.FX_ANIM : null;
+    if (!A || !THREE) return 0;
+    var lista = (typeof JOGO !== 'undefined' && JOGO.FX_ANIM_BLENDER) || [];
+    var n = 0;
+    for (var i = 0; i < lista.length; i++) if (animTexture(lista[i] + ':branco')) n++;
+    return n;
+  };
+  FX.filmesProntos = function () {
+    var lista = (typeof JOGO !== 'undefined' && JOGO.FX_ANIM_BLENDER) || [];
+    for (var i = 0; i < lista.length; i++) {
+      var t = ANIM_TEX[lista[i] + ':branco'];
+      if (t && !imagemPronta(t)) return false;
+    }
+    return true;
+  };
 
   /* o.tipo   estouro|chama|baque|anel|onda
    * o.el     fogo|agua|terra|ar|neutro  (cai em neutro se nao houver folha)
@@ -712,7 +744,11 @@ var JOGO = (typeof window !== 'undefined')
     geosPlaca();
     var el = o.el || 'neutro';
     var t = TINTA[el] || TINTA.neutro;
-    var tex = animTexture(o.tipo + ':' + t[0]);
+    // 12/10 — a FOLHA BRANCA do Blender (`tipo:branco`) vem antes de tudo: é cinza+preto, e a cor
+    // é a do elemento (corBranca) ou a que o chamador pedir em `o.cor` ('#rrggbb').
+    var branca = false, tex = animTexture(o.tipo + ':branco');
+    if (tex) branca = true;
+    else tex = animTexture(o.tipo + ':' + t[0]);
     // FOLHA ASSINADA: os filmes do CGHEVEN vem numa cor autoral (escudo
     // dourado, portal laranja) e existem so como `tipo:unico`. Entram com
     // tinta BRANCA — tingir por elemento destruiria a assinatura, que e
@@ -736,7 +772,8 @@ var JOGO = (typeof window !== 'undefined')
       // `setRGB` aceita valor acima de 1 e o shader nao corta antes da escrita
       // final: e assim que a agua sai do verde-azulado da folha para o azul do
       // elemento. Multiplicar so sabe escurecer; aqui precisa clarear.
-      color: assinada ? new THREE.Color(1, 1, 1)
+      color: branca ? (o.cor ? new THREE.Color(hexInt(o.cor)) : corBranca(el, o.branco))
+           : assinada ? new THREE.Color(1, 1, 1)
                       : new THREE.Color().setRGB(t[1], t[2], t[3]),
       blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       // 0,62 E NAO 1. Mistura aditiva soma no que ja esta na tela, e a folha
@@ -745,19 +782,24 @@ var JOGO = (typeof window !== 'undefined')
       // fogo e terra ficavam identicos na tela, que e o oposto do motivo de
       // haver cinco cores. A 0,62 cada elemento volta a ter a cor que o autor
       // rendeu. Medido com foto, nao chutado.
-      opacity: (o.op == null ? 0.62 : o.op)
+      opacity: (o.op == null ? (branca ? 0.9 : 0.62) : o.op)
     });
     var m = new THREE.Mesh(o.modo === 'chao' ? geoChao : geoBil, mat);
     m.frustumCulled = false;
     m.renderOrder = (o.modo === 'chao' ? 9 : 14);
+    m.visible = imagemPronta(tex);          // 12/10: sem a imagem, nada de quadrado de cor
     var tam = o.tam || 3;
-    if (o.modo === 'chao') m.scale.set(tam, 1, tam); else m.scale.set(tam, tam, 1);
+    // 12/10: `espelho` vira a folha de lado (o golpe da esquerda e o da direita saem da mesma folha);
+    // `alt` estica a altura do bilhete (o raio e o pilar são mais altos que largos)
+    var esp = o.espelho ? -1 : 1, altK = o.alt || 1;
+    if (o.modo === 'chao') m.scale.set(tam * esp, 1, tam * altK); else m.scale.set(tam * esp, tam * altK, 1);
     m.position.copy(o.pos);
+    if (o.modo === 'chao' && o.ang) m.rotation.y = o.ang;
     fxG.add(m);
     filmes.push({ m: m, mat: mat, tex: t2, t: 0,
                   dur: o.dur || 0.62, modo: o.modo || 'bilhete',
-                  cresce: o.cresce || 0, tam: tam,
-                  ang: o.ang || 0, op: (o.op == null ? 0.62 : o.op) });
+                  cresce: o.cresce || 0, tam: tam, esp: esp, altK: altK,
+                  ang: o.ang || 0, op: (o.op == null ? (branca ? 0.9 : 0.62) : o.op) });
     return true;
   }
   FX.filme = filme;
@@ -770,6 +812,7 @@ var JOGO = (typeof window !== 'undefined')
       if (k >= 1) {
         fxG.remove(f.m); f.mat.dispose(); f.tex.dispose(); filmes.splice(i, 1); continue;
       }
+      if (!f.m.visible && imagemPronta(f.tex)) f.m.visible = true;   // 12/10: a folha abriu no meio do filme
       var total = ANIM_N * ANIM_N;
       var q = Math.min(total - 1, Math.floor(k * total));
       var cc = q % ANIM_N, rr = Math.floor(q / ANIM_N);
@@ -778,8 +821,8 @@ var JOGO = (typeof window !== 'undefined')
       f.tex.offset.set(cc / ANIM_N, (ANIM_N - 1 - rr) / ANIM_N);
       if (f.cresce) {
         var e = 1 + f.cresce * k;
-        if (f.modo === 'chao') f.m.scale.set(f.tam * e, 1, f.tam * e);
-        else f.m.scale.set(f.tam * e, f.tam * e, 1);
+        if (f.modo === 'chao') f.m.scale.set(f.tam * e * (f.esp || 1), 1, f.tam * e * (f.altK || 1));
+        else f.m.scale.set(f.tam * e * (f.esp || 1), f.tam * e * (f.altK || 1), 1);
       }
       if (f.modo === 'bilhete' && camera) {
         f.m.quaternion.copy(camera.quaternion);
@@ -1089,6 +1132,8 @@ var JOGO = (typeof window !== 'undefined')
       color: col, color2: col2, kind: 'ball', speed: grande ? 30 : 24, arc: 0,
       onHit: function (pos) {
         impact(pos, el, grande ? 2.0 : 1.4, el2);
+        filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: grande ? 5.0 : 3.8, dur: 0.42, cresce: 0.45, op: 0.9,
+                ang: Math.random() * 6.28, pos: v3(pos.x, Math.max(1.0, pos.y + 0.6), pos.z) });
         shockRing(pos, col, 0.4, grande ? 4.6 : 3.0, 0.55);
         scorch(pos, col, grande ? 3.6 : 2.4, 6);
         placa({ tile: PL.estouro, color: col, modo: 'bilhete',
@@ -1125,6 +1170,8 @@ var JOGO = (typeof window !== 'undefined')
               burst(pos.x, pos.y + 0.2, pos.z, 14, { color: col, speed: 3.2, life: 0.4, size: 0.24,
                                                     tile: TILE.brasa });
               shockRing(pos, col, 0.2, 1.1, 0.35);
+              if (k % 2 === 0) filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: 1.6, dur: 0.3, cresce: 0.3, op: 0.7,
+                                       ang: Math.random() * 6.28, pos: v3(pos.x, pos.y + 0.2, pos.z) });
               placa({ tile: PL.estouro, color: cor, modo: 'bilhete',
                       pos: v3(pos.x, Math.max(0.7, pos.y + 0.4), pos.z),
                       de: [0.9, 0.9], ate: [3.6, 3.6], dur: 0.34, op: 0.95, saida: 1.7 });
@@ -1278,7 +1325,11 @@ var JOGO = (typeof window !== 'undefined')
         }, k * 22);
       })(i);
     }
-    setTimeout(function () { impact(dest, el, 1.5, el2); addShake(6); }, passos * 22);
+    setTimeout(function () {
+      impact(dest, el, 1.5, el2); addShake(6);
+      filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: 3.4, dur: 0.4, cresce: 0.4, op: 0.85,
+              ang: Math.random() * 6.28, pos: v3(dest.x, dest.y + 0.4, dest.z) });
+    }, passos * 22);
   }
 
   /* Arco de corte no alvo, no tempo do golpe corpo a corpo. */
@@ -1546,22 +1597,73 @@ var JOGO = (typeof window !== 'undefined')
    * As folhas `unico` (CGHEVEN, CC0) entraram em 24/08: o `escudo` que este
    * comentario esperava, o `cone` de vento virou tornado de verdade, e a
    * `invocacao` agora ABRE UM PORTAL no chao — a criatura chega por ele. */
+  /* 12/10 — as folhas do BLENDER (assets/embedded/fx-blender.js, tools/fx_blender.py) entram aqui: cada
+   * família pode tocar MAIS DE UM filme — [tipo, modo, tamanho, duração, cresce, atraso em s ('hit' = o
+   * tempo do golpe chegar, R3.hitDelay), opções]. O golpe de contato virou a LÂMINA que varre (no tempo do
+   * acerto, de um lado ou do outro); o terremoto RACHA o chão; a cura e a invocação sobem um PILAR de luz; a
+   * armadilha e a maldição assentam um SELO de runas; o estouro ganha o IMPACTO seco por cima da explosão. */
   var FILME_FAM = {
-    meteoro:   ['estouro', 'bilhete', 5.2, 0.55, 0.35],
-    estouro:   ['estouro', 'bilhete', 4.2, 0.50, 0.30],
-    anel:      ['anel',    'chao',    5.0, 0.62, 0.55],
-    terremoto: ['baque',   'chao',    5.4, 0.60, 0.40],
-    onda:      ['onda',    'bilhete', 3.6, 0.42, 0.25],
-    investida: ['onda',    'bilhete', 3.0, 0.38, 0.20],
-    aura:      ['chama',   'bilhete', 2.6, 0.80, 0.10],
-    cura:      ['anel',    'chao',    3.2, 0.70, 0.30],
-    // 07/10: o GOLPE DE CONTATO ganha a batida da folha CC0 (o 'baque'), miúda e de frente — a meia-lua da
-    // família continua sendo a manchete; a folha é o estalo da lâmina chegando
-    corte:     ['baque',   'bilhete', 2.4, 0.34, 0.20],
-    escudo:    ['escudo',  'bilhete', 3.0, 0.60, 0.15],
-    cone:      ['tornado', 'bilhete', 4.0, 0.66, 0.25],
-    invocacao: ['portal',  'chao',    3.4, 0.72, 0.30]
+    meteoro:   [['estouro', 'bilhete', 5.2, 0.55, 0.35], ['rachadura', 'chao', 7.0, 0.8, 0.25, 0.45]],
+    estouro:   [['estouro', 'bilhete', 4.2, 0.50, 0.30], ['impacto', 'bilhete', 3.8, 0.42, 0.45, 0, { op: 0.8 }]],
+    anel:      [['anel',    'chao',    5.0, 0.62, 0.55]],
+    terremoto: [['rachadura', 'chao',  6.2, 0.75, 0.30], ['impacto', 'bilhete', 2.8, 0.36, 0.3, 0.05, { op: 0.6 }]],
+    onda:      [['onda',    'bilhete', 3.6, 0.42, 0.25]],
+    investida: [['onda',    'bilhete', 3.0, 0.38, 0.20]],
+    aura:      [['chama',   'bilhete', 2.6, 0.80, 0.10], ['pilar', 'bilhete', 2.4, 0.9, 0.05, 0, { alt: 1.6, op: 0.7 }]],
+    cura:      [['anel',    'chao',    3.2, 0.70, 0.30], ['pilar', 'bilhete', 2.6, 0.95, 0.05, 0.05, { alt: 1.7 }]],
+    corte:     [['golpe',   'bilhete', 3.6, 0.40, 0.12, 'hit', { giro: 0.7, espelho: 'sorteio' }]],
+    escudo:    [['escudo',  'bilhete', 3.0, 0.60, 0.15]],
+    cone:      [['tornado', 'bilhete', 4.0, 0.66, 0.25]],
+    invocacao: [['portal',  'chao',    3.4, 0.72, 0.30], ['pilar', 'bilhete', 3.0, 0.9, 0.1, 0.12, { alt: 1.6, op: 0.75 }]],
+    armadilha: [['selo',    'chao',    4.4, 1.5, 0.08, 0, { op: 0.8 }]],
+    maldicao:  [['selo',    'chao',    3.8, 1.1, 0.05, 0.1, { op: 0.6 }]],
+    piscar:    [['impacto', 'bilhete', 2.6, 0.32, 0.3, 0.12, { op: 0.7 }]],
+    gancho:    [['impacto', 'bilhete', 2.4, 0.3, 0.3, 0.23, { op: 0.6 }]]
   };
+  /* toca os filmes de uma família em `dest` (as posições vêm em metros do mundo) */
+  function filmesDaFamilia(fam, from, dest, el, el2) {
+    var lista = FILME_FAM[fam];
+    if (!lista || !dest) return;
+    var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+    for (var i = 0; i < lista.length; i++) {
+      (function (ff) {
+        var op = ff[6] || {};
+        var atraso = ff[5] === 'hit' ? hd : (ff[5] || 0);
+        var toca = function () {
+          var alto = (ff[1] === 'chao') ? 0.06 : 1.05;
+          var ang = op.giro ? (Math.random() - 0.5) * 2 * op.giro : 0;
+          var esp = op.espelho === 'sorteio' ? (Math.random() < 0.5) : !!op.espelho;
+          filme({ tipo: ff[0], el: el, modo: ff[1], tam: ff[2], dur: ff[3], cresce: ff[4], op: op.op, alt: op.alt,
+                  ang: ang, espelho: esp, pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
+          // ELEMENTO SECUNDARIO, quando a fusao gera feitico de dois elementos.
+          // Menor e um pouco atrasado, para ler como o segundo elemento CHEGANDO
+          // e nao como dois efeitos disputando o mesmo instante.
+          if (el2 && el2 !== el) {
+            filme({ tipo: ff[0], el: el2, modo: ff[1], tam: ff[2] * 0.72, dur: ff[3],
+                    cresce: ff[4], op: (op.op || 0.62) * 0.7, alt: op.alt, ang: ang, espelho: !esp,
+                    pos: v3(dest.x, (dest.y || 0) + alto + (ff[1] === 'chao' ? 0.02 : 0.5), dest.z) });
+          }
+        };
+        if (atraso > 0) setTimeout(toca, atraso * 1000); else toca();
+      })(lista[i]);
+    }
+    // 12/10 — o ELEMENTO escolhe um filme a mais: o AR traz o RAIO em todo tiro, feixe e anel;
+    // a ÁGUA, o JATO em toda onda e anel (a família diz a forma; o elemento, a matéria)
+    var ventoso = (el === 'ar' || el2 === 'ar'), aguado = (el === 'agua' || el2 === 'agua');
+    if (ventoso && (fam === 'flecha' || fam === 'feixe' || fam === 'anel' || fam === 'chuva')) {
+      var atrasoRaio = fam === 'flecha' ? 0.3 : 0.05;
+      setTimeout(function () {
+        filme({ tipo: 'raio', el: 'ar', modo: 'bilhete', tam: 3.2, alt: 1.9, dur: 0.42, cresce: 0.05, op: 0.95,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + 2.4, dest.z) });
+      }, atrasoRaio * 1000);
+    }
+    if (aguado && (fam === 'onda' || fam === 'anel' || fam === 'sifao' || fam === 'estouro')) {
+      setTimeout(function () {
+        filme({ tipo: 'jato', el: 'agua', modo: 'bilhete', tam: 3.0, alt: 1.6, dur: 0.6, cresce: 0.1, op: 0.9,
+                pos: v3(dest.x, (dest.y || 0) + 1.6, dest.z) });
+      }, 180);
+    }
+  }
 
   /* Escolhe e toca o desenho da familia. */
   function tocaFamilia(fam, from, dest, el, el2, sp) {
@@ -1575,20 +1677,7 @@ var JOGO = (typeof window !== 'undefined')
       filme({ tipo: 'muzzle', el: el, modo: 'bilhete', tam: 1.7, dur: 0.30,
               cresce: 0.1, pos: v3(from.x, (from.y || 0) + 1.15, from.z) });
     }
-    var ff = FILME_FAM[fam];
-    if (ff && dest) {
-      var alto = (ff[1] === 'chao') ? 0.06 : 1.05;
-      filme({ tipo: ff[0], el: el, modo: ff[1], tam: ff[2], dur: ff[3], cresce: ff[4],
-              pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
-      // ELEMENTO SECUNDARIO, quando a fusao gera feitico de dois elementos.
-      // Menor e um pouco atrasado, para ler como o segundo elemento CHEGANDO
-      // e nao como dois efeitos disputando o mesmo instante.
-      if (el2 && el2 !== el) {
-        filme({ tipo: ff[0], el: el2, modo: ff[1], tam: ff[2] * 0.72, dur: ff[3],
-                cresce: ff[4], op: 0.44,
-                pos: v3(dest.x, (dest.y || 0) + alto + (ff[1] === 'chao' ? 0.02 : 0.5), dest.z) });
-      }
-    }
+    filmesDaFamilia(fam, from, dest, el, el2);
     switch (fam) {
       case 'meteoro':   meteoro(dest, el, el2, !!(sp && sp.unlockLevel >= 20)); break;
       case 'chuva':     chuva(dest, el, el2, 7); break;
@@ -1623,7 +1712,12 @@ var JOGO = (typeof window !== 'undefined')
                 saida: 1.25, patamar: 0.48 });
         launch(from, dest, {
           color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25,
-          onHit: function (pos) { impact(pos, el, 1.0, el2); }
+          onHit: function (pos) {
+            impact(pos, el, 1.0, el2);
+            // 12/10: o IMPACTO do Blender onde a flecha crava — o tiro passou a ter um fim
+            filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: 2.6, dur: 0.34, cresce: 0.35, op: 0.85,
+                    ang: Math.random() * 6.28, pos: v3(pos.x, pos.y + 0.2, pos.z) });
+          }
         });
         break;
       }
@@ -1632,6 +1726,8 @@ var JOGO = (typeof window !== 'undefined')
           color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'ball', speed: 22, arc: 0.6,
           onHit: function (pos) {
             impact(pos, el, 1.0, el2);
+            filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: 3.0, dur: 0.38, cresce: 0.4, op: 0.85,
+                    ang: Math.random() * 6.28, pos: v3(pos.x, pos.y + 0.3, pos.z) });
             // a bola e o ultimo recurso, mas ate ela deixa uma marca no chao
             placa({ tile: PL.anel, color: ecol(el), modo: 'chao', pos: v3(pos.x, 0.09, pos.z),
                     de: [1.0, 1.0], ate: [7.0, 7.0], dur: 0.6, op: 1, saida: 1.2,
@@ -1827,6 +1923,7 @@ var JOGO = (typeof window !== 'undefined')
   FX.handleEvent = function (ev) {
     if (!ev) return;
     if (!attached) { if (queued.length < 300) queued.push(ev); return; }
+    if (!preparou) { preparou = true; try { FX.preparaFilmes(); } catch (ePrep) {} }   // 12/10: as folhas do Blender abrem no 1º evento
     var D = JOGO.DATA || {};
     var u, p, tgt, col;
 

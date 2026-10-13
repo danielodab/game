@@ -38,6 +38,9 @@
     'js/core/engine.js', 'js/core/fusion.js', 'js/core/ai.js',
     'js/core/progress.js', 'js/core/game.js',
     'assets/embedded/env-kit.js', 'js/render3d/models3d.js',
+    // 12/10: os atlas e as folhas — sem eles a placa cai no borrão e o filme nem existe, e a foto mente
+    'assets/embedded/fx-atlas.js', 'assets/embedded/fx-placas.js', 'assets/embedded/fx-anim.js',
+    'assets/embedded/fx-cgheven.js', 'assets/embedded/fx-blender.js',
     'assets/embedded/models-anims.js', 'assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
     'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
     'js/render3d/models3d_v2.js', 'js/render3d/fx3d_v2.js', 'js/render3d/renderer3d_v2.js',
@@ -150,6 +153,19 @@
             F.debugImpact(gx, gy, elem, 1.4, elem2);
             F.debugNova(gx - 3, gy - 2, elem, elem2);
             F.debugBeam(1, gy + 2, gx + 2, gy + 2, elem, elem2);
+          } else if (efe === 'cast') {
+            // 12/10: um LANCE DE VERDADE (?efeito=cast&spell=<id>): o feitiço inteiro, com a família, a
+            // assinatura da classe e os filmes do Blender — do herói para a casa alvo. Os filmes que esperam
+            // o golpe chegar (o corte, o impacto da flecha) vêm por setTimeout, em tempo REAL: por isso a foto
+            // espera `espera` ms (padrão 420) antes de bombear os quadros.
+            var sp = null;
+            try { sp = JOGO.Engine.spell(Q.spell || 'sumo-neutro-1'); } catch (e) { sp = null; }
+            if (sp && h0) {
+              F.handleEvent({ type: 'cast', uid: h0.uid, spellId: sp.id, spell: sp, element: sp.element, x: gx, y: gy });
+              var nf0 = parseInt(Q.frames || '4', 10);
+              setTimeout(function () { pump(nf0); finalizar(); }, parseInt(Q.espera || '420', 10));
+              return;
+            }
           }
           var nf = parseInt(Q.frames || '7', 10);
           pump(nf);

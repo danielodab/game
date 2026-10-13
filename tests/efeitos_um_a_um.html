@@ -91,7 +91,9 @@ genéricos, então todos caíam na mesma bolinha.</div>
           JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo');
           ids = JOGO.Progress.heroIds();
         }
-        G.startRun(ids.slice(0, 2), 'greenhouse');
+        // 12/10: desde a antessala (03/09) o startRun para no pátio; `direto` desce à sala de vez — sem isso a prova
+        // acabava em "sem sala" com 0 de 0 e passava VAZIA
+        G.startRun(ids.slice(0, 2), 'greenhouse', { direto: true });
       } catch (e) { return fim('não desci: ' + e.message); }
       roda();
     })();

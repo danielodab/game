@@ -37,6 +37,7 @@ animação em quatro momentos, porque efeito animado não se julga por número.<
     'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js',
     'assets/embedded/fx-anim.js',
     'assets/embedded/fx-cgheven.js',
+    'assets/embedded/fx-blender.js',
     'js/render3d/fx3d_v2.js'];
   for (var i = 0; i < arquivos.length; i++)
     document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
@@ -141,8 +142,11 @@ animação em quatro momentos, porque efeito animado não se julga por número.<
     var n1 = disparaTudo();
     // O teto de filmes simultâneos existe para um feitiço de área não encher a
     // cena; 25 de uma vez é acima dele DE PROPÓSITO, e o teto tem de segurar.
-    check('o teto de filmes simultâneos segura', n1 > 0 && n1 <= 15,
-          n1 + ' filmes aceitos de 25 pedidos');
+    // 12/10: o teto subiu de 14 para 24 (dois ou três filmes por lance — a lâmina, o impacto,
+    // a rachadura); 25 pedidos ainda passam dele, e 26 de uma vez não podem entrar.
+    var n2 = FX.filme({ tipo: 'estouro', el: 'fogo', pos: new THREE.Vector3(0, 0, 0), tam: 2, dur: 1 });
+    check('o teto de filmes simultâneos segura', n1 > 0 && n1 <= 25 && !n2,
+          n1 + ' filmes aceitos de 25 pedidos; o 26º ' + (n2 ? 'ENTROU' : 'ficou de fora'));
 
     // ---- o filme ANDA? Um efeito animado que fica no primeiro quadro é
     // exatamente o tile parado que eu estava tentando substituir, e a foto não
