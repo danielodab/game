@@ -98,10 +98,13 @@ js/
   render3d/
     models3d_v2.js      modelos, "looks" de classe, enxerto de peça, retratos
     renderer3d_v2.js    tabuleiro, câmera, clima, sobreposições, armadilhas
-    fx3d_v2.js          partículas, placas e as 21 famílias de efeito
+    fx3d_v2.js          partículas, placas, as 21 famílias de efeito e os FILMES (as folhas do rubberduck,
+                        do CGHEVEN e, desde 12/10, as sete do Blender — tools/fx_blender.py → embute_fx_blender.py
+                        → assets/embedded/fx-blender.js; docs/SISTEMAS.md §9-A.30)
     portraits3d.js      embrulha Art.* para servir retrato 3D em vez de 2D
   render2d/
-    art.js              ícones e desenho procedural (o retrato 2D de emergência)
+    art.js              ícones (12/10: um desenho por feitiço — MOTIVO_FX/MOTIVO_FORMA, a marca da área e o
+                        distintivo do efeito; prova tests/icones_feiticos.html) e desenho procedural (o retrato 2D de emergência)
   ui/
     hud.js              TODA a interface
     debug.js            painel de teste (libera classes, nível, modo de efeitos)
@@ -230,6 +233,13 @@ jogador. Página nova sem essa linha é bug.
 
 | bateria | resultado |
 |---|---|
+| **`icones_feiticos.html`** | 30 / 0 (12/10: um desenho por feitiço — todo feitiço de classe nomeado na `MOTIVO_FX`, 90+ motivos, nenhum par igual dentro da árvore de cada classe a 48 e a 34 px, nenhuma barra de fusão repetida nas 21 duplas, monstros/bichos/itens desenham; a página é a galeria) |
+| **`efeitos_um_a_um.html`** | 7 / 0 com **213 feitiços** (12/10: a página descia sem `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala"; consertada, cobre os filmes do Blender por família) |
+| `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não) |
+| `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas |
+| `foto_molduras.html` · `foto_moldura_arena.html` | 12 placas / 17 de 17 (12/10: as molduras com bisel, contas, rosetas e o ornamento de cada forma; a do campeão cabe na tela e a da guilda pinta menos de 6%) |
+| `app_modelos.js` (Node) | 41 / 0 (12/10: `vendor/capacitor/local-notifications.js` existia só no package.json — a ponte entrou) |
+| `art_gallery.html` · `icones_extras.html` | PASS · 8 / 0 (12/10: réguas de 6 classes/5 pedras/48 itens/13 extras acertadas para 7/8+/48+/15) |
 | `test_engine_v2.html` | 218 passaram / 0 falharam (19/09: +9 da visão e da cobertura; medido em Node com dublê de DOM) |
 | `gema.js` (Node) | 29 / 0 (08/10: a Gema Enterrada — juntar fragmentos, o engaste sorteado pelos pesos, o `extra` que viaja com a cópia, os stats, o juiz, a loja e o saque) |
 | `prova_toque_batalha.html` | 14 / 0 (08/10, Chrome headless em tempo real pelo DevTools: o "i" fora da barra, a explicação por toque longo ou mouse parado, o lance pelo card da fila, UM laço na antessala) |
@@ -341,6 +351,20 @@ entram na base); Node — `poco_perigos` 42, `eco_motor` 74, `visao_mapas` 218; 
 rodada antes deu 1 falha no filtro de itens da wiki, a oscilação de sempre do tempo virtual; 72 fotos em 72
 cartões). Com TODOS os 183 modelos embutidos carregados, o ajuste de locomoção por medida
 (`M.locoAjustada()`) pega um clipe só, o nado da Arraia: nenhum andar que já estava no ar mudou.
+
+**A bateria de 12/10 à noite** (a branch `claude/game-analysis-polish-4b0e6d`; o relatório inteiro, com o
+que é da máquina e o que é do código, em [`docs/PRE_LANCAMENTO_12_10.md`](docs/PRE_LANCAMENTO_12_10.md)):
+rodou tudo — as 52 de Node, as 43 de API e relé, as páginas de praça, batalha, HUD e validação e a bancada
+completa do equilíbrio (405 de 436, `docs/EQUILIBRIO.md` §8). **Nenhuma falha nova**; o que está vermelho falha
+igual no main `6773161` (conferido lá): Node — `juiz_poco` 1/7, `luta_aberta_cliente` 2/34, `autoridade_cliente`,
+`autoridade_ponta` 3/11, `guerra_bancada` 7/96 (a régua do bloco B2 envelheceu com as classes); API — `guilda_api`
+1 (o nome Mestre), `mestre_api` 3 (as iniciais livres de 08/10 e a codificação do log — com `PYTHONUTF8=1` passa),
+`moderacao_api` 1 (`test_16`, idem), `pagamento_api` 3 e `pagamento_play_api` 1 (sem as chaves no ambiente),
+`pocoes_api` 1, `torneio_api` (um timeout de socket com a máquina cheia); navegador — `coroa_praca`, `balao_praca`,
+`guerra_hud` (tempo real sob carga), `arvore_feiticos` 4, `prova_icones_menus` 4, `cartas_item` 3, `grupo_hud` 2,
+`eco_hud` 2, `quebra_hud` 3, `pocoes_hud` 1, `torneio_hud` 1 (janela larga), `ui_screens` (não fecha). Voltaram a
+verde nesta noite: `validate_world` 8.791/0, `validate_classes` 7.095/0, `validate_fusion` 6.664/0, `art_gallery`,
+`icones_extras` (réguas acertadas às decisões do dono), `app_modelos` 41/41 e `efeitos_um_a_um` (passava vazia).
 
 As quatro últimas são a preparação para celular; o passo a passo do APK e todos
 os números medidos estão em [`docs/CELULAR.md`](docs/CELULAR.md).
@@ -494,10 +518,15 @@ existe cenário CC0 adulto equivalente**. Decisão do dono: **fica KayKit**.
 
 ### 7.3 Efeitos
 
-As 21 famílias existem e o teste prova que desenham coisas diferentes. O dono
-ainda acha que "parece tudo igual" na tela. As placas (billboards) foram
-implementadas e acabaram de ser ligadas; **falta o julgamento no tamanho real do
-tabuleiro** — julgar em close já enganou uma vez.
+As 21 famílias existem e o teste prova que desenham coisas diferentes (`efeitos_um_a_um`, 213
+feitiços). Em 07/10 entrou a assinatura de cada classe por cima da família; em 12/10, as sete
+folhas do Blender (golpe, impacto, rachadura, raio, jato, pilar, selo — §9-A.30 do SISTEMAS):
+o corte virou a lâmina que varre no tempo do acerto, todo projétil estoura um impacto onde cai,
+o terremoto racha o chão, a cura sobe um pilar, a armadilha assenta um selo, o ar traz o raio e a
+água o jato. O que ficou em aberto: o julgamento do dono jogando (a foto de `fx_sala.html?efeito=cast`
+é o tamanho real, mas o olho dele é a régua), e folhas novas que o mesmo roteiro do Blender pode
+render (um vórtice de vento próprio, uma lâmina de gelo, o sopro em leque): é geometria emissiva
+com keyframes, uma função por efeito em `tools/fx_blender.py`.
 
 ### 7.4 Fila
 

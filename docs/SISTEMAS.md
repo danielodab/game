@@ -1779,6 +1779,78 @@ guilda), `tests/site_torneio.html` (a página do site com dados de mentira) e a 
   do elemento dela e a Âncora, e a pedra já vai escolhida (`forjaPedra = pedraCerta`). Sem peça na bancada, e
   no Quebrar, a prateleira inteira segue à vista. Prova: `tests/prova_forja.html?errada=1`.
 
+## 9-A.30 Os ícones de feitiço, as molduras e as folhas de efeito do Blender (12/10)
+
+O dono, na véspera das duas semanas até a Google Play: "mude os ícones dos ataques, vejo muitos repetidos",
+"crie mais efeitos visuais nos ataques, tenho o Blender", "melhore os detalhes que ficam em volta dos nomes".
+Três frentes, cada uma com a sua prova, e nenhuma mexe em regra de jogo (a `VERSAO_REGRAS` segue 10).
+
+- **Os ícones de feitiço: um desenho por feitiço** (`js/render2d/art.js`, "ÍCONES DE FEITIÇO v2"). Até aqui o
+  ícone saía de `glyphFor`: o primeiro efeito que não fosse dano escolhia entre 22 glifos, e todo feitiço de
+  dano caía na chama/gota/pedra/sopro do elemento — numa árvore de 27 feitiços do mesmo herói, seis do mesmo
+  caminho saíam com a MESMA chama. Agora o desenho tem três camadas: o **motivo**, pela tabela `MOTIVO_FX`
+  (os 198 feitiços de classe nomeados um a um pelo `fxKey`: machado, grito, chifres, arpão, aljava, verruma,
+  braseiro, pira, cisterna, grilhão, fenda, lousa, fonte, compressa, redoma, névoa, emboscada, cada invocação
+  com o bicho dela, as armadilhas por elemento, muro, cerca, menir, cerco, labirinto, bigorna…), pela tabela
+  `MOTIVO_FORMA` para as 147 formas de fusão (pelo NOME da forma — a barra de uma dupla tem sete formas com só
+  quinze `fxShape` entre elas, então duas saíam iguais) e pela família do nome (`REGRAS_MOTIVO`, a mesma
+  lógica do `fx3d_v2.js`) para monstros, bichos e itens, com o `glyphFor` de sempre no fim; a **marca da
+  área** no canto de cima (círculo, cruz, cone, linha, anel); e o **distintivo** do efeito secundário no canto
+  de baixo (veneno, marca, empurrão, puxão, raiz, invisível, escudo, cura, bônus, maldição, armadilha,
+  teleporte) — os dois só de 40 px para cima, a 34 px vira sujeira. A fusão de dois elementos pinta o motivo
+  metade em cada cor. `Art.spellMotif/spellBadge/spellForm` estão expostos para a prova.
+  Prova: `tests/icones_feiticos.html` (30 de 30) — todo feitiço de classe nomeado, 90+ motivos, nenhum par
+  igual DENTRO da árvore de cada classe a 48 e a 34 px, nenhuma barra de fusão repetida, monstros/bichos/itens
+  desenham; a página é também a galeria.
+  *Armadilha:* o ícone é CACHEADO por id+tamanho (`A.spellIcon`); mudou o desenho, `Art.clearCache()` ou
+  recarregar. Feitiço novo de classe sem linha na `MOTIVO_FX` cai na família do nome — funciona, mas pode
+  repetir o motivo do vizinho de caminho: a prova acusa.
+
+- **As molduras da plaquinha** (`js/render3d/hub3d.js`, `bordaBiselada` nova + `desenhaMoldura`). Toda borda
+  passou a ter BISEL (o aro de dentro claro em cima e à esquerda, escuro embaixo e à direita — a placa
+  recortada por `clip`, só sobra a parte que invade o miolo; o fio escuro de fora por `clip('evenodd')`), o
+  metal em degradê com um lustre diagonal, fio gravado duplo, CONTAS ao longo do fio de dentro, ROSETA nos
+  cantos, gemas lapidadas em quatro facetas com a cintilação, rebites com luz e o vinhete do fundo. Cada forma
+  ganhou o seu ornamento: volutas (Dourada), espinhos sombreados (Rubi), a vinha com folhinhas (Esmeralda),
+  runas gravadas (Obsidiana), rosetas e contas (Arena), arcos góticos sobre pilastras com pedra de fecho (Eco),
+  ameias com juntas de cantaria e torres com telhado e seteira (Chefe), caneluras e o medalhão com a estrela
+  (pódio de classe). A placa comum (sem moldura, grupo, guilda) também passou pela `bordaBiselada`, e a do
+  jogador ganhou cantoneiras. Continua SEM brilho (regra do dono: forma e metal). `tomDe` tolera `rgba()`.
+  Provas: `foto_molduras` 12/12, `foto_moldura_arena` 17/17.
+
+- **As folhas de efeito do Blender** (`tools/fx_blender.py` → `tools/embute_fx_blender.py` →
+  `assets/embedded/fx-blender.js`, 332 KB). Sete folhas de 4×4 quadros a 192 px, renderizadas no Cycles (CPU,
+  ~30 s cada) a partir de GEOMETRIA EMISSIVA animada por keyframe — nada de partículas nem simulação, o render
+  é determinístico: **golpe** (a lâmina curva que varre), **impacto** (clarão, lascas radiais e anel),
+  **rachadura** (o chão rachando, folha de chão), **raio** (o relâmpago que desce, ramifica e pisca), **jato**
+  (a coluna d'água com gotas e o anel na base), **pilar** (a coluna de luz com faíscas subindo) e **selo** (o
+  círculo de runas que gira, folha de chão). São BRANCAS (`<tipo>:branco`): `filme()` as tinge com a cor do
+  elemento puxada para o branco (`corBranca`) — sete folhas em vez de trinta e cinco; `o.cor` força uma cor,
+  `espelho` vira a folha de lado e `alt` estica a altura. `FILME_FAM` virou uma LISTA de filmes por família,
+  com atraso (`'hit'` = o tempo do golpe chegar): o corte toca a lâmina no tempo do acerto, de um lado ou do
+  outro, girada ao acaso; o terremoto racha o chão; a cura e a invocação sobem um pilar; a armadilha e a
+  maldição assentam um selo; o estouro e o meteoro ganham o impacto; a flecha, a bola, a investida e os pingos
+  da chuva estouram um impacto onde acertam; o AR traz o raio em todo tiro, feixe, anel e chuva; a ÁGUA, o jato
+  em toda onda, anel e estouro. O teto de filmes subiu de 14 para 24.
+  *Armadilha (medida em `tests/fx_sala.html?efeito=cast`):* a folha que ainda não abriu virava um QUADRADO da
+  cor do elemento do tamanho do filme — `animTexture` cria a imagem na primeira vez que o tipo é pedido e ela
+  decodifica depois, e o three desenha o plano com o mapa vazio. Duas defesas: `FX.preparaFilmes()` pede as
+  sete folhas no primeiro evento do FX, e todo filme nasce invisível até a imagem da folha estar completa
+  (`imagemPronta`, conferida a cada quadro). Como renderizar de novo: o comando está no topo de
+  `tools/fx_blender.py` (Blender 5.2, `--background`); o Blender 5.2 não tem mais `Action.fcurves` — a
+  interpolação linear vem da preferência `keyframe_new_interpolation_type`, e as máscaras radiais são medidas
+  no UV (em coordenadas de objeto a gota saía quadrada).
+  Provas: `fx_filme` 8/8 (com o teto novo), `efeitos_um_a_um` 7/7 com 213 feitiços (a página descia sem
+  `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala" — consertada), e as fotos de
+  `tests/fx_sala.html?efeito=cast&spell=<id>&espera=<ms>&frames=<n>` (um lance de verdade, com os filmes que
+  esperam o golpe em tempo real).
+
+- **De quebra:** `vendor/capacitor/local-notifications.js` não existia (o `js/core/notificacoes.js` de 08/10
+  o carrega; no aplicativo era 404 e os avisos locais ficavam calados) — entrou o dist do
+  `@capacitor/local-notifications` 8.3.1; FALTA DO DONO `npm install` + `npx cap sync` e um AAB novo para a
+  parte nativa. E as réguas envelhecidas: `art_gallery` (7 classes, 8 pedras, 91 itens, o 6º pet no 2D de
+  reserva) e `icones_extras` (15 ícones).
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

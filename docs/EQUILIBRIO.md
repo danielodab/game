@@ -675,3 +675,99 @@ node tests/equilibrio_pve.js [raiz]      # o calabouço (§6.6), mostra e não c
 # recortes para calibrar: --niveis 5,30  --classes minotauro  --sementes 4
 # experimentar sem tocar nos dados: --ajuste arquivo.json (formato no topo de tests/equilibrio.js)
 ```
+
+---
+
+## 8. A medida de 12/10 e as sugestões (sem mexer nos dados)
+
+O dono (12/10): "veja o balanceamento de classe, sugira melhoria". A medida completa
+(`node tests/equilibrio.js --completo`, 11 sementes, 154 jogos por célula, 924 por média, 1 h 40 de relógio com
+a máquina dividida) na árvore de 12/10 — `VERSAO_REGRAS` 10, o muro de espinhos, as classes de 03/10 — deu
+**405 de 436 na faixa** (a de 03/10 depois dos espinhos: 399 + as três médias que entraram). Nenhum dado foi
+mexido nesta rodada: o que segue é leitura e proposta, com o número de cada proposta, para o dono decidir.
+
+### 8.1 Os duelos em dupla — a média de cada classe, níveis 5 / 12 / 20 / 30 (924 jogos cada)
+
+| classe | 03/10 (depois dos espinhos) | **12/10** | leitura |
+|---|---|---|---|
+| Bárbaro | 50 / 52 / 49 / 54 | **42\* / 47 / 47 / 51** | caiu de 3 a 8 pontos em todo nível; no 5 está fora da faixa |
+| Caçador | 50 / 54 / 51 / 53 | **46 / 53 / 51 / 52** | na faixa |
+| Bruxo | 56 / 46 / 46 / 51 | **57\* / 46 / 46 / 51** | o 5 segue alto |
+| Ladino | 56 / 48 / 46 / 47 | **60\* / 45\* / 46 / 48** | forte no 5, fraco do 12 em diante |
+| Curandeiro | 48 / 49 / 50 / 47 | **46 / 50 / 49 / 46** | na faixa |
+| Xamã | 46 / 47 / 53 / 52 | **52 / 51 / 55 / 54** | subiu de 2 a 6 pontos |
+| Minotauro | 44 / 55 / 55 / 47 | **48 / 57\* / 57\* / 48** | o 12 e o 20 passaram da faixa por dois pontos |
+
+(\* = fora de 45–55%.) Células fora de 40–60%: 14 de 84 (eram 14 em 03/10 também — mudaram de lugar). No
+nível 5 o Bárbaro perde para o Bruxo (33%), o Ladino (34%) e o Xamã (36%) e o Caçador para o Ladino (33%); do 12
+ao 20 o Ladino perde para o Xamã (38%, 36%) e para o Minotauro (36%, 39%), e o Minotauro ganha de Ladino,
+Curandeiro e Bruxo (60–64%); no 30 o Xamã ganha do Curandeiro e do Minotauro (63%).
+
+**O que mudou desde 03/10 e ninguém mediu:** as mesmas sementes, a mesma IA, e o Bárbaro caiu enquanto o Xamã e
+o Minotauro subiram. Entre as duas medidas entraram a versão 8 (afixos, só calabouço), a 9 e a **10 ("atacar a
+casa vazia", §9-A.16 do SISTEMAS)** — a suspeita é esta: quem mira o chão (Xamã, Minotauro com o muro) ganhou
+jogadas e quem precisa de alvo na casa (o Bárbaro) não. Vale uma rodada da bancada com a 10 desligada para
+confirmar antes de mexer em número.
+
+### 8.2 Por caminho (classe × elemento, em dupla; ~230 jogos por célula, ±6 pontos)
+
+Onde o desequilíbrio mora de verdade — a média da classe esconde o caminho:
+
+| | nível 5 | 12 | 20 | 30 |
+|---|---|---|---|---|
+| **Bárbaro de Fogo** | **34%** | **39%** | **40%** | **43%** |
+| Bárbaro de Água / Terra | 38 / 39 | 49 / 49 | 50 / 46 | 53 / 56 |
+| **Caçador de Água** | **26%** | 60 | 50 | 50 |
+| Caçador de Terra | 55 | **40** | 52 | 57 |
+| Bruxo de Água | 59 | **37** | 53 | 54 |
+| **Bruxo de Ar** | 55 | 43 | **32%** | **42%** |
+| Ladino (os quatro) | **57–62** | 39–47 | 39–53 | 37–64 |
+| **Ladino de Ar** | 61 | 46 | **39** | **37** |
+| Ladino de Água | 60 | 47 | 53 | **64** |
+| **Curandeiro de Água** | 49 | 41 | **39** | **31%** |
+| Curandeiro de Ar | **39** | 41 | 46 | 44 |
+| Curandeiro de Fogo | 47 | **66** | 58 | 52 |
+| **Minotauro de Água** | 44 | **76%** | **67%** | 53 |
+| Minotauro de Fogo | 44 | 49 | **66** | 46 |
+| Xamã (os quatro) | 48–56 | 49–52 | 48–61 | 50–59 |
+
+### 8.3 As sugestões, com número (nenhuma aplicada)
+
+1. **O Bárbaro de Fogo (34–43% em todo nível) é o caminho mais fraco do jogo.** Os feitiços que se
+   queimam — Sangue Fervente (`sumo-fogo-15`, +poder e queimadura própria) e Fúria da Fornalha (`sumo-fogo-30`,
+   queimadura própria) — custam ao Bárbaro o que ele tem de menos: vida efetiva 108–119% do elenco com alcance
+   2. Proposta: a queimadura própria do Sangue Fervente cair pela metade (de 2 turnos para 1, ou o `min/max`
+   do `poison` em si a 50%), e Gume Incandescente (`sumo-fogo-10`) e Estouro de Brasa (`sumo-fogo-12`) +12% de
+   dano. Alvo: 45% no 12 e no 20.
+2. **O Caçador de Água no nível 5 (26%)** é o Tiro-Arpão (`arqueiro-agua-5`: dano + PUXA 2 + marca) — puxar o
+   inimigo para junto de quem atira de longe é dar ao outro o que ele quer, e a IA faz isso toda vez. Proposta:
+   `pull` de 2 para 1 casa (fica o gancho, some o abraço), ou trocar o puxão por −1 PP. Alvo: 40% no 5.
+3. **O Minotauro de Água no 12 e no 20 (76%, 67%)** é o Muro Escorregadio (`minotauro-agua-5`, muro + armadilha)
+   com o Casco de Maré (`minotauro-agua-10`, escudo + regeneração) e o Dique (`-15`): a pedra que fere 30 ao
+   encostar mais a armadilha na mesma casa mais a regeneração — três defesas somadas. Proposta: a regeneração do
+   Casco de Maré −25% e o `fere` do muro de água em 24 em vez de 30 (os outros muros ficam em 30). Alvo: 58%.
+4. **O Ladino no 5 (60%, os quatro caminhos entre 57 e 62)** e **o Ladino de Ar do 20 em diante (39%, 37%)**.
+   Proposta: os três neutros (`espadachim-neutro-1/2/3`) e os feitiços de nível 5 −8% de dano; Corte em Cadeia
+   (`espadachim-ar-15`) e Mil Cortes de Vento (`espadachim-ar-30`, `chain`) +15%. Alvo: 54% no 5, 45% no 30 de ar.
+5. **O Curandeiro de Água no 20 e no 30 (39%, 31%)**: Corrente Sanadora (`curandeiro-agua-20`) e A Cisterna Boa
+   (`curandeiro-agua-30`) curam menos do que o Coração de Brasa e A Chama que Cuida do caminho de Fogo (66% no
+   12). Proposta: +15% na cura dos dois (e o `cleanse` da Cisterna Boa já é raro na mão da IA — na de gente vale
+   mais). Alvo: 42%.
+6. **O Bruxo de Ar no 20 (32%)**: Trovoada (`bruxo-ar-20`, `chain`) e o Olho da Tempestade (`-30`) rendem pouco
+   porque a cadeia precisa de dois inimigos encostados e a IA do outro lado não encosta. Proposta: o dano da
+   cadeia +20% e a Trovoada com `range.max` 8 (é 7). Alvo: 42%.
+7. **O que NÃO mexer:** o Xamã contra o Minotauro (62–63%) e o Ladino contra o Xamã (36–38%) são o alcance e as
+   invocações bloqueando o caminho — a régua da IA de 03/10 (§5.1) já disse que isso é kiting, e o jogador de
+   verdade resolve com a troca de lugar e a invisibilidade, que a IA não usa. E a fusão: as sete fora de ±20% são
+   as mesmas de 03/10 (16 e 25 são níveis de conferência; `curandeiro+minotauro` no 20 está em 120%, na borda).
+
+### 8.4 Como repetir
+
+```bash
+node tests/equilibrio.js --completo --json medida.json    # ~1 h 40 com a máquina dividida; sozinha, ~35 min
+python tools/resume_equilibrio.py medida.json             # as tabelas desta seção (matriz, por caminho, fusão, perfil)
+```
+
+O resumidor (`tools/resume_equilibrio.py`, 90 linhas) lê `duelos.M` (um triângulo: o outro lado é o espelho),
+`duelos.PC` (vitórias/jogos por `nível:classe:elemento` — a leitura por caminho, que a prova não cobra),
+`fusao.R` e `perfis.resumo`, e marca com `*` o que sai da faixa.
