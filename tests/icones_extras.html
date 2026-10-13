@@ -19,7 +19,7 @@
 </style>
 </head>
 <body>
-<h1>Os 13 ícones extras — a arte do usuário nas moedas e pedras</h1>
+<h1>Os 15 ícones extras — a arte do usuário nas moedas e pedras</h1>
 <div class="sub">Pedras de forja (6), selos de chefe (5), a Insígnia de Fundação e o vintém. A página
 espera as imagens decodificarem, cobra que <code>Art.stoneIcon</code> serve a ARTE (cache próprio) e
 que <code>seloIcon</code>, <code>insigniaIcon</code> e <code>vintemIcon</code> existem e servem arte — e
@@ -55,7 +55,8 @@ desenha tudo nos tamanhos em que o jogo mostra (34/48 pedra, 30/18 selo, 30/18 i
   var PEDRAS = ['stone-ember', 'stone-tear', 'stone-root', 'stone-breath', 'stone-slate', 'stone-anchor'];
   var ELEMS = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
   var ids = Object.keys(JOGO.ICONES_EXTRAS || {});
-  check('os 13 ícones estão embutidos (6 pedras + 5 selos + insígnia + vintém)', ids.length === 13, ids.join(','));
+  // 12/10: eram 13; a Gema Enterrada e o Fragmento (08/10) entraram nas pedras — 15
+  check('os 15 ícones estão embutidos (8 pedras + 5 selos + insígnia + vintém)', ids.length === 15, ids.join(','));
   check('as seis pedras têm arte com o id de DATA.stones',
         PEDRAS.every(function (id) { return ids.indexOf(id) >= 0 && !!(JOGO.DATA.stones || {})[id]; }));
   check('os cinco selos têm arte (selo-<elemento>)',

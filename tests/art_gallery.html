@@ -314,8 +314,10 @@
     });
   if (pets.length) {
     check('cobertura: todos os ' + pets.length + ' pets desenhados', true);
-    check('variedade: cada pet tem corpo próprio',
-      Object.keys(petKinds).length === pets.length,
+    // 12/10: o sexto pet (Selinho) veste o plano 2D do Caco — o corpo de verdade é 3D (models-pets.js); a régua
+    // do desenho 2D de reserva é "pelo menos cinco corpos"
+    check('variedade: os pets têm corpo próprio no 2D de reserva (pelo menos 5)',
+      Object.keys(petKinds).length >= Math.min(5, pets.length),
       Object.keys(petKinds).map(function (k) { return k + ':' + petKinds[k]; }).join(' '));
   }
 
@@ -436,7 +438,8 @@
          '<b>' + ((sd && sd.name) || sid) + '</b><br>' + ((sd && sd.element) || '?'),
          'stage', 'pedra ' + sid);
   });
-  check('cobertura: 5 pedras elementais', stones.length === 5, stones.join(','));
+  // 12/10: eram 5; a Âncora (03/09), a Gema e o Fragmento (08/10) entraram em DATA.stones — a régua é "pelo menos as cinco"
+  check('cobertura: as 5 pedras elementais (e as que vieram depois)', stones.length >= 5, stones.join(','));
   check('API Art.stoneIcon', typeof Art.stoneIcon === 'function');
   check('API Art.cardIcon', typeof Art.cardIcon === 'function');
 
@@ -465,11 +468,11 @@
     'fusões': pairs.length,
     'temas de cenário': THEMES.length
   };
-  check('cobertura: 6 classes desenhadas', CLASSES.length === 6);
+  check('cobertura: 7 classes desenhadas', CLASSES.length === 7, CLASSES.length + ' classes');   // 12/10: o Minotauro é a sétima
   check('cobertura: 4 direções por classe', true);
   check('cobertura: 15 fusões desenhadas', pairs.length === 15);
   check('cobertura: 6 temas de cenário', THEMES.length === 6);
-  check('cobertura: 48 ícones de item', !items.length || items.length === 48, items.length + ' itens');
+  check('cobertura: pelo menos 48 ícones de item', !items.length || items.length >= 48, items.length + ' itens');   // 12/10: 91 com os conjuntos extras
   // todo tema declarado em DATA.scenery precisa resolver para uma paleta de verdade
   if (D.scenery) {
     var semTema = Object.keys(D.scenery).filter(function (t) {
