@@ -4365,15 +4365,1217 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ==========================================================================
+  // ÍCONES DE FEITIÇO v2 (12/10) — um DESENHO por feitiço, não um por tipo de efeito.
+  //
+  // O dono: "mude os ícones dos ataques, vejo muitos repetidos". Até aqui o ícone saía de
+  // `glyphFor`: o PRIMEIRO efeito que não fosse dano escolhia entre 22 glifos, e todo feitiço
+  // de dano caía na chama/gota/pedra/sopro do elemento (ou na lâmina, se corpo a corpo). Numa
+  // árvore de 27 feitiços do mesmo herói, seis do mesmo caminho saíam com a MESMA chama.
+  //
+  // Agora o desenho vem em três camadas:
+  //   1. o MOTIVO — pelo `fxKey` do feitiço (a tabela MOTIVO_FX, um por chave, os 198 de
+  //      classe nomeados um a um) ou, para quem não está na tabela (monstros, pets, itens e
+  //      as formas de fusão, que trazem `fxShape`), pela FAMÍLIA do nome (REGRAS_MOTIVO, a
+  //      mesma lógica do fx3d_v2.js) e, no fim, pelo efeito (o `glyphFor` de sempre);
+  //   2. a MARCA DA ÁREA no canto de cima-esquerda — círculo, cruz, cone, linha ou anel —
+  //      só quando o feitiço pega área (e só de 40 px para cima: a 34 px vira sujeira);
+  //   3. o DISTINTIVO do efeito secundário no canto de baixo-direita — veneno, marca, empurrão,
+  //      puxão, raiz, invisível, escudo, cura, bônus, maldição, armadilha, teleporte — o que o
+  //      feitiço faz ALÉM do golpe (idem, só de 40 px para cima).
+  // A fusão de dois elementos pinta o motivo em DUAS cores, metade de cada (clip), e o quadro
+  // leva a mistura. O cache continua por id+tamanho (`A.spellIcon`).
+  // ==========================================================================
+  var MOTIVO = {};
+  // --- os ajudantes dos motivos
+  function arco(g, cx, cy, r, a0, a1, col, w) {   // um arco de traço
+    g.save(); g.beginPath(); g.arc(cx, cy, r, a0, a1); g.strokeStyle = col;
+    g.lineWidth = (w == null ? 1 : w) * _lw; g.lineCap = 'round'; g.stroke(); g.restore();
+  }
+  function risco(g, pts, col, w) { stroke(g, pts, col, w == null ? 0.8 : w); }
+  function pontinho(g, x, y, rr, col) { part(g, Pel(x, y, rr, rr), col, { flat: true, noline: true }); }
+  function meiaLua(g, x, y, r, ang, esp, col, o) {   // a lâmina curva de um corte
+    var c = Math.cos(ang), s = Math.sin(ang);
+    part(g, tag(function (c2) {
+      c2.beginPath();
+      c2.arc(x - c * r * 0.25, y - s * r * 0.25, r, ang - 1.25, ang + 1.25);
+      c2.arc(x - c * r * (0.25 + esp), y - s * r * (0.25 + esp), r * (1 + esp * 0.4), ang + 1.1, ang - 1.1, true);
+      c2.closePath();
+    }, x, y, r), col, o || { k: 0.2, hi: 0.3, lw: 0.7 });
+  }
+  function espada(g, x, y, r, col, I, ang, len) {   // lâmina reta com guarda e cabo
+    g.save(); g.translate(x, y); g.rotate(ang == null ? -0.7 : ang);
+    var L = (len || 1) * r;
+    part(g, Ppoly([-r * 0.14, L * 0.35, r * 0.14, L * 0.35, r * 0.17, -L * 0.75, 0, -L * 1.05, -r * 0.17, -L * 0.75]),
+         sh(col, 0.35), { k: 0.22, hi: 0.3, lw: 0.7, line: lineOf(I.deep) });
+    risco(g, [0, -L * 0.7, 0, L * 0.25], rgba('#ffffff', 0.55), 0.45);
+    part(g, Prr(0, L * 0.38, r * 0.62, r * 0.14, 2), I.deep, { k: 0.2, lw: 0.6 });
+    part(g, Prr(0, L * 0.62, r * 0.18, r * 0.42, 2), '#6b4a2a', { k: 0.25, lw: 0.6 });
+    pontinho(g, 0, L * 0.86, r * 0.11, sh(col, -0.1));
+    g.restore();
+  }
+  function flecha(g, x, y, r, col, I, ang, len) {   // uma flecha com ponta e empenas
+    g.save(); g.translate(x, y); g.rotate(ang == null ? -0.78 : ang);
+    var L = (len || 1) * r;
+    risco(g, [0, L * 0.95, 0, -L * 0.6], sh(col, -0.1), 0.8);
+    part(g, Ppoly([0, -L * 1.1, r * 0.24, -L * 0.6, -r * 0.24, -L * 0.6]), sh(col, 0.3), { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Ppoly([-r * 0.05, L * 0.55, -r * 0.3, L * 0.85, -r * 0.05, L * 0.95]), I.deep, { flat: true, lw: 0.5 });
+    part(g, Ppoly([r * 0.05, L * 0.55, r * 0.3, L * 0.85, r * 0.05, L * 0.95]), I.deep, { flat: true, lw: 0.5 });
+    g.restore();
+  }
+  function figura(g, x, y, r, col, I) {   // um vulto de pé: cabeça e tronco
+    pontinho(g, x, y - r * 0.55, r * 0.2, col);
+    part(g, Pblob([x - r * 0.3, y - r * 0.3, x + r * 0.3, y - r * 0.3, x + r * 0.34, y + r * 0.4, x - r * 0.34, y + r * 0.4]),
+         col, { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+  }
+  function ondaCrista(g, x, y, r, col, I, w) {   // a crista de uma onda, enrolando à direita
+    part(g, tag(function (c2) {
+      c2.beginPath();
+      c2.moveTo(x - r * 1.0, y + r * 0.5);
+      c2.quadraticCurveTo(x - r * 0.9, y - r * 0.6, x + r * 0.1, y - r * 0.7);
+      c2.quadraticCurveTo(x + r * 0.9, y - r * 0.8, x + r * 0.9, y - r * 0.05);
+      c2.quadraticCurveTo(x + r * 0.7, y - r * 0.45, x + r * 0.25, y - r * 0.3);
+      c2.quadraticCurveTo(x + r * 0.55, y - r * 0.1, x + r * 0.4, y + r * 0.2);
+      c2.lineTo(x + r * 0.9, y + r * 0.5);
+      c2.closePath();
+    }, x, y, r), col, { k: 0.2, hi: 0.3, lw: w || 0.7, line: lineOf(I.deep) });
+    risco(g, [x - r * 0.6, y + r * 0.0, x - r * 0.2, y - r * 0.35, x + r * 0.2, y - r * 0.2], rgba('#ffffff', 0.6), 0.45, true);
+  }
+  function muro(g, x, y, r, col, I, lin) {   // fiadas de blocos
+    var fil = lin || 3, i, j;
+    for (i = 0; i < fil; i++) {
+      var yy = y + r * 0.75 - i * r * 0.5, off = (i % 2) * r * 0.4;
+      for (j = -1; j <= 1; j++) {
+        var xx = x + j * r * 0.8 + off - r * 0.2;
+        if (xx < x - r * 1.05 || xx > x + r * 1.05) continue;
+        part(g, Prr(xx, yy, r * 0.74, r * 0.44, 1.5), mx(col, '#8a7a66', 0.35), { k: 0.24, lw: 0.55, line: lineOf(I.deep) });
+      }
+    }
+  }
+  function circuloRunas(g, x, y, r, col, I, n) {   // o anel de runas no chão
+    arco(g, x, y, r * 0.95, 0, TAU, col, 0.9);
+    arco(g, x, y, r * 0.62, 0, TAU, rgba(col, 0.6), 0.5);
+    for (var i = 0; i < (n || 6); i++) {
+      var a = i / (n || 6) * TAU;
+      part(g, Pdiamond(x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78, r * 0.2, r * 0.3), sh(col, 0.3), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    }
+  }
+  function cristal(g, x, y, r, col, I, s) {   // uma lasca de pedra facetada
+    part(g, Ppoly([x - r * 0.6, y + r * 0.9, x - r * 0.55, y - r * 0.2, x, y - r * 1.0, x + r * 0.5, y - r * 0.3, x + r * 0.62, y + r * 0.9]),
+         col, { k: 0.3, hi: 0.2, lw: 0.7, line: lineOf(I.deep) });
+    part(g, Ppoly([x, y - r * 1.0, x + r * 0.5, y - r * 0.3, x + r * 0.62, y + r * 0.9, x + r * 0.05, y + r * 0.9]),
+         sh(I.deep, 0.1), { flat: true, noline: true });
+  }
+  function labareda(g, x, y, r, col, I, lean) {
+    part(g, Pflame(x, y + r * 0.8, r * 0.6, r * 1.6, lean || 0.08), col, { k: 0.18, hi: 0.2, line: lineOf(I.deep) });
+    part(g, Pflame(x, y + r * 0.7, r * 0.3, r * 0.9, -(lean || 0.08) * 0.5), sh(col, 0.45), { k: 0.14, lw: 0.6 });
+  }
+  function reticulo(g, x, y, r, col) {   // a mira da marca
+    arco(g, x, y, r * 0.85, 0, TAU, col, 0.9);
+    risco(g, [x - r * 1.1, y, x - r * 0.45, y], col, 0.7); risco(g, [x + r * 0.45, y, x + r * 1.1, y], col, 0.7);
+    risco(g, [x, y - r * 1.1, x, y - r * 0.45], col, 0.7); risco(g, [x, y + r * 0.45, x, y + r * 1.1], col, 0.7);
+    pontinho(g, x, y, r * 0.16, col);
+  }
+  function ventoCurva(g, x, y, r, col, w) {
+    g.save(); g.strokeStyle = col; g.lineWidth = (w || 1) * _lw; g.lineCap = 'round';
+    Pswirl(x, y, r, 1.0)(g); g.stroke(); g.restore();
+  }
+  function mais(g, x, y, r, col) {   // a cruz da cura
+    part(g, Ppoly([x - r * 0.28, y - r, x + r * 0.28, y - r, x + r * 0.28, y - r * 0.28, x + r, y - r * 0.28, x + r, y + r * 0.28,
+                   x + r * 0.28, y + r * 0.28, x + r * 0.28, y + r, x - r * 0.28, y + r, x - r * 0.28, y + r * 0.28, x - r, y + r * 0.28,
+                   x - r, y - r * 0.28, x - r * 0.28, y - r * 0.28]), col, { k: 0.2, hi: 0.2, lw: 0.6 });
+  }
+  function pegadas(g, x, y, r, col) {   // duas pegadas em diagonal
+    [[-0.45, 0.35, -0.5], [0.3, -0.35, -0.5]].forEach(function (p) {
+      part(g, Pel(x + p[0] * r, y + p[1] * r, r * 0.22, r * 0.36, p[2]), col, { k: 0.2, lw: 0.5 });
+      pontinho(g, x + p[0] * r - r * 0.1, y + p[1] * r - r * 0.5, r * 0.09, col);
+      pontinho(g, x + p[0] * r + r * 0.08, y + p[1] * r - r * 0.53, r * 0.08, col);
+    });
+  }
+  function escudoForma(g, x, y, r, col, I, o) {
+    part(g, tag(function (c2) {
+      c2.beginPath(); c2.moveTo(x, y - r);
+      c2.quadraticCurveTo(x + r, y - r * 0.86, x + r * 0.92, y - r * 0.2);
+      c2.quadraticCurveTo(x + r * 0.8, y + r * 0.72, x, y + r);
+      c2.quadraticCurveTo(x - r * 0.8, y + r * 0.72, x - r * 0.92, y - r * 0.2);
+      c2.quadraticCurveTo(x - r, y - r * 0.86, x, y - r); c2.closePath();
+    }, x, y, r), col, o || { k: 0.22, hi: 0.2, lw: 0.7, line: lineOf(I.deep) });
+  }
+
+  // --- OS MOTIVOS. Cada um desenha dentro de ~1,1 r em volta de (x, y), na cor do elemento.
+  // corpo a corpo
+  MOTIVO.corteArco = function (g, x, y, r, col, I) {
+    meiaLua(g, x, y, r * 0.9, -0.6, 0.35, sh(col, 0.2), { k: 0.2, hi: 0.3, lw: 0.7, line: lineOf(I.deep) });
+    risco(g, [x - r * 0.5, y + r * 0.7, x + r * 0.8, y - r * 0.6], rgba('#ffffff', 0.45), 0.4);
+    risco(g, [x - r * 0.9, y + r * 0.9, x - r * 0.3, y + r * 0.3], rgba(col, 0.7), 0.4);
+  };
+  MOTIVO.corteDuplo = function (g, x, y, r, col, I) {
+    meiaLua(g, x - r * 0.15, y, r * 0.8, -0.7, 0.3, sh(col, 0.2), { k: 0.2, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    meiaLua(g, x + r * 0.15, y, r * 0.8, Math.PI - 0.7, 0.3, sh(col, 0.05), { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+  };
+  MOTIVO.setecortes = function (g, x, y, r, col, I) {
+    for (var i = 0; i < 5; i++) {
+      var a = -1.3 + i * 0.5;
+      risco(g, [x + Math.cos(a) * r * 0.1, y + Math.sin(a) * r * 0.1, x + Math.cos(a) * r * 1.05, y + Math.sin(a) * r * 1.05],
+            i % 2 ? sh(col, 0.4) : col, 0.75);
+    }
+    pontinho(g, x, y, r * 0.2, sh(col, 0.5));
+  };
+  MOTIVO.estocada = function (g, x, y, r, col, I) {
+    espada(g, x, y, r, col, I, -0.25, 1.05);
+    risco(g, [x - r * 0.95, y + r * 0.1, x - r * 0.45, y + r * 0.1], rgba('#ffffff', 0.5), 0.4);
+    risco(g, [x - r * 0.85, y + r * 0.4, x - r * 0.5, y + r * 0.4], rgba('#ffffff', 0.35), 0.4);
+  };
+  MOTIVO.espada = function (g, x, y, r, col, I) { espada(g, x, y, r, col, I, -0.7, 1.0); };
+  MOTIVO.adaga = function (g, x, y, r, col, I) {
+    espada(g, x + r * 0.1, y + r * 0.05, r * 0.72, col, I, 0.75, 1.0);
+    pontinho(g, x - r * 0.7, y - r * 0.6, r * 0.12, sh(col, 0.5));
+  };
+  MOTIVO.lamina_enferrujada = function (g, x, y, r, col, I) {
+    espada(g, x, y, r, col, I, -0.7, 1.0);
+    pontinho(g, x - r * 0.1, y - r * 0.35, r * 0.12, '#8a4a22'); pontinho(g, x + r * 0.2, y - r * 0.05, r * 0.09, '#8a4a22');
+    pontinho(g, x - r * 0.25, y + r * 0.1, r * 0.08, '#a85a28');
+  };
+  MOTIVO.tornozelo = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 0.35, y - r * 0.9, x + r * 0.15, y - r * 0.9, x + r * 0.2, y + r * 0.15, x + r * 0.9, y + r * 0.55,
+                   x + r * 0.9, y + r * 0.9, x - r * 0.35, y + r * 0.9]), mx(col, '#6b4a2a', 0.55), { k: 0.24, lw: 0.6 });
+    meiaLua(g, x - r * 0.1, y + r * 0.1, r * 0.6, 0.4, 0.3, sh(col, 0.3), { flat: true, lw: 0.5, line: lineOf(I.deep) });
+  };
+  MOTIVO.sanguessuga = function (g, x, y, r, col, I) {
+    meiaLua(g, x - r * 0.1, y - r * 0.1, r * 0.8, -0.7, 0.32, sh(col, 0.15), { k: 0.2, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pdrop(x + r * 0.55, y + r * 0.45, r * 0.3), '#d0352a', { k: 0.2, lw: 0.5 });
+  };
+  MOTIVO.afogar = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.5, r * 1.05, r * 0.45), col, { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    pontinho(g, x, y - r * 0.3, r * 0.42, '#efe6d8');
+    pontinho(g, x - r * 0.16, y - r * 0.35, r * 0.1, '#241c22'); pontinho(g, x + r * 0.16, y - r * 0.35, r * 0.1, '#241c22');
+    risco(g, [x - r * 0.7, y + r * 0.45, x - r * 0.4, y + r * 0.25, x - r * 0.1, y + r * 0.45, x + r * 0.2, y + r * 0.25, x + r * 0.5, y + r * 0.45], sh(col, 0.5), 0.5, true);
+    part(g, Pdrop(x + r * 0.6, y - r * 0.6, r * 0.22), '#d0352a', { flat: true, lw: 0.4 });
+  };
+  MOTIVO.machado = function (g, x, y, r, col, I) {
+    g.save(); g.translate(x, y); g.rotate(-0.6);
+    part(g, Prr(0, r * 0.1, r * 0.2, r * 1.9, 2), '#6b4a2a', { k: 0.25, lw: 0.6 });
+    part(g, tag(function (c2) {
+      c2.beginPath(); c2.moveTo(r * 0.1, -r * 0.85); c2.quadraticCurveTo(r * 1.05, -r * 0.85, r * 1.0, r * 0.0);
+      c2.quadraticCurveTo(r * 1.05, r * 0.6, r * 0.1, r * 0.45); c2.closePath();
+    }, r * 0.55, -r * 0.2, r * 0.6), sh(col, 0.3), { k: 0.24, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    g.restore();
+  };
+  MOTIVO.machadoGiro = function (g, x, y, r, col, I) {
+    arco(g, x, y, r * 1.0, 0.2, 2.2, rgba(col, 0.8), 0.6); arco(g, x, y, r * 1.0, 3.3, 5.3, rgba(col, 0.8), 0.6);
+    MOTIVO.machado(g, x, y, r * 0.78, col, I);
+  };
+  MOTIVO.ombro = function (g, x, y, r, col, I) {
+    figura(g, x - r * 0.15, y + r * 0.05, r, col, I);
+    part(g, Pel(x + r * 0.35, y - r * 0.15, r * 0.34, r * 0.3), sh(col, 0.25), { k: 0.2, lw: 0.5 });
+    risco(g, [x + r * 0.8, y - r * 0.55, x + r * 1.05, y - r * 0.75], sh(col, 0.5), 0.5);
+    risco(g, [x + r * 0.9, y - r * 0.15, x + r * 1.15, y - r * 0.15], sh(col, 0.5), 0.5);
+    risco(g, [x + r * 0.8, y + r * 0.25, x + r * 1.05, y + r * 0.45], sh(col, 0.5), 0.5);
+  };
+  MOTIVO.chifres = function (g, x, y, r, col, I) {
+    [-1, 1].forEach(function (d) {
+      part(g, tag(function (c2) {
+        c2.beginPath(); c2.moveTo(x + d * r * 0.1, y + r * 0.8);
+        c2.quadraticCurveTo(x + d * r * 0.9, y + r * 0.7, x + d * r * 0.95, y - r * 0.2);
+        c2.quadraticCurveTo(x + d * r * 0.95, y - r * 0.8, x + d * r * 0.55, y - r * 1.0);
+        c2.quadraticCurveTo(x + d * r * 0.75, y - r * 0.3, x + d * r * 0.45, y + r * 0.2);
+        c2.quadraticCurveTo(x + d * r * 0.3, y + r * 0.45, x + d * r * 0.1, y + r * 0.45); c2.closePath();
+      }, x + d * r * 0.5, y, r * 0.6), mx(col, '#e8dcc8', 0.45), { k: 0.24, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    });
+    part(g, Prr(x, y + r * 0.55, r * 0.7, r * 0.5, r * 0.2), mx(col, '#4a3a2a', 0.5), { k: 0.2, lw: 0.5 });
+  };
+  MOTIVO.agarrar = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.5, y + r * 0.9, x - r * 0.7, y, x - r * 0.2, y - r * 0.6, x + r * 0.5, y - r * 0.4, x + r * 0.7, y + r * 0.4, x + r * 0.3, y + r * 0.9]),
+         mx(col, '#e3c39c', 0.4), { k: 0.22, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    for (var i = 0; i < 4; i++) {
+      part(g, Prr(x - r * 0.45 + i * r * 0.3, y - r * 0.5, r * 0.24, r * 0.5, 2), mx(col, '#e3c39c', 0.5), { k: 0.2, lw: 0.5 });
+    }
+  };
+  MOTIVO.arremesso = function (g, x, y, r, col, I) {
+    figura(g, x - r * 0.45, y + r * 0.2, r * 0.9, col, I);
+    arco(g, x + r * 0.1, y + r * 0.5, r * 0.9, -2.6, -0.5, rgba(col, 0.65), 0.5);
+    part(g, Pshard(x + r * 0.6, y - r * 0.6, r * 0.38, 'arremesso'), mx(col, '#8a7a66', 0.4), { k: 0.26, lw: 0.6 });
+  };
+  MOTIVO.arremessoMundo = function (g, x, y, r, col, I) {
+    arco(g, x - r * 0.1, y + r * 0.3, r * 1.0, -2.8, -0.3, rgba(col, 0.6), 0.5);
+    pontinho(g, x + r * 0.15, y - r * 0.1, r * 0.62, mx(col, '#6a8a9a', 0.5));
+    part(g, Pblob([x - r * 0.2, y - r * 0.4, x + r * 0.25, y - r * 0.5, x + r * 0.45, y - r * 0.05, x + r * 0.1, y + r * 0.15]), sh(col, 0.2), { flat: true, noline: true });
+    arco(g, x + r * 0.15, y - r * 0.1, r * 0.62, 0, TAU, lineOf(I.deep), 0.6);
+  };
+  MOTIVO.investida = function (g, x, y, r, col, I) {
+    figura(g, x + r * 0.25, y, r, col, I);
+    risco(g, [x - r * 1.05, y - r * 0.4, x - r * 0.35, y - r * 0.4], sh(col, 0.45), 0.6);
+    risco(g, [x - r * 1.0, y, x - r * 0.2, y], sh(col, 0.45), 0.6);
+    risco(g, [x - r * 1.05, y + r * 0.4, x - r * 0.4, y + r * 0.4], sh(col, 0.45), 0.6);
+  };
+  MOTIVO.tufao = function (g, x, y, r, col, I) {
+    ventoCurva(g, x, y, r * 1.05, rgba(col, 0.9), 1.1);
+    flecha(g, x + r * 0.1, y + r * 0.05, r * 0.7, sh(col, 0.3), I, -0.78, 1.0);
+  };
+  MOTIVO.casco = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.55, y - r * 0.7, x + r * 0.55, y - r * 0.7, x + r * 0.7, y + r * 0.1, x + r * 0.4, y + r * 0.35, x - r * 0.4, y + r * 0.35, x - r * 0.7, y + r * 0.1]),
+         mx(col, '#4a3a2a', 0.55), { k: 0.24, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    risco(g, [x, y - r * 0.6, x, y + r * 0.3], lineOf(I.deep), 0.5);
+    risco(g, [x - r * 1.05, y + r * 0.75, x - r * 0.6, y + r * 0.55, x - r * 0.25, y + r * 0.85, x + r * 0.25, y + r * 0.55, x + r * 0.6, y + r * 0.85, x + r * 1.05, y + r * 0.65], col, 0.6);
+  };
+  MOTIVO.grito = function (g, x, y, r, col, I) {
+    pontinho(g, x - r * 0.35, y, r * 0.5, mx(col, '#e3c39c', 0.4));
+    part(g, Pel(x - r * 0.2, y + r * 0.12, r * 0.14, r * 0.2), '#241c22', { flat: true, noline: true });
+    arco(g, x - r * 0.2, y, r * 0.75, -0.7, 0.7, col, 0.7); arco(g, x - r * 0.2, y, r * 1.0, -0.6, 0.6, rgba(col, 0.7), 0.6);
+    arco(g, x - r * 0.2, y, r * 1.25, -0.5, 0.5, rgba(col, 0.45), 0.5);
+  };
+  MOTIVO.estouro = function (g, x, y, r, col, I) {
+    part(g, Pstar(x, y, r, 8, 0.44), col, { k: 0.2, hi: 0.2, line: lineOf(I.deep) });
+    part(g, Pel(x, y, r * 0.32, r * 0.32), sh(col, 0.42), { k: 0.14, lw: 0.7 });
+  };
+  MOTIVO.fornalha = function (g, x, y, r, col, I) {
+    part(g, Pstar(x, y + r * 0.1, r * 1.05, 10, 0.5), rgba(col, 0.55), { flat: true, noline: true });
+    part(g, Prr(x, y + r * 0.45, r * 1.2, r * 0.5, 3), '#4a3a3a', { k: 0.25, lw: 0.6 });
+    part(g, Prr(x, y + r * 0.45, r * 0.6, r * 0.28, 2), sh(col, 0.2), { flat: true, noline: true });
+    labareda(g, x, y - r * 0.15, r * 0.6, col, I, 0.1);
+  };
+  MOTIVO.represalia = function (g, x, y, r, col, I) {
+    escudoForma(g, x, y, r, col, I);
+    flecha(g, x + r * 0.05, y - r * 0.05, r * 0.6, sh(col, 0.55), I, 2.4, 1.0);
+  };
+  MOTIVO.montanha = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 1.05, y + r * 0.85, x - r * 0.35, y - r * 0.3, x + r * 0.05, y + r * 0.2, x + r * 0.45, y - r * 0.9, x + r * 1.1, y + r * 0.85]),
+         mx(col, '#6b6358', 0.45), { k: 0.26, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Ppoly([x + r * 0.45, y - r * 0.9, x + r * 0.2, y - r * 0.45, x + r * 0.35, y - r * 0.4, x + r * 0.5, y - r * 0.52, x + r * 0.62, y - r * 0.4, x + r * 0.72, y - r * 0.5]),
+         '#f2f0ea', { flat: true, noline: true });
+  };
+  MOTIVO.estacaHumana = function (g, x, y, r, col, I) {
+    figura(g, x, y - r * 0.15, r, col, I);
+    part(g, Ppoly([x - r * 0.3, y + r * 0.3, x + r * 0.3, y + r * 0.3, x, y + r * 1.05]), mx(col, '#6b4a2a', 0.5), { k: 0.2, lw: 0.5 });
+    risco(g, [x - r * 1.0, y + r * 0.95, x + r * 1.0, y + r * 0.95], lineOf(I.deep), 0.6);
+  };
+  MOTIVO.bebedor = function (g, x, y, r, col, I) {
+    part(g, Prr(x - r * 0.1, y + r * 0.2, r * 1.0, r * 1.2, 3), mx(col, '#8a7a66', 0.5), { k: 0.24, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Prr(x + r * 0.55, y + r * 0.15, r * 0.3, r * 0.6, 3), mx(col, '#8a7a66', 0.5), { k: 0.24, lw: 0.5 });
+    part(g, Pel(x - r * 0.1, y - r * 0.4, r * 0.5, r * 0.18), sh(col, 0.3), { k: 0.1, lw: 0.4 });
+    risco(g, [x - r * 0.5, y - r * 0.4, x - r * 0.3, y - r * 0.6, x - r * 0.1, y - r * 0.4, x + r * 0.1, y - r * 0.6, x + r * 0.3, y - r * 0.4], sh(col, 0.55), 0.5, true);
+  };
+  MOTIVO.mareBruta = function (g, x, y, r, col, I) {
+    figura(g, x, y - r * 0.1, r * 0.8, sh(col, -0.15), I);
+    ondaCrista(g, x - r * 0.1, y + r * 0.35, r * 1.0, col, I, 0.55);
+  };
+  // arco e flecha
+  MOTIVO.flecha = function (g, x, y, r, col, I) { flecha(g, x, y, r, col, I, -0.78, 1.0); };
+  MOTIVO.flechaChama = function (g, x, y, r, col, I) {
+    labareda(g, x - r * 0.5, y + r * 0.25, r * 0.5, col, I, 0.25);
+    flecha(g, x + r * 0.1, y - r * 0.05, r * 0.95, col, I, -0.78, 1.0);
+  };
+  MOTIVO.flechaVento = function (g, x, y, r, col, I) {
+    ventoCurva(g, x - r * 0.45, y + r * 0.45, r * 0.6, rgba(col, 0.8), 0.8);
+    flecha(g, x + r * 0.15, y - r * 0.1, r * 0.95, col, I, -0.78, 1.0);
+  };
+  MOTIVO.flechaGota = function (g, x, y, r, col, I) {
+    flecha(g, x + r * 0.1, y - r * 0.1, r * 0.95, col, I, -0.78, 1.0);
+    part(g, Pdrop(x - r * 0.6, y + r * 0.55, r * 0.28), sh(col, 0.3), { k: 0.2, lw: 0.5 });
+  };
+  MOTIVO.flechaSilex = function (g, x, y, r, col, I) {
+    flecha(g, x, y, r * 0.95, col, I, -0.78, 1.0);
+    part(g, Pshard(x + r * 0.62, y - r * 0.62, r * 0.32, 'silex'), mx(col, '#7a7066', 0.5), { k: 0.28, lw: 0.5 });
+  };
+  MOTIVO.ferroBrasa = function (g, x, y, r, col, I) {
+    g.save(); g.translate(x, y); g.rotate(-0.7);
+    part(g, Prr(r * 0.2, r * 0.0, r * 0.16, r * 1.7, 2), '#5a4a42', { k: 0.25, lw: 0.6 });
+    part(g, Prr(r * 0.2, -r * 0.95, r * 0.6, r * 0.42, 3), sh(col, 0.2), { k: 0.2, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    g.restore();
+    glow(g, x + r * 0.75, y - r * 0.75, r * 0.6, I.glow, 0.5);
+  };
+  MOTIVO.salva = function (g, x, y, r, col, I) {
+    flecha(g, x - r * 0.45, y + r * 0.1, r * 0.8, sh(col, -0.1), I, -1.1, 1.0);
+    flecha(g, x + r * 0.05, y - r * 0.1, r * 0.85, col, I, -0.78, 1.0);
+    flecha(g, x + r * 0.55, y + r * 0.1, r * 0.8, sh(col, 0.25), I, -0.45, 1.0);
+  };
+  MOTIVO.arpao = function (g, x, y, r, col, I) {
+    g.save(); g.translate(x, y); g.rotate(-0.78);
+    risco(g, [0, r * 1.0, 0, -r * 0.55], sh(col, -0.1), 0.8);
+    part(g, Ppoly([0, -r * 1.1, r * 0.3, -r * 0.45, r * 0.1, -r * 0.55, 0, -r * 0.75, -r * 0.1, -r * 0.55, -r * 0.3, -r * 0.45]), sh(col, 0.3), { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    g.restore();
+    risco(g, [x - r * 0.7, y + r * 0.7, x - r * 1.0, y + r * 0.3, x - r * 0.8, y - r * 0.1, x - r * 1.05, y - r * 0.5], mx(col, '#c9a55e', 0.6), 0.5, true);
+  };
+  MOTIVO.linha = function (g, x, y, r, col, I) {
+    for (var i = 0; i < 3; i++) pontinho(g, x - r * 0.55 + i * r * 0.55, y + r * 0.05, r * 0.2, rgba(col, 0.55));
+    flecha(g, x, y, r * 1.05, col, I, Math.PI / 2 * 3, 1.1);
+  };
+  MOTIVO.detonar = function (g, x, y, r, col, I) {
+    part(g, Pstar(x, y, r * 1.05, 8, 0.5), rgba(col, 0.45), { flat: true, noline: true });
+    reticulo(g, x, y, r * 0.8, sh(col, 0.3));
+  };
+  MOTIVO.estacaPe = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.6, r * 0.9, r * 0.35), mx(col, '#6b4a2a', 0.55), { k: 0.2, lw: 0.5 });
+    flecha(g, x, y - r * 0.1, r * 0.9, col, I, Math.PI, 1.0);
+  };
+  MOTIVO.chuva = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.9, y - r * 0.3, x - r * 0.5, y - r * 0.8, x + r * 0.3, y - r * 0.85, x + r * 0.9, y - r * 0.3, x + r * 0.5, y, x - r * 0.5, y]),
+         mx(col, '#8a93a0', 0.45), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    for (var i = 0; i < 4; i++) {
+      var xx = x - r * 0.65 + i * r * 0.43, yy = y + r * 0.45 + (i % 2) * r * 0.3;
+      part(g, Pdrop(xx, yy, r * 0.17), col, { k: 0.2, lw: 0.4 });
+    }
+  };
+  MOTIVO.chuvaBrasa = function (g, x, y, r, col, I) {
+    for (var i = 0; i < 4; i++) {
+      var xx = x - r * 0.7 + i * r * 0.46, yy = y - r * 0.2 + (i % 2) * r * 0.5;
+      risco(g, [xx + r * 0.25, yy - r * 0.9, xx, yy - r * 0.25], rgba(col, 0.6), 0.45);
+      part(g, Pflame(xx, yy + r * 0.35, r * 0.2, r * 0.55, 0.1), col, { k: 0.18, lw: 0.4, line: lineOf(I.deep) });
+    }
+    risco(g, [x - r * 1.0, y + r * 0.95, x + r * 1.0, y + r * 0.95], rgba(col, 0.6), 0.5);
+  };
+  MOTIVO.aljava = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y + r * 0.25, r * 0.7, r * 1.4, 4), mx(col, '#6b4a2a', 0.55), { k: 0.24, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    for (var i = -1; i <= 1; i++) {
+      risco(g, [x + i * r * 0.2, y - r * 0.35, x + i * r * 0.28, y - r * 1.05], sh(col, 0.2), 0.5);
+      part(g, Ppoly([x + i * r * 0.28, y - r * 1.15, x + i * r * 0.28 + r * 0.12, y - r * 0.9, x + i * r * 0.28 - r * 0.12, y - r * 0.9]), col, { flat: true, lw: 0.4 });
+    }
+    pontinho(g, x + r * 0.25, y - r * 0.05, r * 0.16, '#2a1a1a');
+  };
+  MOTIVO.saltador = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 1.0, y + r * 0.6, x - r * 0.5, y - r * 0.5, x, y + r * 0.6, x + r * 0.5, y - r * 0.5], rgba(col, 0.7), 0.6, true);
+    flecha(g, x + r * 0.55, y + r * 0.1, r * 0.75, col, I, -0.35, 1.0);
+  };
+  MOTIVO.rodopio = function (g, x, y, r, col, I) {
+    arco(g, x, y, r * 0.95, 0.4, 2.6, rgba(col, 0.8), 0.6); arco(g, x, y, r * 0.95, 3.5, 5.7, rgba(col, 0.8), 0.6);
+    flecha(g, x, y, r * 0.8, col, I, -0.78, 1.0);
+  };
+  MOTIVO.tempestade = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 1.0, y - r * 0.1, x - r * 0.6, y - r * 0.75, x + r * 0.2, y - r * 0.85, x + r * 1.0, y - r * 0.2, x + r * 0.5, y + r * 0.2, x - r * 0.5, y + r * 0.2]),
+         mx(col, '#5a6070', 0.55), { k: 0.22, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Ppoly([x + r * 0.1, y, x - r * 0.3, y + r * 0.45, x, y + r * 0.45, x - r * 0.25, y + r * 1.05, x + r * 0.45, y + r * 0.3, x + r * 0.15, y + r * 0.3, x + r * 0.45, y]),
+         sh(col, 0.45), { k: 0.1, lw: 0.5, line: lineOf(I.deep) });
+  };
+  MOTIVO.olho = function (g, x, y, r, col, I) {
+    ventoCurva(g, x, y, r * 1.1, rgba(col, 0.75), 0.8);
+    part(g, tag(function (c2) {
+      c2.beginPath(); c2.moveTo(x - r * 0.7, y); c2.quadraticCurveTo(x, y - r * 0.6, x + r * 0.7, y);
+      c2.quadraticCurveTo(x, y + r * 0.6, x - r * 0.7, y); c2.closePath();
+    }, x, y, r * 0.7), '#efe6d8', { k: 0.1, lw: 0.5, line: lineOf(I.deep) });
+    pontinho(g, x, y, r * 0.24, col); pontinho(g, x, y, r * 0.1, '#241c22');
+  };
+  MOTIVO.passo = function (g, x, y, r, col, I) { pegadas(g, x, y, r, col); };
+  MOTIVO.passoVento = function (g, x, y, r, col, I) {
+    ventoCurva(g, x + r * 0.5, y - r * 0.5, r * 0.5, rgba(col, 0.8), 0.7);
+    pegadas(g, x - r * 0.1, y + r * 0.1, r * 0.9, col);
+  };
+  MOTIVO.passoLodo = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 1.0, y + r * 0.7, x - r * 0.5, y + r * 0.3, x + r * 0.4, y + r * 0.35, x + r * 1.0, y + r * 0.7, x + r * 0.5, y + r * 1.0, x - r * 0.5, y + r * 1.0]),
+         mx(col, '#5a6a3a', 0.4), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    pegadas(g, x, y - r * 0.2, r * 0.85, col);
+  };
+  // bruxo
+  MOTIVO.verruma = function (g, x, y, r, col, I) {
+    g.save(); g.strokeStyle = col; g.lineWidth = 1.1 * _lw; g.lineCap = 'round';
+    g.beginPath();
+    for (var i = 0; i <= 40; i++) { var t = i / 40, a = t * TAU * 2.4, rr = r * 1.05 * (1 - t * 0.85); var px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.55 + t * r * 0.9 - r * 0.45; if (i) g.lineTo(px, py); else g.moveTo(px, py); }
+    g.stroke(); g.restore();
+    part(g, Ppoly([x - r * 0.18, y + r * 0.35, x + r * 0.18, y + r * 0.35, x, y + r * 1.05]), sh(col, 0.4), { flat: true, lw: 0.5, line: lineOf(I.deep) });
+  };
+  MOTIVO.praga = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.7, y - r * 0.1, x - r * 0.45, y - r * 0.75, x + r * 0.45, y - r * 0.75, x + r * 0.7, y - r * 0.1, x + r * 0.45, y + r * 0.4, x - r * 0.45, y + r * 0.4]),
+         '#e6e0d4', { k: 0.18, lw: 0.6, line: lineOf(I.deep) });
+    pontinho(g, x - r * 0.26, y - r * 0.15, r * 0.17, I.deep); pontinho(g, x + r * 0.26, y - r * 0.15, r * 0.17, I.deep);
+    part(g, Prr(x, y + r * 0.6, r * 0.5, r * 0.3, 1), '#e6e0d4', { flat: true, lw: 0.4 });
+    risco(g, [x - r * 0.9, y + r * 0.6, x - r * 1.05, y + r * 0.1, x - r * 0.85, y - r * 0.35], rgba(col, 0.75), 0.5, true);
+    risco(g, [x + r * 0.9, y + r * 0.6, x + r * 1.05, y + r * 0.1, x + r * 0.85, y - r * 0.35], rgba(col, 0.75), 0.5, true);
+  };
+  MOTIVO.circulo = function (g, x, y, r, col, I) { circuloRunas(g, x, y, r, col, I, 6); };
+  MOTIVO.anelMenires = function (g, x, y, r, col, I) {
+    arco(g, x, y + r * 0.3, r * 1.0, 0, TAU, rgba(col, 0.6), 0.5);
+    for (var i = 0; i < 5; i++) {
+      var a = -Math.PI * 0.95 + i * Math.PI * 0.95 / 2, xx = x + Math.cos(a) * r * 0.85, yy = y + r * 0.3 + Math.sin(a) * r * 0.5;
+      part(g, Prr(xx, yy - r * 0.25, r * 0.26, r * 0.6, 2), mx(col, '#6b6358', 0.5), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    }
+  };
+  MOTIVO.faisca = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x + r * 0.25, y - r * 1.05, x - r * 0.35, y + r * 0.05, x + r * 0.05, y + r * 0.05, x - r * 0.25, y + r * 1.05, x + r * 0.4, y - r * 0.15, x + r * 0.05, y - r * 0.15]),
+         sh(col, 0.35), { k: 0.12, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+  };
+  MOTIVO.faiscaGemea = function (g, x, y, r, col, I) {
+    part(g, Pstar(x - r * 0.42, y - r * 0.1, r * 0.5, 4, 0.35), sh(col, 0.3), { k: 0.14, lw: 0.5 });
+    part(g, Pstar(x + r * 0.42, y + r * 0.15, r * 0.6, 4, 0.35), col, { k: 0.14, lw: 0.5 });
+  };
+  MOTIVO.faiscaSalto = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 1.0, y + r * 0.5, x - r * 0.5, y - r * 0.4, x, y + r * 0.5, x + r * 0.5, y - r * 0.4, x + r * 1.0, y + r * 0.5], rgba(col, 0.7), 0.55, true);
+    part(g, Pstar(x - r * 0.5, y - r * 0.4, r * 0.3, 4, 0.35), sh(col, 0.4), { flat: true, lw: 0.4 });
+    part(g, Pstar(x + r * 0.5, y - r * 0.4, r * 0.38, 4, 0.35), col, { k: 0.12, lw: 0.4 });
+  };
+  MOTIVO.cone = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 0.9, y, x + r * 0.9, y - r * 0.85, x + r * 1.0, y, x + r * 0.9, y + r * 0.85]), rgba(col, 0.55), { flat: true, noline: true });
+    arco(g, x - r * 0.9, y, r * 1.1, -0.6, 0.6, col, 0.9); arco(g, x - r * 0.9, y, r * 1.6, -0.5, 0.5, rgba(col, 0.75), 0.7);
+    arco(g, x - r * 0.9, y, r * 0.6, -0.7, 0.7, sh(col, 0.4), 0.7);
+  };
+  MOTIVO.sopro = function (g, x, y, r, col, I) {
+    pontinho(g, x - r * 0.6, y - r * 0.1, r * 0.42, mx(col, '#e3c39c', 0.4));
+    part(g, Pel(x - r * 0.3, y, r * 0.1, r * 0.14), '#241c22', { flat: true, noline: true });
+    risco(g, [x - r * 0.1, y - r * 0.4, x + r * 0.5, y - r * 0.6, x + r * 1.0, y - r * 0.3], col, 0.7, true);
+    risco(g, [x - r * 0.05, y, x + r * 0.6, y - r * 0.1, x + r * 1.05, y + r * 0.1], col, 0.7, true);
+    risco(g, [x - r * 0.1, y + r * 0.4, x + r * 0.5, y + r * 0.55, x + r * 1.0, y + r * 0.35], col, 0.7, true);
+  };
+  MOTIVO.meteoro = function (g, x, y, r, col, I) {
+    risco(g, [x + r * 1.0, y - r * 1.0, x - r * 0.1, y + r * 0.1], rgba(col, 0.55), 1.3);
+    risco(g, [x + r * 0.95, y - r * 0.55, x + r * 0.2, y + r * 0.2], rgba(col, 0.4), 0.7);
+    risco(g, [x + r * 0.55, y - r * 0.95, x - r * 0.2, y - r * 0.2], rgba(col, 0.4), 0.7);
+    part(g, Pshard(x - r * 0.3, y + r * 0.3, r * 0.6, 'meteoro'), mx(col, '#6b5a4a', 0.4), { k: 0.28, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    glow(g, x - r * 0.3, y + r * 0.3, r * 0.7, I.glow, 0.45);
+  };
+  MOTIVO.meteoroGrande = function (g, x, y, r, col, I) {
+    arco(g, x - r * 0.25, y + r * 0.25, r * 1.05, 0, TAU, rgba(col, 0.6), 0.6);
+    MOTIVO.meteoro(g, x, y, r * 0.95, col, I);
+  };
+  MOTIVO.braseiro = function (g, x, y, r, col, I) {
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.95, y + r * 0.1); c2.quadraticCurveTo(x, y + r * 1.3, x + r * 0.95, y + r * 0.1); c2.closePath(); }, x, y + r * 0.5, r),
+         '#4a3a3a', { k: 0.26, lw: 0.6 });
+    part(g, Prr(x, y + r * 0.95, r * 0.5, r * 0.18, 2), '#4a3a3a', { k: 0.2, lw: 0.5 });
+    labareda(g, x - r * 0.3, y - r * 0.05, r * 0.45, col, I, -0.2);
+    labareda(g, x + r * 0.3, y - r * 0.1, r * 0.5, col, I, 0.25);
+  };
+  MOTIVO.pira = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y + r * 0.85, r * 1.5, r * 0.26, 2), '#6b4a2a', { k: 0.24, lw: 0.5 });
+    part(g, Prr(x, y + r * 0.6, r * 1.1, r * 0.26, 2), '#7a5632', { k: 0.24, lw: 0.5 });
+    labareda(g, x, y - r * 0.15, r * 0.75, col, I, 0.08);
+  };
+  MOTIVO.lanca = function (g, x, y, r, col, I) {
+    g.save(); g.translate(x, y); g.rotate(-0.78);
+    part(g, Prr(0, r * 0.3, r * 0.14, r * 1.5, 2), mx(col, '#6b4a2a', 0.5), { k: 0.25, lw: 0.5 });
+    part(g, Ppoly([0, -r * 1.15, r * 0.22, -r * 0.45, 0, -r * 0.6, -r * 0.22, -r * 0.45]), sh(col, 0.35), { k: 0.2, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    g.restore();
+  };
+  MOTIVO.sifao = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y - r * 0.55, r * 1.0, r * 0.4), col, { k: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Ppoly([x - r * 1.0, y - r * 0.55, x + r * 1.0, y - r * 0.55, x + r * 0.15, y + r * 1.05, x - r * 0.15, y + r * 1.05]), rgba(col, 0.75), { flat: true, lw: 0.5, line: lineOf(I.deep) });
+    arco(g, x, y - r * 0.1, r * 0.55, Math.PI, TAU, rgba('#ffffff', 0.5), 0.45); arco(g, x, y + r * 0.35, r * 0.3, Math.PI, TAU, rgba('#ffffff', 0.5), 0.45);
+  };
+  MOTIVO.onda = function (g, x, y, r, col, I) { ondaCrista(g, x, y + r * 0.1, r, col, I); };
+  MOTIVO.poca = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.2, r * 1.05, r * 0.62), col, { k: 0.2, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    arco(g, x, y + r * 0.2, r * 0.55, 0, TAU, rgba('#ffffff', 0.5), 0.45); arco(g, x, y + r * 0.2, r * 0.25, 0, TAU, rgba('#ffffff', 0.5), 0.45);
+    pontinho(g, x - r * 0.35, y - r * 0.55, r * 0.14, sh(col, 0.4)); pontinho(g, x + r * 0.45, y - r * 0.45, r * 0.1, sh(col, 0.4));
+  };
+  MOTIVO.dissolucao = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.5, y - r * 0.8, x + r * 0.5, y - r * 0.8, x + r * 0.6, y, x + r * 0.3, y + r * 0.3, x - r * 0.3, y + r * 0.3, x - r * 0.6, y]),
+         rgba(col, 0.8), { k: 0.18, lw: 0.5, line: lineOf(I.deep) });
+    [[-0.5, 0.65, 0.2], [0, 0.85, 0.16], [0.55, 0.6, 0.13], [-0.1, 0.5, 0.1]].forEach(function (b) {
+      part(g, Pel(x + b[0] * r, y + b[1] * r, b[2] * r, b[2] * r), col, { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    });
+  };
+  MOTIVO.cisterna = function (g, x, y, r, col, I) {
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.9, y + r * 0.9); c2.lineTo(x - r * 0.9, y - r * 0.2); c2.arc(x, y - r * 0.2, r * 0.9, Math.PI, 0); c2.lineTo(x + r * 0.9, y + r * 0.9); c2.closePath(); }, x, y, r),
+         mx(col, '#6b6358', 0.55), { k: 0.24, lw: 0.6, line: lineOf(I.deep) });
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.55, y + r * 0.9); c2.lineTo(x - r * 0.55, y); c2.arc(x, y, r * 0.55, Math.PI, 0); c2.lineTo(x + r * 0.55, y + r * 0.9); c2.closePath(); }, x, y, r * 0.6),
+         '#141a20', { flat: true, noline: true });
+    part(g, Prr(x, y + r * 0.62, r * 1.1, r * 0.5, 1), col, { k: 0.2, lw: 0.4 });
+    risco(g, [x - r * 0.5, y + r * 0.42, x - r * 0.25, y + r * 0.3, x, y + r * 0.42, x + r * 0.25, y + r * 0.3, x + r * 0.5, y + r * 0.42], sh(col, 0.5), 0.45, true);
+  };
+  MOTIVO.grilhao = function (g, x, y, r, col, I) {
+    arco(g, x, y + r * 0.1, r * 0.6, 0, TAU, mx(col, '#8a7a66', 0.4), 1.4);
+    risco(g, [x - r * 0.6, y + r * 0.1, x - r * 1.05, y + r * 0.6], mx(col, '#8a7a66', 0.4), 0.9);
+    risco(g, [x + r * 0.6, y + r * 0.1, x + r * 1.05, y - r * 0.4], mx(col, '#8a7a66', 0.4), 0.9);
+    risco(g, [x - r * 0.3, y - r * 0.4, x - r * 0.6, y - r * 1.0], col, 0.6, true); risco(g, [x + r * 0.2, y - r * 0.45, x + r * 0.45, y - r * 1.05], col, 0.6, true);
+  };
+  MOTIVO.fenda = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 1.05, y - r * 0.2, x - r * 0.5, y - r * 0.05, x - r * 0.2, y - r * 0.4, x + r * 0.2, y + r * 0.1, x + r * 0.6, y - r * 0.1, x + r * 1.05, y + r * 0.3,
+                   x + r * 0.6, y + r * 0.15, x + r * 0.2, y + r * 0.35, x - r * 0.2, y - r * 0.1, x - r * 0.5, y + r * 0.2]),
+         '#141a20', { flat: true, lw: 0.5, line: col });
+    glow(g, x, y, r * 0.8, I.glow, 0.3);
+  };
+  MOTIVO.estacas = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.6, r * 1.05, r * 0.4), mx(col, '#6b5a4a', 0.5), { k: 0.2, lw: 0.5 });
+    for (var i = 0; i < 5; i++) {
+      var xx = x - r * 0.8 + i * r * 0.4, h = r * (i % 2 ? 1.2 : 0.8);
+      part(g, Ppoly([xx - r * 0.17, y + r * 0.55, xx + r * 0.17, y + r * 0.55, xx, y + r * 0.55 - h]), i % 2 ? col : sh(col, 0.25), { k: 0.16, lw: 0.5, line: lineOf(I.deep) });
+    }
+  };
+  MOTIVO.lousa = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 0.5, y - r * 1.05, x - r * 0.5, y - r * 0.5], rgba(col, 0.55), 0.6); risco(g, [x + r * 0.5, y - r * 1.05, x + r * 0.5, y - r * 0.5], rgba(col, 0.55), 0.6);
+    part(g, Pblob([x - r * 1.0, y - r * 0.1, x + r * 1.0, y - r * 0.3, x + r * 0.95, y + r * 0.35, x - r * 0.95, y + r * 0.5]), mx(col, '#6b6358', 0.5), { k: 0.26, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    risco(g, [x - r * 0.8, y + r * 0.95, x - r * 0.5, y + r * 0.7], col, 0.5); risco(g, [x + r * 0.8, y + r * 0.95, x + r * 0.5, y + r * 0.7], col, 0.5);
+  };
+  MOTIVO.lousaEspinho = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 1.0, y + r * 0.5, x + r * 1.0, y + r * 0.4, x + r * 0.9, y + r * 0.95, x - r * 0.9, y + r * 1.0]), mx(col, '#6b6358', 0.5), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Ppoly([x - r * 0.35, y + r * 0.5, x + r * 0.35, y + r * 0.5, x + r * 0.1, y - r * 1.05]), col, { k: 0.2, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+  };
+  // curandeiro
+  MOTIVO.gota = function (g, x, y, r, col, I) {
+    part(g, Pdrop(x, y + r * 0.28, r * 0.78), col, { k: 0.18, hi: 0.22, line: lineOf(I.deep) });
+    part(g, Pstar(x + r * 0.62, y - r * 0.62, r * 0.28, 4, 0.35), '#fff6dc', { flat: true, noline: true });
+  };
+  MOTIVO.fonte = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y + r * 0.7, r * 1.4, r * 0.4, 3), mx(col, '#6b6358', 0.5), { k: 0.24, lw: 0.5, line: lineOf(I.deep) });
+    risco(g, [x, y + r * 0.5, x, y - r * 0.9], sh(col, 0.3), 0.9);
+    risco(g, [x, y - r * 0.9, x - r * 0.5, y - r * 0.2, x - r * 0.65, y + r * 0.4], col, 0.6, true);
+    risco(g, [x, y - r * 0.9, x + r * 0.5, y - r * 0.2, x + r * 0.65, y + r * 0.4], col, 0.6, true);
+    pontinho(g, x - r * 0.75, y + r * 0.5, r * 0.09, sh(col, 0.4)); pontinho(g, x + r * 0.75, y + r * 0.5, r * 0.09, sh(col, 0.4));
+  };
+  MOTIVO.puxao = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 1.0, y + r * 0.6, x - r * 0.3, y + r * 0.2, x + r * 0.4, y - r * 0.3, x + r * 1.0, y - r * 0.7], mx(col, '#c9a55e', 0.5), 0.7, true);
+    part(g, Ppoly([x - r * 1.05, y + r * 0.6, x - r * 0.45, y + r * 0.0, x - r * 0.3, y + r * 0.55, x - r * 0.45, y + r * 0.95]), col, { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    pontinho(g, x + r * 0.9, y - r * 0.7, r * 0.16, sh(col, 0.3));
+  };
+  MOTIVO.corrente = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 1.05, y + r * 0.1, x - r * 0.6, y - r * 0.6, x, y + r * 0.1, x + r * 0.6, y + r * 0.8, x + r * 1.05, y - r * 0.1], col, 1.1, true);
+    risco(g, [x - r * 1.05, y + r * 0.5, x - r * 0.6, y - r * 0.2, x, y + r * 0.5, x + r * 0.6, y + r * 1.0, x + r * 1.05, y + r * 0.3], rgba(col, 0.6), 0.6, true);
+    mais(g, x + r * 0.5, y - r * 0.55, r * 0.3, '#f6f0e0');
+  };
+  MOTIVO.folego = function (g, x, y, r, col, I) {
+    ventoCurva(g, x - r * 0.1, y + r * 0.1, r * 1.05, col, 1.0);
+    mais(g, x + r * 0.55, y - r * 0.55, r * 0.3, '#f6f0e0');
+  };
+  MOTIVO.folegoForja = function (g, x, y, r, col, I) {
+    ventoCurva(g, x - r * 0.2, y + r * 0.15, r * 0.95, col, 1.0);
+    labareda(g, x + r * 0.55, y - r * 0.35, r * 0.35, col, I, 0.1);
+  };
+  MOTIVO.folegoRoubado = function (g, x, y, r, col, I) {
+    ventoCurva(g, x + r * 0.2, y + r * 0.1, r * 0.95, col, 1.0);
+    part(g, Pel(x - r * 0.65, y - r * 0.55, r * 0.3, r * 0.42), mx(col, '#d8b0a8', 0.45), { k: 0.2, lw: 0.4 });
+    part(g, Pel(x - r * 0.2, y - r * 0.55, r * 0.3, r * 0.42), mx(col, '#d8b0a8', 0.45), { k: 0.2, lw: 0.4 });
+  };
+  MOTIVO.troca = function (g, x, y, r, col, I) {
+    arco(g, x, y, r * 0.85, Math.PI * 1.05, Math.PI * 1.95, col, 1.0);
+    arco(g, x, y, r * 0.85, Math.PI * 0.05, Math.PI * 0.95, sh(col, 0.3), 1.0);
+    part(g, Ppoly([x + r * 0.95, y - r * 0.05, x + r * 0.55, y - r * 0.45, x + r * 1.2, y - r * 0.5]), col, { flat: true, lw: 0.4 });
+    part(g, Ppoly([x - r * 0.95, y + r * 0.05, x - r * 0.55, y + r * 0.45, x - r * 1.2, y + r * 0.5]), sh(col, 0.3), { flat: true, lw: 0.4 });
+  };
+  MOTIVO.brasa = function (g, x, y, r, col, I) {
+    part(g, Pshard(x, y + r * 0.2, r * 0.75, 'brasa'), '#3a2a26', { k: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    glow(g, x, y + r * 0.1, r * 0.9, I.glow, 0.55);
+    risco(g, [x - r * 0.4, y + r * 0.3, x, y - r * 0.1, x + r * 0.35, y + r * 0.35], col, 0.6, true);
+    part(g, Pflame(x, y - r * 0.15, r * 0.25, r * 0.7, 0.1), sh(col, 0.3), { k: 0.14, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.anelCinzas = function (g, x, y, r, col, I) {
+    arco(g, x, y + r * 0.2, r * 0.95, 0, TAU, col, 1.2);
+    for (var i = 0; i < 6; i++) { var a = i / 6 * TAU + 0.3; part(g, Pflame(x + Math.cos(a) * r * 0.95, y + r * 0.2 + Math.sin(a) * r * 0.5 + r * 0.15, r * 0.14, r * 0.42, 0), col, { flat: true, lw: 0.35, line: lineOf(I.deep) }); }
+  };
+  MOTIVO.coracao = function (g, x, y, r, col, I) {
+    part(g, tag(function (c2) {
+      c2.beginPath(); c2.moveTo(x, y + r * 0.95);
+      c2.bezierCurveTo(x - r * 1.3, y, x - r * 0.6, y - r * 1.1, x, y - r * 0.4);
+      c2.bezierCurveTo(x + r * 0.6, y - r * 1.1, x + r * 1.3, y, x, y + r * 0.95); c2.closePath();
+    }, x, y, r), mx(col, '#d04a4a', 0.4), { k: 0.2, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pflame(x, y - r * 0.35, r * 0.2, r * 0.6, 0.1), sh(col, 0.4), { flat: true, lw: 0.35, line: lineOf(I.deep) });
+  };
+  MOTIVO.chamaCuida = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y + r * 0.55, r * 0.5, r * 0.9, 2), '#f2e8d0', { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    labareda(g, x, y - r * 0.2, r * 0.42, col, I, 0.1);
+    pontinho(g, x - r * 0.75, y - r * 0.5, r * 0.1, '#fff6dc'); pontinho(g, x + r * 0.8, y - r * 0.2, r * 0.08, '#fff6dc');
+  };
+  MOTIVO.compressa = function (g, x, y, r, col, I) {
+    g.save(); g.translate(x, y); g.rotate(-0.5);
+    part(g, Prr(0, 0, r * 2.0, r * 0.7, r * 0.3), '#f2e8d0', { k: 0.18, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Prr(0, 0, r * 0.8, r * 0.7, 2), mx(col, '#f2e8d0', 0.35), { flat: true, noline: true });
+    g.restore();
+    mais(g, x, y, r * 0.26, col);
+  };
+  MOTIVO.mao = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.55, y + r * 1.0, x - r * 0.6, y + r * 0.1, x - r * 0.1, y - r * 0.2, x + r * 0.55, y, x + r * 0.6, y + r * 0.5, x + r * 0.4, y + r * 1.0]),
+         '#e8c7a0', { k: 0.22, lw: 0.6, line: lineOf('#a2532a') });
+    for (var i = 0; i < 4; i++) part(g, Prr(x - r * 0.45 + i * r * 0.3, y - r * 0.15, r * 0.22, r * 0.55, 2), '#e8c7a0', { k: 0.2, lw: 0.5, line: lineOf('#a2532a') });
+    glow(g, x, y - r * 0.6, r * 0.8, I.glow, 0.6);
+    part(g, Pstar(x, y - r * 0.65, r * 0.3, 4, 0.35), '#fff6dc', { flat: true, noline: true });
+  };
+  MOTIVO.bencao = function (g, x, y, r, col, I) {
+    glow(g, x, y, r * 1.1, I.glow, 0.5);
+    part(g, Pstar(x, y, r * 0.95, 4, 0.32), sh(col, 0.3), { k: 0.14, hi: 0.3, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pstar(x + r * 0.7, y - r * 0.7, r * 0.28, 4, 0.35), '#fff6dc', { flat: true, noline: true });
+    part(g, Pstar(x - r * 0.75, y + r * 0.55, r * 0.2, 4, 0.35), '#fff6dc', { flat: true, noline: true });
+  };
+  MOTIVO.raiz = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.85, r * 0.95, r * 0.28), mx(col, '#6b5a4a', 0.5), { k: 0.2, lw: 0.5 });
+    risco(g, [x - r * 0.2, y + r * 0.8, x - r * 0.55, y + r * 0.2, x - r * 0.95, y - r * 0.3], col, 0.9, true);
+    risco(g, [x, y + r * 0.8, x + r * 0.1, y, x - r * 0.1, y - r * 0.95], col, 1.0, true);
+    risco(g, [x + r * 0.2, y + r * 0.8, x + r * 0.6, y + r * 0.3, x + r * 0.95, y - r * 0.45], col, 0.9, true);
+    risco(g, [x - r * 0.55, y + r * 0.2, x - r * 0.3, y - r * 0.3], rgba(col, 0.8), 0.5);
+  };
+  MOTIVO.redoma = function (g, x, y, r, col, I) {
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.95, y + r * 0.5); c2.arc(x, y + r * 0.5, r * 0.95, Math.PI, 0); c2.closePath(); }, x, y, r),
+         rgba(col, 0.55), { flat: true, lw: 0.8, line: col });
+    part(g, Prr(x, y + r * 0.62, r * 2.1, r * 0.26, 2), mx(col, '#6b5a4a', 0.4), { k: 0.2, lw: 0.5 });
+    arco(g, x, y + r * 0.5, r * 0.6, Math.PI + 0.3, TAU - 0.3, rgba('#ffffff', 0.5), 0.45);
+  };
+  MOTIVO.jardim = function (g, x, y, r, col, I) {
+    MOTIVO.redoma(g, x, y, r, col, I);
+    part(g, Pfeather(x - r * 0.35, y + r * 0.35, r * 0.6, -1.9), sh(col, 0.2), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    part(g, Pfeather(x + r * 0.1, y + r * 0.35, r * 0.55, -1.2), sh(col, 0.35), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.pedraAmparo = function (g, x, y, r, col, I) {
+    part(g, Pshard(x, y + r * 0.15, r * 0.85, 'amparo'), mx(col, '#8a8070', 0.5), { k: 0.28, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    mais(g, x + r * 0.05, y + r * 0.1, r * 0.34, '#f6f0e0');
+  };
+  MOTIVO.casca = function (g, x, y, r, col, I) {
+    escudoForma(g, x, y, r, mx(col, '#8a6a4a', 0.4), I);
+    risco(g, [x - r * 0.45, y - r * 0.5, x - r * 0.3, y + r * 0.1, x - r * 0.45, y + r * 0.55], lineOf(I.deep), 0.45, true);
+    risco(g, [x, y - r * 0.6, x + r * 0.12, y, x, y + r * 0.7], lineOf(I.deep), 0.45, true);
+    risco(g, [x + r * 0.45, y - r * 0.5, x + r * 0.32, y + r * 0.1, x + r * 0.45, y + r * 0.55], lineOf(I.deep), 0.45, true);
+  };
+  MOTIVO.peleBrasa = function (g, x, y, r, col, I) {
+    figura(g, x, y + r * 0.1, r, mx(col, '#e3c39c', 0.3), I);
+    for (var i = 0; i < 4; i++) { var a = -2.6 + i * 0.75; part(g, Pflame(x + Math.cos(a) * r * 0.75, y + r * 0.2 + Math.sin(a) * r * 0.55, r * 0.14, r * 0.45, 0.05), col, { flat: true, lw: 0.35, line: lineOf(I.deep) }); }
+  };
+  MOTIVO.couroFervente = function (g, x, y, r, col, I) {
+    figura(g, x, y + r * 0.1, r, mx(col, '#8a5a3a', 0.4), I);
+    pontinho(g, x - r * 0.55, y - r * 0.6, r * 0.13, sh(col, 0.4)); pontinho(g, x + r * 0.6, y - r * 0.45, r * 0.1, sh(col, 0.4)); pontinho(g, x + r * 0.35, y - r * 0.95, r * 0.08, sh(col, 0.4));
+    risco(g, [x - r * 0.9, y + r * 0.3, x - r * 0.55, y + r * 0.1, x - r * 0.3, y + r * 0.4], sh(col, 0.5), 0.45, true);
+  };
+  // espadachim
+  MOTIVO.nevoa = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 1.0, y + r * 0.3, x - r * 0.7, y - r * 0.5, x + r * 0.1, y - r * 0.7, x + r * 0.9, y - r * 0.3, x + r * 1.0, y + r * 0.4, x + r * 0.3, y + r * 0.7, x - r * 0.4, y + r * 0.75]),
+         rgba(col, 0.6), { flat: true, lw: 0.5, line: rgba(col, 0.9) });
+    part(g, Pblob([x - r * 0.5, y + r * 0.1, x - r * 0.1, y - r * 0.3, x + r * 0.5, y - r * 0.15, x + r * 0.45, y + r * 0.35, x - r * 0.1, y + r * 0.45]), rgba('#ffffff', 0.35), { flat: true, noline: true });
+    pontinho(g, x - r * 0.18, y + r * 0.05, r * 0.08, '#241c22'); pontinho(g, x + r * 0.18, y + r * 0.05, r * 0.08, '#241c22');
+  };
+  MOTIVO.sombra = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.4, y - r * 0.4, x + r * 0.4, y - r * 0.4, x + r * 0.5, y + r * 0.5, x + r * 0.1, y + r * 1.0, x - r * 0.1, y + r * 1.0, x - r * 0.5, y + r * 0.5]),
+         '#1a1622', { k: 0.1, lw: 0.6, line: rgba(col, 0.8) });
+    pontinho(g, x, y - r * 0.65, r * 0.26, '#1a1622');
+    pontinho(g, x - r * 0.1, y - r * 0.62, r * 0.06, col); pontinho(g, x + r * 0.1, y - r * 0.62, r * 0.06, col);
+    risco(g, [x - r * 1.05, y + r * 0.95, x + r * 1.05, y + r * 0.95], rgba(col, 0.5), 0.6);
+  };
+  MOTIVO.emboscada = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 1.05, y + r * 0.4, x - r * 0.5, y + r * 0.1, x + r * 0.5, y + r * 0.1, x + r * 1.05, y + r * 0.4, x + r * 1.0, y + r * 1.0, x - r * 1.0, y + r * 1.0]),
+         mx(col, '#6b5a4a', 0.55), { k: 0.22, lw: 0.6, line: lineOf(I.deep) });
+    pontinho(g, x - r * 0.22, y + r * 0.35, r * 0.1, sh(col, 0.5)); pontinho(g, x + r * 0.22, y + r * 0.35, r * 0.1, sh(col, 0.5));
+    espada(g, x + r * 0.55, y - r * 0.35, r * 0.55, col, I, -0.3, 1.0);
+  };
+  MOTIVO.veias = function (g, x, y, r, col, I) {
+    MOTIVO.coracao(g, x, y + r * 0.1, r * 0.85, col, I);
+    risco(g, [x - r * 0.3, y + r * 0.3, x - r * 0.1, y, x + r * 0.15, y + r * 0.25, x + r * 0.3, y - r * 0.05], sh(col, 0.5), 0.45, true);
+  };
+  MOTIVO.danca = function (g, x, y, r, col, I) {
+    figura(g, x, y, r * 0.9, sh(col, -0.1), I);
+    arco(g, x, y + r * 0.15, r * 1.05, -2.8, -0.4, rgba(col, 0.8), 0.6);
+    for (var i = 0; i < 5; i++) { var a = -2.6 + i * 0.55; part(g, Pstar(x + Math.cos(a) * r * 1.0, y + r * 0.15 + Math.sin(a) * r * 1.0, r * 0.14, 4, 0.35), sh(col, 0.4), { flat: true, noline: true }); }
+  };
+  // invocador
+  MOTIVO.invocar = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.45, r * 0.95, col, I, 5);
+    glow(g, x, y - r * 0.1, r * 0.8, I.glow, 0.45);
+    figura(g, x, y - r * 0.25, r * 0.85, sh(col, 0.3), I);
+  };
+  MOTIVO.invocarAve = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.55, r * 0.9, col, I, 5);
+    part(g, Pblob([x - r * 0.25, y - r * 0.25, x + r * 0.3, y - r * 0.45, x + r * 0.45, y - r * 0.05, x + r * 0.1, y + r * 0.2]), sh(col, 0.2), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Pfeather(x - r * 0.05, y - r * 0.2, r * 0.95, -2.6), col, { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    part(g, Pfeather(x + r * 0.1, y - r * 0.2, r * 0.95, -0.5), col, { flat: true, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.invocarCao = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.55, r * 0.9, col, I, 5);
+    part(g, Pblob([x - r * 0.6, y - r * 0.2, x - r * 0.3, y - r * 0.65, x + r * 0.35, y - r * 0.6, x + r * 0.7, y + r * 0.1, x + r * 0.3, y + r * 0.3, x - r * 0.5, y + r * 0.25]), col, { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Ppoly([x - r * 0.55, y - r * 0.45, x - r * 0.65, y - r * 1.0, x - r * 0.2, y - r * 0.65]), sh(col, -0.1), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    pontinho(g, x + r * 0.1, y - r * 0.3, r * 0.08, '#fff6dc'); pontinho(g, x + r * 0.62, y + r * 0.05, r * 0.07, '#241c22');
+  };
+  MOTIVO.invocarGolem = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.6, r * 0.9, col, I, 5);
+    part(g, Prr(x, y - r * 0.1, r * 0.95, r * 0.8, 3), mx(col, '#6b6358', 0.5), { k: 0.26, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Prr(x, y - r * 0.75, r * 0.5, r * 0.4, 2), mx(col, '#6b6358', 0.5), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Prr(x - r * 0.75, y - r * 0.05, r * 0.3, r * 0.7, 2), mx(col, '#6b6358', 0.45), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Prr(x + r * 0.75, y - r * 0.05, r * 0.3, r * 0.7, 2), mx(col, '#6b6358', 0.45), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    pontinho(g, x - r * 0.12, y - r * 0.75, r * 0.07, col); pontinho(g, x + r * 0.12, y - r * 0.75, r * 0.07, col);
+  };
+  MOTIVO.invocarColosso = function (g, x, y, r, col, I) {
+    MOTIVO.invocarGolem(g, x, y, r, col, I);
+    part(g, Ppoly([x - r * 0.45, y - r * 0.95, x - r * 0.3, y - r * 1.25, x - r * 0.12, y - r * 0.98, x, y - r * 1.3, x + r * 0.12, y - r * 0.98, x + r * 0.3, y - r * 1.25, x + r * 0.45, y - r * 0.95]), col, { flat: true, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.invocarNinfa = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.55, r * 0.9, col, I, 5);
+    part(g, Pdrop(x, y - r * 0.05, r * 0.55), col, { k: 0.18, hi: 0.25, lw: 0.5, line: lineOf(I.deep) });
+    pontinho(g, x, y - r * 0.75, r * 0.2, sh(col, 0.4));
+  };
+  MOTIVO.invocarAfogado = function (g, x, y, r, col, I) {
+    circuloRunas(g, x, y + r * 0.55, r * 0.9, col, I, 5);
+    figura(g, x, y - r * 0.25, r * 0.85, mx(col, '#4a6a7a', 0.5), I);
+    risco(g, [x - r * 0.7, y + r * 0.05, x - r * 0.4, y - r * 0.15, x - r * 0.1, y + r * 0.05, x + r * 0.2, y - r * 0.15, x + r * 0.5, y + r * 0.05], sh(col, 0.5), 0.45, true);
+  };
+  MOTIVO.revoada = function (g, x, y, r, col, I) {
+    [[-0.5, -0.5, 0.55], [0.35, -0.75, 0.45], [0.1, 0.1, 0.65], [-0.6, 0.45, 0.4]].forEach(function (b) {
+      var bx = x + b[0] * r, by = y + b[1] * r, s = b[2];
+      risco(g, [bx - r * 0.45 * s, by - r * 0.25 * s, bx, by + r * 0.1 * s, bx + r * 0.45 * s, by - r * 0.25 * s], col, 0.7 * s + 0.3, true);
+    });
+  };
+  MOTIVO.pacto = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y, r * 1.5, r * 1.9, 2), '#f2e8d0', { k: 0.16, lw: 0.6, line: lineOf('#a2532a') });
+    part(g, Prr(x, y - r * 0.9, r * 1.6, r * 0.3, r * 0.15), '#e6d8b8', { k: 0.2, lw: 0.4, line: lineOf('#a2532a') });
+    risco(g, [x - r * 0.5, y - r * 0.35, x + r * 0.5, y - r * 0.35], rgba('#6b4a2a', 0.6), 0.4);
+    risco(g, [x - r * 0.5, y - r * 0.05, x + r * 0.3, y - r * 0.05], rgba('#6b4a2a', 0.6), 0.4);
+    pontinho(g, x + r * 0.25, y + r * 0.5, r * 0.3, col); part(g, Pstar(x + r * 0.25, y + r * 0.5, r * 0.18, 4, 0.4), sh(col, 0.5), { flat: true, noline: true });
+  };
+  MOTIVO.armadilha = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.3, r * 0.98, r * 0.42), mx(col, '#6b5a4a', 0.45), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    for (var i = 0; i < 5; i++) part(g, Ppoly([x - r * 0.8 + i * r * 0.4, y + r * 0.24, x - r * 0.62 + i * r * 0.4, y - r * 0.5, x - r * 0.44 + i * r * 0.4, y + r * 0.24]), '#f2ead8', { k: 0.14, lw: 0.4 });
+    pontinho(g, x, y + r * 0.3, r * 0.14, col);
+  };
+  MOTIVO.armadilhaPlantar = function (g, x, y, r, col, I) {
+    MOTIVO.armadilha(g, x, y + r * 0.1, r * 0.88, col, I);
+    part(g, Prr(x + r * 0.6, y - r * 0.65, r * 0.4, r * 0.4, 1.5), sh(col, 0.3), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    mais(g, x + r * 0.6, y - r * 0.65, r * 0.16, '#fff6dc');
+  };
+  MOTIVO.verbo = function (g, x, y, r, col, I) {
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.9, y - r * 0.7); c2.lineTo(x + r * 0.9, y - r * 0.7); c2.lineTo(x + r * 0.9, y + r * 0.3); c2.lineTo(x - r * 0.1, y + r * 0.3); c2.lineTo(x - r * 0.6, y + r * 0.9); c2.lineTo(x - r * 0.5, y + r * 0.3); c2.lineTo(x - r * 0.9, y + r * 0.3); c2.closePath(); }, x, y, r),
+         '#f2e8d0', { k: 0.16, lw: 0.6, line: lineOf('#a2532a') });
+    part(g, Pdiamond(x, y - r * 0.2, r * 0.55, r * 0.7), col, { k: 0.2, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.alarme = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 0.18, y + r * 1.0, x + r * 0.18, y + r * 1.0, x + r * 0.1, y - r * 0.3, x - r * 0.1, y - r * 0.3]), mx(col, '#6b4a2a', 0.55), { k: 0.24, lw: 0.5 });
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.5, y - r * 0.2); c2.quadraticCurveTo(x - r * 0.5, y - r * 1.0, x, y - r * 1.05); c2.quadraticCurveTo(x + r * 0.5, y - r * 1.0, x + r * 0.5, y - r * 0.2); c2.closePath(); }, x, y - r * 0.6, r * 0.5),
+         mx(col, '#c9a55e', 0.55), { k: 0.22, hi: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    arco(g, x, y - r * 0.6, r * 0.8, -0.9, -0.3, col, 0.5); arco(g, x, y - r * 0.6, r * 0.8, Math.PI + 0.3, Math.PI + 0.9, col, 0.5);
+  };
+  // minotauro
+  MOTIVO.muro = function (g, x, y, r, col, I) { muro(g, x, y, r, col, I, 3); };
+  MOTIVO.muroChama = function (g, x, y, r, col, I) {
+    muro(g, x, y + r * 0.25, r * 0.9, col, I, 2);
+    labareda(g, x - r * 0.45, y - r * 0.45, r * 0.3, col, I, -0.1); labareda(g, x + r * 0.35, y - r * 0.5, r * 0.35, col, I, 0.15);
+  };
+  MOTIVO.muroAgua = function (g, x, y, r, col, I) {
+    muro(g, x, y + r * 0.2, r * 0.9, col, I, 2);
+    risco(g, [x - r * 1.0, y - r * 0.5, x - r * 0.6, y - r * 0.8, x - r * 0.2, y - r * 0.5, x + r * 0.2, y - r * 0.8, x + r * 0.6, y - r * 0.5, x + r * 1.0, y - r * 0.8], col, 0.7, true);
+  };
+  MOTIVO.muroVento = function (g, x, y, r, col, I) {
+    muro(g, x, y + r * 0.25, r * 0.85, col, I, 2);
+    ventoCurva(g, x + r * 0.35, y - r * 0.6, r * 0.5, col, 0.8);
+  };
+  MOTIVO.cercaVoa = function (g, x, y, r, col, I) {
+    for (var i = -1; i <= 1; i++) part(g, Prr(x + i * r * 0.6, y + r * 0.1, r * 0.22, r * 1.1, 2), mx(col, '#8a7a66', 0.4), { k: 0.24, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Prr(x, y - r * 0.2, r * 1.9, r * 0.18, 1), mx(col, '#8a7a66', 0.35), { k: 0.2, lw: 0.4 });
+    part(g, Prr(x, y + r * 0.35, r * 1.9, r * 0.18, 1), mx(col, '#8a7a66', 0.35), { k: 0.2, lw: 0.4 });
+    risco(g, [x - r * 1.05, y + r * 0.95, x - r * 0.6, y + r * 0.95], rgba(col, 0.7), 0.5); risco(g, [x + r * 0.5, y + r * 0.95, x + r * 1.05, y + r * 0.95], rgba(col, 0.7), 0.5);
+  };
+  MOTIVO.menir = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.85, r * 0.8, r * 0.26), mx(col, '#6b5a4a', 0.5), { k: 0.2, lw: 0.5 });
+    part(g, Pblob([x - r * 0.4, y + r * 0.8, x - r * 0.45, y - r * 0.4, x - r * 0.1, y - r * 1.05, x + r * 0.35, y - r * 0.8, x + r * 0.45, y + r * 0.8]), mx(col, '#8a8070', 0.5), { k: 0.28, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pdiamond(x, y - r * 0.1, r * 0.3, r * 0.45), col, { flat: true, lw: 0.35, line: lineOf(I.deep) });
+  };
+  MOTIVO.cerco = function (g, x, y, r, col, I) {
+    arco(g, x, y + r * 0.2, r * 1.0, 0, TAU, mx(col, '#8a7a66', 0.3), 1.6);
+    for (var i = 0; i < 8; i++) { var a = i / 8 * TAU; part(g, Prr(x + Math.cos(a) * r * 1.0, y + r * 0.2 + Math.sin(a) * r * 0.6, r * 0.3, r * 0.36, 1), mx(col, '#8a7a66', 0.4), { k: 0.24, lw: 0.4, line: lineOf(I.deep) }); }
+    pontinho(g, x, y + r * 0.1, r * 0.2, col);
+  };
+  MOTIVO.labirinto = function (g, x, y, r, col, I) {
+    var m = mx(col, '#8a7a66', 0.35);
+    risco(g, [x - r, y - r, x + r, y - r, x + r, y + r, x - r, y + r, x - r, y - r * 0.4], m, 0.9);
+    risco(g, [x - r * 0.45, y - r * 0.45, x + r * 0.45, y - r * 0.45, x + r * 0.45, y + r * 0.45, x - r * 0.4, y + r * 0.45], m, 0.9);
+    risco(g, [x - r * 0.45, y - r * 0.45, x - r * 0.45, y + r * 0.05], m, 0.9);
+    pontinho(g, x, y, r * 0.16, col);
+  };
+  MOTIVO.escudo = function (g, x, y, r, col, I) {
+    escudoForma(g, x, y, r, col, I);
+    risco(g, [x, y - r * 0.6, x, y + r * 0.6], sh(col, -0.3), 0.8);
+  };
+  MOTIVO.escudoAsa = function (g, x, y, r, col, I) {
+    part(g, Pfeather(x - r * 0.55, y - r * 0.1, r * 0.8, -2.5), sh(col, 0.3), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    part(g, Pfeather(x + r * 0.55, y - r * 0.1, r * 0.8, -0.65), sh(col, 0.3), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    escudoForma(g, x, y, r * 0.85, col, I);
+  };
+  MOTIVO.escudoErrante = function (g, x, y, r, col, I) {
+    escudoForma(g, x + r * 0.2, y, r * 0.85, col, I);
+    risco(g, [x - r * 1.05, y - r * 0.35, x - r * 0.55, y - r * 0.35], sh(col, 0.45), 0.55); risco(g, [x - r * 1.0, y + r * 0.05, x - r * 0.5, y + r * 0.05], sh(col, 0.45), 0.55);
+    risco(g, [x - r * 1.05, y + r * 0.45, x - r * 0.6, y + r * 0.45], sh(col, 0.45), 0.55);
+  };
+  MOTIVO.fundacao = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y + r * 0.7, r * 2.0, r * 0.45, 2), mx(col, '#8a7a66', 0.5), { k: 0.24, lw: 0.5, line: lineOf(I.deep) });
+    escudoForma(g, x, y - r * 0.15, r * 0.8, col, I);
+  };
+  MOTIVO.bigorna = function (g, x, y, r, col, I) {
+    var m = mx(col, '#5a5a62', 0.55);
+    part(g, Prr(x, y + r * 0.8, r * 1.3, r * 0.3, 2), m, { k: 0.26, lw: 0.5 });
+    part(g, Prr(x, y + r * 0.35, r * 0.6, r * 0.6, 2), m, { k: 0.26, lw: 0.5 });
+    part(g, Pblob([x - r * 1.0, y - r * 0.3, x + r * 0.5, y - r * 0.45, x + r * 1.05, y - r * 0.2, x + r * 0.5, y + r * 0.15, x - r * 0.6, y + r * 0.15]), m, { k: 0.26, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    glow(g, x + r * 0.3, y - r * 0.45, r * 0.5, I.glow, 0.5);
+  };
+  MOTIVO.cone_chifres = function (g, x, y, r, col, I) {
+    MOTIVO.chifres(g, x - r * 0.2, y, r * 0.8, col, I);
+    arco(g, x + r * 0.2, y, r * 1.1, -0.55, 0.55, rgba(col, 0.8), 0.7); arco(g, x + r * 0.2, y, r * 1.45, -0.45, 0.45, rgba(col, 0.55), 0.55);
+  };
+  // formas genéricas (fusão, monstros, pets, itens)
+  MOTIVO.feixe = function (g, x, y, r, col, I) {
+    glow(g, x, y, r * 1.1, I.glow, 0.35);
+    part(g, Ppoly([x - r * 1.1, y - r * 0.25, x + r * 1.1, y - r * 0.06, x + r * 1.1, y + r * 0.06, x - r * 1.1, y + r * 0.25]), col, { k: 0.1, lw: 0.5, line: lineOf(I.deep) });
+    risco(g, [x - r * 1.0, y, x + r * 1.0, y], rgba('#ffffff', 0.6), 0.45);
+    part(g, Pstar(x - r * 0.95, y, r * 0.35, 4, 0.3), sh(col, 0.4), { flat: true, noline: true });
+  };
+  MOTIVO.piscar = function (g, x, y, r, col, I) {
+    part(g, Pstar(x - r * 0.45, y + r * 0.2, r * 0.55, 4, 0.3), rgba(col, 0.5), { flat: true, noline: true });
+    part(g, Pstar(x + r * 0.4, y - r * 0.25, r * 0.85, 4, 0.3), col, { k: 0.12, hi: 0.3, lw: 0.5, line: lineOf(I.deep) });
+    risco(g, [x - r * 0.2, y + r * 0.05, x + r * 0.05, y - r * 0.1], rgba('#ffffff', 0.5), 0.4);
+  };
+  MOTIVO.gancho = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 1.0, y - r * 0.9, x - r * 0.4, y - r * 0.4, x, y + r * 0.1], mx(col, '#c9a55e', 0.4), 0.7, true);
+    g.save(); g.beginPath(); g.arc(x + r * 0.25, y + r * 0.35, r * 0.55, -Math.PI * 0.5, Math.PI * 0.9); g.strokeStyle = sh(col, 0.2); g.lineWidth = 1.4 * _lw; g.lineCap = 'round'; g.stroke(); g.restore();
+    part(g, Ppoly([x - r * 0.35, y + r * 0.55, x - r * 0.25, y + r * 1.05, x + r * 0.05, y + r * 0.7]), sh(col, 0.2), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.maldicao = function (g, x, y, r, col, I) {
+    part(g, Pstar(x, y, r, 5, 0.42), rgba(col, 0.2), { flat: true, lw: 0.7, line: col });
+    arco(g, x, y, r * 1.0, 0, TAU, rgba(col, 0.8), 0.5);
+    pontinho(g, x, y, r * 0.2, col);
+  };
+  MOTIVO.bola = function (g, x, y, r, col, I) {
+    glow(g, x, y, r * 1.1, I.glow, 0.45);
+    pontinho(g, x, y, r * 0.75, col);
+    arco(g, x, y, r * 0.75, 0, TAU, lineOf(I.deep), 0.6);
+    pontinho(g, x - r * 0.25, y - r * 0.28, r * 0.22, rgba('#ffffff', 0.55));
+  };
+  MOTIVO.cruz = function (g, x, y, r, col, I) {
+    part(g, Ppoly([x - r * 0.2, y - r * 1.05, x + r * 0.2, y - r * 1.05, x + r * 0.2, y - r * 0.2, x + r * 1.05, y - r * 0.2, x + r * 1.05, y + r * 0.2, x + r * 0.2, y + r * 0.2,
+                   x + r * 0.2, y + r * 1.05, x - r * 0.2, y + r * 1.05, x - r * 0.2, y + r * 0.2, x - r * 1.05, y + r * 0.2, x - r * 1.05, y - r * 0.2, x - r * 0.2, y - r * 0.2]),
+         col, { k: 0.2, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pstar(x, y, r * 0.35, 4, 0.4), sh(col, 0.5), { flat: true, noline: true });
+  };
+  MOTIVO.terremoto = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.5, r * 1.05, r * 0.45), mx(col, '#6b5a4a', 0.45), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    cristal(g, x - r * 0.35, y, r * 0.55, col, I);
+    cristal(g, x + r * 0.4, y - r * 0.1, r * 0.4, sh(col, 0.15), I);
+    risco(g, [x - r * 1.0, y + r * 0.85, x - r * 0.6, y + r * 0.7, x - r * 0.3, y + r * 0.95], lineOf(I.deep), 0.45, true);
+  };
+  MOTIVO.pedra = function (g, x, y, r, col, I) { cristal(g, x, y, r * 0.9, col, I); };
+  MOTIVO.chama = function (g, x, y, r, col, I) { labareda(g, x, y, r * 0.75, col, I, 0.08); };
+  MOTIVO.aura = function (g, x, y, r, col, I) {
+    glow(g, x, y, r * 1.2, I.glow, 0.5);
+    arco(g, x, y + r * 0.1, r * 1.05, 0, TAU, rgba(col, 0.7), 0.6);
+    figura(g, x, y + r * 0.05, r * 0.85, sh(col, 0.2), I);
+  };
+  // --- os que faltavam depois da primeira prova (variantes dentro da mesma classe e da mesma barra de fusão)
+  MOTIVO.brisa = function (g, x, y, r, col, I) {
+    ventoCurva(g, x - r * 0.25, y + r * 0.2, r * 0.9, col, 0.9);
+    ventoCurva(g, x + r * 0.45, y - r * 0.45, r * 0.5, rgba(col, 0.8), 0.6);
+    part(g, Pfeather(x + r * 0.15, y + r * 0.55, r * 0.55, -0.6), sh(col, 0.35), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+    part(g, Pfeather(x - r * 0.8, y - r * 0.35, r * 0.45, -2.2), sh(col, 0.35), { flat: true, lw: 0.4, line: lineOf(I.deep) });
+  };
+  MOTIVO.respiracao = function (g, x, y, r, col, I) {
+    part(g, Pblob([x - r * 0.95, y - r * 0.3, x - r * 0.55, y - r * 0.75, x - r * 0.15, y - r * 0.4, x - r * 0.15, y + r * 0.7, x - r * 0.6, y + r * 0.85, x - r * 1.0, y + r * 0.45]),
+         mx(col, '#d8b0a8', 0.45), { k: 0.2, hi: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    part(g, Pblob([x + r * 0.95, y - r * 0.3, x + r * 0.55, y - r * 0.75, x + r * 0.15, y - r * 0.4, x + r * 0.15, y + r * 0.7, x + r * 0.6, y + r * 0.85, x + r * 1.0, y + r * 0.45]),
+         mx(col, '#d8b0a8', 0.45), { k: 0.2, hi: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    risco(g, [x, y - r * 1.0, x, y - r * 0.3], sh(col, 0.3), 0.8);
+    mais(g, x, y + r * 0.2, r * 0.22, '#f6f0e0');
+  };
+  function armadilhaBase(g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.45, r * 0.95, r * 0.36), mx(col, '#6b5a4a', 0.45), { k: 0.2, lw: 0.5, line: lineOf(I.deep) });
+    for (var i = 0; i < 5; i++) part(g, Ppoly([x - r * 0.78 + i * r * 0.39, y + r * 0.4, x - r * 0.6 + i * r * 0.39, y - r * 0.2, x - r * 0.42 + i * r * 0.39, y + r * 0.4]), '#f2ead8', { k: 0.14, lw: 0.4 });
+  }
+  MOTIVO.armadilhaPira = function (g, x, y, r, col, I) {
+    armadilhaBase(g, x, y + r * 0.1, r, col, I);
+    labareda(g, x - r * 0.35, y - r * 0.45, r * 0.3, col, I, -0.15); labareda(g, x + r * 0.3, y - r * 0.55, r * 0.36, col, I, 0.2);
+  };
+  MOTIVO.armadilhaSorvedouro = function (g, x, y, r, col, I) {
+    armadilhaBase(g, x, y + r * 0.15, r, col, I);
+    g.save(); g.strokeStyle = col; g.lineWidth = 0.9 * _lw; g.lineCap = 'round'; Pswirl(x, y - r * 0.45, r * 0.6, 1.5)(g); g.stroke(); g.restore();
+  };
+  MOTIVO.armadilhaTremor = function (g, x, y, r, col, I) {
+    armadilhaBase(g, x, y + r * 0.15, r, col, I);
+    risco(g, [x - r * 1.05, y - r * 0.6, x - r * 0.6, y - r * 0.4, x - r * 0.3, y - r * 0.75, x + r * 0.1, y - r * 0.45, x + r * 0.5, y - r * 0.8, x + r * 1.05, y - r * 0.5], col, 0.6);
+    cristal(g, x + r * 0.55, y - r * 0.55, r * 0.28, col, I);
+  };
+  MOTIVO.armadilhaVortice = function (g, x, y, r, col, I) {
+    armadilhaBase(g, x, y + r * 0.15, r, col, I);
+    ventoCurva(g, x - r * 0.35, y - r * 0.5, r * 0.5, col, 0.7); ventoCurva(g, x + r * 0.45, y - r * 0.6, r * 0.4, rgba(col, 0.8), 0.6);
+  };
+  MOTIVO.ameias = function (g, x, y, r, col, I) {
+    muro(g, x, y + r * 0.3, r * 0.9, col, I, 2);
+    for (var i = -1; i <= 1; i++) part(g, Prr(x + i * r * 0.6, y - r * 0.5, r * 0.36, r * 0.45, 1), mx(col, '#8a7a66', 0.35), { k: 0.24, lw: 0.5, line: lineOf(I.deep) });
+  };
+  MOTIVO.ariete = function (g, x, y, r, col, I) {
+    part(g, Prr(x - r * 0.1, y, r * 1.7, r * 0.42, 3), mx(col, '#6b4a2a', 0.55), { k: 0.25, hi: 0.15, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Prr(x + r * 0.85, y, r * 0.42, r * 0.7, 3), mx(col, '#5a5a62', 0.5), { k: 0.26, lw: 0.5, line: lineOf(I.deep) });
+    risco(g, [x - r * 0.95, y - r * 0.45, x - r * 0.95, y - r * 0.9], mx(col, '#c9a55e', 0.5), 0.5); risco(g, [x + r * 0.2, y - r * 0.45, x + r * 0.2, y - r * 0.9], mx(col, '#c9a55e', 0.5), 0.5);
+    risco(g, [x - r * 1.0, y - r * 0.9, x + r * 0.25, y - r * 0.9], mx(col, '#c9a55e', 0.5), 0.5);
+  };
+  MOTIVO.broto = function (g, x, y, r, col, I) {
+    part(g, Pel(x, y + r * 0.8, r * 0.75, r * 0.26), mx(col, '#6b5a4a', 0.55), { k: 0.2, lw: 0.5 });
+    risco(g, [x, y + r * 0.75, x, y - r * 0.3], mx(col, '#5c7a2a', 0.3), 0.8, false);
+    part(g, Pfeather(x, y - r * 0.2, r * 0.8, -2.4), col, { k: 0.16, lw: 0.4, line: lineOf(I.deep) });
+    part(g, Pfeather(x, y - r * 0.2, r * 0.8, -0.75), sh(col, 0.2), { k: 0.16, lw: 0.4, line: lineOf(I.deep) });
+    pontinho(g, x, y - r * 0.5, r * 0.14, sh(col, 0.5));
+  };
+  MOTIVO.frasco = function (g, x, y, r, col, I) {
+    part(g, Prr(x, y - r * 0.75, r * 0.5, r * 0.5, 2), '#d9e8ec', { k: 0.12, lw: 0.5, line: '#2c3a40' });
+    part(g, Pel(x, y + r * 0.3, r * 0.78, r * 0.72), '#d9e8ec', { k: 0.1, lw: 0.6, line: '#2c3a40' });
+    g.save(); Pel(x, y + r * 0.3, r * 0.68, r * 0.62)(g); g.clip(); g.fillStyle = col; g.fillRect(x - r, y + r * 0.05, r * 2, r * 1.2); g.restore();
+    part(g, Prr(x, y - r * 1.0, r * 0.6, r * 0.22, 1.5), '#a8733f', { k: 0.25, lw: 0.4, line: '#4a2c14' });
+    mais(g, x, y + r * 0.3, r * 0.2, '#f6f0e0');
+  };
+  MOTIVO.calice = function (g, x, y, r, col, I) {
+    var ouro = mx(col, '#e0b050', 0.6);
+    part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(x - r * 0.85, y - r * 0.9); c2.lineTo(x + r * 0.85, y - r * 0.9); c2.quadraticCurveTo(x + r * 0.7, y + r * 0.1, x, y + r * 0.15); c2.quadraticCurveTo(x - r * 0.7, y + r * 0.1, x - r * 0.85, y - r * 0.9); c2.closePath(); }, x, y - r * 0.4, r * 0.8),
+         ouro, { k: 0.24, hi: 0.25, lw: 0.6, line: lineOf('#8a6a20') });
+    part(g, Prr(x, y + r * 0.5, r * 0.22, r * 0.7, 2), ouro, { k: 0.24, lw: 0.5, line: lineOf('#8a6a20') });
+    part(g, Prr(x, y + r * 0.9, r * 1.0, r * 0.22, 2), ouro, { k: 0.24, lw: 0.5, line: lineOf('#8a6a20') });
+    part(g, Pel(x, y - r * 0.82, r * 0.68, r * 0.16), col, { flat: true, noline: true });
+    glow(g, x, y - r * 1.0, r * 0.55, I.glow, 0.5);
+  };
+  MOTIVO.estandarte = function (g, x, y, r, col, I) {
+    risco(g, [x - r * 0.75, y + r * 1.05, x - r * 0.75, y - r * 1.05], mx(col, '#6b4a2a', 0.6), 0.9);
+    pontinho(g, x - r * 0.75, y - r * 1.05, r * 0.14, mx(col, '#e0b050', 0.6));
+    part(g, Ppoly([x - r * 0.65, y - r * 0.95, x + r * 0.95, y - r * 0.95, x + r * 0.95, y + r * 0.35, x + r * 0.15, y + r * 0.05, x - r * 0.65, y + r * 0.35]), col, { k: 0.22, hi: 0.2, lw: 0.6, line: lineOf(I.deep) });
+    part(g, Pstar(x + r * 0.15, y - r * 0.4, r * 0.28, 4, 0.4), sh(col, 0.55), { flat: true, noline: true });
+  };
+  MOTIVO.tranca = function (g, x, y, r, col, I) {
+    var m = mx(col, '#8a8a92', 0.5);
+    arco(g, x, y - r * 0.35, r * 0.5, Math.PI, TAU, m, 1.6);
+    part(g, Prr(x, y + r * 0.35, r * 1.3, r * 1.0, 3), mx(col, '#e0b050', 0.5), { k: 0.24, hi: 0.2, lw: 0.6, line: lineOf('#8a6a20') });
+    pontinho(g, x, y + r * 0.22, r * 0.16, '#2a2420'); part(g, Prr(x, y + r * 0.5, r * 0.14, r * 0.4, 1), '#2a2420', { flat: true, noline: true });
+  };
+  MOTIVO.espinheiro = function (g, x, y, r, col, I) {
+    arco(g, x, y + r * 0.15, r * 0.85, 0, TAU, mx(col, '#5c7a2a', 0.3), 1.2);
+    for (var i = 0; i < 8; i++) {
+      var a = i / 8 * TAU + 0.2, xx = x + Math.cos(a) * r * 0.85, yy = y + r * 0.15 + Math.sin(a) * r * 0.85;
+      part(g, Ppoly([xx - r * 0.1, yy - r * 0.08, xx + r * 0.1, yy + r * 0.08, xx + Math.cos(a) * r * 0.32, yy + Math.sin(a) * r * 0.32]), col, { flat: true, lw: 0.35, line: lineOf(I.deep) });
+    }
+    pontinho(g, x, y + r * 0.15, r * 0.2, sh(col, 0.3));
+  };
+  MOTIVO.sumonCura = MOTIVO.mao;
+
+  /* A TABELA: o fxKey de cada feitiço de classe e o motivo dele (198 chaves). Dois feitiços do mesmo
+   * caminho nunca apontam para o mesmo motivo — é a regra que a prova tests/icones_feiticos.html cobra. */
+  var MOTIVO_FX = {
+    // Bárbaro (sumo)
+    axeSlam: 'machado', warCry: 'grito', grappleHold: 'agarrar',
+    emberSlam: 'machado', emberBurst: 'estouro', boilingBlood: 'veias', volcanicRetort: 'represalia', furyForge: 'fornalha', emberSkin: 'peleBrasa',
+    slickStep: 'passoLodo', shoulderWave: 'ombro', tideDrink: 'bebedor', bruteTide: 'mareBruta', undertowMaw: 'sifao', tideEdge: 'machado',
+    rootQuake: 'casco', humanStake: 'estacaHumana', stoneRoots: 'raiz', livingWall: 'muro', walkingMountain: 'montanha', stoneHusk: 'casca',
+    brutalThrow: 'arremesso', axeCyclone: 'machadoGiro', graspAndSlam: 'agarrar', ironTyphoon: 'tufao', worldThrow: 'arremessoMundo', brutalCharge: 'investida',
+    // Caçador (arqueiro)
+    markShot: 'flecha', doeStep: 'passo', markCollect: 'detonar',
+    emberArrow: 'flechaChama', markVolley: 'salva', brandShot: 'ferroBrasa', markBlast: 'detonar', emberRain: 'chuvaBrasa', deadSunQuiver: 'aljava',
+    harpoonArrow: 'arpao', springShot: 'flechaGota', currentLine: 'linha', tideCollect: 'detonar', coldRain: 'chuva', markedTide: 'onda',
+    flintArrow: 'flechaSilex', pinShot: 'estacaPe', piercingShot: 'linha', boulderCollect: 'detonar', menhirVolley: 'salva', menhirShot: 'lanca',
+    windArrow: 'flechaVento', skipShot: 'saltador', spinArrow: 'rodopio', chainCollect: 'detonar', arrowGale: 'salva', markedStorm: 'tempestade',
+    // Bruxo
+    arcaneBore: 'verruma', whisperCurse: 'praga', leadCircle: 'circulo',
+    twinSpark: 'faiscaGemea', ashCone: 'cone', lesserMeteor: 'meteoro', forbiddenBrazier: 'braseiro', foldedPyre: 'pira', lockMeteor: 'meteoroGrande',
+    waterLance: 'lanca', siphon: 'sifao', tidalWave: 'onda', hungryPool: 'poca', dissolution: 'dissolucao', cisternRemembers: 'cisterna',
+    slabSpike: 'lousaEspinho', rootShackle: 'grilhao', fissure: 'fenda', spikeField: 'estacas', menhirRing: 'anelMenires', slateDescends: 'lousa',
+    snapBolt: 'faisca', hopSpark: 'faiscaSalto', warlockStep: 'passoVento', galeCone: 'cone', thunderRun: 'tempestade', stormEye: 'olho',
+    // Curandeiro
+    warmHand: 'mao', stubbornBlade: 'espada', briefBlessing: 'bencao',
+    searingPoultice: 'compressa', healingEmber: 'brasa', forgeBreath: 'folegoForja', ashRing: 'anelCinzas', emberHeart: 'coracao', tendingFlame: 'chamaCuida',
+    goodDrop: 'gota', calmSpring: 'fonte', tideTug: 'puxao', goodWave: 'onda', healingCurrent: 'corrente', goodCistern: 'cisterna',
+    friendlyBark: 'casca', mudPoultice: 'compressa', zealousRoot: 'raiz', rootDome: 'redoma', stoneSuccor: 'pedraAmparo', sealedGarden: 'jardim',
+    sweetBreath: 'sopro', lentBreath: 'folego', placeSwap: 'troca', friendlyGust: 'cone', restoringBreeze: 'brisa', lockBreath: 'respiracao',
+    // Ladino (espadachim)
+    quickThrust: 'estocada', shortShadow: 'sombra', sideStep: 'passo',
+    emberBlade: 'espada', burningCross: 'corteDuplo', boilingVeins: 'veias', sparkDance: 'danca', scaldingThrust: 'estocada', sevenFlameCuts: 'setecortes',
+    thirstyBlade: 'espada', brineMist: 'nevoa', currentSlash: 'corteArco', slimeStep: 'passoLodo', leechCut: 'sanguessuga', drownInBlood: 'afogar',
+    rustBlade: 'lamina_enferrujada', hamstring: 'tornozelo', barkSkin: 'casca', flintDagger: 'adaga', buriedAmbush: 'emboscada', menhirThrust: 'estocada',
+    windCut: 'corteArco', windStep: 'passoVento', stolenBreath: 'folegoRoubado', chainSlash: 'corteDuplo', shadowSwap: 'troca', thousandWindCuts: 'setecortes',
+    // Xamã (invocador)
+    lesserCall: 'invocar', pactWord: 'verbo', alarmStake: 'alarme',
+    emberTrapSet: 'armadilhaPlantar', emberHoundCall: 'invocarCao', burningPact: 'pacto', pactBreath: 'sopro', pyreTrapSet: 'armadilhaPira', magmaColossusCall: 'invocarColosso',
+    whirlTrapSet: 'armadilhaPlantar', tideNymphCall: 'invocarNinfa', springPact: 'pacto', undertowCall: 'sifao', maelstromTrapSet: 'armadilhaSorvedouro', theMaelstrom: 'invocarAfogado',
+    snareTrapSet: 'armadilhaPlantar', stoneSentinelCall: 'invocar', barkPact: 'pacto', pactStakes: 'estacas', quakeTrapSet: 'armadilhaTremor', mountainGolemCall: 'invocarGolem',
+    gustTrapSet: 'armadilhaPlantar', stormFalconCall: 'invocarAve', windPact: 'pacto', cuttingBreath: 'cone', vortexTrapSet: 'armadilhaVortice', falconSwarm: 'revoada',
+    alarmSnap: 'alarme', emberTrap: 'armadilha', pyreTrap: 'armadilha', whirlTrap: 'armadilha', maelstromTrap: 'armadilha', snareTrap: 'armadilha', quakeTrap: 'armadilha', gustTrap: 'armadilha', vortexTrap: 'armadilha',
+    // Minotauro
+    shoulderCharge: 'ombro', guardWard: 'escudo', stoneWall: 'muro',
+    emberWall: 'muroChama', boilingHide: 'couroFervente', burningHorn: 'cone_chifres', fireFence: 'cercaVoa', livingAnvil: 'bigorna', sealedForge: 'cerco',
+    slickWall: 'muroAgua', tideHusk: 'casca', waveShove: 'onda', dike: 'muro', guardedCistern: 'cisterna', waterSiege: 'cerco',
+    menhir: 'menir', stoneBark: 'casca', hoofQuake: 'casco', rampart: 'muro', foundation: 'fundacao', labyrinth: 'labirinto',
+    gustWall: 'muroVento', lightWard: 'escudoAsa', windHorn: 'chifres', flyingFence: 'cercaVoa', wanderingGuard: 'escudoErrante', windPen: 'cerco'
+  };
+  /* Quem não está na tabela (monstros, pets, itens, as formas de fusão) cai aqui: a FAMÍLIA pelo nome,
+   * na mesma ordem de preferência do fx3d_v2.js (o específico antes do genérico). */
+  var REGRAS_MOTIVO = [
+    ['meteoro',    /meteor/i],
+    ['chuva',      /rain|quiver|swarm|volley/i],
+    ['invocar',    /call$|summon|sentinel|golem|nymph|falcon|hound/i],
+    ['armadilha',  /trap|stake|snare|alarm|ambush/i],
+    ['cone',       /cone|breath|gale|mist|typhoon/i],
+    ['cruz',       /cross/i],
+    ['circulo',    /ring|circle|cyclone|maelstrom|whirl|vortex|dome|nova|storm|eye/i],
+    ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark/i],
+    ['onda',       /wave|tide|pool|current|undertow|drown|brine|spring|cistern|siphon|maw/i],
+    ['mao',        /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good/i],
+    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|curse|bore|brazier|retort/i],
+    ['investida',  /step|swap|walk|run|charge|descend|throw|slam|hop|skip/i],
+    ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark/i],
+    ['corteArco',  /blade|cut|slash|thrust|edge|dagger|hamstring|leech|scald|rust|flint|quick/i],
+    ['feixe',      /beam|line|ray/i],
+    ['estouro',    /^burst$|explod/i],
+    ['escudo',     /shield|veil|guard/i],
+    ['piscar',     /blink|teleport|phase/i],
+    ['gancho',     /hook|grapple|pull|drag/i],
+    ['maldicao',   /debuff|hex|rot|wither/i],
+    ['bencao',     /^buff$/i],
+    ['cone',       /gust|wind/i],
+    ['praga',      /poison|cloud|plague/i]
+  ];
+  /* AS FORMAS DE FUSÃO pelo NOME (147, todos únicos em DATA.fusionForms): a barra de uma dupla tem sete formas com
+   * só quinze `fxShape` entre elas, então duas da mesma dupla saíam iguais; pelo nome cada uma ganha o seu desenho. */
+  var MOTIVO_FORMA = {
+    'Agarrão': 'agarrar', 'Alicerce': 'fundacao', 'Alpendre': 'muro', 'Ameia': 'ameias', 'Amparo': 'pedraAmparo', 'Anel': 'circulo',
+    'Anfiteatro': 'cerco', 'Anteparo': 'escudo', 'Anátema': 'praga', 'Arpéu': 'arpao', 'Arranco': 'tufao', 'Arremesso': 'arremesso',
+    'Arsenal': 'aljava', 'Aríete': 'ariete', 'Assédio': 'anelMenires', 'Baluarte': 'escudo', 'Baque': 'casco', 'Bastiao': 'cerco',
+    'Bastião': 'fundacao', 'Beco': 'cercaVoa', 'Bisturi': 'adaga', 'Borda': 'anelMenires', 'Bote': 'saltador', 'Botica': 'frasco',
+    'Brado': 'grito', 'Bramido': 'cone_chifres', 'Breu': 'emboscada', 'Broto': 'broto', 'Bálsamo': 'compressa', 'Carrossel': 'rodopio',
+    'Cataclismo': 'meteoroGrande', 'Cercado': 'cercaVoa', 'Cerco': 'cerco', 'Chamado': 'puxao', 'Cilício': 'grilhao', 'Claustro': 'redoma',
+    'Colosso': 'montanha', 'Compasso': 'troca', 'Contrapeso': 'bigorna', 'Coro': 'invocar', 'Corte': 'corteArco', 'Cortejo': 'revoada',
+    'Cravo': 'armadilha', 'Curral': 'cerco', 'Cálice': 'calice', 'Círculo': 'circulo', 'Círio': 'chamaCuida', 'Dardo': 'lanca',
+    'Desmoronamento': 'lousa', 'Disparo': 'flecha', 'Dreno': 'sifao', 'Dédalo': 'labirinto', 'Encontrão': 'ombro', 'Enfermaria': 'compressa',
+    'Enfiada': 'linha', 'Enterro': 'emboscada', 'Enxame': 'revoada', 'Enxerto': 'raiz', 'Epílogo': 'piscar', 'Escora': 'ariete',
+    'Espectro': 'nevoa', 'Espelho': 'represalia', 'Espeto': 'estacaPe', 'Espinheiro': 'espinheiro', 'Espinho': 'lousaEspinho',
+    'Estampido': 'cone', 'Estandarte': 'estandarte', 'Esteio': 'fundacao', 'Estigma': 'maldicao', 'Estilete': 'adaga', 'Estilhaço': 'pedra',
+    'Estrondo': 'cruz', 'Ferrolho': 'labirinto', 'Ferrão': 'estocada', 'Finta': 'passo', 'Fio': 'feixe', 'Fornalha': 'fornalha',
+    'Fortaleza': 'cerco', 'Fosso': 'poca', 'Fôlego': 'folego', 'Golpe': 'corteArco', 'Guardião': 'invocarGolem', 'Guarita': 'muro',
+    'Guarnição': 'invocarGolem', 'Halo': 'bencao', 'Hospício': 'mao', 'Impacto': 'estouro', 'Juramento': 'pacto', 'Juízo': 'detonar',
+    'Lanho': 'corteArco', 'Legado': 'verbo', 'Manto': 'sombra', 'Marrada': 'cone_chifres', 'Muro': 'muro', 'Ninho': 'invocarAve',
+    'Ofertório': 'calice', 'Orvalho': 'gota', 'Paliçada': 'cercaVoa', 'Parapeito': 'muro', 'Pesadelo': 'praga', 'Pilar': 'menir',
+    'Piquete': 'estacas', 'Pomar': 'jardim', 'Postigo': 'flecha', 'Prenúncio': 'tempestade', 'Pulso': 'corrente', 'Punhalada': 'adaga',
+    'Rasgo': 'setecortes', 'Rastro': 'linha', 'Ratoeira': 'armadilha', 'Rebate': 'detonar', 'Rebentação': 'onda', 'Recuo': 'passo',
+    'Redil': 'cerco', 'Redoma': 'redoma', 'Reduto': 'escudo', 'Retalho': 'corteDuplo', 'Ricochete': 'saltador', 'Risco': 'linha',
+    'Rodopio': 'machadoGiro', 'Rojão': 'estouro', 'Sabá': 'braseiro', 'Sacramento': 'bencao', 'Sacrário': 'calice', 'Salto': 'piscar',
+    'Santuário': 'jardim', 'Sebe': 'estacas', 'Selo': 'maldicao', 'Sentinela': 'invocar', 'Sigilo': 'circulo', 'Sulco': 'cone',
+    'Talho': 'corteArco', 'Terreiro': 'anelMenires', 'Terço': 'corrente', 'Trabuco': 'arremessoMundo', 'Tranca': 'tranca', 'Tranco': 'investida',
+    'Troca': 'troca', 'Trombada': 'ombro', 'Umbral': 'sombra', 'Vigia': 'olho', 'Virote': 'linha', 'Viveiro': 'estacas', 'Voto': 'bencao',
+    'Vulcão': 'montanha', 'Vulto': 'sombra', 'Véu': 'nevoa'
+  };
+  /* a forma de uma fusão pelo id do feitiço ('fus:<par>:<mistura>:<tier>') — o nome dela mora em DATA.fusionForms */
+  function formaDaFusao(spell) {
+    if (!spell || !spell.id || String(spell.id).slice(0, 4) !== 'fus:') return null;
+    var p = String(spell.id).split(':');
+    if (p.length < 4) return null;
+    var F = (JOGO.DATA && JOGO.DATA.fusionForms && JOGO.DATA.fusionForms[p[1]]) || null;
+    if (!F) return null;
+    var tier = +p[3];
+    for (var i = 0; i < F.length; i++) if (F[i] && F[i].tier === tier) return F[i];
+    return null;
+  }
+  A.spellForm = formaDaFusao;
+  function motivoDe(spell) {
+    var forma = formaDaFusao(spell);
+    if (forma && forma.formName && MOTIVO_FORMA[forma.formName]) return MOTIVO_FORMA[forma.formName];
+    var fk = spell && (spell.fxKey || spell.fxShape);
+    if (fk && MOTIVO_FX[fk]) return MOTIVO_FX[fk];
+    if (fk) {
+      if (fk === 'melee') return 'corteArco';
+      if (fk === 'slam') return (spell.range && spell.range.max <= 1) ? 'ombro' : 'investida';
+      if (fk === 'beam' || fk === 'line') return 'feixe';
+      if (fk === 'nova' || fk === 'ring' || fk === 'circle') return 'circulo';
+      if (fk === 'heal') return 'mao';
+      if (fk === 'arrow' || fk === 'bolt') return 'flecha';
+      if (fk === 'slash') return 'corteArco';
+      if (fk === 'shieldFx') return 'escudo';
+      if (fk === 'summonFx') return 'invocar';
+      if (fk === 'veil') return 'nevoa';
+      for (var i = 0; i < REGRAS_MOTIVO.length; i++) if (REGRAS_MOTIVO[i][1].test(fk)) return REGRAS_MOTIVO[i][0];
+    }
+    // sem chave: o jeito antigo, pelo efeito
+    var velho = glyphFor(spell);
+    return ({ burst: 'estouro', flame: 'chama', drop: 'gota', stone: 'pedra', gust: 'cone', heal: 'mao', shield: 'escudo', up: 'bencao',
+              down: 'maldicao', push: 'investida', pull: 'gancho', swirl: 'piscar', poison: 'praga', mark: 'detonar', summon: 'invocar',
+              trap: 'armadilha', chain: 'grilhao', root: 'raiz', invisible: 'sombra', weather: 'tempestade', blade: 'espada' })[velho] || 'bola';
+  }
+  A.spellMotif = function (spell) { return motivoDe(spell); };   // exposto para a prova
+  A.spellMotifs = function () { return Object.keys(MOTIVO); };
+
+  /* O DISTINTIVO: o efeito secundário que o jogador precisa ler de relance. Prioridade do mais
+   * decisivo para o menos: o que muda a posição, o que prende, o que some, o que envenena… */
+  var DISTINTIVO_ORDEM = ['push', 'pull', 'moveTo', 'teleport', 'swap', 'root', 'invisible', 'poison', 'mark', 'detonateMarks', 'chain',
+                          'shield', 'reflect', 'heal', 'regen', 'cleanse', 'resist', 'taunt', 'trap', 'wall', 'summon', 'weatherShift', 'dispelShield', 'buff'];
+  function distintivoDe(spell, motivo) {
+    var e = (spell && spell.effects) || [], i, j, t;
+    var ignora = { estouro: 'damage' };
+    // o que o MOTIVO já conta não vira distintivo (a armadilha não leva o selo da armadilha)
+    var jaConta = { armadilha: ['trap'], armadilhaPlantar: ['trap'], invocar: ['summon'], invocarAve: ['summon'], invocarCao: ['summon'],
+                    invocarGolem: ['summon'], invocarColosso: ['summon'], invocarNinfa: ['summon'], invocarAfogado: ['summon'], revoada: ['summon'],
+                    escudo: ['shield'], escudoAsa: ['shield'], escudoErrante: ['shield'], fundacao: ['shield'], casca: ['shield', 'resist'], mao: ['heal'],
+                    gota: ['heal'], bencao: ['buff'], raiz: ['root'], grilhao: ['root'], estacaPe: ['root'], muro: ['wall'], muroChama: ['wall'], muroAgua: ['wall'],
+                    muroVento: ['wall'], cercaVoa: ['wall'], menir: ['wall'], cerco: ['wall'], labirinto: ['wall'], sombra: ['invisible'], nevoa: ['invisible'],
+                    emboscada: ['invisible'], detonar: ['detonateMarks', 'mark'], passo: ['moveTo'], passoVento: ['teleport', 'moveTo'], passoLodo: ['moveTo'],
+                    troca: ['swap'], puxao: ['pull'], gancho: ['pull'], sifao: ['pull'], arpao: ['pull', 'mark'], praga: ['poison'], sanguessuga: ['poison'],
+                    represalia: ['reflect', 'shield'], tempestade: ['weatherShift', 'chain'], olho: ['weatherShift'], compressa: ['heal'], corrente: ['heal'],
+                    folego: ['heal', 'buff'], coracao: ['heal'], chamaCuida: ['heal'], pedraAmparo: ['heal', 'shield'], redoma: ['shield'], jardim: ['heal', 'shield'],
+                    fonte: ['regen'], veias: ['buff'], pacto: ['buff', 'regen', 'shield'], grito: ['taunt'], estacaHumana: ['taunt'], agarrar: ['root'], tornozelo: ['root'] };
+    var ja = jaConta[motivo] || [];
+    var tipos = [];
+    for (i = 0; i < e.length; i++) {
+      t = e[i].type;
+      if (t === 'damage' || ja.indexOf(t) >= 0 || tipos.indexOf(t) >= 0) continue;
+      if (t === 'buff' && e[i].value != null && e[i].value < 0) t = 'debuff';
+      tipos.push(t);
+    }
+    for (j = 0; j < DISTINTIVO_ORDEM.length; j++) if (tipos.indexOf(DISTINTIVO_ORDEM[j]) >= 0) return DISTINTIVO_ORDEM[j];
+    if (tipos.indexOf('debuff') >= 0) return 'debuff';
+    return null;
+  }
+  A.spellBadge = function (spell) { return distintivoDe(spell, motivoDe(spell)); };
+  var DISTINTIVO_COR = { push: '#ffb060', pull: '#ffb060', moveTo: '#ffd37a', teleport: '#c8b6ff', swap: '#c8b6ff', root: '#9bd06a', invisible: '#b9c7d2',
+                         poison: '#8fdc5a', mark: '#ff9ad0', detonateMarks: '#ff9ad0', chain: '#f2e36a', shield: '#9be8ff', reflect: '#9be8ff', heal: '#7ef0a0',
+                         regen: '#7ef0a0', cleanse: '#e8f6ff', resist: '#9be8ff', taunt: '#ff7a6a', trap: '#f2ead8', wall: '#c9b89a', summon: '#86e8d2',
+                         weatherShift: '#b4c8ff', dispelShield: '#ff8a8a', buff: '#ffd166', debuff: '#c080ff' };
+  function desenhaDistintivo(g, tipo, cx, cy, rr) {
+    var col = DISTINTIVO_COR[tipo] || '#ffffff';
+    part(g, Pel(cx, cy, rr, rr), '#10151b', { flat: true, lw: 0.55, line: rgba(col, 0.9) });
+    var q = rr * 0.6;
+    switch (tipo) {
+      case 'push': part(g, Ppoly([cx + q, cy, cx - q * 0.1, cy - q * 0.75, cx - q * 0.1, cy + q * 0.75]), col, { flat: true, noline: true });
+                   part(g, Prr(cx - q * 0.7, cy, q * 0.35, q * 1.4, 1), col, { flat: true, noline: true }); break;
+      case 'pull': part(g, Ppoly([cx - q, cy, cx + q * 0.1, cy - q * 0.75, cx + q * 0.1, cy + q * 0.75]), col, { flat: true, noline: true });
+                   part(g, Prr(cx + q * 0.7, cy, q * 0.35, q * 1.4, 1), col, { flat: true, noline: true }); break;
+      case 'moveTo': pontinho(g, cx - q * 0.35, cy + q * 0.3, q * 0.3, col); pontinho(g, cx + q * 0.4, cy - q * 0.35, q * 0.3, col); break;
+      case 'teleport': case 'swap': g.save(); g.strokeStyle = col; g.lineWidth = 0.55 * _lw; g.lineCap = 'round'; Pswirl(cx, cy, q * 1.1, 1.4)(g); g.stroke(); g.restore(); break;
+      case 'root': risco(g, [cx - q * 0.7, cy + q * 0.9, cx - q * 0.3, cy, cx - q * 0.6, cy - q * 0.9], col, 0.45, true); risco(g, [cx + q * 0.2, cy + q * 0.9, cx + q * 0.3, cy, cx + q * 0.7, cy - q * 0.8], col, 0.45, true); break;
+      case 'invisible': part(g, tag(function (c2) { c2.beginPath(); c2.moveTo(cx - q, cy); c2.quadraticCurveTo(cx, cy - q, cx + q, cy); c2.quadraticCurveTo(cx, cy + q, cx - q, cy); c2.closePath(); }, cx, cy, q), col, { flat: true, noline: true });
+                        risco(g, [cx - q, cy + q * 0.7, cx + q, cy - q * 0.7], '#10151b', 0.5); break;
+      case 'poison': part(g, Pdrop(cx, cy + q * 0.35, q * 0.6), col, { flat: true, noline: true }); break;
+      case 'mark': case 'detonateMarks': arco(g, cx, cy, q * 0.85, 0, TAU, col, 0.5); pontinho(g, cx, cy, q * 0.3, col); break;
+      case 'chain': part(g, Ppoly([cx + q * 0.3, cy - q, cx - q * 0.5, cy + q * 0.1, cx, cy + q * 0.1, cx - q * 0.3, cy + q, cx + q * 0.5, cy - q * 0.15, cx, cy - q * 0.15]), col, { flat: true, noline: true }); break;
+      case 'shield': case 'reflect': case 'resist': escudoForma(g, cx, cy, q, col, { deep: col }, { flat: true, noline: true }); break;
+      case 'heal': case 'regen': case 'cleanse': mais(g, cx, cy, q * 0.85, col); break;
+      case 'taunt': pontinho(g, cx, cy, q * 0.75, col); pontinho(g, cx - q * 0.25, cy - q * 0.15, q * 0.14, '#10151b'); pontinho(g, cx + q * 0.25, cy - q * 0.15, q * 0.14, '#10151b');
+                    risco(g, [cx - q * 0.3, cy + q * 0.4, cx + q * 0.3, cy + q * 0.4], '#10151b', 0.35); break;
+      case 'trap': for (var k = 0; k < 3; k++) part(g, Ppoly([cx - q * 0.9 + k * q * 0.7, cy + q * 0.6, cx - q * 0.55 + k * q * 0.7, cy - q * 0.7, cx - q * 0.2 + k * q * 0.7, cy + q * 0.6]), col, { flat: true, noline: true }); break;
+      case 'wall': part(g, Prr(cx, cy - q * 0.45, q * 1.6, q * 0.6, 0.5), col, { flat: true, noline: true }); part(g, Prr(cx - q * 0.45, cy + q * 0.35, q * 0.7, q * 0.6, 0.5), col, { flat: true, noline: true }); part(g, Prr(cx + q * 0.45, cy + q * 0.35, q * 0.7, q * 0.6, 0.5), col, { flat: true, noline: true }); break;
+      case 'summon': part(g, Pstar(cx, cy, q, 5, 0.45), col, { flat: true, noline: true }); break;
+      case 'weatherShift': part(g, Pblob([cx - q, cy, cx - q * 0.5, cy - q * 0.7, cx + q * 0.3, cy - q * 0.7, cx + q, cy, cx + q * 0.4, cy + q * 0.4, cx - q * 0.4, cy + q * 0.4]), col, { flat: true, noline: true }); break;
+      case 'dispelShield': escudoForma(g, cx, cy, q, col, { deep: col }, { flat: true, noline: true }); risco(g, [cx - q * 0.8, cy + q * 0.8, cx + q * 0.8, cy - q * 0.8], '#10151b', 0.5); break;
+      case 'buff': part(g, Ppoly([cx, cy - q, cx + q * 0.9, cy, cx + q * 0.35, cy, cx + q * 0.35, cy + q, cx - q * 0.35, cy + q, cx - q * 0.35, cy, cx - q * 0.9, cy]), col, { flat: true, noline: true }); break;
+      case 'debuff': part(g, Ppoly([cx, cy + q, cx + q * 0.9, cy, cx + q * 0.35, cy, cx + q * 0.35, cy - q, cx - q * 0.35, cy - q, cx - q * 0.35, cy, cx - q * 0.9, cy]), col, { flat: true, noline: true }); break;
+      default: pontinho(g, cx, cy, q * 0.5, col);
+    }
+  }
+  /* A MARCA DA ÁREA no canto: a forma que o feitiço pega, em pontinhos. */
+  function desenhaArea(g, shape, cx, cy, rr, col) {
+    var p = rr * 0.42, d = rr * 0.22, i, a;
+    part(g, Pel(cx, cy, rr, rr), '#10151b', { flat: true, lw: 0.45, line: rgba(col, 0.75) });
+    if (shape === 'circle') { for (i = 0; i < 6; i++) { a = i / 6 * TAU; pontinho(g, cx + Math.cos(a) * p, cy + Math.sin(a) * p, d, col); } pontinho(g, cx, cy, d, col); }
+    else if (shape === 'ring') { for (i = 0; i < 6; i++) { a = i / 6 * TAU; pontinho(g, cx + Math.cos(a) * p, cy + Math.sin(a) * p, d, col); } }
+    else if (shape === 'cross') { pontinho(g, cx, cy, d, col); pontinho(g, cx - p, cy, d, col); pontinho(g, cx + p, cy, d, col); pontinho(g, cx, cy - p, d, col); pontinho(g, cx, cy + p, d, col); }
+    else if (shape === 'cone') { pontinho(g, cx - p * 0.9, cy, d, col); pontinho(g, cx, cy - p * 0.6, d, col); pontinho(g, cx, cy + p * 0.6, d, col); pontinho(g, cx + p * 0.9, cy - p, d, col); pontinho(g, cx + p * 0.9, cy, d, col); pontinho(g, cx + p * 0.9, cy + p, d, col); }
+    else if (shape === 'line') { pontinho(g, cx - p, cy, d, col); pontinho(g, cx, cy, d, col); pontinho(g, cx + p, cy, d, col); }
+    else pontinho(g, cx, cy, d * 1.3, col);
+  }
+
   function spellIconCanvas(spell, size) {
     var c = mkCanvas(size, size), g = c.getContext('2d');
     setScale(RES); g.save(); g.scale(RES, RES);
     var el = (spell && spell.element) || 'neutro';
     var info = elemInfo(ELEM[el] ? el : 'neutro');
-    iconFrame(g, size, info.c, null);
-    var kind = glyphFor(spell);
-    glow(g, size / 2, size / 2, size * 0.42, info.c, 0.4);
-    (GLYPH[kind] || GLYPH.burst)(g, size / 2, size / 2, size * 0.27, info.c);
+    // o segundo elemento da fusão: metade do motivo em cada cor, e o quadro na mistura
+    var els = (spell && spell.elements && spell.elements.length > 1) ? spell.elements : null;
+    var el2 = els ? els[1] : null;
+    if (el2 && (el2 === el || !ELEM[el2])) el2 = null;
+    var info2 = el2 ? elemInfo(el2) : null;
+    iconFrame(g, size, info2 ? mx(info.c, info2.c, 0.5) : info.c, null);
+    var motivo = motivoDe(spell);
+    var fn = MOTIVO[motivo] || MOTIVO.bola;
+    var cx = size / 2, cy = size / 2, r = size * 0.3;
+    glow(g, cx, cy, size * 0.42, info.c, 0.32);
+    if (info2) glow(g, cx + size * 0.1, cy, size * 0.36, info2.c, 0.3);
+    var grande = size >= 40;
+    // com distintivo ou marca de área, o motivo encolhe um pouco e sobe, para os cantos ficarem limpos
+    var tipo = grande ? distintivoDe(spell, motivo) : null;
+    var shape = (grande && spell && spell.aoe && spell.aoe.shape && spell.aoe.shape !== 'single' && spell.aoe.size > 0) ? spell.aoe.shape : null;
+    if (tipo || shape) { r *= 0.9; cy -= size * 0.02; }
+    // uma sombra curta por baixo do motivo: separa o desenho do quadro, que é da mesma cor
+    g.save(); g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = size * 0.06; g.shadowOffsetY = size * 0.02;
+    try {
+      if (info2) {
+        g.save(); g.beginPath(); g.rect(0, 0, cx, size); g.clip(); fn(g, cx, cy, r, info.c, info); g.restore();
+        g.save(); g.beginPath(); g.rect(cx, 0, size - cx, size); g.clip(); fn(g, cx, cy, r, info2.c, info2); g.restore();
+      } else fn(g, cx, cy, r, info.c, info);
+    } catch (e) { MOTIVO.bola(g, cx, cy, r, info.c, info); }
+    g.restore();
+    if (shape) desenhaArea(g, shape, size * 0.2, size * 0.2, size * 0.11, info.c);
+    if (tipo) desenhaDistintivo(g, tipo, size * 0.8, size * 0.8, size * 0.125);
     g.restore();
     c.__anchor = [0.5, 0.5];
     return c;

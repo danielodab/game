@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — os ícones de feitiço, um por feitiço</title>
+<style>
+  body{margin:0;background:#0f1216;color:#e8eef6;font:13px/1.5 system-ui,Segoe UI,sans-serif}
+  h1{font-size:15px;margin:10px 16px 2px}
+  .sub{color:#8895a6;font-size:12px;margin:0 16px 8px;max-width:980px}
+  #summary{font:12px monospace;margin:6px 16px;padding:6px 10px;border-radius:6px}
+  .allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+  ul{margin:4px 16px;padding-left:18px;font-size:12px} li.pass{color:#8fc79b} li.fail{color:#f88}
+  h2{font:600 14px Georgia,serif;margin:14px 16px 4px;color:#ffd08a}
+  .fila{display:flex;flex-wrap:wrap;gap:6px;margin:0 16px 6px}
+  .cel{width:78px;text-align:center;background:#161b22;border:1px solid #262d38;border-radius:6px;padding:4px 2px}
+  .cel canvas{display:block;margin:0 auto}
+  .cel .nm{font-size:9px;color:#aab4c2;line-height:1.15;height:22px;overflow:hidden;margin-top:3px}
+  .cel .fx{font-size:8px;color:#5f6b7a}
+  .cel.dup{outline:2px solid #ff6b5a}
+  .mini .cel{width:46px}
+</style>
+</head>
+<body>
+<h1>Os ícones de feitiço — um desenho por feitiço (12/10)</h1>
+<div class="sub">Cada feitiço de classe leva o MOTIVO do próprio <code>fxKey</code> (tabela <code>MOTIVO_FX</code> em js/render2d/art.js), a marca da
+área no canto de cima e o distintivo do efeito secundário no de baixo. A prova cobra: todo feitiço de classe nomeado na tabela (nenhum na bola),
+nenhum par de ícones iguais DENTRO da árvore de uma classe (os 27 que o herói vê, a 48 e a 34 px), a barra de cada fusão sem repetição,
+e monstros, bichos e itens desenhando sem erro. A célula com borda vermelha é um ícone repetido dentro da própria classe.</div>
+<div id="summary">rodando…</div>
+<ul id="lista"></ul>
+<div id="galeria"></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arqs = ['js/core/data/elements.js', 'js/core/data/classes.js', 'js/core/data/spells.js', 'js/core/data/progression.js',
+              'js/core/data/monsters.js', 'js/core/data/dungeons.js', 'js/core/data/fusions.js', 'js/core/data/pets.js',
+              'js/core/data/items.js', 'js/core/data/items_extra.js', 'js/core/engine.js', 'js/core/fusion.js', 'js/render2d/art.js'];
+  for (var i = 0; i < arqs.length; i++) document.write('<scr' + 'ipt src="../' + arqs[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = (cond ? 'PASSOU · ' : 'FALHOU · ') + nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+  function fim(msg) {
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') + okN + ' de ' + (okN + falhas.length) + ' ok, ' +
+                     falhas.length + ' falharam' + (msg ? ' · ' + msg : '');
+    document.title = el.textContent;
+    window.__pronto = true;
+  }
+  var A = JOGO.Art, D = JOGO.DATA, E = JOGO.Engine, F = JOGO.Fusion;
+  var CLASSES = ['sumo', 'arqueiro', 'bruxo', 'espadachim', 'curandeiro', 'invocador', 'minotauro'];
+  var NOME = { sumo: 'Bárbaro', arqueiro: 'Caçador', bruxo: 'Bruxo', espadachim: 'Ladino', curandeiro: 'Curandeiro', invocador: 'Xamã', minotauro: 'Minotauro' };
+  var ELS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
+
+  // a assinatura dos pixels: FNV sobre a imagem inteira (RES 2 ⇒ 96×96 a 48 px)
+  function hashCanvas(cv) {
+    var g = cv.getContext('2d'), d = g.getImageData(0, 0, cv.width, cv.height).data;
+    var h = 2166136261, i;
+    for (i = 0; i < d.length; i += 4) { h ^= (d[i] << 16) ^ (d[i + 1] << 8) ^ d[i + 2] ^ (d[i + 3] << 24); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+  // quantos pixels do MIOLO (fora do quadro) foram pintados em cor diferente do fundo do quadro
+  function pintouMiolo(cv) {
+    var g = cv.getContext('2d'), w = cv.width, hh = cv.height, d = g.getImageData(0, 0, w, hh).data;
+    var n = 0, x, y, m = Math.round(w * 0.22);
+    for (y = m; y < hh - m; y += 2) for (x = m; x < w - m; x += 2) {
+      var i = (y * w + x) * 4;
+      if (d[i + 3] > 40 && (d[i] + d[i + 1] + d[i + 2]) > 220) n++;
+    }
+    return n;
+  }
+  function spellsDaClasse(cid) {
+    var out = [];
+    Object.keys(D.spells).forEach(function (id) {
+      var s = D.spells[id];
+      if (s.classId === cid && !/^trap-/.test(id)) out.push(s);
+    });
+    out.sort(function (a, b) { return ELS.indexOf(a.element) - ELS.indexOf(b.element) || a.unlockLevel - b.unlockLevel || (a.id < b.id ? -1 : 1); });
+    return out;
+  }
+  function celula(sp, size, legenda) {
+    var cel = document.createElement('div');
+    cel.className = 'cel';
+    var cv = A.spellIcon(sp, size);
+    cel.appendChild(A.node(cv, size));
+    var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = legenda || sp.name || sp.id; cel.appendChild(nm);
+    if (size >= 40) { var fx = document.createElement('div'); fx.className = 'fx'; fx.textContent = (sp.fxKey || sp.fxShape || '') + ' · ' + A.spellMotif(sp); cel.appendChild(fx); }
+    return { cel: cel, cv: cv };
+  }
+  var gal = document.getElementById('galeria');
+  function titulo(t) { var h = document.createElement('h2'); h.textContent = t; gal.appendChild(h); }
+  function fila(cls) { var f = document.createElement('div'); f.className = 'fila' + (cls ? ' ' + cls : ''); gal.appendChild(f); return f; }
+
+  try {
+    // ------------------------------------------------------------ 1. a tabela cobre os 198 de classe
+    var todos = Object.keys(D.spells).map(function (id) { return D.spells[id]; });
+    var naBola = todos.filter(function (s) { return A.spellMotif(s) === 'bola'; }).map(function (s) { return s.id; });
+    check('todo feitiço de classe tem motivo próprio (nenhum cai na bola genérica)', naBola.length === 0, naBola.join(', ') || todos.length + ' feitiços');
+    var motivosUsados = {};
+    todos.forEach(function (s) { motivosUsados[A.spellMotif(s)] = 1; });
+    check('o elenco usa pelo menos 60 motivos diferentes', Object.keys(motivosUsados).length >= 60, Object.keys(motivosUsados).length + ' motivos em ' + todos.length + ' feitiços');
+
+    // ------------------------------------------------------------ 2. dentro de cada classe, nada igual
+    var hashesGerais48 = {}, totalClasse = 0;
+    CLASSES.forEach(function (cid) {
+      var lista = spellsDaClasse(cid);
+      totalClasse += lista.length;
+      titulo(NOME[cid] + ' — ' + lista.length + ' feitiços (48 px)');
+      var f = fila(), vistos48 = {}, vistos34 = {}, dups48 = [], dups34 = [], vazios = [];
+      lista.forEach(function (sp) {
+        var c = celula(sp, 48);
+        var h48 = hashCanvas(c.cv), h34 = hashCanvas(A.spellIcon(sp, 34));
+        if (vistos48[h48]) { dups48.push(sp.id + '=' + vistos48[h48]); c.cel.classList.add('dup'); } else vistos48[h48] = sp.id;
+        if (vistos34[h34]) dups34.push(sp.id + '=' + vistos34[h34]); else vistos34[h34] = sp.id;
+        hashesGerais48[h48] = (hashesGerais48[h48] || 0) + 1;
+        if (pintouMiolo(c.cv) < 40) vazios.push(sp.id);
+        f.appendChild(c.cel);
+      });
+      check(NOME[cid] + ': os ' + lista.length + ' ícones a 48 px são todos diferentes', dups48.length === 0, dups48.join(', '));
+      check(NOME[cid] + ': os ' + lista.length + ' ícones a 34 px são todos diferentes', dups34.length === 0, dups34.join(', '));
+      check(NOME[cid] + ': todo ícone pinta o miolo', vazios.length === 0, vazios.join(', '));
+    });
+    var distintos = Object.keys(hashesGerais48).length;
+    check('no elenco inteiro (' + totalClasse + ' feitiços de classe) há pelo menos ' + Math.round(totalClasse * 0.9) + ' ícones distintos a 48 px',
+          distintos >= totalClasse * 0.9, distintos + ' distintos');
+
+    // ------------------------------------------------------------ 3. a 34 px, o mesmo desenho de uma classe, para olhar
+    titulo('Ladino a 34 px (a barra do tronco e os chips)');
+    var f34 = fila('mini');
+    spellsDaClasse('espadachim').forEach(function (sp) { f34.appendChild(celula(sp, 34, ' ').cel); });
+
+    // ------------------------------------------------------------ 4. as fusões: a barra de cada dupla sem repetição
+    var pares = Object.keys(D.fusionForms || {}), misturas = Object.keys(D.fusionBlends || {});
+    var paresComDup = [], nFus = 0, fusoesIguaisPorPar = 0;
+    titulo('Fusões — uma barra por dupla (nível 30, mistura em rodízio)');
+    pares.forEach(function (par, pi) {
+      var mistura = misturas[pi % misturas.length], lista = [];
+      try { lista = F.spellsFor(par, mistura, 30) || []; } catch (e) { lista = []; }
+      if (!lista.length) return;
+      var f = fila(), vistos = {}, dup = 0;
+      lista.forEach(function (sp) {
+        nFus++;
+        var c = celula(sp, 48, sp.name);
+        var h = hashCanvas(c.cv);
+        if (vistos[h]) { dup++; c.cel.classList.add('dup'); } else vistos[h] = 1;
+        f.appendChild(c.cel);
+      });
+      var rot = document.createElement('div'); rot.className = 'cel'; rot.style.width = '110px'; rot.textContent = par + ' · ' + mistura; f.insertBefore(rot, f.firstChild);
+      if (dup) { paresComDup.push(par + '(' + dup + ')'); fusoesIguaisPorPar += dup; }
+    });
+    check('as fusões entraram (21 duplas, barra do nível 30)', pares.length >= 21 && nFus > 100, pares.length + ' duplas, ' + nFus + ' feitiços');
+    check('nenhuma barra de fusão repete um ícone', fusoesIguaisPorPar === 0, paresComDup.join(', ') || 'nenhuma');
+
+    // ------------------------------------------------------------ 5. monstros, bichos, itens: desenham sem erro e quase nada na bola
+    var outros = [];
+    ['monsterSpells', 'petSpells', 'itemSpells'].forEach(function (k) {
+      Object.keys(D[k] || {}).forEach(function (id) { outros.push(D[k][id]); });
+    });
+    var erros = 0, bolas = 0;
+    outros.forEach(function (sp) {
+      try { A.spellIcon(sp, 40); } catch (e) { erros++; }
+      if (A.spellMotif(sp) === 'bola') bolas++;
+    });
+    check('monstros, bichos e itens: ' + outros.length + ' feitiços desenham sem erro', erros === 0, erros + ' erros');
+    check('monstros, bichos e itens: a bola genérica é rara', bolas <= Math.max(2, outros.length * 0.05), bolas + ' na bola de ' + outros.length);
+    titulo('Monstros (amostra de 24) e bichos');
+    var fm = fila();
+    outros.slice(0, 24).forEach(function (sp) { fm.appendChild(celula(sp, 48, sp.name || sp.id).cel); });
+
+    // ------------------------------------------------------------ 6. a porta por id continua valendo (a HUD passa ids)
+    var porId = A.spellIcon('sumo-neutro-1', 48), porObj = A.spellIcon(D.spells['sumo-neutro-1'], 48);
+    check('Art.spellIcon(id) e Art.spellIcon(objeto) dão o mesmo desenho', hashCanvas(porId) === hashCanvas(porObj));
+    var semDados = A.spellIcon('xpto-fogo-99', 48);
+    check('um id desconhecido ainda desenha um ícone (o elemento vem do id)', pintouMiolo(semDados) > 20);
+    fim(totalClasse + ' de classe · ' + nFus + ' de fusão · ' + outros.length + ' outros');
+  } catch (e) {
+    check('a prova rodou até o fim', false, String(e && e.stack || e));
+    fim();
+  }
+})();
+</script>
+</body>
+</html>
