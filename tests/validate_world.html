@@ -403,7 +403,8 @@
     // 5 de elemento + a ÂNCORA DE FORJA (element 'forja', segura o nível na
     // batida falhada — rodada da forja de risco). A régua velha dizia 5 e
     // reprovava uma pedra legítima.
-    check('DATA.stones tem 6 pedras (5 de elemento + a Âncora)', keys(D.stones).length === 6, keys(D.stones).length + '');
+    // 12/10: a Gema Enterrada e o Fragmento (08/10) entraram — 8
+    check('DATA.stones tem 8 pedras (5 de elemento + a Âncora + a Gema + o Fragmento)', keys(D.stones).length === 8, keys(D.stones).length + '');
     ELEMENTS.forEach(function (e) {
       check('DATA.stones: existe pedra de ' + e, !!byEl[e]);
       var sources = monIds.filter(function (i) {
@@ -676,16 +677,17 @@
         JSON.stringify(card.starCosts));
     });
     // custos fixados pelo usuário no adendo 9-B
-    var EXPECTED_COST = { sumo: 0, curandeiro: 0, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
+    // 12/10: desde as duas iniciais LIVRES (08/10, a conta nova escolhe dois heróis de qualquer classe) nenhuma carta custa 0;
+    // Bárbaro e Curandeiro custam 5 como as comuns
+    var EXPECTED_COST = { sumo: 5, curandeiro: 5, invocador: 10, bruxo: 10, espadachim: 20, arqueiro: 25 };
     for (var cid in EXPECTED_COST) {
       if (!EXPECTED_COST.hasOwnProperty(cid)) { continue; }
       check('custo de desbloqueio de ' + cid + ' = ' + EXPECTED_COST[cid],
         has(CARDS, cid) && CARDS[cid].unlockCost === EXPECTED_COST[cid],
         has(CARDS, cid) ? String(CARDS[cid].unlockCost) : 'ausente');
     }
-    check('exatamente 2 classes iniciais (unlockCost 0): sumo e curandeiro',
-      CLASS_IDS.filter(function (c) { return has(CARDS, c) && CARDS[c].unlockCost === 0; }).sort().join(',') ===
-      'curandeiro,sumo');
+    check('nenhuma classe custa 0 cartas (as iniciais são escolhidas, não dadas — 08/10)',
+      CLASS_IDS.every(function (c) { return has(CARDS, c) && CARDS[c].unlockCost > 0; }));
 
     // ---- nenhuma entrada inerte, calabouço a calabouço ----
     DG.forEach(function (d) {

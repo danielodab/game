@@ -62,7 +62,8 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
                    'invocador', 'minotauro'];
   /* adendo v2.1: iniciais e custos de desbloqueio fixados pelo usuário */
   var STARTERS = ['sumo', 'curandeiro'];
-  var UNLOCK_COST = { sumo: 0, curandeiro: 0, invocador: 10, bruxo: 10, espadachim: 20,
+  // 12/10: Bárbaro e Curandeiro custam 5 desde as duas iniciais LIVRES (08/10) — ninguém custa 0
+  var UNLOCK_COST = { sumo: 5, curandeiro: 5, invocador: 10, bruxo: 10, espadachim: 20,
                       arqueiro: 25, minotauro: 30 };
   var ELEMENTS = ['neutro', 'fogo', 'agua', 'terra', 'ar'];
   var PATH_ELEMENTS = ['fogo', 'agua', 'terra', 'ar'];
@@ -685,14 +686,14 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
     var cd = D.cards[cid], cls = D.classes[cid];
     var p = 'card ' + cid + ' ';
     check(p + 'unlockCost = ' + UNLOCK_COST[cid] + ' (fixado pelo usuário)', cd.unlockCost === UNLOCK_COST[cid], cd.unlockCost);
-    check(p + 'unlockCost 0 ⇔ classe inicial',
-      !!cls && (cd.unlockCost === 0) === (cls.startsUnlocked === true),
+    check(p + 'classe inicial (startsUnlocked) custa 5; as outras, 10 ou mais',
+      !!cls && (cls.startsUnlocked === true ? cd.unlockCost === 5 : cd.unlockCost >= 10),
       cd.unlockCost + '/' + (cls && cls.startsUnlocked));
     check(p + 'dropWeight > 0 (excedente vira estrela, nenhuma carta é inútil)',
       isNum(cd.dropWeight) && cd.dropWeight > 0, cd.dropWeight);
     check(p + 'minDungeon 0–5', isNum(cd.minDungeon) && cd.minDungeon >= 0 && cd.minDungeon <= 5, cd.minDungeon);
     check(p + 'starCosts com 5 entradas', !!cd.starCosts && cd.starCosts.length === 5, cd.starCosts && cd.starCosts.length);
-    check(p + 'starCosts = [5,15,30,55,90]', !!cd.starCosts && cd.starCosts.join(',') === '5,15,30,55,90',
+    check(p + 'starCosts = [5,15,35,65,110] (a escada de 30/08)', !!cd.starCosts && cd.starCosts.join(',') === '5,15,35,65,110',
       cd.starCosts && cd.starCosts.join(','));
     var scOk = true;
     for (var k = 1; k < (cd.starCosts || []).length; k++) {
@@ -703,8 +704,8 @@ document.write('<scr' + 'ipt src="../js/core/data/dungeons.js?v=' + window.__V +
       !!D.stars && cd.starCosts.length === D.stars.max);
     if (cls) {
       check(p + 'raridade coerente com o custo',
-        (cd.unlockCost === 0 && cls.cardRarity === 'comum') ||
-        (cd.unlockCost > 0 && cd.unlockCost <= 10 && cls.cardRarity === 'raro') ||
+        (cd.unlockCost <= 5 && cls.cardRarity === 'comum') ||
+        (cd.unlockCost > 5 && cd.unlockCost <= 10 && cls.cardRarity === 'raro') ||
         (cd.unlockCost > 10 && cls.cardRarity === 'epico'),
         cd.unlockCost + '/' + cls.cardRarity);
     }

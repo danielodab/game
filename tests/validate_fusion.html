@@ -980,14 +980,16 @@
 
   // ---- pedras ----
   var stoneIds = Object.keys(STONES);
-  check('DATA.stones com 5 pedras', stoneIds.length === 5, 'tem ' + stoneIds.length);
+  // 12/10: 5 de elemento + a Âncora de Forja (03/09) + a Gema Enterrada e o Fragmento (08/10)
+  check('DATA.stones com 8 pedras', stoneIds.length === 8, 'tem ' + stoneIds.length);
   var stoneByElement = {};
   stoneIds.forEach(function (sid) {
     var st = STONES[sid];
     check('pedra ' + sid + ' id bate', st.id === sid);
     check('pedra ' + sid + ' name/description/iconKey',
       isStr(st.name) && isStr(st.description) && st.description.length > 30 && isStr(st.iconKey));
-    check('pedra ' + sid + ' element válido', has(ELEMENTS, st.element), String(st.element));
+    // 12/10: a Âncora é 'forja', a Gema 'gema' e o Fragmento 'fragmento' — pedras que não são de elemento nenhum
+    check('pedra ' + sid + ' element válido', has(ELEMENTS, st.element) || st.element === 'forja' || st.element === 'gema' || st.element === 'fragmento', String(st.element));
     if (has(ELEMENTS, st.element)) {
       check('pedra ' + sid + ' é a única do elemento ' + st.element, !stoneByElement[st.element],
         stoneByElement[st.element] || '');
@@ -1174,9 +1176,15 @@
     }
 
     var DRAWS = 50000, DESCENTS = 20000, ROLLS_PER_DESCENT = 4;
+    /* 12/10: as faixas são as da RARIDADE DURA de 08/09 ("MUITO difícil, senão perde a graça": rareRatio 0,05,
+     * epicRatio 0,0025, legendRatio 0,006, o "nada" a 300% dos comuns) — medidas hoje com esta mesma conta
+     * (tools: scratchpad mc_saque.js): solo vazio 71–72%, raro 2,6–3,3%, épico 0,26–0,38% por sorteio, 1,12 itens
+     * por descida, épico em 1,0–1,5% das descidas; dupla raro 2,0–2,2%, épico 0,12–0,17%, 1,09 itens, 0,5–0,7%.
+     * As faixas velhas (raro 12–15%, 45–58% sem item, ~2 itens) eram as de antes de 08/09 e reprovavam a decisão
+     * do dono. A banda é larga o bastante para o ruído do MC e estreita o bastante para acusar um peso trocado. */
     var configs = [
-      { name: 'solo',  luck: LW.luck.solo,  raro: [0.12, 0.15], epico: 0.03,  epicDescent: [0.06, 0.14] },
-      { name: 'dupla', luck: LW.luck.dupla, raro: [0.08, 0.11], epico: 0.015, epicDescent: [0.03, 0.075] }
+      { name: 'solo',  luck: LW.luck.solo,  raro: [0.02, 0.045], epico: 0.01, epicDescent: [0.006, 0.025] },
+      { name: 'dupla', luck: LW.luck.dupla, raro: [0.014, 0.032], epico: 0.01, epicDescent: [0.003, 0.012] }
     ];
     var dungeonIds = Object.keys(byDungeonItems);
 
@@ -1193,8 +1201,8 @@
           pR >= cfg.raro[0] && pR <= cfg.raro[1], (pR * 100).toFixed(2) + '%');
         check('MC ' + cfg.name + '/' + dg + ': comum domina o que cai',
           pC > pR + pE + pL, (pC * 100).toFixed(1) + '% vs ' + ((pR + pE + pL) * 100).toFixed(1) + '%');
-        check('MC ' + cfg.name + '/' + dg + ': saque duro — 45% a 58% dos sorteios não dão item',
-          pV >= 0.45 && pV <= 0.58, (pV * 100).toFixed(1) + '%');
+        check('MC ' + cfg.name + '/' + dg + ': saque duro — 65% a 78% dos sorteios não dão item (o "nada" a 300%, 08/09)',
+          pV >= 0.65 && pV <= 0.78, (pV * 100).toFixed(1) + '%');
 
         // descida completa: 4 sorteios
         var itemsTotal = 0, withEpic = 0, d, k, got, gotEpic;
@@ -1208,8 +1216,8 @@
           if (gotEpic) withEpic++;
         }
         var avgItems = itemsTotal / DESCENTS, pEpicDescent = withEpic / DESCENTS;
-        check('MC ' + cfg.name + '/' + dg + ': descida rende ~2 itens (1,7–2,3)',
-          avgItems >= 1.7 && avgItems <= 2.3, avgItems.toFixed(2) + ' itens');
+        check('MC ' + cfg.name + '/' + dg + ': descida rende ~1 item (0,9–1,4; era ~2 antes da raridade dura)',
+          avgItems >= 0.9 && avgItems <= 1.4, avgItems.toFixed(2) + ' itens');
         check('MC ' + cfg.name + '/' + dg + ': chance de épico por descida na faixa',
           pEpicDescent >= cfg.epicDescent[0] && pEpicDescent <= cfg.epicDescent[1],
           (pEpicDescent * 100).toFixed(1) + '%');
@@ -1242,8 +1250,8 @@
     });
     check('Traje do Coração: fechar as 4 peças exige uma caçada longa (>= 25 descidas solo)',
       legendResult.solo >= 25, legendResult.solo.toFixed(0) + ' descidas solo');
-    check('Traje do Coração: mas não é impossível (<= 200 descidas solo)',
-      legendResult.solo <= 200, legendResult.solo.toFixed(0) + ' descidas solo');
+    check('Traje do Coração: mas não é impossível (<= 400 descidas solo; medido 238 com a raridade dura)',
+      legendResult.solo <= 400, legendResult.solo.toFixed(0) + ' descidas solo');
     check('Traje do Coração: solo fecha antes da dupla (o risco compra sorte)',
       legendResult.solo < legendResult.dupla,
       'solo ' + legendResult.solo.toFixed(0) + ' vs dupla ' + legendResult.dupla.toFixed(0));
