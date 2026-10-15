@@ -804,11 +804,22 @@ var JOGO = (typeof window !== 'undefined')
     else if (name === 'heroSelect') buildHeroSelect();
     else if (name === 'hub') buildHub(null);
     // A ANTESSALA (03/09): a mesma máquina da praça, no pátio da sala
-    else if (name === 'antessala') buildHub(data || safe(function () { return G().salaInfo(); }, null));
+    else if (name === 'antessala') {
+      // 15/10: a primeira luta de uma conta nova entra sem o pátio — a porta abre sozinha
+      if (safe(function () { return !!G().primeiraLuta; }, false)) buildPrimeiraLuta();
+      else buildHub(data || safe(function () { return G().salaInfo(); }, null));
+    }
     else if (name === 'dungeonSelect') buildDungeonSelect();
     else if (name === 'elementChoice') buildElementChoice(data);
     else if (name === 'duelFim') buildDuelFim(data);
-    else if (name === 'battle') { logLines = []; buildBattle(); }
+    else if (name === 'battle') {
+      logLines = []; buildBattle();
+      // 15/10: a primeira batalha da conta é GUIADA (js/ui/tutor.js, três passos); a marca sai aqui
+      if (safe(function () { return !!G().primeiraLuta; }, false)) {
+        G().primeiraLuta = false;
+        safe(function () { JOGO.Tutor.guiar(); return true; }, null);
+      }
+    }
     else if (name === 'roomClear' || name === 'dungeonComplete') buildRewards(name, data);
     else if (name === 'defeat') buildDefeat();
     else if (name === 'ecoFim') buildEcoFim(data);
@@ -1098,6 +1109,17 @@ var JOGO = (typeof window !== 'undefined')
         var okE = safe(function () { return P().escolheIniciais(selHeroes.slice()); }, false);
         if (!okE) { toast(tr('Não deu para gravar a escolha. Tente de novo.')); return; }
         toast(tr('{a} e {b} são os seus heróis. Boa descida!', { a: esc(className(selHeroes[0])), b: esc(className(selHeroes[1])) }), 'good');
+        /* 15/10 — A PRIMEIRA LUTA ANTES DA PRAÇA (a análise de mercado: quem não chega à primeira luta em
+         * um ou dois minutos desinstala). A escolha das iniciais só acontece UMA vez por conta, então
+         * este é, por definição, o primeiro jogador: em vez da praça (a cena mais pesada, com a pré-busca),
+         * os dois descem direto para a primeira sala do primeiro calabouço — a antessala vira um aviso de
+         * um instante e a porta abre sozinha (buildPrimeiraLuta). A praça vem depois da primeira vitória. */
+        guardaDupla();
+        var primeiro = safe(function () { return (JOGO.DATA.dungeons[0] || {}).id; }, null) || 'greenhouse';
+        G().primeiraLuta = true;
+        safe(function () { JOGO.EventosUso.anota('primeira_luta_direta'); }, null);
+        if (safe(function () { return G().startRun(selHeroes.slice(), primeiro); }, false)) return;
+        G().primeiraLuta = false;      // não deu (portal fechado?): a praça de sempre
       }
       if (!selHeroes.length) { toast(tr('Escolha ao menos um herói.')); return; }
       guardaDupla();          // 12/09: o próximo login já abre na praça com esta
@@ -3451,6 +3473,26 @@ var JOGO = (typeof window !== 'undefined')
     b.appendChild(el('h3', null, esc(title)));
     b.appendChild(node);
     return b;
+  }
+
+  /* 15/10 — A ANTESSALA DA PRIMEIRA LUTA: um aviso de um instante no lugar do pátio 3D, e a porta
+   * abre sozinha (Game.entrarNaSala pede o bilhete ao servidor e entra quando ele chega). Se a porta
+   * não abrir (vida, portal), o botão leva à praça de sempre. */
+  function buildPrimeiraLuta() {
+    var s = screens.antessala;
+    clear(s);
+    var box = el('div', 'menu-box');
+    box.appendChild(el('h1', 'game-title', tr('A primeira descida')));
+    box.appendChild(el('p', 'game-sub', tr('Os seus dois heróis descem agora para a primeira sala. A praça, o cais e os portais vêm logo depois desta luta.')));
+    box.appendChild(el('p', 'inv-dica', tr('Abrindo a porta…')));
+    var acts = el('div', 'menu-acts');
+    acts.appendChild(btn(tr('Ir para a praça'), 'btn-ghost', function () { G().primeiraLuta = false; safe(function () { G().abandonar(); return true; }, null); navTo('hub'); }));
+    box.appendChild(acts);
+    s.appendChild(box);
+    setTimeout(function () {
+      var r = safe(function () { return G().entrarNaSala(); }, false);
+      if (r === false) { G().primeiraLuta = false; navTo('hub'); }
+    }, 60);
   }
 
   function buildDefeat() {

@@ -104,6 +104,8 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   T.aoTela = function (tela) {
+    if (guia && tela === 'battle') return false;      // 15/10: os passos guiados valem pela dica da batalha
+    if (guia && tela !== 'battle') guia = null;        // saiu da batalha no meio: o guia some (volta na próxima conta nova)
     fecha();
     var d = le(), dica = dicaDe(tela);
     if (!dica) return false;
@@ -143,6 +145,76 @@ var JOGO = (typeof window !== 'undefined')
 
   // reservado para testes e para religar as dicas num futuro menu de opções
   T._zera = function () { grava({ vistos: {}, off: false }); };
+
+  /* 15/10 — A PRIMEIRA BATALHA GUIADA (a análise de mercado: a profundidade é o muro de quem entra).
+   * Três passos, um de cada vez, sem botão: 1) toque num feitiço (Game.selectSpell), 2) toque no
+   * inimigo (o evento 'cast' de um herói), 3) passe a vez (Game.endTurn). Acabou, grava `guiada` e
+   * não volta. A HUD chama T.guiar() na primeira batalha da conta (Game.primeiraLuta). Enquanto guia,
+   * a dica fixa da batalha não aparece — os passos dizem o mesmo, na hora certa. */
+  var PASSOS = [
+    Tx('Passo 1 de 3 — Toque num <b>feitiço</b> na barra de baixo.'),
+    Tx('Passo 2 de 3 — Agora toque no <b>inimigo</b> para atacar.'),
+    Tx('Passo 3 de 3 — Sem PA? Toque em <b>Passar a vez</b>. O relógio guarda o que sobrar.')
+  ];
+  var guia = null;     // { passo, caixa }
+  T.guiando = function () { return !!guia; };
+  function mostraPasso(i) {
+    fecha();
+    if (i >= PASSOS.length) {
+      caixa = document.createElement('div');
+      caixa.className = 'tutor-caixa tutor-guia';
+      caixa.innerHTML = '<p>' + Tx('Isso é tudo. <b>Boa descida!</b>') + '</p>';
+      document.body.appendChild(caixa);
+      setTimeout(fecha, 3000);
+      var d = le(); d.guiada = true; grava(d);
+      guia = null;
+      return;
+    }
+    caixa = document.createElement('div');
+    caixa.className = 'tutor-caixa tutor-guia';
+    caixa.innerHTML = '<p>' + PASSOS[i] + '</p>';
+    document.body.appendChild(caixa);
+  }
+  function avanca(ate) {
+    if (!guia || guia.passo >= ate) return;
+    guia.passo = ate;
+    mostraPasso(ate);
+  }
+  var ganchosGuia = false;
+  function ligaGanchosGuia() {
+    if (ganchosGuia) return;
+    var G = JOGO.Game, UI = JOGO.UI;
+    if (!G || !UI) return;
+    ganchosGuia = true;
+    var sel = G.selectSpell;
+    if (typeof sel === 'function') {
+      G.selectSpell = function () { var r = sel.apply(this, arguments); try { if (guia && guia.passo === 0) avanca(1); } catch (e) {} return r; };
+    }
+    var fim = G.endTurn;
+    if (typeof fim === 'function') {
+      G.endTurn = function () { var r = fim.apply(this, arguments); try { if (guia && guia.passo === 2) avanca(3); } catch (e) {} return r; };
+    }
+    var he = UI.handleEvent;
+    UI.handleEvent = function (ev) {
+      try {
+        if (guia && guia.passo === 1 && ev && ev.type === 'cast') {
+          var st = G.state, u = null;
+          if (st && st.units) for (var i = 0; i < st.units.length; i++) if (st.units[i].uid === ev.uid) u = st.units[i];
+          if (!u || u.side === 'player') avanca(2);
+        }
+      } catch (e) {}
+      return typeof he === 'function' ? he.apply(this, arguments) : undefined;
+    };
+  }
+  T.guiar = function () {
+    var d = le();
+    if (d.off || d.guiada) return false;
+    ligaGanchosGuia();
+    guia = { passo: 0 };
+    mostraPasso(0);
+    return true;
+  };
+  T._passo = function () { return guia ? guia.passo : -1; };
 
   // o gancho: embrulha UI.showScreen assim que a HUD existir
   (function tenta() {

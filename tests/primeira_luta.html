@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SOTERRA — a primeira luta antes da praça e a batalha guiada (15/10)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  #summary { padding: 8px; font: 14px/1.4 system-ui; }
+  #summary.allpass { background: #163; color: #cfc; }
+  #summary.fail { background: #611; color: #fcc; }
+  li.pass { color: #4c4; } li.fail { color: #f66; }
+</style>
+</head>
+<body>
+<div id="summary">carregando…</div>
+<ul id="lista"></ul>
+<!-- a conta nova escolhe os dois heróis e, em vez da praça, cai na primeira sala com a porta aberta sozinha e
+     o guia de três passos (js/ui/hud.js buildPrimeiraLuta; js/ui/tutor.js T.guiar). Sem servidor aqui: a sala
+     nasce sem bilhete (ataSolo nulo), que é o caminho de casa. -->
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js','assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/icones_ui.js','js/ui/hud.js','js/ui/tutor.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+  function fim(msg) {
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') + okN + ' de ' + (okN + falhas.length) + ' ok, ' +
+      falhas.length + ' falharam' + (msg ? ' · ' + msg : '');
+    window.__pronto = true;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, T = JOGO.Tutor;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return fim('init: ' + e.message); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() && JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      roda();
+    })();
+
+    function roda() {
+      try { T._zera(); } catch (e) {}
+      var ids = JOGO.Progress.heroIds();
+      while (ids.length < 2) { JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = JOGO.Progress.heroIds(); }
+      check('o guia existe (Tutor.guiar)', typeof T.guiar === 'function');
+      // o que a HUD faz depois da escolha das iniciais: a marca e o startRun do primeiro calabouço
+      G.primeiraLuta = true;
+      var primeiro = (JOGO.DATA.dungeons[0] || {}).id;
+      check('o primeiro calabouço da lista tem id', !!primeiro, primeiro);
+      var r = G.startRun(ids.slice(0, 2), primeiro);
+      check('startRun aceitou a descida', r === true, String(r));
+      var telas = [], t1 = Date.now();
+      (function olha() {
+        if (telas[telas.length - 1] !== G.screen) telas.push(G.screen);
+        if (G.screen !== 'battle' && Date.now() - t1 < 20000) return setTimeout(olha, 100);
+        check('passou pela antessala sem o pátio e caiu na batalha sozinha', telas.indexOf('antessala') >= 0 && G.screen === 'battle', telas.join(' → '));
+        check('a antessala mostrou o aviso da primeira descida, não a praça',
+              !!document.querySelector('#ui-root .menu-box') || telas.indexOf('battle') >= 0, 'telas: ' + telas.join(' → '));
+        check('a marca da primeira luta saiu ao entrar na batalha', G.primeiraLuta === false);
+        check('o guia está ligado no passo 1', T.guiando() && T._passo() === 0, 'passo ' + T._passo());
+        var cx = document.querySelector('.tutor-guia');
+        check('a caixa do passo 1 está na tela', !!cx && /feitiço|spell|hechizo/i.test(cx.textContent));
+        // passo 1: escolher um feitiço
+        var st = G.state, heroi = st.units.filter(function (u) { return u.side === 'player' && u.alive; })[0];
+        var sid = heroi && heroi.spells && heroi.spells[0];
+        G.selectSpell(sid);
+        check('tocar num feitiço avança para o passo 2', T._passo() === 1, 'passo ' + T._passo());
+        // passo 2: o evento de lance de um herói
+        JOGO.UI.handleEvent({ type: 'cast', uid: heroi.uid, spellId: sid });
+        check('o lance do herói avança para o passo 3', T._passo() === 2, 'passo ' + T._passo());
+        // passo 3: passar a vez (o endTurn pode recusar fora da vez; o gancho conta mesmo assim)
+        try { G.endTurn(); } catch (e) {}
+        check('passar a vez encerra o guia e grava', !T.guiando(), 'passo ' + T._passo());
+        check('o guia não volta na mesma conta', T.guiar() === false);
+        fim(telas.join(' → '));
+      })();
+    }
+  });
+})();
+</script>
+</body>
+</html>
