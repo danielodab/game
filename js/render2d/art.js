@@ -4383,8 +4383,9 @@ var JOGO = (typeof window !== 'undefined')
   //   3. o DISTINTIVO do efeito secundário no canto de baixo-direita — veneno, marca, empurrão,
   //      puxão, raiz, invisível, escudo, cura, bônus, maldição, armadilha, teleporte — o que o
   //      feitiço faz ALÉM do golpe (idem, só de 40 px para cima).
-  // A fusão de dois elementos pinta o motivo em DUAS cores, metade de cada (clip), e o quadro
-  // leva a mistura. O cache continua por id+tamanho (`A.spellIcon`).
+  // A fusão de dois elementos pinta o ícone INTEIRO em duas metades (clip): quadro, brilho e
+  // motivo, a esquerda no primeiro elemento e a direita no segundo (15/10; antes o quadro levava a
+  // mistura das duas). O cache continua por id+tamanho (`A.spellIcon`).
   // ==========================================================================
   var MOTIVO = {};
   // --- os ajudantes dos motivos
@@ -5554,12 +5555,19 @@ var JOGO = (typeof window !== 'undefined')
     var el2 = els ? els[1] : null;
     if (el2 && (el2 === el || !ELEM[el2])) el2 = null;
     var info2 = el2 ? elemInfo(el2) : null;
-    iconFrame(g, size, info2 ? mx(info.c, info2.c, 0.5) : info.c, null);
+    var cx = size / 2, cy = size / 2, r = size * 0.3;
+    // 15/10 — o dono: "os feitiços da fusão devem pegar METADE da cor de cada elemento". O quadro
+    // saía na MISTURA das duas (um roxo que não era nem fogo nem água); agora o quadro, o brilho e o
+    // motivo saem partidos ao meio, a esquerda no primeiro elemento e a direita no segundo
+    if (info2) {
+      g.save(); g.beginPath(); g.rect(0, 0, cx, size); g.clip(); iconFrame(g, size, info.c, null); glow(g, cx, cy, size * 0.42, info.c, 0.32); g.restore();
+      g.save(); g.beginPath(); g.rect(cx, 0, size - cx, size); g.clip(); iconFrame(g, size, info2.c, null); glow(g, cx, cy, size * 0.42, info2.c, 0.32); g.restore();
+    } else {
+      iconFrame(g, size, info.c, null);
+      glow(g, cx, cy, size * 0.42, info.c, 0.32);
+    }
     var motivo = motivoDe(spell);
     var fn = MOTIVO[motivo] || MOTIVO.bola;
-    var cx = size / 2, cy = size / 2, r = size * 0.3;
-    glow(g, cx, cy, size * 0.42, info.c, 0.32);
-    if (info2) glow(g, cx + size * 0.1, cy, size * 0.36, info2.c, 0.3);
     var grande = size >= 40;
     // com distintivo ou marca de área, o motivo encolhe um pouco e sobe, para os cantos ficarem limpos
     var tipo = grande ? distintivoDe(spell, motivo) : null;
