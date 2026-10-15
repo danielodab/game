@@ -89,6 +89,7 @@ from torneio import ESQUEMA_TORNEIO, ROTAS_TORNEIO, ROTAS_TORNEIO_MESTRE, Tornei
 # 02/10: os direitos do titular (aceite dos termos, excluir a conta, baixar os dados) e o registro de erros
 from privacidade import ESQUEMA_PRIVACIDADE, ROTAS_PRIVACIDADE, PrivacidadeMixin, confere_aceite
 from registros import ESQUEMA_REGISTROS, ROTAS_REGISTROS, RegistrosMixin
+from eventos_uso import ESQUEMA_EVENTOS_USO, ROTAS_EVENTOS_USO, EventosUsoMixin   # 15/10: o funil, somado por dia
 import nomes                    # a lei dos nomes (servidor/nomes.py): o cadastro recusa quem veste a equipe
 # 02/10: a moderação (servidor/moderacao.py): banimento com prazo, silêncio, denúncias, auditoria do Mestre
 from moderacao import DO_BANIDO, ESQUEMA_MODERACAO, FRASE_BANIDA, ModeracaoMixin
@@ -483,6 +484,7 @@ ROTAS = {
 }
 ROTAS.update(ROTAS_PRIVACIDADE)   # 02/10: privacidade.py — aceite, excluir a conta, baixar os dados
 ROTAS.update(ROTAS_REGISTROS)     # 02/10: registros.py — o registro de erros e o painel dele
+ROTAS.update(ROTAS_EVENTOS_USO)   # 15/10: eventos_uso.py — os eventos de uso (o funil) e o painel deles
 ROTAS.update(ROTAS_TRILHA)        # 07/10: trilha.py — a trilha da temporada (ler e resgatar)
 ROTAS.update(ROTAS_DIARIO)        # 08/10: premio_diario.py — o prêmio diário de resgate (ler e resgatar)
 # 10/10: torneio.py — o Torneio da Arena. Ler é público (o site mostra a chave); inscrever, a presença e a guilda
@@ -844,7 +846,7 @@ def versao_da_regra():
 
 class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
           AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin,
-          TrilhaMixin, DiarioMixin, TorneioMixin):   # 07/10: a trilha da temporada; 08/10: o prêmio diário; 10/10: o torneio
+          TrilhaMixin, DiarioMixin, TorneioMixin, EventosUsoMixin):   # 07/10: a trilha da temporada; 08/10: o prêmio diário; 10/10: o torneio; 15/10: os eventos de uso
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
     escritas de qualquer jeito, e a tranca dá de graça o que o anti-duplicação
     precisa: dois PUT do mesmo save nunca se entrelaçam — o segundo vê a
@@ -887,10 +889,12 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         self.con.executescript(ESQUEMA_PRESENCA)  # 15/09: a presença que o Relé grava (presenca.py) — idem
         self.con.executescript(ESQUEMA_SUPREMO)   # 02/10: o Eco Primordial (supremo.py) — idem
         self.con.executescript(ESQUEMA_PRIVACIDADE + ESQUEMA_REGISTROS)   # 02/10: aceites e erros — idem
+        self.con.executescript(ESQUEMA_EVENTOS_USO)   # 15/10: os eventos de uso (eventos_uso.py) — idem
         self.con.executescript(ESQUEMA_MODERACAO)  # 02/10: a moderação (moderacao.py) — idem
         self.con.executescript(ESQUEMA_TORNEIO)    # 10/10: o Torneio da Arena (torneio.py) — idem
         self.tranca = threading.RLock()
         self._registros_init()   # 02/10: o freio do registro de erros (registros.py), em memória
+        self._eventos_uso_init()  # 15/10: o freio dos eventos de uso (eventos_uso.py), em memória
         self.tentativas = {}     # conta_id → [instantes de senha errada]   (em memória basta)
         self._em_voo = {}        # chave do balde do IP → vagas com o PBKDF2 correndo   (conta.py: _freia_por_ip)
         self._fila = {}          # chave do balde do IP → pedidos esperando uma dessas vagas voltar

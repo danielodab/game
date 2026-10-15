@@ -58,6 +58,7 @@ import pagamento as pagamento_mod  # noqa: E402
 import presenca as presenca_mod  # noqa: E402
 import privacidade  # noqa: E402
 import registros  # noqa: E402
+import eventos_uso as eventos_uso_mod  # noqa: E402
 
 SENHA = 'segredo-bom-8'
 ASSUNTO_EXCLUIDA = 'SOTERRA: sua conta foi excluída'
@@ -648,6 +649,7 @@ class ProvaDoTexto(unittest.TestCase):
             'FAXINA_DIAS': conta_mod.FAXINA // 86400,
             'PRESENCA_HORAS': presenca_mod.GUARDA_MS // 3600000,
             'ERROS_DIAS': registros.RETENCAO_DIAS,
+            'EVENTOS_DIAS': eventos_uso_mod.RETENCAO_DIAS,   # 15/10: os eventos de uso, somados por dia
             'BACKUP_DIAS': dias_backup,
             'PBKDF2_VOLTAS': comum.PBKDF2_VOLTAS,
             'INATIVO_MIN': int(inativo.group(1)),
