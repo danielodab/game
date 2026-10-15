@@ -787,6 +787,8 @@ var JOGO = (typeof window !== 'undefined')
     if (typeof THREE.GLTFLoader !== 'function') { finish(new Error('THREE.GLTFLoader ausente')); return; }
 
     var loader = new THREE.GLTFLoader();
+    // 15/10: os .glb do bundle vem com meshopt (tools/comprime_glb.py); o decodificador e o vendor/meshopt_decoder.js
+    if (typeof MeshoptDecoder !== 'undefined' && loader.setMeshoptDecoder) { try { loader.setMeshoptDecoder(MeshoptDecoder); } catch (eM) {} }
     var pending = keys.length, firstErr = null;
     keys.forEach(function (key) {
       parseUm(loader, key, function (err) { if (err) firstErr = firstErr || err; step(); });
@@ -836,6 +838,8 @@ var JOGO = (typeof window !== 'undefined')
       return;
     }
     var loader = new THREE.GLTFLoader();
+    // 15/10: os .glb do bundle vem com meshopt (tools/comprime_glb.py); o decodificador e o vendor/meshopt_decoder.js
+    if (typeof MeshoptDecoder !== 'undefined' && loader.setMeshoptDecoder) { try { loader.setMeshoptDecoder(MeshoptDecoder); } catch (eM) {} }
     var pending = lista.length, firstErr = null;
     lista.forEach(function (key) {
       // cada chave conta UMA vez: o GLTFLoader pode chamar onLoad e depois

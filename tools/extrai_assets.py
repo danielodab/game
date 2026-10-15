@@ -56,6 +56,7 @@ USO
 import base64
 import binascii
 import hashlib
+import comprime_glb   # 15/10: o meshopt pelo gltfpack (o .glb servido fica em ~metade)
 import json
 import os
 import re
@@ -66,6 +67,11 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORIGEM = os.path.join(RAIZ, 'assets', 'embedded')
 DESTINO = os.path.join(RAIZ, 'assets', 'models', 'bundle')
 MANIFESTO = os.path.join(DESTINO, 'manifest.json')
+# 15/10: o caderno da compressao — arquivo servido -> {fonte: hash do embutido, hash: hash do servido}. Com ele, o
+# embutido que nao mudou nao passa pelo gltfpack de novo (1-2 s por modelo), e o --conferir sabe que o .glb em disco
+# e a versao comprimida DESTE embutido
+COMPRIMIDOS = os.path.join(DESTINO, 'comprimidos.json')
+SEM_COMPRIMIR = '--sem-comprimir' in sys.argv
 TABELAS = 'tabelas'                       # subpasta de DESTINO
 
 # Os arquivos que participam. `fx-atlas.js` e `fx-placas.js` ficam de fora de
@@ -271,6 +277,32 @@ def _bate_texto(caminho, texto):
             atual.decode('utf-8', 'replace').replace('\r\n', '\n') == texto.replace('\r\n', '\n'))
 
 
+def _comprimidos_antigos():
+    try:
+        with open(COMPRIMIDOS, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def servido_de(rel, bruto, ext, caderno, fis):
+    """O que vai para o disco e para o manifesto: o .glb comprimido (reaproveitado do caderno quando o embutido
+    nao mudou), ou o bruto. Devolve (bytes, comprimiu)."""
+    if ext != '.glb' or SEM_COMPRIMIR:
+        return bruto, False
+    fonte = impressao(bruto)
+    reg = caderno.get(rel)
+    if reg and reg.get('fonte') == fonte:
+        atual = _le(fis)
+        if atual is not None and impressao(atual) == reg.get('hash') and comprime_glb.comprimido(atual):
+            return atual, True
+    novo = comprime_glb.comprime(bruto)
+    if novo is None:
+        return bruto, False
+    return novo, True
+
+
 def _manifesto_antigo():
     try:
         with open(MANIFESTO, encoding='utf-8') as f:
@@ -311,6 +343,11 @@ def principal(conferir=False):
     sem_reduzir = []
     faltando = []
     tabelas = {}                 # caminho relativo -> texto
+    caderno = _comprimidos_antigos()
+    caderno_novo = {}
+    comprimidos = 0
+    if not SEM_COMPRIMIR and comprime_glb.comando() is None:
+        print('(sem gltfpack: os .glb vao como vieram — veja tools/comprime_glb.py)')
 
     for nome in _fontes():
         caminho = os.path.join(ORIGEM, nome)
@@ -336,18 +373,23 @@ def principal(conferir=False):
             rel = pasta + '/' + seguro + ext
             fis = os.path.join(DESTINO, pasta, seguro + ext)
             total_b64 += n_b64
-            total_bin += len(bruto)
+            # 15/10: o .glb servido e o COMPRIMIDO (meshopt); o manifesto leva o hash e o tamanho do que se serve
+            servido, comprimiu = servido_de(rel, bruto, ext, caderno, fis)
+            if comprimiu:
+                caderno_novo[rel] = {'fonte': impressao(bruto), 'hash': impressao(servido)}
+                comprimidos += 1
+            total_bin += len(servido)
             manifesto['itens'].append({
-                'alvo': alvo, 'chave': chave, 'arquivo': rel, 'bytes': len(bruto),
-                'hash': impressao(bruto), 'grupo': grupo_de(pasta, chave),
+                'alvo': alvo, 'chave': chave, 'arquivo': rel, 'bytes': len(servido),
+                'hash': impressao(servido), 'grupo': grupo_de(pasta, chave),
             })
             if conferir:
-                if _le(fis) != bruto:
+                if _le(fis) != servido:
                     faltando.append(rel)
                 continue
-            if _le(fis) != bruto:
+            if _le(fis) != servido:
                 with open(fis, 'wb') as f:
-                    f.write(bruto)
+                    f.write(servido)
                 escritos += 1
         if itens:
             print('  %-28s %3d itens%s' % (nome, len(itens), '  + tabela' if tabela is not None else ''))
@@ -378,6 +420,8 @@ def principal(conferir=False):
               % (len(sem_reduzir), ', '.join(sem_reduzir[:4]), '...' if len(sem_reduzir) > 4 else ''))
 
     if conferir:
+        if comprimidos and _comprimidos_antigos() != caderno_novo:
+            faltando.append('comprimidos.json')
         for rel_tab, texto in sorted(tabelas.items()):
             fis = os.path.join(DESTINO, *rel_tab.split('/'))
             if not _bate_texto(fis, texto):
@@ -408,6 +452,14 @@ def principal(conferir=False):
                 os.remove(os.path.join(pasta_tab, velho))
                 print('  (tabela velha apagada: %s)' % velho)
 
+    # 15/10: o caderno da compressao (so quando houve o que comprimir; sem gltfpack ele nao muda)
+    if comprimidos:
+        texto_cad = json.dumps(caderno_novo, ensure_ascii=False, indent=1, sort_keys=True)
+        cru_cad = _le(COMPRIMIDOS)
+        if cru_cad is None or cru_cad.decode('utf-8', 'replace').replace('\r\n', '\n') != texto_cad:
+            with open(COMPRIMIDOS, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(texto_cad)
+
     novo = json.dumps(manifesto, ensure_ascii=False, indent=1)
     cru = _le(MANIFESTO)
     if cru is None or cru.decode('utf-8', 'replace').replace('\r\n', '\n') != novo:
@@ -422,6 +474,7 @@ def principal(conferir=False):
     print('  arquivos reescritos .. %d' % escritos)
     print('  base64 no .js ........ %.2f MB' % (total_b64 / 1048576.0))
     print('  binario em disco ..... %.2f MB' % (total_bin / 1048576.0))
+    print('  .glb comprimidos ..... %d (meshopt; tools/comprime_glb.py)' % comprimidos)
     print('  economia ............. %.2f MB (%.0f%%)' % (
         (total_b64 - total_bin) / 1048576.0,
         100.0 * (total_b64 - total_bin) / total_b64 if total_b64 else 0))

@@ -64,6 +64,8 @@ var JOGO = (typeof window !== 'undefined')
     var keys = Object.keys(A);
     if (!keys.length || !THREE.GLTFLoader) { finishLoad(); return; }
     var loader = new THREE.GLTFLoader();
+    // 15/10: os .glb do bundle vem com meshopt (tools/comprime_glb.py); o decodificador e o vendor/meshopt_decoder.js
+    if (typeof MeshoptDecoder !== 'undefined' && loader.setMeshoptDecoder) { try { loader.setMeshoptDecoder(MeshoptDecoder); } catch (eM) {} }
     var pending = keys.length;
     keys.forEach(function (k) {
       try {

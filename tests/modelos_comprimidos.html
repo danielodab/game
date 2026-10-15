@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>SOTERRA — os .glb comprimidos (meshopt) do bundle abrem no three do jogo (15/10)</title></head>
+<body>
+<div id="summary">carregando…</div>
+<script src="save_sandbox.js"></script>
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/GLTFLoader.js"></script>
+<script src="../vendor/meshopt_decoder.js"></script>
+<script>
+(function () {
+  var res = [], arqs = (location.search.match(/arqs=([^&]+)/) || [])[1];
+  // sem ?arqs=, tres do bundle: um heroi do KayKit (os nomes das malhas tem de sobreviver), um corpo
+  // do Meshy com esqueleto e clipes, e as animacoes partilhadas
+  arqs = arqs ? decodeURIComponent(arqs).split(',') : ['../assets/models/bundle/models-heroes/rogue.glb',
+    '../assets/models/bundle/models-meshy-colossos/colosso-agua.glb', '../assets/models/bundle/models-anims/_anims.glb'];
+  var loader = new THREE.GLTFLoader();
+  try { loader.setMeshoptDecoder(MeshoptDecoder); } catch (e) { res.push('setMeshoptDecoder: ' + e.message); }
+  var i = 0;
+  function proximo() {
+    if (i >= arqs.length) {
+      document.getElementById('summary').textContent = (res.some(function (r) { return /ERRO/.test(r); }) ? 'FALHAS — ' : 'TUDO PASSOU — ') + res.join(' | ');
+      window.__pronto = true; return;
+    }
+    var a = arqs[i++], t0 = performance.now();
+    loader.load(a, function (g) {
+      var sk = 0, meshes = 0, verts = 0, anims = (g.animations || []).length, nomes = [];
+      g.scene.traverse(function (n) { if (n.isMesh || n.isSkinnedMesh) { meshes++; if (n.isSkinnedMesh) sk++; verts += n.geometry.attributes.position.count; nomes.push(n.name); } });
+      // a regua: a malha tem NOME (nao 'mesh_0' — o gltfpack sem -noq pendurava a malha num no novo sem nome)
+      var semNome = nomes.filter(function (n) { return !n || /^mesh_\d+$/.test(n); }).length;
+      res.push((semNome ? 'ERRO ' : '') + a.split('/').pop() + ': ' + meshes + ' malhas (' + sk + ' com pele), ' + verts + ' vértices, ' + anims + ' clipes, ' + Math.round(performance.now() - t0) + ' ms, nomes ' + nomes.slice(0, 3).join('/') + (semNome ? ' — ' + semNome + ' sem nome' : ''));
+      proximo();
+    }, undefined, function (e) { res.push('ERRO ' + a + ': ' + (e && e.message || e)); proximo(); });
+  }
+  proximo();
+})();
+</script>
+</body></html>

@@ -1,5 +1,5 @@
 {
- "gerado": "2026-10-08T20:48:02",
+ "gerado": "2026-10-15T20:44:37",
  "ferramenta": "tools/extrai_assets.py",
  "base": "assets/models/bundle/",
  "itens": [
@@ -7,1104 +7,1104 @@
    "alvo": "MODELS",
    "chave": "av_muro",
    "arquivo": "cenario-andaimes/av_muro.glb",
-   "bytes": 810144,
-   "hash": "340a7352bf48",
+   "bytes": 633544,
+   "hash": "139685742bdc",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_muro_quebrado",
    "arquivo": "cenario-andaimes/av_muro_quebrado.glb",
-   "bytes": 783420,
-   "hash": "19203667e3cb",
+   "bytes": 605144,
+   "hash": "7aaab92d99b7",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_viga",
    "arquivo": "cenario-andaimes/av_viga.glb",
-   "bytes": 728428,
-   "hash": "f22574145a5b",
+   "bytes": 560688,
+   "hash": "400b684d2387",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_guindaste",
    "arquivo": "cenario-andaimes/av_guindaste.glb",
-   "bytes": 473144,
-   "hash": "8cc16a3caed0",
+   "bytes": 426464,
+   "hash": "7481e69cf4f8",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_chamine",
    "arquivo": "cenario-andaimes/av_chamine.glb",
-   "bytes": 393624,
-   "hash": "349d0838d95a",
+   "bytes": 370900,
+   "hash": "b038d1588dcc",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_mastro",
    "arquivo": "cenario-andaimes/av_mastro.glb",
-   "bytes": 423824,
-   "hash": "5b0c2b910890",
+   "bytes": 389276,
+   "hash": "cbda19e1d3d7",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_torre",
    "arquivo": "cenario-andaimes/av_torre.glb",
-   "bytes": 502992,
-   "hash": "156008d54ad9",
+   "bytes": 449028,
+   "hash": "89113350511d",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_caixa",
    "arquivo": "cenario-andaimes/av_caixa.glb",
-   "bytes": 476312,
-   "hash": "c304770cb912",
+   "bytes": 425312,
+   "hash": "a8971284cae6",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_saco",
    "arquivo": "cenario-andaimes/av_saco.glb",
-   "bytes": 386184,
-   "hash": "b862ca114acc",
+   "bytes": 355796,
+   "hash": "7bd00e2f0b31",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_cabo",
    "arquivo": "cenario-andaimes/av_cabo.glb",
-   "bytes": 458812,
-   "hash": "2b897e7eaf51",
+   "bytes": 409988,
+   "hash": "f699e7dda8af",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_estrado",
    "arquivo": "cenario-andaimes/av_estrado.glb",
-   "bytes": 458964,
-   "hash": "505e5015e7b8",
+   "bytes": 413528,
+   "hash": "25ab985a9fb3",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_grade",
    "arquivo": "cenario-andaimes/av_grade.glb",
-   "bytes": 455248,
-   "hash": "e968bf6261fc",
+   "bytes": 413900,
+   "hash": "5c9f9e373678",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_tabuas",
    "arquivo": "cenario-andaimes/av_tabuas.glb",
-   "bytes": 388528,
-   "hash": "90bcf1d90b21",
+   "bytes": 366060,
+   "hash": "7a4d93db6d46",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_ninho",
    "arquivo": "cenario-andaimes/av_ninho.glb",
-   "bytes": 342888,
-   "hash": "23d5fad5517f",
+   "bytes": 332484,
+   "hash": "b6cc96102828",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_corda",
    "arquivo": "cenario-andaimes/av_corda.glb",
-   "bytes": 315496,
-   "hash": "c3efb87709ed",
+   "bytes": 309108,
+   "hash": "31d5b956f5b6",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_elevador",
    "arquivo": "cenario-andaimes/av_elevador.glb",
-   "bytes": 427464,
-   "hash": "aa29f3f891fc",
+   "bytes": 392888,
+   "hash": "ac90faf22c55",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_passarela",
    "arquivo": "cenario-andaimes/av_passarela.glb",
-   "bytes": 421876,
-   "hash": "aee98d3f730e",
+   "bytes": 387520,
+   "hash": "49dd6f4f6d98",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "av_barraca",
    "arquivo": "cenario-andaimes/av_barraca.glb",
-   "bytes": 435848,
-   "hash": "504344787e7f",
+   "bytes": 397388,
+   "hash": "f2500dde6d12",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_muro_inteiro",
    "arquivo": "cenario-cisterna/cs_muro_inteiro.glb",
-   "bytes": 893952,
-   "hash": "a95daa50cc68",
+   "bytes": 687616,
+   "hash": "f13bd42ad4ef",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_muro_brecha",
    "arquivo": "cenario-cisterna/cs_muro_brecha.glb",
-   "bytes": 827396,
-   "hash": "85d2809a15b6",
+   "bytes": 660220,
+   "hash": "b9a60b222df7",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_pilar_a",
    "arquivo": "cenario-cisterna/cs_pilar_a.glb",
-   "bytes": 546168,
-   "hash": "1ebabaf965f3",
+   "bytes": 463020,
+   "hash": "228ec0b81510",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_pilar_b",
    "arquivo": "cenario-cisterna/cs_pilar_b.glb",
-   "bytes": 539408,
-   "hash": "57114dc78284",
+   "bytes": 457696,
+   "hash": "864f1c973649",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_aquario",
    "arquivo": "cenario-cisterna/cs_aquario.glb",
-   "bytes": 1068344,
-   "hash": "7896077c9825",
+   "bytes": 846116,
+   "hash": "04aec9353ec1",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_estandarte",
    "arquivo": "cenario-cisterna/cs_estandarte.glb",
-   "bytes": 350984,
-   "hash": "4ae1c3d88f29",
+   "bytes": 338456,
+   "hash": "33ad36040bfd",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_luminaria",
    "arquivo": "cenario-cisterna/cs_luminaria.glb",
-   "bytes": 465956,
-   "hash": "80875bc47477",
+   "bytes": 414848,
+   "hash": "63afdcabed5a",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_espelho",
    "arquivo": "cenario-cisterna/cs_espelho.glb",
-   "bytes": 393376,
-   "hash": "5a10fc205321",
+   "bytes": 370868,
+   "hash": "506ce68e21a1",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_trono",
    "arquivo": "cenario-cisterna/cs_trono.glb",
-   "bytes": 539536,
-   "hash": "2e05e5d1db8c",
+   "bytes": 467244,
+   "hash": "6fa4cbfb8574",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_sal",
    "arquivo": "cenario-cisterna/cs_sal.glb",
-   "bytes": 505360,
-   "hash": "c0fcf2316407",
+   "bytes": 450368,
+   "hash": "e09d8c973883",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_poco_lirio",
    "arquivo": "cenario-cisterna/cs_poco_lirio.glb",
-   "bytes": 559780,
-   "hash": "d7e14a1de588",
+   "bytes": 493376,
+   "hash": "704e7e1ce914",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_fonte",
    "arquivo": "cenario-cisterna/cs_fonte.glb",
-   "bytes": 570888,
-   "hash": "e08caa147bce",
+   "bytes": 484288,
+   "hash": "cdf0136956ca",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_lustre",
    "arquivo": "cenario-cisterna/cs_lustre.glb",
-   "bytes": 617720,
-   "hash": "79d9358579c4",
+   "bytes": 524408,
+   "hash": "16c13aa20595",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cs_barril",
    "arquivo": "cenario-cisterna/cs_barril.glb",
-   "bytes": 488652,
-   "hash": "2a3b98dd822b",
+   "bytes": 442428,
+   "hash": "0dbc7bfce2e0",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_muro_inteiro",
    "arquivo": "cenario-coracao/cp_muro_inteiro.glb",
-   "bytes": 266788,
-   "hash": "56fa16aafc50",
+   "bytes": 263828,
+   "hash": "bee607ad497a",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_muro_balaustrada",
    "arquivo": "cenario-coracao/cp_muro_balaustrada.glb",
-   "bytes": 357628,
-   "hash": "b77266d892a5",
+   "bytes": 326844,
+   "hash": "4ed5189eed37",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_pilar",
    "arquivo": "cenario-coracao/cp_pilar.glb",
-   "bytes": 274864,
-   "hash": "40f54123f496",
+   "bytes": 268032,
+   "hash": "0b62563f1350",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_marco_estatua",
    "arquivo": "cenario-coracao/cp_marco_estatua.glb",
-   "bytes": 338128,
-   "hash": "f6854ade7aa9",
+   "bytes": 315880,
+   "hash": "e1fda1afde08",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_arco",
    "arquivo": "cenario-coracao/cp_arco.glb",
-   "bytes": 270480,
-   "hash": "4557f2167e3e",
+   "bytes": 268516,
+   "hash": "39943cffdaec",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_escadaria",
    "arquivo": "cenario-coracao/cp_escadaria.glb",
-   "bytes": 302956,
-   "hash": "96fd3b23f189",
+   "bytes": 292240,
+   "hash": "59259d3298ab",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_coluna_elementos",
    "arquivo": "cenario-coracao/cp_coluna_elementos.glb",
-   "bytes": 287292,
-   "hash": "709df2e9ef4c",
+   "bytes": 280384,
+   "hash": "31f87fbee2fa",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_bacia",
    "arquivo": "cenario-coracao/cp_bacia.glb",
-   "bytes": 295168,
-   "hash": "67af39891f53",
+   "bytes": 282596,
+   "hash": "7aee6f3a98f9",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_caco_espelho",
    "arquivo": "cenario-coracao/cp_caco_espelho.glb",
-   "bytes": 265068,
-   "hash": "7a1c5a9beb62",
+   "bytes": 262424,
+   "hash": "90542cbe5b78",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_raiz",
    "arquivo": "cenario-coracao/cp_raiz.glb",
-   "bytes": 326016,
-   "hash": "25ebad8c4379",
+   "bytes": 305532,
+   "hash": "0b15ed55f301",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_lampioes",
    "arquivo": "cenario-coracao/cp_lampioes.glb",
-   "bytes": 301396,
-   "hash": "02f2d19f54bb",
+   "bytes": 289124,
+   "hash": "3bbc1aeaf5f1",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_mosaico",
    "arquivo": "cenario-coracao/cp_mosaico.glb",
-   "bytes": 288416,
-   "hash": "aed85492fd4c",
+   "bytes": 275736,
+   "hash": "b9016f7e6b48",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_rachadura_estrela",
    "arquivo": "cenario-coracao/cp_rachadura_estrela.glb",
-   "bytes": 260732,
-   "hash": "65560c668e29",
+   "bytes": 256320,
+   "hash": "b1212ecb1e47",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_veio_luz",
    "arquivo": "cenario-coracao/cp_veio_luz.glb",
-   "bytes": 260156,
-   "hash": "7424353b74f8",
+   "bytes": 256308,
+   "hash": "c2f644248aaa",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "cp_cinza_gelo",
    "arquivo": "cenario-coracao/cp_cinza_gelo.glb",
-   "bytes": 308064,
-   "hash": "b485284c14bd",
+   "bytes": 288984,
+   "hash": "a6eb424a1863",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "ce_pilar_quebrado",
    "arquivo": "cenario-eco/ce_pilar_quebrado.glb",
-   "bytes": 359604,
-   "hash": "d4df639e2072",
+   "bytes": 304752,
+   "hash": "e69f3a094a2d",
    "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
    "chave": "ce_entulho",
    "arquivo": "cenario-eco/ce_entulho.glb",
-   "bytes": 462732,
-   "hash": "528a38e5d6bc",
+   "bytes": 375736,
+   "hash": "95151adb5bde",
    "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
    "chave": "ce_borda_abismo",
    "arquivo": "cenario-eco/ce_borda_abismo.glb",
-   "bytes": 534424,
-   "hash": "3b3dce1a7773",
+   "bytes": 464908,
+   "hash": "02bbc8297550",
    "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
    "chave": "ce_cristal_eco",
    "arquivo": "cenario-eco/ce_cristal_eco.glb",
-   "bytes": 350852,
-   "hash": "1a85879da0f3",
+   "bytes": 337556,
+   "hash": "97afb5311198",
    "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
    "chave": "ce_obelisco",
    "arquivo": "cenario-eco/ce_obelisco.glb",
-   "bytes": 525920,
-   "hash": "a8cae3b64668",
+   "bytes": 458544,
+   "hash": "e46682012c43",
    "grupo": "mapa:camara_eco"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_muro",
    "arquivo": "cenario-fecho/fj_muro.glb",
-   "bytes": 768684,
-   "hash": "93b7ad7b7c3d",
+   "bytes": 591416,
+   "hash": "011fad9e1f3f",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_muro_quebrado",
    "arquivo": "cenario-fecho/fj_muro_quebrado.glb",
-   "bytes": 671088,
-   "hash": "acf20b89194e",
+   "bytes": 502092,
+   "hash": "07998644179b",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_pilar",
    "arquivo": "cenario-fecho/fj_pilar.glb",
-   "bytes": 691676,
-   "hash": "261c6f841c0d",
+   "bytes": 526748,
+   "hash": "952f4e53c4d0",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_forno",
    "arquivo": "cenario-fecho/fj_forno.glb",
-   "bytes": 469524,
-   "hash": "ef6073c93da4",
+   "bytes": 419872,
+   "hash": "621c07e2912f",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_chamine",
    "arquivo": "cenario-fecho/fj_chamine.glb",
-   "bytes": 360308,
-   "hash": "636b6f1683b8",
+   "bytes": 346972,
+   "hash": "a7824dd82d40",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_correntes",
    "arquivo": "cenario-fecho/fj_correntes.glb",
-   "bytes": 453900,
-   "hash": "2da162c6611d",
+   "bytes": 409596,
+   "hash": "5618888c26bc",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_prensa",
    "arquivo": "cenario-fecho/fj_prensa.glb",
-   "bytes": 382348,
-   "hash": "695c7d05cf9c",
+   "bytes": 362040,
+   "hash": "c3a2fe3c78a6",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_bigorna",
    "arquivo": "cenario-fecho/fj_bigorna.glb",
-   "bytes": 400960,
-   "hash": "8df0d2712ed9",
+   "bytes": 369956,
+   "hash": "8c735b7d4ebd",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_calha",
    "arquivo": "cenario-fecho/fj_calha.glb",
-   "bytes": 583704,
-   "hash": "c8627dbc8793",
+   "bytes": 500540,
+   "hash": "fead11afc240",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_lingotes",
    "arquivo": "cenario-fecho/fj_lingotes.glb",
-   "bytes": 353044,
-   "hash": "a3189044c385",
+   "bytes": 337840,
+   "hash": "10955073bb61",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_bancada",
    "arquivo": "cenario-fecho/fj_bancada.glb",
-   "bytes": 489476,
-   "hash": "792b1d4edd82",
+   "bytes": 430620,
+   "hash": "c4a775502c98",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_fole",
    "arquivo": "cenario-fecho/fj_fole.glb",
-   "bytes": 382592,
-   "hash": "5cd11b0c1faf",
+   "bytes": 360188,
+   "hash": "7a2e1d401bff",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_braseiro",
    "arquivo": "cenario-fecho/fj_braseiro.glb",
-   "bytes": 420864,
-   "hash": "1ad366af1f57",
+   "bytes": 398228,
+   "hash": "3f576ae47ed7",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_grelha",
    "arquivo": "cenario-fecho/fj_grelha.glb",
-   "bytes": 356192,
-   "hash": "37eef73e3d9b",
+   "bytes": 352104,
+   "hash": "c4eca5317e5c",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_limalha",
    "arquivo": "cenario-fecho/fj_limalha.glb",
-   "bytes": 407568,
-   "hash": "e4d86c31e55e",
+   "bytes": 387048,
+   "hash": "5fbc87c67a07",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_carvao",
    "arquivo": "cenario-fecho/fj_carvao.glb",
-   "bytes": 414624,
-   "hash": "7275bfdbb327",
+   "bytes": 391584,
+   "hash": "c90f5d6a427e",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_pilao",
    "arquivo": "cenario-fecho/fj_pilao.glb",
-   "bytes": 488360,
-   "hash": "9f4cb283ffae",
+   "bytes": 446992,
+   "hash": "c20e4b2d3f7f",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_carrinho",
    "arquivo": "cenario-fecho/fj_carrinho.glb",
-   "bytes": 444864,
-   "hash": "38ab47da7e85",
+   "bytes": 413872,
+   "hash": "b9ea7816d0f2",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "fj_sino",
    "arquivo": "cenario-fecho/fj_sino.glb",
-   "bytes": 469468,
-   "hash": "a7797e08afae",
+   "bytes": 429688,
+   "hash": "67eb86059d29",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_regador",
    "arquivo": "cenario-jardim/jd_regador.glb",
-   "bytes": 675228,
-   "hash": "23b1c01dc5fd",
+   "bytes": 568244,
+   "hash": "348f60c5bd66",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_carrinho",
    "arquivo": "cenario-jardim/jd_carrinho.glb",
-   "bytes": 465996,
-   "hash": "f6242f354ac4",
+   "bytes": 427188,
+   "hash": "6bdafa20b460",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_tronco",
    "arquivo": "cenario-jardim/jd_tronco.glb",
-   "bytes": 572448,
-   "hash": "7919082ae83c",
+   "bytes": 494900,
+   "hash": "09f02dfe95ba",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_redoma",
    "arquivo": "cenario-jardim/jd_redoma.glb",
-   "bytes": 606228,
-   "hash": "a2154dbae0da",
+   "bytes": 524080,
+   "hash": "5b0bdf7939e3",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_canteiro",
    "arquivo": "cenario-jardim/jd_canteiro.glb",
-   "bytes": 363708,
-   "hash": "2974950843da",
+   "bytes": 338644,
+   "hash": "36fc5537a0bd",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_vaso",
    "arquivo": "cenario-jardim/jd_vaso.glb",
-   "bytes": 539540,
-   "hash": "01e30bb6bc73",
+   "bytes": 478136,
+   "hash": "050b72bc5ddf",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_pilastra",
    "arquivo": "cenario-jardim/jd_muro_pilastra.glb",
-   "bytes": 678320,
-   "hash": "c48103734311",
+   "bytes": 508052,
+   "hash": "725ec9f974a2",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_brecha",
    "arquivo": "cenario-jardim/jd_muro_brecha.glb",
-   "bytes": 662596,
-   "hash": "c49c1e08f5a3",
+   "bytes": 500736,
+   "hash": "02e612d35873",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_ruina",
    "arquivo": "cenario-jardim/jd_muro_ruina.glb",
-   "bytes": 720048,
-   "hash": "f8fe1e0fdc1e",
+   "bytes": 560740,
+   "hash": "25b128d652e5",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_muro_mato",
    "arquivo": "cenario-jardim/jd_muro_mato.glb",
-   "bytes": 915452,
-   "hash": "b4326d1a7d2a",
+   "bytes": 746400,
+   "hash": "d5326531b1fe",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_coluna_vidro",
    "arquivo": "cenario-jardim/jd_coluna_vidro.glb",
-   "bytes": 418864,
-   "hash": "b59d29c8d3bb",
+   "bytes": 399332,
+   "hash": "066f527cd40e",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cipo",
    "arquivo": "cenario-jardim/jd_cipo.glb",
-   "bytes": 473744,
-   "hash": "afe68c0c4097",
+   "bytes": 428980,
+   "hash": "c3674db72629",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_estatua",
    "arquivo": "cenario-jardim/jd_estatua.glb",
-   "bytes": 464776,
-   "hash": "1bd67f11dda0",
+   "bytes": 398404,
+   "hash": "babd41fbde04",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_pilar",
    "arquivo": "cenario-jardim/jd_pilar.glb",
-   "bytes": 597952,
-   "hash": "c58c06f440d0",
+   "bytes": 445944,
+   "hash": "687716d98b49",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cristal_p",
    "arquivo": "cenario-jardim/jd_cristal_p.glb",
-   "bytes": 464484,
-   "hash": "719f1161b04f",
+   "bytes": 431688,
+   "hash": "de061ed72608",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_cristal_g",
    "arquivo": "cenario-jardim/jd_cristal_g.glb",
-   "bytes": 559072,
-   "hash": "7f4af5225bd8",
+   "bytes": 493088,
+   "hash": "546663d8cf79",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_raiz",
    "arquivo": "cenario-jardim/jd_raiz.glb",
-   "bytes": 497632,
-   "hash": "eb65dbd12a56",
+   "bytes": 426496,
+   "hash": "172b5aa60777",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_poca",
    "arquivo": "cenario-jardim/jd_poca.glb",
-   "bytes": 414708,
-   "hash": "ae7a81db8d41",
+   "bytes": 371108,
+   "hash": "29121de85534",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_escada",
    "arquivo": "cenario-jardim/jd_escada.glb",
-   "bytes": 415788,
-   "hash": "dad6b32a8079",
+   "bytes": 397352,
+   "hash": "1aa1abd6e88b",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "jd_estufa_arvore",
    "arquivo": "cenario-jardim/jd_estufa_arvore.glb",
-   "bytes": 826516,
-   "hash": "70f3f6541a76",
+   "bytes": 688676,
+   "hash": "0be76b089b15",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_muro_inteiro",
    "arquivo": "cenario-mina/mt_muro_inteiro.glb",
-   "bytes": 340940,
-   "hash": "1d0d319485e1",
+   "bytes": 298764,
+   "hash": "28b7073dd82a",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_muro_brecha",
    "arquivo": "cenario-mina/mt_muro_brecha.glb",
-   "bytes": 407528,
-   "hash": "766d0147c33f",
+   "bytes": 342492,
+   "hash": "710cb6af172a",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_muro_entulho",
    "arquivo": "cenario-mina/mt_muro_entulho.glb",
-   "bytes": 434268,
-   "hash": "51ffdd8d5e70",
+   "bytes": 376332,
+   "hash": "3196e612495f",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_muro_escora",
    "arquivo": "cenario-mina/mt_muro_escora.glb",
-   "bytes": 259904,
-   "hash": "1ce722a2a1ee",
+   "bytes": 253716,
+   "hash": "372b8915d3e4",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_pilar",
    "arquivo": "cenario-mina/mt_pilar.glb",
-   "bytes": 388768,
-   "hash": "c580f5b763d6",
+   "bytes": 331984,
+   "hash": "fab7408d0a5c",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_marco_broca",
    "arquivo": "cenario-mina/mt_marco_broca.glb",
-   "bytes": 681448,
-   "hash": "c23dcbe92116",
+   "bytes": 548632,
+   "hash": "220a74fae3e8",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_estalagmite",
    "arquivo": "cenario-mina/mt_estalagmite.glb",
-   "bytes": 338792,
-   "hash": "728f53e5fc40",
+   "bytes": 321596,
+   "hash": "82f9a000a45e",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_silo",
    "arquivo": "cenario-mina/mt_silo.glb",
-   "bytes": 341612,
-   "hash": "5d63b9dcf6e6",
+   "bytes": 324424,
+   "hash": "c5365c9bb275",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_porta_lacrada",
    "arquivo": "cenario-mina/mt_porta_lacrada.glb",
-   "bytes": 348844,
-   "hash": "d9ce424f65c0",
+   "bytes": 330020,
+   "hash": "a8f3b40374dd",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_vagonete",
    "arquivo": "cenario-mina/mt_vagonete.glb",
-   "bytes": 357824,
-   "hash": "ef3a2f9c2c77",
+   "bytes": 334456,
+   "hash": "0d3482883562",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_dinamite",
    "arquivo": "cenario-mina/mt_dinamite.glb",
-   "bytes": 338440,
-   "hash": "c7ac645ff912",
+   "bytes": 322264,
+   "hash": "522fe5f4cacf",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_esteril",
    "arquivo": "cenario-mina/mt_esteril.glb",
-   "bytes": 360936,
-   "hash": "0da70eb7427d",
+   "bytes": 337524,
+   "hash": "cc908ea2e5f7",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_gaiola_canario",
    "arquivo": "cenario-mina/mt_gaiola_canario.glb",
-   "bytes": 385760,
-   "hash": "47b75de60f2c",
+   "bytes": 354032,
+   "hash": "cc9e8d09e344",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_trilho",
    "arquivo": "cenario-mina/mt_trilho.glb",
-   "bytes": 304108,
-   "hash": "31c53bf09f19",
+   "bytes": 291644,
+   "hash": "2a737dafe408",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_rachadura",
    "arquivo": "cenario-mina/mt_rachadura.glb",
-   "bytes": 303980,
-   "hash": "dc6bd038e75c",
+   "bytes": 291344,
+   "hash": "662788f35f39",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_cristal_aflorando",
    "arquivo": "cenario-mina/mt_cristal_aflorando.glb",
-   "bytes": 362640,
-   "hash": "598acde373db",
+   "bytes": 334924,
+   "hash": "d6f3cf314531",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_pegadas",
    "arquivo": "cenario-mina/mt_pegadas.glb",
-   "bytes": 295512,
-   "hash": "494d5cd2c059",
+   "bytes": 286088,
+   "hash": "6e91efb02c73",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_boca_galeria",
    "arquivo": "cenario-mina/mt_boca_galeria.glb",
-   "bytes": 354260,
-   "hash": "372cacd19782",
+   "bytes": 325636,
+   "hash": "22a516ce0be8",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "mt_guindaste_poco",
    "arquivo": "cenario-mina/mt_guindaste_poco.glb",
-   "bytes": 523008,
-   "hash": "3416ac0cdd3a",
+   "bytes": 449156,
+   "hash": "3a59011518a5",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_portal_pvp",
    "arquivo": "cenario-pvp/praca_portal_pvp.glb",
-   "bytes": 403132,
-   "hash": "30ff4e45b8b7",
+   "bytes": 354328,
+   "hash": "a0ac2c56d910",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_muro_alto",
    "arquivo": "cenario-pvp/pv_muro_alto.glb",
-   "bytes": 422376,
-   "hash": "1e6f92b39b02",
+   "bytes": 376080,
+   "hash": "e37b657ad77d",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_muro_pedra",
    "arquivo": "cenario-pvp/pv_muro_pedra.glb",
-   "bytes": 454364,
-   "hash": "d578b29089d7",
+   "bytes": 405444,
+   "hash": "b5382533567d",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_muro_rachado",
    "arquivo": "cenario-pvp/pv_muro_rachado.glb",
-   "bytes": 535272,
-   "hash": "f7f621f6018f",
+   "bytes": 464320,
+   "hash": "6a2b842e6d8a",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_palicada",
    "arquivo": "cenario-pvp/pv_palicada.glb",
-   "bytes": 450320,
-   "hash": "9e43c9f5140a",
+   "bytes": 403468,
+   "hash": "881051488b5c",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_pilar",
    "arquivo": "cenario-pvp/pv_pilar.glb",
-   "bytes": 344840,
-   "hash": "d89e103c9e3e",
+   "bytes": 330416,
+   "hash": "5be997dc532b",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_muro_medio",
    "arquivo": "cenario-pvp/pv_muro_medio.glb",
-   "bytes": 423908,
-   "hash": "7da6478fda1c",
+   "bytes": 373364,
+   "hash": "07c6b95cf24b",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_sacos",
    "arquivo": "cenario-pvp/pv_sacos.glb",
-   "bytes": 410924,
-   "hash": "777925270147",
+   "bytes": 352620,
+   "hash": "f5d0d4fba45c",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_caixote",
    "arquivo": "cenario-pvp/pv_caixote.glb",
-   "bytes": 354752,
-   "hash": "a84663cb7b72",
+   "bytes": 325712,
+   "hash": "ad1dc9bf02cc",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_frisa",
    "arquivo": "cenario-pvp/pv_frisa.glb",
-   "bytes": 280424,
-   "hash": "3500404a3dce",
+   "bytes": 272580,
+   "hash": "5bca0c4b08ec",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "pv_tonel",
    "arquivo": "cenario-pvp/pv_tonel.glb",
-   "bytes": 476316,
-   "hash": "1a04517747b2",
+   "bytes": 399476,
+   "hash": "a7f89302b76f",
    "grupo": "campo:pvp"
   },
   {
    "alvo": "MODELS",
    "chave": "el_muro_fogo",
    "arquivo": "cenario-santuario/el_muro_fogo.glb",
-   "bytes": 195668,
-   "hash": "d6936b2bfa7f",
+   "bytes": 178948,
+   "hash": "56c95971b867",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_muro_agua",
    "arquivo": "cenario-santuario/el_muro_agua.glb",
-   "bytes": 248160,
-   "hash": "0e56706523f4",
+   "bytes": 231132,
+   "hash": "ca915e70cb63",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_muro_terra",
    "arquivo": "cenario-santuario/el_muro_terra.glb",
-   "bytes": 400548,
-   "hash": "cf122e6bc555",
+   "bytes": 379656,
+   "hash": "c961c1badfc7",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_muro_ar",
    "arquivo": "cenario-santuario/el_muro_ar.glb",
-   "bytes": 262924,
-   "hash": "1b45e2dc1fac",
+   "bytes": 243992,
+   "hash": "25151b4b1c46",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_pilar_vivo",
    "arquivo": "cenario-santuario/el_pilar_vivo.glb",
-   "bytes": 197256,
-   "hash": "b58719553668",
+   "bytes": 180308,
+   "hash": "1a76c2044503",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_marco_altar",
    "arquivo": "cenario-santuario/el_marco_altar.glb",
-   "bytes": 506904,
-   "hash": "341ab03260c9",
+   "bytes": 433684,
+   "hash": "eaf464725b29",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_estatua_cega",
    "arquivo": "cenario-santuario/el_estatua_cega.glb",
-   "bytes": 333120,
-   "hash": "28d1e7e7a19e",
+   "bytes": 297504,
+   "hash": "cc7ae38fdf99",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_agua_pilar",
    "arquivo": "cenario-santuario/el_agua_pilar.glb",
-   "bytes": 374072,
-   "hash": "77c0e1c63a6d",
+   "bytes": 325668,
+   "hash": "8b22239c4272",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_menir",
    "arquivo": "cenario-santuario/el_menir.glb",
-   "bytes": 389712,
-   "hash": "fe4262d69189",
+   "bytes": 356936,
+   "hash": "dab91ad54d4a",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_ar_pilar",
    "arquivo": "cenario-santuario/el_ar_pilar.glb",
-   "bytes": 375244,
-   "hash": "9ed27b33e88c",
+   "bytes": 347128,
+   "hash": "78eed71d422f",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_bica",
    "arquivo": "cenario-santuario/el_bica.glb",
-   "bytes": 344564,
-   "hash": "80eabcf113e1",
+   "bytes": 302996,
+   "hash": "c6fc8e3a610d",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_cata_vento",
    "arquivo": "cenario-santuario/el_cata_vento.glb",
-   "bytes": 333728,
-   "hash": "bee2567407f6",
+   "bytes": 318884,
+   "hash": "705e9befcd5c",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_braseiro",
    "arquivo": "cenario-santuario/el_braseiro.glb",
-   "bytes": 302796,
-   "hash": "6540cf439a59",
+   "bytes": 279156,
+   "hash": "9d15b5479ed7",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_respiro",
    "arquivo": "cenario-santuario/el_respiro.glb",
-   "bytes": 424276,
-   "hash": "d52efaa99369",
+   "bytes": 371872,
+   "hash": "e8cce352d5bb",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_soquete",
    "arquivo": "cenario-santuario/el_soquete.glb",
-   "bytes": 340212,
-   "hash": "5190d0774a88",
+   "bytes": 313148,
+   "hash": "7b63bc16865e",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_poca",
    "arquivo": "cenario-santuario/el_poca.glb",
-   "bytes": 405060,
-   "hash": "0837adc6c273",
+   "bytes": 357020,
+   "hash": "9c02d737266c",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el_ponte",
    "arquivo": "cenario-santuario/el_ponte.glb",
-   "bytes": 321252,
-   "hash": "daf2815f69e6",
+   "bytes": 299608,
+   "hash": "f15a083bde7b",
    "grupo": "calabouco:elementsanctum"
   },
   {
@@ -1119,16 +1119,16 @@
    "alvo": "MODELS",
    "chave": "sd_parede_esteio",
    "arquivo": "cenario-sede/sd_parede_esteio.glb",
-   "bytes": 507604,
-   "hash": "98967113c722",
+   "bytes": 427536,
+   "hash": "2920cfb61890",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_parede_tocha",
    "arquivo": "cenario-sede/sd_parede_tocha.glb",
-   "bytes": 518492,
-   "hash": "0033d3dba4f2",
+   "bytes": 432680,
+   "hash": "407e3e8b7708",
    "grupo": "mapa:sede"
   },
   {
@@ -1143,1960 +1143,1960 @@
    "alvo": "MODELS",
    "chave": "sd_porta",
    "arquivo": "cenario-sede/sd_porta.glb",
-   "bytes": 632000,
-   "hash": "30fa92c63b58",
+   "bytes": 491136,
+   "hash": "e13dcf2421e8",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_trono",
    "arquivo": "cenario-sede/sd_trono.glb",
-   "bytes": 501924,
-   "hash": "eca84a7ba379",
+   "bytes": 408568,
+   "hash": "246c9d3eebbb",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_lareira",
    "arquivo": "cenario-sede/sd_lareira.glb",
-   "bytes": 376876,
-   "hash": "f9b1f6461bba",
+   "bytes": 325400,
+   "hash": "3478f47d8dcd",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_estandarte",
    "arquivo": "cenario-sede/sd_estandarte.glb",
-   "bytes": 274640,
-   "hash": "0a1dbf03447c",
+   "bytes": 253736,
+   "hash": "497e137a80d6",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_pilar",
    "arquivo": "cenario-sede/sd_pilar.glb",
-   "bytes": 297240,
-   "hash": "8f1b44d7fec0",
+   "bytes": 285640,
+   "hash": "adf17c902844",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_rack_armas",
    "arquivo": "cenario-sede/sd_rack_armas.glb",
-   "bytes": 409404,
-   "hash": "2ea7cbbc5dd2",
+   "bytes": 368724,
+   "hash": "648a029f0440",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_armadura",
    "arquivo": "cenario-sede/sd_armadura.glb",
-   "bytes": 526968,
-   "hash": "a2d2a1b94e38",
+   "bytes": 442832,
+   "hash": "830b7300cbf9",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_mesa",
    "arquivo": "cenario-sede/sd_mesa.glb",
-   "bytes": 476980,
-   "hash": "a523bc3110f2",
+   "bytes": 409852,
+   "hash": "93c0cded624e",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_banco",
    "arquivo": "cenario-sede/sd_banco.glb",
-   "bytes": 297516,
-   "hash": "030c669037fc",
+   "bytes": 286808,
+   "hash": "3e9741a28f87",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_estatua",
    "arquivo": "cenario-sede/sd_estatua.glb",
-   "bytes": 329700,
-   "hash": "5c1df7293371",
+   "bytes": 307488,
+   "hash": "26620fcddc28",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_bau",
    "arquivo": "cenario-sede/sd_bau.glb",
-   "bytes": 334392,
-   "hash": "070311994010",
+   "bytes": 313240,
+   "hash": "6f5d309a85af",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "sd_trofeu",
    "arquivo": "cenario-sede/sd_trofeu.glb",
-   "bytes": 380620,
-   "hash": "2f4e7c08524c",
+   "bytes": 339688,
+   "hash": "75b011a4ffa6",
    "grupo": "mapa:sede"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n1",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n1.glb",
-   "bytes": 503840,
-   "hash": "5f2b9053ad9b",
+   "bytes": 472176,
+   "hash": "3df78fb960f2",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n2",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n2.glb",
-   "bytes": 504332,
-   "hash": "dda9ad36fdc8",
+   "bytes": 472892,
+   "hash": "d065ffaf1f3c",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n3",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n3.glb",
-   "bytes": 504184,
-   "hash": "c3140a98687c",
+   "bytes": 472856,
+   "hash": "97db5b1382b7",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n4",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n4.glb",
-   "bytes": 501704,
-   "hash": "6d99cd1e6e46",
+   "bytes": 471244,
+   "hash": "cc10061fb769",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n5",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n5.glb",
-   "bytes": 507056,
-   "hash": "7a8d179c015d",
+   "bytes": 474712,
+   "hash": "b4c4e886cc3b",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n6",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n6.glb",
-   "bytes": 565808,
-   "hash": "929ba6159c56",
+   "bytes": 544340,
+   "hash": "b10f3340d25b",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n7",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n7.glb",
-   "bytes": 571220,
-   "hash": "988b5da41506",
+   "bytes": 547996,
+   "hash": "fb703dffcb2d",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n8",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n8.glb",
-   "bytes": 579300,
-   "hash": "37a8e029e22a",
+   "bytes": 553588,
+   "hash": "49071b7844ea",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n9",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n9.glb",
-   "bytes": 592400,
-   "hash": "986b21d8893f",
+   "bytes": 562108,
+   "hash": "e1c248f7cb38",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_pvp_n10",
    "arquivo": "coroas-pvp-3d/coroa_pvp_n10.glb",
-   "bytes": 666640,
-   "hash": "0458560c01ea",
+   "bytes": 610444,
+   "hash": "79cb2157734b",
    "grupo": "coroas"
   },
   {
    "alvo": "MODELS",
    "chave": "coroa_gm",
    "arquivo": "coroas-pvp-3d/coroa_gm.glb",
-   "bytes": 796396,
-   "hash": "8f9e525e0e4a",
+   "bytes": 697384,
+   "hash": "cf7ebff9a9a0",
    "grupo": "coroas"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_blue",
    "arquivo": "env-kit/banner_blue.glb",
-   "bytes": 24216,
-   "hash": "219995a647a1",
+   "bytes": 22156,
+   "hash": "419d932e6c7b",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_green",
    "arquivo": "env-kit/banner_green.glb",
-   "bytes": 24216,
-   "hash": "afe5f8742a78",
+   "bytes": 22172,
+   "hash": "dc1ce728597f",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_b",
    "arquivo": "env-kit/banner_pat_b.glb",
-   "bytes": 24224,
-   "hash": "a86be2d4bc01",
+   "bytes": 22312,
+   "hash": "0ac438b457a6",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_g",
    "arquivo": "env-kit/banner_pat_g.glb",
-   "bytes": 25168,
-   "hash": "cad4bf2a5f99",
+   "bytes": 22972,
+   "hash": "e122e79917f0",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_pat_r",
    "arquivo": "env-kit/banner_pat_r.glb",
-   "bytes": 24224,
-   "hash": "ee729f974b6c",
+   "bytes": 22320,
+   "hash": "abedfad3c5b5",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "banner_red",
    "arquivo": "env-kit/banner_red.glb",
-   "bytes": 24216,
-   "hash": "c69c6eaffc83",
+   "bytes": 22152,
+   "hash": "759ab7b72493",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrel",
    "arquivo": "env-kit/barrel.glb",
-   "bytes": 32060,
-   "hash": "f46d0c421e46",
+   "bytes": 26536,
+   "hash": "a51ce1098f64",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrel_big",
    "arquivo": "env-kit/barrel_big.glb",
-   "bytes": 44292,
-   "hash": "9fae6a790562",
+   "bytes": 33904,
+   "hash": "c2cc9af2fcf6",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrier",
    "arquivo": "env-kit/barrier.glb",
-   "bytes": 19948,
-   "hash": "cc4c5641e641",
+   "bytes": 19336,
+   "hash": "781bcae2d164",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "barrier_col",
    "arquivo": "env-kit/barrier_col.glb",
-   "bytes": 24856,
-   "hash": "aa65dd217a0a",
+   "bytes": 21668,
+   "hash": "f34598434323",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "bottle",
    "arquivo": "env-kit/bottle.glb",
-   "bytes": 26460,
-   "hash": "32759c64c6e8",
+   "bytes": 23520,
+   "hash": "89f3e4583222",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "box",
    "arquivo": "env-kit/box.glb",
-   "bytes": 28692,
-   "hash": "3052015d7cd6",
+   "bytes": 24748,
+   "hash": "173d977ea736",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "box_big",
    "arquivo": "env-kit/box_big.glb",
-   "bytes": 28740,
-   "hash": "6dacda267f04",
+   "bytes": 24768,
+   "hash": "2a5bae71737f",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "candle",
    "arquivo": "env-kit/candle.glb",
-   "bytes": 28240,
-   "hash": "3536f0a55df5",
+   "bytes": 24572,
+   "hash": "1cd996297843",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chair",
    "arquivo": "env-kit/chair.glb",
-   "bytes": 36252,
-   "hash": "5f133281686d",
+   "bytes": 29472,
+   "hash": "ab7b8811cf84",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chest",
    "arquivo": "env-kit/chest.glb",
-   "bytes": 81412,
-   "hash": "f72fd2201cd4",
+   "bytes": 44064,
+   "hash": "c1e0b4fe2127",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "chest_gold",
    "arquivo": "env-kit/chest_gold.glb",
-   "bytes": 140140,
-   "hash": "04708d5f88ed",
+   "bytes": 71528,
+   "hash": "33896a983d1c",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "coins",
    "arquivo": "env-kit/coins.glb",
-   "bytes": 101076,
-   "hash": "1a64011dc0d6",
+   "bytes": 74776,
+   "hash": "1386deeabf0e",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "column",
    "arquivo": "env-kit/column.glb",
-   "bytes": 20260,
-   "hash": "761adf0fcc1a",
+   "bytes": 19704,
+   "hash": "46bc8081b897",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "crates",
    "arquivo": "env-kit/crates.glb",
-   "bytes": 103704,
-   "hash": "43182b077ead",
+   "bytes": 69752,
+   "hash": "562327e296c4",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_a",
    "arquivo": "env-kit/floor_a.glb",
-   "bytes": 20740,
-   "hash": "645f02c82d1f",
+   "bytes": 19988,
+   "hash": "da29b3429123",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_b",
    "arquivo": "env-kit/floor_b.glb",
-   "bytes": 22132,
-   "hash": "d1acc3407f94",
+   "bytes": 20744,
+   "hash": "de99745bdeb7",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_c",
    "arquivo": "env-kit/floor_c.glb",
-   "bytes": 21608,
-   "hash": "0ef8ee472371",
+   "bytes": 20208,
+   "hash": "d70332417dce",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_deco",
    "arquivo": "env-kit/floor_deco.glb",
-   "bytes": 40812,
-   "hash": "4dd8a74dc00c",
+   "bytes": 32780,
+   "hash": "787ed041c5d8",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_dirt",
    "arquivo": "env-kit/floor_dirt.glb",
-   "bytes": 20460,
-   "hash": "b5be9118f0b6",
+   "bytes": 20252,
+   "hash": "1d626838b6af",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_grate",
    "arquivo": "env-kit/floor_grate.glb",
-   "bytes": 26700,
-   "hash": "d39a8c32aa99",
+   "bytes": 23068,
+   "hash": "95079fd6b799",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_weeds",
    "arquivo": "env-kit/floor_weeds.glb",
-   "bytes": 44020,
-   "hash": "95fcb7701819",
+   "bytes": 36988,
+   "hash": "99ca14d55ff4",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "floor_weeds2",
    "arquivo": "env-kit/floor_weeds2.glb",
-   "bytes": 42368,
-   "hash": "cfbe329aeea2",
+   "bytes": 32556,
+   "hash": "dd3b45d066a1",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "keg",
    "arquivo": "env-kit/keg.glb",
-   "bytes": 59912,
-   "hash": "cc620e27439a",
+   "bytes": 43140,
+   "hash": "bb065c4aa1ea",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "pillar",
    "arquivo": "env-kit/pillar.glb",
-   "bytes": 25552,
-   "hash": "e31da4964619",
+   "bytes": 22412,
+   "hash": "e0b0537b089e",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "pillar_deco",
    "arquivo": "env-kit/pillar_deco.glb",
-   "bytes": 62460,
-   "hash": "eecf7d454a1b",
+   "bytes": 47532,
+   "hash": "a882f18ff6b5",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "rubble",
    "arquivo": "env-kit/rubble.glb",
-   "bytes": 38836,
-   "hash": "7514ccbda643",
+   "bytes": 32764,
+   "hash": "5bfe6c652556",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "rubble_big",
    "arquivo": "env-kit/rubble_big.glb",
-   "bytes": 60196,
-   "hash": "0292da1b5788",
+   "bytes": 47248,
+   "hash": "dc0a086e5b1a",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "stool",
    "arquivo": "env-kit/stool.glb",
-   "bytes": 28528,
-   "hash": "f9170499ea59",
+   "bytes": 24828,
+   "hash": "4f6eb6f13ceb",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "sword_shield",
    "arquivo": "env-kit/sword_shield.glb",
-   "bytes": 47764,
-   "hash": "4dc33b156a16",
+   "bytes": 39920,
+   "hash": "81cd08f758b0",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "table",
    "arquivo": "env-kit/table.glb",
-   "bytes": 33832,
-   "hash": "9686a202ea2f",
+   "bytes": 27312,
+   "hash": "0fe3b4f86a0a",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "torch",
    "arquivo": "env-kit/torch.glb",
-   "bytes": 31244,
-   "hash": "45fcfeb3b129",
+   "bytes": 26244,
+   "hash": "43059c62724d",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "torch_wall",
    "arquivo": "env-kit/torch_wall.glb",
-   "bytes": 33220,
-   "hash": "a617c159e029",
+   "bytes": 27804,
+   "hash": "3ccd6f45f513",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "trunk",
    "arquivo": "env-kit/trunk.glb",
-   "bytes": 30184,
-   "hash": "de40320413c5",
+   "bytes": 26080,
+   "hash": "cc74abf19aac",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_broken",
    "arquivo": "env-kit/wall_broken.glb",
-   "bytes": 69276,
-   "hash": "ee7598ef2b88",
+   "bytes": 51484,
+   "hash": "228aee919ef2",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_corner",
    "arquivo": "env-kit/wall_corner.glb",
-   "bytes": 49212,
-   "hash": "3c8cbcbf3abf",
+   "bytes": 38508,
+   "hash": "5df7a843468d",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_cross",
    "arquivo": "env-kit/wall_cross.glb",
-   "bytes": 66856,
-   "hash": "ec4d4efc6dcc",
+   "bytes": 48276,
+   "hash": "31ad2beedd6b",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_half",
    "arquivo": "env-kit/wall_half.glb",
-   "bytes": 36840,
-   "hash": "9e65c438f55d",
+   "bytes": 30780,
+   "hash": "cbf77ed9d6c8",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_pil",
    "arquivo": "env-kit/wall_pil.glb",
-   "bytes": 55156,
-   "hash": "f85030386f9f",
+   "bytes": 41548,
+   "hash": "e6873ef64d7b",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str",
    "arquivo": "env-kit/wall_str.glb",
-   "bytes": 53132,
-   "hash": "f2f343a7bdf2",
+   "bytes": 41184,
+   "hash": "ef0d02c00984",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str2",
    "arquivo": "env-kit/wall_str2.glb",
-   "bytes": 138396,
-   "hash": "344fb9a709a5",
+   "bytes": 90016,
+   "hash": "e5393700d539",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_str3",
    "arquivo": "env-kit/wall_str3.glb",
-   "bytes": 69276,
-   "hash": "ee7598ef2b88",
+   "bytes": 51484,
+   "hash": "228aee919ef2",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_tsplit",
    "arquivo": "env-kit/wall_tsplit.glb",
-   "bytes": 60080,
-   "hash": "a93b661ce2eb",
+   "bytes": 44956,
+   "hash": "113e2eb176d2",
    "grupo": "base"
   },
   {
    "alvo": "ASSETS",
    "chave": "wall_win",
    "arquivo": "env-kit/wall_win.glb",
-   "bytes": 57256,
-   "hash": "7cb4804e55bd",
+   "bytes": 42800,
+   "hash": "85ebd20fd049",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "_anims",
    "arquivo": "models-anims/_anims.glb",
-   "bytes": 1427872,
-   "hash": "c5ee225f816f",
+   "bytes": 619624,
+   "hash": "ee408be7182c",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_mushnub",
    "arquivo": "models-bosses/q_mushnub.glb",
-   "bytes": 163392,
-   "hash": "6c6755ed26ae",
+   "bytes": 68004,
+   "hash": "aa1c3efcb407",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_glub",
    "arquivo": "models-bosses/q_glub.glb",
-   "bytes": 236380,
-   "hash": "e7b66cace0ac",
+   "bytes": 93812,
+   "hash": "520691b92974",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_bluedemon",
    "arquivo": "models-bosses/q_bluedemon.glb",
-   "bytes": 644208,
-   "hash": "228acfbd03e0",
+   "bytes": 240668,
+   "hash": "27c64412c7ed",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_alpaking",
    "arquivo": "models-bosses/q_alpaking.glb",
-   "bytes": 273764,
-   "hash": "2da1f1fae288",
+   "bytes": 109568,
+   "hash": "348d41aaad51",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_goleling",
    "arquivo": "models-bosses/q_goleling.glb",
-   "bytes": 311000,
-   "hash": "90824ae2026a",
+   "bytes": 122072,
+   "hash": "3f481fc4f849",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_ghostskull",
    "arquivo": "models-bosses/q_ghostskull.glb",
-   "bytes": 349616,
-   "hash": "e0c39f768735",
+   "bytes": 129816,
+   "hash": "ee19649004b7",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_yeti",
    "arquivo": "models-bosses/q_yeti.glb",
-   "bytes": 651656,
-   "hash": "62fc689e514c",
+   "bytes": 242612,
+   "hash": "eda47ec8fac2",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_espadachim",
    "arquivo": "models-fusao-bruxo-ladino/fus_bruxo_espadachim.glb",
-   "bytes": 1143132,
-   "hash": "3aaa9ef487bb",
+   "bytes": 610552,
+   "hash": "6ba049eb8bca",
    "grupo": "fusao:bruxo+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_bruxo",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_bruxo.glb",
-   "bytes": 1200144,
-   "hash": "a03983a9cc85",
+   "bytes": 655688,
+   "hash": "1bfa6c6b550d",
    "grupo": "fusao:arqueiro+bruxo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_curandeiro",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_curandeiro.glb",
-   "bytes": 1473596,
-   "hash": "d4e76621a1c0",
+   "bytes": 810648,
+   "hash": "a01396c4eb77",
    "grupo": "fusao:arqueiro+curandeiro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_espadachim",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_espadachim.glb",
-   "bytes": 1204572,
-   "hash": "00a64a9bde52",
+   "bytes": 648876,
+   "hash": "370352b7903d",
    "grupo": "fusao:arqueiro+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_invocador",
    "arquivo": "models-fusoes-cacador/fus_arqueiro_invocador.glb",
-   "bytes": 1212424,
-   "hash": "9e64f622b0e6",
+   "bytes": 670152,
+   "hash": "9497c764edb7",
    "grupo": "fusao:arqueiro+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_totem_espoleta",
    "arquivo": "models-fusoes-cacador/fus_totem_espoleta.glb",
-   "bytes": 1129392,
-   "hash": "5af4fdf47abc",
+   "bytes": 638620,
+   "hash": "2824d580e1e6",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_curandeiro",
    "arquivo": "models-fusoes-curandeira/fus_bruxo_curandeiro.glb",
-   "bytes": 1258472,
-   "hash": "cf53c97eeec8",
+   "bytes": 709136,
+   "hash": "c1f6653da6d4",
    "grupo": "fusao:bruxo+curandeiro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_espadachim",
    "arquivo": "models-fusoes-curandeira/fus_curandeiro_espadachim.glb",
-   "bytes": 1318012,
-   "hash": "fbc502197186",
+   "bytes": 724796,
+   "hash": "62c9ead88614",
    "grupo": "fusao:curandeiro+espadachim"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_arqueiro_minotauro.glb",
-   "bytes": 1381512,
-   "hash": "f483231b11e1",
+   "bytes": 749852,
+   "hash": "2bb8d0e6337c",
    "grupo": "fusao:arqueiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_bruxo_minotauro.glb",
-   "bytes": 1282520,
-   "hash": "1c084bf72f75",
+   "bytes": 674008,
+   "hash": "57c63fe9580e",
    "grupo": "fusao:bruxo+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_curandeiro_minotauro.glb",
-   "bytes": 1253724,
-   "hash": "70e7374119ee",
+   "bytes": 702860,
+   "hash": "71c364093d0b",
    "grupo": "fusao:curandeiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_espadachim_minotauro.glb",
-   "bytes": 1168212,
-   "hash": "e975ff2690f4",
+   "bytes": 612440,
+   "hash": "1b476a0daf53",
    "grupo": "fusao:espadachim+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_invocador_minotauro",
    "arquivo": "models-fusoes-minotauro/fus_invocador_minotauro.glb",
-   "bytes": 1445664,
-   "hash": "c14742665160",
+   "bytes": 771280,
+   "hash": "370cab06eea6",
    "grupo": "fusao:invocador+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_minotauro_sumo",
    "arquivo": "models-fusoes-minotauro/fus_minotauro_sumo.glb",
-   "bytes": 1193444,
-   "hash": "3961e9410787",
+   "bytes": 626740,
+   "hash": "b40a8716d61e",
    "grupo": "fusao:minotauro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_muro_vigia",
    "arquivo": "models-fusoes-minotauro/fus_muro_vigia.glb",
-   "bytes": 1050524,
-   "hash": "82f35ecc5888",
+   "bytes": 545248,
+   "hash": "48af63a2c893",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_arqueiro_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_arqueiro_minotauro.glb",
-   "bytes": 713060,
-   "hash": "a31ffcf11238",
+   "bytes": 537948,
+   "hash": "dfca870fd839",
    "grupo": "fusao:arqueiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_bruxo_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_bruxo_minotauro.glb",
-   "bytes": 827020,
-   "hash": "850d4b1d3e42",
+   "bytes": 645512,
+   "hash": "f903c5648a4b",
    "grupo": "fusao:bruxo+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_curandeiro_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_curandeiro_minotauro.glb",
-   "bytes": 766632,
-   "hash": "09e736a089f8",
+   "bytes": 587388,
+   "hash": "fe6274884b9d",
    "grupo": "fusao:curandeiro+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_espadachim_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_espadachim_minotauro.glb",
-   "bytes": 758816,
-   "hash": "fe40bde39d69",
+   "bytes": 593820,
+   "hash": "d0d907311bf0",
    "grupo": "fusao:espadachim+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_invocador_minotauro",
    "arquivo": "models-fusoes-minotauro/muro_invocador_minotauro.glb",
-   "bytes": 721276,
-   "hash": "ad123e2a6f89",
+   "bytes": 537176,
+   "hash": "d4d4fda7f99c",
    "grupo": "fusao:invocador+minotauro"
   },
   {
    "alvo": "MODELS",
    "chave": "muro_minotauro_sumo",
    "arquivo": "models-fusoes-minotauro/muro_minotauro_sumo.glb",
-   "bytes": 694844,
-   "hash": "94c110b5d93c",
+   "bytes": 526104,
+   "hash": "5889707528cf",
    "grupo": "fusao:minotauro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_arqueiro_sumo",
    "arquivo": "models-fusoes-sumo/fus_arqueiro_sumo.glb",
-   "bytes": 1408788,
-   "hash": "8eb953924ee0",
+   "bytes": 780620,
+   "hash": "6364e2a08a62",
    "grupo": "fusao:arqueiro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_sumo",
    "arquivo": "models-fusoes-sumo/fus_bruxo_sumo.glb",
-   "bytes": 1137564,
-   "hash": "5273fb2aea85",
+   "bytes": 630112,
+   "hash": "199fdeed3e34",
    "grupo": "fusao:bruxo+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_sumo",
    "arquivo": "models-fusoes-sumo/fus_curandeiro_sumo.glb",
-   "bytes": 1366924,
-   "hash": "f712cca4082b",
+   "bytes": 755400,
+   "hash": "28534d5b5c22",
    "grupo": "fusao:curandeiro+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_sumo",
    "arquivo": "models-fusoes-sumo/fus_espadachim_sumo.glb",
-   "bytes": 1107604,
-   "hash": "298ffbcacbef",
+   "bytes": 589196,
+   "hash": "5ba0b4e4ca9c",
    "grupo": "fusao:espadachim+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_invocador_sumo",
    "arquivo": "models-fusoes-sumo/fus_invocador_sumo.glb",
-   "bytes": 1202732,
-   "hash": "93684380384e",
+   "bytes": 666368,
+   "hash": "9c6d4a7b1bef",
    "grupo": "fusao:invocador+sumo"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_idolo_escora",
    "arquivo": "models-fusoes-sumo/fus_idolo_escora.glb",
-   "bytes": 1129352,
-   "hash": "072cf532d1cf",
+   "bytes": 599192,
+   "hash": "def5583b696a",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_bruxo_invocador",
    "arquivo": "models-fusoes-xama/fus_bruxo_invocador.glb",
-   "bytes": 1217372,
-   "hash": "5e20207a7ac2",
+   "bytes": 657092,
+   "hash": "2695c4da3325",
    "grupo": "fusao:bruxo+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_efigie_runica",
    "arquivo": "models-fusoes-xama/fus_efigie_runica.glb",
-   "bytes": 1106728,
-   "hash": "4b7354735838",
+   "bytes": 572476,
+   "hash": "e30b9c675e66",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_curandeiro_invocador",
    "arquivo": "models-fusoes-xama/fus_curandeiro_invocador.glb",
-   "bytes": 1261420,
-   "hash": "afc14a36ae18",
+   "bytes": 722204,
+   "hash": "a3931f83c993",
    "grupo": "fusao:curandeiro+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_guarda_flor",
    "arquivo": "models-fusoes-xama/fus_guarda_flor.glb",
-   "bytes": 1039884,
-   "hash": "918b2013d967",
+   "bytes": 567488,
+   "hash": "2f95b3f04c54",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_espadachim_invocador",
    "arquivo": "models-fusoes-xama/fus_espadachim_invocador.glb",
-   "bytes": 1447772,
-   "hash": "846933a9d353",
+   "bytes": 795956,
+   "hash": "c689480dbbac",
    "grupo": "fusao:espadachim+invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "fus_gemeo_breu",
    "arquivo": "models-fusoes-xama/fus_gemeo_breu.glb",
-   "bytes": 1118416,
-   "hash": "16bf74b0e7b4",
+   "bytes": 565632,
+   "hash": "a35f61556f2d",
    "grupo": "fusao:invocacoes"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_gm",
    "arquivo": "models-gm/meshy_gm.glb",
-   "bytes": 1146332,
-   "hash": "10559f92412d",
+   "bytes": 610736,
+   "hash": "f9fe3fc87b36",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "barbarian",
    "arquivo": "models-heroes/barbarian.glb",
-   "bytes": 334384,
-   "hash": "932eb04f9f55",
+   "bytes": 191732,
+   "hash": "5ec6676ddcc0",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "knight",
    "arquivo": "models-heroes/knight.glb",
-   "bytes": 380284,
-   "hash": "f26a3ba72293",
+   "bytes": 219792,
+   "hash": "e20fe364b4c2",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "mage",
    "arquivo": "models-heroes/mage.glb",
-   "bytes": 310832,
-   "hash": "69bf61ac869d",
+   "bytes": 179112,
+   "hash": "cb236a2c97e2",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "rogue",
    "arquivo": "models-heroes/rogue.glb",
-   "bytes": 337388,
-   "hash": "bd74b1b75b97",
+   "bytes": 193412,
+   "hash": "f3dd0b09878b",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "rogue_hooded",
    "arquivo": "models-heroes/rogue_hooded.glb",
-   "bytes": 318960,
-   "hash": "fea22b3983f9",
+   "bytes": 185300,
+   "hash": "84f58405825b",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_warrior",
    "arquivo": "models-heroes/skeleton_warrior.glb",
-   "bytes": 372648,
-   "hash": "33140696c3ff",
+   "bytes": 199844,
+   "hash": "e96e7582858b",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_minion",
    "arquivo": "models-heroes/skeleton_minion.glb",
-   "bytes": 323684,
-   "hash": "c902f288ce10",
+   "bytes": 170176,
+   "hash": "263b3fe90d0a",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_mage",
    "arquivo": "models-heroes/skeleton_mage.glb",
-   "bytes": 270840,
-   "hash": "d14f7b4f2140",
+   "bytes": 147524,
+   "hash": "dae94ebb4ee3",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "skeleton_rogue",
    "arquivo": "models-heroes/skeleton_rogue.glb",
-   "bytes": 336340,
-   "hash": "3eeebb1b3f0c",
+   "bytes": 179412,
+   "hash": "ecf87bdfa009",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "cinder-herald",
    "arquivo": "models-meshy-brokenheart/cinder-herald.glb",
-   "bytes": 1224860,
-   "hash": "ef581d8e62eb",
+   "bytes": 718708,
+   "hash": "e3f37685ed75",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "tide-herald",
    "arquivo": "models-meshy-brokenheart/tide-herald.glb",
-   "bytes": 1313208,
-   "hash": "4c321cae1e7a",
+   "bytes": 739684,
+   "hash": "954a04a063ea",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "stone-herald",
    "arquivo": "models-meshy-brokenheart/stone-herald.glb",
-   "bytes": 1243236,
-   "hash": "3fad94edd227",
+   "bytes": 720140,
+   "hash": "b23824c2541f",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "gale-herald",
    "arquivo": "models-meshy-brokenheart/gale-herald.glb",
-   "bytes": 1241644,
-   "hash": "07c50f993d4c",
+   "bytes": 716800,
+   "hash": "01fc671c7a24",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "null-warden",
    "arquivo": "models-meshy-brokenheart/null-warden.glb",
-   "bytes": 1302304,
-   "hash": "8ec87299e416",
+   "bytes": 708028,
+   "hash": "c7966b5f0fa9",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "mirror-twin",
    "arquivo": "models-meshy-brokenheart/mirror-twin.glb",
-   "bytes": 1204464,
-   "hash": "5d7d30247bcc",
+   "bytes": 668040,
+   "hash": "17c07829b454",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "mirror-sliver",
    "arquivo": "models-meshy-brokenheart/mirror-sliver.glb",
-   "bytes": 1195360,
-   "hash": "fba7908c567c",
+   "bytes": 679812,
+   "hash": "a8b0a51145e9",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "weather-mote",
    "arquivo": "models-meshy-brokenheart/weather-mote.glb",
-   "bytes": 786064,
-   "hash": "1dbe9fb7f7b6",
+   "bytes": 390080,
+   "hash": "bb18b8c2de50",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "heartroot",
    "arquivo": "models-meshy-brokenheart/heartroot.glb",
-   "bytes": 1379888,
-   "hash": "cc8a194631fd",
+   "bytes": 839620,
+   "hash": "ed0b63cfcefe",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-riftheart",
    "arquivo": "models-meshy-brokenheart/boss-riftheart.glb",
-   "bytes": 1397860,
-   "hash": "523497c8d27f",
+   "bytes": 843500,
+   "hash": "c7e0f2b61422",
    "grupo": "calabouco:brokenheart"
   },
   {
    "alvo": "MODELS",
    "chave": "drowned-porter",
    "arquivo": "models-meshy-cisterna/drowned-porter.glb",
-   "bytes": 1360600,
-   "hash": "5d035c12b0db",
+   "bytes": 712112,
+   "hash": "50d9ed43bbfe",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "moray-piper",
    "arquivo": "models-meshy-cisterna/moray-piper.glb",
-   "bytes": 1129800,
-   "hash": "a2b4898f3597",
+   "bytes": 583268,
+   "hash": "2cdd9565b308",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "lantern-jelly",
    "arquivo": "models-meshy-cisterna/lantern-jelly.glb",
-   "bytes": 1173168,
-   "hash": "9addca5b875f",
+   "bytes": 541100,
+   "hash": "f13861a96087",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "brine-golem",
    "arquivo": "models-meshy-cisterna/brine-golem.glb",
-   "bytes": 1043144,
-   "hash": "bc2ff9f611a4",
+   "bytes": 517840,
+   "hash": "66cda273c607",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "fat-drop",
    "arquivo": "models-meshy-cisterna/fat-drop.glb",
-   "bytes": 1054240,
-   "hash": "3b70e9985670",
+   "bytes": 537544,
+   "hash": "75bc4aa295fc",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "droplet",
    "arquivo": "models-meshy-cisterna/droplet.glb",
-   "bytes": 1028100,
-   "hash": "f5ca3e4b56c1",
+   "bytes": 502560,
+   "hash": "df9c71b1e47b",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "sump-crab",
    "arquivo": "models-meshy-cisterna/sump-crab.glb",
-   "bytes": 1219904,
-   "hash": "544df177da7e",
+   "bytes": 649984,
+   "hash": "f08ebf46c052",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "mist-warbler",
    "arquivo": "models-meshy-cisterna/mist-warbler.glb",
-   "bytes": 1099004,
-   "hash": "af7c76900ad0",
+   "bytes": 571304,
+   "hash": "26c9f789ba58",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-baroness",
    "arquivo": "models-meshy-cisterna/boss-baroness.glb",
-   "bytes": 1131048,
-   "hash": "3c6a27b26847",
+   "bytes": 615352,
+   "hash": "35a2c2035fa6",
    "grupo": "calabouco:cistern"
   },
   {
    "alvo": "MODELS",
    "chave": "colosso-fogo",
    "arquivo": "models-meshy-colossos/colosso-fogo.glb",
-   "bytes": 1650172,
-   "hash": "5e8d53bcca89",
+   "bytes": 886200,
+   "hash": "f3c4a19ce2be",
    "grupo": "poco:colossos"
   },
   {
    "alvo": "MODELS",
    "chave": "colosso-agua",
    "arquivo": "models-meshy-colossos/colosso-agua.glb",
-   "bytes": 1762660,
-   "hash": "9846ed64d75b",
+   "bytes": 1001444,
+   "hash": "01b6554268c7",
    "grupo": "poco:colossos"
   },
   {
    "alvo": "MODELS",
    "chave": "colosso-terra",
    "arquivo": "models-meshy-colossos/colosso-terra.glb",
-   "bytes": 1451220,
-   "hash": "f99b6f131fa2",
+   "bytes": 693716,
+   "hash": "c8d92cc258f3",
    "grupo": "poco:colossos"
   },
   {
    "alvo": "MODELS",
    "chave": "colosso-ar",
    "arquivo": "models-meshy-colossos/colosso-ar.glb",
-   "bytes": 1745624,
-   "hash": "6bc58e29fc9d",
+   "bytes": 842488,
+   "hash": "851763e51fe2",
    "grupo": "poco:colossos"
   },
   {
    "alvo": "MODELS",
    "chave": "eco-menor-fogo",
    "arquivo": "models-meshy-eco/eco-menor-fogo.glb",
-   "bytes": 1393612,
-   "hash": "7291ee601e01",
+   "bytes": 699492,
+   "hash": "348f6f4bd0e0",
    "grupo": "evento:eco"
   },
   {
    "alvo": "MODELS",
    "chave": "eco-menor-agua",
    "arquivo": "models-meshy-eco/eco-menor-agua.glb",
-   "bytes": 1418496,
-   "hash": "5f988f1d9d70",
+   "bytes": 704344,
+   "hash": "d87f779ad79e",
    "grupo": "evento:eco"
   },
   {
    "alvo": "MODELS",
    "chave": "eco-menor-terra",
    "arquivo": "models-meshy-eco/eco-menor-terra.glb",
-   "bytes": 1432788,
-   "hash": "870b5523783d",
+   "bytes": 753012,
+   "hash": "e043ef413d4b",
    "grupo": "evento:eco"
   },
   {
    "alvo": "MODELS",
    "chave": "ember-imp",
    "arquivo": "models-meshy-emberlock/ember-imp.glb",
-   "bytes": 1218400,
-   "hash": "771cca7d52f3",
+   "bytes": 687928,
+   "hash": "7afae63a68a1",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "walking-anvil",
    "arquivo": "models-meshy-emberlock/walking-anvil.glb",
-   "bytes": 1153016,
-   "hash": "f041e31e94ef",
+   "bytes": 635992,
+   "hash": "be1085e76d9e",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "ash-wraith",
    "arquivo": "models-meshy-emberlock/ash-wraith.glb",
-   "bytes": 1131704,
-   "hash": "79b90fcd3b81",
+   "bytes": 599864,
+   "hash": "a8ded2201d72",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "slag-mound",
    "arquivo": "models-meshy-emberlock/slag-mound.glb",
-   "bytes": 1341800,
-   "hash": "c52b08e70203",
+   "bytes": 775060,
+   "hash": "39176f838e07",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "faceless-smith",
    "arquivo": "models-meshy-emberlock/faceless-smith.glb",
-   "bytes": 1138072,
-   "hash": "15e3bf3b0454",
+   "bytes": 587688,
+   "hash": "22e51a7e8094",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "quench-hound",
    "arquivo": "models-meshy-emberlock/quench-hound.glb",
-   "bytes": 1243128,
-   "hash": "19f058a6dbb9",
+   "bytes": 694184,
+   "hash": "255f035b0662",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "chain-hauler",
    "arquivo": "models-meshy-emberlock/chain-hauler.glb",
-   "bytes": 1485792,
-   "hash": "373a1404b5e8",
+   "bytes": 849544,
+   "hash": "398d11c0da75",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "spark-whelp",
    "arquivo": "models-meshy-emberlock/spark-whelp.glb",
-   "bytes": 1208256,
-   "hash": "0db13061e399",
+   "bytes": 657172,
+   "hash": "1b0f95013ff5",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "slag-bit",
    "arquivo": "models-meshy-emberlock/slag-bit.glb",
-   "bytes": 1241692,
-   "hash": "7150be09492d",
+   "bytes": 708276,
+   "hash": "19d189aedf1e",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-heartforge",
    "arquivo": "models-meshy-emberlock/boss-heartforge.glb",
-   "bytes": 1481064,
-   "hash": "769656e76337",
+   "bytes": 891032,
+   "hash": "7df4e8de0e58",
    "grupo": "calabouco:emberlock"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-gardener",
    "arquivo": "models-meshy-jardim/boss-gardener.glb",
-   "bytes": 1297004,
-   "hash": "5c8eb3e387e5",
+   "bytes": 683920,
+   "hash": "da1413650e95",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "dew-strider",
    "arquivo": "models-meshy-jardim/dew-strider.glb",
-   "bytes": 1097692,
-   "hash": "a30f7963880b",
+   "bytes": 590796,
+   "hash": "41d26bbdfde7",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "sprout-feral",
    "arquivo": "models-meshy-jardim/sprout-feral.glb",
-   "bytes": 1112924,
-   "hash": "e5339ab6dcb5",
+   "bytes": 586744,
+   "hash": "5f311b4194dd",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "pollen-puff",
    "arquivo": "models-meshy-jardim/pollen-puff.glb",
-   "bytes": 1334440,
-   "hash": "c6f09399f2a9",
+   "bytes": 732356,
+   "hash": "a1ab99578dd7",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "burrlet",
    "arquivo": "models-meshy-jardim/burrlet.glb",
-   "bytes": 1483100,
-   "hash": "0ab8e0984016",
+   "bytes": 845504,
+   "hash": "0009f993d705",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "burr-mother",
    "arquivo": "models-meshy-jardim/burr-mother.glb",
-   "bytes": 1675840,
-   "hash": "fe7a972d353a",
+   "bytes": 968812,
+   "hash": "011c24e2cc90",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "sap-shaman",
    "arquivo": "models-meshy-jardim/sap-shaman.glb",
-   "bytes": 952140,
-   "hash": "b83288a2ad76",
+   "bytes": 515080,
+   "hash": "416e62112eee",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "thorn-lasher",
    "arquivo": "models-meshy-jardim/thorn-lasher.glb",
-   "bytes": 1154360,
-   "hash": "e6debd02847c",
+   "bytes": 626780,
+   "hash": "d94cbc2095c1",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "lantern-wasp",
    "arquivo": "models-meshy-jardim/lantern-wasp.glb",
-   "bytes": 1325248,
-   "hash": "292824fe5930",
+   "bytes": 741216,
+   "hash": "44c66a4e25d1",
    "grupo": "calabouco:greenhouse"
   },
   {
    "alvo": "MODELS",
    "chave": "pick-revenant",
    "arquivo": "models-meshy-quakemine/pick-revenant.glb",
-   "bytes": 1211536,
-   "hash": "e6190bb90db6",
+   "bytes": 684884,
+   "hash": "fcb7bbfa4145",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "firedamp-wisp",
    "arquivo": "models-meshy-quakemine/firedamp-wisp.glb",
-   "bytes": 1104700,
-   "hash": "c31e8c93aca2",
+   "bytes": 575232,
+   "hash": "fe5015bb3b26",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "cave-jaw",
    "arquivo": "models-meshy-quakemine/cave-jaw.glb",
-   "bytes": 1255780,
-   "hash": "35eaa1276f20",
+   "bytes": 727644,
+   "hash": "9facef91aca0",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "sinkhole-worm",
    "arquivo": "models-meshy-quakemine/sinkhole-worm.glb",
-   "bytes": 1206484,
-   "hash": "f959f773f0d3",
+   "bytes": 711272,
+   "hash": "31a2d1487ed6",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "ore-tumbler",
    "arquivo": "models-meshy-quakemine/ore-tumbler.glb",
-   "bytes": 1211772,
-   "hash": "95c6a707e7ec",
+   "bytes": 685136,
+   "hash": "0fcd3aa0d06b",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "shaft-bat",
    "arquivo": "models-meshy-quakemine/shaft-bat.glb",
-   "bytes": 1263916,
-   "hash": "f3161bf69ad2",
+   "bytes": 694904,
+   "hash": "338483476729",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "damp-seeper",
    "arquivo": "models-meshy-quakemine/damp-seeper.glb",
-   "bytes": 1091968,
-   "hash": "6e574b059fc4",
+   "bytes": 608736,
+   "hash": "105e9fa65bc2",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-deepknock",
    "arquivo": "models-meshy-quakemine/boss-deepknock.glb",
-   "bytes": 1261556,
-   "hash": "f3d2f42f0672",
+   "bytes": 742736,
+   "hash": "eab3336f81d0",
    "grupo": "calabouco:quakemine"
   },
   {
    "alvo": "MODELS",
    "chave": "el-fogo-1",
    "arquivo": "models-meshy-santuario/el-fogo-1.glb",
-   "bytes": 1370848,
-   "hash": "5e6bed401c10",
+   "bytes": 635724,
+   "hash": "20f354bc6708",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-fogo-2",
    "arquivo": "models-meshy-santuario/el-fogo-2.glb",
-   "bytes": 1507372,
-   "hash": "44a945f41390",
+   "bytes": 772204,
+   "hash": "cd1d29056fb8",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-agua-1",
    "arquivo": "models-meshy-santuario/el-agua-1.glb",
-   "bytes": 1423880,
-   "hash": "57a9ef545656",
+   "bytes": 669596,
+   "hash": "44946b21cfcf",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-agua-2",
    "arquivo": "models-meshy-santuario/el-agua-2.glb",
-   "bytes": 1382332,
-   "hash": "2244d20d0dc0",
+   "bytes": 739036,
+   "hash": "3af6777dc7fb",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-terra-1",
    "arquivo": "models-meshy-santuario/el-terra-1.glb",
-   "bytes": 1415520,
-   "hash": "828ef8778c48",
+   "bytes": 731980,
+   "hash": "48371a9510ce",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-terra-2",
    "arquivo": "models-meshy-santuario/el-terra-2.glb",
-   "bytes": 1631304,
-   "hash": "d0de02b7e9c2",
+   "bytes": 843708,
+   "hash": "81c17f52822e",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-ar-1",
    "arquivo": "models-meshy-santuario/el-ar-1.glb",
-   "bytes": 1610112,
-   "hash": "059a06b95555",
+   "bytes": 821528,
+   "hash": "534804e7ab31",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "el-ar-2",
    "arquivo": "models-meshy-santuario/el-ar-2.glb",
-   "bytes": 1473720,
-   "hash": "016e319eade7",
+   "bytes": 661452,
+   "hash": "c4f317efa434",
    "grupo": "calabouco:elementsanctum"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_familiar",
    "arquivo": "models-meshy-sum/sum_familiar.glb",
-   "bytes": 1135152,
-   "hash": "09dae3ad30dc",
+   "bytes": 583396,
+   "hash": "c080200642db",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_ember_hound",
    "arquivo": "models-meshy-sum/sum_ember_hound.glb",
-   "bytes": 1217308,
-   "hash": "664a0577089c",
+   "bytes": 646716,
+   "hash": "f4b16307a1e7",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_magma_colossus",
    "arquivo": "models-meshy-sum/sum_magma_colossus.glb",
-   "bytes": 1188880,
-   "hash": "86d78b578b84",
+   "bytes": 631724,
+   "hash": "93093b2a6e97",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_tide_nymph",
    "arquivo": "models-meshy-sum/sum_tide_nymph.glb",
-   "bytes": 1069532,
-   "hash": "6acd0109095f",
+   "bytes": 430380,
+   "hash": "33b7188e32e3",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_stone_sentinel",
    "arquivo": "models-meshy-sum/sum_stone_sentinel.glb",
-   "bytes": 1120444,
-   "hash": "d58597e78077",
+   "bytes": 617516,
+   "hash": "d245cf45c56c",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_mountain_golem",
    "arquivo": "models-meshy-sum/sum_mountain_golem.glb",
-   "bytes": 1091920,
-   "hash": "9cb0fd55ab2d",
+   "bytes": 568736,
+   "hash": "b84c9bebba74",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_storm_falcon",
    "arquivo": "models-meshy-sum/sum_storm_falcon.glb",
-   "bytes": 1263740,
-   "hash": "a46e6b9cd6d5",
+   "bytes": 693348,
+   "hash": "692810287f07",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_drowned_cistern",
    "arquivo": "models-meshy-sum/sum_drowned_cistern.glb",
-   "bytes": 994008,
-   "hash": "88e40d366721",
+   "bytes": 446448,
+   "hash": "f93b0ca77a2f",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "sum_storm_eye",
    "arquivo": "models-meshy-sum/sum_storm_eye.glb",
-   "bytes": 1196328,
-   "hash": "696a58e2ad77",
+   "bytes": 635120,
+   "hash": "36a81ec7d040",
    "grupo": "classe:invocador"
   },
   {
    "alvo": "MODELS",
    "chave": "plank-shrike",
    "arquivo": "models-meshy-windscaffold/plank-shrike.glb",
-   "bytes": 1299544,
-   "hash": "ed5788db326e",
+   "bytes": 730608,
+   "hash": "707ba82f420f",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "gust-gremlin",
    "arquivo": "models-meshy-windscaffold/gust-gremlin.glb",
-   "bytes": 1183936,
-   "hash": "f3ca48d270e5",
+   "bytes": 658852,
+   "hash": "b4089f0f5d8e",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "rope-hanger",
    "arquivo": "models-meshy-windscaffold/rope-hanger.glb",
-   "bytes": 1636924,
-   "hash": "abda45d020bd",
+   "bytes": 994748,
+   "hash": "17b0bf0ebc7b",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "kite-serpent",
    "arquivo": "models-meshy-windscaffold/kite-serpent.glb",
-   "bytes": 1346208,
-   "hash": "caa43250d60c",
+   "bytes": 771880,
+   "hash": "8f0388fc9174",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "ballast-golem",
    "arquivo": "models-meshy-windscaffold/ballast-golem.glb",
-   "bytes": 1691072,
-   "hash": "5e275a2322ba",
+   "bytes": 1021308,
+   "hash": "1e3b7a2f6fa4",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "whistle-choir",
    "arquivo": "models-meshy-windscaffold/whistle-choir.glb",
-   "bytes": 1355692,
-   "hash": "4a16a3fd8b74",
+   "bytes": 789332,
+   "hash": "cbbc1d9fb409",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "mote-swarm",
    "arquivo": "models-meshy-windscaffold/mote-swarm.glb",
-   "bytes": 1314620,
-   "hash": "4f098d96a9f7",
+   "bytes": 690752,
+   "hash": "c646dd3d6f59",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "mote-bit",
    "arquivo": "models-meshy-windscaffold/mote-bit.glb",
-   "bytes": 1364620,
-   "hash": "2bd5f6e86550",
+   "bytes": 771912,
+   "hash": "dce1c9844828",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "nail-sprite",
    "arquivo": "models-meshy-windscaffold/nail-sprite.glb",
-   "bytes": 1140960,
-   "hash": "6ec15ad0ed97",
+   "bytes": 595336,
+   "hash": "921eb3749739",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "boss-windwright",
    "arquivo": "models-meshy-windscaffold/boss-windwright.glb",
-   "bytes": 1654372,
-   "hash": "fe70b4b0733f",
+   "bytes": 1000708,
+   "hash": "5a4ffd82b111",
    "grupo": "calabouco:windscaffold"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_sumo",
    "arquivo": "models-meshy/meshy_sumo.glb",
-   "bytes": 1091988,
-   "hash": "65d0ecaaa258",
+   "bytes": 582748,
+   "hash": "fddc72610517",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_invocador",
    "arquivo": "models-meshy/meshy_invocador.glb",
-   "bytes": 1421332,
-   "hash": "7e6ddd3f9aad",
+   "bytes": 742728,
+   "hash": "21a7556244c5",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_espadachim",
    "arquivo": "models-meshy/meshy_espadachim.glb",
-   "bytes": 1130948,
-   "hash": "042ec65736a4",
+   "bytes": 561852,
+   "hash": "fb6a7ef37543",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_minotauro",
    "arquivo": "models-meshy/meshy_minotauro.glb",
-   "bytes": 1131236,
-   "hash": "c1fff1b091f2",
+   "bytes": 601004,
+   "hash": "fc9746530cb5",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_curandeiro",
    "arquivo": "models-meshy/meshy_curandeiro.glb",
-   "bytes": 1405560,
-   "hash": "044a8ac0fde7",
+   "bytes": 767880,
+   "hash": "a57c19e43417",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_arqueiro",
    "arquivo": "models-meshy/meshy_arqueiro.glb",
-   "bytes": 1214292,
-   "hash": "0f5bb4ebe710",
+   "bytes": 659448,
+   "hash": "823d851336a4",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "meshy_bruxo",
    "arquivo": "models-meshy/meshy_bruxo.glb",
-   "bytes": 1107700,
-   "hash": "71d892491a47",
+   "bytes": 591708,
+   "hash": "4892352509f9",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_frog",
    "arquivo": "models-monsters/q_frog.glb",
-   "bytes": 581708,
-   "hash": "9dfc5585d810",
+   "bytes": 216644,
+   "hash": "cd70fa9ff8b7",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_spider",
    "arquivo": "models-monsters/q_spider.glb",
-   "bytes": 439716,
-   "hash": "0ad5a1dd4969",
+   "bytes": 165080,
+   "hash": "edccdfa7f570",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_wasp",
    "arquivo": "models-monsters/q_wasp.glb",
-   "bytes": 436820,
-   "hash": "7d8954376281",
+   "bytes": 158620,
+   "hash": "ff1d7fd00bfc",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_snake",
    "arquivo": "models-monsters/q_snake.glb",
-   "bytes": 212804,
-   "hash": "ea3f2b621743",
+   "bytes": 80292,
+   "hash": "813e3c0a6c0a",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_rat",
    "arquivo": "models-monsters/q_rat.glb",
-   "bytes": 541640,
-   "hash": "28f75b5611aa",
+   "bytes": 215292,
+   "hash": "6ade23802314",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_wolf",
    "arquivo": "models-monsters/q_wolf.glb",
-   "bytes": 588768,
-   "hash": "ce2b0b21b343",
+   "bytes": 229948,
+   "hash": "a3bda26375c9",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_fox",
    "arquivo": "models-monsters/q_fox.glb",
-   "bytes": 570360,
-   "hash": "e47c6818498a",
+   "bytes": 224088,
+   "hash": "c836d4af6e62",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_stag",
    "arquivo": "models-monsters/q_stag.glb",
-   "bytes": 668632,
-   "hash": "67b67534af0b",
+   "bytes": 257376,
+   "hash": "7825497292d9",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_bull",
    "arquivo": "models-monsters/q_bull.glb",
-   "bytes": 629372,
-   "hash": "b770822da077",
+   "bytes": 232540,
+   "hash": "e60bb0258e36",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_velociraptor",
    "arquivo": "models-monsters/q_velociraptor.glb",
-   "bytes": 277244,
-   "hash": "3d5ff54d7322",
+   "bytes": 110736,
+   "hash": "e35806720e65",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_trex",
    "arquivo": "models-monsters/q_trex.glb",
-   "bytes": 327680,
-   "hash": "eb1a7f185381",
+   "bytes": 128532,
+   "hash": "646d8160f8c0",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_triceratops",
    "arquivo": "models-monsters/q_triceratops.glb",
-   "bytes": 301168,
-   "hash": "6b5075d81553",
+   "bytes": 120152,
+   "hash": "16715bdd1ba0",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-emberling",
    "arquivo": "models-pets/pet-emberling.glb",
-   "bytes": 1253272,
-   "hash": "ba20ab48bbe3",
+   "bytes": 661520,
+   "hash": "ca6af748c4f7",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-snapvine",
    "arquivo": "models-pets/pet-snapvine.glb",
-   "bytes": 1094764,
-   "hash": "f5958cf9e144",
+   "bytes": 567640,
+   "hash": "1e2ec3ddf483",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-galehawk",
    "arquivo": "models-pets/pet-galehawk.glb",
-   "bytes": 1102752,
-   "hash": "1a3642c35930",
+   "bytes": 595232,
+   "hash": "97bb5b69c8c9",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-dewling",
    "arquivo": "models-pets/pet-dewling.glb",
-   "bytes": 1097916,
-   "hash": "981b26d718a1",
+   "bytes": 527124,
+   "hash": "7efcd928d590",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-lodestone",
    "arquivo": "models-pets/pet-lodestone.glb",
-   "bytes": 1163636,
-   "hash": "8ba3366917a5",
+   "bytes": 600904,
+   "hash": "46f6c6b8cd9d",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-heartshard",
    "arquivo": "models-pets/pet-heartshard.glb",
-   "bytes": 1255384,
-   "hash": "4af098ff2a4d",
+   "bytes": 640940,
+   "hash": "bee6cd4dd257",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "pet-colecionador",
    "arquivo": "models-pets/pet-colecionador.glb",
-   "bytes": 1135996,
-   "hash": "184c2328a11e",
+   "bytes": 594212,
+   "hash": "cb957af30d46",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_arvore",
    "arquivo": "models-praca/praca_arvore.glb",
-   "bytes": 1033252,
-   "hash": "c6726d2e22ab",
+   "bytes": 860264,
+   "hash": "8d97aca9cb75",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_arena",
    "arquivo": "models-praca/praca_arena.glb",
-   "bytes": 1083832,
-   "hash": "f1c72aa47e1b",
+   "bytes": 898280,
+   "hash": "786fcf0fd87e",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_banco",
    "arquivo": "models-praca/praca_banco.glb",
-   "bytes": 1004524,
-   "hash": "59e13bbdd445",
+   "bytes": 808732,
+   "hash": "7f3fa79ce089",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_mercado",
    "arquivo": "models-praca/praca_mercado.glb",
-   "bytes": 893116,
-   "hash": "e111e0acf674",
+   "bytes": 691968,
+   "hash": "5acd735c91cd",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_sede",
    "arquivo": "models-praca/praca_sede.glb",
-   "bytes": 913252,
-   "hash": "0d13773823b5",
+   "bytes": 707644,
+   "hash": "40f1e5fd4fed",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_forja",
    "arquivo": "models-praca/praca_forja.glb",
-   "bytes": 792872,
-   "hash": "8e5c51e4c971",
+   "bytes": 595296,
+   "hash": "51745e31d200",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_loteria",
    "arquivo": "models-praca/praca_loteria.glb",
-   "bytes": 877264,
-   "hash": "ef9f774515b0",
+   "bytes": 670640,
+   "hash": "ce6bdb777278",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "praca_poco",
    "arquivo": "models-praca/praca_poco.glb",
-   "bytes": 1019936,
-   "hash": "26d178f50419",
+   "bytes": 792900,
+   "hash": "abc51e4f164a",
    "grupo": "base"
   },
   {
    "alvo": "MODELS",
    "chave": "q_hywirl",
    "arquivo": "models-summons/q_hywirl.glb",
-   "bytes": 317228,
-   "hash": "ebd5f0a31e08",
+   "bytes": 115972,
+   "hash": "44cb4f2c47ef",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_demon",
    "arquivo": "models-summons/q_demon.glb",
-   "bytes": 700840,
-   "hash": "fd7bb98d76d1",
+   "bytes": 261388,
+   "hash": "1069d4055ec7",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_dragon_ev",
    "arquivo": "models-summons/q_dragon_ev.glb",
-   "bytes": 533556,
-   "hash": "fa32aa36dafe",
+   "bytes": 199120,
+   "hash": "d8d8bc6cf566",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_squidle",
    "arquivo": "models-summons/q_squidle.glb",
-   "bytes": 418132,
-   "hash": "1a068c02822b",
+   "bytes": 151828,
+   "hash": "3dfc45ab6bcd",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_cactoro",
    "arquivo": "models-summons/q_cactoro.glb",
-   "bytes": 676764,
-   "hash": "e4063c57b912",
+   "bytes": 253264,
+   "hash": "f8908551fd07",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_spikyblob",
    "arquivo": "models-summons/q_spikyblob.glb",
-   "bytes": 214664,
-   "hash": "05743146f0ed",
+   "bytes": 82936,
+   "hash": "1f85bc05e718",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "q_birb",
    "arquivo": "models-summons/q_birb.glb",
-   "bytes": 648736,
-   "hash": "90c552bc07e2",
+   "bytes": 241348,
+   "hash": "0b980d2bb2d3",
    "grupo": "fechados"
   },
   {
    "alvo": "MODELS",
    "chave": "muro-escudo",
    "arquivo": "muro-escudo/muro-escudo.glb",
-   "bytes": 758816,
-   "hash": "fe40bde39d69",
+   "bytes": 593820,
+   "hash": "d0d907311bf0",
    "grupo": "base"
   }
  ],
@@ -3698,160 +3698,160 @@
   "cenario-santuario.js": "tabelas/cenario-santuario.js",
   "cenario-sede.js": "tabelas/cenario-sede.js"
  },
- "totalBytes": 259286280,
+ "totalBytes": 167164184,
  "totalBase64": 345715556,
  "grupos": {
   "base": {
    "itens": 92,
-   "bytes": 37620232
+   "bytes": 24178032
   },
   "calabouco:brokenheart": {
    "itens": 25,
-   "bytes": 16692040
+   "bytes": 11257160
   },
   "calabouco:cistern": {
    "itens": 23,
-   "bytes": 18606528
+   "bytes": 12332016
   },
   "calabouco:elementsanctum": {
    "itens": 25,
-   "bytes": 17570584
+   "bytes": 11092868
   },
   "calabouco:emberlock": {
    "itens": 29,
-   "bytes": 21652168
+   "bytes": 15064136
   },
   "calabouco:greenhouse": {
    "itens": 21,
-   "bytes": 18300396
+   "bytes": 12002176
   },
   "calabouco:quakemine": {
    "itens": 27,
-   "bytes": 16736284
+   "bytes": 11885572
   },
   "calabouco:windscaffold": {
    "itens": 28,
-   "bytes": 22671144
+   "bytes": 15664452
   },
   "campo:pvp": {
    "itens": 10,
-   "bytes": 4153496
+   "bytes": 3703480
   },
   "classe:invocador": {
    "itens": 9,
-   "bytes": 10277312
+   "bytes": 5253384
   },
   "coroas": {
    "itens": 11,
-   "bytes": 6292880
+   "bytes": 5879740
   },
   "evento:eco": {
    "itens": 3,
-   "bytes": 4244896
+   "bytes": 2156848
   },
   "fechados": {
    "itens": 26,
-   "bytes": 11715848
+   "bytes": 4451708
   },
   "fusao:arqueiro+bruxo": {
    "itens": 1,
-   "bytes": 1200144
+   "bytes": 655688
   },
   "fusao:arqueiro+curandeiro": {
    "itens": 1,
-   "bytes": 1473596
+   "bytes": 810648
   },
   "fusao:arqueiro+espadachim": {
    "itens": 1,
-   "bytes": 1204572
+   "bytes": 648876
   },
   "fusao:arqueiro+invocador": {
    "itens": 1,
-   "bytes": 1212424
+   "bytes": 670152
   },
   "fusao:arqueiro+minotauro": {
    "itens": 2,
-   "bytes": 2094572
+   "bytes": 1287800
   },
   "fusao:arqueiro+sumo": {
    "itens": 1,
-   "bytes": 1408788
+   "bytes": 780620
   },
   "fusao:bruxo+curandeiro": {
    "itens": 1,
-   "bytes": 1258472
+   "bytes": 709136
   },
   "fusao:bruxo+espadachim": {
    "itens": 1,
-   "bytes": 1143132
+   "bytes": 610552
   },
   "fusao:bruxo+invocador": {
    "itens": 1,
-   "bytes": 1217372
+   "bytes": 657092
   },
   "fusao:bruxo+minotauro": {
    "itens": 2,
-   "bytes": 2109540
+   "bytes": 1319520
   },
   "fusao:bruxo+sumo": {
    "itens": 1,
-   "bytes": 1137564
+   "bytes": 630112
   },
   "fusao:curandeiro+espadachim": {
    "itens": 1,
-   "bytes": 1318012
+   "bytes": 724796
   },
   "fusao:curandeiro+invocador": {
    "itens": 1,
-   "bytes": 1261420
+   "bytes": 722204
   },
   "fusao:curandeiro+minotauro": {
    "itens": 2,
-   "bytes": 2020356
+   "bytes": 1290248
   },
   "fusao:curandeiro+sumo": {
    "itens": 1,
-   "bytes": 1366924
+   "bytes": 755400
   },
   "fusao:espadachim+invocador": {
    "itens": 1,
-   "bytes": 1447772
+   "bytes": 795956
   },
   "fusao:espadachim+minotauro": {
    "itens": 2,
-   "bytes": 1927028
+   "bytes": 1206260
   },
   "fusao:espadachim+sumo": {
    "itens": 1,
-   "bytes": 1107604
+   "bytes": 589196
   },
   "fusao:invocacoes": {
    "itens": 6,
-   "bytes": 6574296
+   "bytes": 3488656
   },
   "fusao:invocador+minotauro": {
    "itens": 2,
-   "bytes": 2166940
+   "bytes": 1308456
   },
   "fusao:invocador+sumo": {
    "itens": 1,
-   "bytes": 1202732
+   "bytes": 666368
   },
   "fusao:minotauro+sumo": {
    "itens": 2,
-   "bytes": 1888288
+   "bytes": 1152844
   },
   "mapa:camara_eco": {
    "itens": 5,
-   "bytes": 2233532
+   "bytes": 1941496
   },
   "mapa:sede": {
    "itens": 16,
-   "bytes": 6167716
+   "bytes": 5396688
   },
   "poco:colossos": {
    "itens": 4,
-   "bytes": 6609676
+   "bytes": 3423848
   }
  }
 }
