@@ -238,6 +238,11 @@ jogador. Página nova sem essa linha é bug.
 | **`efeitos_um_a_um.html`** | 7 / 0 com **213 feitiços** (12/10: a página descia sem `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala"; consertada, cobre os filmes do Blender por família; 15/10: 25 famílias, 3 de 3 rodadas verdes — a régua "famílias diferentes desenham diferente" mede o quadro de MAIS partículas, que é o da conjuração, então o que uma família tem de próprio precisa existir no primeiro quadro, não só depois do acerto) |
 | `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não; 15/10: dezoito folhas) |
 | `som.html` | 6 / 0 (15/10: as 26 famílias com som explícito — as cinco novas entraram no `POR_FAMILIA`) |
+| `eventos_uso.js` (Node) · `eventos_uso_api.py` | 15 / 0 · 7 / 0 (15/10: o registro de eventos de uso — o funil somado por dia, sem linha de ninguém; §9-C) |
+| `acessibilidade.js` (Node) | 19 / 0 (15/10: as duas paletas, as quatro tabelas lendo a paleta, a regra da avaliação na Play, o limite de 30 quadros) |
+| `primeira_luta.html` | 12 / 0 (15/10: a conta nova cai na primeira sala sem a praça e a batalha guiada avança passo a passo) |
+| `retoma_solo.js` (Node) · `retoma_solo.html` | 14 / 0 · 8 / 0 (15/10: a sala solo refeita do bilhete tem o MESMO hash da sala viva e do juiz; a página cai na batalha na vez do jogador) |
+| `modelos_comprimidos.html` | passou (15/10: os .glb do bundle com meshopt abrem no three do jogo com os nomes das malhas; o bundle foi de 247 para 159 MB, `carga.html` de 40 para 28 MB até o menu) |
 | `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas; 15/10: mais oito, uma por família nova e por matéria nova (§9-A.31) |
 | `foto_molduras.html` · `foto_moldura_arena.html` | 12 placas / 17 de 17 (12/10: as molduras com bisel, contas, rosetas e o ornamento de cada forma; a do campeão cabe na tela e a da guilda pinta menos de 6%) |
 | `app_modelos.js` (Node) | 41 / 0 (12/10: `vendor/capacitor/local-notifications.js` existia só no package.json — a ponte entrou) |

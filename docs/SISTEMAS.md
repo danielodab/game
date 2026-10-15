@@ -2019,6 +2019,45 @@ pedras; quem paga adianta. Prova: `node tests/juiz_balcao.js` (18).
 
 ---
 
+## 9-C. A análise de mercado e as melhorias de 15/10 (PC pelo navegador e Google Play)
+
+O dono: "analisando meu jogo em relação ao mercado, você acha que tem algum ponto que podemos melhorar?",
+e depois "pode implantar todas as melhorias". A análise (contra o que os táticos por turnos gratuitos
+esperam no celular e no navegador) e o que entrou de cada ponto, um commit por bloco:
+
+| ponto | o que entrou | onde |
+|---|---|---|
+| **Enxergar o funil** (não havia medida de uso nenhuma) | o registro de eventos de uso: boot, a faixa do retorno (1, 2–3, 4–7, 8–30, 30+ dias desde o boot anterior no aparelho) e a primeira chegada da sessão a cada tela; o servidor só SOMA por dia × nome × versão × plataforma (sem linha de ninguém); o painel "Funil de uso" do Mestre; a linha na política de privacidade | `js/core/eventos_uso.js`, `servidor/eventos_uso.py`, `site/mestre_eventos.js`, `site/privacidade.html` §2 e §4 (+ en/es) |
+| **O primeiro quarto de hora** (conta → heróis → praça pesada → portal → luta) | a conta continua obrigatória (decisão de 06/10), mas a ORDEM mudou: quem acaba de escolher as duas iniciais desce DIRETO para a primeira sala da Estufa, sem a praça (a antessala vira um aviso e a porta abre sozinha); a praça vem depois da primeira vitória; e a primeira batalha é GUIADA em três passos (toque num feitiço, toque no inimigo, passe a vez) | `js/ui/hud.js` (buildPrimeiraLuta), `js/ui/tutor.js` (T.guiar) |
+| **O peso do que se baixa** (247 MB de .glb, 174 deles malha e animação) | os .glb do bundle saem COMPRIMIDOS com meshopt (gltfpack `-cc -noq -kn -km -ke`): 247 → 159 MB, sem trocar arte; o extrator comprime ao escrever e guarda o caderno `comprimidos.json` (o embutido que não mudou não passa pelo gltfpack de novo); o decodificador `vendor/meshopt_decoder.js` entra no GLTFLoader dos dois carregadores | `tools/comprime_glb.py`, `tools/extrai_assets.py`, `js/render3d/models3d*.js`, `index.html` |
+| **A luta solo que morria quando o celular dormia** | a sala solo que ficou aberta é REFEITA do bilhete na abertura seguinte (semente + lances, como o juiz), e a praça pergunta "Continuar a luta?"; desistir fecha como sempre | `js/core/retomada.js`, `js/core/autoridade.js`, `js/core/game.js` (retomaSolo), `js/ui/hud.js` |
+| **Avaliação na loja e comunidade** | na 3ª sala vencida, com 2 dias desde o primeiro boot e uma vez só, o aplicativo pede a avaliação pela caixa nativa da Play; "Comunidade e ajuda" nas Configurações: avaliar, falar com a equipe (e-mail), entrar na comunidade (quando o dono puser o endereço) | `js/core/avaliacao.js`, `vendor/capacitor/in-app-review.js` |
+| **Acessibilidade e bateria** | o modo para daltônicos (a paleta de Okabe–Ito nos quatro lugares que leem a cor do elemento: renderer, FX, Art, DATA) e o limite de 30 quadros nos dois laços | `js/core/paleta.js`, `js/mobile.js`, `js/main.js`, `hub3d.js` |
+| **Monetização** | nada a construir: o Pacote de Boas-Vindas (250 barras, uma vez por conta) já é o pacote inicial; auras e molduras já são os cosméticos; o passe de temporada pago (só cosmético, em cima da trilha de 42 dias) é decisão de produto e de SKU na Play — proposto em `docs/LOJA_SUGESTOES.md`, não feito | — |
+
+**O que é do dono, não do código:** `npm install` + `npx cap sync` + AAB novo para o plugin da avaliação; o
+AdMob; a ficha da Play (cinco capturas de LUTA, o vídeo); o endereço da comunidade em
+`JOGO.Avaliacao.LINKS.comunidade`; os portais de jogos web (exigem SDK e anúncios nos termos deles, o que
+esbarra na regra "anúncio só por vontade"); o Play Asset Delivery (levar o pacote base dentro do AAB) —
+com a compressão feita, o primeiro calabouço já pesa menos da metade do que pesava.
+
+**Armadilhas medidas:**
+- O gltfpack com quantização (`-c`/`-cc` sem `-noq`) pendura cada malha num nó NOVO sem nome, para o
+  nó com nome poder ser transformado por fora — e o jogo acha malha e osso pelo NOME (`show`, os enxertos
+  da fusão, `/_Head/`): o rogue saía com `mesh_0`… em vez de `Knife_Offhand`. Com `-noq` a estrutura fica
+  intacta e a compressão ainda é de 43–57% (com quantização seria 29–43%).
+- O three vendorizado não tem `BufferAttribute.getComponent` (só `getX/Y/Z/W`); o GLTFLoader daqui tem
+  `setMeshoptDecoder`, e o `parse` fica assíncrono com meshopt (os callbacks já esperavam).
+- A régua "famílias diferentes desenham diferente" e a da paleta antiga: a de sempre tem o neutro perto do
+  ar (é a paleta do dono); a nova tem de abrir mais (≥ 60 de distância RGB entre todo par).
+- `autoridade_ponta` (3 de 11) e `autoridade_cliente` falham IGUAL no commit anterior, numa worktree
+  limpa: réguas envelhecidas de antes, não da retomada.
+
+Provas novas: `node tests/eventos_uso.js` (15), `python tests/eventos_uso_api.py` (7), `node tests/acessibilidade.js`
+(19), `tests/primeira_luta.html` (12), `node tests/retoma_solo.js` (14, o hash igual ao do juiz), `tests/retoma_solo.html`
+(8), `tests/modelos_comprimidos.html` (os três do bundle abrem com os nomes das malhas). Seguem verdes: registros_api 11,
+privacidade_api 12, fx_filme 8, icones_feiticos 30, som 6, efeitos_um_a_um 7, extrai_assets `--conferir` em dia.
+
 ## 10. Progressão
 
 Nível por experiência, com tabela em `progression.js`. A cada nível o herói
