@@ -93,6 +93,8 @@ CAPACITOR = [
     ('node_modules/@capacitor-community/admob/dist/plugin.js', 'admob.js'),
     # 08/10: os avisos locais do aparelho (js/core/notificacoes.js): a ponte sobe na primeira ligacao
     ('node_modules/@capacitor/local-notifications/dist/plugin.js', 'local-notifications.js'),
+    # 15/10: a avaliacao na Play pela caixa nativa (js/core/avaliacao.js): sobe depois da 3a vitoria
+    ('node_modules/@capacitor-community/in-app-review/dist/plugin.js', 'in-app-review.js'),
 ]
 
 # A Play recusa o que passa disto no download inicial. A www/ fica muito

@@ -4676,6 +4676,8 @@ var JOGO = (typeof window !== 'undefined')
   // -------------------------------------------------------------------- laço
   function quadro(t) {
     if (!rodando) { laco = 0; return; }
+    // 15/10: "limitar a 30 quadros" (Configurações) vale na praça também
+    if (JOGO.Mobile && JOGO.Mobile.pulaQuadro && JOGO.Mobile.pulaQuadro(t, ultimoT)) { laco = requestAnimationFrame(quadro); return; }
     // 08/10: o quadro que repete o mesmo `t` (dois laços no mesmo tique) não anda nada — antes o
     // `|| 0.016` somava um passo inteiro e o boneco da antessala andava em dobro
     var dt = Math.min(Math.max(0, (t - ultimoT) / 1000) || 0, 0.1);

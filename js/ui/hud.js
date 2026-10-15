@@ -11844,6 +11844,32 @@ var JOGO = (typeof window !== 'undefined')
       chaveConfig(!!prefUi().menosMovimento, tr('Menos movimento'), function (on) {
         var p = prefUi(); p.menosMovimento = on; gravaPrefUi(p);
       })));
+    // 15/10: o MODO PARA DALTÔNICOS (js/core/paleta.js) — troca a paleta dos elementos; vale ao recarregar
+    var avisoD = el('div', 'cfg-recarrega');
+    var pintaAvisoD = function () {
+      clear(avisoD);
+      var ligadoAgora = safe(function () { return !!(JOGO.PALETA && JOGO.PALETA.ligado()); }, false);
+      var ligadoNaFicha = !!prefUi().daltonico;
+      var emUso = safe(function () { return JOGO.PALETA && JOGO.PALETA.tabela() === JOGO.PALETA.DALTONICO; }, false);
+      if (ligadoNaFicha === emUso) return;
+      void ligadoAgora;
+      avisoD.appendChild(el('span', 'inv-dica', tr('Vale depois de recarregar o jogo.')));
+      avisoD.appendChild(btn(tr('Recarregar agora'), 'btn-mini btn-gold', function () { try { location.reload(); } catch (e) {} }));
+    };
+    tela.appendChild(linhaConfig(tr('Modo para daltônicos'), tr('Troca as cores dos elementos por outras que quem não separa vermelho de verde distingue.'),
+      chaveConfig(!!prefUi().daltonico, tr('Modo para daltônicos'), function (on) {
+        var p = prefUi(); p.daltonico = on; gravaPrefUi(p); pintaAvisoD();
+      })));
+    tela.appendChild(avisoD);
+    pintaAvisoD();
+    // 15/10: LIMITAR A 30 QUADROS (js/mobile.js) — vale na hora, nos dois laços
+    var Mq = JOGO.Mobile;
+    if (Mq && Mq.defineLimiteQuadros) {
+      tela.appendChild(linhaConfig(tr('Limitar a 30 quadros'), tr('Poupa bateria e esquenta menos; o jogo fica um pouco menos fluido.'),
+        chaveConfig(!!prefUi().quadros30, tr('Limitar a 30 quadros'), function (on) {
+          var p = prefUi(); p.quadros30 = on; gravaPrefUi(p); Mq.defineLimiteQuadros(on);
+        })));
+    }
     // 08/10: os AVISOS do aparelho (só no aplicativo): o prêmio diário, o Eco e a saudade de três dias
     var Nt = JOGO.Notificacoes;
     if (Nt && Nt.disponivel && Nt.disponivel()) {
@@ -11933,6 +11959,28 @@ var JOGO = (typeof window !== 'undefined')
       body.appendChild(at);
     }
 
+    /* 15/10: COMUNIDADE E AJUDA (js/core/avaliacao.js) — avaliar na loja (a caixa nativa no app, a página da
+     * Play na web), falar com a equipe por e-mail, e a comunidade quando o dono puser o endereço */
+    var Av = JOGO.Avaliacao;
+    if (Av) {
+      var com = el('section', 'cfg-sec');
+      com.appendChild(el('h3', 'bk-tit', tr('Comunidade e ajuda')));
+      com.appendChild(btn(tr('Avaliar na Google Play'), 'btn-ghost btn-block', function () {
+        Av.avaliar().then(function (como) {
+          if (como === 'nativo') toast(tr('Obrigado! Se a caixa não abriu, a Play decide quando mostrar.'));
+          safe(function () { JOGO.EventosUso.anota('avaliacao_botao'); }, null);
+        });
+      }));
+      var mail = el('a', 'btn btn-ghost btn-block', tr('Falar com a equipe'));
+      mail.href = 'mailto:' + Av.LINKS.email + '?subject=' + encodeURIComponent('SOTERRA');
+      com.appendChild(mail);
+      if (Av.LINKS.comunidade) {
+        var cm = el('a', 'btn btn-ghost btn-block', tr('Entrar na comunidade'));
+        cm.href = Av.LINKS.comunidade; cm.target = '_blank'; cm.rel = 'noopener';
+        com.appendChild(cm);
+      }
+      body.appendChild(com);
+    }
     var conta = el('section', 'cfg-sec');
     conta.appendChild(el('h3', 'bk-tit', tr('Conta')));
     conta.appendChild(btn(tr('Contas e nuvem'), 'btn-ghost btn-block', function () { openSheet('contas'); }));

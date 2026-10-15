@@ -81,7 +81,8 @@ var JOGO = (typeof window !== 'undefined')
   R.CELL = CELL;
   R.FUSION_TIMING = { approach: 0.62, flash: 0.26, reveal: 0.66 };
 
-  var ELEMENT_COLORS = {
+  // 15/10: a paleta vem de js/core/paleta.js (o modo para daltônicos troca a tabela inteira)
+  var ELEMENT_COLORS = (JOGO.PALETA && JOGO.PALETA.elementos) ? JOGO.PALETA.elementos() : {
     neutro: '#d8dee4', fogo: '#ff8c3a', agua: '#57c8ec',
     terra: '#9bd06a', ar: '#c8b6ff'
   };

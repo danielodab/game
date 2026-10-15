@@ -40,7 +40,8 @@ var JOGO = (typeof window !== 'undefined')
   var MAXP = 2600;                 // partículas simultâneas
   var LIGHT_POOL = 6;
 
-  var ELEM = {
+  // 15/10: a paleta vem de js/core/paleta.js (o modo para daltônicos troca a tabela inteira)
+  var ELEM = (typeof JOGO !== 'undefined' && JOGO.PALETA && JOGO.PALETA.elementos) ? JOGO.PALETA.elementos() : {
     neutro: '#d8dee4', fogo: '#ff8c3a', agua: '#57c8ec',
     terra: '#9bd06a', ar: '#c8b6ff'
   };

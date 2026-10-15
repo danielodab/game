@@ -118,6 +118,13 @@ var JOGO = (typeof window !== 'undefined')
     terra:  { c: '#9bd06a', deep: '#5c7a2a', glow: '#e2f0a8', name: 'Terra' },
     ar:     { c: '#c8b6ff', deep: '#7a63c8', glow: '#f0eaff', name: 'Ar' }
   };
+  // 15/10: a paleta vem de js/core/paleta.js (o modo para daltônicos troca c/deep/glow; o nome fica)
+  (function () {
+    var P = (typeof JOGO !== 'undefined') && JOGO.PALETA;
+    if (!P || !P.arte) return;
+    var t = P.arte();
+    for (var k in t) if (t.hasOwnProperty(k) && ELEM[k]) { ELEM[k].c = t[k].c; ELEM[k].deep = t[k].deep; ELEM[k].glow = t[k].glow; }
+  })();
   function elemInfo(e) {
     var d = (JOGO.DATA && JOGO.DATA.elementInfo && JOGO.DATA.elementInfo[e]) || null;
     var base = ELEM[e] || ELEM.neutro;

@@ -6,6 +6,7 @@ var JOGO = (typeof window !== 'undefined')
 // SOTERRA 2.0 — Elementos, rivalidades e climas
 // Dono: Criativo Mundo. Globais: DATA.elements, DATA.rivals, DATA.weathers,
 // DATA.elementInfo (extra, só apresentação: nome pt-BR e cor por elemento).
+// 15/10: a cor vem de js/core/paleta.js quando ele carregou antes (o modo para daltônicos).
 // Arquivo ADITIVO: nunca sobrescreve JOGO.DATA.
 //
 // LEI (CONTRACT_V2 §2): o clima dá +5 PV no início do turno da unidade cujo
@@ -57,23 +58,23 @@ JOGO.DATA = JOGO.DATA || {};
   // Apresentação (Designer/HUD): nome visível, cor do número de dano, ícone.
   DATA.elementInfo = {
     neutro: {
-      id: 'neutro', name: 'Neutro', color: '#d8dee4', icon: 'circle',
+      id: 'neutro', name: 'Neutro', color: (JOGO.PALETA ? JOGO.PALETA.cor('neutro') : '#d8dee4'), icon: 'circle',
       description: 'A matéria crua do mundo enterrado. Não ama nem odeia ninguém: nenhum clima o ajuda, nenhum clima o fere.'
     },
     fogo: {
-      id: 'fogo', name: 'Fogo', color: '#ff8c3a', icon: 'flame',
+      id: 'fogo', name: 'Fogo', color: (JOGO.PALETA ? JOGO.PALETA.cor('fogo') : '#ff8c3a'), icon: 'flame',
       description: 'A memória do sol, guardada em brasa. Come depressa e cobra caro. Odeia a Água, que o cala.'
     },
     agua: {
-      id: 'agua', name: 'Água', color: '#57c8ec', icon: 'drop',
+      id: 'agua', name: 'Água', color: (JOGO.PALETA ? JOGO.PALETA.cor('agua') : '#57c8ec'), icon: 'drop',
       description: 'Paciente, pesada, sem pressa nenhuma. Contorna o que não consegue quebrar. Odeia o Fogo, que a rouba.'
     },
     terra: {
-      id: 'terra', name: 'Terra', color: '#9bd06a', icon: 'stone',
+      id: 'terra', name: 'Terra', color: (JOGO.PALETA ? JOGO.PALETA.cor('terra') : '#9bd06a'), icon: 'stone',
       description: 'Raiz, pedra e teimosia. Só cede quando alguém cava. Odeia o Ar, que a leva embora um grão por vez.'
     },
     ar: {
-      id: 'ar', name: 'Ar', color: '#c8b6ff', icon: 'gust',
+      id: 'ar', name: 'Ar', color: (JOGO.PALETA ? JOGO.PALETA.cor('ar') : '#c8b6ff'), icon: 'gust',
       description: 'O que sobrou do céu depois que o céu virou pedra. Nunca está onde você mirou. Odeia a Terra, que o prende.'
     }
   };

@@ -48,6 +48,8 @@ var JOGO = (typeof window !== 'undefined')
     // 13/09 (um aparelho só): a conta entrou em outro aparelho — o jogo desta
     // aba para aqui, parado embaixo da capa da Sessao (js/core/sessao.js)
     if (JOGO.Sessao && JOGO.Sessao.derrubadaJa && JOGO.Sessao.derrubadaJa()) return;
+    // 15/10: "limitar a 30 quadros" (Configurações): o quadro cedo demais é pulado inteiro
+    if (JOGO.Mobile && JOGO.Mobile.pulaQuadro && JOGO.Mobile.pulaQuadro(time, lastTime)) { requestAnimationFrame(frame); return; }
     var dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
     pumpEvents();

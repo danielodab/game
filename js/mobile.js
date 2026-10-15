@@ -165,6 +165,23 @@ var JOGO = (typeof window !== 'undefined')
     return n;
   };
   M.grafico = function () { return GRAFICOS[M.qualidade()]; };
+  /* 15/10: LIMITAR A 30 QUADROS (Configurações → Tela). Poupa bateria e esquenta menos no celular; o jogo
+   * é por turnos, 30 quadros bastam. Os dois laços (js/main.js e o da praça em hub3d.js) perguntam aqui a
+   * cada quadro, então a chave vale na hora. A escolha mora em soterra-pref-ui.quadros30. */
+  var limiteQuadros = null;
+  M.limiteQuadros = function () {
+    if (limiteQuadros === null) {
+      limiteQuadros = 0;
+      try { var p = JSON.parse(localStorage.getItem('soterra-pref-ui') || '{}') || {}; if (p.quadros30) limiteQuadros = 30; } catch (e) {}
+    }
+    return limiteQuadros;
+  };
+  M.defineLimiteQuadros = function (liga) { limiteQuadros = liga ? 30 : 0; };
+  /* o quadro `t` (ms) deve ser pulado? `ultimo` é o instante do último quadro desenhado */
+  M.pulaQuadro = function (t, ultimo) {
+    var lim = M.limiteQuadros();
+    return !!(lim && (t - ultimo) < (1000 / lim) - 2);
+  };
   M.NIVEIS_GRAFICOS = ['alta', 'media', 'baixa'];
 
   // Classes no <html> para o CSS que a consulta de mídia não alcança sozinha
