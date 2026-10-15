@@ -29,6 +29,16 @@ OS SETE
   jato       a coluna d'água que sobe e respinga
   pilar      a coluna de luz da cura e da invocação, com faíscas subindo
   selo       o círculo de runas que gira (folha de chão)
+
+AS SETE DE 15/10 (o dono: "os efeitos estão muito parecidos… gosto dos do Laghaim")
+--------------
+  helice     a dupla hélice que sobe em volta de quem recebe o bônus (três fases que se revezam)
+  cristais   cristais que brotam do chão em leque, clarão na base e lascas — a matéria da TERRA
+  redemoinho três braços em espiral que giram e puxam para o centro (folha de chão) — a ÁGUA que suga
+  correntes  dois cordões de elos que abraçam o alvo, apertam e acendem; a algema no centro
+  cortes     o golpe triplo: três lâminas cruzadas, uma atrás da outra
+  laminas    quatro gumes girando em volta do guerreiro, uma volta e meia (folha de chão)
+  trovao     a coluna de trovão grossa, do alto ao chão, que pisca e abre o clarão na base
 """
 import bpy, math, os, random, sys
 
@@ -594,7 +604,336 @@ def selo():
     return sc
 
 
-EFEITOS = {'golpe': golpe, 'impacto': impacto, 'rachadura': rachadura, 'raio': raio, 'jato': jato, 'pilar': pilar, 'selo': selo}
+# ======================================================= AS SETE DE 15/10
+# O dono: "os efeitos estão muito parecidos… gosto dos efeitos do Laghaim e de outros MMORPGs".
+# O que esse gênero (Laghaim, MU, Lineage) faz e o jogo não fazia: a DUPLA HÉLICE que sobe em
+# volta de quem recebe o bônus, os CRISTAIS brotando do chão, o REDEMOINHO visto de cima, as
+# CORRENTES que abraçam o alvo, o golpe TRIPLO cruzado, as LÂMINAS girando em volta do guerreiro
+# e a coluna de TROVÃO grossa que desce do céu com clarão na base. Mesma regra das sete primeiras:
+# geometria emissiva branca, keyframe, Cycles CPU, 16 quadros.
+
+def vazio(sc, nome):
+    ob = bpy.data.objects.new(nome, None)
+    sc.collection.objects.link(ob)
+    return ob
+
+
+def helice():
+    """a dupla hélice do bônus: duas fitas trançadas que SOBEM em volta do corpo; três fases da trança
+    se revezam a cada dois quadros, e o olho lê a trança girando; quatro orbes sobem junto"""
+    sc = cena_nova('helice')
+    n = 64
+    fases = []
+    for f in range(3):
+        par = []
+        for s in (1, -1):
+            pts, lar = [], []
+            for i in range(n):
+                t = i / (n - 1)
+                y = -0.95 + 1.9 * t
+                ph = f * math.tau / 3 + t * math.tau * 1.5
+                x = s * 0.36 * math.sin(ph) * (1 - 0.3 * t)          # afunila no alto
+                pts.append((x, y))
+                # a fita que passa por TRÁS do corpo fica mais fina (cos < 0 é o lado de trás)
+                lar.append(0.05 + 0.05 * (0.5 + 0.5 * s * math.cos(ph)))
+            m = material('fita%d_%d' % (f, s > 0), 4.5, mascara_janela('cabeca', 0.8, 0.06))
+            ob = faixa('fita%d_%d' % (f, s > 0), pts, lar, m, z=0.01 * s)
+            par.append((ob, m))
+        fases.append(par)
+    # os orbes que sobem pela trança
+    mo = material('orbe', 6.0, mascara_radial(0.15, 0.9))
+    orbes = [plano('orbe%d' % k, 0.14, 0.14, mo, z=0.03) for k in range(4)]
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        ativa = ((q - 1) // 2) % 3
+        cab = min(1.35, 0.12 + (q - 1) * 0.12)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        for f, par in enumerate(fases):
+            for ob, m in par:
+                chave_valor(m.node_tree, 'cabeca', q, cab)
+                chave_forca(m, q, (4.5 if f == ativa else 0.0) * some)
+        for k, ob in enumerate(orbes):
+            tt = (t * 1.1 + k * 0.25) % 1.0
+            y = -0.95 + 1.9 * tt
+            ph = k * 0.7 + tt * math.tau * 1.5
+            x = 0.36 * math.sin(ph) * (1 - 0.3 * tt)
+            vis = some * (1.0 if tt < 0.92 else 0.0) * (1.0 if y <= -0.95 + 1.9 * min(1.0, cab) else 0.0)
+            chave(ob, q, loc=(x, y, 0.03), esc=(vis, vis, 1))
+        chave_forca(mo, q, 6.0 * some)
+    for par in fases:
+        for ob, m in par:
+            linear_nt(m.node_tree)
+    for ob in orbes:
+        linear(ob)
+    linear_nt(mo.node_tree)
+    return sc
+
+
+def cristais():
+    """cristais que BROTAM do chão: sete lascas afiadas que sobem em leque, o clarão achatado na base e
+    as lascas miúdas que voam — a matéria da TERRA (e a espinha que a pedra tem e a rachadura não)"""
+    sc = cena_nova('cristais')
+    rd = random.Random(29)
+    mc = material('cristal', 5.5, mascara_faixa_v(0.42))
+    base_y = -0.78
+    for i in range(7):
+        a = math.radians(rd.uniform(-40, 40)) if i else 0.0
+        L = rd.uniform(0.7, 1.4) if i else 1.65
+        w0 = rd.uniform(0.17, 0.27)
+        pts = [(0, 0), (0, L * 0.45), (0, L)]
+        ob = faixa('cristal%d' % i, pts, [w0, w0 * 0.72, 0.012], mc, z=0.01 + 0.002 * i)
+        x0 = rd.uniform(-0.55, 0.55) if i else 0.0
+        ob.location = (x0, base_y, 0)
+        ob.rotation_euler = (0, 0, -a)
+        t0 = 1 if i == 0 else rd.randint(1, 4)
+        for q, e in [(t0, 0.0), (t0 + 1, 0.62), (t0 + 3, 1.06), (t0 + 5, 1.0), (16, 1.0)]:
+            chave(ob, min(16, q), esc=(1, e, 1))
+        linear(ob)
+    for q, f in [(1, 6.5), (6, 5.5), (11, 3.0), (16, 0.0)]:
+        chave_forca(mc, q, f)
+    linear_nt(mc.node_tree)
+    mb = material('base', 2.5, mascara_radial(0.1, 1.0))
+    base = plano('base', 1.9, 0.5, mb, z=-0.01)
+    base.location = (0, base_y, 0)
+    for q, e, f in [(1, 0.3, 3.2), (4, 1.0, 2.6), (10, 1.2, 1.2), (16, 1.3, 0.0)]:
+        chave(base, q, esc=(e, e, 1)); chave_forca(mb, q, f)
+    linear(base)
+    ml = material('lasca', 5.0, mascara_radial(0.2, 0.9))
+    for i in range(12):
+        g = plano('lasca%d' % i, 0.09, 0.09, ml, z=0.03)
+        vx = rd.uniform(-0.75, 0.75); vy = rd.uniform(0.9, 1.9); t0 = rd.randint(1, 4)
+        for q in range(1, QUADROS + 1):
+            t = max(0.0, (q - t0) / 10.0)
+            x = vx * t; y = base_y + 0.1 + vy * t - 2.0 * t * t
+            vis = 1.0 if q >= t0 and y > base_y - 0.05 else 0.0
+            chave(g, q, loc=(x, y, 0.03), esc=(vis, vis, 1))
+        linear(g)
+    for q, f in [(1, 5.0), (9, 3.0), (14, 0.0)]:
+        chave_forca(ml, q, f)
+    linear_nt(ml.node_tree)
+    return sc
+
+
+def redemoinho():
+    """o redemoinho visto de cima (folha de chão): três braços em espiral que GIRAM e puxam para o
+    centro, a borda e o olho que acende no fim — a ÁGUA que suga, o oposto do anel que abre"""
+    sc = cena_nova('redemoinho')
+    raiz = vazio(sc, 'raiz')
+    mb = material('braco', 3.5, mascara_janela('cabeca', 0.85, 0.05))
+    n = 72
+    for k in range(3):
+        pts, lar = [], []
+        for i in range(n):
+            t = i / (n - 1)
+            r = 0.95 * (1 - t) + 0.05
+            a = k * math.tau / 3 + t * math.tau * 1.15
+            pts.append((r * math.cos(a), r * math.sin(a)))
+            lar.append(0.17 * (1 - t) + 0.02)
+        ob = faixa('braco%d' % k, pts, lar, mb)
+        ob.parent = raiz
+    ma = material('borda', 2.0, mascara_faixa_v(0.5))
+    an = anel('borda', 0.93, 0.05, ma)
+    an.parent = raiz
+    mo = material('olho', 3.0, mascara_radial(0.1, 1.0))
+    olho = plano('olho', 0.5, 0.5, mo, z=0.01)
+    nt = mb.node_tree
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        abre = min(1.0, (q - 1) / 3.0)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        chave(raiz, q, esc=(abre, abre, 1), rot=(0, 0, -t * math.radians(320)))
+        chave_valor(nt, 'cabeca', q, min(1.35, 0.3 + t * 1.25))
+        chave_forca(mb, q, 3.5 * some)
+        chave_forca(ma, q, 2.0 * some * abre)
+        e = 0.4 + 0.8 * t
+        chave(olho, q, esc=(e, e, 1))
+        chave_forca(mo, q, 3.0 * some * min(1.0, t * 2))
+    linear(raiz); linear(olho); linear_nt(nt); linear_nt(ma.node_tree); linear_nt(mo.node_tree)
+    return sc
+
+
+def correntes():
+    """as correntes que ABRAÇAM o alvo: dois cordões de elos (um de frente, um de lado, alternados)
+    que cruzam o quadro, nascem elo a elo, APERTAM e acendem; a algema no centro fecha por último"""
+    sc = cena_nova('correntes')
+    raiz = vazio(sc, 'raiz')
+    ml = material('elo', 5.5, mascara_faixa_v(0.45))
+    elos = []
+    nel = 9
+    for c in range(2):
+        s = 1 if c == 0 else -1
+        def ponto(t):
+            x = (-0.95 + 1.9 * t) * s
+            y = -0.5 + 1.0 * t
+            y = (y * 0.55) + 0.22 * math.sin(t * math.pi) * (1 if c == 0 else -1)
+            return x, y
+        for i in range(nel):
+            t = i / (nel - 1)
+            x, y = ponto(t)
+            x2, y2 = ponto(min(1.0, t + 0.02))
+            x1, y1 = ponto(max(0.0, t - 0.02))
+            ang = math.atan2(y2 - y1, x2 - x1)
+            el = anel('elo%d_%d' % (c, i), 0.125, 0.05, ml, z=0.01 + 0.004 * c, seg=28)
+            el.parent = raiz
+            el.location = (x, y, 0)
+            el.rotation_euler = (0, 0, ang)
+            base = (1.0, 0.62, 1.0) if i % 2 == 0 else (1.0, 0.3, 1.0)   # de frente / de lado
+            elos.append((el, base, i))
+    ma = material('algema', 5.0, mascara_faixa_v(0.5))
+    alg = anel('algema', 0.34, 0.09, ma, z=0.02)
+    for q in range(1, QUADROS + 1):
+        aperta = 1.0 if q < 9 else (0.88 if q >= 11 else 1.0 - 0.06 * (q - 8))
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        chave(raiz, q, esc=(aperta, aperta, 1))
+        for el, base, i in elos:
+            k = min(1.0, max(0.0, (q - 1 - i * 0.6) / 1.2))
+            chave(el, q, esc=(base[0] * k, base[1] * k, 1))
+        forca = 4.5 if q < 9 else (9.0 if q == 10 else 5.5)
+        chave_forca(ml, q, forca * some)
+        ka = min(1.0, max(0.0, (q - 7) / 2.0))
+        chave(alg, q, esc=(0.4 + 0.6 * ka, 0.4 + 0.6 * ka, 1), rot=(0, 0, q * 0.25))
+        chave_forca(ma, q, 5.0 * ka * some)
+    linear(raiz); linear(alg)
+    for el, base, i in elos:
+        linear(el)
+    linear_nt(ml.node_tree); linear_nt(ma.node_tree)
+    return sc
+
+
+def cortes():
+    """o golpe TRIPLO: três lâminas que varrem uma atrás da outra em ângulos cruzados — a primeira de
+    cima, a segunda espelhada, a terceira em pé — e o rastro das três fica um instante"""
+    sc = cena_nova('cortes')
+    n = 48
+    pts, lar = [], []
+    for i in range(n):
+        t = i / (n - 1)
+        a = math.radians(-78 + 156 * t)
+        r = 0.8
+        pts.append((r * math.sin(a), r * math.cos(a) - 0.14))
+        lar.append(0.18 * math.sin(math.pi * t) ** 0.7 + 0.014)
+    laminas = []
+    for k, (rot, esp, q0) in enumerate([(-0.55, 1, 1), (0.6, -1, 5), (1.62, 1, 9)]):
+        m = material('lamina%d' % k, 6.0, mascara_janela('cabeca', 0.42, 0.05))
+        ob = faixa('lamina%d' % k, pts, lar, m, z=0.01 * (k + 1))
+        m2 = material('rastro%d' % k, 0.7, mascara_janela('cabeca', 0.7, 0.12))
+        ob2 = faixa('rastro%d' % k, pts, [w * 2.3 for w in lar], m2, z=-0.01 * (k + 1))
+        for o in (ob, ob2):
+            o.rotation_euler = (0, 0, rot)
+            o.scale = (esp, 1, 1)
+        laminas.append((m, m2, q0))
+    for q in range(1, QUADROS + 1):
+        for m, m2, q0 in laminas:
+            t = max(0.0, (q - q0) / 4.0)
+            chave_valor(m.node_tree, 'cabeca', q, 0.0 if q < q0 else min(1.45, 0.22 + t * 1.3))
+            chave_valor(m2.node_tree, 'cabeca', q, 0.0 if q < q0 else min(1.6, 0.2 + t * 1.3))
+            vivo = q >= q0
+            dec = max(0.0, 1.0 - max(0.0, q - q0 - 4) / 4.0)
+            chave_forca(m, q, 6.0 * dec if vivo else 0.0)
+            chave_forca(m2, q, 0.7 * max(0.0, 1.0 - max(0.0, q - q0 - 5) / 6.0) if vivo else 0.0)
+    for m, m2, q0 in laminas:
+        linear_nt(m.node_tree); linear_nt(m2.node_tree)
+    return sc
+
+
+def laminas():
+    """as lâminas que GIRAM em volta do guerreiro (folha de chão): quatro gumes de machado presos a um
+    aro, uma volta e meia em dezesseis quadros, o centro aceso — o ciclone de aço do Bárbaro"""
+    sc = cena_nova('laminas')
+    raiz = vazio(sc, 'raiz')
+    mlam = material('lamina', 5.5, mascara_faixa_v(0.45))
+    mras = material('rastro', 0.9, mascara_faixa_v(0.5))
+    n = 26
+    for k in range(4):
+        a0 = k * math.tau / 4
+        pts, lar = [], []
+        for i in range(n):
+            t = i / (n - 1)
+            a = a0 + t * math.radians(72)
+            r = 0.6 + 0.24 * math.sin(math.pi * t) ** 0.8
+            pts.append((r * math.cos(a), r * math.sin(a)))
+            lar.append(0.03 + 0.17 * (1 - t) ** 1.2)
+        ob = faixa('lamina%d' % k, pts, lar, mlam, z=0.01)
+        ob.parent = raiz
+        # o rastro: o mesmo arco esticado para trás, fraco
+        pts2, lar2 = [], []
+        for i in range(n):
+            t = i / (n - 1)
+            a = a0 - t * math.radians(60)
+            r = 0.62
+            pts2.append((r * math.cos(a), r * math.sin(a)))
+            lar2.append(0.2 * (1 - t) ** 1.5 + 0.01)
+        ob2 = faixa('rastro%d' % k, pts2, lar2, mras, z=-0.01)
+        ob2.parent = raiz
+    ma = material('aro', 2.2, mascara_faixa_v(0.5))
+    an = anel('aro', 0.6, 0.05, ma)
+    an.parent = raiz
+    mc = material('centro', 3.0, mascara_radial(0.1, 1.0))
+    cen = plano('centro', 0.7, 0.7, mc, z=0.0)
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        abre = min(1.0, (q - 1) / 2.0)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        chave(raiz, q, esc=(abre, abre, 1), rot=(0, 0, t * math.radians(560)))
+        chave_forca(mlam, q, 5.5 * some); chave_forca(mras, q, 0.9 * some)
+        chave_forca(ma, q, 2.2 * some)
+        e = 0.6 + 0.4 * abre
+        chave(cen, q, esc=(e, e, 1)); chave_forca(mc, q, 3.0 * some)
+    linear(raiz); linear(cen)
+    for m in (mlam, mras, ma, mc):
+        linear_nt(m.node_tree)
+    return sc
+
+
+def trovao():
+    """a coluna de TROVÃO: grossa, desce do alto do quadro ao chão com dois cotovelos, pisca três vezes,
+    e na base o clarão achatado abre com lascas voando — o raio grande do AR (o `raio` é o fino)"""
+    sc = cena_nova('trovao')
+    rd = random.Random(61)
+    mn = material('nucleo', 8.0, mascara_faixa_v(0.3))
+    mh = material('halo', 1.5, mascara_faixa_v(0.5))
+    pts = [(0.0, 1.0), (0.05, 0.55), (-0.06, 0.1), (0.03, -0.35), (0.0, -0.78)]
+    lar = [0.10, 0.16, 0.18, 0.16, 0.12]
+    col = faixa('coluna', pts, lar, mn, z=0.01)
+    halo = faixa('halo', pts, [w * 2.8 for w in lar], mh, z=-0.01)
+    base_y = -0.78
+    mb = material('base', 3.0, mascara_radial(0.08, 1.0))
+    base = plano('base', 1.6, 0.42, mb, z=0.0)
+    base.location = (0, base_y, 0)
+    ml = material('lasca', 6.0, mascara_faixa_v(0.5))
+    lascas = []
+    for i in range(12):
+        a = rd.uniform(math.radians(8), math.radians(172))
+        comp = rd.uniform(0.3, 0.75)
+        w0 = rd.uniform(0.03, 0.06)
+        ob = faixa('lasca%d' % i, [(0, 0), (comp * 0.55, 0), (comp, 0)], [w0, w0 * 0.7, 0.004], ml, z=0.02)
+        ob.location = (0, base_y, 0)
+        ob.rotation_euler = (0, 0, a)
+        lascas.append(ob)
+    pisca = [0, 9.0, 10.0, 5.0, 8.5, 3.5, 6.0, 2.5, 3.5, 1.8, 2.2, 1.0, 0.8, 0.4, 0.2, 0.05, 0.0]
+    larg = [0, 0.35, 1.0, 0.8, 1.1, 0.85, 1.0, 0.8, 0.9, 0.75, 0.8, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45]
+    for q in range(1, QUADROS + 1):
+        chave_forca(mn, q, pisca[q]); chave_forca(mh, q, pisca[q] * 0.25)
+        chave(col, q, esc=(larg[q], 1, 1)); chave(halo, q, esc=(larg[q] * 1.1, 1, 1))
+        eb = min(1.7, 0.4 + (q - 1) * 0.2)
+        chave(base, q, esc=(eb, eb, 1))
+        chave_forca(mb, q, max(0.0, 3.0 * (1.0 - (q - 2) / 10.0)) if q >= 2 else 0.5)
+        for ob in lascas:
+            e = 0.1 if q < 2 else min(1.15, 0.1 + (q - 2) * 0.16)
+            chave(ob, q, esc=(e, 1, 1))
+        chave_forca(ml, q, 0.0 if q < 2 else max(0.0, 6.0 * (1.0 - (q - 2) / 9.0)))
+    linear(col); linear(halo); linear(base)
+    for ob in lascas:
+        linear(ob)
+    for m in (mn, mh, mb, ml):
+        linear_nt(m.node_tree)
+    return sc
+
+
+EFEITOS = {'golpe': golpe, 'impacto': impacto, 'rachadura': rachadura, 'raio': raio, 'jato': jato, 'pilar': pilar, 'selo': selo,
+           # 15/10 — as sete do gênero
+           'helice': helice, 'cristais': cristais, 'redemoinho': redemoinho, 'correntes': correntes, 'cortes': cortes,
+           'laminas': laminas, 'trovao': trovao}
 
 
 def renderiza(nome):

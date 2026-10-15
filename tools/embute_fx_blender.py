@@ -21,7 +21,8 @@ PX = 192
 GRADE = 4
 QUADROS = GRADE * GRADE
 QUAL = 88
-TIPOS = ['golpe', 'impacto', 'rachadura', 'raio', 'jato', 'pilar', 'selo']
+TIPOS = ['golpe', 'impacto', 'rachadura', 'raio', 'jato', 'pilar', 'selo',
+         'helice', 'cristais', 'redemoinho', 'correntes', 'cortes', 'laminas', 'trovao']   # 15/10: as sete do gênero
 
 
 def premultiplica(im):
@@ -54,7 +55,8 @@ def main():
         "  ? (window.JOGO = window.JOGO || {})",
         "  : (globalThis.JOGO = globalThis.JOGO || {});",
         "/* SOTERRA — as folhas de efeito do BLENDER (12/10): golpe, impacto, rachadura, raio,",
-        " * jato, pilar e selo. Brancas (`tipo:branco`): filme() as tinge com o elemento.",
+        " * jato, pilar e selo; (15/10) hélice, cristais, redemoinho, correntes, cortes, lâminas e trovão — as do gênero.",
+        " * Brancas (`tipo:branco`): filme() as tinge com o elemento.",
         " * Renderizadas por tools/fx_blender.py, empacotadas por tools/embute_fx_blender.py. */",
         "JOGO.FX_ANIM = JOGO.FX_ANIM || {};",
         "JOGO.FX_ANIM_BLENDER = %s;" % str(tipos).replace("'", "'"),

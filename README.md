@@ -98,9 +98,9 @@ js/
   render3d/
     models3d_v2.js      modelos, "looks" de classe, enxerto de peça, retratos
     renderer3d_v2.js    tabuleiro, câmera, clima, sobreposições, armadilhas
-    fx3d_v2.js          partículas, placas, as 21 famílias de efeito e os FILMES (as folhas do rubberduck,
-                        do CGHEVEN e, desde 12/10, as sete do Blender — tools/fx_blender.py → embute_fx_blender.py
-                        → assets/embedded/fx-blender.js; docs/SISTEMAS.md §9-A.30)
+    fx3d_v2.js          partículas, placas, EMISSORES por quadro (15/10: a órbita), as 25 famílias de efeito e os
+                        FILMES (as folhas do rubberduck, do CGHEVEN e as catorze do Blender — tools/fx_blender.py →
+                        embute_fx_blender.py → assets/embedded/fx-blender.js; docs/SISTEMAS.md §9-A.30 e §9-A.31)
     portraits3d.js      embrulha Art.* para servir retrato 3D em vez de 2D
   render2d/
     art.js              ícones (12/10: um desenho por feitiço — MOTIVO_FX/MOTIVO_FORMA, a marca da área e o
@@ -234,9 +234,10 @@ jogador. Página nova sem essa linha é bug.
 | bateria | resultado |
 |---|---|
 | **`icones_feiticos.html`** | 30 / 0 (12/10: um desenho por feitiço — todo feitiço de classe nomeado na `MOTIVO_FX`, 90+ motivos, nenhum par igual dentro da árvore de cada classe a 48 e a 34 px, nenhuma barra de fusão repetida nas 21 duplas, monstros/bichos/itens desenham; a página é a galeria) |
-| **`efeitos_um_a_um.html`** | 7 / 0 com **213 feitiços** (12/10: a página descia sem `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala"; consertada, cobre os filmes do Blender por família) |
-| `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não) |
-| `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas |
+| **`efeitos_um_a_um.html`** | 7 / 0 com **213 feitiços** (12/10: a página descia sem `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala"; consertada, cobre os filmes do Blender por família; 15/10: 25 famílias, 3 de 3 rodadas verdes — a régua "famílias diferentes desenham diferente" mede o quadro de MAIS partículas, que é o da conjuração, então o que uma família tem de próprio precisa existir no primeiro quadro, não só depois do acerto) |
+| `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não; 15/10: catorze folhas) |
+| `som.html` | 6 / 0 (15/10: as 25 famílias com som explícito — as quatro novas entraram no `POR_FAMILIA`) |
+| `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas; 15/10: mais oito, uma por família nova e por matéria nova (§9-A.31) |
 | `foto_molduras.html` · `foto_moldura_arena.html` | 12 placas / 17 de 17 (12/10: as molduras com bisel, contas, rosetas e o ornamento de cada forma; a do campeão cabe na tela e a da guilda pinta menos de 6%) |
 | `app_modelos.js` (Node) | 41 / 0 (12/10: `vendor/capacitor/local-notifications.js` existia só no package.json — a ponte entrou) |
 | `art_gallery.html` · `icones_extras.html` | PASS · 8 / 0 (12/10: réguas de 6 classes/5 pedras/48 itens/13 extras acertadas para 7/8+/48+/15) |
@@ -518,15 +519,20 @@ existe cenário CC0 adulto equivalente**. Decisão do dono: **fica KayKit**.
 
 ### 7.3 Efeitos
 
-As 21 famílias existem e o teste prova que desenham coisas diferentes (`efeitos_um_a_um`, 213
+As 25 famílias existem e o teste prova que desenham coisas diferentes (`efeitos_um_a_um`, 213
 feitiços). Em 07/10 entrou a assinatura de cada classe por cima da família; em 12/10, as sete
 folhas do Blender (golpe, impacto, rachadura, raio, jato, pilar, selo — §9-A.30 do SISTEMAS):
 o corte virou a lâmina que varre no tempo do acerto, todo projétil estoura um impacto onde cai,
 o terremoto racha o chão, a cura sobe um pilar, a armadilha assenta um selo, o ar traz o raio e a
-água o jato. O que ficou em aberto: o julgamento do dono jogando (a foto de `fx_sala.html?efeito=cast`
-é o tamanho real, mas o olho dele é a régua), e folhas novas que o mesmo roteiro do Blender pode
-render (um vórtice de vento próprio, uma lâmina de gelo, o sopro em leque): é geometria emissiva
-com keyframes, uma função por efeito em `tools/fx_blender.py`.
+água o jato. Em 15/10 (o dono: "os efeitos estão muito parecidos… gosto dos do Laghaim"), as sete
+folhas do GÊNERO e as quatro famílias que faltavam (§9-A.31): a hélice que sobe no bônus, os
+cristais da terra, o redemoinho que suga, as correntes do gancho, o golpe triplo, as lâminas
+girando em volta do Bárbaro, o trovão grosso do ar; a órbita de orbes com rastro (emissor por
+quadro) e os anéis que sobem pelo corpo; e cada elemento com a sua matéria (fogo = labareda,
+terra = cristais, ar = raio/trovão, água = jato). O que ficou em aberto: o julgamento do dono
+jogando (a foto de `fx_sala.html?efeito=cast` é o tamanho real, mas o olho dele é a régua), e o
+que o gênero ainda tem e o jogo não: a imagem-fantasma da investida (clonar a malha com esqueleto
+é caro), as asas da cura, a mão do breu na maldição.
 
 ### 7.4 Fila
 

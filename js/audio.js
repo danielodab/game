@@ -196,12 +196,14 @@ var JOGO = (typeof window !== 'undefined')
   };
 
   // --------------------------------------------------------------- as famílias
-  // Familia do FX -> papel de som. As 21 familias cabem em cinco gestos: cortar,
+  // Familia do FX -> papel de som. As 25 familias (21 + as quatro de 15/10) cabem em cinco gestos: cortar,
   // estourar, conjurar, curar e sumir. Mais que isso seria variedade que o
   // jogador nao distingue no meio de uma briga.
   var POR_FAMILIA = {
     corte: 'golpe', investida: 'golpe', gancho: 'golpe',
+    cortes: 'golpe', ciclone: 'golpe',                 // 15/10: o golpe triplo e as lâminas girando cortam
     meteoro: 'fogo', estouro: 'fogo', anel: 'fogo', terremoto: 'fogo',
+    espinhos: 'fogo', vortice: 'magia',                // 15/10: os cristais estouram; o vórtice conjura
     bola: 'magia', feixe: 'magia', flecha: 'magia', cone: 'magia',
     cruz: 'magia', onda: 'magia', chuva: 'magia', maldicao: 'magia',
     invocacao: 'magia',

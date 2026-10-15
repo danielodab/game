@@ -1851,6 +1851,71 @@ Três frentes, cada uma com a sua prova, e nenhuma mexe em regra de jogo (a `VER
   parte nativa. E as réguas envelhecidas: `art_gallery` (7 classes, 8 pedras, 91 itens, o 6º pet no 2D de
   reserva) e `icones_extras` (15 ícones).
 
+## 9-A.31 Os efeitos do gênero: sete folhas, quatro famílias, a órbita e a matéria de cada elemento (15/10)
+
+O dono: "gostaria que estivesse com mais efeitos principalmente nas skills e cada uma com uma característica…
+os efeitos estão muito parecidos… gosto dos efeitos de jogos como o Laghaim". Não há cliente do Laghaim na
+máquina para abrir, então o levantamento foi por referência: o que esse gênero (Laghaim, MU, Lineage, os
+MMORPGs coreanos de 2000–2006) faz nas skills e o jogo não fazia, medido contra o inventário real do
+`fx3d_v2.js` (21 famílias, 7 folhas do Blender, 4 do CGHEVEN, 5 do acervo, 16 placas, 16 tiles). Nada de regra
+de jogo mudou (a `VERSAO_REGRAS` segue 10).
+
+**O que o gênero tem e faltava — e o que entrou por cada um:**
+
+| no gênero | o que o jogo fazia | o que entrou (15/10) |
+|---|---|---|
+| a **dupla hélice** que sobe em volta de quem recebe o bônus | a aura era o halo + três anéis fechando + um pilar | a folha `helice` (três fases da trança que se revezam a cada dois quadros, e o olho lê girando) no lugar do pilar da aura, e menor no escudo |
+| os **anéis empilhados** subindo pelo corpo | nada | `shockRing` ganhou altura e subida (`y`, `vy`): a aura sobe três anéis fechando, um atrás do outro |
+| os **orbes em órbita** com rastro | só o Invocador tinha espíritos lançados em círculo (`burst` + velocidade tangencial) | o **EMISSOR por quadro** (`emissor(dur, fn)`, teto 40) e a `orbita()`: a partícula nasce ONDE a espiral está agora, cada quadro, e o rastro curto desenha a órbita — a aura sobe três orbes, o escudo fecha três (`fecha`), o ciclone gira quatro cortes na cintura |
+| **cristais/espinhos** brotando do chão | `slabSpike`, `spikeField`, `menhir`, `stoneRoots` caíam no terremoto (cascalho + rachadura) | a família **espinhos** (`/spike|menhir(?!shot|volley)|roots?$|thorn/`): a folha `cristais` (sete lascas em leque, clarão na base, lascas voando) com a base no chão, a coluna de cascalho que acende inteira, o detrito, o impacto |
+| o **redemoinho** visto de cima que SUGA | `theMaelstrom`, `siphon`, `hungryPool`, `undertowMaw` eram o anel da nova (que abre) | a família **vortice**: a folha `redemoinho` (três braços em espiral girando, 320° em 16 quadros, o olho acende no fim) no chão, o anel que FECHA, o aro girando ao contrário e o emissor que faz as partículas nascerem na borda e correrem para dentro; depois o que foi sugado sobe pelo meio |
+| as **correntes** que prendem | o gancho tinha o fio, as garras e o fio de volta; `rootShackle` era terremoto | a folha `correntes` (dois cordões de elos de frente/de lado alternados que nascem elo a elo, apertam e acendem; a algema no centro) no gancho; `/shackle|grapple|hook|tug/` entrou cedo nas regras (`rootShackle`, `tideTug` viraram gancho) |
+| o **golpe triplo** cruzado | `sevenFlameCuts`, `thousandWindCuts`, `chainSlash` eram UMA meia-lua | a família **cortes** (`/cuts$|chainslash|flurry/`): a folha `cortes` (três lâminas em ângulos cruzados, uma atrás da outra) e três meias-luas a 130 ms, cada uma com o seu arco de partículas; as faíscas da preparação sobem em coluna do alvo antes |
+| as **lâminas girando** em volta do guerreiro | `axeCyclone` era anel, `ironTyphoon` era cone | a família **ciclone** (`/cyclone|typhoon/`): a folha `laminas` (quatro gumes de machado presos a um aro, uma volta e meia) NO CHÃO DE QUEM ATACA, a órbita de cortes na cintura, e o alvo leva a lâmina no tempo do golpe |
+| a **coluna de trovão** grossa com clarão na base | o `raio` fino (zigue-zague) em tiro, feixe, anel e chuva | a folha `trovao` (coluna com dois cotovelos que pisca três vezes, o clarão achatado e as lascas na base): o AR a traz nos grandes — anel, estouro, meteoro, terremoto, investida, cruz; o raio fino segue no tiro e no feixe |
+| o **feixe vertical** do teleporte | o piscar era a estrela que some e a que nasce | o pilar de luz no sumiço (em `piscar()`) e na chegada (`FILME_FAM`) |
+| a **matéria de cada elemento** | só o ar (raio) e a água (jato) tinham a sua; fogo e terra eram só cor | o FOGO traz a labareda (`chama`, do acervo) no corte, no triplo, no estouro, na investida, no meteoro e no ciclone; a TERRA, os cristais no terremoto, na investida, no estouro, no meteoro e no corte |
+
+**As sete folhas** (`tools/fx_blender.py`, as funções `helice`, `cristais`, `redemoinho`, `correntes`, `cortes`,
+`laminas`, `trovao`; `tools/embute_fx_blender.py` com os catorze tipos; `assets/embedded/fx-blender.js`, 332 →
+684 KB) seguem a regra de 12/10: geometria emissiva branca, keyframe, Cycles CPU, 16 quadros a 256 px descidos
+a 192, `tipo:branco` tingido pelo elemento em `filme()`. As catorze foram renderizadas de novo (o roteiro gera
+todas; ~20 s por folha em prioridade baixa). Medido na folha de contato: os elos da corrente a 0,085 de raio
+saíam miúdos num quadro de 2 — subiram a 0,125 com 9 elos por cordão.
+
+**O que mudou no motor** (`js/render3d/fx3d_v2.js`):
+- `REGRAS_FX`: as quatro famílias ANTES de quem as engolia (cortes e gancho logo depois do meteoro; ciclone,
+  vortice e espinhos depois da armadilha — as armadilhas de vórtice seguem armadilha). De quebra, três buracos
+  que já existiam: `warCry` (o Grito de Guerra, um bônus) caía na BOLA — `cry|roar|shout|howl` entrou na aura;
+  `emberBurst` caía na bola (`/^burst$/`) — virou `/burst|explod/`; cercas, muralhas, dique, fundação,
+  labirinto e bigorna (`fireFence`, `flyingFence`, `rampart`, `dike`, `foundation`, `labyrinth`, `livingAnvil`)
+  caíam na bola — entraram no terremoto; `lightWard` no escudo. A bola ficou com 8 dos 219 (eram 17).
+- `FILME_FAM` ganhou as quatro famílias e a opção `alto` por filme (a altura do centro de um filme de pé: a base
+  da folha de cristais e do trovão está em −0,78 do quadro, e `altoDaBase(tam, alt)` = 0,05 + 0,39 × tam × alt
+  põe a base no chão — sem isso metade do cristal ficava enterrada e o teste de profundidade a escondia).
+- `filmesDaFamilia`: a matéria por elemento (fogo e terra, além do ar e da água de 12/10), com o atraso do
+  golpe (`hd`) quando a família espera o acerto.
+- `emissor`/`updateEmissores`/`orbita` (`FX.orbita` exposto), chamados antes das partículas no `FX.update`;
+  `FX.reset` zera; `FX.stats().emissores`.
+- `shockRing(pos, cor, r0, r1, dur, y, vy)`.
+- `js/audio.js`: `cortes` e `ciclone` soam como golpe, `espinhos` como fogo (o grupo do terremoto), `vortice`
+  como magia; `tests/som.html` cobra as 25.
+
+**A armadilha da prova** (`tests/efeitos_um_a_um.html`, "famílias diferentes produzem desenhos diferentes"): a
+assinatura de cada família é medida no quadro de MAIS partículas, que é sempre o da conjuração (a carga na mão
++ o que a família solta na hora), e os `setTimeout` do acerto são em tempo real — numa prova que bombeia 18
+quadros em ~70 ms eles nem disparam. As quatro famílias novas saíam IGUAIS às velhas (o triplo = o corte, os
+espinhos = a armadilha) e a régua caiu de 15/25 para 13–14/25. O conserto foi dar a cada uma o que é dela NO
+PRIMEIRO QUADRO: as faíscas da preparação do triplo já nascem em coluna (3 de altura), a coluna de cristal
+acende inteira (3), e os anéis do ciclone e do vórtice duram mais que a janela da prova (1,0 e 1,1 s), para a
+peça "anel" não oscilar. Três rodadas seguidas verdes. Vale para a próxima família: o que ela tem de próprio
+precisa existir na hora da conjuração, não só depois do golpe.
+
+**O que o gênero ainda tem e ficou de fora** (decisão de orçamento, não de arte): a imagem-fantasma da
+investida (clonar a `SkinnedMesh` no meio do clipe é caro e frágil), as asas de luz da cura, a mão do breu
+subindo do chão na maldição, as linhas de velocidade na tela nos golpes grandes. Todas cabem no mesmo roteiro
+do Blender ou num emissor; o julgamento das catorze no tabuleiro de verdade é do dono.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
@@ -1903,7 +1968,7 @@ servidor (`docs/SEGURANCA.md` §10.5).
 | assunto | estado |
 |---|---|
 | **Equilíbrio** | classes, caminhos, fusões e duelos medidos — ver `docs/EQUILIBRIO.md` (03/10, as duas decisões do dono de §6 de lá: o muro do Minotauro fere quem encosta, e a paridade da Arena caiu de 5 para 3 níveis) |
-| **Efeitos** | 21 famílias e placas ligadas; falta julgar no tamanho real do tabuleiro |
+| **Efeitos** | 25 famílias, placas, filmes do Blender e órbitas ligados; falta julgar no tamanho real do tabuleiro |
 | **Fogo na arma** | proposto, depende do resultado das placas |
 | **Nomes das classes** | confirmados pelo dono — ficam como estão |
 | **Elenco chibi** | decidido: **fica KayKit**, pela coerência com o cenário |

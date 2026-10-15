@@ -248,6 +248,47 @@ var JOGO = (typeof window !== 'undefined')
     return n;
   }
 
+  // ------------------------------------------------------- emissores (15/10)
+  /* O EMISSOR POR QUADRO. `burst` lança e esquece: a partícula nasce de uma vez e segue a
+   * física. O que o gênero (Laghaim, MU) faz nos bônus e nos vórtices é outra coisa — a
+   * partícula nasce ONDE A ESPIRAL ESTÁ AGORA, quadro a quadro, e o rastro curto de cada uma
+   * desenha a órbita. Um emissor é uma função chamada a cada quadro por `dur` segundos com a
+   * fração do tempo; o teto de 40 segura o celular ralo. */
+  var emissores = [];
+  var MAX_EMISSORES = 40;
+  function emissor(dur, fn) {
+    if (emissores.length >= MAX_EMISSORES) return false;
+    emissores.push({ t: 0, dur: dur || 0.5, fn: fn });
+    return true;
+  }
+  function updateEmissores(dt) {
+    for (var i = emissores.length - 1; i >= 0; i--) {
+      var e = emissores[i];
+      e.t += dt;
+      if (e.t >= e.dur) { emissores.splice(i, 1); continue; }
+      try { e.fn(e.t / e.dur, dt, e.t); } catch (err) { emissores.splice(i, 1); }
+    }
+  }
+  /* ÓRBITA: `n` orbes giram em volta de `c` subindo de y0 a y1 em `dur` s, cada um deixando o
+   * rastro (uma partícula por quadro, vida curta). `fecha` encolhe o raio até o fim (a casca do
+   * escudo), `sentido` −1 gira ao contrário, `plano` segura a altura (as lâminas do ciclone). */
+  function orbita(c, col, o) {
+    o = o || {};
+    var n = o.n || 3, r = o.r || 1.1, dur = o.dur || 0.9, y0 = o.y0 == null ? 0.2 : o.y0, y1 = o.y1 == null ? 2.4 : o.y1;
+    var voltas = o.voltas || 1.6, tile = o.tile == null ? TILE.brilho : o.tile, col2 = o.col2 || null;
+    var sentido = o.sentido || 1, tam = o.tam || 0.34, vida = o.vida || 0.28, fase = o.fase || 0;
+    return emissor(dur, function (k) {
+      var rr = r * (o.fecha ? (1 - 0.6 * k) : 1);
+      for (var i = 0; i < n; i++) {
+        var a = fase + sentido * (k * voltas * Math.PI * 2 + i * Math.PI * 2 / n);
+        spawn({ x: c.x + Math.cos(a) * rr, y: y0 + (y1 - y0) * k, z: c.z + Math.sin(a) * rr,
+                vx: 0, vy: o.vy == null ? 0.3 : o.vy, vz: 0, life: vida,
+                color: (col2 && i % 2) ? col2 : col, size: tam, grav: 0, drag: 0, tile: tile, fade: 1.6 });
+      }
+    });
+  }
+  FX.orbita = orbita;
+
   // ------------------------------------------------------------ luzes (pool)
   var lightPool = [];
   function buildLights() {
@@ -383,17 +424,17 @@ var JOGO = (typeof window !== 'undefined')
   // ------------------------------------------------------------- ondas/decais
   var rings = [], decals = [];
   var ringGeo = null;
-  function shockRing(pos, color, r0, r1, dur) {
+  function shockRing(pos, color, r0, r1, dur, y, vy) {
     if (!ringGeo) { ringGeo = new THREE.RingGeometry(0.86, 1.0, 40); ringGeo.rotateX(-Math.PI / 2); }
     var m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
       color: col3(color), transparent: true, opacity: 0.75,
       depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     }));
-    m.position.set(pos.x, 0.08, pos.z);
+    m.position.set(pos.x, y == null ? 0.08 : y, pos.z);
     m.scale.setScalar(r0 || 0.4);
     m.renderOrder = 8;
     fxG.add(m);
-    rings.push({ m: m, t: 0, dur: dur || 0.5, r0: r0 || 0.4, r1: r1 || 3.0 });
+    rings.push({ m: m, t: 0, dur: dur || 0.5, r0: r0 || 0.4, r1: r1 || 3.0, vy: vy || 0 });
   }
   function updateRings(dt) {
     for (var i = rings.length - 1; i >= 0; i--) {
@@ -401,6 +442,7 @@ var JOGO = (typeof window !== 'undefined')
       r.t += dt;
       var k = Math.min(1, r.t / r.dur);
       r.m.scale.setScalar(r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 2)));
+      if (r.vy) r.m.position.y += r.vy * dt;            // 15/10: o anel que sobe pelo corpo
       r.m.material.opacity = 0.75 * (1 - k);
       if (k >= 1) { fxG.remove(r.m); r.m.material.dispose(); rings.splice(i, 1); }
     }
@@ -1073,23 +1115,30 @@ var JOGO = (typeof window !== 'undefined')
   // chuva, nao brasa. O especifico vem antes do generico.
   var REGRAS_FX = [
     ['meteoro',    /meteor/i],
+    // 15/10 — as quatro do gênero vêm ANTES de quem as engolia: 'sevenFlameCuts' era corte (um só),
+    // 'rootShackle' era terremoto, 'axeCyclone' era anel, 'theMaelstrom' era anel, 'slabSpike' era terremoto
+    ['cortes',     /cuts$|chainslash|flurry/i],
+    ['gancho',     /shackle|grapple|hook|tug/i],
     ['chuva',      /rain|quiver|swarm|volley/i],
     ['invocacao',  /call$|summon|sentinel|golem|nymph|falcon|hound/i],
     ['armadilha',  /trap|stake|snare|alarm|ambush/i],
+    ['ciclone',    /cyclone|typhoon/i],
+    ['vortice',    /maelstrom|whirl|vortex|siphon|undertow|hungry/i],
+    ['espinhos',   /spike|menhir(?!shot|volley)|roots?$|thorn/i],
     ['cone',       /cone|breath|gale|mist|typhoon/i],
     ['cruz',       /cross/i],
     ['anel',       /ring|circle|cyclone|maelstrom|whirl|vortex|dome|nova|storm|eye/i],
-    ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark/i],
+    ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark|fence|rampart|dike|foundation|labyrinth|anvil/i],   // 15/10: as cercas e muralhas caíam na bola
     ['onda',       /wave|tide|pool|current|undertow|drown|brine|spring|cistern|siphon|maw/i],
     ['cura',       /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good/i],
-    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|curse|bore|brazier|retort/i],
+    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|curse|bore|brazier|retort|cry|roar|shout|howl/i],
     ['investida',  /step|swap|walk|run|charge|descend|throw|slam|hop|skip/i],
     ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark/i],
     ['corte',      /blade|cut|slash|thrust|edge|dagger|hamstring|leech|scald|rust|flint|quick/i],
     ['feixe',      /beam|line|ray/i],
     // ---- vindos do `fxShape` das formas de FUSAO, que usam outro vocabulario
-    ['estouro',    /^burst$|explod/i],
-    ['escudo',     /shield|veil|guard/i],
+    ['estouro',    /burst|explod/i],          // 15/10: 'emberBurst' caía na bola
+    ['escudo',     /shield|veil|guard|ward/i],
     ['piscar',     /blink|teleport|phase/i],
     ['gancho',     /hook|grapple|pull|drag/i],
     ['maldicao',   /debuff|hex|rot|wither/i],
@@ -1449,6 +1498,16 @@ var JOGO = (typeof window !== 'undefined')
       })(i);
     }
     shockRing({ x: from.x, y: 0, z: from.z }, col, 1.6, 0.4, 0.6);
+    // 15/10 — o que o gênero faz no bônus e o jogo não fazia: os ANÉIS EMPILHADOS que sobem pelo
+    // corpo (três, um atrás do outro) e os ORBES em órbita subindo com rastro
+    for (var r = 0; r < 3; r++) {
+      (function (k) {
+        setTimeout(function () {
+          shockRing({ x: from.x, y: 0, z: from.z }, (col2 && k === 1) ? col2 : col, 1.25, 0.95, 0.7, 0.12, 2.6);
+        }, k * 140);
+      })(r);
+    }
+    orbita(from, col, { col2: col2, n: 3, r: 1.05, dur: 0.95, y0: 0.15, y1: 2.7, voltas: 1.7, tam: 0.36 });
   }
 
   /* Estouro seco no alvo: sem projetil, a coisa ja acontece la. */
@@ -1495,6 +1554,7 @@ var JOGO = (typeof window !== 'undefined')
       })(i);
     }
     shockRing(dest, col, 1.9, 0.8, 0.55);
+    orbita(dest, col2 || col, { n: 3, r: 1.6, dur: 0.7, y0: 0.3, y1: 1.9, voltas: 1.2, fecha: true, tile: TILE.halo, tam: 0.32 });
   }
 
   /* Piscar: some de um lugar e aparece no outro, sem nada no caminho. */
@@ -1509,6 +1569,9 @@ var JOGO = (typeof window !== 'undefined')
       color: col, speed: 2.4, life: 0.4, size: 0.34, spread: 0.5, grav: -0.5,
       tile: TILE.cintila
     });
+    // 15/10: o teleporte do gênero é um FEIXE vertical — o pilar do sumiço aqui, o da chegada no FILME_FAM
+    filme({ tipo: 'pilar', el: el, modo: 'bilhete', tam: 2.0, alt: 1.7, dur: 0.42, cresce: 0.05, op: 0.8,
+            pos: v3(from.x, 1.75, from.z) });
     placa({ tile: PL.estrela, color: col2 || col, modo: 'bilhete',
             pos: v3(dest.x, dest.y + 0.5, dest.z),
             de: [0.6, 0.6], ate: [6.4, 6.4], dur: 0.44, atraso: 0.14, op: 1, saida: 1.5 });
@@ -1562,6 +1625,117 @@ var JOGO = (typeof window !== 'undefined')
     }
   }
 
+  // ===================================== AS QUATRO FAMÍLIAS DO GÊNERO (15/10)
+  /* O dono: "os efeitos estão muito parecidos… gosto dos do Laghaim". O que faltava não era cor,
+   * era GESTO: o golpe triplo, as lâminas girando em volta de quem ataca, o vórtice que SUGA e os
+   * cristais que BROTAM. Cada uma entra com a folha nova do Blender (FILME_FAM) e o desenho de
+   * partícula aqui, no mesmo orçamento das outras. */
+
+  /* Golpe triplo: três meias-luas cruzadas, uma atrás da outra, no tempo do acerto. */
+  function cortes(dest, el, el2) {
+    var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    // a PREPARAÇÃO, na hora: as faíscas sobem do alvo em coluna antes das três lâminas chegarem — é o
+    // que separa o triplo do corte simples antes mesmo do golpe (e o que a prova mede: os cortes
+    // esperam o acerto em tempo real)
+    for (var f = 0; f < 16; f++) {
+      var af = Math.random() * Math.PI * 2;
+      spawn({ x: dest.x + Math.cos(af) * 0.5, y: dest.y + 0.2 + f * 0.17, z: dest.z + Math.sin(af) * 0.5,
+              vx: 0, vy: 2.5 + Math.random() * 2, vz: 0, life: 0.45, color: f % 2 ? col : '#ffffff', size: 0.3,
+              grav: -5, drag: 0.5, tile: TILE.risco });
+    }
+    for (var g = 0; g < 3; g++) {
+      (function (k) {
+        setTimeout(function () {
+          var ang = [-0.75, 0.9, 1.55][k];
+          placa({ tile: PL.meialua, color: (col2 && k === 1) ? col2 : col, modo: 'bilhete',
+                  pos: v3(dest.x, dest.y + 0.45 + k * 0.1, dest.z),
+                  de: [4.0, 1.6], ate: [5.8, 2.3], dur: 0.42, op: 1, saida: 1.2,
+                  patamar: 0.55, ang: ang, giro: k % 2 ? -1.8 : 1.6, forro: 0.5 });
+          for (var i = 0; i < 10; i++) {
+            var a = ang + (i / 9) * 2.0 - 1.0;
+            spawn({ x: dest.x + Math.cos(a) * 0.9, y: dest.y + 0.3 + Math.sin(a) * 0.6, z: dest.z + Math.sin(a) * 0.4,
+                    vx: Math.cos(a) * 3.0, vy: 0.5 + Math.sin(a), vz: Math.sin(a) * 3.0,
+                    life: 0.28, color: col, size: 0.4, tile: TILE.corte });
+          }
+          impact(dest, el, k === 2 ? 1.0 : 0.55, el2);
+          if (k === 2) addShake(5);
+        }, hd * 1000 + k * 130);
+      })(g);
+    }
+  }
+
+  /* Ciclone de aço: as lâminas giram em volta de QUEM ATACA (a folha de chão + a órbita de cortes
+   * na altura da cintura), e o alvo leva a lâmina no tempo do golpe. */
+  function ciclone(from, dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    var hd = R3 && R3.hitDelay ? R3.hitDelay() : 0.3;
+    filme({ tipo: 'laminas', el: el, modo: 'chao', tam: 5.6, dur: 0.75, cresce: 0.25, op: 0.95,
+            pos: v3(from.x, 0.12, from.z) });
+    orbita(from, col, { col2: col2, n: 4, r: 1.5, dur: 0.7, y0: 0.9, y1: 1.1, voltas: 2.2,
+                        tile: TILE.corte, tam: 0.46, vida: 0.22, vy: 0 });
+    orbita(from, '#ffffff', { n: 2, r: 1.1, dur: 0.6, y0: 0.6, y1: 0.8, voltas: 2.2, tile: TILE.risco, tam: 0.3, vida: 0.18, vy: 0 });
+    shockRing({ x: from.x, y: 0, z: from.z }, col, 0.5, 2.6, 1.0);
+    if (dest && (dest.x !== from.x || dest.z !== from.z)) {
+      setTimeout(function () {
+        for (var i = 0; i < 12; i++) {
+          var a = (i / 11) * 2.4 - 1.2;
+          spawn({ x: dest.x + Math.cos(a) * 1.0, y: dest.y + 0.3, z: dest.z + Math.sin(a) * 0.5,
+                  vx: Math.cos(a) * 3.4, vy: 0.4, vz: Math.sin(a) * 3.4, life: 0.3, color: col2 || col, size: 0.42,
+                  tile: TILE.corte });
+        }
+        impact(dest, el, 1.1, el2);
+        addShake(4);
+      }, hd * 1000);
+    }
+  }
+
+  /* Vórtice: a água (ou o que for) é SUGADA para o alvo — o anel fecha, a espiral do chão gira, e
+   * as partículas nascem na borda e correm para dentro (o emissor é o que faz o sentido ler). */
+  function vortice(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    shockRing(dest, col, 3.2, 0.3, 1.1);
+    placa({ tile: PL.aro, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
+            de: [5.4, 5.4], ate: [1.8, 1.8], dur: 0.9, op: 0.7, saida: 1.0, patamar: 0.4, giro: -2.4, curva: 1.3 });
+    emissor(0.95, function (k) {
+      for (var i = 0; i < 3; i++) {
+        var a = Math.random() * Math.PI * 2, r = 3.0;
+        spawn({ x: dest.x + Math.cos(a) * r, y: 0.15 + Math.random() * 0.3, z: dest.z + Math.sin(a) * r,
+                vx: -Math.cos(a) * 5.5 - Math.sin(a) * 2.8, vy: 0.4, vz: -Math.sin(a) * 5.5 + Math.cos(a) * 2.8,
+                life: 0.5, color: (col2 && i === 2) ? col2 : col, size: 0.34, grav: 0, drag: 0.6, tile: TILE.redemoinho });
+      }
+    });
+    setTimeout(function () {
+      // o que foi sugado sobe pelo meio: a coluna curta e o estouro no alto
+      burst(dest.x, 0.3, dest.z, 22, { color: col, speed: 1.2, life: 0.6, size: 0.36, up: 4.5, grav: -2, spread: 0.4,
+                                       tile: TILE.redemoinho });
+      impact(dest, el, 0.8, el2);
+      addShake(4);
+    }, 520);
+    scorch(dest, col, 2.2, 4);
+  }
+
+  /* Espinhos: cristais que BROTAM do chão sob o alvo — a pedra tem gume, a rachadura não. */
+  function espinhos(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    burst(dest.x, 0.1, dest.z, 18, { color: col, speed: 1.6, life: 0.5, size: 0.34, flat: true, up: 0.4,
+                                     tile: TILE.cascalho, grav: -4 });
+    // as lascas sobem em leque, em coluna estreita, NA HORA — a altura é o que separa isto do terremoto
+    for (var i = 0; i < 34; i++) {
+      var a = Math.random() * Math.PI * 2, r = Math.random() * 0.9;
+      spawn({ x: dest.x + Math.cos(a) * r, y: 0.1 + (i / 34) * 4.2, z: dest.z + Math.sin(a) * r,
+              vx: Math.cos(a) * 0.6, vy: 3 + Math.random() * 3, vz: Math.sin(a) * 0.6,
+              life: 0.6, color: (col2 && i % 3 === 2) ? col2 : col, size: 0.36, grav: -8, drag: 0.3, tile: TILE.cascalho });
+    }
+    setTimeout(function () {
+      placa({ tile: PL.detrito, color: col2 || col, modo: 'bilhete', pos: v3(dest.x, 1.4, dest.z),
+              de: [2.0, 2.6], ate: [4.2, 6.0], dur: 0.5, op: 0.9, saida: 1.4 });
+      impact(dest, el, 1.0, el2);
+      addShake(6);
+    }, 110);
+    scorch(dest, col, 2.0, 5);
+  }
+
   /* Maldicao: cai DE CIMA sobre o alvo, devagar, e assenta. */
   function maldicao(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
@@ -1609,17 +1783,27 @@ var JOGO = (typeof window !== 'undefined')
     terremoto: [['rachadura', 'chao',  6.2, 0.75, 0.30], ['impacto', 'bilhete', 2.8, 0.36, 0.3, 0.05, { op: 0.6 }]],
     onda:      [['onda',    'bilhete', 3.6, 0.42, 0.25]],
     investida: [['onda',    'bilhete', 3.0, 0.38, 0.20]],
-    aura:      [['chama',   'bilhete', 2.6, 0.80, 0.10], ['pilar', 'bilhete', 2.4, 0.9, 0.05, 0, { alt: 1.6, op: 0.7 }]],
+    // 15/10: a aura trocou o pilar pela HÉLICE (a trança que sobe em volta do corpo, a marca do bônus no gênero)
+    aura:      [['chama',   'bilhete', 2.6, 0.80, 0.10], ['helice', 'bilhete', 2.8, 1.0, 0.05, 0, { alt: 1.7, op: 0.95, alto: 1.55 }]],
     cura:      [['anel',    'chao',    3.2, 0.70, 0.30], ['pilar', 'bilhete', 2.6, 0.95, 0.05, 0.05, { alt: 1.7 }]],
     corte:     [['golpe',   'bilhete', 3.6, 0.40, 0.12, 'hit', { giro: 0.7, espelho: 'sorteio' }]],
-    escudo:    [['escudo',  'bilhete', 3.0, 0.60, 0.15]],
+    escudo:    [['escudo',  'bilhete', 3.0, 0.60, 0.15], ['helice', 'bilhete', 2.2, 0.7, 0.1, 0.05, { alt: 1.5, op: 0.6, alto: 1.3 }]],
     cone:      [['tornado', 'bilhete', 4.0, 0.66, 0.25]],
     invocacao: [['portal',  'chao',    3.4, 0.72, 0.30], ['pilar', 'bilhete', 3.0, 0.9, 0.1, 0.12, { alt: 1.6, op: 0.75 }]],
     armadilha: [['selo',    'chao',    4.4, 1.5, 0.08, 0, { op: 0.8 }]],
     maldicao:  [['selo',    'chao',    3.8, 1.1, 0.05, 0.1, { op: 0.6 }]],
-    piscar:    [['impacto', 'bilhete', 2.6, 0.32, 0.3, 0.12, { op: 0.7 }]],
-    gancho:    [['impacto', 'bilhete', 2.4, 0.3, 0.3, 0.23, { op: 0.6 }]]
+    // 15/10: o piscar NASCE num pilar de luz (o do sumiço fica em piscar()); o gancho PRENDE com as correntes
+    piscar:    [['impacto', 'bilhete', 2.6, 0.32, 0.3, 0.12, { op: 0.7 }], ['pilar', 'bilhete', 2.2, 0.5, 0.1, 0.1, { alt: 1.7, op: 0.8, alto: 1.9 }]],
+    gancho:    [['impacto', 'bilhete', 2.4, 0.3, 0.3, 0.23, { op: 0.6 }], ['correntes', 'bilhete', 3.6, 0.7, 0.05, 0.2, { op: 0.95, giro: 0.3 }]],
+    // 15/10 — as quatro do gênero
+    cortes:    [['cortes',  'bilhete', 4.2, 0.55, 0.1, 'hit', { giro: 0.4, espelho: 'sorteio' }]],
+    ciclone:   [['golpe',   'bilhete', 3.2, 0.40, 0.12, 'hit', { giro: 0.7, espelho: 'sorteio' }]],
+    vortice:   [['redemoinho', 'chao', 6.6, 1.1, 0.1, 0, { op: 1.0, branco: 0.12 }]],   // `branco` baixo: a espiral puxada ao branco virava um disco   // medido na foto: a 5,4 o aro de 7 m engolia a espiral
+    espinhos:  [['cristais', 'bilhete', 3.6, 0.62, 0.15, 0.05, { alt: 1.3, op: 0.95, alto: 1.9 }]]
   };
+  /* 15/10 — a ALTURA de um filme de pé: o quadro vai de −1 a 1 e a base da folha de cristais/trovão
+   * está em −0,78; para a base ficar no chão o centro tem de subir 0,39 × tam × alt (`alto` na opção). */
+  function altoDaBase(tam, alt) { return 0.05 + 0.39 * tam * (alt || 1); }
   /* toca os filmes de uma família em `dest` (as posições vêm em metros do mundo) */
   function filmesDaFamilia(fam, from, dest, el, el2) {
     var lista = FILME_FAM[fam];
@@ -1630,11 +1814,11 @@ var JOGO = (typeof window !== 'undefined')
         var op = ff[6] || {};
         var atraso = ff[5] === 'hit' ? hd : (ff[5] || 0);
         var toca = function () {
-          var alto = (ff[1] === 'chao') ? 0.06 : 1.05;
+          var alto = op.alto != null ? op.alto : ((ff[1] === 'chao') ? 0.06 : 1.05);
           var ang = op.giro ? (Math.random() - 0.5) * 2 * op.giro : 0;
           var esp = op.espelho === 'sorteio' ? (Math.random() < 0.5) : !!op.espelho;
           filme({ tipo: ff[0], el: el, modo: ff[1], tam: ff[2], dur: ff[3], cresce: ff[4], op: op.op, alt: op.alt,
-                  ang: ang, espelho: esp, pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
+                  branco: op.branco, ang: ang, espelho: esp, pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
           // ELEMENTO SECUNDARIO, quando a fusao gera feitico de dois elementos.
           // Menor e um pouco atrasado, para ler como o segundo elemento CHEGANDO
           // e nao como dois efeitos disputando o mesmo instante.
@@ -1662,6 +1846,31 @@ var JOGO = (typeof window !== 'undefined')
         filme({ tipo: 'jato', el: 'agua', modo: 'bilhete', tam: 3.0, alt: 1.6, dur: 0.6, cresce: 0.1, op: 0.9,
                 pos: v3(dest.x, (dest.y || 0) + 1.6, dest.z) });
       }, 180);
+    }
+    // 15/10 — FOGO e TERRA não tinham matéria própria (só o ar e a água): o fogo traz a LABAREDA no golpe
+    // e no estouro; a terra, os CRISTAIS brotando onde a pancada chega; e o AR, nos grandes, o TROVÃO
+    // grosso (o raio fino segue no tiro e no feixe)
+    var quente = (el === 'fogo' || el2 === 'fogo'), pedra = (el === 'terra' || el2 === 'terra');
+    if (quente && (fam === 'corte' || fam === 'cortes' || fam === 'estouro' || fam === 'investida' || fam === 'meteoro' || fam === 'ciclone')) {
+      var atrasoChama = (fam === 'corte' || fam === 'cortes' || fam === 'ciclone') ? hd + 0.05 : (fam === 'investida' ? 0.2 : 0.1);
+      setTimeout(function () {
+        filme({ tipo: 'chama', el: 'fogo', modo: 'bilhete', tam: 3.2, alt: 1.4, dur: 0.62, cresce: 0.25, op: 0.7,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + 1.5, dest.z) });
+      }, atrasoChama * 1000);
+    }
+    if (pedra && (fam === 'terremoto' || fam === 'investida' || fam === 'estouro' || fam === 'meteoro' || fam === 'corte')) {
+      var atrasoCristal = fam === 'corte' ? hd : (fam === 'investida' ? 0.18 : (fam === 'meteoro' ? 0.4 : 0.05));
+      setTimeout(function () {
+        filme({ tipo: 'cristais', el: 'terra', modo: 'bilhete', tam: 3.0, alt: 1.3, dur: 0.6, cresce: 0.15, op: 0.9,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + altoDaBase(3.0, 1.3), dest.z) });
+      }, atrasoCristal * 1000);
+    }
+    if (ventoso && (fam === 'anel' || fam === 'estouro' || fam === 'meteoro' || fam === 'terremoto' || fam === 'investida' || fam === 'cruz')) {
+      setTimeout(function () {
+        // medido na foto de bruxo-ar-30: a 3,4 × 2,0 e 0,95 a coluna saturava a tela inteira
+        filme({ tipo: 'trovao', el: 'ar', modo: 'bilhete', tam: 2.9, alt: 2.0, dur: 0.5, cresce: 0.05, op: 0.8,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + altoDaBase(2.9, 2.0), dest.z) });
+      }, (fam === 'investida' ? 0.18 : 0.04) * 1000);
     }
   }
 
@@ -1701,6 +1910,11 @@ var JOGO = (typeof window !== 'undefined')
       case 'piscar':    piscar(from, dest, el, el2); break;
       case 'gancho':    gancho(from, dest, el, el2); break;
       case 'maldicao':  maldicao(dest, el, el2); break;
+      // 15/10 — as quatro do gênero
+      case 'cortes':    cortes(dest, el, el2); break;
+      case 'ciclone':   ciclone(from, dest, el, el2); break;
+      case 'vortice':   vortice(dest, el, el2); break;
+      case 'espinhos':  espinhos(dest, el, el2); break;
       case 'flecha': {
         // a haste da flecha tem 4,5 cm de raio: meio pixel. O rastro em trilho e
         // o que faz o tiro existir na tela, e e ele que separa a flecha da bola.
@@ -2391,6 +2605,7 @@ var JOGO = (typeof window !== 'undefined')
     updateDecals(dt);
     updateFloaters(dt);
     updateAmbient(dt);
+    updateEmissores(dt);      // 15/10: antes das partículas, para o que nasce neste quadro já andar
     updateParticles(dt);
 
     if (shakeAmp > 0.01) {
@@ -2419,6 +2634,7 @@ var JOGO = (typeof window !== 'undefined')
     floaters.length = 0;
     limpaPlacas();
     limpaFilmes();
+    emissores.length = 0;
     FX.clearDecals();
     limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;
@@ -2451,6 +2667,6 @@ var JOGO = (typeof window !== 'undefined')
     return { particles: alive, shots: shots.length, decals: decals.length,
              floaters: floaters.length, texCache: texCacheN,
              rings: rings.length, luzes: flashes.length,
-             placas: placas.length, ptK: PT_K };
+             placas: placas.length, emissores: emissores.length, ptK: PT_K };
   };
 })();
