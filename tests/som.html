@@ -86,13 +86,13 @@ em jogo, com estrangulamento e sorteio de variante incluídos.</div>
     window.__done = true; window.__fail = mau;
   }
 
-  // as 25 famílias que `FX.familiaDe` pode devolver (21 + as quatro do gênero de 15/10: cortes,
-  // ciclone, vortice, espinhos). A cobertura é cobrada contra ESTA lista e não contra a tabela do
+  // as 26 famílias que `FX.familiaDe` pode devolver (21 + as quatro do gênero de 15/10: cortes,
+  // ciclone, vortice, espinhos + a cisterna da leva 3). A cobertura é cobrada contra ESTA lista e não contra a tabela do
   // audio.js — senão o teste só conferiria que a tabela é igual a ela mesma.
   var FAMILIAS = ['meteoro','chuva','invocacao','armadilha','cone','cruz','anel','terremoto',
                   'onda','cura','aura','investida','flecha','corte','feixe','estouro','escudo',
                   'piscar','gancho','maldicao','bola',
-                  'cortes','ciclone','vortice','espinhos'];
+                  'cortes','ciclone','vortice','espinhos','cisterna'];
 
   var EVENTOS = [
     ['cast (corte)',      { type:'cast', fxKey:'melee',  element:'terra' }],

@@ -44,6 +44,11 @@ A LEVA 2 (15/10)
 --------------
   asas       as asas de luz da cura: duas asas de seis penas que abrem em leque atrás do alvo e sobem
   mao        a mão do breu da maldição: palma e cinco dedos que sobem do chão e se fecham sobre o alvo
+
+A LEVA 3 (15/10)
+--------------
+  poca       a poça das cisternas (chão): o disco que enche, três ondulações e as gotas da borda
+  marca      a mira do Caçador (chão): dois aros em sentidos opostos que travam no alvo, os traços e o ponto
 """
 import bpy, math, os, random, sys
 
@@ -1036,12 +1041,105 @@ def mao():
     return sc
 
 
+# ======================================================= A LEVA 3 (15/10)
+# A poça das cisternas (a água de área, que era a mesma onda das dezesseis) e a marca do Caçador.
+
+def poca():
+    """a poça (folha de chão): a água sobe numa cisterna — o disco que enche, três ondulações
+    concêntricas que correm para fora uma atrás da outra, e as gotas que pulam na borda"""
+    sc = cena_nova('poca')
+    rd = random.Random(97)
+    md = material('disco', 0.55, mascara_radial(0.25, 1.0))
+    disco = plano('disco', 2.0, 2.0, md, z=-0.01)
+    mo = material('ondula', 4.0, mascara_faixa_v(0.5))
+    ondas = [anel('onda%d' % k, 0.5, 0.045, mo, z=0.005 * (k + 1)) for k in range(3)]
+    mg = material('gota', 4.0, mascara_radial(0.2, 0.9))
+    gotas = []
+    for i in range(12):
+        g = plano('gota%d' % i, 0.09, 0.09, mg, z=0.02)
+        a = rd.uniform(0, math.tau); r0 = rd.uniform(0.55, 0.85)
+        gotas.append((g, a, r0, rd.randint(2, 9), rd.uniform(0.15, 0.3)))
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        enche = min(1.0, (q - 1) / 4.0)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        e = 0.3 + 0.7 * enche
+        chave(disco, q, esc=(e, e, 1))
+        chave_forca(md, q, 0.55 * some * (0.5 + 0.5 * enche))
+        for k, an in enumerate(ondas):
+            tk = (t * 1.3 - k * 0.3)
+            vis = 1.0 if 0.0 <= tk <= 0.8 else 0.0
+            r = 0.3 + 1.6 * max(0.0, tk)
+            chave(an, q, esc=(r * vis + 0.001, r * vis + 0.001, 1))
+        chave_forca(mo, q, 3.0 * some)
+        for g, a, r0, t0, h in gotas:
+            tt = max(0.0, (q - t0) / 6.0)
+            vis = 1.0 if t0 <= q <= t0 + 6 else 0.0
+            r = r0 + 0.25 * tt
+            # "pula": a gota sobe e cai — na folha de chão isso é afastar e voltar um pouco
+            chave(g, q, loc=(r * math.cos(a), r * math.sin(a), 0.02), esc=(vis * (1.2 - tt), vis * (1.2 - tt), 1))
+        chave_forca(mg, q, 4.0 * some)
+    linear(disco)
+    for an in ondas:
+        linear(an)
+    for g, a, r0, t0, h in gotas:
+        linear(g)
+    for m in (md, mo, mg):
+        linear_nt(m.node_tree)
+    return sc
+
+
+def marca():
+    """a marca do Caçador (folha de chão): a mira que TRAVA no alvo — dois aros que giram em sentidos
+    opostos e encolhem até o alvo, quatro traços de mira que entram, o ponto que acende no fim"""
+    sc = cena_nova('marca')
+    raiz = vazio(sc, 'raiz')
+    ma = material('aro_fora', 3.2, mascara_faixa_v(0.5))
+    mb = material('aro_dentro', 2.6, mascara_faixa_v(0.5))
+    fora = anel('fora', 0.8, 0.06, ma)
+    dentro = anel('dentro', 0.5, 0.05, mb)
+    fora.parent = raiz; dentro.parent = raiz
+    mt = material('traco', 4.0, mascara_faixa_v(0.45))
+    tracos = []
+    for k in range(4):
+        a = k * math.pi / 2
+        tr = faixa('traco%d' % k, [(0, 0), (0.3, 0)], [0.06, 0.03], mt, z=0.01)
+        tr.parent = raiz
+        tr.rotation_euler = (0, 0, a)
+        tracos.append((tr, a))
+    mp = material('ponto', 5.0, mascara_radial(0.1, 1.0))
+    ponto = plano('ponto', 0.3, 0.3, mp, z=0.02)
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        trava = min(1.0, (q - 1) / 6.0)
+        trava = trava * trava * (3 - 2 * trava)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        e = 1.6 - 0.8 * trava
+        chave(fora, q, esc=(e, e, 1), rot=(0, 0, t * math.radians(110)))
+        chave(dentro, q, esc=(e, e, 1), rot=(0, 0, -t * math.radians(160)))
+        for tr, a in tracos:
+            d = 0.95 - 0.5 * trava
+            chave(tr, q, loc=(d * math.cos(a), d * math.sin(a), 0.01))
+        chave_forca(ma, q, 3.2 * some); chave_forca(mb, q, 2.6 * some); chave_forca(mt, q, 4.0 * some)
+        acende = 0.2 if q < 7 else (1.6 if q == 7 or q == 8 else 1.0)
+        chave(ponto, q, esc=(0.4 + 0.6 * trava, 0.4 + 0.6 * trava, 1))
+        chave_forca(mp, q, 5.0 * some * acende)
+    linear(fora); linear(dentro); linear(ponto)
+    for tr, a in tracos:
+        linear(tr)
+    for m in (ma, mb, mt, mp):
+        linear_nt(m.node_tree)
+    return sc
+
+
 EFEITOS = {'golpe': golpe, 'impacto': impacto, 'rachadura': rachadura, 'raio': raio, 'jato': jato, 'pilar': pilar, 'selo': selo,
            # 15/10 — as sete do gênero
            'helice': helice, 'cristais': cristais, 'redemoinho': redemoinho, 'correntes': correntes, 'cortes': cortes,
            'laminas': laminas, 'trovao': trovao,
            # 15/10, leva 2
-           'asas': asas, 'mao': mao}
+           'asas': asas, 'mao': mao,
+           # 15/10, leva 3
+           'poca': poca, 'marca': marca}
 
 
 def renderiza(nome):

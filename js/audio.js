@@ -204,6 +204,7 @@ var JOGO = (typeof window !== 'undefined')
     cortes: 'golpe', ciclone: 'golpe',                 // 15/10: o golpe triplo e as lâminas girando cortam
     meteoro: 'fogo', estouro: 'fogo', anel: 'fogo', terremoto: 'fogo',
     espinhos: 'fogo', vortice: 'magia',                // 15/10: os cristais estouram; o vórtice conjura
+    cisterna: 'magia',                                 // 15/10 leva 3: a água que sobe no lugar
     bola: 'magia', feixe: 'magia', flecha: 'magia', cone: 'magia',
     cruz: 'magia', onda: 'magia', chuva: 'magia', maldicao: 'magia',
     invocacao: 'magia',

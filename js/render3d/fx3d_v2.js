@@ -471,7 +471,7 @@ var JOGO = (typeof window !== 'undefined')
       mesh: mesh, shell: shell, light: light, from: from.clone(), to: to.clone(),
       t: 0, dur: Math.max(0.16, Math.min(0.8, d / (o.speed || 22))),
       arc: o.arc == null ? 0.5 : o.arc, color: color, color2: color2,
-      trail: o.trail !== false, onHit: o.onHit || null
+      trail: o.trail !== false, onHit: o.onHit || null, el: o.el || null
     });
   }
   function updateShots(dt) {
@@ -490,6 +490,12 @@ var JOGO = (typeof window !== 'undefined')
         spawn({ x: px, y: py, z: pz, vx: (Math.random() - 0.5) * 0.9, vy: (Math.random() - 0.5) * 0.7,
                 vz: (Math.random() - 0.5) * 0.9, life: 0.34,
                 color: use2 ? s.color2 : s.color, size: 0.30, grav: 0.4, drag: 3 });
+        // 15/10 leva 3: o RASTRO tem a matéria do elemento — a brasa que sobe do tiro de fogo, a gota
+        // que cai do de água, o cascalho do de terra, o risco de vento do de ar
+        if (s.el === 'fogo') spawn({ x: px, y: py, z: pz, vx: (Math.random() - 0.5) * 0.6, vy: 1.2, vz: (Math.random() - 0.5) * 0.6, life: 0.4, color: '#ffb347', size: 0.3, grav: 1.5, drag: 2, tile: TILE.brasa });
+        else if (s.el === 'agua') spawn({ x: px, y: py - 0.1, z: pz, vx: 0, vy: -0.4, vz: 0, life: 0.45, color: '#8fd4ff', size: 0.24, grav: -4, drag: 1, tile: TILE.ponto });
+        else if (s.el === 'terra') spawn({ x: px, y: py, z: pz, vx: (Math.random() - 0.5) * 1.2, vy: 0.2, vz: (Math.random() - 0.5) * 1.2, life: 0.4, color: '#d2ab7c', size: 0.26, grav: -5, drag: 1.5, tile: TILE.cascalho });
+        else if (s.el === 'ar') spawn({ x: px, y: py, z: pz, vx: 0, vy: 0, vz: 0, life: 0.22, color: '#dff5ff', size: 0.42, grav: 0, drag: 0, tile: TILE.risco });
         if (s.color2) {
           // espiral do segundo elemento em volta do eixo do tiro
           var ph = s.t * 26;
@@ -1235,22 +1241,23 @@ var JOGO = (typeof window !== 'undefined')
     ['invocacao',  /call$|summon|sentinel|golem|nymph|falcon|hound/i],
     ['armadilha',  /trap|stake|snare|alarm|ambush/i],
     ['ciclone',    /cyclone|typhoon/i],
-    ['vortice',    /maelstrom|whirl|vortex|siphon|undertow|hungry/i],
+    ['vortice',    /maelstrom|whirl|vortex|siphon|undertow|hungry|dissol/i],   // leva 3: a Dissolução suga
+    ['cisterna',   /cistern|(brute|marked)tide|goodwave/i],                      // leva 3: a água de ÁREA sobe no lugar
     ['espinhos',   /spike|menhir(?!shot|volley)|roots?$|thorn/i],
-    ['cone',       /cone|breath|gale|mist|typhoon/i],
+    ['cone',       /cone|breath|gale|mist|typhoon|horn/i],         // leva 3: a Chifrada Acesa é um leque
     ['cruz',       /cross/i],
-    ['anel',       /ring|circle|cyclone|maelstrom|whirl|vortex|dome|nova|storm|eye/i],
+    ['anel',       /ring|circle|cyclone|maelstrom|whirl|vortex|dome|nova|storm|eye|siege/i],   // leva 3: o Cerco de Água
     ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark|fence|rampart|dike|foundation|labyrinth|anvil/i],   // 15/10: as cercas e muralhas caíam na bola
     ['onda',       /wave|tide|pool|current|undertow|drown|brine|spring|cistern|siphon|maw/i],
-    ['cura',       /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good/i],
-    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|bore|brazier|retort|cry|roar|shout|howl/i],
+    ['cura',       /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good|garden/i],   // leva 3: o Jardim Fechado
+    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|bore|brazier|retort|cry|roar|shout|howl|shadow$/i],   // leva 3: a Sombra Curta (invisível) é bônus
     ['investida',  /step|swap|walk|run|charge|descend|throw|slam|hop|skip/i],
-    ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark/i],
+    ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark|collect/i],   // leva 3: Detonar a Corrente
     ['corte',      /blade|cut|slash|thrust|edge|dagger|hamstring|leech|scald|rust|flint|quick/i],
     ['feixe',      /beam|line|ray/i],
     // ---- vindos do `fxShape` das formas de FUSAO, que usam outro vocabulario
-    ['estouro',    /burst|explod/i],          // 15/10: 'emberBurst' caía na bola
-    ['escudo',     /shield|veil|guard|ward/i],
+    ['estouro',    /burst|explod|pyre$/i],    // 15/10: 'emberBurst' caía na bola; leva 3: a Pira Dobrada
+    ['escudo',     /shield|veil|guard|ward|hide/i],   // leva 3: o Couro Fervente
     ['piscar',     /blink|teleport|phase/i],
     ['gancho',     /hook|grapple|pull|drag/i],
     ['maldicao',   /debuff|hex|rot|wither/i],
@@ -1848,6 +1855,91 @@ var JOGO = (typeof window !== 'undefined')
     scorch(dest, col, 2.0, 5);
   }
 
+  /* 15/10 leva 3 — A CISTERNA: a água de ÁREA (as seis cisternas/marés/ondas boas das classes) era a
+   * mesma parede da onda. Aqui a água SOBE no lugar: a poça do Blender enche no chão, o anel fecha, as
+   * gotas pulam pela borda (emissor) e o jato sobe no meio. */
+  function cisterna(dest, el, el2) {
+    var col = ecol(el), col2 = el2 ? ecol(el2) : null;
+    placa({ tile: PL.anel, color: col2 || col, modo: 'chao', pos: v3(dest.x, 0.09, dest.z),
+            de: [7.5, 7.5], ate: [3.0, 3.0], dur: 0.8, op: 0.85, saida: 1.0, patamar: 0.4, curva: 1.3 });
+    emissor(0.9, function (k) {
+      for (var i = 0; i < 2; i++) {
+        var a = Math.random() * Math.PI * 2, r = 2.2 + Math.random() * 0.8;
+        spawn({ x: dest.x + Math.cos(a) * r, y: 0.12, z: dest.z + Math.sin(a) * r,
+                vx: Math.cos(a) * 0.4, vy: 2.2 + Math.random() * 1.6, vz: Math.sin(a) * 0.4,
+                life: 0.55, color: (col2 && i) ? col2 : col, size: 0.3, grav: -6, drag: 0.3, tile: TILE.ponto });
+      }
+    });
+    setTimeout(function () {
+      burst(dest.x, 0.3, dest.z, 24, { color: col, speed: 1.0, life: 0.7, size: 0.36, up: 4.0, grav: -3, spread: 0.8,
+                                       tile: TILE.redemoinho });
+      flash(v3(dest.x, 1.0, dest.z), col, 5.0, 0.5, 10);
+    }, 240);
+    scorch(dest, col, 2.6, 5);
+  }
+  /* a onda em LINHA viaja: a parede do acervo toca em três pontos do caminho, um atrás do outro */
+  function ondaViajante(from, dest, el) {
+    var n = 3;
+    for (var i = 1; i <= n; i++) {
+      (function (k) {
+        setTimeout(function () {
+          var t = k / n;
+          filme({ tipo: 'onda', el: el, modo: 'bilhete', tam: 2.8 + k * 0.4, dur: 0.4, cresce: 0.2, op: 0.85,
+                  pos: v3(from.x + (dest.x - from.x) * t, 1.0, from.z + (dest.z - from.z) * t) });
+        }, 90 * (k - 1));
+      })(i);
+    }
+  }
+
+  // ------------------------------------------- as linhas de velocidade (15/10 leva 3)
+  /* O quadro de impacto do gênero: nos golpes grandes (os que já congelam o quadro) a tela inteira
+   * ganha, por um instante, as linhas radiais que correm da borda para o centro. É um plano preso na
+   * frente da câmera, recolocado a cada quadro, com uma textura de riscos desenhada uma vez em canvas. */
+  var linhas = null, linhasT = 0, LINHAS_DUR = 0.22;
+  function texLinhas() {
+    var c = document.createElement('canvas'); c.width = c.height = 512;
+    var g = c.getContext('2d'); g.clearRect(0, 0, 512, 512);
+    g.strokeStyle = '#ffffff'; g.lineCap = 'round';
+    var R = 380;
+    for (var i = 0; i < 110; i++) {
+      var a = (i / 110) * Math.PI * 2 + (Math.random() - 0.5) * 0.05;
+      var r0 = R * (0.42 + Math.random() * 0.25), r1 = R * (0.95 + Math.random() * 0.1);
+      g.lineWidth = 0.8 + Math.random() * 2.4; g.globalAlpha = 0.35 + Math.random() * 0.6;
+      g.beginPath(); g.moveTo(256 + Math.cos(a) * r0, 256 + Math.sin(a) * r0); g.lineTo(256 + Math.cos(a) * r1, 256 + Math.sin(a) * r1); g.stroke();
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = false;
+    return t;
+  }
+  function linhasDeVelocidade() {
+    if (!attached || !camera) return;
+    if (!linhas) {
+      var mat = new THREE.MeshBasicMaterial({ map: texLinhas(), transparent: true, opacity: 0, depthTest: false,
+                                              depthWrite: false, blending: THREE.AdditiveBlending });
+      linhas = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      linhas.frustumCulled = false; linhas.renderOrder = 999; linhas.visible = false;
+      fxG.add(linhas);
+    }
+    linhas.rotation.z = Math.random() * Math.PI * 2;
+    linhasT = LINHAS_DUR;
+  }
+  FX.linhasDeVelocidade = linhasDeVelocidade;
+  var _dirCam = null;
+  function updateLinhas(dt) {
+    if (!linhas) return;
+    if (linhasT <= 0) { linhas.visible = false; return; }
+    linhasT -= dt;
+    if (!_dirCam) _dirCam = new THREE.Vector3();
+    var d = 2.0;
+    camera.getWorldDirection(_dirCam);
+    linhas.position.copy(camera.position).addScaledVector(_dirCam, d);
+    linhas.quaternion.copy(camera.quaternion);
+    var h = 2 * d * Math.tan((camera.fov || 45) * Math.PI / 360) * 1.08, w = h * (camera.aspect || 1.6);
+    linhas.scale.set(w, h, 1);
+    linhas.material.opacity = 0.8 * Math.max(0, linhasT / LINHAS_DUR);
+    linhas.visible = true;
+  }
+
   /* Maldicao: cai DE CIMA sobre o alvo, devagar, e assenta. */
   function maldicao(dest, el, el2) {
     var col = ecol(el), col2 = el2 ? ecol(el2) : null;
@@ -1913,7 +2005,9 @@ var JOGO = (typeof window !== 'undefined')
     cortes:    [['cortes',  'bilhete', 4.2, 0.55, 0.1, 'hit', { giro: 0.4, espelho: 'sorteio' }]],
     ciclone:   [['golpe',   'bilhete', 3.2, 0.40, 0.12, 'hit', { giro: 0.7, espelho: 'sorteio' }]],
     vortice:   [['redemoinho', 'chao', 6.6, 1.1, 0.1, 0, { op: 1.0, branco: 0.12 }]],   // `branco` baixo: a espiral puxada ao branco virava um disco   // medido na foto: a 5,4 o aro de 7 m engolia a espiral
-    espinhos:  [['cristais', 'bilhete', 3.6, 0.62, 0.15, 0.05, { alt: 1.3, op: 0.95, alto: 1.9 }]]
+    espinhos:  [['cristais', 'bilhete', 3.6, 0.62, 0.15, 0.05, { alt: 1.3, op: 0.95, alto: 1.9 }]],
+    // 15/10 leva 3: a poça enche no chão e o jato sobe no meio
+    cisterna:  [['poca', 'chao', 6.4, 1.0, 0.12, 0, { op: 0.95, branco: 0.15 }], ['jato', 'bilhete', 3.2, 0.6, 0.1, 0.24, { alt: 1.6, op: 0.9, alto: 1.7 }]]
   };
   /* 15/10 — a ALTURA de um filme de pé: o quadro vai de −1 a 1 e a base da folha de cristais/trovão
    * está em −0,78; para a base ficar no chão o centro tem de subir 0,39 × tam × alt (`alto` na opção). */
@@ -1965,19 +2059,40 @@ var JOGO = (typeof window !== 'undefined')
     // e no estouro; a terra, os CRISTAIS brotando onde a pancada chega; e o AR, nos grandes, o TROVÃO
     // grosso (o raio fino segue no tiro e no feixe)
     var quente = (el === 'fogo' || el2 === 'fogo'), pedra = (el === 'terra' || el2 === 'terra');
-    if (quente && (fam === 'corte' || fam === 'cortes' || fam === 'estouro' || fam === 'investida' || fam === 'meteoro' || fam === 'ciclone')) {
-      var atrasoChama = (fam === 'corte' || fam === 'cortes' || fam === 'ciclone') ? hd + 0.05 : (fam === 'investida' ? 0.2 : 0.1);
+    // leva 3: o tiro, o sopro, a armadilha, a invocação e a muralha também recebem a matéria — menores
+    // (`MIUDO`) onde o gesto é pequeno, e no tempo certo (o tiro chega em ~0,3 s; o sopro abre no meio)
+    var MIUDO = { flecha: 0.7, armadilha: 0.65, invocacao: 0.75, cone: 0.8, corte: 0.9 };
+    var esc = MIUDO[fam] || 1;
+    var atrasoFam = { flecha: 0.3, cone: 0.16, armadilha: 0.08, invocacao: 0.15, terremoto: 0.08 };
+    var FOGO_FAM = { corte: 1, cortes: 1, estouro: 1, investida: 1, meteoro: 1, ciclone: 1, flecha: 1, cone: 1, armadilha: 1, invocacao: 1, terremoto: 1 };
+    var TERRA_FAM = { terremoto: 1, investida: 1, estouro: 1, meteoro: 1, corte: 1, flecha: 1, cone: 1, armadilha: 1, invocacao: 1, anel: 1 };
+    var AGUA_FAM = { flecha: 1, cone: 1, corte: 1, terremoto: 1, armadilha: 1, invocacao: 1 };
+    var AR_FAM = { armadilha: 1, invocacao: 1 };
+    if (quente && FOGO_FAM[fam]) {
+      var atrasoChama = (fam === 'corte' || fam === 'cortes' || fam === 'ciclone') ? hd + 0.05 : (fam === 'investida' ? 0.2 : (atrasoFam[fam] || 0.1));
       setTimeout(function () {
-        filme({ tipo: 'chama', el: 'fogo', modo: 'bilhete', tam: 3.2, alt: 1.4, dur: 0.62, cresce: 0.25, op: 0.7,
-                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + 1.5, dest.z) });
+        filme({ tipo: 'chama', el: 'fogo', modo: 'bilhete', tam: 3.2 * esc, alt: 1.4, dur: 0.62, cresce: 0.25, op: 0.7,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + 1.5 * esc, dest.z) });
       }, atrasoChama * 1000);
     }
-    if (pedra && (fam === 'terremoto' || fam === 'investida' || fam === 'estouro' || fam === 'meteoro' || fam === 'corte')) {
-      var atrasoCristal = fam === 'corte' ? hd : (fam === 'investida' ? 0.18 : (fam === 'meteoro' ? 0.4 : 0.05));
+    if (pedra && TERRA_FAM[fam]) {
+      var atrasoCristal = fam === 'corte' ? hd : (fam === 'investida' ? 0.18 : (fam === 'meteoro' ? 0.4 : (atrasoFam[fam] || 0.05)));
       setTimeout(function () {
-        filme({ tipo: 'cristais', el: 'terra', modo: 'bilhete', tam: 3.0, alt: 1.3, dur: 0.6, cresce: 0.15, op: 0.9,
-                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + altoDaBase(3.0, 1.3), dest.z) });
+        filme({ tipo: 'cristais', el: 'terra', modo: 'bilhete', tam: 3.0 * esc, alt: 1.3, dur: 0.6, cresce: 0.15, op: 0.9,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + altoDaBase(3.0 * esc, 1.3), dest.z) });
       }, atrasoCristal * 1000);
+    }
+    if (aguado && AGUA_FAM[fam]) {
+      setTimeout(function () {
+        filme({ tipo: 'jato', el: 'agua', modo: 'bilhete', tam: 3.0 * esc, alt: 1.6, dur: 0.55, cresce: 0.1, op: 0.9,
+                pos: v3(dest.x, (dest.y || 0) + 1.6 * esc, dest.z) });
+      }, (fam === 'corte' ? hd : (atrasoFam[fam] || 0.1)) * 1000);
+    }
+    if (ventoso && AR_FAM[fam]) {
+      setTimeout(function () {
+        filme({ tipo: 'raio', el: 'ar', modo: 'bilhete', tam: 2.6, alt: 1.9, dur: 0.4, cresce: 0.05, op: 0.9,
+                espelho: Math.random() < 0.5, pos: v3(dest.x, (dest.y || 0) + 2.0, dest.z) });
+      }, (atrasoFam[fam] || 0.1) * 1000);
     }
     if (ventoso && (fam === 'anel' || fam === 'estouro' || fam === 'meteoro' || fam === 'terremoto' || fam === 'investida' || fam === 'cruz')) {
       setTimeout(function () {
@@ -2008,7 +2123,11 @@ var JOGO = (typeof window !== 'undefined')
       case 'cruz':      cruz(dest, el, el2); break;
       case 'anel':      nova(dest, ecol(el), el2 ? ecol(el2) : null); break;
       case 'terremoto': terremoto(dest, el, el2); break;
-      case 'onda':      onda(from, dest, el, el2); break;
+      case 'onda':
+        onda(from, dest, el, el2);
+        if (sp && sp.aoe && sp.aoe.shape === 'line') ondaViajante(from, dest, el);   // leva 3
+        break;
+      case 'cisterna':  cisterna(dest, el, el2); break;
       case 'investida': investida(from, dest, el, el2); break;
       case 'corte':     corte(dest, el, el2); break;
       case 'armadilha': armadilha(dest, el, el2); break;
@@ -2030,6 +2149,13 @@ var JOGO = (typeof window !== 'undefined')
       case 'vortice':   vortice(dest, el, el2); break;
       case 'espinhos':  espinhos(dest, el, el2); break;
       case 'flecha': {
+        // leva 3: o tiro MARCADO do Caçador trava a mira no alvo (a folha `marca`, na cor da marca)
+        if (sp && /mark/i.test(sp.fxKey || '')) {
+          setTimeout(function () {
+            filme({ tipo: 'marca', modo: 'chao', tam: 3.4, dur: 0.7, cresce: 0, op: 0.95, cor: '#ff9ad0',
+                    pos: v3(dest.x, 0.07, dest.z) });
+          }, 120);
+        }
         // a haste da flecha tem 4,5 cm de raio: meio pixel. O rastro em trilho e
         // o que faz o tiro existir na tela, e e ele que separa a flecha da bola.
         var fx2 = dest.x - from.x, fz2 = dest.z - from.z;
@@ -2039,7 +2165,7 @@ var JOGO = (typeof window !== 'undefined')
                 de: [fd * 0.35, 1.6], ate: [fd * 1.02, 3.2], dur: 0.62, op: 1,
                 saida: 1.25, patamar: 0.48 });
         launch(from, dest, {
-          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25,
+          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'arrow', speed: 34, arc: 0.25, el: el,
           onHit: function (pos) {
             impact(pos, el, 1.0, el2);
             // 12/10: o IMPACTO do Blender onde a flecha crava — o tiro passou a ter um fim
@@ -2051,7 +2177,7 @@ var JOGO = (typeof window !== 'undefined')
       }
       default:
         launch(from, dest, {
-          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'ball', speed: 22, arc: 0.6,
+          color: ecol(el), color2: el2 ? ecol(el2) : null, kind: 'ball', speed: 22, arc: 0.6, el: el,
           onHit: function (pos) {
             impact(pos, el, 1.0, el2);
             filme({ tipo: 'impacto', el: el, modo: 'bilhete', tam: 3.0, dur: 0.38, cresce: 0.4, op: 0.85,
@@ -2304,7 +2430,7 @@ var JOGO = (typeof window !== 'undefined')
             color: col, speed: 3.4, life: 0.45, size: 0.24, spread: 0.4
           });
           addShake(Math.min(9, 2.2 + ev.amount * 0.08));
-          if (ev.amount >= 45) freezeT = Math.max(freezeT, 0.07);
+          if (ev.amount >= 45) { freezeT = Math.max(freezeT, 0.07); linhasDeVelocidade(); }   // leva 3: o quadro de impacto
         }
         /* 19/09: A COBERTURA BAIXA. O motor manda `coberto: true` (e a `reducao`) quando a
          * vítima estava atrás de um '=' (Engine.coberto): o número menor precisa de um
@@ -2362,6 +2488,9 @@ var JOGO = (typeof window !== 'undefined')
       case 'markStack':
         p = unitPos(ev.uid, 1.0);
         burst(p.x, p.y, p.z, 10, { color: '#ff9ad0', speed: 1.4, life: 0.45, size: 0.24, grav: -0.6 });
+        // leva 3: a mira trava no chão de quem leva a marca (a 5ª pilha é maior)
+        filme({ tipo: 'marca', modo: 'chao', tam: ev.stacks >= 5 ? 4.2 : 3.0, dur: 0.6, cresce: 0, op: 0.9, cor: '#ff9ad0',
+                pos: v3(p.x, 0.07, p.z) });
         break;
 
       case 'tileEvent':
@@ -2721,6 +2850,7 @@ var JOGO = (typeof window !== 'undefined')
     updateAmbient(dt);
     updateEmissores(dt);      // 15/10: antes das partículas, para o que nasce neste quadro já andar
     updateFantasmas(dt);
+    updateLinhas(dt);
     updateParticles(dt);
 
     if (shakeAmp > 0.01) {
@@ -2751,6 +2881,7 @@ var JOGO = (typeof window !== 'undefined')
     limpaFilmes();
     emissores.length = 0;
     limpaFantasmas();
+    linhasT = 0; if (linhas) linhas.visible = false;
     FX.clearDecals();
     limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;

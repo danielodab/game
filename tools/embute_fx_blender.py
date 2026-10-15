@@ -23,7 +23,8 @@ QUADROS = GRADE * GRADE
 QUAL = 88
 TIPOS = ['golpe', 'impacto', 'rachadura', 'raio', 'jato', 'pilar', 'selo',
          'helice', 'cristais', 'redemoinho', 'correntes', 'cortes', 'laminas', 'trovao',   # 15/10: as sete do gênero
-         'asas', 'mao']   # 15/10, leva 2: as asas da cura e a mão do breu
+         'asas', 'mao',   # 15/10, leva 2: as asas da cura e a mão do breu
+         'poca', 'marca']   # 15/10, leva 3: a poça das cisternas e a mira do Caçador
 
 
 def premultiplica(im):

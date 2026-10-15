@@ -1953,6 +1953,50 @@ Provas: `fx_filme` 8/8, `som` 6/6, `efeitos_um_a_um` 7/7 (213); fotos de `fx_sal
 `curandeiro-neutro-1` (asas + pilar) e `bruxo-neutro-2` (a mão violeta sob a fumaça e o selo). O que ainda
 não entrou do gênero: as linhas de velocidade na tela nos golpes grandes.
 
+## 9-A.33 Os efeitos do gênero, leva 3: onde ainda estava repetido (15/10)
+
+O dono, depois das duas levas: "teria como analisar e criar mais?". A medida: dos 189 feitiços de classe,
+96 seguiam com o desenho de 12/10, e a repetição morava em blocos — a **onda** com 16 (toda a água de
+área, de linha e de alvo único era a MESMA parede), a **flecha** com 14 (todo tiro igual, só a cor), o
+**cone** com 14, a **armadilha** com 12, a **invocação** com 8, e 8 ainda na **bola** genérica.
+
+**O que entrou:**
+- **A cisterna** (família nova, `/cistern|(brute|marked)tide|goodwave/`, antes da onda e da cura): a
+  água de ÁREA sobe no lugar em vez de atravessar — a folha `poca` do Blender no chão (o disco que
+  enche, três ondulações concêntricas correndo para fora, as gotas que pulam na borda; medido na folha
+  de contato: o disco a 1,6 de força virava um clarão e engolia as ondulações — 0,55), o anel que fecha,
+  o emissor que faz as gotas pularem pela borda, o jato no meio. Seis feitiços (Maré Bruta, Maré Marcada,
+  A Cisterna Lembra, Onda Boa, Cisterna Boa, Cisterna Guardada). Som: magia; `tests/som.html` cobra 26.
+- **A onda em linha viaja** (`ondaViajante`): quando o feitiço tem `aoe.shape === 'line'` (Onda de Ombro,
+  Linha de Corrente, Maré Alta), a parede do acervo toca em três pontos do caminho, um atrás do outro,
+  crescendo — antes a parede nascia num ponto só.
+- **A marca do Caçador** (folha `marca`: dois aros em sentidos opostos que TRAVAM no alvo, os quatro
+  traços de mira que entram, o ponto que acende): no chão de quem leva a pilha (`markStack`, maior na
+  5ª) e em todo tiro marcado (`/mark/` no fxKey: Tiro Marcado, Recolher Marcas, Detonar Marcas, Salva
+  Marcada…), na cor da marca (`#ff9ad0`).
+- **O rastro do projétil tem matéria** (`launch` leva `el`; `updateShots`): a brasa que sobe do tiro de
+  fogo, a gota que cai do de água, o cascalho do de terra, o risco de vento do de ar — além do rastro de
+  cor que já havia.
+- **A matéria por elemento, estendida** (`filmesDaFamilia`): o tiro, o sopro, a armadilha, a invocação, a
+  muralha e o corte também recebem a labareda/os cristais/o jato/o raio, MENORES onde o gesto é pequeno
+  (`MIUDO`: tiro 0,7, armadilha 0,65, invocação 0,75, sopro 0,8) e no tempo certo (o tiro chega em ~0,3 s;
+  o sopro abre no meio).
+- **As linhas de velocidade** (`linhasDeVelocidade`/`updateLinhas`): o quadro de impacto do gênero —
+  nos golpes que já congelam o quadro (dano ≥ 45) a tela ganha por 0,22 s os riscos radiais que correm da
+  borda para o centro: um plano preso na frente da câmera (recolocado a cada quadro a 2 m, no tamanho do
+  frustum ×1,08), textura de 110 riscos desenhada UMA vez em canvas, aditivo, `depthTest` desligado,
+  `renderOrder` 999, girado ao acaso a cada disparo. `FX.linhasDeVelocidade()` exposto.
+- **Os oito da bola, cada um na sua**: Dissolução → vórtice; Pira Dobrada → estouro (`/pyre$/`; as
+  armadilhas de pira seguem armadilha); Chifrada Acesa → cone (`horn`); O Cerco de Água → anel (`siege`);
+  Jardim Fechado → cura (`garden`); Sombra Curta (invisível, bônus) → aura (`shadow$`); Couro Fervente →
+  escudo (`hide`); Detonar a Corrente → flecha (`collect`). A bola ficou com ZERO feitiços de classe.
+- As dezoito folhas em `assets/embedded/fx-blender.js` (~890 KB).
+
+Provas: `fx_filme` 8/8, `som` 6/6, `efeitos_um_a_um` 7/7 (213). Fotos de `fx_sala.html?efeito=cast`:
+`bruxo-agua-30` (a cisterna), `sumo-agua-12` (a onda que viaja), `arqueiro-fogo-5` (o rastro de brasa e a
+labareda no alvo), `arqueiro-neutro-1` (a mira que trava), e o quadro de impacto por um `damage` de 62
+disparado pelo DevTools.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e
@@ -2005,7 +2049,7 @@ servidor (`docs/SEGURANCA.md` §10.5).
 | assunto | estado |
 |---|---|
 | **Equilíbrio** | classes, caminhos, fusões e duelos medidos — ver `docs/EQUILIBRIO.md` (03/10, as duas decisões do dono de §6 de lá: o muro do Minotauro fere quem encosta, e a paridade da Arena caiu de 5 para 3 níveis) |
-| **Efeitos** | 25 famílias, placas, filmes do Blender e órbitas ligados; falta julgar no tamanho real do tabuleiro |
+| **Efeitos** | 26 famílias, placas, dezoito filmes do Blender, órbitas, fantasma e quadro de impacto ligados; falta julgar no tamanho real do tabuleiro |
 | **Fogo na arma** | proposto, depende do resultado das placas |
 | **Nomes das classes** | confirmados pelo dono — ficam como estão |
 | **Elenco chibi** | decidido: **fica KayKit**, pela coerência com o cenário |
