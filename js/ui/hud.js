@@ -802,7 +802,7 @@ var JOGO = (typeof window !== 'undefined')
     battleSig = '';
     if (name === 'menu') buildMenu();
     else if (name === 'heroSelect') buildHeroSelect();
-    else if (name === 'hub') buildHub(null);
+    else if (name === 'hub') { buildHub(null); ofereceRetomada(); }
     // A ANTESSALA (03/09): a mesma máquina da praça, no pátio da sala
     else if (name === 'antessala') {
       // 15/10: a primeira luta de uma conta nova entra sem o pátio — a porta abre sozinha
@@ -3473,6 +3473,27 @@ var JOGO = (typeof window !== 'undefined')
     b.appendChild(el('h3', null, esc(title)));
     b.appendChild(node);
     return b;
+  }
+
+  /* 15/10 — CONTINUAR A LUTA QUE FICOU ABERTA (js/core/retomada.js): ao chegar à praça, se o registro da
+   * última vez é uma sala solo que dá para refazer, pergunta uma vez. Continuar refaz e volta à batalha;
+   * desistir fecha a sala como sempre (os heróis com a vida do ponto em que parou). */
+  var ofereceuRetomada = false;
+  function ofereceRetomada() {
+    if (ofereceuRetomada) return;
+    var A = JOGO.Autoridade;
+    var v = safe(function () { return A && A.salaRetomavel ? A.salaRetomavel() : null; }, null);
+    if (!v) return;
+    ofereceuRetomada = true;
+    var d = v.retomada || {};
+    confirmSheet(tr('Continuar a luta?'),
+      tr('A sua última luta ficou aberta: a sala {n}, com {k} lance(s) até onde parou. Continuar volta para ela do mesmo ponto; desistir fecha a sala e os heróis ficam com a vida de onde pararam.',
+         { n: (d.roomIndex || 0) + 1, k: (v.lances || []).length }),
+      function () {
+        var ok = safe(function () { return G().retomaSolo(v); }, false);
+        if (!ok) { toast(tr('Não deu para refazer a luta: a sala fechou.')); safe(function () { A.fechaPendente(); return true; }, null); }
+      },
+      { sim: tr('Continuar'), aoCancelar: function () { safe(function () { A.fechaPendente(); return true; }, null); } });
   }
 
   /* 15/10 — A ANTESSALA DA PRIMEIRA LUTA: um aviso de um instante no lugar do pátio 3D, e a porta

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SOTERRA — a retomada da sala solo na página (15/10)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  #summary { padding: 8px; font: 14px/1.4 system-ui; }
+  #summary.allpass { background: #163; color: #cfc; }
+  #summary.fail { background: #611; color: #fcc; }
+  li.pass { color: #4c4; } li.fail { color: #f66; }
+</style>
+</head>
+<body>
+<div id="summary">carregando…</div>
+<ul id="lista"></ul>
+<!-- o fio inteiro da página sem servidor: um registro de luta aberta com a retomada (o que o game.js grava ao
+     entrar na sala com bilhete) é refeito por Game.retomaSolo e a tela cai na batalha, na vez do jogador; a
+     prova pura do refazer (o hash igual ao do juiz) é tests/retoma_solo.js. -->
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/retomada.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js','assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+  function fim(msg) {
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') + okN + ' de ' + (okN + falhas.length) + ' ok, ' +
+      falhas.length + ' falharam' + (msg ? ' · ' + msg : '');
+    window.__pronto = true;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, E = JOGO.Engine;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return fim('init: ' + e.message); }
+    try { JOGO.UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() && JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      roda();
+    })();
+
+    function roda() {
+      var ids = JOGO.Progress.heroIds();
+      while (ids.length < 2) { JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = JOGO.Progress.heroIds(); }
+      // o registro que o game.js grava ao entrar na sala com bilhete, mais os lances até parar:
+      // a colocação e um "passar a vez" (o `ok` de cada um confere no replay)
+      var reg = { tipo: 'sala', ref: 'bilhete-prova', fim: false,
+                  lances: [{ a: 'p', x: null, y: null, e: {}, ok: true }, { a: 'e', ok: true }],
+                  retomada: { dungeonId: 'greenhouse', roomIndex: 0, dificuldade: 'normal', party: ids.slice(0, 2),
+                              semente: 777, carry: null, afixo: null, versaoRegras: E.VERSAO_REGRAS, em: Date.now() } };
+      check('Game.retomaSolo existe', typeof G.retomaSolo === 'function');
+      check('a tela de partida é o menu', G.screen === 'menu', G.screen);
+      var r = G.retomaSolo(reg);
+      check('retomaSolo aceitou o registro', r === true, String(r));
+      var t1 = Date.now();
+      (function olha() {
+        if (G.screen !== 'battle' && Date.now() - t1 < 20000) return setTimeout(olha, 100);
+        check('a tela caiu na batalha', G.screen === 'battle', G.screen);
+        var st = G.state;
+        check('a sala está jogando, na vez do jogador', !!st && st.phase === 'playing' && E.activeUnit(st) && E.activeUnit(st).side === 'player',
+              st ? st.phase : 'sem estado');
+        check('a sala é a da Estufa, porta 0', G.dungeonId === 'greenhouse' && G.roomIndex === 0);
+        check('nenhum evento do replay ficou para animar', E.events.length === 0, E.events.length + ' eventos');
+        // o registro torto (regras de outra versão) não entra
+        G.init('menu');
+        var velho = JSON.parse(JSON.stringify(reg)); velho.retomada.versaoRegras = (E.VERSAO_REGRAS || 0) + 1;
+        check('regras de outra versão: retomaSolo recusa', G.retomaSolo(velho) === false);
+        fim();
+      })();
+    }
+  });
+})();
+</script>
+</body>
+</html>

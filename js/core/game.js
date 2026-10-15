@@ -817,6 +817,15 @@ var JOGO = (typeof window !== 'undefined')
     ataSolo = bil ? { bilhete: bil.bilhete, lances: [] } : null;
     // 07/10: o afixo é o do BILHETE (o servidor decidiu); sem bilhete, a proposta da página
     var afixoSala = bil ? (bil.afixo || null) : afixoProposto(Game.dungeonId);
+    // 15/10: o que a RETOMADA precisa para refazer esta sala na próxima abertura (js/core/retomada.js)
+    if (bil) {
+      try {
+        JOGO.Autoridade.guardaRetomada(bil.bilhete, {
+          dungeonId: Game.dungeonId, roomIndex: Game.roomIndex, dificuldade: Game.dificuldade, party: Game.party.slice(),
+          semente: bil.semente, carry: carryPorta || null, afixo: afixoSala, versaoRegras: E().VERSAO_REGRAS, em: Date.now()
+        });
+      } catch (eRt) {}
+    }
     Game.escuro = false;                 // 07/10: o caminho escuro é de cada porta — a próxima pergunta de novo
     Game.state = E().createBattle(Game.dungeonId, Game.roomIndex, partyPayload(),
       bil ? { seed: bil.semente, dificuldade: Game.dificuldade, escolhePosicao: true, afixo: afixoSala }
@@ -827,6 +836,45 @@ var JOGO = (typeof window !== 'undefined')
     // 13/09: a vida da porta entra como está (era "vivos curam 50%, mortos voltam com 30%")
     aplicaCarry(Game.state, carryPorta, false);
     zeraPrep();                                    // 21/09: 30 s limpos nesta sala
+    setScreen('battle');
+    return true;
+  };
+
+  /* 15/10 — RETOMAR A SALA SOLO (js/core/retomada.js): da praça, a luta que ficou aberta na última vez
+   * é REFEITA do registro (semente + lances, como o juiz refaz) e a tela volta à batalha no ponto em que
+   * parou — a vez do jogador, o relógio recomeçado. Devolve false quando não dá (a sala já tinha acabado
+   * no replay, as regras mudaram, o registro está torto): quem chamou fecha a sala como sempre. */
+  Game.retomaSolo = function (reg) {
+    if (Game.screen !== 'hub' && Game.screen !== 'menu') return false;
+    var Rt = JOGO.Retomada, d = reg && reg.retomada;
+    if (!Rt || !d || !validParty(d.party) || !validDungeon(d.dungeonId)) return false;
+    if (d.dungeonId === 'poco' && (!JOGO.Poco || !JOGO.Poco.preparar(d.roomIndex + 2))) return false;
+    if (seguraParaModelos({ dungeonId: d.dungeonId, party: d.party, duplas: null, sala: d.roomIndex },
+        function () { Game.retomaSolo(reg); })) return true;
+    var r = Rt.refaz(JOGO, { dungeonId: d.dungeonId, roomIndex: d.roomIndex, dificuldade: d.dificuldade, party: d.party,
+                             semente: d.semente, carry: d.carry || null, afixo: d.afixo || null, versaoRegras: d.versaoRegras,
+                             lances: reg.lances || [] },
+                       { aplicaCarry: function (st, carry) { aplicaCarry(st, carry, false); } });
+    if (!r || r.erro || !r.st || Rt.FIM[r.st.phase]) return false;
+    Game.party = d.party.slice();
+    Game.dungeonId = d.dungeonId;
+    Game.roomIndex = d.roomIndex;
+    Game.dificuldade = (d.dificuldade === 'facil' || d.dificuldade === 'normal' || d.dificuldade === 'dificil') ? d.dificuldade : 'normal';
+    Game.selectedSpellId = null;
+    Game.hoverTile = null;
+    Game.pendingFusion = null;
+    Game.mustEndTurn = false;
+    Game.escuro = false;
+    carryFimRede = null;
+    rede = null;
+    resetAiState();
+    resetTimer(true);
+    ultimoTurno = null; timerTurno = null;
+    ataSolo = { bilhete: reg.ref, lances: (reg.lances || []).slice() };
+    Game.state = r.st;
+    E().events.length = 0;                       // o replay não anima
+    if (r.st.phase === 'placing') zeraPrep();
+    try { JOGO.EventosUso.anota('luta_retomada'); } catch (eU) {}
     setScreen('battle');
     return true;
   };

@@ -298,6 +298,28 @@ var JOGO = (typeof window !== 'undefined')
     var v = A.lutaAberta();
     if (v && (!ref || v.ref === ref)) gravaLuta(null);
   };
+  /* 15/10 — A RETOMADA DA SALA SOLO (js/core/retomada.js). O registro da luta aberta ganha o que a sala
+   * precisa para ser REFEITA (semente, porta, grupo, PV da porta, afixo, a versão das regras, o instante):
+   * o game.js grava ao entrar na sala. Na abertura seguinte, `salaRetomavel()` diz se dá para voltar — a
+   * sala solo, não acabada, com menos de RETOMADA_MS (a janela em que o servidor ainda não larga a luta é
+   * de 2 h: LARGADA_JANELA_MS do salas.py) e com as regras desta página (o juiz recusaria 'regras-mudaram'). */
+  A.RETOMADA_MS = 2 * 3600 * 1000;
+  A.guardaRetomada = function (ref, dados) {
+    var v = A.lutaAberta();
+    if (!v || v.ref !== ref || !dados || typeof dados !== 'object') return;
+    v.retomada = dados;
+    gravaLuta(v);
+  };
+  A.salaRetomavel = function () {
+    var v = A.lutaAberta();
+    if (!v || v.tipo !== 'sala' || v.fim || !v.retomada) return null;
+    var d = v.retomada;
+    if (!(Date.now() - (d.em || 0) < A.RETOMADA_MS)) return null;
+    var E = JOGO.Engine;
+    if (E && E.VERSAO_REGRAS != null && d.versaoRegras !== E.VERSAO_REGRAS) return null;
+    if (!JOGO.Retomada || !JOGO.Retomada.refaz) return null;
+    return v;
+  };
   var fechandoLuta = {};       // ref → a promessa do fechar em curso (o de sempre ou o do registro)
   /* Fecha a luta pendente e resolve quando o servidor respondeu de vez (sem rede, tenta de novo como todo fechar).
    * Resolve null sem luta pendente. Um fechar da MESMA luta que já está a caminho é esperado, não repetido. */
@@ -316,6 +338,12 @@ var JOGO = (typeof window !== 'undefined')
       var podeRetomar = false;
       try { podeRetomar = !!(JOGO.Grupo && JOGO.Grupo.retomavel && JOGO.Grupo.retomavel(v.ref)); } catch (eR) { podeRetomar = false; }
       if (podeRetomar) return Promise.resolve(null);
+    }
+    // 15/10: a sala SOLO que dá para refazer também fica — a praça pergunta "continuar ou desistir"
+    if (opts && opts.retomavel === true && v.tipo === 'sala' && !v.fim) {
+      var podeSolo = false;
+      try { podeSolo = !!A.salaRetomavel(); } catch (eS) { podeSolo = false; }
+      if (podeSolo) return Promise.resolve(null);
     }
     if (fechandoLuta[v.ref]) return fechandoLuta[v.ref].then(function () { return A.lutaAberta() ? A.fechaPendente() : null; });
     var p;
