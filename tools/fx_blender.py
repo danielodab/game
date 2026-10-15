@@ -39,6 +39,11 @@ AS SETE DE 15/10 (o dono: "os efeitos estão muito parecidos… gosto dos do Lag
   cortes     o golpe triplo: três lâminas cruzadas, uma atrás da outra
   laminas    quatro gumes girando em volta do guerreiro, uma volta e meia (folha de chão)
   trovao     a coluna de trovão grossa, do alto ao chão, que pisca e abre o clarão na base
+
+A LEVA 2 (15/10)
+--------------
+  asas       as asas de luz da cura: duas asas de seis penas que abrem em leque atrás do alvo e sobem
+  mao        a mão do breu da maldição: palma e cinco dedos que sobem do chão e se fecham sobre o alvo
 """
 import bpy, math, os, random, sys
 
@@ -930,10 +935,113 @@ def trovao():
     return sc
 
 
+# ======================================================= A LEVA 2 (15/10)
+# As asas de luz da cura e a mão do breu da maldição — o que o gênero tem e ficou fora da leva 1.
+
+def asas():
+    """as asas de luz: duas asas de seis penas cada que ABREM atrás do alvo (fechadas para cima no
+    primeiro quadro, abertas em leque no sexto), batem de leve, e sobem sumindo; o halo no meio"""
+    sc = cena_nova('asas')
+    rd = random.Random(71)
+    mp = material('pena', 5.0, mascara_faixa_v(0.42))
+    mh = material('halo', 2.2, mascara_radial(0.08, 1.0))
+    halo = plano('halo', 0.8, 0.8, mh, z=-0.01)
+    raiz = vazio(sc, 'raiz')
+    penas = []
+    for lado in (1, -1):
+        for i in range(6):
+            t = i / 5.0
+            L = 0.55 + 0.42 * math.sin(math.pi * (0.25 + 0.75 * t)) + rd.uniform(-0.03, 0.03)
+            w0 = 0.075 - 0.02 * t
+            # a pena é uma faixa que sai da raiz e curva um pouco para fora
+            pts = [(0, 0), (lado * 0.06, L * 0.5), (lado * 0.16, L)]
+            ob = faixa('pena%d_%d' % (lado > 0, i), pts, [w0, w0 * 0.85, 0.01], mp, z=0.01 + 0.002 * i)
+            ob.parent = raiz
+            ob.location = (lado * 0.08, -0.25, 0)
+            fechada = -lado * math.radians(8 + 4 * i)          # quase em pé, encostadas
+            aberta = -lado * math.radians(22 + 13 * i)         # em leque: a última quase deitada
+            penas.append((ob, fechada, aberta, i))
+    for q in range(1, QUADROS + 1):
+        t = (q - 1) / 15.0
+        abre = min(1.0, (q - 1) / 5.0)
+        abre = abre * abre * (3 - 2 * abre)
+        bate = 0.06 * math.sin((q - 6) * 1.1) if q > 6 else 0.0
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        sobe = 0.0 if q <= 10 else (q - 10) * 0.05
+        chave(raiz, q, loc=(0, sobe, 0))
+        for ob, fe, ab, i in penas:
+            ang = fe + (ab - fe) * abre + bate * (1 if ab < 0 else -1) * (0.3 + 0.7 * i / 5.0)
+            chave(ob, q, rot=(0, 0, ang), esc=(1, 0.35 + 0.65 * abre, 1))
+        chave_forca(mp, q, 5.0 * some * (0.4 + 0.6 * abre))
+        e = 0.4 + 0.8 * abre
+        chave(halo, q, esc=(e, e, 1))
+        chave_forca(mh, q, 2.2 * some)
+    linear(raiz); linear(halo)
+    for ob, fe, ab, i in penas:
+        linear(ob)
+    linear_nt(mp.node_tree); linear_nt(mh.node_tree)
+    return sc
+
+
+def mao():
+    """a mão do breu: a palma e cinco dedos que SOBEM de baixo do quadro (o chão), os dedos se fecham
+    sobre o alvo, um clarão e some — o jogo a tinge de violeta (`cor`), porque o filme é aditivo"""
+    sc = cena_nova('mao')
+    rd = random.Random(83)
+    raiz = vazio(sc, 'raiz')
+    mpal = material('palma', 3.2, mascara_radial(0.12, 1.0))
+    palma = plano('palma', 0.9, 0.72, mpal, z=0.0)
+    palma.parent = raiz
+    palma.location = (0, -0.08, 0)
+    mbra = material('braco', 2.6, mascara_pilar())
+    braco = plano('braco', 0.5, 1.5, mbra, z=-0.01)
+    for v in braco.data.vertices:
+        v.co.y += 0.75
+    braco.parent = raiz
+    braco.location = (0, -1.7, 0)
+    mdedo = material('dedo', 4.5, mascara_faixa_v(0.42))
+    dedos = []
+    for i in range(5):
+        t = (i - 2) / 2.0                                    # -1 .. 1
+        x0 = t * 0.4
+        L = 0.62 - 0.14 * abs(t) + rd.uniform(-0.02, 0.02)
+        if i == 0:
+            L = 0.42
+        w0 = 0.15 - 0.03 * abs(t)
+        pts = [(0, 0), (-t * 0.04, L * 0.5), (-t * 0.14, L)]      # curva para o centro (a garra)
+        ob = faixa('dedo%d' % i, pts, [w0, w0 * 0.8, 0.03], mdedo, z=0.01 + 0.002 * i)
+        ob.parent = raiz
+        ob.location = (x0, 0.2 - 0.06 * abs(t), 0)
+        # fecha para o centro (z positivo gira para -x: os da direita, t > 0, giram para a esquerda)
+        # medido na 2ª folha de contato: a 50°/26° as pontas cruzavam e a mão virava um cone
+        fecha = t * math.radians(30) if abs(t) > 0.6 else t * math.radians(15)
+        dedos.append((ob, t * math.radians(5), fecha))
+    for q in range(1, QUADROS + 1):
+        sobe = min(1.0, (q - 1) / 5.0)
+        sobe = sobe * sobe * (3 - 2 * sobe)
+        fechar = 0.0 if q <= 6 else min(1.0, (q - 6) / 4.0)
+        some = 1.0 if q <= 12 else max(0.0, (16 - q) / 4.0)
+        chave(raiz, q, loc=(0, -1.35 + 1.15 * sobe, 0))
+        for ob, a0, a1 in dedos:
+            chave(ob, q, rot=(0, 0, a0 + (a1 - a0) * fechar))
+        clarao = 2.2 if q == 11 else (1.5 if q == 10 or q == 12 else 1.0)
+        chave_forca(mdedo, q, 4.5 * some * clarao)
+        chave_forca(mpal, q, 3.2 * some * clarao)
+        chave_forca(mbra, q, 2.6 * some)
+    linear(raiz)
+    for ob, a0, a1 in dedos:
+        linear(ob)
+    linear(braco)
+    linear_nt(mdedo.node_tree); linear_nt(mpal.node_tree); linear_nt(mbra.node_tree)
+    return sc
+
+
 EFEITOS = {'golpe': golpe, 'impacto': impacto, 'rachadura': rachadura, 'raio': raio, 'jato': jato, 'pilar': pilar, 'selo': selo,
            # 15/10 — as sete do gênero
            'helice': helice, 'cristais': cristais, 'redemoinho': redemoinho, 'correntes': correntes, 'cortes': cortes,
-           'laminas': laminas, 'trovao': trovao}
+           'laminas': laminas, 'trovao': trovao,
+           # 15/10, leva 2
+           'asas': asas, 'mao': mao}
 
 
 def renderiza(nome):

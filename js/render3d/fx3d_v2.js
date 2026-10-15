@@ -289,6 +289,116 @@ var JOGO = (typeof window !== 'undefined')
   }
   FX.orbita = orbita;
 
+  // ------------------------------------------------- a imagem-fantasma (15/10, leva 2)
+  /* O que o gênero faz na investida e no teleporte: cópias do corpo ficam pelo caminho e somem. Clonar a
+   * SkinnedMesh não serve (a cópia divide o esqueleto e continua animando junto); aqui o corpo é ASSADO
+   * num quadro parado: para cada vértice, a mesma conta do shader de pele (bindMatrix → a soma dos ossos
+   * pelos pesos → bindMatrixInverse → matrixWorld), numa geometria só de posições, num material aditivo
+   * que some. Custa uma passada pelos vértices por fantasma (medido: 2–6 ms num corpo do Meshy) — por
+   * isso o renderer pede um por casa, não por quadro, e o teto é de oito de uma vez. */
+  var fantasmas = [];
+  var MAX_FANTASMAS = 8;
+  var _fm = [], _fv = null, _fb = null, _ft = null;
+  // o three daqui não tem BufferAttribute.getComponent: só getX/getY/getZ/getW
+  function compDe(at, i, c) { return c === 0 ? at.getX(i) : c === 1 ? at.getY(i) : c === 2 ? at.getZ(i) : at.getW(i); }
+  function assaCorpo(node) {
+    if (!THREE || !node) return null;
+    node.updateMatrixWorld(true);
+    var partes = [], total = 0;
+    node.traverse(function (n) {
+      if (!n.visible || !n.geometry || !(n.isMesh || n.isSkinnedMesh)) return;
+      var pa = n.geometry.attributes && n.geometry.attributes.position;
+      if (!pa) return;
+      // o adereço escondido do 'show' e o que mora em pai invisível não entram
+      for (var p = n.parent; p; p = p.parent) if (!p.visible) return;
+      partes.push(n); total += pa.count;
+    });
+    if (!total || total > 120000) return null;
+    var out = new Float32Array(total * 3), k = 0;
+    if (!_fv) { _fv = new THREE.Vector3(); _fb = new THREE.Vector3(); _ft = new THREE.Vector3(); for (var i = 0; i < 4; i++) _fm.push(new THREE.Matrix4()); }
+    var v = _fv, acc = _fb;
+    for (var pi = 0; pi < partes.length; pi++) {
+      var n = partes[pi], g = n.geometry, pa = g.attributes.position;
+      var idx = g.index;
+      // sem índice a malha é lista de triângulos; com índice copio os vértices e o índice junto
+      var skin = n.isSkinnedMesh && n.skeleton && g.attributes.skinIndex && g.attributes.skinWeight;
+      var si = skin ? g.attributes.skinIndex : null, sw = skin ? g.attributes.skinWeight : null;
+      var bm = skin ? n.skeleton.boneMatrices : null;
+      if (skin) { try { n.skeleton.update(); bm = n.skeleton.boneMatrices; } catch (e) {} }
+      var base = k / 3;
+      for (var vi = 0; vi < pa.count; vi++) {
+        v.fromBufferAttribute(pa, vi);
+        if (skin && bm) {
+          v.applyMatrix4(n.bindMatrix);
+          acc.set(0, 0, 0);
+          for (var b = 0; b < 4; b++) {
+            var w = compDe(sw, vi, b);
+            if (!w) continue;
+            var bi = compDe(si, vi, b);
+            _fm[b].fromArray(bm, bi * 16);
+            _ft.copy(v).applyMatrix4(_fm[b]);
+            acc.x += _ft.x * w; acc.y += _ft.y * w; acc.z += _ft.z * w;
+          }
+          v.copy(acc).applyMatrix4(n.bindMatrixInverse);
+        }
+        v.applyMatrix4(n.matrixWorld);
+        out[k++] = v.x; out[k++] = v.y; out[k++] = v.z;
+      }
+      partes[pi] = { base: base, n: pa.count, idx: idx };
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    // o índice: cada parte desloca o seu pela base
+    var temIdx = false, nIdx = 0;
+    for (var q = 0; q < partes.length; q++) { if (partes[q].idx) { temIdx = true; nIdx += partes[q].idx.count; } else nIdx += partes[q].n; }
+    if (temIdx) {
+      var ia = new Uint32Array(nIdx), ki = 0;
+      for (var r = 0; r < partes.length; r++) {
+        var P = partes[r];
+        if (P.idx) { for (var e = 0; e < P.idx.count; e++) ia[ki++] = P.base + P.idx.getX(e); }
+        else { for (var f = 0; f < P.n; f++) ia[ki++] = P.base + f; }
+      }
+      geo.setIndex(new THREE.BufferAttribute(ia, 1));
+    }
+    return geo;
+  }
+  /* FX.fantasma(uid, o): a cópia parada do corpo de `uid` onde ele está AGORA. o.cor (padrão: a cor do
+   * elemento puxada ao branco), o.dur (0,5 s), o.op (0,55), o.sobe (m/s). Devolve true se entrou. */
+  FX.fantasma = function (uid, o) {
+    o = o || {};
+    if (!attached || !R3 || !R3.unitNode) return false;
+    if (fantasmas.length >= MAX_FANTASMAS) return false;
+    var node = R3.unitNode(uid);
+    if (!node) return false;
+    var geo;
+    try { geo = assaCorpo(node); FX._erroFantasma = null; } catch (e) { geo = null; FX._erroFantasma = String(e && e.stack || e); }
+    if (!geo) return false;
+    var u = unitOf(uid);
+    var cor = o.cor ? new THREE.Color(hexInt(o.cor)) : corBranca((u && u.element) || 'neutro', 0.5);
+    var mat = new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: o.op == null ? 0.55 : o.op,
+                                            depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    var m = new THREE.Mesh(geo, mat);
+    m.frustumCulled = false;
+    m.renderOrder = 11;
+    fxG.add(m);
+    fantasmas.push({ m: m, t: 0, dur: o.dur || 0.5, op: mat.opacity, sobe: o.sobe || 0 });
+    return true;
+  };
+  function updateFantasmas(dt) {
+    for (var i = fantasmas.length - 1; i >= 0; i--) {
+      var f = fantasmas[i];
+      f.t += dt;
+      var k = f.t / f.dur;
+      if (k >= 1) { fxG.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); fantasmas.splice(i, 1); continue; }
+      f.m.material.opacity = f.op * (1 - k) * (1 - k);
+      if (f.sobe) f.m.position.y += f.sobe * dt;
+    }
+  }
+  function limpaFantasmas() {
+    for (var i = fantasmas.length - 1; i >= 0; i--) { fxG.remove(fantasmas[i].m); fantasmas[i].m.geometry.dispose(); fantasmas[i].m.material.dispose(); }
+    fantasmas.length = 0;
+  }
+
   // ------------------------------------------------------------ luzes (pool)
   var lightPool = [];
   function buildLights() {
@@ -1119,6 +1229,8 @@ var JOGO = (typeof window !== 'undefined')
     // 'rootShackle' era terremoto, 'axeCyclone' era anel, 'theMaelstrom' era anel, 'slabSpike' era terremoto
     ['cortes',     /cuts$|chainslash|flurry/i],
     ['gancho',     /shackle|grapple|hook|tug/i],
+    // 15/10 leva 2: a Praga Sussurrada (whisperCurse, veneno + −poder no INIMIGO) era aura por causa de 'curse'
+    ['maldicao',   /curse|plague|wither/i],
     ['chuva',      /rain|quiver|swarm|volley/i],
     ['invocacao',  /call$|summon|sentinel|golem|nymph|falcon|hound/i],
     ['armadilha',  /trap|stake|snare|alarm|ambush/i],
@@ -1131,7 +1243,7 @@ var JOGO = (typeof window !== 'undefined')
     ['terremoto',  /quake|fissure|root|menhir|boulder|slab|spike|stone|mountain|wall|husk|bark|fence|rampart|dike|foundation|labyrinth|anvil/i],   // 15/10: as cercas e muralhas caíam na bola
     ['onda',       /wave|tide|pool|current|undertow|drown|brine|spring|cistern|siphon|maw/i],
     ['cura',       /heal|poultice|blessing|succor|tending|warm|sweet|restoring|calm|good/i],
-    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|curse|bore|brazier|retort|cry|roar|shout|howl/i],
+    ['aura',       /pact|skin|veins|blood|fury|forge|heart|dance|word|bore|brazier|retort|cry|roar|shout|howl/i],
     ['investida',  /step|swap|walk|run|charge|descend|throw|slam|hop|skip/i],
     ['flecha',     /arrow|shot|bolt|spark|lance|harpoon|pin|brand|mark/i],
     ['corte',      /blade|cut|slash|thrust|edge|dagger|hamstring|leech|scald|rust|flint|quick/i],
@@ -1785,13 +1897,15 @@ var JOGO = (typeof window !== 'undefined')
     investida: [['onda',    'bilhete', 3.0, 0.38, 0.20]],
     // 15/10: a aura trocou o pilar pela HÉLICE (a trança que sobe em volta do corpo, a marca do bônus no gênero)
     aura:      [['chama',   'bilhete', 2.6, 0.80, 0.10], ['helice', 'bilhete', 2.8, 1.0, 0.05, 0, { alt: 1.7, op: 0.95, alto: 1.55 }]],
-    cura:      [['anel',    'chao',    3.2, 0.70, 0.30], ['pilar', 'bilhete', 2.6, 0.95, 0.05, 0.05, { alt: 1.7 }]],
+    cura:      [['anel',    'chao',    3.2, 0.70, 0.30], ['pilar', 'bilhete', 2.6, 0.95, 0.05, 0.05, { alt: 1.7 }],
+                ['asas', 'bilhete', 4.4, 0.85, 0.1, 0.1, { op: 0.9, alto: 2.1 }]],   // 15/10 leva 2: as asas abrem atrás de quem recebe (medido na foto: a 3,6 saíam miúdas)
     corte:     [['golpe',   'bilhete', 3.6, 0.40, 0.12, 'hit', { giro: 0.7, espelho: 'sorteio' }]],
     escudo:    [['escudo',  'bilhete', 3.0, 0.60, 0.15], ['helice', 'bilhete', 2.2, 0.7, 0.1, 0.05, { alt: 1.5, op: 0.6, alto: 1.3 }]],
     cone:      [['tornado', 'bilhete', 4.0, 0.66, 0.25]],
     invocacao: [['portal',  'chao',    3.4, 0.72, 0.30], ['pilar', 'bilhete', 3.0, 0.9, 0.1, 0.12, { alt: 1.6, op: 0.75 }]],
     armadilha: [['selo',    'chao',    4.4, 1.5, 0.08, 0, { op: 0.8 }]],
-    maldicao:  [['selo',    'chao',    3.8, 1.1, 0.05, 0.1, { op: 0.6 }]],
+    maldicao:  [['selo',    'chao',    3.8, 1.1, 0.05, 0.1, { op: 0.6 }],
+                ['mao', 'bilhete', 4.0, 0.95, 0.05, 0.05, { op: 0.95, cor: '#8a3cff', branco: 0, alto: 2.05 }]],   // 15/10 leva 2: a mão do breu sobe do chão e fecha (a base da folha é o chão: alto = 0,05 + tam/2)
     // 15/10: o piscar NASCE num pilar de luz (o do sumiço fica em piscar()); o gancho PRENDE com as correntes
     piscar:    [['impacto', 'bilhete', 2.6, 0.32, 0.3, 0.12, { op: 0.7 }], ['pilar', 'bilhete', 2.2, 0.5, 0.1, 0.1, { alt: 1.7, op: 0.8, alto: 1.9 }]],
     gancho:    [['impacto', 'bilhete', 2.4, 0.3, 0.3, 0.23, { op: 0.6 }], ['correntes', 'bilhete', 3.6, 0.7, 0.05, 0.2, { op: 0.95, giro: 0.3 }]],
@@ -1818,7 +1932,7 @@ var JOGO = (typeof window !== 'undefined')
           var ang = op.giro ? (Math.random() - 0.5) * 2 * op.giro : 0;
           var esp = op.espelho === 'sorteio' ? (Math.random() < 0.5) : !!op.espelho;
           filme({ tipo: ff[0], el: el, modo: ff[1], tam: ff[2], dur: ff[3], cresce: ff[4], op: op.op, alt: op.alt,
-                  branco: op.branco, ang: ang, espelho: esp, pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
+                  branco: op.branco, cor: op.cor, ang: ang, espelho: esp, pos: v3(dest.x, (dest.y || 0) + alto, dest.z) });
           // ELEMENTO SECUNDARIO, quando a fusao gera feitico de dois elementos.
           // Menor e um pouco atrasado, para ler como o segundo elemento CHEGANDO
           // e nao como dois efeitos disputando o mesmo instante.
@@ -2606,6 +2720,7 @@ var JOGO = (typeof window !== 'undefined')
     updateFloaters(dt);
     updateAmbient(dt);
     updateEmissores(dt);      // 15/10: antes das partículas, para o que nasce neste quadro já andar
+    updateFantasmas(dt);
     updateParticles(dt);
 
     if (shakeAmp > 0.01) {
@@ -2635,6 +2750,7 @@ var JOGO = (typeof window !== 'undefined')
     limpaPlacas();
     limpaFilmes();
     emissores.length = 0;
+    limpaFantasmas();
     FX.clearDecals();
     limpaTexCache();          // as texturas dos numeros vao embora com a sala
     shakeAmp = 0; shakeOut.x = 0; shakeOut.y = 0; freezeT = 0;
@@ -2667,6 +2783,6 @@ var JOGO = (typeof window !== 'undefined')
     return { particles: alive, shots: shots.length, decals: decals.length,
              floaters: floaters.length, texCache: texCacheN,
              rings: rings.length, luzes: flashes.length,
-             placas: placas.length, emissores: emissores.length, ptK: PT_K };
+             placas: placas.length, emissores: emissores.length, fantasmas: fantasmas.length, ptK: PT_K };
   };
 })();

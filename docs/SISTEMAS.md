@@ -1916,6 +1916,43 @@ investida (clonar a `SkinnedMesh` no meio do clipe é caro e frágil), as asas d
 subindo do chão na maldição, as linhas de velocidade na tela nos golpes grandes. Todas cabem no mesmo roteiro
 do Blender ou num emissor; o julgamento das catorze no tabuleiro de verdade é do dono.
 
+## 9-A.32 Os efeitos do gênero, leva 2: a imagem-fantasma, as asas da cura e a mão do breu (15/10)
+
+A segunda leva do §9-A.31 — os três que ficaram de fora por orçamento e o dono mandou fazer.
+
+- **A imagem-fantasma** (`FX.fantasma(uid, o)` em `fx3d_v2.js`; os ganchos em `renderer3d_v2.js`). Clonar a
+  `SkinnedMesh` não serve: a cópia divide o esqueleto e continua animando junto com o original. O corpo é
+  ASSADO num quadro parado (`assaCorpo`): para cada vértice de cada malha visível do nó da unidade, a mesma
+  conta do shader de pele — `bindMatrix` → a soma dos quatro ossos pelos pesos (`skeleton.boneMatrices`) →
+  `bindMatrixInverse` → `matrixWorld` — numa geometria só de posições (o índice vem junto, deslocado pela
+  base de cada parte), num `MeshBasicMaterial` aditivo que some ao quadrado (`op × (1−k)²`); teto de oito
+  de uma vez, corpo acima de 120 mil vértices não entra. Medido no Chrome headless (SwiftShader): o corpo
+  do Curandeiro tem 11.684 vértices em 3 malhas (1 com pele) e assa em ~19 ms; no jogo de verdade é menos.
+  *Quem pede é o renderer, que sabe quando o corpo se mexe:* a `investida` (`move` com `forced`, o `charge`
+  do motor) deixa UMA cópia por casa que o boneco deixa (`a.fantSeg`, 0,42 s, opacidade 0,5); o `teleport`
+  deixa uma na casa de onde saiu antes de o boneco sumir (0,6 s, sobe 0,6 m/s); o `placed` da preparação
+  usa o mesmo verbo e NÃO deixa (`fant` só no evento de teleporte). Medido pelo DevTools na sala do fx_sala:
+  na investida de 3 casas há 1–2 fantasmas vivos por quadro; o teleporte soma 1.
+  *Armadilha:* o three daqui não tem `BufferAttribute.getComponent` (só `getX/getY/getZ/getW`) — o primeiro
+  bake caiu calado nisso e o contador dava 0; `FX._erroFantasma` guarda o último erro do bake para a prova
+  não precisar adivinhar.
+- **As asas da cura** (`tools/fx_blender.py` `asas`): duas asas de seis penas que abrem em leque atrás de
+  quem recebe (fechadas para cima no 1º quadro, abertas no 6º, batem de leve, sobem sumindo), o halo no
+  meio. Entra em `FILME_FAM.cura` (4,4 m, `alto` 2,1 — medido na foto de `curandeiro-neutro-1`: a 3,6
+  saíam miúdas atrás do pilar).
+- **A mão do breu** (`mao`): o braço sobe de baixo do quadro (o chão), a palma e cinco dedos que curvam
+  para o centro e se fecham sobre o alvo, um clarão e some. O filme é aditivo, então o breu não pode ser
+  preto: `FILME_FAM` ganhou `cor` por filme (`'#8a3cff'`, violeta) e `branco: 0`. Entra em
+  `FILME_FAM.maldicao` — e a **Praga Sussurrada** (`whisperCurse`, veneno + −poder no INIMIGO) saiu da
+  aura, onde caía por causa de 'curse', para a maldição (`/curse|plague|wither/` antes da aura). Medido
+  na 2ª folha de contato: a 50°/26° de fechamento as pontas cruzavam e a mão virava um cone — 30°/15°.
+- As dezesseis folhas em `assets/embedded/fx-blender.js` (774 KB); `tools/embute_fx_blender.py` com
+  `asas` e `mao` na lista.
+
+Provas: `fx_filme` 8/8, `som` 6/6, `efeitos_um_a_um` 7/7 (213); fotos de `fx_sala.html?efeito=cast` de
+`curandeiro-neutro-1` (asas + pilar) e `bruxo-neutro-2` (a mão violeta sob a fumaça e o selo). O que ainda
+não entrou do gênero: as linhas de velocidade na tela nos golpes grandes.
+
 ## 9-B. O balcão de vinténs (07/10)
 
 O dono: "quero que o jogador comum tenha direito a crescer igual quem paga". O vintém das diárias e

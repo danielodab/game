@@ -99,8 +99,9 @@ js/
     models3d_v2.js      modelos, "looks" de classe, enxerto de peça, retratos
     renderer3d_v2.js    tabuleiro, câmera, clima, sobreposições, armadilhas
     fx3d_v2.js          partículas, placas, EMISSORES por quadro (15/10: a órbita), as 25 famílias de efeito e os
-                        FILMES (as folhas do rubberduck, do CGHEVEN e as catorze do Blender — tools/fx_blender.py →
-                        embute_fx_blender.py → assets/embedded/fx-blender.js; docs/SISTEMAS.md §9-A.30 e §9-A.31)
+                        FILMES (as folhas do rubberduck, do CGHEVEN e as dezesseis do Blender — tools/fx_blender.py →
+                        embute_fx_blender.py → assets/embedded/fx-blender.js; docs/SISTEMAS.md §9-A.30 a §9-A.32) e a
+                        imagem-fantasma (FX.fantasma: o corpo assado num quadro parado)
     portraits3d.js      embrulha Art.* para servir retrato 3D em vez de 2D
   render2d/
     art.js              ícones (12/10: um desenho por feitiço — MOTIVO_FX/MOTIVO_FORMA, a marca da área e o
@@ -235,7 +236,7 @@ jogador. Página nova sem essa linha é bug.
 |---|---|
 | **`icones_feiticos.html`** | 30 / 0 (12/10: um desenho por feitiço — todo feitiço de classe nomeado na `MOTIVO_FX`, 90+ motivos, nenhum par igual dentro da árvore de cada classe a 48 e a 34 px, nenhuma barra de fusão repetida nas 21 duplas, monstros/bichos/itens desenham; a página é a galeria) |
 | **`efeitos_um_a_um.html`** | 7 / 0 com **213 feitiços** (12/10: a página descia sem `{ direto: true }` desde a antessala e passava VAZIA, "0 de 0 · sem sala"; consertada, cobre os filmes do Blender por família; 15/10: 25 famílias, 3 de 3 rodadas verdes — a régua "famílias diferentes desenham diferente" mede o quadro de MAIS partículas, que é o da conjuração, então o que uma família tem de próprio precisa existir no primeiro quadro, não só depois do acerto) |
-| `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não; 15/10: catorze folhas) |
+| `fx_filme.html` | 8 / 0 (12/10: as folhas do Blender embutidas e o teto de 24 filmes — 25 entram, o 26º não; 15/10: dezesseis folhas) |
 | `som.html` | 6 / 0 (15/10: as 25 famílias com som explícito — as quatro novas entraram no `POR_FAMILIA`) |
 | `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas; 15/10: mais oito, uma por família nova e por matéria nova (§9-A.31) |
 | `foto_molduras.html` · `foto_moldura_arena.html` | 12 placas / 17 de 17 (12/10: as molduras com bisel, contas, rosetas e o ornamento de cada forma; a do campeão cabe na tela e a da guilda pinta menos de 6%) |
@@ -531,8 +532,10 @@ girando em volta do Bárbaro, o trovão grosso do ar; a órbita de orbes com ras
 quadro) e os anéis que sobem pelo corpo; e cada elemento com a sua matéria (fogo = labareda,
 terra = cristais, ar = raio/trovão, água = jato). O que ficou em aberto: o julgamento do dono
 jogando (a foto de `fx_sala.html?efeito=cast` é o tamanho real, mas o olho dele é a régua), e o
-que o gênero ainda tem e o jogo não: a imagem-fantasma da investida (clonar a malha com esqueleto
-é caro), as asas da cura, a mão do breu na maldição.
+que o gênero ainda tem e o jogo não: as linhas de velocidade na tela nos golpes grandes. A leva 2
+(§9-A.32, 15/10) trouxe a imagem-fantasma da investida e do teleporte (o corpo com esqueleto ASSADO
+num quadro parado, `FX.fantasma`, pedido pelo renderer a cada casa), as asas de luz da cura e a mão
+do breu da maldição (violeta: o filme é aditivo).
 
 ### 7.4 Fila
 

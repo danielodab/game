@@ -5497,7 +5497,8 @@ var JOGO = (typeof window !== 'undefined')
 
       case 'move':
         if (ev.path && ev.path.length) {
-          animQ.push({ kind: 'move', uid: ev.uid, path: ev.path.slice(), k: 0, seg: 0, age: 0 });
+          // 15/10: a investida (`forced`) deixa a IMAGEM-FANTASMA pelo caminho (FX.fantasma, uma por casa)
+          animQ.push({ kind: 'move', uid: ev.uid, path: ev.path.slice(), k: 0, seg: 0, age: 0, fant: !!ev.forced, fantSeg: -1 });
         }
         break;
 
@@ -5554,7 +5555,8 @@ var JOGO = (typeof window !== 'undefined')
         break;
 
       case 'teleport':
-        animQ.push({ kind: 'teleport', uid: ev.uid, fx: ev.fromX, fy: ev.fromY, tx: ev.toX, ty: ev.toY, t: 0, dur: 0.44, age: 0 });
+        // 15/10: o fantasma fica na casa de onde saiu (`fant`); o 'placed' da preparação não deixa
+        animQ.push({ kind: 'teleport', uid: ev.uid, fx: ev.fromX, fy: ev.fromY, tx: ev.toX, ty: ev.toY, t: 0, dur: 0.44, age: 0, fant: true });
         break;
 
       case 'placed':
@@ -5713,6 +5715,11 @@ var JOGO = (typeof window !== 'undefined')
         v2 = getVis(a.uid);
         if (!v2) { done = true; break; }
         v2.walking = 1;
+        // 15/10: a imagem-fantasma da investida — uma cópia parada do corpo a cada casa que ele deixa
+        if (a.fant && a.seg !== a.fantSeg && JOGO.FX && JOGO.FX.fantasma) {
+          a.fantSeg = a.seg;
+          try { JOGO.FX.fantasma(a.uid, { dur: 0.42, op: 0.5 }); } catch (eF) {}
+        }
         a.k += dt * MOVE_RATE;
         while (a.k >= 1 && a.seg < a.path.length) { a.k -= 1; a.seg++; }
         var from;
@@ -5748,6 +5755,11 @@ var JOGO = (typeof window !== 'undefined')
       case 'teleport':
         v2 = getVis(a.uid);
         if (!v2) { done = true; break; }
+        // 15/10: antes de sumir, a cópia parada fica onde ele estava e some devagar
+        if (a.fant && !a.fantFeito && JOGO.FX && JOGO.FX.fantasma) {
+          a.fantFeito = true;
+          try { JOGO.FX.fantasma(a.uid, { dur: 0.6, op: 0.6, sobe: 0.6 }); } catch (eT) {}
+        }
         a.t += dt;
         var k2 = a.t / a.dur;
         if (k2 < 0.5) { v2.x = a.fx; v2.y = a.fy; v2.hideK = k2 * 2; }
