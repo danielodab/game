@@ -95,6 +95,9 @@ CAPACITOR = [
     ('node_modules/@capacitor/local-notifications/dist/plugin.js', 'local-notifications.js'),
     # 15/10: a avaliacao na Play pela caixa nativa (js/core/avaliacao.js): sobe depois da 3a vitoria
     ('node_modules/@capacitor-community/in-app-review/dist/plugin.js', 'in-app-review.js'),
+    # 15/10: compartilhar o cartao da fusao (js/core/compartilhar.js): o PNG vai para o cache e a folha nativa abre
+    ('node_modules/@capacitor/share/dist/plugin.js', 'share.js'),
+    ('node_modules/@capacitor/filesystem/dist/plugin.js', 'filesystem.js'),
 ]
 
 # A Play recusa o que passa disto no download inicial. A www/ fica muito

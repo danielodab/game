@@ -4603,3 +4603,14 @@ button.tor-ultimo:hover { border-color: rgba(232,194,90,.45); }
 .char-mol-cor.is-campeao1 { --mol: #c98a52; --mol-fundo: rgba(40,16,10,.95); border-top-width: 4px; }
 .char-mol-cor.is-campeao2 { --mol: #cdd5e0; --mol-fundo: rgba(22,22,34,.95); border-top-width: 4px; }
 .char-mol-cor.is-campeao3 { --mol: #f2c14e; --mol-fundo: rgba(48,20,8,.96); border-top-width: 4px; border-style: double; }
+
+/* 15/10 — compartilhar (js/core/compartilhar.js): a faixa da fusão e o bloco do convite na ficha de amigos */
+.share-faixa { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; gap: 8px; align-items: center;
+  padding: 8px 10px 8px 14px; border-radius: 10px; background: rgba(14, 18, 24, .94); border: 1px solid var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+.share-faixa b { font-family: var(--ui-serif); color: var(--gold); font-size: 14px; letter-spacing: .04em; }
+.share-faixa .share-fecha { padding: 2px 8px; }
+.cv-bloco { margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(255,196,77,.35); border-radius: 10px; background: rgba(255,255,255,.03); }
+.cv-bloco .cfg-tit { display: block; margin-bottom: 4px; }
+.cv-link { width: 100%; box-sizing: border-box; margin: 6px 0; font-size: 12.5px; }
+.cv-acts { display: flex; gap: 8px; }
+.cv-conta { margin-top: 6px; }

@@ -1126,6 +1126,8 @@ class SalasMixin:
                     trilha = soma_trilha(self.con, cid, t, 'sala', {   # 07/10: os pontos da trilha da temporada
                         'desafio': bool(desafio.get('cumprido')), 'dificil': s['dificuldade'] == 'dificil',
                         'afixo': bool(afixo_bilhete)})
+                    # 15/10: a PRIMEIRA vitória de quem veio por convite paga os dois (convites.py), uma vez só
+                    inv_pago = self._convite_paga(cid, t) if hasattr(self, '_convite_paga') else None
                     # a espera começa AGORA — o PV do fim e o máximo de cada herói (14/09: na linha do herói)
                     self._vida_grava_fim(cid, fim, saida.get('vidaMax'), int(time.time() * 1000))
                     self._evento(cid, 'sala-paga', {'bilhete': bilhete, 'dungeon': s['dungeon'], 'sala': s['sala'],
@@ -1149,6 +1151,8 @@ class SalasMixin:
             feito = self._loja_depois_da_luta(conta)
             if feito:
                 resp.update(versao=feito['versao'], hash=feito['hash'], progress=feito['progress'], db=feito['db'])
+            if inv_pago:
+                self._convite_entrega_convidante(inv_pago)     # 15/10: o prêmio de quem convidou, na hora
             return 200, resp
         raise Recusa(409, MUDOU_NO_MEIO, **self._estado_publico(cid))
 

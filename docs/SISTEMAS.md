@@ -2035,6 +2035,41 @@ esperam no celular e no navegador) e o que entrou de cada ponto, um commit por b
 | **Acessibilidade e bateria** | o modo para daltônicos (a paleta de Okabe–Ito nos quatro lugares que leem a cor do elemento: renderer, FX, Art, DATA) e o limite de 30 quadros nos dois laços | `js/core/paleta.js`, `js/mobile.js`, `js/main.js`, `hub3d.js` |
 | **Monetização** | nada a construir: o Pacote de Boas-Vindas (250 barras, uma vez por conta) já é o pacote inicial; auras e molduras já são os cosméticos; o passe de temporada pago (só cosmético, em cima da trilha de 42 dias) é decisão de produto e de SKU na Play — proposto em `docs/LOJA_SUGESTOES.md`, não feito | — |
 
+
+### 9-C.1 As duas alavancas de espalhar (15/10): o cartão e o convite
+
+O dono: "tem chance de ser viral? de alguma forma viciante?" — a resposta honesta: o jogo tem um ativo que um
+leigo repete (a fusão: "junta dois heróis e vira outra coisa") e nenhum caminho para ele sair do jogo, e o
+convite dentro do jogo era só entre contas que já existiam. As duas alavancas de menor custo e maior retorno:
+
+- **O cartão de compartilhar** (`js/core/compartilhar.js`): um canvas de 1080×1080 com o retrato (o corpo 3D da
+  forma por `Models3D2.portrait(defId, {corpoInteiro: true})`, ou o Art de reserva), o nome da identidade da
+  dupla (`DATA.fusionIdentities`), as classes e os elementos, e no rodapé o link de convite (ou o endereço do
+  site). Sai pela folha nativa no aplicativo (`@capacitor/filesystem` grava o PNG no cache e `@capacitor/share`
+  abre a folha — pontes em `vendor/capacitor/share.js` e `filesystem.js`; FALTA DO DONO `npm install` + `cap
+  sync` + AAB), por `navigator.share` com o arquivo no navegador que tem (o Chrome do Android), e por download
+  do PNG + texto copiado no resto. Onde aparece: a FAIXA "FUSÃO! <nome> · Compartilhar" quando o evento
+  `fusion` é meu (na dupla, só a minha), 12 s na tela; e o botão "Compartilhar" no rodapé de toda sala limpa.
+- **O convite** (`servidor/convites.py`, `js/core/convite.js`): cada conta tem um código de 8 caracteres (sem
+  I/O/0/1) e o link `site/conta.html?convite=<código>#criar`; o cadastro do site lê o código da consulta (o
+  hash é reescrito pelo `gravaHash`, por isso vai na consulta e fica na sessão da aba), mostra "você veio pelo
+  convite de um amigo" e o manda no POST; código inválido ou próprio é ignorado, o cadastro não falha. Quando
+  o convidado VENCE A PRIMEIRA SALA (a vitória confirmada pelo juiz, dentro da transação do `sala_fechar`), os
+  dois ganham 500 vinténs pela fila da loja (o `credita`, sku `convite-vintens`, idem `convite-<id>-a|b`) — o
+  convidado na hora, o convidante na hora também (`_loja_na_hora`) ou na próxima abertura. Contra o abuso:
+  nada de si mesmo; uma vez por convidado (`pago_em`); as duas contas no MESMO endereço agora (a sessão viva
+  de cada uma em `sessoes_extra`) não pagam (`motivo = 'mesmo-endereco'`); o convidante recebe no máximo 5 por
+  dia e 100 ao todo (o convidado recebe mesmo assim: jogou de verdade). As tabelas `convites` e `convidados`
+  guardam só números de conta e somem com a conta; a política de privacidade ganhou a linha "Convites" e o
+  "baixar meus dados" o bloco `convite`. Na ficha de amigos, o bloco "Convide um amigo" (o link, Copiar,
+  Mandar, a contagem); nas Configurações, "Convidar um amigo"; a torrada "Prêmio do convite: N vinténs".
+
+Provas: `python tests/convites_api.py` (5, com o juiz de verdade: o código nasce e não muda; o cadastro pelo link e
+a vitória pagam os dois uma vez; código inválido ou próprio não falha nem anota; o mesmo endereço não paga; a
+vitória sem convite não cria nada), `node tests/compartilhar.js` (7, o cartão puro), `tests/compartilhar.html`
+(9, em headless: o cartão da fusão com retrato e título, o da sala limpa, a faixa que não quebra com unidade
+desconhecida). O que ainda é do dono: os vídeos curtos de fusões para a ficha da Play e as redes.
+
 **O que é do dono, não do código:** `npm install` + `npx cap sync` + AAB novo para o plugin da avaliação; o
 AdMob; a ficha da Play (cinco capturas de LUTA, o vídeo); o endereço da comunidade em
 `JOGO.Avaliacao.LINKS.comunidade`; os portais de jogos web (exigem SDK e anúncios nos termos deles, o que

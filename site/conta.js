@@ -502,7 +502,24 @@
     });
   }
 
+  /* 15/10 — O CONVITE: `conta.html?convite=<código>#criar` (o link que o amigo mandou; servidor/convites.py).
+   * O código vai na consulta, não no hash (o gravaHash reescreve o hash); fica guardado na sessão da aba
+   * para sobreviver à troca de tela, mostra a linha "convidado por um amigo" e vai no POST do cadastro. */
+  function conviteDaUrl() {
+    try {
+      var m = /[?&]convite=([A-Za-z0-9]{4,12})/.exec(location.search || '');
+      if (m) { sessionStorage.setItem('soterra-convite', m[1].toUpperCase()); return m[1].toUpperCase(); }
+      return sessionStorage.getItem('soterra-convite') || null;
+    } catch (e) { return null; }
+  }
+  function mostraConvite() {
+    var c = conviteDaUrl(), p = $('c-convite-dica');
+    if (!p) return;
+    p.hidden = !c;
+    if (c) p.innerHTML = Tx('Você veio pelo convite de um amigo: na sua <b>primeira vitória</b>, vocês dois ganham <b>500 vinténs</b>.');
+  }
   function inicia() {
+    mostraConvite();
     /* -- abas e links de tela */
     $('aba-criar').addEventListener('click', function () { mostra('criar'); });
     $('aba-entrar').addEventListener('click', function () { mostra('entrar'); });
@@ -562,7 +579,8 @@
       aviso('c-aviso', Tx('Criando a conta…'), 'neutro');
       $('c-bt').disabled = true;
       SITE.api('/api/cadastro', { method: 'POST', semToken: true,
-                                  body: { nome: nome, email: email, senha: senha, aceiteTermos: SITE.VERSAO_TERMOS } })
+                                  body: { nome: nome, email: email, senha: senha, aceiteTermos: SITE.VERSAO_TERMOS,
+                                          convite: conviteDaUrl() || undefined } })
         .then(function (r) {
           $('c-bt').disabled = false;
           if (!r.ok) { aviso('c-aviso', SITE.erro(r, Tx('não deu para criar a conta'))); return; }

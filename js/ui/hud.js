@@ -441,6 +441,11 @@ var JOGO = (typeof window !== 'undefined')
                     : ent.tipo === 'pedras' ? tr('Prêmio do torneio: {n} Gema(s) Enterrada(s)', { n: Math.max(1, Math.floor(Number(ent.qtd) || 1)) })
                     : tr('Prêmio do torneio: {a}', { a: esc(nome) }), tipo: 'good' };
     }
+    // 15/10: o prêmio do convite (servidor/convites.py): os vinténs dos dois na primeira vitória do convidado
+    if (d.origem === 'convite' || ped.origem === 'convite' || ent.origem === 'convite' || String(ped.sku || '') === 'convite-vintens') {
+      if (d.tipo !== 'entregue') return { texto: tr('O prêmio do convite não entrou aqui: ele volta na próxima abertura'), tipo: null };
+      return { texto: tr('Prêmio do convite: {a} vinténs', { a: lojaMilhar(ent.qtd) }), tipo: 'good' };
+    }
     // 08/10: o prêmio diário de resgate (servidor/premio_diario.py)
     if (origem === 'diario') {
       if (d.tipo !== 'entregue') return { texto: tr('O prêmio diário não entrou aqui: ele volta na próxima abertura'), tipo: null };
@@ -3396,6 +3401,8 @@ var JOGO = (typeof window !== 'undefined')
       }));
     }
     foot.appendChild(btn(tr('Inventário'), 'btn-ghost', function () { openSheet('inventory'); }));
+    // 15/10: o fim da sala também sai como cartão (js/core/compartilhar.js)
+    if (JOGO.Compartilhar) foot.appendChild(btn(tr('Compartilhar'), 'btn-ghost', function () { compartilhaSala(name); }));
     // 11/09: a descida de GRUPO tem rodapé próprio (4.8) — quem lidera abre a
     // próxima sala, quem segue espera, e a dificuldade é de quem lidera (D9)
     var rg = noPoco ? false : rodapeGrupo(foot, fim);
@@ -3473,6 +3480,121 @@ var JOGO = (typeof window !== 'undefined')
     b.appendChild(el('h3', null, esc(title)));
     b.appendChild(node);
     return b;
+  }
+
+  /* 15/10 — COMPARTILHAR (js/core/compartilhar.js). A fusão é o que o jogador mostra: o cartão com o corpo
+   * da forma, o nome da identidade da dupla (DATA.fusionIdentities), as classes e os elementos, e o link de
+   * convite no rodapé. O fim da sala sai com o retrato do primeiro herói e os números. */
+  function retratoDe(defId, opts) {
+    var M2 = JOGO.Models3D2;
+    return safe(function () { return M2 && M2.isReady() ? M2.portrait(defId, opts) : null; }, null)
+        || safe(function () { return A().unit(defId, { elements: opts.elements, size: 512 }); }, null)
+        || safe(function () { return A().portrait(defId, { elements: opts.elements, element: opts.elements && opts.elements[0], size: 512 }); }, null);
+  }
+  function rodapeConvite() {
+    var l = safe(function () { return JOGO.Convite.link(); }, null);
+    return l ? l.replace(/^https?:\/\//, '') : null;
+  }
+  function nomesDosElementos(els) {
+    return (els || []).map(function (e) { return safe(function () { return D().elementInfo[e].name; }, e); }).join(' + ');
+  }
+  function cartaoFusao(u) {
+    var C = JOGO.Compartilhar;
+    if (!C || !u) return null;
+    var par = String(u.classPair || String(u.defId || '').slice(4)), cls = par.split('+');
+    var els = (u.elements && u.elements.length) ? u.elements : [u.element || 'neutro'];
+    var titulo = safe(function () { return D().fusionIdentities[par].name; }, null) || nomeDoPar(u.defId);
+    return C.cartao({
+      retrato: retratoDe(u.defId, { elements: els, size: 768, corpoInteiro: true }),
+      titulo: titulo,
+      sub: cls.map(function (c) { return className(c); }).join(' + ') + ' · ' + nomesDosElementos(els),
+      linha: tr('Nível {n} — uma fusão do SOTERRA', { n: u.level || 1 }),
+      cor: elemColor(els[0]), cor2: elemColor(els[1] || els[0]),
+      rodape: rodapeConvite() || undefined
+    });
+  }
+  UI.cartaoFusao = cartaoFusao;
+  function textoDeCompartilhar(frase) {
+    var l = safe(function () { return JOGO.Convite.link(); }, null) || JOGO.Compartilhar.SITE;
+    return frase + ' ' + l;
+  }
+  var faixaShare = null;
+  function fechaFaixa() { if (faixaShare && faixaShare.parentNode) faixaShare.parentNode.removeChild(faixaShare); faixaShare = null; }
+  function ofereceCompartilharFusao(u) {
+    var meuLado = safe(function () { return G().meuLado(); }, 'player');
+    if (u.side !== meuLado) return;
+    if (emGrupo() && u.dono && u.dono !== meuIdRede()) return;
+    fechaFaixa();
+    var par = String(u.classPair || String(u.defId || '').slice(4));
+    var nome = safe(function () { return D().fusionIdentities[par].name; }, null) || nomeDoPar(u.defId);
+    faixaShare = el('div', 'share-faixa');
+    faixaShare.appendChild(el('b', null, tr('FUSÃO! {a}', { a: esc(nome) })));
+    faixaShare.appendChild(btn(tr('Compartilhar'), 'btn-mini btn-gold', function () {
+      var cv = cartaoFusao(u);
+      fechaFaixa();
+      if (!cv) { toast(tr('Não deu para montar o cartão.')); return; }
+      safe(function () { JOGO.EventosUso.anota('compartilhou:fusao'); }, null);
+      JOGO.Compartilhar.manda(cv, { titulo: 'SOTERRA — ' + nome, texto: textoDeCompartilhar(tr('Minha fusão no SOTERRA: {a}.', { a: nome })), nome: 'soterra-fusao.png' })
+        .then(function (como) { if (como === 'baixou') toast(tr('Imagem baixada e texto copiado — é só colar.'), 'good'); });
+    }));
+    faixaShare.appendChild(btn('✕', 'btn-mini btn-ghost share-fecha', fechaFaixa));
+    document.body.appendChild(faixaShare);
+    setTimeout(fechaFaixa, 12000);
+  }
+  function cartaoSalaLimpa(name) {
+    var C = JOGO.Compartilhar;
+    if (!C) return null;
+    var info = safe(function () { return G().salaInfo(); }, null) || {};
+    var noPoco = safe(function () { return G().dungeonId === 'poco'; }, false);
+    var fim = name === 'dungeonComplete';
+    var hid = selHeroes[0], h = hid ? hero(hid) : null;
+    var r = lastRewards || {};
+    var titulo = noPoco ? tr('Andar {n} vencido', { n: safe(function () { return G().roomIndex + 1; }, 0) }) : (fim ? tr('Calabouço vencido') : tr('Sala limpa'));
+    return C.cartao({
+      retrato: h ? retratoDe(h.classId, { element: h.element, elements: [h.element], size: 768, corpoInteiro: true, classId: h.classId }) : null,
+      titulo: titulo,
+      sub: [info.calabouco, info.nome].filter(Boolean).join(' · '),
+      linha: tr('XP +{x} · vinténs +{v}', { x: r.xpGanho || 0, v: r.moedas || 0 }),
+      cor: elemColor(h ? h.element : 'neutro'), cor2: elemColor(h ? h.element : 'neutro'),
+      rodape: rodapeConvite() || undefined
+    });
+  }
+  UI.cartaoSalaLimpa = cartaoSalaLimpa;
+  function compartilhaSala(name) {
+    var cv = cartaoSalaLimpa(name);
+    if (!cv) { toast(tr('Não deu para montar o cartão.')); return; }
+    safe(function () { JOGO.EventosUso.anota('compartilhou:sala'); }, null);
+    JOGO.Compartilhar.manda(cv, { titulo: 'SOTERRA', texto: textoDeCompartilhar(tr('Mais uma sala vencida no SOTERRA.')), nome: 'soterra-sala.png' })
+      .then(function (como) { if (como === 'baixou') toast(tr('Imagem baixada e texto copiado — é só colar.'), 'good'); });
+  }
+  /* O BLOCO DO CONVITE (js/core/convite.js) na ficha de amigos: o link, copiar, mandar, e a contagem */
+  function blocoConvite() {
+    var V = JOGO.Convite;
+    var box = el('div', 'cv-bloco');
+    box.appendChild(el('b', 'cfg-tit', tr('Convide um amigo')));
+    if (!V || !V.disponivel()) {
+      box.appendChild(el('p', 'inv-dica', tr('O convite precisa da conta do site.')));
+      return box;
+    }
+    var texto = el('p', 'inv-dica', tr('Quem entrar pelo seu link e vencer a primeira sala ganha vinténs — e você também.'));
+    box.appendChild(texto);
+    var inp = document.createElement('input');
+    inp.className = 'hub-input cv-link'; inp.readOnly = true; inp.value = '…'; inp.setAttribute('aria-label', tr('Link de convite'));
+    inp.addEventListener('focus', function () { try { inp.select(); } catch (e) {} });
+    box.appendChild(inp);
+    var acts = el('div', 'cv-acts');
+    acts.appendChild(btn(tr('Copiar'), 'btn-mini btn-ghost', function () { V.copia().then(function (ok) { toast(ok ? tr('Convite copiado — cole onde quiser.') : tr('Não deu para copiar; selecione o link.'), ok ? 'good' : undefined); }); }));
+    acts.appendChild(btn(tr('Mandar'), 'btn-mini btn-gold', function () { V.manda().then(function (como) { if (como === 'copiou') toast(tr('Convite copiado — cole onde quiser.'), 'good'); }); }));
+    box.appendChild(acts);
+    var conta = el('p', 'inv-dica cv-conta', '');
+    box.appendChild(conta);
+    V.carrega().then(function (d) {
+      if (!d) { inp.value = tr('sem convite agora'); return; }
+      inp.value = d.link;
+      texto.innerHTML = tr('Quem entrar pelo seu link e vencer a primeira sala ganha <b>{a}</b> vinténs — e você ganha <b>{b}</b> (até {c} por dia).', { a: d.premioConvidado, b: d.premio, c: d.limiteDia });
+      conta.textContent = tr('{n} convidado(s) · {p} prêmio(s) pago(s)', { n: d.convidados, p: d.pagos });
+    });
+    return box;
   }
 
   /* 15/10 — CONTINUAR A LUTA QUE FICOU ABERTA (js/core/retomada.js): ao chegar à praça, se o registro da
@@ -12034,6 +12156,14 @@ var JOGO = (typeof window !== 'undefined')
           safe(function () { JOGO.EventosUso.anota('avaliacao_botao'); }, null);
         });
       }));
+      if (safe(function () { return JOGO.Convite && JOGO.Convite.disponivel(); }, false)) {
+        com.appendChild(btn(tr('Convidar um amigo'), 'btn-ghost btn-block', function () {
+          JOGO.Convite.carrega().then(function (d) {
+            if (!d) { toast(tr('O convite precisa da conta do site.')); return; }
+            JOGO.Convite.manda().then(function (como) { if (como === 'copiou') toast(tr('Convite copiado — cole onde quiser.'), 'good'); });
+          });
+        }));
+      }
       var mail = el('a', 'btn btn-ghost btn-block', tr('Falar com a equipe'));
       mail.href = 'mailto:' + Av.LINKS.email + '?subject=' + encodeURIComponent('SOTERRA');
       com.appendChild(mail);
@@ -12618,6 +12748,7 @@ var JOGO = (typeof window !== 'undefined')
     body.appendChild(el('p', 'inv-dica', amigosAba === 'amigos'
       ? tr('Também dá para adicionar tocando na pessoa na praça. No chat: <b>/Nome mensagem</b> manda particular.')
       : tr('Inimigo não manda mensagem particular nem propõe troca a você (nem você a ele) — mas duelo vale.')));
+    if (amigosAba === 'amigos') body.appendChild(blocoConvite());   // 15/10: o link que chama um amigo
 
     var caixa = el('div', 'am-lista');
     body.appendChild(caixa);
@@ -17572,6 +17703,11 @@ var JOGO = (typeof window !== 'undefined')
     if (ev.type === 'prepTick') { pintaPrep(); return; }      // 21/09: o relógio da preparação
     if (ev.type === 'battleStart') avisouEspinhos = false;
     if (current !== 'battle') return;
+    // 15/10: a FUSÃO é o que o jogador mostra — a faixa com "Compartilhar" (só a minha, na dupla)
+    if (ev.type === 'fusion') {
+      var ufu = unitByUid(ev.uid);
+      if (ufu && JOGO.Compartilhar) safe(function () { ofereceCompartilharFusao(ufu); return true; }, null);
+    }
     /* 03/10 — OS ESPINHOS DO MURO. A primeira vez que um dos MEUS encosta no muro de espinhos do
      * outro lado, o porquê vai à torrada (a linha do diário é miúda e o número parece só mais um
      * golpe); depois disso o vermelho das casas de passo já ensina. */

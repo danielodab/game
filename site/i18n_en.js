@@ -16,6 +16,7 @@ JOGO.I18n.registra('en', { textos: {
   "Pelo menos 8 caracteres.": "At least 8 characters.",
   "Repita a senha": "Repeat the password",
   "Li e aceito os <a>Termos de Uso</a> e a <a>Política de Privacidade</a>.": "I have read and accept the <a>Terms of Use</a> and the <a>Privacy Policy</a>.",
+  "Você veio pelo convite de um amigo: na sua <b>primeira vitória</b>, vocês dois ganham <b>500 vinténs</b>.": "You came through a friend's invite: on your <b>first victory</b>, you both earn <b>500 vinténs</b>.",
   "Criar conta e jogar": "Create account and play",
   "<span>Já tem conta?</span><a>Entrar</a>": "<span>Already have an account?</span><a>Sign in</a>",
   "Nome ou e-mail": "Name or e-mail",

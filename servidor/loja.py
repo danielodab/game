@@ -646,6 +646,9 @@ def nome_do_pedido(sku, entrega=None, vintens=None):
     item = POR_SKU.get(sku) or RETIRADOS.get(sku) or POR_PACOTE.get(sku)
     if item is not None:
         return item['nome']
+    if sku == 'convite-vintens':   # 15/10: o prêmio do convite (convites.py)
+        n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
+        return ('%d vinténs (convite)' % n) if n else 'Prêmio do convite'
     if sku == SKU_PRESENTE_VINTENS:
         n = vintens if vintens else (entrega.get('qtd') if isinstance(entrega, dict) else None)
         if isinstance(n, int) and not isinstance(n, bool) and n > 0:
@@ -715,6 +718,8 @@ def origem_do_pedido(r):
     if 'sku' in chaves and isinstance(r['sku'], str) and r['sku'].startswith('eco-'):
         return 'eco'
     # 07/10: o resgate de um degrau da trilha da temporada (trilha.py) — o jogo avisa "Prêmio da trilha"
+    if 'sku' in chaves and r['sku'] == 'convite-vintens':   # 15/10: o prêmio do convite
+        return 'convite'
     if 'sku' in chaves and r['sku'] == 'trilha':
         return 'trilha'
     # 08/10: o prêmio diário de resgate (premio_diario.py) — o jogo avisa "Prêmio diário"

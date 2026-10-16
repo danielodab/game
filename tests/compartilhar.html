@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SOTERRA — o cartão de compartilhar na página: a fusão e o fim da sala (15/10)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  #summary { padding: 8px; font: 14px/1.4 system-ui; }
+  #summary.allpass { background: #163; color: #cfc; }
+  #summary.fail { background: #611; color: #fcc; }
+  li.pass { color: #4c4; } li.fail { color: #f66; }
+  #cartoes img { width: 270px; height: 270px; margin: 4px; border: 1px solid #444; }
+</style>
+</head>
+<body>
+<div id="summary">carregando…</div>
+<ul id="lista"></ul>
+<div id="cartoes"></div>
+<div id="app"><canvas id="game-canvas"></canvas><div id="ui-root"></div></div>
+
+<script src="save_sandbox.js"></script>
+<script>
+  window.__V = '?v=' + Date.now();
+  var arquivos = [
+    'vendor/three.min.js','vendor/GLTFLoader.js','vendor/CopyShader.js',
+    'vendor/LuminosityHighPassShader.js','vendor/EffectComposer.js',
+    'vendor/RenderPass.js','vendor/ShaderPass.js','vendor/UnrealBloomPass.js',
+    'js/core/compartilhar.js','js/core/convite.js',
+    'js/core/data/elements.js','js/core/data/classes.js','js/core/data/spells.js',
+    'js/core/data/progression.js','js/core/data/monsters.js','js/core/data/dungeons.js',
+    'js/core/data/fusions.js','js/core/data/pets.js','js/core/data/items.js',
+    'js/core/data/items_extra.js',
+    'js/core/engine.js','js/core/fusion.js','js/core/ai.js','js/core/progress.js','js/core/game.js',
+    'assets/embedded/env-kit.js','js/render3d/models3d.js',
+    'assets/embedded/fx-atlas.js','assets/embedded/fx-placas.js','assets/embedded/models-anims.js','assets/embedded/models-heroes.js','assets/embedded/models-meshy.js',
+    'assets/embedded/models-meshy-jardim.js','assets/embedded/models-fusoes-sumo.js','assets/embedded/models-fusoes-minotauro.js','assets/embedded/models-monsters.js','assets/embedded/models-bosses.js','assets/embedded/models-summons.js',
+    'js/render3d/models3d_v2.js','js/render3d/portraits3d.js','js/render3d/fx3d_v2.js','js/render3d/renderer3d_v2.js',
+    'js/render2d/art.js','js/ui/icones_ui.js','js/ui/hud.js'];
+  for (var i = 0; i < arquivos.length; i++)
+    document.write('<scr' + 'ipt src="../' + arquivos[i] + window.__V + '"></scr' + 'ipt>');
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var okN = 0, falhas = [];
+  function check(nome, cond, extra) {
+    var li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = nome + (extra ? ' — ' + extra : '');
+    document.getElementById('lista').appendChild(li);
+    if (cond) okN++; else falhas.push(nome);
+  }
+  function fim(msg) {
+    var el = document.getElementById('summary');
+    el.className = falhas.length ? 'fail' : 'allpass';
+    el.textContent = (falhas.length ? 'FALHAS — ' : 'TUDO PASSOU — ') + okN + ' de ' + (okN + falhas.length) + ' ok, ' + falhas.length + ' falharam' + (msg ? ' · ' + msg : '');
+    window.__pronto = true;
+  }
+  function mostra(cv, rotulo) {
+    if (!cv) return;
+    var im = document.createElement('img'); im.src = cv.toDataURL('image/png'); im.title = rotulo;
+    document.getElementById('cartoes').appendChild(im);
+  }
+  // o cartão tem tinta onde? conta pixels claros no terço de cima (o retrato) e no rodapé (o título)
+  function tinta(cv, y0, y1) {
+    var g = cv.getContext('2d'), d = g.getImageData(0, Math.floor(cv.height * y0), cv.width, Math.floor(cv.height * (y1 - y0))).data, n = 0;
+    for (var i = 0; i < d.length; i += 16) if (d[i] + d[i + 1] + d[i + 2] > 300) n++;
+    return n;
+  }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var R = JOGO.Renderer, G = JOGO.Game, UI = JOGO.UI;
+    try { R.init(document.getElementById('game-canvas')); } catch (e) { return fim('init: ' + e.message); }
+    try { UI.init(); } catch (e) {}
+    try { G.init(); } catch (e) {}
+    try { if (JOGO.Portraits3D && JOGO.Portraits3D.install) JOGO.Portraits3D.install(); } catch (e) {}
+    var t0 = Date.now();
+    (function espera() {
+      var ok = false;
+      try { ok = JOGO.Models3D2 && JOGO.Models3D2.isReady() && JOGO.Models3D && JOGO.Models3D.isReady() && R.isReady(); } catch (e) {}
+      if (!ok && Date.now() - t0 < 60000) return setTimeout(espera, 250);
+      roda();
+    })();
+
+    function roda() {
+      check('o módulo de compartilhar carregou', !!(JOGO.Compartilhar && JOGO.Compartilhar.cartao && JOGO.Compartilhar.manda));
+      check('a HUD expõe o cartão da fusão e o da sala', typeof UI.cartaoFusao === 'function' && typeof UI.cartaoSalaLimpa === 'function');
+      // uma unidade fundida como o motor a descreve (fusion.js doFuse): a dupla sumo+minotauro, fogo+terra
+      var u = { kind: 'fusion', uid: 'fx1', defId: 'fus:minotauro+sumo', classPair: 'minotauro+sumo', elemPair: 'fogo+terra',
+                elements: ['fogo', 'terra'], element: 'fogo', level: 12, side: 'player', name: 'Minotauro + Sumô' };
+      var cv = UI.cartaoFusao(u);
+      check('o cartão da fusão nasce (canvas 1080)', !!cv && cv.width === 1080 && cv.height === 1080);
+      mostra(cv, 'fusão');
+      if (cv) {
+        check('há retrato no meio do cartão (tinta no terço de cima)', tinta(cv, 0.15, 0.65) > 400, tinta(cv, 0.15, 0.65) + ' pixels claros');
+        check('há título embaixo (tinta na faixa do nome)', tinta(cv, 0.76, 0.85) > 100, tinta(cv, 0.76, 0.85) + ' pixels claros');
+      }
+      var ident = JOGO.DATA.fusionIdentities && JOGO.DATA.fusionIdentities['minotauro+sumo'];
+      check('a identidade da dupla existe para o título', !!(ident && ident.name), ident && ident.name);
+      // a sala limpa: uma descida direta e o cartão do fim
+      var ids = JOGO.Progress.heroIds();
+      while (ids.length < 2) { JOGO.Progress.createHero(ids.length ? 'curandeiro' : 'sumo'); ids = JOGO.Progress.heroIds(); }
+      G.startRun(ids.slice(0, 2), 'greenhouse', { direto: true });
+      var cs = UI.cartaoSalaLimpa('roomClear');
+      check('o cartão da sala limpa nasce', !!cs && cs.width === 1080);
+      mostra(cs, 'sala limpa');
+      if (cs) check('o cartão da sala tem retrato e título', tinta(cs, 0.15, 0.65) > 200 && tinta(cs, 0.76, 0.85) > 100);
+      // a faixa da fusão aparece com o evento, só na batalha, só do meu lado
+      UI.handleEvent({ type: 'fusion', uid: 'nao-existe' });
+      check('fusão de unidade desconhecida não quebra nem mostra faixa', !document.querySelector('.share-faixa'));
+      fim();
+    }
+  });
+})();
+</script>
+</body>
+</html>

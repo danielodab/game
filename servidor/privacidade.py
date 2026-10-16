@@ -614,4 +614,12 @@ class PrivacidadeMixin:
                 "ON e.chave = x.chave WHERE x.conta_id = ? ORDER BY e.ultima_em DESC LIMIT 200", (cid,))]
         except sqlite3.OperationalError:
             dados['registros_de_erro'] = []
+        try:   # 15/10: o convite (convites.py): o seu código e de quem você veio (números de conta)
+            cv = self.con.execute("SELECT codigo, criado_em FROM convites WHERE conta_id = ?", (cid,)).fetchone()
+            veio = self.con.execute("SELECT convidou_id, criado_em, pago_em, motivo FROM convidados WHERE conta_id = ?", (cid,)).fetchone()
+            dados['convite'] = {'codigo': dict(cv) if cv is not None else None, 'veio_por': dict(veio) if veio is not None else None,
+                                'convidados': [dict(r) for r in self.con.execute(
+                                    "SELECT conta_id, criado_em, pago_em, motivo FROM convidados WHERE convidou_id = ?", (cid,))]}
+        except sqlite3.OperationalError:
+            dados['convite'] = None
         return dados

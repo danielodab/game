@@ -242,6 +242,7 @@ jogador. Página nova sem essa linha é bug.
 | `acessibilidade.js` (Node) | 19 / 0 (15/10: as duas paletas, as quatro tabelas lendo a paleta, a regra da avaliação na Play, o limite de 30 quadros) |
 | `primeira_luta.html` | 12 / 0 (15/10: a conta nova cai na primeira sala sem a praça e a batalha guiada avança passo a passo) |
 | `retoma_solo.js` (Node) · `retoma_solo.html` | 14 / 0 · 8 / 0 (15/10: a sala solo refeita do bilhete tem o MESMO hash da sala viva e do juiz; a página cai na batalha na vez do jogador) |
+| `convites_api.py` · `compartilhar.js` (Node) · `compartilhar.html` | 5 / 0 · 7 / 0 · 9 / 0 (15/10: o convite com prêmio para os dois na primeira vitória do convidado, e o cartão de compartilhar da fusão e da sala limpa; §9-C.1) |
 | `modelos_comprimidos.html` | passou (15/10: os .glb do bundle com meshopt abrem no three do jogo com os nomes das malhas; o bundle foi de 247 para 159 MB, `carga.html` de 40 para 28 MB até o menu) |
 | `fx_sala.html?efeito=cast&spell=<id>` | foto, não prova (12/10): um lance de verdade com os filmes do Blender; oito fotos conferidas; 15/10: mais oito, uma por família nova e por matéria nova (§9-A.31) |
 | `foto_molduras.html` · `foto_moldura_arena.html` | 12 placas / 17 de 17 (12/10: as molduras com bisel, contas, rosetas e o ornamento de cada forma; a do campeão cabe na tela e a da guilda pinta menos de 6%) |
