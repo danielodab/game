@@ -107,6 +107,13 @@ versionCode 1          // some 1 a CADA envio — a Play recusa número repetido
 versionName "1.0.0"    // o que o jogador lê na loja
 ```
 
+As versões geradas até aqui (a próxima é a seguinte da última linha):
+
+| versionCode | versionName | gerado em | o que a casca ganhou |
+|---|---|---|---|
+| 1 | 1.0.0 | 06/10 | o primeiro envio: o jogo do servidor, a compra pela Play, o anúncio premiado |
+| 2 | 1.1.0 | 24/10 | os plugins que faltavam na casca: avisos do aparelho, avaliação na loja, compartilhar e arquivos (o cartão da fusão). Permissões novas: `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` e `SCHEDULE_EXACT_ALARM` (do plugin de avisos; sem ela concedida, o lembrete sai pelo agendamento comum) |
+
 ### 1.6 Onde enviar
 
 <https://play.google.com/console> → **Criar app** → nome *SOTERRA*, idioma
