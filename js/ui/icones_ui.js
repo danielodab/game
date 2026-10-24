@@ -475,6 +475,13 @@ var JOGO = (typeof window !== 'undefined')
   // 08/10 à noite: a LUPA da busca do inventário limpo (inv2)
   poe('busca', risco('M10 4a6 6 0 1 1 0 12a6 6 0 1 1 0-12Z', 2.4) + risco('M14.6 14.6 20.5 20.5', 2.8));
 
+  // 24/10: o GLOBO do botão "Site" (o site do jogo, numa aba dentro do aplicativo — js/ui/site_aba.js). Riscos,
+  // como a lupa: a 22 px um globo cheio vira só um disco. O contorno, o meridiano em elipse e o equador inteiros;
+  // os dois paralelos a meia tinta, de apoio
+  poe('globo', risco('M12 2.6a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8Z', 1.9) +
+    risco('M12 2.6C9.3 5.3 8.1 8.5 8.1 12S9.3 18.7 12 21.4M12 2.6C14.7 5.3 15.9 8.5 15.9 12S14.7 18.7 12 21.4', 1.6) +
+    risco('M2.8 12H21.2', 1.6) + risco('M4.4 7.3H19.6M4.4 16.7H19.6', 1.5, MEIA));
+
   /* --------------------------------------------------------------- a API */
   function tem(id) { return Object.prototype.hasOwnProperty.call(DESENHO, id); }
 

@@ -177,8 +177,12 @@ var JOGO = (typeof window !== 'undefined')
     return limiteQuadros;
   };
   M.defineLimiteQuadros = function (liga) { limiteQuadros = liga ? 30 : 0; };
+  /* 24/10: com a ABA DO SITE por cima do jogo (js/ui/site_aba.js, só no aplicativo e fora da batalha) não há o que
+   * desenhar: os dois laços pulam todo quadro até ela fechar — o mesmo caminho do limite de 30 */
+  M.desenhoPausado = false;
   /* o quadro `t` (ms) deve ser pulado? `ultimo` é o instante do último quadro desenhado */
   M.pulaQuadro = function (t, ultimo) {
+    if (M.desenhoPausado) return true;
     var lim = M.limiteQuadros();
     return !!(lim && (t - ultimo) < (1000 / lim) - 2);
   };

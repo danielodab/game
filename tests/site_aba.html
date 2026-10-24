@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a aba do site dentro do jogo (24/10)</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- 24/10, o dono: "meu app não seja o site ao fechar o jogo — seja somente página de login; dentro do jogo um
+     ícone de um globo com nome Site, que abre uma aba do site no próprio jogo". Aqui o js/ui/site_aba.js de
+     verdade roda com `?app=1` (a casca fingida) e abre as PÁGINAS DE VERDADE do site no quadro da aba:
+       · o botão "Site" (o globo) e todo link do jogo para o site abrem a aba, sem sair do jogo; o desenho para;
+       · o site sabe que está na aba (SITE.naAba): o "Jogar" fecha a aba, link nosso com target=_blank fica no
+         quadro, link para fora ganha target=_blank; o toque no site conta como jogar (os 15 minutos);
+       · o voltar do Android anda para trás dentro da aba e, na primeira página, fecha; o Esc fecha; a sessão que
+         mudou lá dentro leva ao "entrar de novo";
+       · a loja do quadro compra pela Google Play do JOGO (o quadro de cima) e não traz a sua;
+       · na batalha o desenho não para; o "Sair do jogo" segue com a casca (js/mobile.js);
+       · NA WEB (sem ?app=1) nada disto liga.
+     Precisa de um servidor (python -m http.server na raiz): o quadro abre ../site/*.html. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+  history.replaceState(null, '', location.pathname + '?app=1');
+  window.__V = '?v=' + Date.now();
+  ['js/mobile.js', 'js/ui/icones_ui.js', 'js/ui/site_aba.js'].forEach(function (f) {
+    document.write('<scr' + 'ipt src="../' + f + window.__V + '"></scr' + 'ipt>');
+  });
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var guardada = null;
+  try { guardada = localStorage.getItem('soterra-sessao'); } catch (e) {}
+  function fim(msg) {
+    try { if (guardada === null) localStorage.removeItem('soterra-sessao'); else localStorage.setItem('soterra-sessao', guardada); } catch (e) {}
+    try { sessionStorage.removeItem('soterra-app'); } catch (e2) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = (falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')')) + (msg ? ' · ' + msg : '');
+    window.__done = true; window.__fail = falhas;
+  }
+  window.onerror = function (m) { check('sem erro de script', false, m); };
+
+  var SA = JOGO.SiteAba, M = JOGO.Mobile;
+  SA._raiz = new URL('../', location.href).href;           // a pasta do jogo: o site está em ../site/
+  var toques = 0, entrouDeNovo = 0;
+  JOGO.Sessao = { tocou: function () { toques++; }, entrarDeNovo: function () { entrouDeNovo++; return 'entrar'; } };
+  JOGO.Game = { screen: 'hub' };
+  var alvos = [];
+  JOGO.CompraPlay = { painel: function (alvo) { alvos.push(alvo); alvo.innerHTML = '<p data-falso>a compra do jogo</p>'; },
+                      aberto: function () { return false; } };
+  function sessao(tok) { localStorage.setItem('soterra-sessao', JSON.stringify({ token: tok, conta: { id: 7, nome: 'Prova', gm: false } })); }
+  sessao('tok-A');
+  sessionStorage.removeItem('soterra-app');
+
+  function quadro() { return SA._quadro(); }
+  function doc() { try { return quadro().contentDocument; } catch (e) { return null; } }
+  function caminho() { try { return quadro().contentWindow.location.pathname; } catch (e) { return ''; } }
+  /* espera `cond` (até 15 s) e segue */
+  function espera(cond, fn, rotulo) {
+    var t0 = Date.now();
+    (function volta() {
+      var ok = false;
+      try { ok = !!cond(); } catch (e) {}
+      if (ok) return fn();
+      if (Date.now() - t0 > 15000) { check('esperou: ' + rotulo, false, 'não chegou em 15 s'); return fim('parou em: ' + rotulo); }
+      setTimeout(volta, 60);
+    })();
+  }
+  /* o quadro abriu `pagina` e o site.js dela já rodou */
+  /* o quadro terminou de abrir `pagina` depois da carga número `desde` (lida ANTES de pedir a página) */
+  function abriu(pagina, desde) {
+    return function () {
+      var d = doc();
+      return SA._cargas > desde && d && d.readyState === 'complete' && new RegExp('/site/' + pagina.replace('.', '\\.') + '$').test(caminho()) &&
+        !!quadro().contentWindow.SITE && semCarga();
+    };
+  }
+  function semCarga() { var c = document.querySelector('.site-aba-carga'); return !c || c.hidden; }
+  function clica(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })); }
+  /* um clique que não pode navegar esta página: quem barra é o último ouvinte (depois do da aba) */
+  function cliqueSemSair(el) {
+    var d = el.ownerDocument, freio = function (ev) { ev.preventDefault(); };
+    d.addEventListener('click', freio, false);
+    clica(el);
+    d.removeEventListener('click', freio, false);
+  }
+
+  // ---- 1. a casca e o botão -------------------------------------------------------------------------------
+  check('com ?app=1 a aba existe e os ouvintes estão ligados', M.app() === true && !!SA && SA.ligado === true);
+  var b = SA.botao('menu-site');
+  check('o botão "Site" é um link para a capa do site, numa aba nova (o caminho da web)',
+        b.tagName === 'A' && /\/site\/index\.html$/.test(b.href) && b.target === '_blank' && /noopener/.test(b.rel), b.href);
+  check('o botão tem o globo e o textContent é só "Site"', !!b.querySelector('svg.ico-globo') && b.textContent === 'Site', b.textContent);
+  document.body.appendChild(b);
+  var n0 = SA._cargas;
+  clica(b);
+  var capa = document.querySelector('.site-aba');
+  check('o toque no globo abre a aba DENTRO do jogo (sem sair desta página)', !!capa && SA.aberta() && location.pathname.indexOf('site_aba.html') > 0);
+  check('o quadro pede a capa do site com a marca do aplicativo', !!quadro() && /\/site\/index\.html\?app=1$/.test(quadro().src), quadro() && quadro().src);
+  check('com a aba por cima, o desenho do jogo para (fora da batalha)', M.desenhoPausado === true && M.pulaQuadro(1000, 0) === true);
+  check('a aba é diálogo, acima das fichas e abaixo da compra pela Play',
+        capa.getAttribute('role') === 'dialog' && Number(getComputedStyle(capa).zIndex) === 99900 && getComputedStyle(capa).position === 'fixed');
+
+  espera(abriu('index.html', n0), passo2, 'a capa do site no quadro');
+
+  // ---- 2. o site sabe que está na aba ---------------------------------------------------------------------
+  function passo2() {
+    var w = quadro().contentWindow, d = doc();
+    check('o site no quadro se vê na aba: SITE.naAba, a classe na-aba, e não é a porta do aplicativo',
+          w.SITE.naAba() === true && d.documentElement.classList.contains('na-aba') && !d.documentElement.classList.contains('porta-app') && w.SITE.portaDoApp() === false);
+    check('… e no aplicativo (a marca do quadro): SITE.noApp', w.SITE.noApp() === true);
+    var nav = d.querySelector('header.topo nav');
+    check('na aba o site é o site: o menu do topo aparece', !!nav && w.getComputedStyle(nav).display !== 'none');
+    check('o topo da aba mostra o título da página', !!document.querySelector('.site-aba-tit').textContent);
+    check('na primeira página não há "voltar uma página"', document.querySelector('.site-aba-volta').hidden === true);
+    var antes = toques;
+    d.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    check('tocar no site conta como jogar (o relógio dos 15 minutos)', toques === antes + 1, toques - antes);
+    var ev = d.querySelector('header.topo nav a[href="eventos.html"]');
+    check('o menu do site tem o link dos Eventos', !!ev);
+    var n = SA._cargas;
+    clica(ev);
+    espera(abriu('eventos.html', n), passo3, 'Eventos no quadro');
+  }
+  function passo3() {
+    check('o link do site anda DENTRO da aba', SA.aberta() && SA._pilha().length === 2, SA._pilha().length);
+    check('com duas páginas, aparece o "voltar uma página"', document.querySelector('.site-aba-volta').hidden === false);
+    var d = doc();
+    var a = d.createElement('a'); a.href = 'wiki.html'; a.target = '_blank'; a.textContent = 'wiki';
+    d.body.appendChild(a);
+    var n = SA._cargas;
+    clica(a);
+    espera(abriu('wiki.html', n), passo4, 'link com target=_blank no quadro');
+  }
+  function passo4() {
+    check('link nosso com target=_blank fica no quadro (fora dele o WebView inteiro viraria o site)',
+          SA.aberta() && SA._pilha().length === 3, SA._pilha().length);
+    var d = doc();
+    var fora = d.createElement('a'); fora.href = 'https://example.com/comunidade'; fora.textContent = 'fora';
+    d.body.appendChild(fora);
+    cliqueSemSair(fora);
+    check('link para fora do jogo vai para o navegador do aparelho (target=_blank)', fora.target === '_blank' && /noopener/.test(fora.rel), fora.target);
+    // ---- 3. o voltar do Android ----
+    var n = SA._cargas;
+    check('o voltar do Android com a aba aberta é da aba', SA.voltar() === true && SA.aberta());
+    espera(abriu('eventos.html', n), function () {
+      check('… e volta uma página dentro dela', SA._pilha().length === 2, SA._pilha().join(' '));
+      var n2 = SA._cargas;
+      SA.voltar();
+      espera(abriu('index.html', n2), function () {
+        check('… e outra, até a primeira', SA._pilha().length === 1 && document.querySelector('.site-aba-volta').hidden === true);
+        SA.voltar();
+        check('na primeira página, o voltar FECHA a aba', !SA.aberta() && !document.querySelector('.site-aba'));
+        check('fechada a aba, o desenho do jogo volta', M.desenhoPausado === false);
+        passo5();
+      }, 'voltar até a capa');
+    }, 'voltar para Eventos');
+  }
+
+  // ---- 4. Esc, as teclas do jogo, o "Jogar" e a conta que mudou ----------------------------------------------
+  function passo5() {
+    var teclas = 0, conta = function () { teclas++; };
+    document.addEventListener('keydown', conta);
+    SA.abre(SA.endereco('termos.html'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', bubbles: true }));
+    check('com a aba aberta, as teclas do jogo (o I do inventário) não passam por baixo', teclas === 0 && SA.aberta(), teclas);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    check('o Esc fecha a aba', !SA.aberta());
+    document.removeEventListener('keydown', conta);
+    var n = SA._cargas;
+    SA.abre(SA.endereco('index.html'));
+    espera(abriu('index.html', n), function () {
+      var j = doc().querySelector('header.topo nav a.jogar');
+      check('o site tem o "Jogar"', !!j);
+      clica(j);
+      espera(function () { return !SA.aberta(); }, function () {
+        check('o "Jogar" do site FECHA a aba (o jogo já está aqui)', !SA.aberta() && location.pathname.indexOf('site_aba.html') > 0);
+        check('com a mesma conta, nada de recarregar', entrouDeNovo === 0, entrouDeNovo);
+        var n2 = SA._cargas;
+        SA.abre(SA.endereco('index.html'));
+        espera(abriu('index.html', n2), function () {
+          sessao('tok-B');                                   // lá dentro a pessoa saiu e entrou em outra conta
+          clica(doc().querySelector('header.topo nav a.jogar'));
+          espera(function () { return !SA.aberta(); }, function () {
+            check('a conta mudou dentro da aba: de volta ao jogo, o "entrar de novo" (recarrega com a conta nova)', entrouDeNovo === 1, entrouDeNovo);
+            passo6();
+          }, 'Jogar com a conta trocada');
+        }, 'a capa de novo');
+      }, 'o Jogar fechar a aba');
+    }, 'a capa para o Jogar');
+  }
+
+  // ---- 5. a loja compra pela Play do jogo ------------------------------------------------------------------
+  function passo6() {
+    var n = SA._cargas;
+    SA.abre(SA.endereco('loja.html'));
+    espera(function () { return abriu('loja.html', n)() && alvos.length > 0; }, function () {
+      var w = quadro().contentWindow, d = doc();
+      check('a loja na aba desenha a compra do JOGO (o quadro de cima) no painel dela',
+            alvos.length >= 1 && alvos[alvos.length - 1].ownerDocument === d && !!d.querySelector('[data-falso]'));
+      check('… e não carrega a sua própria compra_play.js', !(w.JOGO && w.JOGO.CompraPlay));
+      var leu = 0, api = w.SITE.api;
+      w.SITE.api = function (rota) { if (rota === '/api/loja/minha') leu++; return api.apply(this, arguments); };
+      window.dispatchEvent(new CustomEvent('soterra:barras-play', { detail: { tipo: 'entregue' } }));
+      check('as barras compradas pela Play do jogo: a loja do quadro relê o saldo', leu === 1, leu);
+      SA.fecha();
+      passo7();
+    }, 'a loja no quadro');
+  }
+
+  // ---- 6. os links do jogo, a batalha, o "Sair do jogo" ----------------------------------------------------
+  function passo7() {
+    var a = document.createElement('a');
+    a.href = SA.endereco('ranking.html#eco'); a.target = '_blank'; a.textContent = 'ranking';
+    document.body.appendChild(a);
+    clica(a);
+    check('um link do jogo para o site (o ranking do Eco) abre na aba', SA.aberta() && /\/site\/ranking\.html\?app=1#eco$/.test(quadro().src), quadro() && quadro().src);
+    SA.fecha();
+    var fora = document.createElement('a'); fora.href = 'https://example.com/'; fora.textContent = 'fora';
+    document.body.appendChild(fora);
+    cliqueSemSair(fora);
+    var jogo = document.createElement('a'); jogo.href = new URL('../index.html', location.href).href; jogo.textContent = 'jogo';
+    document.body.appendChild(jogo);
+    cliqueSemSair(jogo);
+    check('link que não é do site (fora do jogo, ou o próprio jogo) não abre a aba', !SA.aberta());
+    check('SA.abre recusa endereço que não é do site', SA.abre('https://example.com/site/index.html') === false && !SA.aberta());
+    var sair = document.createElement('a');
+    sair.className = 'btn menu-sair'; sair.href = SA.endereco('index.html'); sair.textContent = 'Sair do jogo';
+    document.body.appendChild(sair);
+    clica(sair);
+    check('o "Sair do jogo" segue com a casca (pergunta e fecha o aplicativo), sem abrir a aba',
+          !SA.aberta() && !!document.getElementById('app-sair'));
+    var nao = document.getElementById('app-sair-nao'); if (nao) nao.click();
+    JOGO.Game = { screen: 'battle' };
+    SA.abre(SA.endereco('index.html'));
+    check('na batalha a aba abre, mas o desenho não para (a luta corre)', SA.aberta() && M.desenhoPausado === false);
+    SA.fecha();
+    JOGO.Game = { screen: 'hub' };
+    passo8();
+  }
+
+  // ---- 7. a web ----------------------------------------------------------------------------------------------
+  function passo8() {
+    var q = document.createElement('iframe');
+    q.style.cssText = 'width:300px;height:120px;border:1px solid #333';
+    q.srcdoc = '<!DOCTYPE html><html><body><a id="l" target="_blank">site</a>' +
+      '<script src="../js/mobile.js' + window.__V + '"><\/script><script src="../js/ui/icones_ui.js' + window.__V + '"><\/script>' +
+      '<script src="../js/ui/site_aba.js' + window.__V + '"><\/script></body></html>';
+    q.onload = function () {
+      var w = q.contentWindow, S2 = w.JOGO.SiteAba;
+      check('na web a aba não liga nada (nenhum ouvinte)', w.JOGO.Mobile.app() === false && S2.ligado === false);
+      var l = w.document.getElementById('l');
+      l.href = SA.endereco('loja.html');
+      cliqueSemSair(l);
+      check('na web o link do jogo para o site segue sendo o link de sempre (nenhuma aba por cima)',
+            !w.document.querySelector('.site-aba') && S2.aberta() === false);
+      var b2 = S2.botao('menu-site');
+      check('na web o globo é um link com target=_blank', b2.tagName === 'A' && b2.target === '_blank');
+      fim();
+    };
+    document.body.appendChild(q);
+  }
+})();
+</script>
+</body>
+</html>

@@ -787,6 +787,8 @@ var JOGO = (typeof window !== 'undefined')
   UI.showScreen = function (name, data) {
     if (!screens[name]) name = 'menu';
     hideTip();
+    // 24/10: a batalha que começa (o grupo desceu, a porta abriu) fecha a aba do site que estava por cima
+    if (name === 'battle') safe(function () { if (JOGO.SiteAba && JOGO.SiteAba.aberta()) JOGO.SiteAba.fecha(); return true; }, null);
     if (name !== 'battle') closeSheet();
     // 06/10: a batalha que começa encerra a troca que ficou pendurada (o pedido ou a mesa): na luta ela
     // não tem tela, e ficava de pé recusando todo pedido seguinte. O outro lado é avisado (a voz `cancela`)
@@ -1048,6 +1050,9 @@ var JOGO = (typeof window !== 'undefined')
       'btn-mini btn-ghost', function () { openSheet('contas'); }));
     // 02/10: a ficha das Configurações (som, tela, movimento) — antes não havia
     fichas.appendChild(btn(tr('Configurações'), 'btn-mini btn-ghost menu-config', function () { openSheet('config'); }));
+    // 24/10 (o dono): o SITE com o globo — no aplicativo abre numa aba dentro do jogo (js/ui/site_aba.js); na web,
+    // numa aba nova do navegador
+    fichas.appendChild(botaoSite('btn-mini btn-ghost menu-site'));
     // 08/10 (o dono): sair da conta DIRETO do menu, sem passar por Configurações → Conta e nuvem
     if (safe(function () { return JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa(); }, false)) {
       fichas.appendChild(btn(tr('Sair da conta'), 'btn-mini btn-ghost menu-sair-conta', function () { sairDaConta(); }));
@@ -1073,6 +1078,19 @@ var JOGO = (typeof window !== 'undefined')
    * botão que às vezes não faz nada é pior que botão nenhum. Ele LEVA para o
    * site — que é onde se cuida da conta, da loja e do ranking — e o save já
    * está gravado a cada passo, então sair é só sair. */
+  /* O "SITE" COM O GLOBO (24/10, o dono: "dentro do jogo deve ter um ícone de um globo com nome Site, que leva pro
+   * site do jogo e abre uma aba do site no próprio jogo"). É um link para a capa do site: no aplicativo o
+   * js/ui/site_aba.js o abre na aba de dentro do jogo; na web, numa aba nova do navegador. Sem aquele arquivo,
+   * o mesmo link, sem o desenho. */
+  function botaoSite(cls) {
+    var SA = JOGO.SiteAba;
+    if (SA && SA.botao) { var b = safe(function () { return SA.botao(cls, tr('Site')); }, null); if (b) return b; }
+    var a = el('a', 'btn bt-site ' + (cls || ''), tr('Site'));
+    a.href = 'site/index.html';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    return a;
+  }
   function botaoSair() {
     var a = el('a', 'btn btn-ghost menu-sair', tr('Sair do jogo'));
     a.href = safe(function () { return JOGO.Sessao.paginaSite(); }, 'site/index.html');
@@ -1558,6 +1576,8 @@ var JOGO = (typeof window !== 'undefined')
       quem.appendChild(el('span', 'hub-sala-tag', tr('{a} · sala {b}/{c} — {d}', { a: esc(sala.calabouco || ''), b: sala.roomIndex + 1, c: sala.total || '?', d: esc(sala.nome || '') })));
       acts.appendChild(btn(tr('Sair do calabouço'), 'btn-mini btn-ghost', perguntaSair));
     } else {
+      // 24/10: o Site (o globo) ao lado do Menu — a praça é onde se passa o tempo
+      acts.appendChild(botaoSite('btn-mini btn-ghost hub-site'));
       acts.appendChild(btn(tr('Menu'), 'btn-mini btn-ghost', function () { navTo('menu'); }));
     }
     // 12/09: o Painel do Mestre abre daqui, sem voltar ao Menu (também na batalha e na tecla M)
@@ -14607,6 +14627,8 @@ var JOGO = (typeof window !== 'undefined')
   UI.voltar = function () {
     // a tela da compra pela Google Play (só no aplicativo) fica por cima de tudo: fecha primeiro
     if (JOGO.CompraPlay && JOGO.CompraPlay.aberto && JOGO.CompraPlay.aberto()) { JOGO.CompraPlay.fecha(); return true; }
+    // 24/10: a aba do site (js/ui/site_aba.js) cobre o jogo inteiro: o voltar anda nela e, na primeira página, a fecha
+    if (JOGO.SiteAba && JOGO.SiteAba.aberta && JOGO.SiteAba.aberta()) return JOGO.SiteAba.voltar();
     if (JOGO.PremioAnuncio && JOGO.PremioAnuncio.aberto && JOGO.PremioAnuncio.aberto()) { JOGO.PremioAnuncio.fecha(); return true; }
     if (sheetName) { closeSheet(); return true; }
     if (fechaSino()) return true;       // o painel do sino dos avisos (só existe no toque)

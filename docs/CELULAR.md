@@ -120,7 +120,8 @@ na página do servidor antes do primeiro script, como fazia na do pacote.
 **A navegação fica presa ao domínio do jogo.** Não há `allowNavigation`:
 qualquer link para outro domínio abre no navegador do aparelho, não dentro do
 aplicativo (é o comportamento padrão do Capacitor, `Bridge.launchIntent`). O
-`site/conta.html` é do mesmo domínio e abre dentro.
+`site/conta.html` é do mesmo domínio e abre dentro. Desde 24/10 o WebView inteiro **nunca é o site**: fora do
+jogo ele mostra só a entrada, e o site abre numa aba dentro do jogo (seção 10).
 
 **O WebView não prende código velho.** É o mesmo arranjo da web: a página, o
 `js/versao.js` e o manifesto dos modelos vão com `no-cache` (o WebView sempre
@@ -511,3 +512,101 @@ verdade num Chrome headless com uma página-sonda (`tests/app_jogo_sw.py`).
 **Não provado:** o WebView do Android com o Capacitor. Confira no telefone a
 lista do `docs/GOOGLE_PLAY.md` 8.4 (itens 11 a 15) — em especial o **modo
 avião depois de guardar**: tem de aparecer "Sem conexão", nunca o jogo.
+
+---
+
+## 10. O aplicativo não é o site: a entrada e a aba do site (24/10)
+
+**O pedido do dono:** "preciso que meu app não seja o site ao fechar o jogo —
+seja somente página de login. O site é a parte se o usuário quiser navegar:
+dentro do jogo deve ter um ícone de um globo com nome Site, que leva pro site
+do jogo e abre uma aba do site no próprio jogo."
+
+**O que acontecia.** No aplicativo, sair da conta, cair por inatividade ou por
+outro aparelho levava o WebView para `site/conta.html` — com o menu inteiro do
+site (Início, Eventos, Torneio, Wiki, Ranking, Loja, Jogar). E todo link do jogo
+para o site (a loja, o calendário, o ranking do Eco, os Termos) tinha
+`target=_blank`, que no WebView sem várias janelas vira navegação da página
+inteira: o jogo sumia e o aplicativo virava o site.
+
+**Agora são duas situações, e o `site/site.js` decide qual:**
+
+| | quando | o que o site faz |
+|---|---|---|
+| **a porta** (`SITE.portaDoApp`) | no aplicativo, fora da aba — o WebView inteiro é a página | só a ENTRADA: a página da conta sem o menu e sem a sessão do topo (ficam a marca e o idioma); os Termos e a Privacidade, que o cadastro pede para ler, com um "← Voltar"; qualquer outra página manda para a entrada (sem sessão) ou para o jogo (com). Entrar, criar conta ou abrir a conta com a sessão boa leva direto ao jogo, com `location.replace` (o voltar do Android não reabre a entrada) |
+| **a aba** (`SITE.naAba`) | no quadro da aba do site, dentro do jogo | o site de sempre, menos três coisas: o "Jogar" (todo link para `../index.html`) fecha a aba; link para fora do jogo ganha `target=_blank` (o navegador do aparelho); link nosso com `target=_blank` fica no quadro |
+
+Na web os dois são falsos e nada muda. "No aplicativo" é o mesmo
+`SITE.noApp()` de 04/10 (o Capacitor nativo, o `?app=1` das provas ou a marca
+`soterra-app` na sessão da aba). A `site/conta.html` põe a classe `porta-app`
+já no topo, para o menu nem piscar; as outras páginas a recebem do `site.js`.
+
+**A aba: `js/ui/site_aba.js` (`JOGO.SiteAba`).** Só liga no aplicativo
+(`JOGO.Mobile.app()`); na web não registra ouvinte nenhum.
+
+- O botão **Site** com o globo (`IconesUI.svg('globo')`) fica no menu, ao lado
+  das Configurações, e na praça, ao lado do Menu. É um LINK para
+  `site/index.html` com `target=_blank`: na web abre uma aba nova do navegador,
+  como os outros links do jogo sempre abriram.
+- No aplicativo, UM ouvinte de clique no `document` pega todo link do jogo
+  para uma página do site (o globo, a pílula da loja, o sino, a faixa de
+  eventos, o ranking do Eco, os Termos da ficha Contas, o "Ir para o site" da
+  inatividade) e abre a aba. O "Sair do jogo" continua com a casca (pergunta e
+  fecha o aplicativo — `js/mobile.js`).
+- A aba é um quadro (`iframe`) da mesma origem por cima do jogo: a mesma
+  sessão, e o jogo segue de pé embaixo. O quadro abre a primeira página com
+  `?app=1`, para o site saber que está no aplicativo mesmo se o Capacitor não
+  entrar no quadro.
+- **Fechar:** o "Voltar ao jogo" do topo, o "Jogar" do site (postMessage
+  `{soterra: 'site-aba', acao: 'jogo'}`, aceito só da mesma origem e só do
+  quadro da aba), o Esc, ou a batalha que começa (`UI.showScreen('battle')`).
+- **O voltar do Android** (`UI.voltar`, logo depois da compra pela Play): anda
+  uma página para trás dentro da aba e, na primeira, fecha. Anda pela PRÓPRIA
+  pilha com `location.replace`, nunca com `history.back()` — o histórico é um
+  só para a página e o quadro, e um passo a mais levaria o jogo inteiro para
+  trás.
+- **O desenho para** enquanto a aba cobre a tela (`JOGO.Mobile.desenhoPausado`,
+  que o `pulaQuadro` dos dois laços respeita) — fora da batalha, que corre.
+- **Os 15 minutos.** O relógio da inatividade (`js/core/sessao.js`) só ouve a
+  página do jogo; o toque dentro do quadro não sobe até ela. A aba repassa o
+  toque (`Sessao.tocou`): sem isso, quem lê a wiki por 15 minutos perderia a
+  sessão — e o site junto.
+- **A conta que muda lá dentro.** Saiu da conta ou entrou em outra pelo site da
+  aba: ao voltar ao jogo pelo "Jogar" (ou entrando de novo na aba), o jogo vai
+  pelo mesmo caminho da capa "Entrar de novo" — token novo recarrega, sem token
+  vai para a entrada.
+
+**A loja na aba compra pela Play do JOGO.** A compra pela Google
+(`js/core/compra_play.js`) é carregada pelo `index.html` do jogo, no quadro de
+cima, onde a ponte do Capacitor está provada. Na aba, a `site/loja.js` usa esse
+`JOGO.CompraPlay` (o `window.parent`) e o `site/loja.html` nem pede o seu: o
+painel desenha no quadro (a folha de estilo vai para o documento do painel), o
+clique roda no jogo, e a loja ouve o aviso `soterra:barras-play` na janela do
+jogo (o ouvinte sai com a página). Assim não importa se o Capacitor entra ou
+não num quadro.
+
+**Precisa de AAB novo?** Não. Tudo é servido pela web.
+
+**As provas:**
+
+```bash
+# tests/site_aba.html     a aba de verdade com as páginas do site dentro (40): o globo, os links do jogo,
+#                         o voltar do Android, o Esc, o "Jogar", a conta trocada, a loja pela Play do jogo, a web sem nada
+# tests/site_porta.html   a entrada do aplicativo (19): a conta sem o menu, os jurídicos com o "← Voltar",
+#                         as outras páginas mandadas embora, e a web igual
+# tests/compra_play.html  33: a loja do aplicativo agora é a da aba, comprando pela Play do jogo
+```
+
+As duas primeiras precisam de um servidor na raiz (`python -m http.server`).
+
+**Armadilha medida.** O `tests/compra_play.html` escreve a loja num quadro em
+branco com `document.open()`, e o quadro HERDA o endereço da página que
+escreve (`…/tests/compra_play.html?app=1`). Sem a marca da aba, o `site.js`
+via "aplicativo fora da aba" e mandava a página para o jogo — a prova passou a
+pôr a marca `JOGO.SiteAba` (é o jogo com a aba) e a tirá-la na metade da web.
+
+**O que só o aparelho prova:** que o link para fora do jogo com
+`target=_blank`, de dentro do quadro, abre o navegador do aparelho (o
+Capacitor intercepta a navegação da página; dentro do quadro o esperado é o
+mesmo); o botão voltar na entrada (sem ouvinte ali, o Capacitor volta no
+histórico ou fecha o aplicativo); e a compra de verdade pela loja da aba.

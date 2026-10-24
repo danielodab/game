@@ -1310,5 +1310,6 @@ JOGO.I18n.registra('en', { textos: {
   "Nenhum torneio terminou ainda.": "No tournament has ended yet.",
   "O servidor está fora — a lista dos torneios volta com ele.": "The server is down — the tournament list comes back with it.",
   "O Torneio da Arena ainda não chegou a este servidor. As regras estão logo abaixo.": "The Arena Tournament hasn't reached this server yet. The rules are right below.",
-  "Não deu para ler os torneios.": "Couldn't read the tournaments."
+  "Não deu para ler os torneios.": "Couldn't read the tournaments.",
+  "← Voltar": "← Back"
 } });

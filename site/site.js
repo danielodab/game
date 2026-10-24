@@ -120,6 +120,88 @@
     } catch (e2) { return false; }
   };
 
+  /* 24/10 — O APLICATIVO NÃO É O SITE (o dono: "preciso que meu app não seja o site ao fechar o jogo — seja
+   * somente página de login. O site é a parte se o usuário quiser navegar: dentro do jogo deve ter um ícone de
+   * um globo com nome Site, que abre uma aba do site no próprio jogo").
+   *
+   *   naAba()      esta página está na ABA DO SITE de dentro do jogo (js/ui/site_aba.js): o quadro de uma página
+   *                da mesma origem que tem o JOGO.SiteAba. Aqui o site é o de sempre, menos três coisas: o
+   *                "Jogar" (todo link para o jogo) fecha a aba, link para fora do jogo vai para o navegador do
+   *                aparelho, e link nosso com target=_blank fica no quadro — fora dele o WebView inteiro viraria o
+   *                site, que é justamente o que não pode.
+   *   portaDoApp() esta página está no aplicativo e FORA da aba: o WebView inteiro é ela. Aí não há site, só a
+   *                ENTRADA: a página da conta sem o menu e sem a sessão do topo, e os Termos e a Privacidade (o
+   *                cadastro pede para lê-los) com o caminho de volta. Qualquer outra página do site manda para o
+   *                jogo (com sessão) ou para a entrada (sem). Na web os dois são falsos e nada muda. */
+  SITE.naAba = function () {
+    try { return window.parent !== window && !!(window.parent.JOGO && window.parent.JOGO.SiteAba); } catch (e) { return false; }
+  };
+  SITE.portaDoApp = function () { return SITE.noApp() && !SITE.naAba(); };
+  SITE.PAGINAS_DA_PORTA = ['conta.html', 'termos.html', 'privacidade.html'];
+  /* na porta do aplicativo, para onde vai a página `pagina` (o nome do arquivo): null = fica; senão, o endereço */
+  SITE.portaDestino = function (pagina, temSessao) {
+    pagina = String(pagina || '') || 'index.html';
+    if (SITE.PAGINAS_DA_PORTA.indexOf(pagina) >= 0) return null;
+    return temSessao ? '../index.html' : 'conta.html#entrar';
+  };
+  /* O caminho para o JOGO, de qualquer página do site: na aba, fecha a aba (o jogo já está aberto embaixo); na
+   * porta do aplicativo, troca a página sem deixar a entrada no histórico (o voltar do Android não a reabre); na
+   * web, o link de sempre. Devolve qual dos três. */
+  SITE.vaiAoJogo = function () {
+    if (SITE.naAba()) {
+      try { window.parent.postMessage({ soterra: 'site-aba', acao: 'jogo' }, location.protocol === 'file:' ? '*' : location.origin); } catch (e) {}
+      return 'aba';
+    }
+    var jogo = '../index.html';
+    if (SITE.portaDoApp()) { try { location.replace(jogo); } catch (e1) { location.href = jogo; } return 'porta'; }
+    location.href = jogo;
+    return 'web';
+  };
+  function paginaAtual() { return String(location.pathname || '').split('/').pop() || 'index.html'; }
+  function ehOJogo(href) {
+    try { return new URL(href, location.href).pathname === new URL('../index.html', location.href).pathname; } catch (e) { return false; }
+  }
+  function ligaAba() {
+    document.documentElement.classList.add('na-aba');
+    document.addEventListener('click', function (ev) {
+      if (ev.defaultPrevented || (ev.button !== undefined && ev.button !== 0) || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+      var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+      if (!a) return;
+      var u;
+      try { u = new URL(a.href, location.href); } catch (e) { return; }
+      if (u.origin !== location.origin) {
+        // fora do jogo (a comunidade, um pagamento): o navegador do aparelho, nunca dentro do quadro
+        if (u.protocol === 'http:' || u.protocol === 'https:') { a.target = '_blank'; a.rel = 'noopener'; }
+        return;
+      }
+      if (ehOJogo(u.href)) { ev.preventDefault(); SITE.vaiAoJogo(); return; }
+      var alvo = String(a.getAttribute('target') || '').toLowerCase();
+      if (alvo && alvo !== '_self') { ev.preventDefault(); location.href = u.href; }
+    }, true);
+  }
+  function ligaPorta() {
+    var html = document.documentElement;
+    html.classList.add('porta-app');
+    var pagina = paginaAtual();
+    var destino = SITE.portaDestino(pagina, !!SITE.sessao());
+    if (destino) { try { location.replace(destino); } catch (e) { location.href = destino; } return; }
+    var marca = document.querySelector('header.topo .marca');
+    if (marca && marca.tagName === 'A') marca.setAttribute('href', 'conta.html#entrar');
+    // os Termos e a Privacidade: o caminho de volta para a entrada, no lugar do menu
+    if (pagina !== 'conta.html' && !document.querySelector('.porta-volta')) {
+      var miolo = document.querySelector('header.topo .miolo');
+      if (miolo) {
+        var v = document.createElement('a');
+        v.className = 'porta-volta';
+        v.href = 'conta.html#entrar';
+        v.textContent = Tx('← Voltar');
+        v.addEventListener('click', function (ev) {
+          if (history.length > 1) { ev.preventDefault(); history.back(); }
+        });
+        miolo.appendChild(v);
+      }
+    }
+  }
   SITE.sessao = function () {
     try {
       var s = JSON.parse(leLocal(CHAVE_SESSAO) || 'null');
@@ -729,6 +811,13 @@
     return SITE.busto({ src: fus || cls, reserva: fus ? cls : '', letra: SITE.inicial(j.nome),
                         cor: cor(j.classe) || (fus ? cor(par[0]) : '') });
   };
+
+  /* 24/10: a aba do site no jogo, ou a porta do aplicativo (ver SITE.naAba, lá em cima). Aqui no fim, com o
+   * SITE inteiro de pé: o site.js é o primeiro script do pé de toda página, e a porta decide antes dos outros. */
+  try {
+    if (SITE.naAba()) ligaAba();
+    else if (SITE.portaDoApp()) ligaPorta();
+  } catch (eP) { /* sem DOM (as provas em Node): segue */ }
 
   document.addEventListener('DOMContentLoaded', SITE.cabecalho);
 })();

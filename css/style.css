@@ -4614,3 +4614,47 @@ button.tor-ultimo:hover { border-color: rgba(232,194,90,.45); }
 .cv-link { width: 100%; box-sizing: border-box; margin: 6px 0; font-size: 12.5px; }
 .cv-acts { display: flex; gap: 8px; }
 .cv-conta { margin-top: 6px; }
+
+/* 24/10 — o SITE dentro do jogo (js/ui/site_aba.js). O botão "Site" com o globo (menu e praça) e, no aplicativo,
+   a aba que cobre o jogo com o site num quadro. A aba é filha do body (o #ui-root tem pointer-events: none),
+   acima das fichas e do botão de tela cheia, abaixo só da compra pela Google Play (99990) e da pergunta de sair. */
+.bt-site { gap: 6px; text-decoration: none; }
+.bt-site .ico-svg { width: 18px; height: 18px; }
+.bt-site:hover { text-decoration: none; }
+.site-aba {
+  position: fixed; inset: 0; z-index: 99900;
+  display: flex; flex-direction: column;
+  background: var(--panel, #161b22);
+}
+.site-aba-cab {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  min-height: 48px;
+  padding: calc(var(--sa-t, 0px) + 4px) calc(8px + var(--sa-r, 0px)) 4px calc(8px + var(--sa-l, 0px));
+  background: linear-gradient(180deg, rgba(16,20,16,.98), rgba(8,11,8,.96));
+  border-bottom: 1px solid var(--gold-dim, #7a5a1c);
+  font: 600 14px/1.2 var(--ui-sans);
+  color: var(--text, #ece4d4);
+}
+.site-aba-cab button {
+  min-height: 40px; min-width: 40px; padding: 0 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line2, #3a4553); background: rgba(255,255,255,.05);
+  color: var(--text, #ece4d4); font: 600 14px/1 var(--ui-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+.site-aba-cab button:hover, .site-aba-cab button:focus-visible { border-color: var(--gold, #ffc44d); color: var(--gold, #ffc44d); }
+.site-aba-volta { padding: 0 !important; font-size: 24px !important; }
+.site-aba-marca { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; color: var(--gold, #ffc44d); }
+.site-aba-marca .ico-svg { width: 20px; height: 20px; flex: none; }
+.site-aba-marca b { font-family: var(--ui-serif); font-size: 16px; letter-spacing: .04em; }
+.site-aba-tit { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dim, #8b93a0); font-weight: 500; font-size: 13px; }
+.site-aba-tit:not(:empty)::before { content: '·'; margin-right: 7px; }
+.site-aba-fecha { flex: none; border-color: var(--gold-dim, #7a5a1c) !important; color: var(--gold, #ffc44d) !important; }
+.site-aba-carga { position: absolute; left: 0; right: 0; top: calc(var(--sa-t, 0px) + 64px); margin: 0;
+  text-align: center; color: var(--dim, #8b93a0); font: 14px var(--ui-sans); pointer-events: none; }
+.site-aba-quadro { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; display: block; background: transparent;
+  padding-bottom: var(--sa-b, 0px); box-sizing: border-box; }
+@media (max-width: 380px) {
+  .site-aba-tit { display: none; }
+  .site-aba-cab button { padding: 0 10px; }
+}
