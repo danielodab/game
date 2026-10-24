@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — no aplicativo, fora da aba, o site é só a entrada (24/10)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:390px;height:300px;border:1px solid #333}</style>
+</head>
+<body>
+<!-- 24/10, o dono: "preciso que meu app não seja o site ao fechar o jogo — seja somente página de login". As
+     páginas de verdade do site num quadro DESTA página, que não tem a aba do jogo (JOGO.SiteAba): é o WebView do
+     aplicativo visto de fora da aba (site/site.js, SITE.portaDoApp). Com a marca do aplicativo (?app=1, que fica
+     na sessão da aba):
+       · a página da conta é só a entrada: sem o menu do site e sem a sessão do topo, com o idioma;
+       · os Termos e a Privacidade (o cadastro pede para lê-los) ficam, com o "← Voltar";
+       · qualquer outra página do site vai para a entrada (sem sessão) — ou para o jogo (com sessão);
+     e, SEM a marca (a web), tudo como sempre. Precisa de um servidor (python -m http.server na raiz). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<iframe id="q" title="o site"></iframe>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var guardada = null;
+  try { guardada = localStorage.getItem('soterra-sessao'); localStorage.removeItem('soterra-sessao'); } catch (e) {}
+  try { sessionStorage.removeItem('soterra-app'); } catch (e) {}
+  function fim(msg) {
+    try { if (guardada !== null) localStorage.setItem('soterra-sessao', guardada); } catch (e) {}
+    try { sessionStorage.removeItem('soterra-app'); } catch (e2) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = (falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')')) + (msg ? ' · ' + msg : '');
+    window.__done = true; window.__fail = falhas;
+  }
+  var q = document.getElementById('q');
+  var cargas = 0;
+  q.addEventListener('load', function () { cargas++; });
+  function w() { return q.contentWindow; }
+  function d() { try { return q.contentDocument; } catch (e) { return null; } }
+  function caminho() { try { return w().location.pathname + w().location.hash; } catch (e) { return ''; } }
+  /* abre `url` no quadro e espera assentar numa página cujo endereço casa com `re` e cujo site.js já rodou */
+  function vai(url, re, fn, rotulo) {
+    var n = cargas, t0 = Date.now();
+    q.src = url;
+    (function volta() {
+      var ok = false;
+      try { ok = cargas > n && d().readyState === 'complete' && re.test(caminho()) && !!w().SITE; } catch (e) {}
+      if (ok) return setTimeout(fn, 120);           // o site.js termina; a conta.js desenha
+      if (Date.now() - t0 > 15000) { check('chegou: ' + rotulo, false, caminho()); return fim('parou em: ' + rotulo); }
+      setTimeout(volta, 60);
+    })();
+  }
+  function some(sel) { var e = d().querySelector(sel); return !e || w().getComputedStyle(e).display === 'none'; }
+
+  // ---- A PORTA DO APLICATIVO ---------------------------------------------------------------------------------
+  vai('../site/conta.html?app=1#entrar', /\/site\/conta\.html/, function () {
+    var S = w().SITE, html = d().documentElement;
+    check('no aplicativo, fora da aba: SITE.portaDoApp, e não é a aba', S.portaDoApp() === true && S.naAba() === false && S.noApp() === true);
+    check('a página da conta ganha a marca porta-app', html.classList.contains('porta-app'));
+    check('sem o menu do site no topo', some('header.topo nav'));
+    check('sem a sessão do topo', some('header.topo .sessao'));
+    check('com a entrada à vista (Criar conta / Entrar)', !d().getElementById('caixa-fora').hidden && !some('#caixa-fora'));
+    check('a marca do topo leva à entrada, não à capa do site', /conta\.html#entrar$/.test(d().querySelector('header.topo .marca').getAttribute('href')));
+    check('a escolha do idioma segue no topo', !!d().getElementById('idioma-sel') && !some('#idioma-sel'));
+    check('a marca do aplicativo ficou na sessão da aba (as páginas seguintes sabem)', sessionStorage.getItem('soterra-app') === '1');
+    check('o destino de cada página: a entrada e os jurídicos ficam; o resto vai à entrada (sem sessão) ou ao jogo (com)',
+          S.portaDestino('conta.html', false) === null && S.portaDestino('termos.html', true) === null &&
+          S.portaDestino('privacidade.html', false) === null && S.portaDestino('index.html', false) === 'conta.html#entrar' &&
+          S.portaDestino('loja.html', true) === '../index.html' && S.portaDestino('', false) === 'conta.html#entrar' &&
+          S.portaDestino('mestre.html', true) === '../index.html');
+    vai('../site/index.html', /\/site\/conta\.html#entrar$/, function () {
+      check('a capa do site, no aplicativo e sem sessão, vira a entrada', /\/site\/conta\.html#entrar$/.test(caminho()), caminho());
+      vai('../site/loja.html', /\/site\/conta\.html#entrar$/, function () {
+        check('a loja do site também (no aplicativo ela mora na aba do jogo)', /\/site\/conta\.html#entrar$/.test(caminho()), caminho());
+        vai('../site/termos.html', /\/site\/termos\.html$/, function () {
+          check('os Termos ficam (o cadastro pede para lê-los)', /\/site\/termos\.html$/.test(caminho()) && d().documentElement.classList.contains('porta-app'));
+          check('… sem o menu do site', some('header.topo nav'));
+          var v = d().querySelector('.porta-volta');
+          check('… com o "← Voltar" para a entrada', !!v && /conta\.html#entrar$/.test(v.getAttribute('href')) && !some('.porta-volta'));
+          vai('../site/privacidade.html', /\/site\/privacidade\.html$/, function () {
+            check('a Privacidade também fica, do mesmo jeito', d().documentElement.classList.contains('porta-app') && !!d().querySelector('.porta-volta'));
+            web();
+          }, 'a Privacidade');
+        }, 'os Termos');
+      }, 'a loja vira a entrada');
+    }, 'a capa vira a entrada');
+  }, 'a conta no aplicativo');
+
+  // ---- A WEB -------------------------------------------------------------------------------------------------
+  function web() {
+    sessionStorage.removeItem('soterra-app');
+    vai('../site/conta.html#entrar', /\/site\/conta\.html/, function () {
+      var S = w().SITE, html = d().documentElement;
+      check('na web: nem porta nem aba', S.portaDoApp() === false && S.naAba() === false && S.noApp() === false);
+      check('na web a conta é a de sempre: o menu do site no topo', !html.classList.contains('porta-app') && !some('header.topo nav'));
+      vai('../site/index.html', /\/site\/index\.html$/, function () {
+        check('na web a capa do site fica onde está', /\/site\/index\.html$/.test(caminho()) && !some('header.topo nav'));
+        vai('../site/termos.html', /\/site\/termos\.html$/, function () {
+          check('na web os Termos não ganham o "← Voltar"', !d().querySelector('.porta-volta'));
+          fim();
+        }, 'os Termos na web');
+      }, 'a capa na web');
+    }, 'a conta na web');
+  }
+})();
+</script>
+</body>
+</html>

@@ -218,6 +218,13 @@ JOGO.I18n.registra('en', { textos: {
   "{libs} de {length} classes liberadas · {stars} estrelas": "{libs} of {length} classes unlocked · {stars} stars",
   "Sair do jogo": "Quit game",
   "Volta para o site — o seu progresso já está guardado": "Back to the site — your progress is already saved",
+  // 24/10: o botão "Site" (o globo) e a aba do site dentro do jogo (js/ui/site_aba.js)
+  "Site": "Site",
+  "O site do SOTERRA: eventos, ranking, wiki, loja e a sua conta": "The SOTERRA website: events, ranking, wiki, store and your account",
+  "Site do SOTERRA": "SOTERRA website",
+  "Voltar uma página": "Back one page",
+  "Voltar ao jogo": "Back to the game",
+  "abrindo o site…": "opening the website…",
   "Quem desce": "Who descends",
   "Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. Sozinho, a sorte de saque é máxima.": "Pick 1 or 2 heroes — the FIRST is your avatar and walks around Camp. Solo, loot luck is maxed.",
   "Confirmar": "Confirm",

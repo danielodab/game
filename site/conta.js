@@ -196,6 +196,7 @@
    * chegou assim veio para JOGAR: entrar devolve ao jogo sozinho (no aplicativo, dentro do mesmo WebView).
    * A marca é lida uma vez; quem abre a página da conta por conta própria segue parando nela. */
   var CHAVE_VOLTA = 'soterra-volta-jogo';       // a mesma do porteiro (index.html) e do js/core/sessao.js
+  function porta() { return !!(SITE.portaDoApp && SITE.portaDoApp()); }
   var voltaAoJogo = false;
   function leVolta() {
     try {
@@ -207,7 +208,9 @@
   function entrou(r, direto) {
     // o que o jogo vai ler: token + a conta enxuta
     SITE.guarda({ token: r.token, conta: { id: r.conta.id, nome: r.conta.nome, gm: !!r.conta.gm } });
-    if (direto || voltaAoJogo) { location.href = '../index.html'; return; }
+    // 24/10: no aplicativo a página da conta é só a ENTRADA (SITE.portaDoApp) — entrou, é o jogo; na aba do site
+    // de dentro do jogo (SITE.naAba), entrar fecha a aba e o jogo recarrega com a conta que entrou
+    if (direto || voltaAoJogo || porta() || (SITE.naAba && SITE.naAba())) { SITE.vaiAoJogo(); return; }
     SITE.cabecalho();
     carregaConta();
   }
@@ -238,6 +241,9 @@
         $('cc-botoes').hidden = false;
         return;
       }
+      // 24/10: na porta do aplicativo não há "Minha conta" (ela mora na aba do site, dentro do jogo): quem já
+      // está com a sessão boa vai jogar
+      if (porta()) { SITE.vaiAoJogo(); return; }
       dados = r;
       desenhaConta();
       mostra('conta');

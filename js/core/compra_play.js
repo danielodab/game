@@ -321,12 +321,15 @@
     '.cpl-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px}.cpl-cab h3{margin:0;color:#e9c46a;font:700 19px system-ui,sans-serif}' +
     '.cpl-fechar{min-width:44px;min-height:44px;border:1px solid #5a4a22;border-radius:8px;background:transparent;color:#efe6d0;font-size:15px;cursor:pointer}' +
     '.cpl-brinde{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:99991;background:#16301e;color:#9be7a8;border:1px solid #2f6b3f;border-radius:10px;padding:10px 14px;font:15px system-ui,sans-serif;max-width:92vw}';
-  function estilo() {
-    if (document.getElementById('cpl-estilo')) return;
-    var s = document.createElement('style');
+  /* a folha vai para a página onde a tela é desenhada: 24/10, a loja do site na aba de dentro do jogo desenha o
+   * painel no quadro dela com ESTE arquivo, o do jogo (site/loja.js, compraPlay) */
+  function estilo(doc) {
+    doc = doc || document;
+    if (doc.getElementById('cpl-estilo')) return;
+    var s = doc.createElement('style');
     s.id = 'cpl-estilo';
     s.textContent = CSS;
-    document.head.appendChild(s);
+    (doc.head || doc.documentElement).appendChild(s);
   }
   function html() {
     var h = '';
@@ -357,13 +360,14 @@
     return h;
   }
   function pinta() {
-    paineis = paineis.filter(function (e) { return e && e.isConnected; });
+    // a página que se foi (a loja do quadro da aba, que trocou de página) não tem mais janela: sai da lista
+    paineis = paineis.filter(function (e) { return e && e.isConnected && e.ownerDocument && e.ownerDocument.defaultView; });
     paineis.forEach(function (e) { e.innerHTML = html(); });
   }
   /* Desenha a tela dentro de `alvo` (a loja do site usa isto) e começa a carregar. */
   P.painel = function (alvo) {
     if (!alvo) return;
-    estilo();
+    estilo(alvo.ownerDocument);
     alvo.classList.add('cpl');
     if (!alvo._cpl) {
       alvo._cpl = true;

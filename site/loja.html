@@ -119,9 +119,13 @@
   var lista = ['site.js', 'banimento.js', '../js/core/data/classes.js'];
   // SÓ DENTRO DO APLICATIVO de Android: a compra de barras pela Google Play (a Play não aceita o Mercado Pago
   // num aplicativo). Na web este arquivo nem é pedido. O teste é o mesmo do SITE.noApp (site.js).
+  // 24/10: na aba do site de dentro do jogo, a compra é a do jogo (site/loja.js, compraPlay): este quadro não traz
+  // a sua — duas retomariam a mesma compra, e a deste quadro talvez nem tenha a ponte do Capacitor
+  var doJogo = false;
+  try { doJogo = window.parent !== window && !!(window.parent.JOGO && window.parent.JOGO.SiteAba && window.parent.JOGO.CompraPlay); } catch (eJ) {}
   try {
-    if (/[?&]app=1(&|$)/.test(location.search) || sessionStorage.getItem('soterra-app') === '1' ||
-        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+    if (!doJogo && (/[?&]app=1(&|$)/.test(location.search) || sessionStorage.getItem('soterra-app') === '1' ||
+        (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()))) {
       lista.push('../js/core/compra_play.js');
     }
   } catch (eApp) {}

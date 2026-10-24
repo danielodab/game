@@ -268,10 +268,16 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
     servidor.modo = 'ok';
 
     // ---- a loja do site DENTRO do aplicativo ----
+    // 24/10: no aplicativo o site só abre na ABA de dentro do jogo (js/ui/site_aba.js; fora dela, o site é só a
+    // entrada e manda a loja embora — site/site.js, SITE.portaDoApp). Esta página faz o papel do jogo com a aba:
+    // a marca JOGO.SiteAba e a compra de verdade (P), que a loja do quadro usa no lugar da sua
+    JOGO.SiteAba = { prova: true };
     return abreLoja();
   }).then(function (L) {
     var d = L.d, w = L.w;
     return espera(function () { return d.querySelectorAll('#lj-play [data-cpl-pacote]').length === 4; }).then(function () {
+      check('NA ABA DO JOGO a loja do site compra pela Play do jogo e não traz a sua compra_play.js',
+            w.SITE.naAba() === true && !(w.JOGO && w.JOGO.CompraPlay) && !d.querySelector('script[src*="compra_play"]'));
       var texto = d.body.innerText || d.body.textContent;
       check('NO APLICATIVO a loja do site mostra a compra pela Google no lugar dos pacotes',
             w.SITE.noApp() === true && d.querySelectorAll('#lj-play [data-cpl-pacote]').length === 4 && !d.getElementById('lj-pacotes').hidden);
@@ -294,6 +300,7 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
       // a marca "estou no aplicativo" sai pelo armazenamento do QUADRO: o desta página é o de mentira do save_sandbox.js
       L.w.sessionStorage.removeItem('soterra-app');
       L.q.remove();
+      delete JOGO.SiteAba;                 // a web não tem a aba: o site é a página inteira
       history.replaceState(null, '', location.pathname);
       sessionStorage.removeItem('soterra-app');
       return abreLoja();

@@ -218,7 +218,27 @@
    * do Mercado Pago não aparecem (nem botão, nem preço em reais, nem o nome dele): no lugar entra a tela da
    * compra pela Google (js/core/compra_play.js, que o loja.html só carrega no aplicativo). Gastar barras é igual. */
   function noApp() { return !!(SITE.noApp && SITE.noApp()); }
-  function compraPlay() { return (window.JOGO && window.JOGO.CompraPlay) || null; }
+  /* 24/10: na ABA DO SITE de dentro do jogo (SITE.naAba) a compra é a do JOGO, o quadro de cima: é lá que a ponte do
+   * Capacitor está carregada e provada (o quadro da aba pode nem receber a ponte). O painel desenha aqui, o
+   * clique roda lá, e o aviso 'soterra:barras-play' sai na janela de cima (ouveCompraDoJogo) */
+  function compraPlay() {
+    try {
+      var P = SITE.naAba && SITE.naAba() && window.parent.JOGO && window.parent.JOGO.CompraPlay;
+      if (P && P.painel) return P;
+    } catch (e) { /* segue */ }
+    return (window.JOGO && window.JOGO.CompraPlay) || null;
+  }
+  /* a compra é a do jogo (a aba do site): o aviso das barras que entraram sai na janela dele. O ouvinte sai junto
+   * com esta página, para a janela do jogo não ficar com o de cada visita à loja */
+  function ouveCompraDoJogo() {
+    var cp = compraPlay();
+    if (!cp || cp === ((window.JOGO && window.JOGO.CompraPlay) || null)) return;
+    try {
+      var cima = window.parent, fn = function () { carregaMinha(); };
+      cima.addEventListener('soterra:barras-play', fn);
+      window.addEventListener('pagehide', function () { try { cima.removeEventListener('soterra:barras-play', fn); } catch (e) {} });
+    } catch (e2) { /* segue: o saldo anda na próxima leitura */ }
+  }
   function pagamentoLigado() { return !!(catalogo && catalogo.pagamento && catalogo.pagamento.ligado === true); }
 
   /* ---- o que vem do servidor ---- */
@@ -1167,6 +1187,7 @@
       $('lj-sub').textContent = Tx('Personagens, bônus de XP, pedras de forja, insígnias de guilda, pergaminhos e auras para a praça, por barras de ouro. Toda semana há ofertas, e dá para presentear um amigo. As barras vêm dos pacotes ou da troca pelos vinténs que você junta no jogo: quem desce muito leva tudo daqui sem gastar dinheiro; quem tem pressa, adianta.');
       // as barras compradas pela Google entraram (na hora, ou uma compra retomada): o saldo e o extrato andaram
       window.addEventListener('soterra:barras-play', function () { carregaMinha(); });
+      ouveCompraDoJogo();
     }
     desenha();
     carregaCatalogo().then(iniciaVolta);     // sem volta, iniciaVolta só lê "Seus pacotes"

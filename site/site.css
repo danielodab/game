@@ -1003,3 +1003,17 @@ details.torneio[open] > summary { margin-bottom: 10px; }
   .torneio { padding: 12px 12px; }
   .tor-col { flex-basis: 164px; }
 }
+
+/* ---- 24/10: o aplicativo não é o site (site.js, SITE.portaDoApp e SITE.naAba) ----------------------------------
+   PORTA: no aplicativo, fora da aba do site de dentro do jogo, a página é só a entrada — o topo fica com a marca
+   e o idioma, sem o menu do site e sem a sessão; nos Termos e na Privacidade, o "← Voltar" para a entrada. */
+.porta-app .topo nav, .porta-app .topo .sessao { display: none !important; }
+.porta-app .topo .miolo { justify-content: space-between; }
+.porta-app .topo .idioma-sel { margin-left: auto; }
+.porta-volta {
+  padding: 6px 12px; border-radius: 8px; border: 1px solid var(--ouro-esc); background: var(--ouro-a10);
+  color: var(--ouro); font-size: 14.5px; font-weight: 600; font-family: var(--sans);
+}
+.porta-volta:hover { text-decoration: none; }
+/* NA ABA de dentro do jogo o topo não gruda: a aba já tem a barra dela por cima */
+.na-aba .topo { position: static; }

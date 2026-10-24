@@ -12,6 +12,18 @@
   }
 </script>
 <script>
+  /* 24/10: no aplicativo, fora da aba do site de dentro do jogo, esta página é só a ENTRADA (site/site.js,
+   * SITE.portaDoApp: a mesma pergunta). A marca entra aqui no topo para o menu do site nem piscar; quem decide
+   * de verdade, e manda embora o que não é entrada, é o site.js. */
+  try {
+    var naAba = false;
+    try { naAba = window.parent !== window && !!(window.parent.JOGO && window.parent.JOGO.SiteAba); } catch (eA) {}
+    var C = window.Capacitor;
+    if (!naAba && ((C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) ||
+        /[?&]app=1(&|$)/.test(location.search) || sessionStorage.getItem('soterra-app') === '1')) {
+      document.documentElement.classList.add('porta-app');
+    }
+  } catch (eP) {}
   window.SITE_URL = function (s) {
     var V = window.SOTERRA_VERSAO, tem = Object.prototype.hasOwnProperty;
     var mapa = location.protocol !== 'file:' && V && V.versao && V.versao !== 'dev' && V.arquivos;
