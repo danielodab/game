@@ -482,6 +482,11 @@ var JOGO = (typeof window !== 'undefined')
     risco('M12 2.6C9.3 5.3 8.1 8.5 8.1 12S9.3 18.7 12 21.4M12 2.6C14.7 5.3 15.9 8.5 15.9 12S14.7 18.7 12 21.4', 1.6) +
     risco('M2.8 12H21.2', 1.6) + risco('M4.4 7.3H19.6M4.4 16.7H19.6', 1.5, MEIA));
 
+  // 24/10: o SACO da "Loja" (a loja do site, aberta na aba de dentro do jogo): o corpo cheio com dois ilhoses
+  // furados e a alça em arco por cima — diferente do cesto do Mercadinho (mc-comprar)
+  poe('loja', furado('M4.6 8.2H19.4L20.6 21.2H3.4Z' + roda(8.4, 11.2, 0.95) + roda(15.6, 11.2, 0.95)) +
+    risco('M8.4 8.2V6.8A3.6 3.6 0 0 1 15.6 6.8V8.2', 1.8));
+
   /* --------------------------------------------------------------- a API */
   function tem(id) { return Object.prototype.hasOwnProperty.call(DESENHO, id); }
 

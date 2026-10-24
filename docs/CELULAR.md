@@ -536,27 +536,30 @@ inteira: o jogo sumia e o aplicativo virava o site.
 | **a porta** (`SITE.portaDoApp`) | no aplicativo, fora da aba — o WebView inteiro é a página | só a ENTRADA: a página da conta sem o menu e sem a sessão do topo (ficam a marca e o idioma); os Termos e a Privacidade, que o cadastro pede para ler, com um "← Voltar"; qualquer outra página manda para a entrada (sem sessão) ou para o jogo (com). Entrar, criar conta ou abrir a conta com a sessão boa leva direto ao jogo, com `location.replace` (o voltar do Android não reabre a entrada) |
 | **a aba** (`SITE.naAba`) | no quadro da aba do site, dentro do jogo | o site de sempre, menos três coisas: o "Jogar" (todo link para `../index.html`) fecha a aba; link para fora do jogo ganha `target=_blank` (o navegador do aparelho); link nosso com `target=_blank` fica no quadro |
 
-Na web os dois são falsos e nada muda. "No aplicativo" é o mesmo
+A porta só existe no aplicativo; a aba existe no aplicativo e, desde a loja
+dentro do jogo (24/10, mais abaixo), também na web. "No aplicativo" é o mesmo
 `SITE.noApp()` de 04/10 (o Capacitor nativo, o `?app=1` das provas ou a marca
 `soterra-app` na sessão da aba). A `site/conta.html` põe a classe `porta-app`
 já no topo, para o menu nem piscar; as outras páginas a recebem do `site.js`.
 
-**A aba: `js/ui/site_aba.js` (`JOGO.SiteAba`).** Só liga no aplicativo
-(`JOGO.Mobile.app()`); na web não registra ouvinte nenhum.
+**A aba: `js/ui/site_aba.js` (`JOGO.SiteAba`).** Liga no aplicativo e na
+web; a marca do aplicativo (`?app=1`) só vai quando é o aplicativo.
 
-- O botão **Site** com o globo (`IconesUI.svg('globo')`) fica no menu, ao lado
-  das Configurações, e na praça, ao lado do Menu. É um LINK para
-  `site/index.html` com `target=_blank`: na web abre uma aba nova do navegador,
-  como os outros links do jogo sempre abriram.
-- No aplicativo, UM ouvinte de clique no `document` pega todo link do jogo
+- O botão **Loja** com o saco (`IconesUI.svg('loja')`) e o botão **Site** com o
+  globo (`IconesUI.svg('globo')`) ficam no menu, depois das Configurações, e na
+  praça, antes do Menu. São LINKS (para `site/loja.html` e `site/index.html`,
+  com `target=_blank`: Ctrl+clique ou botão do meio ainda abrem uma aba do
+  navegador) que o ouvinte abre na aba de dentro do jogo.
+- UM ouvinte de clique no `document` pega todo link do jogo
   para uma página do site (o globo, a pílula da loja, o sino, a faixa de
   eventos, o ranking do Eco, os Termos da ficha Contas, o "Ir para o site" da
-  inatividade) e abre a aba. O "Sair do jogo" continua com a casca (pergunta e
-  fecha o aplicativo — `js/mobile.js`).
+  inatividade) e abre a aba. O "Sair do jogo" fica de fora: no aplicativo é da
+  casca (pergunta e fecha o aplicativo — `js/mobile.js`); na web é a saída para
+  o site.
 - A aba é um quadro (`iframe`) da mesma origem por cima do jogo: a mesma
-  sessão, e o jogo segue de pé embaixo. O quadro abre a primeira página com
-  `?app=1`, para o site saber que está no aplicativo mesmo se o Capacitor não
-  entrar no quadro.
+  sessão, e o jogo segue de pé embaixo. No aplicativo o quadro abre a
+  primeira página com `?app=1`, para o site saber que está no aplicativo mesmo
+  se o Capacitor não entrar no quadro.
 - **Fechar:** o "Voltar ao jogo" do topo, o "Jogar" do site (postMessage
   `{soterra: 'site-aba', acao: 'jogo'}`, aceito só da mesma origem e só do
   quadro da aba), o Esc, ou a batalha que começa (`UI.showScreen('battle')`).
@@ -586,6 +589,36 @@ jogo (o ouvinte sai com a página). Assim não importa se o Capacitor entra ou
 não num quadro.
 
 **Precisa de AAB novo?** Não. Tudo é servido pela web.
+
+**A loja dentro do jogo (24/10).** O dono: "onde o usuário consegue abrir a
+loja dentro do jogo e já comprar ali, pagando pela Google ou pelo Mercado Pago".
+O botão **Loja** abre a aba direto na loja do site, e a compra acontece ali:
+
+| onde | como paga | o que acontece |
+|---|---|---|
+| aplicativo | Google Play, a do jogo (acima) | a tela da Google abre por cima, e o saldo da loja anda quando a Play confirma |
+| web | Mercado Pago | a página do Mercado Pago não aceita ser posta num quadro: ela abre numa ABA NOVA do navegador, nascida no toque de "Ir para o pagamento" (o navegador barra a janela aberta depois de uma espera de rede), e recebe o endereço quando o servidor o devolve; deu errado, a aba nova fecha. De volta ao jogo, a loja relê o saldo e os pacotes na hora |
+
+No aplicativo **não** há Mercado Pago: a Play não aceita pagamento de item
+digital por fora da cobrança dela. Se o navegador barrar a aba nova mesmo assim,
+o pagamento vai na página inteira (o jogo sai, e o que estava salvo fica).
+Fora da aba do jogo (a loja como página do site) nada muda.
+
+**O que liga cada caminho** (é do dono, no Coolify e nos painéis):
+
+- **Mercado Pago:** `SOTERRA_MP_TOKEN` e `SOTERRA_MP_SEGREDO` no Coolify.
+  Sem eles, os pacotes aparecem "em breve" (conferido no ar em 24/10:
+  `pagamento.ligado` falso). Pendência jurídica antes de vender pela web: o site
+  que vende precisa mostrar CNPJ ou CPF (`GOOGLE_PLAY.md` §7, item 6).
+- **Google Play:** os quatro produtos na Play Console, a conta de serviço e a
+  credencial no Coolify — `GOOGLE_PLAY.md` §9. Não depende da produção: a Play
+  deixa cadastrar os produtos assim que recebe um AAB com a cobrança, e o 1.1.0
+  já tem.
+
+Prova: `tests/loja_na_aba.html` (15) — a aba na web sem a marca do aplicativo;
+a aba nova do Mercado Pago aberta no toque, antes da resposta do servidor; o
+endereço indo para ela com o quadro parado; a releitura do saldo na volta; a
+aba nova fechando na recusa e no endereço que não é do Mercado Pago.
 
 **As provas:**
 

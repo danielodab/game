@@ -1050,8 +1050,8 @@ var JOGO = (typeof window !== 'undefined')
       'btn-mini btn-ghost', function () { openSheet('contas'); }));
     // 02/10: a ficha das Configurações (som, tela, movimento) — antes não havia
     fichas.appendChild(btn(tr('Configurações'), 'btn-mini btn-ghost menu-config', function () { openSheet('config'); }));
-    // 24/10 (o dono): o SITE com o globo — no aplicativo abre numa aba dentro do jogo (js/ui/site_aba.js); na web,
-    // numa aba nova do navegador
+    // 24/10 (o dono): a LOJA e o SITE abrem numa aba DENTRO do jogo (js/ui/site_aba.js) — a loja já compra ali
+    fichas.appendChild(botaoLoja('btn-mini btn-ghost menu-loja'));
     fichas.appendChild(botaoSite('btn-mini btn-ghost menu-site'));
     // 08/10 (o dono): sair da conta DIRETO do menu, sem passar por Configurações → Conta e nuvem
     if (safe(function () { return JOGO.Sessao && JOGO.Sessao.ativa && JOGO.Sessao.ativa(); }, false)) {
@@ -1079,14 +1079,21 @@ var JOGO = (typeof window !== 'undefined')
    * site — que é onde se cuida da conta, da loja e do ranking — e o save já
    * está gravado a cada passo, então sair é só sair. */
   /* O "SITE" COM O GLOBO (24/10, o dono: "dentro do jogo deve ter um ícone de um globo com nome Site, que leva pro
-   * site do jogo e abre uma aba do site no próprio jogo"). É um link para a capa do site: no aplicativo o
-   * js/ui/site_aba.js o abre na aba de dentro do jogo; na web, numa aba nova do navegador. Sem aquele arquivo,
-   * o mesmo link, sem o desenho. */
-  function botaoSite(cls) {
+   * site do jogo e abre uma aba do site no próprio jogo"). É um link para a capa do site, que o js/ui/site_aba.js
+   * abre na aba de dentro do jogo (no aplicativo e na web). Sem aquele arquivo, o mesmo link, sem o desenho. */
+  function botaoSite(cls) { return botaoDoSite(cls, tr('Site'), null, 'site/index.html'); }
+  /* A "LOJA" COM O SACO (24/10, o dono: "onde o usuário consegue abrir a loja dentro do jogo e já comprar ali,
+   * pagando pela Google ou pelo Mercado Pago"): a mesma aba, aberta direto na loja do site. No aplicativo a loja
+   * compra pela Google Play do jogo; na web, pelo Mercado Pago, que abre numa aba nova do navegador. */
+  function botaoLoja(cls) {
+    return botaoDoSite(cls, tr('Loja'), { pagina: 'loja.html', icone: 'loja',
+      titulo: tr('A loja do SOTERRA: barras de ouro, personagens e aparência') }, 'site/loja.html');
+  }
+  function botaoDoSite(cls, rotulo, op, reserva) {
     var SA = JOGO.SiteAba;
-    if (SA && SA.botao) { var b = safe(function () { return SA.botao(cls, tr('Site')); }, null); if (b) return b; }
-    var a = el('a', 'btn bt-site ' + (cls || ''), tr('Site'));
-    a.href = 'site/index.html';
+    if (SA && SA.botao) { var b = safe(function () { return SA.botao(cls, rotulo, op); }, null); if (b) return b; }
+    var a = el('a', 'btn bt-site ' + (cls || ''), esc(rotulo));
+    a.href = reserva;
     a.target = '_blank';
     a.rel = 'noopener';
     return a;
@@ -1576,7 +1583,8 @@ var JOGO = (typeof window !== 'undefined')
       quem.appendChild(el('span', 'hub-sala-tag', tr('{a} · sala {b}/{c} — {d}', { a: esc(sala.calabouco || ''), b: sala.roomIndex + 1, c: sala.total || '?', d: esc(sala.nome || '') })));
       acts.appendChild(btn(tr('Sair do calabouço'), 'btn-mini btn-ghost', perguntaSair));
     } else {
-      // 24/10: o Site (o globo) ao lado do Menu — a praça é onde se passa o tempo
+      // 24/10: a Loja (o saco) e o Site (o globo) ao lado do Menu — a praça é onde se passa o tempo
+      acts.appendChild(botaoLoja('btn-mini btn-ghost hub-loja-bt'));
       acts.appendChild(botaoSite('btn-mini btn-ghost hub-site'));
       acts.appendChild(btn(tr('Menu'), 'btn-mini btn-ghost', function () { navTo('menu'); }));
     }

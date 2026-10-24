@@ -17,8 +17,12 @@
 // Capacitor é a provada (site/loja.js). FORA da aba o aplicativo não mostra o site: só a entrada
 // (SITE.portaDoApp). Os dois lados se falam por postMessage, só da mesma origem e só do quadro da aba.
 //
-// NA WEB nada disto liga (a regra do dono de 04/10: o aplicativo não muda o jogo de quem joga no computador):
-// nenhum ouvinte, e o globo é um link comum, que abre o site numa aba nova do navegador.
+// NA WEB TAMBÉM (24/10, o dono: "onde o usuário consegue abrir a loja dentro do jogo e já comprar ali, pagando pela
+// Google ou pelo Mercado Pago"): a mesma aba, sem a marca do aplicativo — o site sabe que está na aba e não no
+// aplicativo, e a loja vende pelo Mercado Pago, que abre numa aba NOVA do navegador (site/loja.js; a página do
+// Mercado Pago não aceita ser posta num quadro). No aplicativo a loja segue só com a Google Play (a regra da Play).
+// Clique com Ctrl, Shift ou o botão do meio continua abrindo o site numa aba do navegador. O botão LOJA (o saco)
+// abre a aba direto na loja: é a porta da loja dentro do jogo.
 //
 // Prova: tests/site_aba.html (a aba de verdade, com as páginas do site dentro) e tests/site_porta.html.
 
@@ -96,22 +100,27 @@ var JOGO = (typeof window !== 'undefined')
   }
   function emBatalha() { try { var G = JOGO.Game; return !!(G && G.screen === 'battle'); } catch (e) { return false; } }
 
-  /* ---- o globo ---- */
-  function globo() {
+  /* ---- os ícones ---- */
+  var RESERVA = { globo: '🌐', loja: '🛍' };
+  function icone(id) {
     var s = '';
-    try { s = (JOGO.IconesUI && JOGO.IconesUI.svg) ? JOGO.IconesUI.svg('globo') : ''; } catch (e) {}
-    return s || '<span class="bt-site-ic" aria-hidden="true">🌐</span>';
+    try { s = (JOGO.IconesUI && JOGO.IconesUI.svg) ? JOGO.IconesUI.svg(id) : ''; } catch (e) {}
+    return s || '<span class="bt-site-ic" aria-hidden="true">' + (RESERVA[id] || '') + '</span>';
   }
-  /* O botão "Site" com o globo: um LINK para a capa do site. Na web ele abre uma aba nova do navegador; no
-   * aplicativo o ouvinte de clique daqui o abre na aba de dentro do jogo. O textContent é só o rótulo. */
-  SA.botao = function (cls, rotulo) {
+  function globo() { return icone('globo'); }
+  /* Um botão do jogo para uma página do site: um LINK (com target=_blank, para o Ctrl+clique e para quem não tem
+   * este arquivo ligado), que o ouvinte de clique daqui abre na aba de dentro do jogo. Sem `op`, é o "Site" com o
+   * globo, na capa do site; {pagina, icone, titulo} fazem os outros — a "Loja" com o saco abre na loja. O
+   * textContent é só o rótulo. */
+  SA.botao = function (cls, rotulo, op) {
+    op = op || {};
     var a = document.createElement('a');
     a.className = 'btn bt-site' + (cls ? ' ' + cls : '');
-    a.href = SA.endereco('index.html');
+    a.href = SA.endereco(op.pagina || 'index.html');
     a.target = '_blank';
     a.rel = 'noopener';
-    a.title = Tx('O site do SOTERRA: eventos, ranking, wiki, loja e a sua conta');
-    a.innerHTML = globo() + '<span class="bt-site-rot">' + esc(rotulo || Tx('Site')) + '</span>';
+    a.title = op.titulo || Tx('O site do SOTERRA: eventos, ranking, wiki, loja e a sua conta');
+    a.innerHTML = icone(op.icone || 'globo') + '<span class="bt-site-rot">' + esc(rotulo || Tx('Site')) + '</span>';
     return a;
   };
 
@@ -222,7 +231,7 @@ var JOGO = (typeof window !== 'undefined')
     pilha = [];
     substituindo = false;
     if (cargaEl) cargaEl.hidden = false;
-    quadro.src = comMarca(href);
+    quadro.src = noApp() ? comMarca(href) : href;          // a marca do aplicativo, só no aplicativo
     try { capa.querySelector('.site-aba-fecha').focus({ preventScroll: true }); } catch (e2) {}
     return true;
   };
@@ -255,10 +264,11 @@ var JOGO = (typeof window !== 'undefined')
   SA._pilha = function () { return pilha.slice(); };
   SA._quadro = function () { return quadro; };
 
-  /* ---- os ouvintes (só no aplicativo) ---- */
-  /* todo link do jogo para uma página do site abre na aba. O "Sair do jogo" é da casca (js/mobile.js: pergunta e
-   * fecha o aplicativo); clique com tecla ou botão do meio fica com o navegador. Não se para a propagação: quem
-   * escuta o próprio link (o sino que fecha o painel) segue escutando. */
+  /* ---- os ouvintes (no aplicativo e, desde 24/10, na web) ---- */
+  /* todo link do jogo para uma página do site abre na aba. O "Sair do jogo" fica de fora: no aplicativo é da casca
+   * (js/mobile.js: pergunta e fecha o aplicativo); na web é a saída para o site. Clique com tecla ou botão do meio
+   * fica com o navegador. Não se para a propagação: quem escuta o próprio link (o sino que fecha o painel) segue
+   * escutando. */
   function clique(ev) {
     if (ev.defaultPrevented || (ev.button !== undefined && ev.button !== 0)) return;
     if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
@@ -280,7 +290,7 @@ var JOGO = (typeof window !== 'undefined')
   }
   SA.ligado = false;
   function liga() {
-    if (SA.ligado || !noApp() || typeof document === 'undefined' || !document.addEventListener) return;
+    if (SA.ligado || typeof document === 'undefined' || !document.addEventListener) return;
     SA.ligado = true;
     document.addEventListener('click', clique, true);
     window.addEventListener('message', mensagem);
