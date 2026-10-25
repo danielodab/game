@@ -227,6 +227,26 @@ conta e o global).
 
 ### 6. A loja de vinténs
 
+**Fechar a loja (25/10).** Para lançar o jogo sem loja, enquanto a Google
+aprova a conta de pagamentos, ponha no Coolify `SOTERRA_LOJA` = `0`, com
+Runtime ligado e Build desligado, e faça **Redeploy**. Nos Runtime Logs aparece
+`loja: FECHADA (SOTERRA_LOJA=0)`. Com a loja fechada:
+
+- o botão "Loja" some do menu e da praça, a compra de barras some das
+  Configurações do aplicativo, a chamada de ofertas da praça não aparece, e as
+  frases que mandam à "loja do site" saem;
+- a página `/site/loja.html` diz que a loja abre em breve, e o link "Loja" do
+  menu do site some;
+- comprar, presentear e começar um pagamento respondem 503;
+- o que já está em andamento **segue**: os prêmios do anúncio e do diário, os
+  presentes do Mestre e os convites continuam chegando ao jogo, e um pagamento
+  já feito continua sendo conferido e entregue.
+
+Para abrir: apague a variável (ou ponha `1`) e faça Redeploy. O jogo guarda no
+aparelho a última resposta, então o botão volta na abertura seguinte. Prova:
+`python tests/loja_fechada_api.py`, `node tests/loja_fechada.js` e
+`tests/loja_na_aba.html`.
+
 Em `/site/loja.html` o jogador troca vinténs por personagens, bônus de XP
 (1, 3 e 7 dias), pedras de forja, Insígnias de Fundação (as "pedras de
 guilda": 10 fundam uma guilda) e o Pergaminho da Reescrita. O servidor confere

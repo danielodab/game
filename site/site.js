@@ -202,6 +202,19 @@
       }
     }
   }
+  /* 25/10 — A LOJA FECHADA (SOTERRA_LOJA=0 no servidor, servidor/loja.py). A última resposta fica no aparelho, na
+   * MESMA chave do jogo (js/core/loja.js, L.CHAVE_FECHADA): quem a escreve é a loja (o catálogo) e a vitrine do
+   * jogo. Com ela, o <html> leva `loja-fechada` e o link "Loja" do menu do topo some (site.css); a página da loja
+   * diz que abre em breve. Sem argumento, lê; com true/false, grava e acerta a classe. */
+  SITE.CHAVE_LOJA_FECHADA = 'soterra-loja-fechada';
+  SITE.lojaFechada = function (f) {
+    if (f === undefined) return leLocal(SITE.CHAVE_LOJA_FECHADA) === '1';
+    gravaLocal(SITE.CHAVE_LOJA_FECHADA, f ? '1' : null);
+    try { document.documentElement.classList.toggle('loja-fechada', !!f); } catch (e) { /* sem DOM */ }
+    return !!f;
+  };
+  try { if (SITE.lojaFechada()) document.documentElement.classList.add('loja-fechada'); } catch (eL) { /* sem DOM */ }
+
   SITE.sessao = function () {
     try {
       var s = JSON.parse(leLocal(CHAVE_SESSAO) || 'null');

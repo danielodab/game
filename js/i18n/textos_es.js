@@ -225,6 +225,9 @@ JOGO.I18n.registra('es', { textos: {
   "Voltar uma página": "Volver una página",
   "Voltar ao jogo": "Volver al juego",
   "abrindo o site…": "abriendo el sitio…",
+  // 25/10: a loja fechada (SOTERRA_LOJA=0) — as frases sem a loja do site
+  "Você ainda não tem aura. Ela é só aparência, nada de poder.": "Todavía no tienes aura. Es solo apariencia, nada de poder.",
+  "Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um.": "Pergamino del Nuevo Nombre: <b>{a}</b> · Pergamino del Blasón: <b>{b}</b>. Cada cambio gasta uno.",
   // 24/10: o botão "Loja" (o saco), a loja do site na aba de dentro do jogo
   "Loja": "Tienda",
   "A loja do SOTERRA: barras de ouro, personagens e aparência": "La tienda de SOTERRA: barras de oro, personajes y apariencia",

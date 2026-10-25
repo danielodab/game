@@ -225,6 +225,9 @@ JOGO.I18n.registra('en', { textos: {
   "Voltar uma página": "Back one page",
   "Voltar ao jogo": "Back to the game",
   "abrindo o site…": "opening the website…",
+  // 25/10: a loja fechada (SOTERRA_LOJA=0) — as frases sem a loja do site
+  "Você ainda não tem aura. Ela é só aparência, nada de poder.": "You don't have an aura yet. It's only looks, no power.",
+  "Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um.": "Scroll of the New Name: <b>{a}</b> · Scroll of the Crest: <b>{b}</b>. Each change uses one.",
   // 24/10: o botão "Loja" (o saco), a loja do site na aba de dentro do jogo
   "Loja": "Shop",
   "A loja do SOTERRA: barras de ouro, personagens e aparência": "The SOTERRA shop: gold bars, characters and cosmetics",

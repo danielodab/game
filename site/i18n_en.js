@@ -1313,5 +1313,6 @@ JOGO.I18n.registra('en', { textos: {
   "Não deu para ler os torneios.": "Couldn't read the tournaments.",
   "← Voltar": "← Back",
   "Abrindo o Mercado Pago…": "Opening Mercado Pago…",
-  "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "The payment opened in a new browser tab. When you're done, come back to the game: your balance updates by itself."
+  "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "The payment opened in a new browser tab. When you're done, come back to the game: your balance updates by itself.",
+  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>The shop opens soon.</b> For now, everything comes from descents: vinténs, forge stones, cards and characters. The prizes and gifts you earn keep arriving in the game."
 } });

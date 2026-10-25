@@ -1017,3 +1017,9 @@ details.torneio[open] > summary { margin-bottom: 10px; }
 .porta-volta:hover { text-decoration: none; }
 /* NA ABA de dentro do jogo o topo não gruda: a aba já tem a barra dela por cima */
 .na-aba .topo { position: static; }
+
+/* 25/10 — a loja FECHADA (SOTERRA_LOJA=0; site.js põe `loja-fechada` no <html>): o link "Loja" do menu do topo some,
+   e a página da loja mostra só o aviso de que abre em breve */
+html.loja-fechada header.topo nav a[href="loja.html"] { display: none !important; }
+.loja-em-breve { text-align: center; padding: 28px 18px; }
+.loja-em-breve b { display: block; margin-bottom: 6px; color: var(--ouro); font-family: var(--serif); font-size: 20px; }
