@@ -113,6 +113,7 @@ As versões geradas até aqui (a próxima é a seguinte da última linha):
 |---|---|---|---|
 | 1 | 1.0.0 | 06/10 | o primeiro envio: o jogo do servidor, a compra pela Play, o anúncio premiado |
 | 2 | 1.1.0 | 24/10 | os plugins que faltavam na casca: avisos do aparelho, avaliação na loja, compartilhar e arquivos (o cartão da fusão). Permissões novas: `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` e `SCHEDULE_EXACT_ALARM` (do plugin de avisos; sem ela concedida, o lembrete sai pelo agendamento comum) |
+| 3 | 1.1.0 | 24/10 | o mesmo AAB do 2, com outro código: a Play Console recusou o 2 ("o código de versão 2 já foi usado") — um envio anterior já o tinha usado. **Antes de gerar, confira o maior código na Play Console** (Explorador de pacotes de apps) e use o seguinte |
 
 ### 1.6 Onde enviar
 
