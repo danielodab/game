@@ -290,10 +290,10 @@ Os limites da Apple: nome **30**, subtítulo **30**, texto promocional **170**,
 descrição **4.000**, palavras-chave **100** caracteres. **Nenhum texto pode citar
 Android, Google Play ou outra loja** (diretriz 2.3.10).
 
-**Nome** (o da Play cabe: 30)
+**Nome** (até 30 letras: o da Play, "SOTERRA: Ecos do Mundo Enterrado", tem 32 e não cabe)
 
 ```
-SOTERRA: Ecos do Mundo Enterrado
+SOTERRA: Mundo Enterrado
 ```
 
 Se a Apple disser que o nome já existe, use `SOTERRA Online`.
