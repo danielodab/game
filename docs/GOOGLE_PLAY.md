@@ -412,7 +412,10 @@ mas é o melhor jeito de você mesmo instalar pela Play antes de chamar os outro
    `io.viidoo.soterra`).
 10. **O jogo vem do servidor — decidido em 04/10.** Mudou a web, mudou o
     celular, sem AAB novo. O preço e o que a Play pode perguntar estão na seção 8.
-11. **iOS** não foi tocado.
+11. **iOS:** o projeto `ios/` existe desde 25/10 e o passo a passo da App Store
+    está em [`APP_STORE.md`](APP_STORE.md). O que mudou no comum aos dois não
+    muda o Android: a linha `server.allowNavigation` do `capacitor.config.json`
+    (só o domínio do jogo, que no Android já é do aplicativo — `APP_STORE.md` §8.8).
 
 ---
 

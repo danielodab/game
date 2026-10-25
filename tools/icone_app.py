@@ -13,8 +13,12 @@ Desenha tudo de uma vez, a partir de UM desenho (a funcao `marca`):
   android/app/src/main/res/drawable*/splash.png              a tela de abertura, deitada e em pe
   docs/arte-loja/icone-512.png · icone-1024.png              o icone da ficha da Play
   docs/arte-loja/destaque-1024x500.png                       a imagem de destaque da ficha
+  ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png   o icone do iPhone (25/10; 1024, sem
+                                                             transparencia: a Apple recusa icone com canal alfa)
+  ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732*.png   a tela de abertura do iPhone
 
-    python tools/icone_app.py
+    python tools/icone_app.py          tudo (o do iPhone so se a pasta ios/ existir)
+    python tools/icone_app.py --ios    so o do iPhone: nao regrava nenhum arquivo do Android nem da ficha
 
 Precisa do Pillow e da Georgia Bold do Windows (a serifa mais proxima do letreiro do jogo). So desenha:
 nao instala nem baixa nada. Mudou o desenho? Rode de novo e recompile o aplicativo.
@@ -27,6 +31,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 RAIZ = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 RES = os.path.join(RAIZ, 'android', 'app', 'src', 'main', 'res')
 LOJA = os.path.join(RAIZ, 'docs', 'arte-loja')
+XCASSETS = os.path.join(RAIZ, 'ios', 'App', 'App', 'Assets.xcassets')
 FONTE = os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'georgiab.ttf')
 
 FUNDO = (11, 13, 16)            # o preto do jogo (#0b0d10), o mesmo do backgroundColor da casca
@@ -91,10 +96,10 @@ def redondo(img):
     return fora
 
 
-def tela(larg, alt):
-    """A tela de abertura: o fundo do jogo com a marca no meio."""
+def tela(larg, alt, prop=0.46):
+    """A tela de abertura: o fundo do jogo com a marca no meio (`prop`: o lado da marca sobre o lado curto)."""
     img = Image.new('RGBA', (larg, alt), FUNDO + (255,))
-    lado = int(min(larg, alt) * 0.46)
+    lado = int(min(larg, alt) * prop)
     m = marca(lado, fundo=True)
     img.paste(m, ((larg - lado) // 2, (alt - lado) // 2))
     return img.convert('RGB')
@@ -120,10 +125,30 @@ def grava(img, *caminho):
     return alvo
 
 
+def ios():
+    """O icone e a abertura do iPhone, nos nomes que o Assets.xcassets do Capacitor ja espera.
+
+    O icone e UM so, de 1024: o Xcode tira os outros tamanhos dele. Sem canal alfa (RGB), porque a App Store
+    recusa icone com transparencia. A abertura e um quadrado de 2732 que o LaunchScreen.storyboard mostra
+    preenchendo a tela (scaleAspectFill): deitado, o iPhone corta em cima e embaixo e sobra so a faixa do
+    meio, com uns 46% da altura do quadrado. Por isso a marca vai a 30% do lado, e nao aos 46% do Android."""
+    if not os.path.isdir(XCASSETS):
+        print('sem a pasta ios/ (docs/APP_STORE.md): nada do iPhone foi desenhado')
+        return 0
+    grava(marca(1024).convert('RGB'), XCASSETS, 'AppIcon.appiconset', 'AppIcon-512@2x.png')
+    abertura = tela(2732, 2732, prop=0.30)
+    for nome in ('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'):
+        grava(abertura, XCASSETS, 'Splash.imageset', nome)
+    return 4
+
+
 def main():
     if not os.path.isfile(FONTE):
         print('falta a fonte %s' % FONTE)
         return 1
+    if '--ios' in sys.argv[1:]:
+        print('%d arquivos do iPhone (%s)' % (ios(), XCASSETS))
+        return 0
     feitos = 0
     for dens, (ico, frente) in ICONES.items():
         pasta = os.path.join(RES, 'mipmap-' + dens)
@@ -148,6 +173,7 @@ def main():
     grava(marca(512), LOJA, 'icone-512.png')
     grava(marca(1024), LOJA, 'icone-1024.png')
     grava(destaque(), LOJA, 'destaque-1024x500.png')
+    feitos += ios()
     print('%d arquivos do aplicativo e 3 da ficha da loja (%s)' % (feitos, LOJA))
     return 0
 

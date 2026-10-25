@@ -13,3 +13,7 @@ assets/models/bundle/tabelas/*.js  text eol=lf
 # A música (assets/musica/) é binária: nunca troca fim de linha.
 *.ogg  binary
 *.mp3  binary
+# O projeto do iPhone (ios/) é aberto e compilado num Mac ou na nuvem, nunca
+# aqui: o que é texto vai sempre LF (o Xcode e o Capacitor escrevem assim), e o
+# que é imagem o Git reconhece sozinho como binário.
+ios/** text=auto eol=lf

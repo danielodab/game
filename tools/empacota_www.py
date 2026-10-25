@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""SOTERRA — monta a pasta `www/` que vira o aplicativo de Android.
+"""SOTERRA — monta a pasta `www/` que vira o aplicativo de Android e o de iPhone.
 
 O APLICATIVO ABRE O JOGO DO SERVIDOR (04/10, decisao do dono)
 -------------------------------------------------------------
@@ -35,11 +35,24 @@ servido: tire `url` e `errorPath` do capacitor.config.json e use esta opcao.
 Os modelos (assets/models/bundle, ~246 MB) nao entram em nenhum dos dois
 jeitos: passam do que a loja deixa baixar de inicio.
 
+O IPHONE (25/10, docs/APP_STORE.md)
+----------------------------------
+A www/ e a MESMA: a tela "sem conexao", que o Capacitor do iOS tambem mostra
+pelo `server.errorPath`. O que o iPhone pede a mais e uma linha da
+configuracao: o Capacitor do iOS so trata como "do aplicativo" o endereco que
+COMECA pelo `server.url` inteiro (`.../index.html`); a pagina da conta
+(`/site/conta.html`, a entrada) abriria no Safari. O `server.allowNavigation`
+com o dominio do jogo resolve, e no Android nao muda nada (la o dominio do
+`server.url` ja e do aplicativo). Este script recusa montar sem ela, para a
+troca de dominio nao a esquecer. No --embutida a pagina do iPhone viria de
+`capacitor://localhost`: as Caddyfile teriam de dar licenca tambem a essa origem.
+
 USO
 ---
     npm install                       # uma vez: traz o Capacitor
     python tools/empacota_www.py      # monta a www/ (a tela "sem conexao")
     npx cap sync android              # leva para o projeto Android
+    npx cap sync ios                  # e para o do iPhone (roda no Windows; compilar e no Mac ou na nuvem)
 
 `www/` fica FORA do Git (e gerada; ver .gitignore).
 """
@@ -131,15 +144,31 @@ def apaga_www(www):
     return True
 
 
+def problemas_da_config(cfg, servidor):
+    """O que no `server` do capacitor.config.json nao bate com este script (lista vazia = tudo certo)."""
+    cfg = cfg or {}
+    host = servidor.split('://', 1)[-1].split(':', 1)[0]
+    erros = []
+    if cfg.get('url') != servidor + PAGINA_DO_JOGO:
+        erros.append('server.url       = %r   (esperado %r)' % (cfg.get('url'), servidor + PAGINA_DO_JOGO))
+    if cfg.get('errorPath') != SEM_CONEXAO:
+        erros.append('server.errorPath = %r   (esperado %r)' % (cfg.get('errorPath'), SEM_CONEXAO))
+    # o iPhone: so o dominio do jogo, e nenhum de fora (pagina de fora dentro do aplicativo ganharia a ponte)
+    if cfg.get('allowNavigation') != [host]:
+        erros.append('server.allowNavigation = %r   (esperado %r: sem ele o iPhone abre a entrada no Safari)'
+                     % (cfg.get('allowNavigation'), [host]))
+    return erros
+
+
 def casca(www, servidor):
     """A www/ padrao: so a tela "sem conexao", com o endereco do servidor."""
     # o Capacitor le o endereco do capacitor.config.json: tem de ser o mesmo daqui
     with open(os.path.join(RAIZ, 'capacitor.config.json'), encoding='utf-8') as f:
-        cfg = json.load(f).get('server') or {}
-    if cfg.get('url') != servidor + PAGINA_DO_JOGO or cfg.get('errorPath') != SEM_CONEXAO:
+        erros = problemas_da_config(json.load(f).get('server'), servidor)
+    if erros:
         print('capacitor.config.json nao bate com este script:')
-        print('    server.url       = %r   (esperado %r)' % (cfg.get('url'), servidor + PAGINA_DO_JOGO))
-        print('    server.errorPath = %r   (esperado %r)' % (cfg.get('errorPath'), SEM_CONEXAO))
+        for e in erros:
+            print('    ' + e)
         return 1
     # a parte JS dos plugins (servida pelo servidor) tem de ser a do node_modules (a nativa)
     velhos = []
@@ -178,7 +207,7 @@ def casca(www, servidor):
     print('    a tela "sem conexao" (2 copias)    %7.1f KB' % (tamanho(www) / 1024.0))
     print('    o jogo abre de:                    %s' % (servidor + PAGINA_DO_JOGO))
     print('')
-    print('  Proximo passo:  npx cap sync android')
+    print('  Proximo passo:  npx cap sync android   (e, para o iPhone, npx cap sync ios)')
     return 0
 
 

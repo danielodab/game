@@ -19,9 +19,13 @@ desktop.ini
 # `android/` VAI para o Git: é o projeto do aplicativo — a versão, o ícone, o
 # manifesto e a receita de assinatura moram nele. O `android/.gitignore` deixa
 # de fora o que é gerado (a cópia da www/, o build) e a chave de assinatura.
+# `ios/` também VAI (25/10, docs/APP_STORE.md): a versão, o Info.plist, o
+# manifesto de privacidade e o ícone moram nele, e é dele que a compilação na
+# nuvem parte. O `ios/.gitignore` do Capacitor deixa de fora a cópia da www/
+# (App/App/public), a cópia da configuração e o build. Certificado e perfil de
+# assinatura NUNCA entram: ficam no serviço que compila (ver o documento).
 www/
 node_modules/
-ios/
 
 # Arte de terceiros: nao redistribuir (licenca dos packs).
 # A regra e por LICENCA, nao por prefixo de nome: `fx-*.js` era ampla demais e
