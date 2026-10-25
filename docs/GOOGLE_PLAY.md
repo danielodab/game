@@ -833,11 +833,14 @@ o público de 13 anos ou mais. Está em `js/core/premio_anuncio.js`
    aplicativo estiver **publicado** na Play. Sem o vínculo o AdMob limita a
    veiculação.
 2. O AdMob pede o **app-ads.txt** no site que consta na ficha da Play como "site
-   do desenvolvedor". O conteúdo é a linha que o AdMob mostra em **Apps →
-   app-ads.txt** (algo como `google.com, pub-4989579635131748, DIRECT,
-   f08c47fec0942fa0` — copie a de lá). Ela tem de responder em
-   `https://<o site da ficha>/app-ads.txt`. **Este arquivo ainda não existe no
-   repositório**: crie-o quando decidir o domínio da ficha.
+   do desenvolvedor". **Desde 24/10 ele está na raiz do repositório** (`app-ads.txt`,
+   com a linha `google.com, pub-4989579635131748, DIRECT, f08c47fec0942fa0`) e o
+   servidor o entrega em `https://soterra.viidoo.io/app-ads.txt`, como texto puro
+   (as duas `Caddyfile` escrevem o tipo: a imagem do Caddy não o conhece).
+   Confira a linha com a que o AdMob mostra em **Apps → app-ads.txt**: tem de ser
+   igual. Se o site da ficha for **outro** endereço (por exemplo `viidoo.io`), o
+   mesmo arquivo tem de responder também na raiz dele. O rastreador da Google pode
+   levar até sete dias para ver.
 3. **Pagamentos** do AdMob: preencher os dados fiscais e a forma de recebimento.
 4. **Privacidade e mensagens** (AdMob): se o jogo for oferecido na Europa ou no
    Reino Unido, crie ali a **mensagem de consentimento**. O aplicativo já mostra

@@ -60,6 +60,9 @@ jogo.exemplo.com.br {
 	header @ogg Content-Type audio/ogg
 	@mp3 path *.mp3
 	header @mp3 Content-Type audio/mpeg
+	# o app-ads.txt da AdMob (na raiz, docs/GOOGLE_PLAY.md §10.5): texto puro — sem a tabela, sairia sem tipo
+	@txt path *.txt
+	header @txt Content-Type "text/plain; charset=utf-8"
 
 	# O APLICATIVO DE ANDROID abre de https://localhost (os arquivos do pacote)
 	# e baixa os modelos DAQUI, sob demanda, como a web. Buscar um .glb de outra
