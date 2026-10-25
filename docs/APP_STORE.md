@@ -179,18 +179,40 @@ escolha o seu *Team*. Para gerar o arquivo da loja: **Product → Archive** →
    baixar uma vez**) e anote o *Issuer ID* e o *Key ID* que aparecem na página.
 4. **O Codemagic.** <https://codemagic.io> → entre com a conta do GitHub e dê
    acesso ao repositório `danielodab/game`.
-   1. *Team settings* → **Team integrations** → *Developer Portal* → **Connect**:
-      cole o *Issuer ID* e o *Key ID*, envie o `.p8`, e dê à chave o nome
-      **SOTERRA** (é o nome que o `codemagic.yaml` procura).
-   2. *Team settings* → **Code signing identities** → *iOS certificates* →
-      **Generate certificate** → tipo *Apple Distribution*, com a chave
-      SOTERRA. **Baixe a cópia** (`.p12`) e a senha que ele mostrar e guarde junto
-      da chave do Android (seção 3.3).
-   3. Mesma página → *iOS provisioning profiles* → **Fetch profiles** com a chave
-      SOTERRA. Se não vier nenhum perfil *App Store* para `br.com.soterra.jogo`,
-      crie em <https://developer.apple.com/account> → **Profiles** → **+** →
-      *App Store Connect* → o identificador → o certificado do passo anterior, e
-      busque de novo.
+   Na conta pessoal, o "Team settings" da documentação do Codemagic é o
+   **Settings** do menu da esquerda.
+   1. **A chave.** *Settings* → **Integrations** → *Developer Portal* →
+      **Connect** (ou *Manage keys* → *Add key*): nome **SOTERRA** (é o nome que o
+      `codemagic.yaml` procura), o *Issuer ID* ("ID do emissor"), o *Key ID* ("ID
+      da chave") e o arquivo `.p8` → **Save**.
+   2. **O certificado: gerar, baixar e enviar de volta.** *Settings* →
+      **codemagic.yaml settings** → **Code signing identities** → aba **iOS
+      certificates**:
+      - **Generate certificate** → *Reference name* `soterra_distribuicao`,
+        *Certificate type* **Apple Distribution**, a chave **SOTERRA** → **Create
+        certificate**;
+      - na janela seguinte, **baixe o arquivo `.p12` e copie a senha**: ela só
+        aparece **uma vez**. Guarde os dois junto da chave do Android (3.3);
+      - o certificado gerado **não fica guardado sozinho**: na mesma aba, envie o
+        `.p12` que você baixou (**Choose a .p12 or .pem file**), cole a senha em
+        *Certificate password*, *Reference name* `soterra_distribuicao` → **Add
+        certificate**.
+      A Apple aceita no máximo **3** certificados de distribuição por conta. Se der
+      erro de limite, apague um antigo em <https://developer.apple.com/account> →
+      **Certificates** (o do Tamagofit pode ser reaproveitado: `eas credentials`
+      no projeto dele baixa o `.p12`, e aí é só enviar como acima).
+   3. **O perfil: criar no site da Apple e buscar no Codemagic.** O Codemagic
+      não cria perfil, só busca.
+      - <https://developer.apple.com/account> → **Certificates, IDs & Profiles** →
+        **Profiles** → **+** → em *Distribution*, **App Store Connect** →
+        **Continue** → *App ID*: `br.com.soterra.jogo` → **Continue** → marque o
+        certificado do passo anterior (o *Apple Distribution* com a data de hoje)
+        → **Continue** → nome `SOTERRA App Store` → **Generate**. Não precisa
+        baixar;
+      - no Codemagic, a mesma página *Code signing identities* → aba **iOS
+        provisioning profiles** → **Fetch profiles** → marque `SOTERRA App
+        Store` (no grupo *App Store profiles*) → *Reference name*
+        `soterra_app_store` → **Download selected**.
 5. **O ID da Apple na receita.** No `codemagic.yaml`, troque
    `APP_STORE_APPLE_ID: 0000000000` pelo número do passo 2 e faça o commit (o
    número não é segredo).
@@ -200,8 +222,9 @@ escolha o seu *Team*. Para gerar o arquivo da loja: **Product → Archive** →
    "processa" por uns 10 a 30 minutos).
 
 **Se o build falhar**, o Codemagic mostra o passo e o log. Os tropeços mais
-prováveis no primeiro: a chave sem o nome SOTERRA; o perfil que não existe
-(passo 4.3); o ID da Apple ainda com zeros. A receita foi escrita pela
+prováveis no primeiro: a chave sem o nome SOTERRA; o certificado gerado e não
+enviado de volta (passo 4.2); o perfil que não existe (passo 4.3); o ID da Apple
+ainda com zeros. A receita foi escrita pela
 documentação do Codemagic e nunca rodou — o primeiro build é a prova dela.
 
 ### 3.3 O que guardar fora do computador
