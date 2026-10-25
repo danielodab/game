@@ -1068,7 +1068,8 @@ var JOGO = (typeof window !== 'undefined')
       box.appendChild(el('p', 'menu-foot',
         tr('{libs} de {length} classes liberadas · {stars} estrelas', { libs: libs, length: ids.length, stars: stars })));
     }
-    box.appendChild(botaoSair());
+    // 25/10: no iPhone não há "Sair do jogo" — o aplicativo não se fecha sozinho (JOGO.Mobile.falta, js/mobile.js)
+    if (!safe(function () { return JOGO.Mobile.falta('sair'); }, false)) box.appendChild(botaoSair());
     s.appendChild(box);
   }
 
@@ -12140,7 +12141,8 @@ var JOGO = (typeof window !== 'undefined')
 
     /* BARRAS DE OURO PELA GOOGLE PLAY (04/10): só no aplicativo — na web `JOGO.CompraPlay` não é carregado e
      * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */
-    if (JOGO.CompraPlay && JOGO.CompraPlay.noApp()) {
+    // 25/10: `ligada` é o noApp menos o iPhone, que ainda não tem a compra da Apple (js/core/compra_play.js)
+    if (JOGO.CompraPlay && (JOGO.CompraPlay.ligada ? JOGO.CompraPlay.ligada() : JOGO.CompraPlay.noApp())) {
       var secBarras = el('section', 'cfg-sec loja-jogo');      // 25/10: some com a loja fechada
       secBarras.appendChild(el('h3', 'bk-tit', tr('Barras de ouro')));
       secBarras.appendChild(el('p', 'inv-dica', tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.')));
@@ -12182,9 +12184,12 @@ var JOGO = (typeof window !== 'undefined')
     if (Av) {
       var com = el('section', 'cfg-sec');
       com.appendChild(el('h3', 'bk-tit', tr('Comunidade e ajuda')));
-      com.appendChild(btn(tr('Avaliar na Google Play'), 'btn-ghost btn-block', function () {
+      // 25/10: no iPhone a caixa é a da Apple (JOGO.Mobile.ios, js/mobile.js); no Android e na web, a da Play
+      var naApple = safe(function () { return JOGO.Mobile.ios(); }, false);
+      com.appendChild(btn(naApple ? tr('Avaliar na App Store') : tr('Avaliar na Google Play'), 'btn-ghost btn-block', function () {
         Av.avaliar().then(function (como) {
-          if (como === 'nativo') toast(tr('Obrigado! Se a caixa não abriu, a Play decide quando mostrar.'));
+          if (como === 'nativo') toast(naApple ? tr('Obrigado! Se a caixa não abriu, a Apple decide quando mostrar.')
+                                               : tr('Obrigado! Se a caixa não abriu, a Play decide quando mostrar.'));
           safe(function () { JOGO.EventosUso.anota('avaliacao_botao'); }, null);
         });
       }));

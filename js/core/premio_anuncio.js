@@ -69,7 +69,14 @@
   }
   var forcado = false;
   try { forcado = /[?&]app=1(&|$)/.test(String(location.search || '')); } catch (e0) {}
-  P.noApp = function () { return forcado || nativo(); };
+  /* 25/10 — O IPHONE: o AdMob não entra no aplicativo do iPhone (o includePlugins do capacitor.config.json; o aviso de
+   * rastreamento e os identificadores da Google ainda não estão lá — docs/APP_STORE.md §8.6). Lá a área e a moeda da
+   * praça não existem: sem isso a área diria "atualize pela Play Store". Quem diz é o JOGO.Mobile.falta (js/mobile.js),
+   * sempre falso no Android e na web. */
+  function semAnuncioAqui() {
+    try { return !!(JOGO.Mobile && JOGO.Mobile.falta && JOGO.Mobile.falta('anuncio')); } catch (e) { return false; }
+  }
+  P.noApp = function () { return (forcado || nativo()) && !semAnuncioAqui(); };
   function depuracao() { try { return !!(window.Capacitor && window.Capacitor.DEBUG === true); } catch (e) { return false; } }
 
   function api(rota, op) {

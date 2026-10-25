@@ -320,7 +320,11 @@
   /* 25/10 — A LOJA FECHADA (SOTERRA_LOJA=0, servidor/loja.py): o catálogo chega vazio com `fechada`. A página diz
    * que a loja abre em breve e não oferece compra nenhuma (nem pacote, nem "entre para comprar"); quem tem conta
    * segue vendo o saldo, os pedidos e o extrato — o que já aconteceu continua valendo. */
-  function fechada() { return !!(catalogo && catalogo.fechada === true); }
+  function fechada() {
+    if (!catalogo) return false;
+    // 25/10: no iPhone também, até existir a compra da Apple (SITE.faltaNoAparelho, site/site.js)
+    return catalogo.fechada === true || !!(SITE.faltaNoAparelho && SITE.faltaNoAparelho('compra'));
+  }
   function desenhaSaldo() {
     var caixa = $('lj-saldo');
     if (fechada() && estadoMinha === 'fora') { caixa.innerHTML = ''; return; }

@@ -14,11 +14,11 @@ manifesto de privacidade da Apple. A receita para compilar na nuvem está pronta
 (`codemagic.yaml`). A prova é `python tests/app_ios.py` (47 itens). **Nada foi
 compilado**: compilar para iPhone exige um Mac (ou um Mac na nuvem, seção 2).
 
-**O que falta antes do primeiro envio à revisão** (seção 8.0, com o tamanho de
-cada um): separar no jogo o que é do Android e o que é do iPhone. Hoje, aberto
-no iPhone, o jogo ainda mostraria "Google Play" na compra, um "Sair do jogo" que
-não sai e uma área de anúncios que manda atualizar "pela Play Store". A compra
-pela Apple e os anúncios no iPhone ficam para depois do primeiro envio.
+**A separação entre Android e iPhone no jogo está feita (25/10, seção 8.7):** no
+iPhone o "Sair do jogo", a loja (seja qual for o `SOTERRA_LOJA`) e a área de
+anúncios não aparecem, e a avaliação diz "App Store"; no Android e na web nada
+mudou. Ela vale quando for publicada na web (é código do jogo, não da casca). A
+compra pela Apple e os anúncios no iPhone ficam para depois do primeiro envio.
 
 > **O Android não muda.** O `android/` não foi tocado. O que é comum aos dois
 > (o `capacitor.config.json`, o `package.json`) ganhou só o que o iPhone lê: a
@@ -33,7 +33,7 @@ pela Apple e os anúncios no iPhone ficam para depois do primeiro envio.
 | # | o quê | quem | quanto tempo | seção |
 |---|---|---|---|---|
 | 1 | Conta Apple Developer (US$ 99 por ano) | você | 1 a 2 dias para aprovar | 1 |
-| 2 | Separar Android e iPhone no jogo (P+M, uns 2 dias) e publicar na web | código | 2 dias | 8.0 e 8.7 |
+| 2 | ~~Separar Android e iPhone no jogo~~ — **feito em 25/10**; falta só publicar na web | você | o deploy de sempre | 8.7 |
 | 3 | Registrar o identificador, criar o app no App Store Connect e a chave da API | você, no navegador | 1 hora | 3.2 |
 | 4 | Codemagic: ligar o repositório, a chave, o certificado e o perfil | você, no navegador | 1 hora | 3.2 |
 | 5 | Primeiro build → TestFlight → jogar no iPhone (a lista da 5.3) | Codemagic + você | 30 min + o teste | 5 |
@@ -179,29 +179,52 @@ escolha o seu *Team*. Para gerar o arquivo da loja: **Product → Archive** →
    baixar uma vez**) e anote o *Issuer ID* e o *Key ID* que aparecem na página.
 4. **O Codemagic.** <https://codemagic.io> → entre com a conta do GitHub e dê
    acesso ao repositório `danielodab/game`.
-   1. *Team settings* → **Team integrations** → *Developer Portal* → **Connect**:
-      cole o *Issuer ID* e o *Key ID*, envie o `.p8`, e dê à chave o nome
-      **SOTERRA** (é o nome que o `codemagic.yaml` procura).
-   2. *Team settings* → **Code signing identities** → *iOS certificates* →
-      **Generate certificate** → tipo *Apple Distribution*, com a chave
-      SOTERRA. **Baixe a cópia** (`.p12`) e a senha que ele mostrar e guarde junto
-      da chave do Android (seção 3.3).
-   3. Mesma página → *iOS provisioning profiles* → **Fetch profiles** com a chave
-      SOTERRA. Se não vier nenhum perfil *App Store* para `br.com.soterra.jogo`,
-      crie em <https://developer.apple.com/account> → **Profiles** → **+** →
-      *App Store Connect* → o identificador → o certificado do passo anterior, e
-      busque de novo.
-5. **O ID da Apple na receita.** No `codemagic.yaml`, troque
-   `APP_STORE_APPLE_ID: 0000000000` pelo número do passo 2 e faça o commit (o
-   número não é segredo).
+   Na conta pessoal, o "Team settings" da documentação do Codemagic é o
+   **Settings** do menu da esquerda.
+   1. **A chave.** *Settings* → **Integrations** → *Developer Portal* →
+      **Connect** (ou *Manage keys* → *Add key*): nome **SOTERRA** (é o nome que o
+      `codemagic.yaml` procura), o *Issuer ID* ("ID do emissor"), o *Key ID* ("ID
+      da chave") e o arquivo `.p8` → **Save**.
+   2. **O certificado: gerar, baixar e enviar de volta.** *Settings* →
+      **codemagic.yaml settings** → **Code signing identities** → aba **iOS
+      certificates**:
+      - **Generate certificate** → *Reference name* `soterra_distribuicao`,
+        *Certificate type* **Apple Distribution**, a chave **SOTERRA** → **Create
+        certificate**;
+      - na janela seguinte, **baixe o arquivo `.p12` e copie a senha**: ela só
+        aparece **uma vez**. Guarde os dois junto da chave do Android (3.3);
+      - o certificado gerado **não fica guardado sozinho**: na mesma aba, envie o
+        `.p12` que você baixou (**Choose a .p12 or .pem file**), cole a senha em
+        *Certificate password*, *Reference name* `soterra_distribuicao` → **Add
+        certificate**.
+      A Apple aceita no máximo **3** certificados de distribuição por conta. Se der
+      erro de limite, apague um antigo em <https://developer.apple.com/account> →
+      **Certificates** (o do Tamagofit pode ser reaproveitado: `eas credentials`
+      no projeto dele baixa o `.p12`, e aí é só enviar como acima).
+   3. **O perfil: criar no site da Apple e buscar no Codemagic.** O Codemagic
+      não cria perfil, só busca.
+      - <https://developer.apple.com/account> → **Certificates, IDs & Profiles** →
+        **Profiles** → **+** → em *Distribution*, **App Store Connect** →
+        **Continue** → *App ID*: `br.com.soterra.jogo` → **Continue** → marque o
+        certificado do passo anterior (o *Apple Distribution* com a data de hoje)
+        → **Continue** → nome `SOTERRA App Store` → **Generate**. Não precisa
+        baixar;
+      - no Codemagic, a mesma página *Code signing identities* → aba **iOS
+        provisioning profiles** → **Fetch profiles** → marque `SOTERRA App
+        Store` (no grupo *App Store profiles*) → *Reference name*
+        `soterra_app_store` → **Download selected**.
+5. **O ID da Apple na receita** — feito em 25/10: `APP_STORE_APPLE_ID: "6826929117"`
+   no `codemagic.yaml` (entre aspas: sem elas o YAML lê o número como outro). O
+   número não é segredo.
 6. **O primeiro build.** No Codemagic, abra o app → **Start new build** →
    workflow *SOTERRA iPhone para o TestFlight* → branch `main`. Uns 15 minutos
    depois o build aparece no App Store Connect → **TestFlight** (a Apple ainda o
    "processa" por uns 10 a 30 minutos).
 
 **Se o build falhar**, o Codemagic mostra o passo e o log. Os tropeços mais
-prováveis no primeiro: a chave sem o nome SOTERRA; o perfil que não existe
-(passo 4.3); o ID da Apple ainda com zeros. A receita foi escrita pela
+prováveis no primeiro: a chave sem o nome SOTERRA; o certificado gerado e não
+enviado de volta (passo 4.2); o perfil que não existe (passo 4.3); o ID da Apple
+ainda com zeros. A receita foi escrita pela
 documentação do Codemagic e nunca rodou — o primeiro build é a prova dela.
 
 ### 3.3 O que guardar fora do computador
@@ -279,6 +302,11 @@ pode enviar à revisão direto. O TestFlight é para você ver o jogo no iPhone 
     **não aparecer** no iPhone — o WebView da Apple não dá service worker a
     aplicativo comum e pode não ter o *Cache Storage* (8.8). Sem eles, o jogo
     baixa da rede como na web; não é defeito.
+13. **A separação (8.7):** o menu **sem** "Sair do jogo" e **sem** o botão Loja;
+    as Configurações **sem** "Barras de ouro" e **sem** "Ganhar prêmios", e com
+    **"Avaliar na App Store"**; a praça sem a moeda "Prêmio Grátis!". Em nenhuma
+    tela aparece "Google Play", "Play Store", "Android" ou Mercado Pago (só nos
+    Termos e na Privacidade, 8.7).
 
 ---
 
@@ -290,10 +318,10 @@ Os limites da Apple: nome **30**, subtítulo **30**, texto promocional **170**,
 descrição **4.000**, palavras-chave **100** caracteres. **Nenhum texto pode citar
 Android, Google Play ou outra loja** (diretriz 2.3.10).
 
-**Nome** (o da Play cabe: 30)
+**Nome** (até 30 letras: o da Play, "SOTERRA: Ecos do Mundo Enterrado", tem 32 e não cabe)
 
 ```
-SOTERRA: Ecos do Mundo Enterrado
+SOTERRA: Mundo Enterrado
 ```
 
 Se a Apple disser que o nome já existe, use `SOTERRA Online`.
@@ -493,16 +521,17 @@ Tamanhos: **P** = até meio dia de trabalho com as provas; **M** = 1 a 2 dias;
 | # | risco | diretriz | chance de recusa | o que fazer | tamanho | quando |
 |---|---|---|---|---|---|---|
 | 1 | "é só um site embrulhado" — o jogo vem do servidor | 4.2 e 2.5.2 | **alta** | 8.1 | P (notas) · M (recursos nativos) · G (o jogo dentro do app) | antes do 1º envio: as notas; o resto se recusarem |
-| 2 | compra de item digital por fora da Apple, e "Google Play" na tela | 3.1.1, 3.1.3(b), 2.3.10 | **alta** se a loja abrir no iPhone sem a compra da Apple | 8.2 | P (loja fechada no iPhone) · G (a compra pela Apple) | o P antes do 1º envio; o G antes de abrir a loja no iPhone |
-| 3 | partes do jogo que só sabem de Android ("Sair do jogo" que não sai, anúncio que manda à Play Store) | 2.1 e 2.3.10 | **alta** — o revisor toca em tudo | 8.7 | M | antes do 1º envio |
+| 2 | compra de item digital por fora da Apple, e "Google Play" na tela | 3.1.1, 3.1.3(b), 2.3.10 | **baixa** desde 25/10: a loja fica fechada no iPhone | 8.2 | ~~P (loja fechada no iPhone)~~ **feito** · G (a compra pela Apple) | o G antes de abrir a loja no iPhone |
+| 3 | partes do jogo que só sabem de Android ("Sair do jogo" que não sai, anúncio que manda à Play Store) | 2.1 e 2.3.10 | **baixa** desde 25/10 | 8.7 | ~~M~~ **feito** | — |
 | 4 | caixa de recompensa (o bônus sorteado da Gema, que se compra em fragmentos) | 3.1.1 e a classificação | média (e 18 anos no Brasil se marcada) | 8.5 | P (mostrar as chances) | antes do 1º envio |
 | 5 | excluir a conta dentro do app | 5.1.1(v) | baixa — **já existe** | 8.3 | — | — |
 | 6 | chat sem filtro, denúncia ou bloqueio | 1.2 | baixa — **já existe** | 8.4 | — | — |
 | 7 | anúncio sem o aviso de rastreamento (ATT) | 5.1.2 | nenhuma hoje: o AdMob **não entra** no iPhone | 8.6 | M | quando quiser anúncio no iPhone |
 
-**Os três maiores riscos de recusa são o 1, o 2 e o 3.** O 2 e o 3 se resolvem
-com a mesma mudança: a separação por plataforma (8.7), uns **2 dias** de código,
-servida pela web — sem build novo do Android.
+**Os três maiores riscos de recusa eram o 1, o 2 e o 3.** O 2 e o 3 foram
+resolvidos com a mesma mudança, a separação por plataforma (8.7, feita em 25/10),
+servida pela web — sem build novo do Android. Sobra o 1, que se ataca com as notas
+da revisão (6.5) e, se preciso, com os reforços da 8.1.
 
 ### 8.1 Diretriz 4.2 — o jogo vem do servidor
 
@@ -568,10 +597,11 @@ vendidas ali pela Apple.
 - **Hoje a loja está fechada para todos** (`SOTERRA_LOJA=0`): nada disso aparece.
   O risco é o dia em que ela abrir para o Android e a web.
 
-**Antes do primeiro envio (P):** a loja **fechada no iPhone**, sempre, até a
-compra da Apple existir — independente do `SOTERRA_LOJA`. É uma linha no
-`js/core/loja.js` (`L.fechada()` quando a plataforma for `ios`) e o mesmo na loja
-do site aberta na aba (8.7). Com a loja fechada no mundo inteiro, ninguém compra
+**Feito em 25/10:** a loja fica **fechada no iPhone**, sempre, até a compra da
+Apple existir — independente do `SOTERRA_LOJA`: o `L.fechada()` do
+`js/core/loja.js` e o `SITE.lojaFechada()` da loja do site aberta na aba
+respondem "fechada" no iPhone, e a compra pela Play (`js/core/compra_play.js`) não
+liga nada lá — nem a retomada na abertura (8.7). Com a loja fechada no mundo inteiro, ninguém compra
 barras em lugar nenhum, e a 3.1.3(b) fica de pé. **Quando a loja abrir no Android
 e na web, a compra da Apple tem de estar pronta junto** — senão quem joga no
 iPhone gastaria barras compradas fora, sem poder comprá-las no iPhone.
@@ -644,7 +674,8 @@ ou **mostrar as chances e responder "Sim"** — e viver com os 18 anos no Brasil
 
 ### 8.6 O anúncio premiado (AdMob) no iPhone — fica para depois
 
-**Hoje o AdMob NÃO entra no iPhone:** o `ios.includePlugins` do
+**Hoje o AdMob NÃO entra no iPhone, e a área "Ganhar prêmios" e a moeda da praça
+não aparecem lá** (25/10, `JOGO.Mobile.falta('anuncio')`, 8.7). O `ios.includePlugins` do
 `capacitor.config.json` lista os plugins do iPhone, e ele fica de fora de
 propósito. Motivo: com o SDK de anúncios da Google dentro, o `Info.plist` precisa
 do id do aplicativo no AdMob (**sem ele o aplicativo fecha ao abrir**), dos
@@ -679,65 +710,62 @@ plugin no iPhone sem as três chaves não passa.
 7. **Termos e Privacidade:** hoje dizem "a área Ganhar prêmios do aplicativo de
    **Android**" — passam a falar dos dois.
 
-### 8.7 Os pontos do jogo que supõem Android — e a separação por plataforma
+### 8.7 Os pontos do jogo que supõem Android — a separação por plataforma (feita em 25/10)
 
-**A regra de hoje:** `JOGO.Mobile.app()` (`js/mobile.js`), `JOGO.CompraPlay.noApp()`
+**A regra:** `JOGO.Mobile.app()` (`js/mobile.js`), `JOGO.CompraPlay.noApp()`
 e `SITE.noApp()` (`site/site.js`) perguntam "estou no aplicativo?" — e a resposta é
 **sim** no Android e no iPhone. O que é comum aos dois (o botão Loja sem Mercado
-Pago, a aba do site, a qualidade gráfica, os avisos) continua certo. O que é só
-de Android precisa de uma segunda pergunta: **qual aplicativo?**
+Pago, a aba do site, a qualidade gráfica, os avisos) continua igual. O que o iPhone
+ainda não tem responde a uma segunda pergunta: **qual aplicativo?**
 
-| arquivo | o que acontece hoje no iPhone | o que muda | tamanho |
-|---|---|---|---|
-| `js/mobile.js` | o **botão voltar** não existe no iPhone: o ouvinte nunca dispara — sem problema. O **"Sair do jogo"** pergunta e chama `App.exitApp()`, que no iPhone **não está implementado** (lido no plugin): o jogador toca em "Sair" e nada acontece. E a Apple não quer aplicativo que se fecha sozinho | no iPhone, o `.menu-sair` some (o iPhone fecha pelo gesto do sistema) | P |
-| `js/core/compra_play.js` | "compra pela Google Play" falando com a loja da Apple (8.2) | antes do 1º envio: no iPhone, não liga (loja fechada). Depois: a compra pela Apple | P · G |
-| `js/core/premio_anuncio.js` | sem o plugin no iPhone, a área diria **"Atualize o aplicativo pela Play Store"**; e a moeda "Prêmio Grátis!" da praça chamaria para ela | no iPhone, a área e o atalho da praça não aparecem até o AdMob do iPhone (8.6) | P |
-| os textos (`js/ui/hud.js`, `compra_play.js`, `premio_anuncio.js`, e as traduções em `js/i18n/`) | "A compra é feita pela Google Play", **"Avaliar na Google Play"** (o botão das Configurações; no iPhone a caixa que abre é a da Apple), "Abrindo a Google Play…" | o nome da loja vem de uma função (`JOGO.Mobile.loja()`: "App Store" ou "Google Play"); as frases com a loja no meio ganham as duas versões em en/es | P |
-| `site/termos.html`, `site/privacidade.html` (e as traduções jurídicas) | "aplicativo de Android", "pela Google Play" — o revisor abre os dois pela entrada | "aplicativo (Android e iPhone)", a Apple como meio de pagamento, o anúncio só no Android até a 8.6 | P + advogado |
-| `site/site.js` (`SITE.noApp`) | verdadeiro no iPhone — **certo** (esconde o Mercado Pago) | ganha `SITE.plataforma()`, lida da mesma marca da sessão da aba (`soterra-app` = `ios` / `android`), porque dentro do quadro da aba o Capacitor **não entra** no iPhone (ver 8.8) | P |
-| `site/loja.js`, `site/loja.html` | a loja da aba usa a compra do jogo (`window.parent.JOGO.CompraPlay`) — no iPhone, a da 8.2 | segue o jogo: no iPhone, "a loja abre em breve" até a compra da Apple | P |
-| `js/ui/site_aba.js` | **funciona**: é um quadro da mesma origem; o voltar do Android não existe e o "Voltar ao jogo" fecha | nada; conferir no aparelho (5.3, itens 4 e 5) | — |
-| `js/core/avaliacao.js` | a caixa nativa de avaliação existe no iPhone (é a da Apple) — **certo**; só o rótulo do botão (acima) | — | — |
-| `js/core/notificacoes.js` | os avisos locais funcionam no iPhone; a pergunta de permissão sai na primeira vez | nada (o comentário fala de Android 13, vale igual) | — |
-| `js/core/eventos_uso.js`, `registro_erros.js` | o iPhone conta como "app", junto do Android | opcional: "app-ios" para ver o funil de cada um | P |
+**UMA pergunta, num lugar só** (`js/mobile.js`; a mesma no `site/site.js`):
 
-**A proposta: UMA pergunta, num lugar só** (`js/mobile.js`, e a mesma no `site/site.js`):
+| função | o que responde |
+|---|---|
+| `JOGO.Mobile.plataforma()` | `'android'`, `'ios'` ou `'web'` — o Capacitor diz pelo `getPlatform()`; casca sem `getPlatform` é o Android |
+| `JOGO.Mobile.ios()` | é o iPhone? |
+| `JOGO.Mobile.falta(recurso)` | o aplicativo deste aparelho **não tem** este recurso? No Android e na web, **sempre falso** |
+| `JOGO.Mobile.FALTA_NO_IPHONE` | `{ sair, compra, anuncio }` — a lista. Quando a compra da Apple ficar pronta, sai `compra` daqui e o resto do jogo acompanha |
+| `JOGO.Mobile.loja()` | "App Store" ou "Google Play", para os textos |
+| `SITE.plataforma()`, `SITE.faltaNoAparelho(recurso)`, `SITE.FALTA_NO_IPHONE` | o mesmo, no site. No quadro da aba o Capacitor do iPhone **não entra** (8.8): o site lê a marca `soterra-plataforma` que o jogo deixa na sessão da aba, ou o `plataforma=ios` que a aba põe na primeira página |
 
-```js
-/* Qual aplicativo: 'android', 'ios' ou 'web'. O Capacitor diz pelo getPlatform(); `?app=ios` finge o
- * iPhone nas provas (o ?app=1 de hoje continua fingindo o Android). */
-var forcadoIos = /[?&]app=ios(&|$)/.test(busca);
-M.plataforma = function () {
-  if (forcadoIos) return 'ios';
-  if (appForcado) return 'android';
-  try {
-    var C = window.Capacitor;
-    if (C && C.isNativePlatform && C.isNativePlatform() && C.getPlatform) return C.getPlatform();
-  } catch (e) {}
-  return 'web';
-};
-M.ios = function () { return M.plataforma() === 'ios'; };
-/* o nome da loja do aparelho, para os textos */
-M.loja = function () { return M.ios() ? 'App Store' : 'Google Play'; };
-/* o que cada aplicativo já tem — a lista que cresce quando o iPhone ganhar a compra e o anúncio */
-M.tem = function (recurso) {
-  var p = M.plataforma();
-  if (p === 'web') return false;
-  if (p === 'android') return true;
-  return ({ sair: false, compra: false, anuncio: false })[recurso] !== false;
-};
-```
+Cada ponto do jogo pergunta pelo **recurso**, não pelo sistema:
 
-E cada ponto da tabela pergunta pelo **recurso**, não pelo sistema:
-`if (!M.tem('sair'))` esconde o "Sair do jogo"; `if (!M.tem('compra'))` fecha a
-loja; `if (!M.tem('anuncio'))` esconde "Ganhar prêmios". Quando a compra da Apple
-ficar pronta, muda uma palavra (`compra: true`) e o resto do jogo acompanha.
+| arquivo | o que acontecia no iPhone | o que faz agora |
+|---|---|---|
+| `js/ui/hud.js` (o menu) | o **"Sair do jogo"** chamava `App.exitApp()`, que no iPhone **não está implementado** (lido no plugin): tocar em "Sair" não fazia nada. E a Apple não quer aplicativo que se fecha sozinho | com `falta('sair')`, o botão nem entra no menu (o iPhone fecha pelo gesto do sistema) |
+| `js/core/loja.js` | a loja seguia só o `SOTERRA_LOJA` do servidor | com `falta('compra')`, `L.fechada()` é verdadeiro e o `<html>` leva `loja-fechada` (somem o botão Loja, a compra de barras das Configurações e as frases que mandam à loja), sem tocar na chave guardada, que é a resposta do servidor |
+| `js/core/compra_play.js` | a "compra pela Google Play" falaria com a loja da Apple (8.2) | `JOGO.CompraPlay.ligada()` = `noApp()` menos o iPhone: lá não liga a retomada na abertura, não prepara nem compra |
+| `js/core/premio_anuncio.js` | sem o plugin no iPhone, a área diria **"Atualize o aplicativo pela Play Store"**; e a moeda "Prêmio Grátis!" da praça chamaria para ela | com `falta('anuncio')`, `noApp()` é falso: a seção das Configurações e a moeda da praça não aparecem, e nada é pedido |
+| `js/ui/hud.js` (Configurações) | **"Avaliar na Google Play"** — no iPhone a caixa que abre é a da Apple | "Avaliar na App Store" e "a Apple decide quando mostrar" (as duas frases em en/es) |
+| `js/ui/site_aba.js` | a aba já funcionava (quadro da mesma origem) | no iPhone, a primeira página leva também `plataforma=ios`; no Android o endereço fica igual |
+| `site/site.js` · `site/loja.js` | a loja da aba mostraria a compra do jogo — a "Google Play" | `SITE.lojaFechada()` e o `fechada()` da loja respondem "fechada" no iPhone: "A loja abre em breve", e o link "Loja" do menu do site some |
 
-**A prova** é a extensão natural do `tests/app_casca.js`: a janela de mentira já
-põe um Capacitor falso; com `getPlatform: () => 'ios'`, cobrar que o "Sair do
-jogo" some, a loja fica fechada, a área de anúncios não aparece e nenhum texto
-visível diz "Google Play" ou "Android"; e, com `'android'`, que **tudo segue como
-hoje** (é o que protege o aplicativo que está na Play).
+**O que ficou como está, de propósito:**
+
+- `site/termos.html` e `site/privacidade.html` dizem "no aplicativo de Android, pela
+  Google Play" e "a área Ganhar prêmios do aplicativo de Android" — **continua
+  verdade** (o iPhone não compra nem mostra anúncio). Mudam junto com a compra da
+  Apple e o AdMob do iPhone, com o advogado.
+- As frases da compra pela Play e da área de anúncios citam a Google Play — no iPhone
+  elas não aparecem mais.
+- `js/core/avaliacao.js` (a caixa nativa no iPhone é a da Apple), `js/core/notificacoes.js`
+  (os avisos funcionam igual) e `js/core/eventos_uso.js` (o iPhone conta como "app",
+  junto do Android; separar seria mudar o servidor também).
+
+**As provas:** `node tests/app_casca.js` (71: a metade nova põe um Capacitor falso
+com `getPlatform` — `'ios'`, `'android'` e sem ele — e cobra a lista, a classe `ios`,
+a marca na sessão, a compra que não liga no iPhone e **liga igual no Android**, a
+lista igual no jogo e no site, e o que a HUD e a aba fazem com a resposta);
+`node tests/loja_fechada.js` (18: no iPhone a loja segue fechada com a vitrine
+aberta, e a chave do servidor não é tocada; o Android abre e fecha como antes);
+`node tests/premio_anuncio.js` (46: no iPhone nada de área, de moeda nem de pedido;
+no Android, igual). Visto no navegador com `?app=1&plataforma=ios` (a casca fingida
+do iPhone) contra uma API de verdade com a loja **aberta**: sem "Sair do jogo", sem
+Loja, sem barras, sem "Ganhar prêmios", "Avaliar na App Store", e a loja da aba
+dizendo "abre em breve"; e com `?app=1`, o Android igual a antes. As provas de
+navegador da aba e da compra seguem passando (`site_aba.html` 39, `loja_na_aba.html`
+20, `compra_play.html` 33, `site_porta.html` 19, `app_casca.html` 25).
 
 **Precisa de AAB novo?** Não: é tudo do jogo, servido pela web. Publicou, o
 Android segue igual e o iPhone já abre certo.
@@ -816,7 +844,7 @@ número repetido **dentro da mesma versão**.
 
 | versão | build | gerado em | o que a casca tem |
 |---|---|---|---|
-| 1.1.0 | — | ainda não | o primeiro: o jogo do servidor, os avisos, compartilhar, avaliação, tela acesa; **sem** compra e **sem** anúncio |
+| 1.1.0 | 1 | 25/10, Codemagic (Xcode 26.6) | o primeiro: o jogo do servidor, os avisos, compartilhar, avaliação, tela acesa; **sem** compra e **sem** anúncio. Compilou, subiu e a Apple processou; o envio automático à revisão do TestFlight **externo** parou por falta das informações de teste (5.2) |
 
 ---
 

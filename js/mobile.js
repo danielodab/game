@@ -57,6 +57,41 @@ var JOGO = (typeof window !== 'undefined')
   };
   M.app = function () { return appForcado || M.nativo(); };
 
+  /* QUAL APLICATIVO (25/10, o iPhone — docs/APP_STORE.md §8.7): 'android', 'ios' ou 'web'. `app()` continua
+   * valendo para os dois aplicativos (o que é comum: sem Mercado Pago, a aba do site, a qualidade, os avisos);
+   * esta é a segunda pergunta, para o que o iPhone ainda NÃO tem. O Capacitor diz pelo getPlatform(); a casca
+   * fingida das provas (`?app=1`) é o Android, como sempre foi, e `?app=1&plataforma=ios` finge o iPhone. Sem o
+   * getPlatform (uma casca de mentira antiga) também é o Android: nada muda para ele. */
+  var plataformaForcada = (/[?&]plataforma=(ios|android)(&|$)/.exec(busca) || [])[1] || null;
+  M.plataforma = function () {
+    if (M.nativo()) {
+      try {
+        var C = window.Capacitor;
+        if (typeof C.getPlatform === 'function' && C.getPlatform() === 'ios') return 'ios';
+      } catch (e) {}
+      return 'android';
+    }
+    if (appForcado) return plataformaForcada || 'android';
+    return 'web';
+  };
+  M.ios = function () { return M.plataforma() === 'ios'; };
+  /* O QUE O IPHONE AINDA NÃO TEM. Cada ponto do jogo pergunta pelo RECURSO, não pelo sistema: quando a compra
+   * da Apple ficar pronta, sai `compra` daqui e o resto acompanha. No Android e na web nunca falta nada — a
+   * resposta é sempre falsa, e o jogo segue exatamente como era.
+   *   sair     fechar o aplicativo pelo "Sair do jogo": no iPhone o App.exitApp não existe (e a Apple não quer
+   *            aplicativo que se fecha sozinho; quem fecha é o gesto do sistema)
+   *   compra   comprar barras de ouro: no iPhone só pela compra da Apple, que ainda não existe — a loja fica
+   *            fechada (js/core/loja.js), seja qual for o SOTERRA_LOJA do servidor
+   *   anuncio  "Ganhar prêmios": o plugin de anúncio não entra no iPhone (o includePlugins do capacitor.config.json)
+   * A mesma lista mora no site/site.js (SITE.FALTA_NO_IPHONE): a prova tests/app_casca.js cobra que batem. */
+  M.FALTA_NO_IPHONE = { sair: true, compra: true, anuncio: true };
+  M.falta = function (recurso) { return M.ios() && M.FALTA_NO_IPHONE[recurso] === true; };
+  /* o nome da loja do aparelho, para os textos que a citam */
+  M.loja = function () { return M.ios() ? 'App Store' : 'Google Play'; };
+  // as páginas do site abertas na aba (um quadro, onde o Capacitor do iPhone não entra) leem a plataforma daqui;
+  // só o iPhone grava: no Android nada muda
+  try { if (M.ios()) window.sessionStorage.setItem('soterra-plataforma', 'ios'); } catch (eP) {}
+
   function media(q) {
     try { return !!(window.matchMedia && window.matchMedia(q).matches); }
     catch (e) { return false; }
@@ -198,6 +233,7 @@ var JOGO = (typeof window !== 'undefined')
     c.toggle('celular', M.celular());
     c.toggle('retrato', M.retrato());
     if (M.app()) c.add('app');          // só entra dentro do aplicativo: na web a classe nunca existe
+    if (M.ios()) c.add('ios');          // 25/10: só no iPhone (no Android e na web a classe nunca existe)
   }
   M.remarca = marca;
   marca();

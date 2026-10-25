@@ -14,7 +14,10 @@
  *     entra, a qualidade padrão é 'media' — 'baixa' no aparelho fraco —, e a
  *     escolha gravada nas Configurações (ou o ?graficos=) vence nos dois casos;
  *     com a linha que o tools/empacota_www.py grava (window.SOTERRA_APP), a API
- *     passa a ser a do servidor do jogo, mesmo com um ?api= de fora no endereço. */
+ *     passa a ser a do servidor do jogo, mesmo com um ?api= de fora no endereço;
+ *   · QUAL APLICATIVO (25/10, o iPhone — docs/APP_STORE.md §8.7): no iPhone faltam o "Sair do jogo", a compra e o
+ *     anúncio (JOGO.Mobile.falta), e a compra pela Play não liga nada lá; no ANDROID — com e sem o getPlatform —
+ *     e na WEB nunca falta nada, e tudo segue como era. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -29,11 +32,12 @@ const raiz = path.join(__dirname, '..');
 const MOBILE = fs.readFileSync(path.join(raiz, 'js', 'mobile.js'), 'utf8');
 const SESSAO = fs.readFileSync(path.join(raiz, 'js', 'core', 'sessao.js'), 'utf8');
 
-/* Uma janela de mentira. op: { busca, capacitor, memoria, tela:[l,a], pref, host, appCfg } */
+/* Uma janela de mentira. op: { busca, capacitor, plataforma, memoria, tela:[l,a], pref, host, appCfg } */
 function janela(op) {
   op = op || {};
   const classes = new Set();
   const cofre = {};
+  const sessao = {};
   if (op.pref) cofre['soterra-pref-ui'] = JSON.stringify(op.pref);
   const ouvintes = { doc: [], win: [] };
   const tela = op.tela || [1920, 1080];
@@ -51,6 +55,11 @@ function janela(op) {
       setItem: (k, v) => { cofre[k] = String(v); },
       removeItem: (k) => { delete cofre[k]; }
     },
+    sessionStorage: {
+      getItem: (k) => (Object.prototype.hasOwnProperty.call(sessao, k) ? sessao[k] : null),
+      setItem: (k, v) => { sessao[k] = String(v); },
+      removeItem: (k) => { delete sessao[k]; }
+    },
     matchMedia: () => ({ matches: false }),
     addEventListener: (n) => { ouvintes.win.push(n); },
     fetch() { return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }); },
@@ -66,11 +75,12 @@ function janela(op) {
     }
   };
   if (op.capacitor) ctx.Capacitor = { isNativePlatform: () => true };
+  if (op.capacitor && op.plataforma) ctx.Capacitor.getPlatform = () => op.plataforma;
   if (op.appCfg) ctx.SOTERRA_APP = op.appCfg;
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(MOBILE, ctx);
-  ctx._classes = classes; ctx._ouvintes = ouvintes; ctx._cofre = cofre;
+  ctx._classes = classes; ctx._ouvintes = ouvintes; ctx._cofre = cofre; ctx._sessao = sessao;
   return ctx;
 }
 
@@ -145,6 +155,65 @@ check('o ?graficos= continua mandando por cima de tudo', w.JOGO.Mobile.qualidade
 w = janela({ capacitor: true, pref: { graficos: 'ultra' } });
 check('uma escolha que não existe cai no padrão do aplicativo', w.JOGO.Mobile.qualidade() === 'media');
 
+// ---------------------------------------- QUAL APLICATIVO: o iPhone (25/10)
+const RECURSOS = ['sair', 'compra', 'anuncio'];
+const nadaFalta = (M) => RECURSOS.every((r) => M.falta(r) === false);
+w = janela({});
+M = w.JOGO.Mobile;
+check('web: a plataforma é "web", nada falta, a loja dos textos é a Google Play e não há classe ios',
+      M.plataforma() === 'web' && M.ios() === false && nadaFalta(M) && M.loja() === 'Google Play' && !w._classes.has('ios'));
+check('web: nenhuma marca de plataforma na sessão da aba', !('soterra-plataforma' in w._sessao));
+w = janela({ busca: '?plataforma=ios' });
+check('web com ?plataforma=ios (sem ?app=1) segue sendo a web', w.JOGO.Mobile.plataforma() === 'web' && nadaFalta(w.JOGO.Mobile));
+
+w = janela({ capacitor: true, memoria: 8, tela: [412, 915] });
+M = w.JOGO.Mobile;
+check('ANDROID sem o getPlatform (a casca de mentira das provas antigas): "android", nada falta',
+      M.plataforma() === 'android' && nadaFalta(M) && !w._classes.has('ios'));
+w = janela({ capacitor: true, plataforma: 'android', memoria: 8, tela: [412, 915] });
+M = w.JOGO.Mobile;
+check('ANDROID (getPlatform "android"): nada falta, a loja é a Google Play, sem classe ios e sem marca na sessão',
+      M.plataforma() === 'android' && nadaFalta(M) && M.loja() === 'Google Play' && !w._classes.has('ios') &&
+      w._classes.has('app') && !('soterra-plataforma' in w._sessao));
+check('ANDROID: o "Sair do jogo" continua atendido pela casca (pergunta e fecha)', w._ouvintes.doc.indexOf('click') >= 0);
+w = janela({ busca: '?app=1' });
+check('?app=1 continua sendo o Android', w.JOGO.Mobile.plataforma() === 'android' && nadaFalta(w.JOGO.Mobile));
+
+w = janela({ capacitor: true, plataforma: 'ios', tela: [932, 430] });
+M = w.JOGO.Mobile;
+check('IPHONE (getPlatform "ios"): app() verdadeiro, plataforma "ios"', M.app() === true && M.plataforma() === 'ios' && M.ios() === true);
+check('IPHONE: faltam o sair, a compra e o anúncio — e só eles', RECURSOS.every((r) => M.falta(r) === true) && M.falta('avisos') === false);
+check('IPHONE: os textos citam a App Store', M.loja() === 'App Store');
+check('IPHONE: o <html> ganha app e ios', w._classes.has('app') && w._classes.has('ios'));
+check('IPHONE: a marca da plataforma fica na sessão da aba (o site no quadro a lê)', w._sessao['soterra-plataforma'] === 'ios');
+check('IPHONE: sem o deviceMemory, a qualidade padrão é a média', M.qualidade() === 'media');
+w = janela({ busca: '?app=1&plataforma=ios' });
+check('?app=1&plataforma=ios finge o iPhone no navegador', w.JOGO.Mobile.plataforma() === 'ios' && w.JOGO.Mobile.falta('compra') === true);
+
+const SITE_JS = fs.readFileSync(path.join(raiz, 'site', 'site.js'), 'utf8');
+const lista = (fonte, nome) => (new RegExp(nome + ' = (\\{[^}]*\\})').exec(fonte) || [])[1];
+check('a lista do que falta no iPhone é a MESMA no jogo e no site',
+      !!lista(MOBILE, 'M\\.FALTA_NO_IPHONE') && lista(MOBILE, 'M\\.FALTA_NO_IPHONE') === lista(SITE_JS, 'SITE\\.FALTA_NO_IPHONE'),
+      lista(MOBILE, 'M\\.FALTA_NO_IPHONE') + ' x ' + lista(SITE_JS, 'SITE\\.FALTA_NO_IPHONE'));
+
+// o que a HUD e a aba fazem com a resposta (lido no código: a HUD inteira não roda fora do navegador)
+const HUD = fs.readFileSync(path.join(raiz, 'js', 'ui', 'hud.js'), 'utf8');
+check('hud.js: o "Sair do jogo" só entra no menu quando não falta o sair',
+      HUD.indexOf("if (!safe(function () { return JOGO.Mobile.falta('sair'); }, false)) box.appendChild(botaoSair());") >= 0 &&
+      HUD.split('appendChild(botaoSair())').length === 2);
+check('hud.js: no iPhone o botão é "Avaliar na App Store"; fora dele, "Avaliar na Google Play"',
+      HUD.indexOf("naApple ? tr('Avaliar na App Store') : tr('Avaliar na Google Play')") >= 0);
+check('hud.js: a compra de barras das Configurações pergunta à compra se ela está ligada',
+      HUD.indexOf('JOGO.CompraPlay.ligada ? JOGO.CompraPlay.ligada() : JOGO.CompraPlay.noApp()') >= 0);
+const ABA = fs.readFileSync(path.join(raiz, 'js', 'ui', 'site_aba.js'), 'utf8');
+check('site_aba.js: a marca plataforma=ios vai só quando é o iPhone (no Android o endereço fica igual)',
+      ABA.indexOf("if (ios && !/(^|&)plataforma=ios(&|$)/.test(x.search.slice(1))) x.search += '&plataforma=ios';") >= 0);
+['textos_en.js', 'textos_es.js'].forEach(function (f) {
+  const t = fs.readFileSync(path.join(raiz, 'js', 'i18n', f), 'utf8');
+  check('js/i18n/' + f + ': as duas frases novas do iPhone traduzidas',
+        t.indexOf('"Avaliar na App Store": "') >= 0 && t.indexOf('"Obrigado! Se a caixa não abriu, a Apple decide quando mostrar.": "') >= 0);
+});
+
 // ---------------------------------------------- ONDE MORA A API (sessao.js)
 function sessao(op) {
   const c = janela(op);
@@ -195,5 +264,34 @@ check('o servidor do jogo está escrito num lugar só (SERVIDOR, no empacota_www
         !/Access-Control-Allow-Origin\s+"?\*/.test(t));
 });
 
-console.log('\n' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
-process.exit(falhas ? 1 : 0);
+// a compra pela Play (js/core/compra_play.js) no iPhone não liga nada; no Android, como sempre
+const COMPRA = fs.readFileSync(path.join(raiz, 'js', 'core', 'compra_play.js'), 'utf8');
+function comCompra(op) {
+  const c = janela(op);
+  c.pedidos = 0;
+  c.JOGO.Sessao = { token: () => 'tk', api() { c.pedidos++; return Promise.resolve({ ok: true, pacotes: [], compras: [] }); } };
+  const antes = c._ouvintes.doc.length;
+  vm.runInContext(COMPRA, c);
+  c._ouvintesDaCompra = c._ouvintes.doc.length - antes;
+  return c;
+}
+(async function () {
+  let c = comCompra({ capacitor: true, plataforma: 'ios' });
+  check('IPHONE: a compra pela Play está no aplicativo (noApp) mas não ligada (ligada falso)',
+        c.JOGO.CompraPlay.noApp() === true && c.JOGO.CompraPlay.ligada() === false);
+  check('IPHONE: ao abrir, a compra não fica de olho na volta ao aplicativo', c._ouvintesDaCompra === 0);
+  const r = await c.JOGO.CompraPlay.retoma(true);
+  check('IPHONE: a retomada não pergunta nada ao servidor nem à loja', r.creditadas === 0 && c.pedidos === 0);
+  await c.JOGO.CompraPlay.prepara();
+  check('IPHONE: preparar a tela também não pergunta nada', c.pedidos === 0);
+  c = comCompra({ capacitor: true, plataforma: 'android' });
+  check('ANDROID: a compra pela Play segue ligada e de olho na volta ao aplicativo',
+        c.JOGO.CompraPlay.ligada() === true && c._ouvintesDaCompra === 1);
+  c = comCompra({ capacitor: true });
+  check('ANDROID sem o getPlatform: idem', c.JOGO.CompraPlay.ligada() === true && c._ouvintesDaCompra === 1);
+  c = comCompra({});
+  check('WEB: nada da compra pela Play (como sempre)', c.JOGO.CompraPlay.ligada() === false && c._ouvintesDaCompra === 0);
+
+  console.log('\n' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
+  process.exit(falhas ? 1 : 0);
+})().catch((e) => { console.log('FALHOU · a prova quebrou — ' + (e && e.stack || e)); process.exit(1); });

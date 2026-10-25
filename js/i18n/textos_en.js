@@ -28,6 +28,8 @@ JOGO.I18n.registra('en', { textos: {
   "Falar com a equipe": "Contact the team",
   "Entrar na comunidade": "Join the community",
   "Obrigado! Se a caixa não abriu, a Play decide quando mostrar.": "Thank you! If the box did not open, Play decides when to show it.",
+  "Avaliar na App Store": "Rate on the App Store",
+  "Obrigado! Se a caixa não abriu, a Apple decide quando mostrar.": "Thank you! If the box did not open, Apple decides when to show it.",
   "A primeira descida": "The first descent",
   "Os seus dois heróis descem agora para a primeira sala. A praça, o cais e os portais vêm logo depois desta luta.": "Your two heroes go down now to the first room. The square, the dock and the portals come right after this fight.",
   "Abrindo a porta…": "Opening the door…",
