@@ -133,6 +133,23 @@ from comum import (NOME_PUBLICO_SQL, CLASSE_RENOMEADA, XP_MAX, EstadoMudou, Recu
 log = logging.getLogger('api')
 
 LOJA_VERSAO = 3                  # 13/09: o catálogo em barras de ouro (cada item leva `moeda`)
+
+# 25/10 — A LOJA FECHADA (o dono: "quero colocar meu jogo em produção, mas a loja por enquanto não pode estar
+# disponível", enquanto a Google aprova a conta de pagamentos). SOTERRA_LOJA=0 no ambiente (o Coolify) FECHA:
+# comprar, presentear e COMEÇAR um pagamento (o pacote do Mercado Pago, a lista de pacotes da Google Play)
+# respondem 503 com `fechada` (api.py, despacha); o catálogo e a vitrine respondem VAZIOS com `fechada: true` — o
+# site mostra "a loja abre em breve" e o jogo esconde as portas dela (js/core/loja.js, L.fechada). O que já está
+# em andamento SEGUE: a fila de entregas (os prêmios do anúncio e do diário, os presentes do Mestre, os convites),
+# a conferência e o aviso de um pagamento já feito, a entrega de uma compra da Google Play já paga, cancelar um
+# pedido e vestir a aura ou a moldura que já são suas. Sem a variável (ou com outro valor): aberta, como sempre.
+FRASE_LOJA_FECHADA = 'a loja abre em breve'
+ROTAS_DA_LOJA_FECHADA = frozenset(('loja_comprar', 'loja_presentear', 'pagamento_pacote', 'play_ver'))
+
+
+def loja_aberta_do_ambiente(env=None):
+    env = os.environ if env is None else env
+    return (env.get('SOTERRA_LOJA') or '1').strip() != '0'
+
 # espelha JOGO.DATA.pergaminhos.xp (progression.js). O Pergaminho da Sabedoria
 # saiu da venda em 10/09 (o bônus por tempo o substitui); o jogo segue lendo o
 # que já foi comprado, e pedido antigo ainda aberto é entregue normalmente
@@ -1021,6 +1038,15 @@ class LojaMixin:
     def loja_catalogo(self, conta, corpo):
         mp = getattr(self, 'mp', None)
         ligado = bool(mp is not None and mp.ligado)
+        if not getattr(self, 'loja_aberta', True):
+            # 25/10: a loja fechada — a mesma forma, vazia (um site de antes desenha uma loja sem nada à venda)
+            t = agora()
+            of = dict(ofertas_publico(t), itens=[], desconto=0)
+            return 200, {'ok': True, 'versao': LOJA_VERSAO, 'fechada': True, 'itens': [], 'pacotes': [], 'agora': t,
+                         'ofertas': of, 'presente': {'fora': list(FORA_DO_PRESENTE), 'porDia': 0},
+                         'barras': {'nome': 'Barras de Ouro', 'vintensPorBarra': VINTENS_POR_BARRA,
+                                    'vintensPorBarraFarmada': VINTENS_POR_BARRA_FARMADA},
+                         'pagamento': {'ligado': False, 'teste': False}}
         # 13/09: `barras` diz o câmbio para o site explicar as trocas sem repetir número nenhum
         return 200, {'ok': True, 'versao': LOJA_VERSAO,
                      'itens': [dict(i, limite=dict(i['limite']) if i['limite'] else None) for i in CATALOGO],
@@ -1480,6 +1506,12 @@ class LojaMixin:
             auras = self._auras_publico(cid)
             molduras = self._molduras_publico(cid)       # 08/10
             barras = self._barras_saldo(cid)
+        if not getattr(self, 'loja_aberta', True):
+            # 25/10: a loja fechada — sem ofertas nem Pacote de Boas-Vindas (a chamada da praça some); as auras e
+            # as molduras que a conta JÁ tem seguem (a ficha Customizar as veste)
+            return 200, {'ok': True, 'agora': t, 'fechada': True, 'ofertas': dict(ofertas_publico(t), itens=[], desconto=0),
+                         'boasVindas': {'disponivel': False}, 'auras': auras, 'molduras': molduras,
+                         'barras': {'saldo': barras}}
         return 200, {'ok': True, 'agora': t, 'ofertas': ofertas_publico(t), 'boasVindas': boas, 'auras': auras,
                      'molduras': molduras, 'barras': {'saldo': barras}}
 

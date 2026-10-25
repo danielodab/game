@@ -4658,3 +4658,7 @@ button.tor-ultimo:hover { border-color: rgba(232,194,90,.45); }
   .site-aba-tit { display: none; }
   .site-aba-cab button { padding: 0 10px; }
 }
+
+/* 25/10 — a loja FECHADA (SOTERRA_LOJA=0 no servidor; js/core/loja.js põe a classe no <html>): as portas da loja
+   somem — o botão Loja do menu e da praça e a compra de barras das Configurações */
+html.loja-fechada .loja-jogo { display: none !important; }

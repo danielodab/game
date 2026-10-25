@@ -723,5 +723,6 @@ JOGO.I18n.registra('es', { erros: {
   "Prêmio do Torneio da Arena": "Premio del Torneo de la Arena",
   "Vinténs do Torneio da Arena": "Vintenes del Torneo de la Arena",
   "Torneio da Arena": "Torneo de la Arena",
-  "Campeão da Arena": "Campeón de la Arena"
+  "Campeão da Arena": "Campeón de la Arena",
+  "a loja abre em breve": "la tienda abre pronto"
 } });

@@ -275,7 +275,10 @@
   /* ---- o que vem do servidor ---- */
   function carregaCatalogo() {
     return SITE.api('/api/loja/catalogo', { semToken: true }).then(function (r) {
-      if (r.ok && Array.isArray(r.itens)) { catalogo = r; erroCatalogo = ''; }
+      if (r.ok && Array.isArray(r.itens)) {
+        catalogo = r; erroCatalogo = '';
+        if (SITE.lojaFechada) SITE.lojaFechada(r.fechada === true);    // 25/10: guarda para o jogo e o menu do site
+      }
       else {
         catalogo = null;
         erroCatalogo = r.status === 0 ? Tx('O servidor está fora — a loja volta com ele.')
@@ -314,8 +317,13 @@
     desenhaVolta(); desenhaSaldo(); desenhaPacotes(); desenhaCatalogo(); desenhaPedidos(); desenhaExtrato(); desenhaPagamentos();
   }
 
+  /* 25/10 — A LOJA FECHADA (SOTERRA_LOJA=0, servidor/loja.py): o catálogo chega vazio com `fechada`. A página diz
+   * que a loja abre em breve e não oferece compra nenhuma (nem pacote, nem "entre para comprar"); quem tem conta
+   * segue vendo o saldo, os pedidos e o extrato — o que já aconteceu continua valendo. */
+  function fechada() { return !!(catalogo && catalogo.fechada === true); }
   function desenhaSaldo() {
     var caixa = $('lj-saldo');
+    if (fechada() && estadoMinha === 'fora') { caixa.innerHTML = ''; return; }
     if (estadoMinha === 'fora') {
       caixa.innerHTML = (noApp()
         ? '<div class="saldo-fora">' +
@@ -349,6 +357,7 @@
   function listaPacotes() { return catalogo && Array.isArray(catalogo.pacotes) ? catalogo.pacotes.filter(pacoteBom) : []; }
   function desenhaPacotes() {
     var caixa = $('lj-pacotes');
+    if (fechada()) { caixa.hidden = true; caixa.innerHTML = ''; caixaPlay = null; return; }
     if (noApp()) { desenhaPacotesApp(caixa); return; }
     var ps = listaPacotes();
     caixa.hidden = !ps.length;
@@ -534,6 +543,13 @@
     var caixa = $('lj-catalogo');
     if (!catalogo) {
       caixa.innerHTML = '<div class="estado' + (erroCatalogo ? ' fora' : '') + '">' + E(erroCatalogo || Tx('carregando o catálogo…')) + '</div>';
+      return;
+    }
+    var sub = $('lj-sub');
+    if (sub) sub.hidden = fechada();
+    if (fechada()) {
+      caixa.innerHTML = '<div class="estado loja-em-breve">' +
+        Tx('<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.') + '</div>';
       return;
     }
     var itens = catalogo.itens.filter(function (it) {

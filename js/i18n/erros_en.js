@@ -723,5 +723,6 @@ JOGO.I18n.registra('en', { erros: {
   "Prêmio do Torneio da Arena": "Arena Tournament prize",
   "Vinténs do Torneio da Arena": "Coppers from the Arena Tournament",
   "Torneio da Arena": "Arena Tournament",
-  "Campeão da Arena": "Arena Champion"
+  "Campeão da Arena": "Arena Champion",
+  "a loja abre em breve": "the shop opens soon"
 } });

@@ -1313,5 +1313,6 @@ JOGO.I18n.registra('es', { textos: {
   "Não deu para ler os torneios.": "No se pudieron leer los torneos.",
   "← Voltar": "← Volver",
   "Abrindo o Mercado Pago…": "Abriendo Mercado Pago…",
-  "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "El pago se abrió en una pestaña nueva del navegador. Cuando termines, vuelve al juego: el saldo se actualiza solo."
+  "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "El pago se abrió en una pestaña nueva del navegador. Cuando termines, vuelve al juego: el saldo se actualiza solo.",
+  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>La tienda abre pronto.</b> Por ahora, todo viene de los descensos: vinténs, piedras de forja, cartas y personajes. Los premios y regalos que ganes siguen llegando al juego."
 } });

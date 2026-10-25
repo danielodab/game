@@ -1086,7 +1086,8 @@ var JOGO = (typeof window !== 'undefined')
    * pagando pela Google ou pelo Mercado Pago"): a mesma aba, aberta direto na loja do site. No aplicativo a loja
    * compra pela Google Play do jogo; na web, pelo Mercado Pago, que abre numa aba nova do navegador. */
   function botaoLoja(cls) {
-    return botaoDoSite(cls, tr('Loja'), { pagina: 'loja.html', icone: 'loja',
+    // 25/10: `loja-jogo` some com a loja fechada (SOTERRA_LOJA=0; css/style.css, html.loja-fechada)
+    return botaoDoSite((cls || '') + ' loja-jogo', tr('Loja'), { pagina: 'loja.html', icone: 'loja',
       titulo: tr('A loja do SOTERRA: barras de ouro, personagens e aparência') }, 'site/loja.html');
   }
   function botaoDoSite(cls, rotulo, op, reserva) {
@@ -2494,6 +2495,8 @@ var JOGO = (typeof window !== 'undefined')
     if (!JOGO.Hub || !JOGO.Hub.moldura) return;
     safe(function () { JOGO.Hub.moldura(molduraDaLoja() || 'auto'); return true; }, false);
   }
+  /* 25/10: a loja fechada (SOTERRA_LOJA=0; js/core/loja.js, L.fechada): as frases que mandam à loja do site somem */
+  function lojaFechada() { return safe(function () { return !!(JOGO.Loja && JOGO.Loja.fechada && JOGO.Loja.fechada()); }, false); }
   function paginaLoja() {
     var raiz = String(location.href || '').split('#')[0].split('?')[0].replace(/[^\/\\]*$/, '');
     return raiz + 'site/loja.html';
@@ -2520,7 +2523,7 @@ var JOGO = (typeof window !== 'undefined')
    * há o que chamar. `v` é a vitrine (Loja.vitrineAtual) e `agoraS` os segundos do servidor. A `chave` diz
    * QUAL chamada é (o pacote, ou as ofertas DESTA semana): é por ela que o sino sabe se o aviso é novo. */
   UI.chamadaLojaTexto = function (v, agoraS) {
-    if (!v || typeof v !== 'object') return null;
+    if (!v || typeof v !== 'object' || v.fechada) return null;      // 25/10: a loja fechada não chama ninguém
     var bv = v.boasVindas || {};
     if (bv.disponivel && bv.preco > 0 && bv.precoCheio > bv.preco) {
       var menos = Math.round((1 - bv.preco / bv.precoCheio) * 100);
@@ -2803,7 +2806,8 @@ var JOGO = (typeof window !== 'undefined')
       var faltam = v.auras.todas.length - minhas.length;
       var dica = el('p', 'inv-dica', tem.length
         ? tr('{a}Todo mundo na praça vê. Só aparência: não muda nada em batalha.', { a: atual && AURA_EFEITO[atual] ? tr('Aura de {a}: {b}.', { a: esc(AURA_PT[atual] || atual), b: AURA_EFEITO[atual] }) + ' ' : tr('Cada aura é um efeito diferente em volta do herói. ') }) +
-          (faltam > 0 ? ' ' + tr('Mais {a} aura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : '')
+          (faltam > 0 && !lojaFechada() ? ' ' + tr('Mais {a} aura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : '')
+        : lojaFechada() ? tr('Você ainda não tem aura. Ela é só aparência, nada de poder.')
         : tr('Você ainda não tem aura. Elas ficam na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência — só aparência, nada de poder.'));
       var lk = dica.querySelector('a');
       if (lk) lk.href = paginaLoja();
@@ -2870,7 +2874,7 @@ var JOGO = (typeof window !== 'undefined')
         ? tr('Com o título de agora a placa leva a moldura {a} sozinha. ', { a: esc(MOLDURA_PT[doTitulo] || doTitulo) })
         : tr('Sem título de pódio, a placa é a de sempre. ')) +
         tr('A moldura premium vale por cima da automática.') +
-        (faltam > 0 ? ' ' + tr('Mais {a} moldura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : ''));
+        (faltam > 0 && !lojaFechada() ? ' ' + tr('Mais {a} moldura(s) na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Aparência.', { a: faltam }) : ''));
       var lk = dica.querySelector('a');
       if (lk) lk.href = paginaLoja();
       cx.appendChild(dica);
@@ -12137,7 +12141,7 @@ var JOGO = (typeof window !== 'undefined')
     /* BARRAS DE OURO PELA GOOGLE PLAY (04/10): só no aplicativo — na web `JOGO.CompraPlay` não é carregado e
      * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */
     if (JOGO.CompraPlay && JOGO.CompraPlay.noApp()) {
-      var secBarras = el('section', 'cfg-sec');
+      var secBarras = el('section', 'cfg-sec loja-jogo');      // 25/10: some com a loja fechada
       secBarras.appendChild(el('h3', 'bk-tit', tr('Barras de ouro')));
       secBarras.appendChild(el('p', 'inv-dica', tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.')));
       secBarras.appendChild(btn(tr('Comprar barras de ouro'), 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
@@ -13186,7 +13190,9 @@ var JOGO = (typeof window !== 'undefined')
           nbCab.appendChild(el('h3', 'bk-tit', tr('Nome e brasão')));
           blocoNB.appendChild(nbCab);
           var nbDica = el('p', 'inv-dica',
-            tr('Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um. Eles se vendem só na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Guilda.',
+            lojaFechada() ? tr('Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um.',
+               { a: perg.nome || 0, b: perg.brasao || 0 })
+            : tr('Pergaminho do Novo Nome: <b>{a}</b> · Pergaminho do Brasão: <b>{b}</b>. Cada troca gasta um. Eles se vendem só na <a class="char-aura-link" target="_blank" rel="noopener">loja do site</a>, na seção Guilda.',
                { a: perg.nome || 0, b: perg.brasao || 0 }));
           var lkNB = nbDica.querySelector('a');
           if (lkNB) lkNB.href = paginaLoja();

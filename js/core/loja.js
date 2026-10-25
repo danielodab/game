@@ -281,6 +281,19 @@
    * perfil na Rede e repinta a chamada. */
   L.VITRINE_MS = 5 * 60 * 1000;
   var vit = null, vitEm = 0, vitBusca = null;
+  /* 25/10 — A LOJA FECHADA (SOTERRA_LOJA=0 no servidor, servidor/loja.py): a vitrine diz `fechada`. O jogo esconde
+   * as portas da loja — o botão Loja, a compra de barras das Configurações (a classe `loja-fechada` no <html>,
+   * css/style.css) e as frases que mandam à loja do site — e guarda a resposta no aparelho (CHAVE_FECHADA), para a
+   * próxima abertura já nascer certa, sem o botão piscar; o site lê a mesma chave (site/site.js). A fila de
+   * entregas não fecha: prêmios e presentes seguem chegando. Sem resposta nenhuma ainda, vale o que ficou guardado. */
+  L.CHAVE_FECHADA = 'soterra-loja-fechada';
+  function leFechada() { try { return window.localStorage.getItem(L.CHAVE_FECHADA) === '1'; } catch (e) { return false; } }
+  function marcaFechada(f) {
+    try { if (f) window.localStorage.setItem(L.CHAVE_FECHADA, '1'); else window.localStorage.removeItem(L.CHAVE_FECHADA); } catch (e) {}
+    try { document.documentElement.classList.toggle('loja-fechada', !!f); } catch (e2) {}
+  }
+  L.fechada = function () { return vit ? !!vit.fechada : leFechada(); };
+  try { if (typeof document !== 'undefined' && document.documentElement && leFechada()) document.documentElement.classList.add('loja-fechada'); } catch (eF) {}
   function lista(v) { return Object.prototype.toString.call(v) === '[object Array]' ? v : []; }
   function comSessao() {
     if (typeof L._semRede === 'function') return true;
@@ -308,8 +321,10 @@
                                   precoCheio: Number(i && i.precoCheio) || 0 };
                        }) },
             boasVindas: { disponivel: bv.disponivel === true, preco: Number(bv.preco) || 0,
-                          precoCheio: Number(bv.precoCheio) || 0 } };
+                          precoCheio: Number(bv.precoCheio) || 0 },
+            fechada: r.fechada === true };                 // 25/10: SOTERRA_LOJA=0 (ver L.fechada)
     vitEm = Date.now();
+    marcaFechada(vit.fechada);
     try { window.dispatchEvent(new CustomEvent('soterra:vitrine', { detail: copia(vit) })); } catch (e) {}
     return vit;
   }

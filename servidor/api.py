@@ -64,7 +64,7 @@ from comum import (CLASSE_RENOMEADA, CLASSES_RANK, ELEMENTOS, LOGIN_JANELA, LOGI
 from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_SENHA, FRASE_OUTRO_APARELHO,
                    LOGIN_POR_IP, MOTIVO_OUTRO_APARELHO, MUITAS_TENTATIVAS, ContaMixin, carrega_segredo)
 from correio import Correio
-from loja import ESQUEMA_LOJA, LojaMixin
+from loja import ESQUEMA_LOJA, FRASE_LOJA_FECHADA, ROTAS_DA_LOJA_FECHADA, LojaMixin, loja_aberta_do_ambiente
 from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
 from anuncio import ESQUEMA_ANUNCIO, Anuncios, AnuncioMixin
@@ -860,6 +860,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
 
     def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None, anuncios=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
+        self.loja_aberta = loja_aberta_do_ambiente()      # 25/10: SOTERRA_LOJA=0 fecha a loja (loja.py)
         # 09/10: A CAIXA-PRETA — toda sala que o juiz recusa (422: divergiu, lance fora da vez…) deixa o pedido
         # inteiro (a ata, os lances, o estado das contas) num JSON desta pasta, para ser refeita no computador
         # de quem conserta (tools/refaz_recusa.js). O dono: "de novo não deu XP na luta, isso é inaceitável" —
@@ -1031,6 +1032,10 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
             # `gm` que o cliente guardou do login é só uma cópia (10/09)
             if so_mestre and not conta['gm']:
                 raise Recusa(403, rota[3] if len(rota) > 3 else 'só o Mestre do Fundo mexe nos eventos do mundo')
+        # 25/10: A LOJA FECHADA (SOTERRA_LOJA=0, loja.py): comprar, presentear e começar um pagamento recusam;
+        # a entrega, a conferência e o aviso de um pagamento que já aconteceu seguem
+        if nome in ROTAS_DA_LOJA_FECHADA and not self.loja_aberta:
+            raise Recusa(503, FRASE_LOJA_FECHADA, fechada=True)
         resultado = getattr(self, nome)(conta, corpo)
         if so_mestre:
             self._audita_rota(conta, metodo, nome, corpo, resultado)   # 02/10: toda ação do Mestre deixa linha
@@ -2116,6 +2121,8 @@ if __name__ == '__main__':
         log.warning("juiz: desligado — autoridade DESLIGADA: o save do cliente vale inteiro e as rotas "
                     "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
     Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play, anuncios=anuncios)
+    log.info("loja: %s", "aberta" if Atendente.api.loja_aberta
+             else "FECHADA (SOTERRA_LOJA=0): nada se compra; entregas e pagamentos já feitos seguem")
     liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)
     liga_torneios(Atendente.api)                      # 10/10: o relógio do Torneio da Arena, de 5 em 5 s (torneio.py)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
