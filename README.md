@@ -32,7 +32,7 @@ Outras portas de entrada:
 | arquivo | o que é |
 |---|---|
 | `index.html` | o jogo, tabuleiro 3D (Three.js) |
-| `www/` + `capacitor.config.json` | o mesmo jogo como aplicativo — ver [`docs/CELULAR.md`](docs/CELULAR.md) |
+| `www/` + `capacitor.config.json` | o mesmo jogo como aplicativo — ver [`docs/CELULAR.md`](docs/CELULAR.md); Android em `android/`, iPhone em `ios/` ([`docs/APP_STORE.md`](docs/APP_STORE.md)) |
 | `index2d.html` | a versão isométrica 2D em PixiJS (linha antiga, preservada) |
 | `v1_3d.html` | a primeira linha 3D, preservada para comparação |
 
@@ -69,7 +69,8 @@ e derruba três coisas que seriam óbvias em qualquer projeto web:
 
 ```
 index.html              a ordem dos scripts É a árvore de dependências
-capacitor.config.json   o APK: aponta para www/ (gerada) — ver docs/CELULAR.md
+capacitor.config.json   os aplicativos (android/ e ios/): apontam para www/ (gerada) — ver docs/CELULAR.md
+codemagic.yaml          a compilação do iPhone na nuvem, sem Mac — ver docs/APP_STORE.md
 js/
   assets_bundle.js      escolhe entre .glb por XHR (servido) e base64 (file://)
   mobile.js             o que este aparelho é: toque? celular? economizar GPU?
@@ -257,6 +258,7 @@ jogador. Página nova sem essa linha é bug.
 | `premio_diario_api.py` | 4 próprias / 0 (08/10: o prêmio diário de resgate — calendário do mês, ordem só pelos resgates, barra no 10º; herda as da autoridade) |
 | `torneio_api.py` | 15 / 0 (10/10: o Torneio da Arena no servidor, com o juiz de verdade — os da semana, as vagas até 16, o sorteio com passes, a chamada, o W.O., a revanche, o duelo sem coroa nem vida, o prêmio pago uma vez, o título, a moldura, o carimbo do relé e o torneio de guilda; o contrato é docs/TORNEIO.md) |
 | `juiz_titulos_regua.js` (Node) | 8 / 0 (10/10: a régua dos títulos do Torneio da Arena lida como o juiz a lê; `juiz_economia.js` a chama) |
+| `app_ios.py` | 47 / 0 (25/10: a casca do iPhone sem Mac — o `@capacitor/ios` na versão do Android, o `allowNavigation` que segura a entrada dentro do aplicativo, os plugins do iPhone, o projeto e o `Info.plist` feitos à mão, o manifesto de privacidade, o ícone sem transparência, a receita do Codemagic sem segredo — [`docs/APP_STORE.md`](docs/APP_STORE.md)) |
 | `notificacoes.js` (Node) | 20 / 0 (08/10: os avisos locais do aplicativo com plugin de mentira, e a casca: package.json, empacota, manifesto) |
 | `rele_titulos_prova.py` | 3 / 0 (08/10: o título de pódio que acompanha a posição e a moldura carimbada pelo relé) |
 | `estrelas_manuais.js` (Node) | 18 / 0 (08/10: as duas iniciais livres, a carta como moeda, a estrela comprada à mão por 5/10/20/30/45, a migração do save de antes, as ops do juiz, as comuns na loja) |

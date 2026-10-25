@@ -182,8 +182,12 @@ const nomes = (l) => l.map((x) => x.arquivo).sort().join(' ');
         !!servidor && cfg.server.url === servidor + '/index.html' && cfg.server.androidScheme === 'https', cfg.server.url + ' x ' + servidor);
   check('capacitor.config.json: sem resposta do servidor, mostra a tela do pacote (errorPath), não a tela branca',
         cfg.server.errorPath === 'sem-conexao.html' && cfg.webDir === 'www');
+  // 25/10: o allowNavigation leva SÓ o domínio do próprio jogo — o iPhone precisa dele para a entrada (/site/conta.html)
+  // não abrir no Safari (docs/APP_STORE.md); no Android esse domínio já é do aplicativo e nada muda
+  const host = servidor ? servidor.replace(/^https:\/\//, '') : '?';
   check('capacitor.config.json: nenhum outro domínio abre dentro do aplicativo (links de fora vão para o navegador)',
-        !cfg.server.allowNavigation && cfg.server.cleartext !== true);
+        (!cfg.server.allowNavigation || JSON.stringify(cfg.server.allowNavigation) === JSON.stringify([host])) &&
+        cfg.server.cleartext !== true, JSON.stringify(cfg.server.allowNavigation));
   const CASCA = le('app', 'index.html');
   check('a tela "sem conexão" é um arquivo só e leva a marca do servidor para o empacota trocar',
         !/<(script|img|link)[^>]+(src|href)=/.test(CASCA) && CASCA.split("'__SERVIDOR__'").length === 2);

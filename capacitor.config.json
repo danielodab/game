@@ -5,7 +5,8 @@
   "server": {
     "androidScheme": "https",
     "url": "https://soterra.viidoo.io/index.html",
-    "errorPath": "sem-conexao.html"
+    "errorPath": "sem-conexao.html",
+    "allowNavigation": ["soterra.viidoo.io"]
   },
   "android": {
     "backgroundColor": "#0b0d10",
@@ -13,6 +14,17 @@
   },
   "ios": {
     "backgroundColor": "#0b0d10",
-    "contentInset": "always"
+    "contentInset": "never",
+    "preferredContentMode": "mobile",
+    "allowsLinkPreview": false,
+    "includePlugins": [
+      "@capacitor/app",
+      "@capacitor-community/keep-awake",
+      "@capgo/native-purchases",
+      "@capacitor/local-notifications",
+      "@capacitor-community/in-app-review",
+      "@capacitor/share",
+      "@capacitor/filesystem"
+    ]
   }
 }

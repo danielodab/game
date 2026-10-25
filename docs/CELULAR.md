@@ -6,6 +6,12 @@ com o Capacitor) e do que foi mudado no jogo para ele funcionar no telefone.
 **Para publicar na Google Play** — instalar o Android Studio, assinar, a ficha
 da loja, os formulários — o passo a passo é o [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md).
 
+**O iPhone (25/10):** o projeto `ios/` existe (gerado aqui com `npx cap add ios`)
+e o caminho até a App Store — compilar sem Mac, a assinatura, a ficha, os riscos
+da revisão e o que o jogo precisa separar entre Android e iPhone — está no
+[`APP_STORE.md`](APP_STORE.md). Tudo o que este arquivo diz da casca vale para os
+dois, salvo o que o `APP_STORE.md` §8.8 aponta.
+
 **O estado (04/10/2026):** o projeto Android existe (`android/`, criado com
 `npx cap add android`) e a `www/` é montada e sincronizada. **Nunca foi
 compilado**: esta máquina tem Node, mas não tem Java nem o Android SDK.
@@ -57,6 +63,8 @@ O AAB assinado, que é o que a loja recebe, está no `GOOGLE_PLAY.md` §1.
 | `package.json`, `package-lock.json` | sim | dizem quais versões do Capacitor instalar |
 | `capacitor.config.json` | sim | a configuração de publicação |
 | `android/` | **sim** | é o projeto do aplicativo: versão, ícone, manifesto, receita de assinatura |
+| `ios/` | **sim** (25/10) | o projeto do iPhone: versão, ícone, `Info.plist`, manifesto de privacidade (`APP_STORE.md` §9) |
+| `codemagic.yaml` | sim | a compilação do iPhone na nuvem, sem segredo nenhum |
 | `node_modules/` | não | volta inteira com `npm install` |
 | `www/` | não | gerada pelo `tools/empacota_www.py` |
 | `android/keystore.properties`, `*.jks` | **nunca** | a chave de assinatura e as senhas |
@@ -117,9 +125,12 @@ tarde, sem a compra pela Google.
 **`JOGO.Mobile.app()` continua valendo:** o Capacitor põe o `window.Capacitor`
 na página do servidor antes do primeiro script, como fazia na do pacote.
 
-**A navegação fica presa ao domínio do jogo.** Não há `allowNavigation`:
-qualquer link para outro domínio abre no navegador do aparelho, não dentro do
-aplicativo (é o comportamento padrão do Capacitor, `Bridge.launchIntent`). O
+**A navegação fica presa ao domínio do jogo.** O `allowNavigation` leva só o
+domínio do próprio jogo: qualquer link para outro domínio abre no navegador do
+aparelho, não dentro do aplicativo (é o comportamento padrão do Capacitor,
+`Bridge.launchIntent`). A linha entrou em 25/10 por causa do iPhone, que sem ela
+abriria a entrada (`site/conta.html`) no Safari; no Android ela não muda nada
+(`APP_STORE.md` §8.8), e o `tools/empacota_www.py` recusa montar sem ela. O
 `site/conta.html` é do mesmo domínio e abre dentro. Desde 24/10 o WebView inteiro **nunca é o site**: fora do
 jogo ele mostra só a entrada, e o site abre numa aba dentro do jogo (seção 10).
 

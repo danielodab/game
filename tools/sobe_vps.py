@@ -48,7 +48,8 @@ except Exception:
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FORA = ['tests', 'tools', 'docs', '.claude', 'unity', 'servidor/dados',
-        'android', 'app', 'package.json', 'package-lock.json',     # a casca do aplicativo: o servidor não usa
+        'android', 'ios', 'app', 'package.json', 'package-lock.json',   # a casca do aplicativo: o servidor não usa
+        'codemagic.yaml',                                               # a receita da compilação do iPhone na nuvem
         'assets/embedded/models-*', 'assets/embedded/env-kit*', 'assets/embedded/muro-*',
         'assets/embedded/coroas-pvp-3d.js', 'assets/embedded/cenario-*']
 RE_NOME = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
