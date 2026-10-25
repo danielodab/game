@@ -98,6 +98,13 @@ mudam alguns rótulos.
   `admin eventos 50`, `admin agenda`, `admin backup`, `admin email-teste
   SEU@gmail.com`, `admin trocar-email "NOME" certo@exemplo.com`, `admin loja`
   e `admin loja-cancelar ID` (ver as partes 5 e 6, logo abaixo).
+- **Excluir contas de teste** (25/10): `admin excluir "NOME" "OUTRO NOME"`.
+  O nome pode ser o da conta (o de `admin contas`) ou o que aparece no
+  ranking. O comando lista as contas, pede **EXCLUIR** digitado e usa a MESMA
+  exclusão da página da conta: o save, os itens, as barras, os amigos e a
+  guilda saem juntos, e a conta vira lápide. Não manda e-mail. A conta do
+  Mestre não sai por aqui (`admin tirar-mestre` antes), e um nome que case com
+  duas contas é recusado. Não tem volta: rode `admin backup` antes.
 - **Nome reservado à equipe** (GM, Admin, Moderador, Mestre do Fundo…): o site
   recusa no cadastro; quem dá é você, no Terminal: `admin renomear "VELHO" "NOVO"`.
 - **Eventos do mundo** (XP em dobro, Maré da Cisterna…): quem liga é o

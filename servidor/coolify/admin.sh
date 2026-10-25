@@ -20,12 +20,13 @@
 #   admin guildas              TODAS as guildas (até a da equipe): líder, membros, nível e peças no banco
 #   admin desfazer-guilda "NOME"  desfaz a guilda inteira (as peças do banco voltam aos donos; pede o nome de novo)
 #   admin backup               faz um backup agora, em /dados/backups
+#   admin excluir "NOME" […]   EXCLUI contas de vez (as de teste): pede EXCLUIR digitado; o Mestre não sai por aqui
 # Depois de marcar ou tirar a marca de Mestre, a pessoa sai e entra de novo no site.
 # =============================================================================
 set -eu
 BANCO=/dados/soterra.db
 
-ajuda() { sed -n '4,23p' "$0" | sed 's/^# \{0,1\}//'; }
+ajuda() { sed -n '4,24p' "$0" | sed 's/^# \{0,1\}//'; }
 sql() { su-exec soterra sqlite3 "$BANCO" "$@"; }
 texto() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 tem_tabela() { [ "$(sql "select count(*) from sqlite_master where type = 'table' and name = '$1'")" = "1" ]; }
@@ -56,6 +57,8 @@ case "$acao" in
     [ $# -eq 2 ] || { echo "uso: admin desfazer-guilda \"NOME DA GUILDA\" (o nome inteiro, entre aspas se tiver espaço; veja em: admin guildas)"; exit 1; } ;;
   barras)
     [ $# -eq 2 ] || { echo "o NOME vai inteiro, num argumento só; com espaço, entre aspas: admin barras \"Ana Clara\""; exit 1; } ;;
+  excluir)
+    [ $# -ge 2 ] || { echo "uso: admin excluir \"NOME\" [\"OUTRO NOME\" …] (cada nome entre aspas se tiver espaço; veja em: admin contas)"; exit 1; } ;;
 esac
 if [ -z "$acao" ] || [ "$acao" = "ajuda" ]; then ajuda; exit 0; fi
 if [ "$acao" = "backup" ]; then exec /app/servidor/coolify/backup.sh; fi
@@ -195,6 +198,12 @@ case "$acao" in
     echo
     echo "Quem está em cada uma:"
     sql -header -column "select g.nome as guilda, c.nome as conta, case when g.lider_id = c.id then 'lider' else m.cargo end as cargo, datetime(m.entrou_em, 'unixepoch', '-3 hours') as entrou from guilda_membros m join guildas g on g.id = m.guilda_id join contas c on c.id = m.conta_id order by g.id, m.entrou_em" ;;
+  excluir)
+    # 25/10 (dono: "remova todas essas contas que foram somente de teste"). NÃO é um delete no SQL: é a MESMA
+    # transação da exclusão pelo titular (servidor/privacidade.py, _excluir_grava) — a guilda passa ou se desfaz,
+    # as peças emprestadas voltam, a conta vira lápide. O nome é o da conta ou o do ranking. Pede EXCLUIR digitado.
+    shift
+    exec su-exec soterra python3 /app/servidor/privacidade.py --banco "$BANCO" --juiz http://127.0.0.1:8792 --excluir "$@" ;;
   desfazer-guilda)
     # 04/10 (dono: "exclua a guilda … vou refazer"). NÃO é um delete no SQL: as peças do banco têm de voltar
     # ao estado de cada dono pelo JUIZ (o mesmo caminho do painel do Mestre: servidor/guilda.py, _g_desfaz),

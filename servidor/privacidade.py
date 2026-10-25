@@ -623,3 +623,106 @@ class PrivacidadeMixin:
         except sqlite3.OperationalError:
             dados['convite'] = None
         return dados
+
+
+# =============================================================================
+# admin excluir "NOME" ["NOME" …] — A EXCLUSÃO PELO DONO, NO TERMINAL (25/10)
+# =============================================================================
+# O dono, antes de levar o jogo à produção: "remova todas essas contas que foram somente de teste". A exclusão
+# que existia era a do TITULAR (conta_excluir, acima: o nome e a senha da própria conta). Esta é a mesma
+# transação (_excluir_grava: a guilda passa ou se desfaz, os empréstimos do banco voltam, a auditoria perde o
+# número, a conta vira lápide em contas_excluidas), sem a senha, para o dono, de dentro do contêiner — como o
+# `admin desfazer-guilda`. Um DELETE no SQL deixaria resto da conta espalhado em dezenas de tabelas.
+#   - o NOME é o da conta (contas.nome) ou o que aparece no ranking (resumos.nome); tem de achar UMA conta viva;
+#   - a conta do Mestre não sai por aqui (admin tirar-mestre antes), como no site;
+#   - a luta aberta e o pagamento em andamento seguram, como no site;
+#   - lista o que vai sair e pede EXCLUIR digitado (--sim pula a pergunta: as provas);
+#   - nenhum e-mail sai (são contas de teste do dono); a conta excluída não volta.
+def _contas_por_nome(con, nome):
+    return con.execute(
+        "SELECT c.id, c.nome, c.email, c.gm, c.criado_em, r.nome AS publico FROM contas c "
+        "LEFT JOIN resumos r ON r.conta_id = c.id "
+        "WHERE (c.nome = ? OR r.nome = ?) AND c.id NOT IN (SELECT conta_id FROM contas_excluidas) "
+        "ORDER BY c.id", (nome, nome)).fetchall()
+
+
+def _terminal():
+    import argparse
+    import sys
+    ap = argparse.ArgumentParser(description="Exclui contas pelo dono (a mesma transação da exclusão pelo titular)")
+    ap.add_argument('--banco', required=True)
+    ap.add_argument('--juiz', default=None, help="o endereço do juiz (o mesmo da API): devolve as peças emprestadas")
+    ap.add_argument('--excluir', metavar='NOME', nargs='+', required=True)
+    ap.add_argument('--sim', action='store_true', help="não pergunta (só para as provas)")
+    args = ap.parse_args()
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+    from api import Api
+    from juiz_ponte import Juiz
+    api = Api(args.banco, juiz=Juiz(args.juiz))
+    alvos, problemas, vistos = [], [], set()
+    for nome in args.excluir:
+        achadas = _contas_por_nome(api.con, nome)
+        if not achadas:
+            problemas.append('"%s": não achei conta viva com esse nome (confira com: admin contas)' % nome)
+        elif len(achadas) > 1:
+            problemas.append('"%s": mais de uma conta tem esse nome (%s) — use o nome da conta, de admin contas'
+                             % (nome, ', '.join('nº %d %s' % (a['id'], a['nome']) for a in achadas)))
+        elif achadas[0]['gm']:
+            problemas.append('"%s": é a conta do Mestre — tire a marca antes (admin tirar-mestre "%s")'
+                             % (nome, achadas[0]['nome']))
+        elif achadas[0]['id'] not in vistos:
+            vistos.add(achadas[0]['id'])
+            alvos.append(achadas[0])
+    for p in problemas:
+        print(p)
+    if not alvos:
+        print('nada a excluir.')
+        return 1 if problemas else 0
+    print('Vão ser EXCLUÍDAS, sem volta (%d):' % len(alvos))
+    for a in alvos:
+        criada = datetime.fromtimestamp(a['criado_em'], timezone.utc).strftime('%d/%m/%Y')
+        print('  nº %d  %s%s  <%s>  criada em %s' % (a['id'], a['nome'],
+              ' (no jogo: %s)' % a['publico'] if a['publico'] and a['publico'] != a['nome'] else '', a['email'], criada))
+    print('O save, os itens, as barras, os amigos e a guilda delas saem com elas. Nenhum e-mail é mandado.')
+    if not args.sim:
+        print('Digite EXCLUIR para confirmar (ou Enter para desistir): ', end='', flush=True)
+        try:
+            digitado = sys.stdin.readline().strip()
+        except (EOFError, KeyboardInterrupt):
+            digitado = ''
+        if digitado != 'EXCLUIR':
+            print('\nnão confere: nada foi apagado.')
+            return 1
+    erros = 0
+    for a in alvos:
+        cid = a['id']
+        with api.tranca:
+            barrado = api._excluir_barrado(cid, agora())
+        if barrado:
+            print('  nº %d %s: não saiu — %s' % (cid, a['nome'], barrado[1]))
+            erros += 1
+            continue
+        try:
+            for tentativa in range(3):
+                preparos = api._g_recolhas_do_dono(cid)
+                try:
+                    guilda, _t = api._excluir_grava(cid, preparos, ultima=tentativa == 2)
+                    break
+                except EstadoMudou:
+                    continue
+        except Recusa as e:
+            print('  nº %d %s: não saiu — %s' % (cid, a['nome'], e))
+            erros += 1
+            continue
+        log.info("conta #%d excluída pelo dono no Terminal (guilda: %s)", cid, guilda or '-')
+        print('  nº %d %s: excluída%s' % (cid, a['nome'], ' (guilda %s)' % guilda if guilda else ''))
+    print('Pronto. O ranking do site se atualiza em até 30 segundos.')
+    return 1 if (erros or problemas) else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(_terminal())
