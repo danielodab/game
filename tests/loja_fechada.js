@@ -9,7 +9,10 @@
  *   · a vitrine fechada liga L.fechada(), põe `loja-fechada` no <html> e guarda a resposta no aparelho;
  *   · a próxima abertura já nasce com a classe (sem o botão Loja piscar), antes de qualquer resposta;
  *   · a vitrine aberta desfaz tudo: sem classe e sem a marca guardada;
- *   · a vitrine fechada não tem ofertas nem Pacote de Boas-Vindas: a chamada da praça não tem o que mostrar. */
+ *   · a vitrine fechada não tem ofertas nem Pacote de Boas-Vindas: a chamada da praça não tem o que mostrar;
+ *   · NO IPHONE (25/10, docs/APP_STORE.md §8.2) a loja fica fechada SEMPRE, até a compra da Apple: com a vitrine
+ *     aberta, sem resposta ou sem rede — e sem escrever a chave, que é a resposta do servidor. Com o JOGO.Mobile do
+ *     Android (falta sempre falso) tudo segue como acima. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -22,7 +25,7 @@ function check(nome, ok, extra) {
 }
 const FONTE = fs.readFileSync(path.join(__dirname, '..', 'js', 'core', 'loja.js'), 'utf8');
 
-function janela(cofre) {
+function janela(cofre, mobile) {
   const classes = new Set();
   const eventos = [];
   const ctx = {
@@ -45,6 +48,7 @@ function janela(cofre) {
     dispatchEvent(ev) { eventos.push(ev && ev.type); return true; },
     CustomEvent: function (tipo, op) { this.type = tipo; this.detail = op && op.detail; }
   };
+  if (mobile) ctx.JOGO = { Mobile: mobile };      // o JOGO.Mobile.falta do js/mobile.js (carregado antes, no index.html)
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(FONTE, ctx);
@@ -89,6 +93,36 @@ function resposta(fechada) {
   L._semRede = () => ({ ok: false, status: 0 });
   v = await L.vitrine(true);
   check('sem rede, vale a última resposta (aberta)', L.fechada() === false);
+
+  // ---- 25/10: O IPHONE — a loja fechada até a compra da Apple, seja qual for o servidor
+  const IPHONE = { falta: (r) => r === 'compra' || r === 'sair' || r === 'anuncio' };
+  const ANDROID = { falta: () => false };
+  let cofreI = {};
+  w = janela(cofreI, IPHONE);
+  L = w.JOGO.Loja;
+  check('IPHONE: já nasce fechada, sem resposta nenhuma (o botão Loja nem aparece)',
+        L.fechada() === true && w._classes.has('loja-fechada'));
+  check('IPHONE: … sem escrever a chave do servidor no aparelho', !(L.CHAVE_FECHADA in cofreI));
+  L._semRede = () => resposta(false);
+  v = await L.vitrine(true);
+  check('IPHONE: a vitrine ABERTA não abre a loja: L.fechada() segue verdadeiro e a classe fica',
+        v.fechada === false && L.fechada() === true && w._classes.has('loja-fechada'));
+  check('IPHONE: … e a chave segue sendo só a resposta do servidor (aberta: nada guardado)', !(L.CHAVE_FECHADA in cofreI));
+  L._semRede = () => resposta(true);
+  v = await L.vitrine(true);
+  check('IPHONE: a vitrine fechada também fecha, e guarda a resposta como sempre',
+        L.fechada() === true && w._classes.has('loja-fechada') && cofreI[L.CHAVE_FECHADA] === '1');
+
+  let cofreA = {};
+  w = janela(cofreA, ANDROID);
+  L = w.JOGO.Loja;
+  check('ANDROID (com o JOGO.Mobile): nasce aberta, como sempre', L.fechada() === false && !w._classes.has('loja-fechada'));
+  L._semRede = () => resposta(true);
+  await L.vitrine(true);
+  check('ANDROID: a vitrine fechada fecha', L.fechada() === true && w._classes.has('loja-fechada') && cofreA[L.CHAVE_FECHADA] === '1');
+  L._semRede = () => resposta(false);
+  await L.vitrine(true);
+  check('ANDROID: a vitrine aberta abre de novo', L.fechada() === false && !w._classes.has('loja-fechada') && !(L.CHAVE_FECHADA in cofreA));
 
   console.log((falhas ? 'FALHOU' : 'tudo passou') + ' (' + (total - falhas) + ' de ' + total + ')');
   process.exit(falhas ? 1 : 0);

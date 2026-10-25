@@ -28,6 +28,8 @@ JOGO.I18n.registra('es', { textos: {
   "Falar com a equipe": "Hablar con el equipo",
   "Entrar na comunidade": "Entrar a la comunidad",
   "Obrigado! Se a caixa não abriu, a Play decide quando mostrar.": "¡Gracias! Si la caja no se abrió, Play decide cuándo mostrarla.",
+  "Avaliar na App Store": "Calificar en la App Store",
+  "Obrigado! Se a caixa não abriu, a Apple decide quando mostrar.": "¡Gracias! Si la caja no se abrió, Apple decide cuándo mostrarla.",
   "A primeira descida": "El primer descenso",
   "Os seus dois heróis descem agora para a primeira sala. A praça, o cais e os portais vêm logo depois desta luta.": "Tus dos héroes bajan ahora a la primera sala. La plaza, el muelle y los portales vienen justo después de esta pelea.",
   "Abrindo a porta…": "Abriendo la puerta…",

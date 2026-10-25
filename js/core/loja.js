@@ -288,12 +288,18 @@
    * entregas não fecha: prêmios e presentes seguem chegando. Sem resposta nenhuma ainda, vale o que ficou guardado. */
   L.CHAVE_FECHADA = 'soterra-loja-fechada';
   function leFechada() { try { return window.localStorage.getItem(L.CHAVE_FECHADA) === '1'; } catch (e) { return false; } }
+  /* 25/10 — NO IPHONE a loja fica fechada SEMPRE, até existir a compra da Apple (JOGO.Mobile.falta('compra'),
+   * js/mobile.js; docs/APP_STORE.md §8.2): a Apple só aceita item digital vendido pela compra dela. Não mexe na
+   * chave guardada, que é a resposta do servidor. No Android e na web `falta` é sempre falso: nada muda. */
+  function semCompraNoAparelho() {
+    try { return !!(JOGO.Mobile && JOGO.Mobile.falta && JOGO.Mobile.falta('compra')); } catch (e) { return false; }
+  }
   function marcaFechada(f) {
     try { if (f) window.localStorage.setItem(L.CHAVE_FECHADA, '1'); else window.localStorage.removeItem(L.CHAVE_FECHADA); } catch (e) {}
-    try { document.documentElement.classList.toggle('loja-fechada', !!f); } catch (e2) {}
+    try { document.documentElement.classList.toggle('loja-fechada', !!f || semCompraNoAparelho()); } catch (e2) {}
   }
-  L.fechada = function () { return vit ? !!vit.fechada : leFechada(); };
-  try { if (typeof document !== 'undefined' && document.documentElement && leFechada()) document.documentElement.classList.add('loja-fechada'); } catch (eF) {}
+  L.fechada = function () { return semCompraNoAparelho() || (vit ? !!vit.fechada : leFechada()); };
+  try { if (typeof document !== 'undefined' && document.documentElement && (leFechada() || semCompraNoAparelho())) document.documentElement.classList.add('loja-fechada'); } catch (eF) {}
   function lista(v) { return Object.prototype.toString.call(v) === '[object Array]' ? v : []; }
   function comSessao() {
     if (typeof L._semRede === 'function') return true;
