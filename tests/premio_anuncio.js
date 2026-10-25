@@ -15,7 +15,9 @@
  *   · o prêmio só é dado por "creditado" quando o SERVIDOR mostra o contador andando;
  *   · fechou antes do fim: nada; sem anúncio: avisa; limite: avisa; depuração: bloco de TESTE;
  *   · A MOEDA DA PRAÇA ("Prêmio Grátis!") só existe no aplicativo, para a conta comum conectada; lê o que
- *     resta no servidor do jogo, abre a área e mais nada; acabou o limite, some. */
+ *     resta no servidor do jogo, abre a área e mais nada; acabou o limite, some;
+ *   · NO IPHONE (25/10) a área e a moeda não existem — o AdMob não entra no aplicativo de lá (docs/APP_STORE.md
+ *     §8.6) — e nada é pedido; no Android com o getPlatform tudo segue igual. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -104,6 +106,11 @@ function janela(op) {
     } } }
   };
   if (op.capacitor) ctx.Capacitor = { isNativePlatform: () => true, DEBUG: !!op.debug };
+  // 25/10: o JOGO.Mobile.falta do js/mobile.js — no iPhone falta o anúncio; no Android nunca falta nada
+  if (op.plataforma) {
+    ctx.Capacitor.getPlatform = () => op.plataforma;
+    ctx.JOGO.Mobile = { falta: (r) => op.plataforma === 'ios' && FALTA_NO_IPHONE[r] === true };
+  }
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(FONTE, ctx);
@@ -112,6 +119,9 @@ function janela(op) {
   return ctx;
 }
 const calma = () => new Promise((r) => setTimeout(r, 30));
+// a lista do que falta no iPhone, lida do js/mobile.js de verdade
+const FALTA_NO_IPHONE = JSON.parse((/M\.FALTA_NO_IPHONE = (\{[^}]*\})/.exec(le('js', 'mobile.js')) || [])[1]
+  .replace(/(\w+):/g, '"$1":'));
 
 (async function () {
   // ------------------------------------------------------------------ A WEB
@@ -268,6 +278,22 @@ const calma = () => new Promise((r) => setTimeout(r, 30));
   w = janela({ capacitor: true, semSessao: true });
   P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
   check('moeda: sem conta conectada não aparece, e nada é pedido', / is-off/.test(moeda.className) && w._reg.api.length === 0);
+
+  // ------------------------------------------------------------- O IPHONE (25/10)
+  check('a lista do js/mobile.js diz que no iPhone falta o anúncio', FALTA_NO_IPHONE.anuncio === true);
+  w = janela({ capacitor: true, plataforma: 'ios' });
+  check('IPHONE: a área não existe (noApp falso: as Configurações não mostram a seção)', w.JOGO.PremioAnuncio.noApp() === false);
+  w.JOGO.PremioAnuncio.abre();
+  await calma();
+  check('IPHONE: abrir não busca ponte, não fala com o servidor nem com o plugin',
+        w._reg.scripts.length === 0 && w._reg.api.length === 0 && w._reg.plugin.length === 0,
+        JSON.stringify([w._reg.scripts, w._reg.api, w._reg.plugin]));
+  check('IPHONE: a moeda "Prêmio Grátis!" não aparece na praça', w.JOGO.PremioAnuncio.atalho(w._no()) === null);
+  w = janela({ capacitor: true, plataforma: 'android' });
+  check('ANDROID (com o getPlatform): a área segue existindo', w.JOGO.PremioAnuncio.noApp() === true);
+  const moedaAndroid = w.JOGO.PremioAnuncio.atalho(w._no());
+  await calma();
+  check('ANDROID: a moeda da praça segue aparecendo', !!moedaAndroid);
 
   // ------------------------------------------------------------- A CASCA
   const manif = le('android', 'app', 'src', 'main', 'AndroidManifest.xml');

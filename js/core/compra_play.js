@@ -70,6 +70,18 @@
   P.noApp = function () { return forcado || nativo(); };
   // as páginas do site abertas a partir daqui (a loja, a conta) sabem que estão dentro do aplicativo
   try { if (P.noApp()) window.sessionStorage.setItem('soterra-app', '1'); } catch (e2) {}
+  /* 25/10 — O IPHONE: a compra deste arquivo é a da Google Play. No iPhone o plugin falaria com a loja da APPLE,
+   * onde os pacotes não existem; até a compra da Apple ficar pronta (docs/APP_STORE.md §8.2) este arquivo não liga
+   * nada lá — nem a retomada na abertura, nem a tela. Quem diz é o JOGO.Mobile.falta (js/mobile.js) ou, numa
+   * página do site, o SITE.faltaNoAparelho (site/site.js). No Android e na web é sempre falso: nada muda. */
+  function semCompraAqui() {
+    try {
+      if (JOGO.Mobile && JOGO.Mobile.falta) return !!JOGO.Mobile.falta('compra');
+      if (window.SITE && window.SITE.faltaNoAparelho) return !!window.SITE.faltaNoAparelho('compra');
+    } catch (e) {}
+    return false;
+  }
+  P.ligada = function () { return P.noApp() && !semCompraAqui(); };
 
   function noSite() { return !JOGO.Sessao && !!window.SITE; }
   function api(rota, op) {
@@ -134,6 +146,7 @@
 
   /* ---- 1. os produtos ---- */
   P.prepara = function () {
+    if (semCompraAqui()) return Promise.resolve(st);
     st.fase = 'carregando'; st.erro = '';
     pinta();
     function fim(fase, erro) { st.fase = fase; st.erro = erro || ''; pinta(); return st; }
@@ -193,6 +206,7 @@
 
   /* ---- 2. a compra ---- */
   P.compra = function (id) {
+    if (semCompraAqui()) return Promise.resolve({ estado: 'recusada' });
     var pl = plugin();
     var p = st.pacotes.filter(function (x) { return x.id === id; })[0];
     if (!pl || !p || st.ocupado) return Promise.resolve({ estado: 'recusada' });
@@ -235,7 +249,7 @@
   P.retoma = function (forcar) {
     if (retomando) return retomando;
     var vazio = { creditadas: 0, barras: 0, pendentes: 0 };
-    if (!P.noApp() || !temSessao()) return Promise.resolve(vazio);
+    if (!P.ligada() || !temSessao()) return Promise.resolve(vazio);
     if (!forcar && Date.now() - retomadaEm < RETOMA_A_CADA) return Promise.resolve(vazio);
     retomadaEm = Date.now();
     retomando = ponte().then(function (tem) {
@@ -392,7 +406,7 @@
     return true;
   };
   P.abre = function () {
-    if (!P.noApp() || fundo) return;
+    if (!P.ligada() || fundo) return;
     estilo();
     st.recado = null;
     fundo = document.createElement('div');
@@ -423,7 +437,7 @@
 
   /* ---- ao abrir o aplicativo e ao voltar para ele: o que ficou pelo caminho ---- */
   function liga() {
-    if (!P.noApp() || typeof document === 'undefined') return;
+    if (!P.ligada() || typeof document === 'undefined') return;
     setTimeout(function () { P.retoma(); }, 1500);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) P.retoma(); });
   }

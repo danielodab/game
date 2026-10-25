@@ -119,6 +119,27 @@
       return sessionStorage.getItem('soterra-app') === '1';
     } catch (e2) { return false; }
   };
+  /* 25/10 — QUAL APLICATIVO: 'android', 'ios' ou 'web' — a mesma pergunta do JOGO.Mobile.plataforma (js/mobile.js).
+   * Numa página inteira do aplicativo o Capacitor diz (getPlatform). No quadro da aba do site o Capacitor do iPhone
+   * NÃO entra: quem diz é a marca que o jogo deixa na sessão da aba (`soterra-plataforma`) ou o `plataforma=ios`
+   * que a aba põe na primeira página. Aplicativo sem marca de iPhone é o Android, como sempre foi. */
+  SITE.plataforma = function () {
+    try {
+      var C = window.Capacitor;
+      if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) {
+        return (typeof C.getPlatform === 'function' && C.getPlatform() === 'ios') ? 'ios' : 'android';
+      }
+    } catch (e) { /* segue */ }
+    if (!SITE.noApp()) return 'web';
+    try {
+      if (/[?&]plataforma=ios(&|$)/.test(String(location.search || ''))) { sessionStorage.setItem('soterra-plataforma', 'ios'); return 'ios'; }
+      return sessionStorage.getItem('soterra-plataforma') === 'ios' ? 'ios' : 'android';
+    } catch (e2) { return 'android'; }
+  };
+  /* o que o iPhone ainda não tem — a MESMA lista do JOGO.Mobile.FALTA_NO_IPHONE (a prova tests/app_casca.js cobra);
+   * no Android e na web nunca falta nada */
+  SITE.FALTA_NO_IPHONE = { sair: true, compra: true, anuncio: true };
+  SITE.faltaNoAparelho = function (recurso) { return SITE.plataforma() === 'ios' && SITE.FALTA_NO_IPHONE[recurso] === true; };
 
   /* 24/10 — O APLICATIVO NÃO É O SITE (o dono: "preciso que meu app não seja o site ao fechar o jogo — seja
    * somente página de login. O site é a parte se o usuário quiser navegar: dentro do jogo deve ter um ícone de
@@ -207,11 +228,14 @@
    * jogo. Com ela, o <html> leva `loja-fechada` e o link "Loja" do menu do topo some (site.css); a página da loja
    * diz que abre em breve. Sem argumento, lê; com true/false, grava e acerta a classe. */
   SITE.CHAVE_LOJA_FECHADA = 'soterra-loja-fechada';
+  /* 25/10: no iPhone a loja fica fechada SEMPRE, até a compra da Apple existir (SITE.faltaNoAparelho('compra');
+   * docs/APP_STORE.md §8.2). A chave guardada continua sendo só a resposta do servidor. */
   SITE.lojaFechada = function (f) {
-    if (f === undefined) return leLocal(SITE.CHAVE_LOJA_FECHADA) === '1';
+    var noAparelho = SITE.faltaNoAparelho('compra');
+    if (f === undefined) return noAparelho || leLocal(SITE.CHAVE_LOJA_FECHADA) === '1';
     gravaLocal(SITE.CHAVE_LOJA_FECHADA, f ? '1' : null);
-    try { document.documentElement.classList.toggle('loja-fechada', !!f); } catch (e) { /* sem DOM */ }
-    return !!f;
+    try { document.documentElement.classList.toggle('loja-fechada', !!f || noAparelho); } catch (e) { /* sem DOM */ }
+    return !!f || noAparelho;
   };
   try { if (SITE.lojaFechada()) document.documentElement.classList.add('loja-fechada'); } catch (eL) { /* sem DOM */ }
 

@@ -10,7 +10,9 @@ da loja, os formulários — o passo a passo é o [`GOOGLE_PLAY.md`](GOOGLE_PLAY
 e o caminho até a App Store — compilar sem Mac, a assinatura, a ficha, os riscos
 da revisão e o que o jogo precisa separar entre Android e iPhone — está no
 [`APP_STORE.md`](APP_STORE.md). Tudo o que este arquivo diz da casca vale para os
-dois, salvo o que o `APP_STORE.md` §8.8 aponta.
+dois, salvo o que o `APP_STORE.md` §8.8 aponta. O que o iPhone ainda não tem (o
+"Sair do jogo", a compra, o anúncio) o jogo pergunta a `JOGO.Mobile.falta(recurso)`
+— sempre falso no Android e na web (`APP_STORE.md` §8.7).
 
 **O estado (04/10/2026):** o projeto Android existe (`android/`, criado com
 `npx cap add android`) e a `www/` é montada e sincronizada. **Nunca foi

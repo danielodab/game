@@ -90,6 +90,10 @@ var JOGO = (typeof window !== 'undefined')
     var x = url(u);
     if (!x) return u;
     if (!/(^|&)app=1(&|$)/.test(x.search.slice(1))) x.search = x.search ? x.search + '&app=1' : '?app=1';
+    // 25/10: no iPhone, também qual aplicativo é (SITE.plataforma, site/site.js) — no Android o endereço fica igual
+    var ios = false;
+    try { ios = !!(JOGO.Mobile && JOGO.Mobile.ios && JOGO.Mobile.ios()); } catch (e) {}
+    if (ios && !/(^|&)plataforma=ios(&|$)/.test(x.search.slice(1))) x.search += '&plataforma=ios';
     return x.href;
   }
   function lerToken() {
