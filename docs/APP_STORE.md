@@ -268,13 +268,40 @@ TestFlight minutos depois de processado.
 
 ### 5.2 Testadores externos (amigos)
 
-*Testes externos* → **+** → grupo → adicione e-mails ou gere um **link público**.
-Até 10.000 pessoas. O **primeiro build** de cada versão passa por uma revisão
-curta da Apple (a *Beta App Review*, normalmente menos de um dia) — e ela pede as
-mesmas coisas da revisão de verdade: a conta de demonstração e as notas (6.5).
+Até 10.000 pessoas, só com o e-mail ou por um **link público** (bom para mandar no
+WhatsApp). O **primeiro build** de cada versão passa por uma revisão curta da Apple
+(a *Beta App Review*, normalmente menos de um dia).
+
+**Uma vez só — as informações de teste** (App Store Connect → o app → **TestFlight**
+→ no menu da esquerda, **Informações de teste**; é a página que o Codemagic aponta
+quando o envio automático para):
+
+| campo | o que pôr |
+|---|---|
+| Descrição do app beta | `SOTERRA é um RPG tático por turnos em 3D, online. Monte uma dupla de heróis, funda os dois num só no meio da batalha e desça aos calabouços com outros jogadores.` |
+| E-mail para feedback | `system@viidoo.io` |
+| Informações de contato da revisão do beta | o seu nome, sobrenome, telefone (com +55) e e-mail |
+| Requer início de sessão | **marcado**, com o usuário e a senha da conta de demonstração (6.5) |
+| Notas da revisão | as notas em inglês da 6.5 |
+
+**O que testar** (vai em cada build, na página do build → *Informações de teste*):
+
+```
+Crie uma conta (ou entre com a sua do site) e jogue as primeiras salas. Confira: o jogo abre deitado; entrar e sair da conta acontece dentro do app; os avisos do jogo chegam; compartilhar o cartão da fusão funciona. Viu algo estranho? Tire um print: o TestFlight oferece mandar o feedback com ele.
+```
+
+**O grupo:** TestFlight → **Testes externos** → **+** → nome `Amigos` → no grupo,
+**Builds** → **+** → o build → **Enviar para revisão**. Aprovado (em até um dia),
+no mesmo grupo: **Testadores** → **+** para pôr e-mails, ou **Link público** →
+**Ativar** e mande o link. Cada pessoa instala o app **TestFlight** no iPhone e abre
+o link (ou o convite do e-mail). Com as informações acima preenchidas, os próximos
+builds do Codemagic vão sozinhos para essa revisão.
+
+**Testadores internos** (5.1) entram sem revisão e na hora, mas precisam virar
+usuários do App Store Connect: bom para a família, não para amigos.
 
 Diferente da Play, **a Apple não exige teste fechado** para liberar a produção:
-pode enviar à revisão direto. O TestFlight é para você ver o jogo no iPhone antes.
+pode enviar à revisão direto. O TestFlight é para ver o jogo no iPhone antes.
 
 ### 5.3 O que conferir no iPhone (nada disto pôde ser provado aqui)
 
@@ -338,12 +365,36 @@ RPG tático por turnos em 3D
 Forme sua dupla, funda os dois heróis num só e desça aos calabouços. Jogue com amigos na praça, na Arena e nas guerras de guilda.
 ```
 
-**Descrição** — a da Play (`GOOGLE_PLAY.md` §3), com três trocas: o bloco "A
-MESMA CONTA NO CELULAR E NO COMPUTADOR" diz "comece no iPhone e continue no
-navegador do computador"; o "FEITO PARA O CELULAR" fica igual; e o último
-parágrafo, enquanto o iPhone não guardar os modelos (5.3, item 12), fica assim:
+**Descrição** (a da Play, `GOOGLE_PLAY.md` §3, adaptada: iPhone no lugar de
+celular, e o último parágrafo sem o "baixar tudo", que o iPhone ainda não tem —
+5.3, item 12)
 
 ```
+O mundo de cima acabou. O que sobrou dele está enterrado — e alguém precisa descer.
+
+SOTERRA é um RPG tático por turnos em 3D. Você monta uma dupla de heróis, entra pelos portais do Acampamento e enfrenta, sala por sala, o que vive lá embaixo. Cada casa do tabuleiro conta: onde você pisa, quem você empurra, o que fica entre você e o inimigo.
+
+MONTE A SUA DUPLA
+Escolha entre classes com jeitos de lutar bem diferentes — quem aguenta a pancada, quem cura, quem invoca, quem ataca de longe, quem some e reaparece pelas costas. Cada herói segue um caminho elemental e ganha feitiços novos a cada nível.
+
+FUNDA OS HERÓIS
+No meio da batalha os dois heróis podem virar um só: uma fusão com corpo, feitiços e poder próprios. Cada par de classes dá uma fusão diferente.
+
+DESÇA AOS CALABOUÇOS
+Cada portal leva a um lugar com monstros, armadilhas e um chefe só dele. Há desafios em cada sala para quem quer prêmio melhor — e heróis de vida única para quem quer risco de verdade.
+
+JOGUE COM OUTRAS PESSOAS
+O Acampamento é uma praça viva: converse, forme grupo e desça junto. Desafie outros jogadores na Arena, suba no ranking, entre numa guilda e dispute as guerras entre guildas.
+
+FORJE, TROQUE, COLECIONE
+Itens raros, pedras para forjar e melhorar o equipamento, mascotes que acompanham a dupla e um mercado entre jogadores.
+
+FEITO PARA O IPHONE
+Toque uma vez para mirar e ver a área do feitiço, toque de novo para confirmar. Joga-se com o iPhone deitado, em tela inteira, e a qualidade gráfica se ajusta ao aparelho — dá para trocar nas Configurações.
+
+A MESMA CONTA NO IPHONE E NO COMPUTADOR
+O progresso fica guardado no servidor: comece no iPhone e continue no navegador do computador, com a mesma conta.
+
 SOTERRA precisa de internet para jogar. Cada mapa baixa o que precisa na primeira vez que você entra nele.
 ```
 
