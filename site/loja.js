@@ -73,8 +73,39 @@
   function $(id) { return document.getElementById(id); }
   function proprio(o, k) { return !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k); }
 
-  /* a ida ao Mercado Pago num lugar só: a prova troca por um dublê */
-  var LOJA = window.LOJA = { vai: function (url) { location.assign(url); } };
+  /* a ida ao Mercado Pago num lugar só: a prova troca por um dublê. `janela` é a aba nova já aberta no toque
+   * (só na aba do site de dentro do jogo — abreJanelaDoPagamento): ali o Mercado Pago abre nela */
+  var LOJA = window.LOJA = {
+    vai: function (url, janela) {
+      if (janela && !janela.closed) { try { janela.location.href = url; return 'janela'; } catch (e) { /* segue */ } }
+      if (SITE.naAba && SITE.naAba()) {
+        // o navegador barrou a aba nova: o pagamento vai na página inteira (sai do jogo, que fica guardado)
+        try { window.top.location.assign(url); return 'topo'; } catch (e2) { /* segue */ }
+      }
+      location.assign(url);
+      return 'pagina';
+    }
+  };
+  /* 24/10 — A LOJA NA ABA DO SITE DE DENTRO DO JOGO (js/ui/site_aba.js; o dono: "abrir a loja dentro do jogo e já
+   * comprar ali"). Na web o pagamento é o do Mercado Pago, e a página dele não pode abrir no quadro da aba (ela não
+   * aceita ser posta num quadro, e o jogo sumiria por baixo): abre numa ABA NOVA do navegador. A aba nova nasce NO
+   * TOQUE de "Ir para o pagamento" — o navegador barra a janela aberta depois de uma espera de rede — e recebe o
+   * endereço quando o servidor o devolve; deu errado, ela fecha. De volta ao jogo, a loja relê o saldo e os
+   * pacotes na hora (pagamentoFora). Fora da aba do jogo nada muda: o Mercado Pago abre na própria página. */
+  var pagamentoFora = false;
+  function abreJanelaDoPagamento() {
+    if (!(SITE.naAba && SITE.naAba())) return null;
+    var w = null;
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    if (!w) return null;
+    try {
+      w.document.title = 'Mercado Pago';
+      w.document.body.style.cssText = 'margin:0;padding:32px;font:16px system-ui,sans-serif;background:#0f1216;color:#e8e0d0';
+      w.document.body.textContent = Tx('Abrindo o Mercado Pago…');
+    } catch (e2) { /* a aba nova ainda é de outro documento: segue em branco */ }
+    return w;
+  }
+  function fechaJanela(w) { try { if (w && !w.closed) w.close(); } catch (e) { /* segue */ } }
 
   var catalogo = null, erroCatalogo = '';
   var minha = null, erroMinha = '';
@@ -1069,11 +1100,13 @@
       sim: Tx('Ir para o pagamento'), nao: Tx('Voltar')
     }).then(function (sim) {
       if (!sim || ocupado) return;
+      var janela = abreJanelaDoPagamento();          // no toque: na aba do jogo, a aba nova do Mercado Pago
       var idem = chave('pacote', pc.id);
       ocupa(true);
       aviso(Tx('Preparando o pagamento…'), 'neutro');
       return SITE.api('/api/pagamento/pacote', { method: 'POST', body: { pacote: pc.id, idem: idem } }).then(function (r) {
         ocupado = false;
+        if (!r.ok || !(typeof SITE.ehMercadoPago === 'function' && SITE.ehMercadoPago(r.endereco))) fechaJanela(janela);
         if (r.status === 401) { sessaoVencida(); return; }
         if (r.status === 0) {
           semResposta = { tipo: 'pacote', id: pc.id, idem: idem };
@@ -1096,9 +1129,12 @@
           desenha();
           return;
         }
-        aviso(Tx('Indo para o Mercado Pago…'), 'neutro');
+        var onde = LOJA.vai(r.endereco, janela);
+        if (onde === 'janela') {
+          pagamentoFora = true;
+          aviso(Tx('O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.'), 'neutro');
+        } else aviso(Tx('Indo para o Mercado Pago…'), 'neutro');
         desenha();
-        LOJA.vai(r.endereco);
       });
     });
   }
@@ -1175,9 +1211,16 @@
       desenha();
     });
     // voltou à aba (talvez depois de abrir o jogo): o saldo e os pedidos andaram
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && SITE.sessao() && Date.now() - lidaEm > 30 * 1000) { carregaMinha(); carregaPagamentos(); }
-    });
+    // 24/10: e quem pagou numa aba nova (a loja na aba do jogo) relê na hora, sem esperar os 30 s
+    function voltou() {
+      if (document.hidden || !SITE.sessao()) return;
+      if (!pagamentoFora && Date.now() - lidaEm <= 30 * 1000) return;
+      pagamentoFora = false;
+      carregaMinha(); carregaPagamentos();
+    }
+    document.addEventListener('visibilitychange', voltou);
+    // o Mercado Pago numa JANELA (não aba): a do jogo nem some da tela — volta pelo foco
+    window.addEventListener('focus', function () { if (pagamentoFora) voltou(); });
     // o relógio do servidor, para o "há 3 h" e o "de novo em 3 dias"
     SITE.api('/api/saude', { semToken: true }).then(function (r) {
       if (r.ok) { SITE.acertaRelogio(r.agora); desenha(); }

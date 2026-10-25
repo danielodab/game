@@ -19,7 +19,7 @@
          mudou lá dentro leva ao "entrar de novo";
        · a loja do quadro compra pela Google Play do JOGO (o quadro de cima) e não traz a sua;
        · na batalha o desenho não para; o "Sair do jogo" segue com a casca (js/mobile.js);
-       · NA WEB (sem ?app=1) nada disto liga.
+       · NA WEB o módulo liga também (24/10, a loja dentro do jogo): a prova da web é tests/loja_na_aba.html.
      Precisa de um servidor (python -m http.server na raiz): o quadro abre ../site/*.html. -->
 <div id="summary">rodando…</div>
 <div id="log"></div>
@@ -263,14 +263,13 @@
       '<script src="../js/ui/site_aba.js' + window.__V + '"><\/script></body></html>';
     q.onload = function () {
       var w = q.contentWindow, S2 = w.JOGO.SiteAba;
-      check('na web a aba não liga nada (nenhum ouvinte)', w.JOGO.Mobile.app() === false && S2.ligado === false);
-      var l = w.document.getElementById('l');
-      l.href = SA.endereco('loja.html');
-      cliqueSemSair(l);
-      check('na web o link do jogo para o site segue sendo o link de sempre (nenhuma aba por cima)',
-            !w.document.querySelector('.site-aba') && S2.aberta() === false);
-      var b2 = S2.botao('menu-site');
-      check('na web o globo é um link com target=_blank', b2.tagName === 'A' && b2.target === '_blank');
+      // 24/10: a loja dentro do jogo vale na web também — o mesmo ouvinte liga, sem a marca do aplicativo
+      check('na web o módulo liga também (a loja e o site dentro do jogo), sem ser o aplicativo',
+            w.JOGO.Mobile.app() === false && S2.ligado === true && S2.noApp() === false);
+      var b2 = S2.botao('menu-loja', 'Loja', { pagina: 'loja.html', icone: 'loja' });
+      check('o botão "Loja" é um link para a loja do site, com o saco, e o textContent é só "Loja"',
+            b2.tagName === 'A' && /site\/loja\.html$/.test(b2.getAttribute('href')) && b2.target === '_blank' &&
+            !!b2.querySelector('svg.ico-loja') && b2.textContent === 'Loja', b2.getAttribute('href'));
       fim();
     };
     document.body.appendChild(q);

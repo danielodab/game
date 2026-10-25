@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a loja dentro do jogo, na web: o site na aba e o Mercado Pago numa aba nova (24/10)</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}
+iframe{width:420px;height:260px;border:1px solid #333}</style>
+</head>
+<body>
+<!-- 24/10, o dono: "onde o usuário consegue abrir a loja dentro do jogo e já comprar ali, pagando pela Google ou pelo
+     Mercado Pago". Esta página faz o papel do JOGO NA WEB (sem ?app=1), com o js/ui/site_aba.js de verdade:
+       · a aba liga na web também: o botão "Loja" abre a loja do site DENTRO do jogo, sem a marca do aplicativo, e o
+         site se vê na aba (SITE.naAba) e não no aplicativo (SITE.noApp falso) — a loja vende pelo Mercado Pago;
+       · a loja na aba, com um servidor de mentira e os pagamentos ligados: "Comprar com Pix ou cartão" → "Ir para o
+         pagamento" abre a ABA NOVA do navegador no próprio toque (antes da resposta do servidor), o endereço do
+         Mercado Pago vai para ela e o quadro da loja NÃO sai do lugar; de volta ao jogo, a loja relê o saldo na hora;
+       · o servidor recusou (ou mandou um endereço que não é do Mercado Pago): a aba nova fecha;
+       · fora da aba do jogo nada muda: o Mercado Pago abre na própria página.
+     Precisa de um servidor (python -m http.server na raiz). -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+  window.__V = '?v=' + Date.now();
+  ['js/mobile.js', 'js/ui/icones_ui.js', 'js/ui/site_aba.js'].forEach(function (f) {
+    document.write('<scr' + 'ipt src="../' + f + window.__V + '"></scr' + 'ipt>');
+  });
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  var guardada = null;
+  try { guardada = localStorage.getItem('soterra-sessao'); } catch (e) {}
+  try { sessionStorage.removeItem('soterra-app'); } catch (e) {}
+  function fim(msg) {
+    try { if (guardada === null) localStorage.removeItem('soterra-sessao'); else localStorage.setItem('soterra-sessao', guardada); } catch (e) {}
+    try { sessionStorage.removeItem('soterra-app'); } catch (e2) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = (falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')')) + (msg ? ' · ' + msg : '');
+    window.__done = true; window.__fail = falhas;
+  }
+  window.onerror = function (m) { check('sem erro de script', false, m); };
+  function espera(cond, ms) {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function volta() {
+        var v = false;
+        try { v = cond(); } catch (e) {}
+        if (v || Date.now() - t0 > (ms || 10000)) return resolve(v);
+        setTimeout(volta, 50);
+      })();
+    });
+  }
+  function clica(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })); }
+
+  var SA = JOGO.SiteAba, M = JOGO.Mobile;
+  SA._raiz = new URL('../', location.href).href;
+  JOGO.Sessao = { tocou: function () {} };
+  JOGO.Game = { screen: 'hub' };
+
+  // ---- 1. a aba na web ---------------------------------------------------------------------------------------
+  check('na web: não é o aplicativo, e a aba liga mesmo assim', M.app() === false && SA.ligado === true);
+  var b = SA.botao('menu-loja', 'Loja', { pagina: 'loja.html', icone: 'loja' });
+  document.body.appendChild(b);
+  var n0 = SA._cargas;
+  clica(b);
+  check('o botão "Loja" abre a aba DENTRO do jogo', SA.aberta() && location.pathname.indexOf('loja_na_aba.html') > 0);
+  check('na web o quadro pede a loja SEM a marca do aplicativo', /\/site\/loja\.html$/.test(SA._quadro().src), SA._quadro().src);
+  espera(function () {
+    var q = SA._quadro(), d = q && q.contentDocument;
+    return SA._cargas > n0 && d && d.readyState === 'complete' && !!q.contentWindow.SITE;
+  }, 15000).then(function (ok) {
+    var w = SA._quadro().contentWindow, d = w.document;
+    check('a loja abriu no quadro', !!ok && /\/site\/loja\.html$/.test(w.location.pathname));
+    check('na aba da web: SITE.naAba, e não é o aplicativo nem a porta (a loja vende pelo Mercado Pago)',
+          w.SITE.naAba() === true && w.SITE.noApp() === false && w.SITE.portaDoApp() === false &&
+          d.documentElement.classList.contains('na-aba'));
+    check('a loja da web não traz a compra pela Google', !(w.JOGO && w.JOGO.CompraPlay) && !d.querySelector('script[src*="compra_play"]'));
+    SA.fecha();
+    return compra();
+  }).catch(function (e) { check('a prova não quebrou', false, String(e && e.stack || e)); }).then(function () { fim(); });
+
+  // ---- 2. a compra pelo Mercado Pago, da loja na aba ---------------------------------------------------------
+  var CATALOGO = { ok: true, versao: 3, agora: Math.floor(Date.now() / 1000),
+    itens: [{ sku: 'barras-por-vintens-10', secao: 'barras-por-vintens', tipo: 'barras', alvo: 'conta', qtd: 10, nome: '10 barras de ouro',
+              descricao: '10 barras.', preco: 800, moeda: 'vintens', limite: null }],
+    pacotes: [{ id: 'barras-50', nome: 'Bolsa de 50 barras de ouro', moeda: 'barras', barras: 50, centavos: 490, preco: 'R$ 4,90' }],
+    ofertas: { semana: 1, desconto: 25, inicio: 0, fim: 0, itens: [] }, presente: { fora: ['vintens', 'barras', 'pacote'], porDia: 3 },
+    barras: { nome: 'Barras de Ouro', vintensPorBarra: 20, vintensPorBarraFarmada: 80 }, pagamento: { ligado: true, teste: false } };
+  var servidor = { pacote: null, minha: 0, pacotes: 0 };
+  var MP = 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=prova-123';
+  function fetchFalso(url, pedido) {
+    var rota = String(url).replace(/^[a-z]+:\/\/[^/]+/, '').split('?')[0];
+    var r = rota === '/api/loja/catalogo' ? CATALOGO
+      : rota === '/api/loja/minha' ? (servidor.minha++, { ok: true, saldo: { carteira: 0, reservado: 0, aCaminho: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null },
+                                       barras: { saldo: 10, movimentos: [] }, limites: {}, pedidos: [], classes: [],
+                                       auras: { tem: [], escolhida: null, todas: [] }, boasVindas: { disponivel: false, comprado: true } })
+      : rota === '/api/pagamento/meus' ? { ok: true, ligado: true, pagamentos: [] }
+      : rota === '/api/pagamento/pacote' ? (servidor.pacotes++, servidor.pacote)
+      : rota === '/api/saude' ? { ok: true, agora: Math.floor(Date.now() / 1000) }
+      : { ok: false, erro: 'rota fora da prova', status: 404 };
+    var status = r.status || (r.ok ? 200 : 404);
+    return Promise.resolve({ status: status, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(r))); } });
+  }
+  /* a loja num quadro escrito por document.write, com o fetch de mentira posto ANTES dos scripts dela (como em
+   * tests/compra_play.html). O pai desta página tem o JOGO.SiteAba: é a loja NA ABA do jogo. */
+  function abreLoja() {
+    return fetch('../site/loja.html' + window.__V).then(function (r) { return r.text(); }).then(function (texto) {
+      var q = document.createElement('iframe');
+      document.body.appendChild(q);
+      var w = q.contentWindow, d = q.contentDocument;
+      d.open();
+      w.fetch = fetchFalso;
+      w.localStorage.setItem('soterra-sessao', JSON.stringify({ token: 'sessao-de-prova', conta: { id: 1, nome: 'Prova MP' } }));
+      d.write(texto.replace('<head>', '<head><base href="' + location.origin + location.pathname.replace(/tests\/[^/]*$/, 'site/') + '">'));
+      d.close();
+      return espera(function () { return w.SITE && d.querySelector('#lj-pacotes button[data-pacote="barras-50"]'); })
+        .then(function () { return { w: w, d: d, q: q }; });
+    });
+  }
+  /* a aba nova de mentira: o que o window.open devolve */
+  function janelaFalsa(reg) {
+    return { closed: false, location: { href: '' }, document: { body: { style: {} }, title: '' },
+             close: function () { this.closed = true; reg.fechadas++; } };
+  }
+  function confirma(d) {
+    return espera(function () { return d.querySelector('.modal [data-sim]'); }).then(function (bt) { bt.click(); });
+  }
+  function compra() {
+    return abreLoja().then(function (L) {
+      var w = L.w, d = L.d;
+      check('a loja na aba se vê na aba do jogo, na web', w.SITE.naAba() === true && w.SITE.noApp() === false);
+      var reg = { abertas: 0, fechadas: 0, antesDoServidor: false, janela: null, navegou: 0 };
+      w.open = function (u, alvo) {
+        reg.abertas++;
+        reg.antesDoServidor = servidor.pacotes === 0;
+        reg.alvo = alvo;
+        reg.janela = janelaFalsa(reg);
+        return reg.janela;
+      };
+      var assign = w.location.assign;
+      servidor.pacote = { ok: true, status: 201, endereco: MP, id: 9 };
+      w.document.querySelector('#lj-pacotes button[data-pacote="barras-50"]').click();
+      return confirma(d).then(function () {
+        return espera(function () { return reg.janela && reg.janela.location.href === MP; });
+      }).then(function (foi) {
+        check('"Ir para o pagamento" abre a aba nova NO TOQUE, antes da resposta do servidor (o navegador não a barra)',
+              reg.abertas === 1 && reg.antesDoServidor === true && reg.alvo === '_blank', JSON.stringify(reg));
+        check('o endereço do Mercado Pago vai para a aba nova', !!foi && reg.janela.location.href === MP);
+        check('o quadro da loja não sai do lugar (o jogo fica por baixo)', /\/tests\/loja_na_aba\.html/.test(w.location.pathname) && !!w.SITE);
+        check('a loja avisa que o pagamento abriu numa aba nova', /aba nova/.test(d.getElementById('lj-aviso') ? d.getElementById('lj-aviso').textContent : d.body.textContent));
+        // de volta ao jogo: a loja relê o saldo na hora (sem esperar os 30 s)
+        var antes = servidor.minha;
+        Object.defineProperty(d, 'hidden', { configurable: true, get: function () { return false; } });
+        d.dispatchEvent(new Event('visibilitychange'));
+        return espera(function () { return servidor.minha > antes; }, 3000).then(function (releu) {
+          check('de volta ao jogo depois de pagar, a loja relê o saldo na hora', !!releu, servidor.minha - antes);
+        });
+      }).then(function () {
+        // o servidor recusou: a aba nova fecha
+        servidor.pacote = { ok: false, status: 500, erro: 'erro de prova' };
+        reg.janela = null; reg.abertas = 0; reg.fechadas = 0;
+        d.querySelector('#lj-pacotes button[data-pacote="barras-50"]').click();
+        return confirma(d).then(function () { return espera(function () { return reg.fechadas === 1; }, 5000); });
+      }).then(function (fechou) {
+        check('o servidor recusou: a aba nova fecha', reg.abertas === 1 && !!fechou && reg.janela.closed === true, JSON.stringify(reg));
+        // um endereço que não é do Mercado Pago: a aba nova fecha e nada vai para ela
+        servidor.pacote = { ok: true, status: 201, endereco: 'https://golpe.exemplo/pague', id: 10 };
+        reg.janela = null; reg.abertas = 0; reg.fechadas = 0;
+        d.querySelector('#lj-pacotes button[data-pacote="barras-50"]').click();
+        return confirma(d).then(function () { return espera(function () { return reg.fechadas === 1; }, 5000); });
+      }).then(function (fechou) {
+        check('endereço que não é do Mercado Pago: a aba nova fecha em branco', !!fechou && reg.janela.location.href === '', reg.janela && reg.janela.location.href);
+        // FORA da aba do jogo (a loja como página do site) nenhuma aba nova nasce: o Mercado Pago segue na própria
+        // página (o caminho de sempre, que tests/site_fase_c.html cobre com o dublê do LOJA.vai)
+        var guarda = JOGO.SiteAba;
+        delete JOGO.SiteAba;
+        servidor.pacote = { ok: false, status: 500, erro: 'erro de prova' };      // nada navega nesta prova
+        reg.janela = null; reg.abertas = 0;
+        d.querySelector('#lj-pacotes button[data-pacote="barras-50"]').click();
+        return confirma(d).then(function () { return espera(function () { return servidor.pacotes >= 4; }, 5000); }).then(function () {
+          JOGO.SiteAba = guarda;
+          check('fora da aba do jogo nenhuma aba nova nasce (o Mercado Pago segue na própria página)',
+                w.SITE.naAba() === true && reg.abertas === 0, reg.abertas);
+          w.localStorage.removeItem('soterra-sessao');
+          L.q.remove();
+        });
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -225,6 +225,9 @@ JOGO.I18n.registra('en', { textos: {
   "Voltar uma página": "Back one page",
   "Voltar ao jogo": "Back to the game",
   "abrindo o site…": "opening the website…",
+  // 24/10: o botão "Loja" (o saco), a loja do site na aba de dentro do jogo
+  "Loja": "Shop",
+  "A loja do SOTERRA: barras de ouro, personagens e aparência": "The SOTERRA shop: gold bars, characters and cosmetics",
   "Quem desce": "Who descends",
   "Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. Sozinho, a sorte de saque é máxima.": "Pick 1 or 2 heroes — the FIRST is your avatar and walks around Camp. Solo, loot luck is maxed.",
   "Confirmar": "Confirm",

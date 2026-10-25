@@ -225,6 +225,9 @@ JOGO.I18n.registra('es', { textos: {
   "Voltar uma página": "Volver una página",
   "Voltar ao jogo": "Volver al juego",
   "abrindo o site…": "abriendo el sitio…",
+  // 24/10: o botão "Loja" (o saco), a loja do site na aba de dentro do jogo
+  "Loja": "Tienda",
+  "A loja do SOTERRA: barras de ouro, personagens e aparência": "La tienda de SOTERRA: barras de oro, personajes y apariencia",
   "Quem desce": "Quién desciende",
   "Escolha 1 ou 2 heróis — o PRIMEIRO é o seu avatar e anda no Acampamento. Sozinho, a sorte de saque é máxima.": "Elige 1 o 2 héroes — el PRIMERO es tu avatar y camina por el Campamento. En solitario, la suerte de botín es máxima.",
   "Confirmar": "Confirmar",

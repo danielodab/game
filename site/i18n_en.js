@@ -1311,5 +1311,7 @@ JOGO.I18n.registra('en', { textos: {
   "O servidor está fora — a lista dos torneios volta com ele.": "The server is down — the tournament list comes back with it.",
   "O Torneio da Arena ainda não chegou a este servidor. As regras estão logo abaixo.": "The Arena Tournament hasn't reached this server yet. The rules are right below.",
   "Não deu para ler os torneios.": "Couldn't read the tournaments.",
-  "← Voltar": "← Back"
+  "← Voltar": "← Back",
+  "Abrindo o Mercado Pago…": "Opening Mercado Pago…",
+  "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "The payment opened in a new browser tab. When you're done, come back to the game: your balance updates by itself."
 } });
