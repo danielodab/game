@@ -427,6 +427,13 @@ são deitadas:
 | **iPhone 6,9"** (a principal) | **2868 × 1320** | largura 956, altura 440, *Device pixel ratio* **3** |
 | **iPhone 6,3"** | **2622 × 1206** | largura 874, altura 402, *Device pixel ratio* **3** |
 
+**Prontas (25/10):** as cinco cenas da Play — a praça com o Poço, o Campo de PvP, a
+batalha no Corredor de Brasas, os portais e a árvore de feitiços — refeitas nos dois
+tamanhos, com o jogo no modo iPhone (sem a moeda "Prêmio Grátis!" e sem a Loja, que
+o iPhone não tem), em `docs/arte-loja/app-store/iphone-6.9/` e `iphone-6.3/` (JPG,
+~1 MB cada; fora do Git, como as da Play). As da Play não serviam: além do tamanho,
+mostram a moeda do anúncio.
+
 De **1 a 10** por tamanho, PNG ou JPG, sem transparência. A página da Apple hoje
 dá a 6,3" como obrigatória e aceita reduzir a de 6,9" para os outros tamanhos —
 ela é ambígua; **mande as duas** e acaba a dúvida. iPad não precisa: o
