@@ -19,7 +19,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: br.com.soterra.jogo
       vars:
-        APP_STORE_APPLE_ID: 0000000000  # TROCAR pelo "ID da Apple" do app (App Store Connect → o app → Informações do app)
+        APP_STORE_APPLE_ID: "6826929117"  # o "ID da Apple" do app (App Store Connect → o app → Informações do app)
       node: 22                          # o Capacitor 8 pede Node 22 ou mais novo
       xcode: latest                     # a Apple exige o Xcode 26 (SDK do iOS 26) desde 28/04/2026
     scripts:

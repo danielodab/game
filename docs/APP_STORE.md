@@ -213,9 +213,9 @@ escolha o seu *Team*. Para gerar o arquivo da loja: **Product → Archive** →
         provisioning profiles** → **Fetch profiles** → marque `SOTERRA App
         Store` (no grupo *App Store profiles*) → *Reference name*
         `soterra_app_store` → **Download selected**.
-5. **O ID da Apple na receita.** No `codemagic.yaml`, troque
-   `APP_STORE_APPLE_ID: 0000000000` pelo número do passo 2 e faça o commit (o
-   número não é segredo).
+5. **O ID da Apple na receita** — feito em 25/10: `APP_STORE_APPLE_ID: "6826929117"`
+   no `codemagic.yaml` (entre aspas: sem elas o YAML lê o número como outro). O
+   número não é segredo.
 6. **O primeiro build.** No Codemagic, abra o app → **Start new build** →
    workflow *SOTERRA iPhone para o TestFlight* → branch `main`. Uns 15 minutos
    depois o build aparece no App Store Connect → **TestFlight** (a Apple ainda o
@@ -844,7 +844,7 @@ número repetido **dentro da mesma versão**.
 
 | versão | build | gerado em | o que a casca tem |
 |---|---|---|---|
-| 1.1.0 | — | ainda não | o primeiro: o jogo do servidor, os avisos, compartilhar, avaliação, tela acesa; **sem** compra e **sem** anúncio |
+| 1.1.0 | 1 | 25/10, Codemagic (Xcode 26.6) | o primeiro: o jogo do servidor, os avisos, compartilhar, avaliação, tela acesa; **sem** compra e **sem** anúncio. Compilou, subiu e a Apple processou; o envio automático à revisão do TestFlight **externo** parou por falta das informações de teste (5.2) |
 
 ---
 
