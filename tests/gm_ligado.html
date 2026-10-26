@@ -151,6 +151,25 @@
           st2.phase !== 'playing' ||
           E.cast(st2, gm2.uid, 'gm-julgamento', gm2.x, gm2.y) === true);
 
+    /* 26/10, o dono, na Sala dos Espelhos: "o ataque do adm matou ele mesmo com o ataque que limpa sala". A sala de
+     * verdade (O Coração Partido): os Gêmeos-Espelho levantam a Guarda de Espelho (30% do dano recebido volta ao
+     * agressor) e o Mestre conjura o Julgamento — a sala morre e ele segue inteiro. */
+    var coracao = JOGO.DATA.dungeons.filter(function (d) { return d.id === 'brokenheart'; })[0];
+    var iEsp = coracao ? coracao.rooms.map(function (r) { return r.name; }).indexOf('A Sala dos Espelhos') : -1;
+    check('a Sala dos Espelhos existe no Coração Partido', iEsp >= 0);
+    var st3 = E.createBattle('brokenheart', iEsp, P.battleParty(['gm']));
+    var gm3 = st3.units.filter(function (u) { return u.side === 'player'; })[0];
+    var gemeos = st3.units.filter(function (u) { return u.side === 'enemy' && u.defId === 'mirror-twin'; });
+    gemeos.forEach(function (g) { E.cast(st3, g.uid, 'm-mirror-guard', g.x, g.y); });
+    check('os Gêmeos-Espelho estão com o reflexo de pé', gemeos.length > 0 &&
+          gemeos.every(function (g) { return E.unitHasEffect(g, 'reflect'); }), gemeos.length + ' gêmeos');
+    var i3 = st3.order.indexOf(gm3.uid); if (i3 >= 0) st3.turnIndex = i3;
+    var hpGm3 = gm3.hp;
+    check('o Julgamento conjura na Sala dos Espelhos', E.cast(st3, gm3.uid, 'gm-julgamento', gm3.x, gm3.y) === true);
+    check('o reflexo NÃO volta ao Mestre: ele segue vivo e inteiro', gm3.alive && gm3.hp === hpGm3, gm3.hp + ' de ' + hpGm3);
+    check('...e os Gêmeos-Espelho morreram', gemeos.every(function (g) { return !g.alive; }));
+    check('o Julgamento declara semReflexo', jz2.semReflexo === true);
+
     try { localStorage.removeItem('soterra-gm-v1'); } catch (e) {}
     window.__done = true;
   });
