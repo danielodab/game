@@ -60,8 +60,9 @@ Build DESLIGADO; no token e na assinatura, "Is Literal"; ver SUBIR.md, seção 7
   SOTERRA_MP_TOKEN     o Access Token (o de produção começa com APP_USR-)
   SOTERRA_MP_SEGREDO   a assinatura secreta do webhook (painel do Mercado Pago)
   SOTERRA_ENDERECO     https://soterra.viidoo.io (aqui obrigatório: a volta do navegador)
-  SOTERRA_MP_TESTE=1   opcional: usa o sandbox_init_point e só credita pagamento de
-                       teste (live_mode=false); sem ela, só live_mode=true
+  SOTERRA_MP_TESTE=1   opcional: usa o sandbox_init_point e credita o pagamento de
+                       teste venha com o live_mode que vier (26/10: no modelo novo do
+                       Mercado Pago o teste corre em produção); sem ela, só live_mode=true
 
 Ligado = TOKEN, SEGREDO e ENDERECO. Desligado, os pacotes aparecem "em breve",
 as rotas de pagamento respondem 503 e o resto funciona igual. O `--mp-api URL`
@@ -627,10 +628,20 @@ class PagamentoMixin:
             log.info("pagamento: o mp %s traz uma referência que este banco não tem; ignorado", mp_id)
             return {'ignorado': 'referência desconhecida'}
         live = p.get('live_mode')
-        if live is not (not mp.teste):
-            log.warning("pagamento %d (mp %s): live_mode=%s, e o servidor está em modo %s: não credita "
-                        "(confira SOTERRA_MP_TESTE)", pg['id'], mp_id, live, 'teste' if mp.teste else 'produção')
+        # 26/10 — O MODELO NOVO DE TESTE DO MERCADO PAGO. As credenciais de teste agora são as de um VENDEDOR DE
+        # TESTE (o token começa com APP_USR-, como o de produção), o comprador é uma conta de teste, e o teste corre
+        # no ambiente de produção: o pagamento aprovado pode chegar com live_mode=true. A regra de antes (modo teste
+        # só credita live_mode=false) recusava TODO pagamento de teste — o dono pagou e as barras não entraram.
+        # Agora: em PRODUÇÃO só credita live_mode=true (pagamento de teste nunca vira barra de graça); em modo
+        # TESTE credita qualquer um — o dinheiro de verdade não chega a um vendedor de teste, e um pagamento real
+        # que chegasse aqui é de alguém que pagou de verdade e recebe o que pagou.
+        if not mp.teste and live is not True:
+            log.warning("pagamento %d (mp %s): live_mode=%s, e o servidor está em modo produção: não credita "
+                        "(confira SOTERRA_MP_TESTE)", pg['id'], mp_id, live)
             return {'ignorado': 'modo trocado'}
+        if mp.teste and live is True:
+            log.info("pagamento %d (mp %s): live_mode=True com o servidor em modo teste (o teste novo do Mercado Pago "
+                     "corre em produção): credita", pg['id'], mp_id)
         status = _texto(p.get('status'), 40) or 'desconhecido'
         detalhe = _texto(p.get('status_detail'), 80)
         valor = _centavos(p.get('transaction_amount'))

@@ -484,21 +484,22 @@ class ProvaDoPagamento(unittest.TestCase):
         with open(self.log_arq, encoding='utf-8', errors='replace') as f:
             self.assertIn('pagamento %d (mp %s): live_mode=False, e o servidor está em modo produção: não credita'
                           % (pid, mp_id), f.read())
-        # o caso do SUBIR.md: SOTERRA_MP_TESTE=1 esquecido junto com o token de produção. O pagamento de
-        # verdade chega ao servidor em modo teste (o mesmo banco): 503; corrigida a variável, o reenvio credita
+        # 26/10: SOTERRA_MP_TESTE=1 esquecido junto com o token de produção. Antes, o pagamento de verdade que
+        # chegava ao servidor em modo teste levava 503 e ficava sem crédito; com o modelo novo de teste do Mercado
+        # Pago (o teste corre em produção, live_mode=true) a regra mudou: em modo teste, credita — quem pagou de
+        # verdade recebe o que pagou. E o aviso repetido no servidor de produção não credita de novo
         proc, lg, base_t, _ = sobe_api(self.pasta, 'api-trocada', self.banco_arq, dict(self.env, SOTERRA_MP_TESTE='1'),
                                        self.mp.base)
         try:
             d = self.novo('Esqueceu Teste')
             pid2 = self.pede_pacote(d, 'pacote-5500')['pagamento']['id']
             real = self.paga((pid2))                     # live_mode=true
-            st, corpo = self.mp.avisar(real, base_t)
-            self.assertEqual((st, corpo.get('erro')), (503, pag_mod.FRASE_MODO_TROCADO), corpo)
-            self.assertEqual(self.creditos(real), [])
+            self.assertEqual(self.mp.avisar(real, base_t), (200, {'ok': True, 'estado': 'aprovado'}))
+            self.assertEqual(len(self.creditos(real)), 1)
         finally:
             para(proc, lg)
         self.assertEqual(self.mp.avisar(real, self.base), (200, {'ok': True, 'estado': 'aprovado'}))   # o reenvio
-        self.assertEqual(len(self.creditos(real)), 1)
+        self.assertEqual(len(self.creditos(real)), 1)                                                   # uma vez só
         self.assertEqual(self.minha(d)['saldo']['aCaminho'], 5500)
 
     def test_pendente_depois_aprovado(self):
@@ -737,14 +738,19 @@ class ProvaDoPagamento(unittest.TestCase):
             b = sqlite3.connect(os.path.join(self.pasta, 'teste', 'soterra.db'))
             ref = b.execute("SELECT referencia FROM pagamentos WHERE id = ?", (r['pagamento']['id'],)).fetchone()[0]
             b.close()
-            real = self.mp.pagar(ref, live=True)                            # pagamento de verdade num servidor de teste
-            st, corpo = self.mp.avisar(real, base)
-            self.assertEqual((st, corpo.get('erro')), (503, pag_mod.FRASE_MODO_TROCADO), corpo)
+            # 26/10: o modelo NOVO de teste do Mercado Pago (o vendedor e o comprador de teste) corre em produção:
+            # o pagamento aprovado chega com live_mode=true — e credita, em modo teste
+            novo = self.mp.pagar(ref, live=True)
+            self.assertEqual(self.mp.avisar(novo, base), (200, {'ok': True, 'estado': 'aprovado'}))
+            self.assertEqual(c.pede('GET', '/api/loja/minha')[1]['barras']['saldo'], 50)     # 13/09: barras, na hora
+            # o modelo ANTIGO (o token TEST-, live_mode=false) segue creditando
             de_teste = self.mp.pagar(ref, live=False)
             self.assertEqual(self.mp.avisar(de_teste, base), (200, {'ok': True, 'estado': 'aprovado'}))
-            self.assertEqual(c.pede('GET', '/api/loja/minha')[1]['barras']['saldo'], 50)     # 13/09: barras, na hora
+            self.assertEqual(c.pede('GET', '/api/loja/minha')[1]['barras']['saldo'], 100)
             with open(log_arq, encoding='utf-8', errors='replace') as f:
-                self.assertIn('pagamento: Mercado Pago (teste), volta em ' + ENDERECO, f.read())
+                texto = f.read()
+            self.assertIn('pagamento: Mercado Pago (teste), volta em ' + ENDERECO, texto)
+            self.assertIn('live_mode=True com o servidor em modo teste', texto)
         finally:
             para(proc, log)
 

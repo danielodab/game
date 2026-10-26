@@ -319,9 +319,14 @@ passadas as 24 h, aperta **conferir no Mercado Pago** na ficha e ele entra.
    bancária que recebe). Nada disso passa pelo assistente.
 2. **Painel de desenvolvedor** (Suas integrações) → Criar aplicação
    ("SOTERRA", Checkout Pro, pagamentos online).
-3. **Credenciais de TESTE primeiro**: o Access Token de teste e os usuários de
-   teste (vendedor e comprador) que o painel cria. As de PRODUÇÃO só depois de
-   ativar a conta e a aplicação (o painel pede os dados do negócio).
+3. **Credenciais de TESTE primeiro** (o modelo NOVO do Mercado Pago, visto em
+   26/10): as credenciais de teste agora são as de um **vendedor de teste** que o
+   painel cria junto com a aplicação. O Access Token delas começa com
+   `APP_USR-`, como o de produção; o que o faz de teste é ser do vendedor de
+   teste ("Dados das credenciais de teste", com o usuário `TESTUSER…`). Em
+   **Contas de teste**, crie também um **Comprador**. O token antigo `TEST-`
+   ainda funciona, se aparecer. As credenciais de PRODUÇÃO só depois de ativar a
+   conta e a aplicação (o painel pede os dados do negócio).
 4. **Webhooks** → Configurar notificações: URL
    `https://soterra.viidoo.io/api/pagamento/aviso`, evento "Pagamentos" (e
    "Contestações", se aparecer) → Salvar → copie a **assinatura secreta**. O
@@ -344,20 +349,56 @@ passadas as 24 h, aperta **conferir no Mercado Pago** na ficha e ele entra.
    Mercado Pago.
 6. **Conferir**: a Runtime Logs tem de mostrar
    `pagamento: Mercado Pago (teste), volta em https://soterra.viidoo.io`
-   (`pagamento: DESLIGADO (falta …)` diz qual variável faltou); na loja, os
-   pacotes sem "em breve"; compre a Bolsa com o comprador de teste; os vinténs
-   aparecem "a caminho"; abra o jogo logado; a carteira sobe. No painel do
-   Mestre, a ficha da conta mostra o pagamento.
-7. **Produção**: troque o token pelo de produção, APAGUE `SOTERRA_MP_TESTE`,
-   Redeploy, faça UMA compra real da Bolsa (R$ 4,90) e estorne pelo painel do
-   Mercado Pago: tem de aparecer o alerta "estorno" no painel do Mestre.
-8. Sem as variáveis, tudo volta a "em breve" sem quebrar nada. Nunca deixe
-   `SOTERRA_MP_TESTE` junto com o token de produção por esquecimento: o
-   servidor não creditaria os pagamentos reais (e logaria `live_mode=True, e
-   o servidor está em modo teste: não credita`). Ele responde 503 a esses
-   avisos, e o Mercado Pago avisa de novo por um tempo: corrigida a variável
-   (Redeploy), os reenvios creditam. O que tiver passado disso, confira pelo
-   botão **conferir no Mercado Pago** da ficha da conta.
+   (`pagamento: DESLIGADO (falta …)` diz qual variável faltou). A compra de
+   teste, como o Mercado Pago manda:
+   - numa **janela anônima** (Ctrl+Shift+N) — com a sua conta real do Mercado
+     Pago aberta no navegador, a página de teste dá "Ops, ocorreu um erro";
+   - entre no jogo pelo navegador, abra a Loja e compre a Bolsa;
+   - na página do Mercado Pago, **entre com o comprador de teste** (se pedir um
+     código por e-mail, é o "Código de verificação" da tela Contas de teste);
+   - pague com um cartão da página **Cartões de teste**, com `APRO` no nome do
+     titular e o CPF 12345678909.
+   As barras entram na hora na conta. No modelo novo o pagamento de teste chega
+   com `live_mode=true` (o teste corre em produção), e o servidor em modo teste
+   credita assim mesmo — o log diz `live_mode=True com o servidor em modo
+   teste … credita`. No painel do Mestre, a ficha da conta mostra o pagamento.
+7. **Produção**: em **Credenciais de produção**, ative-as (o painel pede os
+   dados do negócio) e troque `SOTERRA_MP_TOKEN` pelo Access Token de produção
+   da SUA conta (`APP_USR-…`, não o do vendedor de teste). Confira em Webhooks se
+   a assinatura secreta do modo produtivo é outra; se for, troque
+   `SOTERRA_MP_SEGREDO`. APAGUE `SOTERRA_MP_TESTE` e faça Redeploy: o log diz
+   `pagamento: Mercado Pago (produção)`. Faça UMA compra real da Bolsa
+   (R$ 4,90) com a conta de OUTRA pessoa (o Mercado Pago não deixa a conta
+   pagar a si mesma) e estorne pelo painel: tem de aparecer o alerta "estorno"
+   no painel do Mestre.
+8. Sem as variáveis, tudo volta a "em breve" sem quebrar nada. Em produção o
+   servidor só credita `live_mode=true`: um pagamento de teste nunca vira barra.
+   **Não esqueça `SOTERRA_MP_TESTE` com o token de produção**: com ela o jogador
+   vai para a página de teste do Mercado Pago (a "sandbox"), onde cartão de
+   verdade não paga. (26/10: antes, o servidor em modo teste também recusava
+   pagamento com `live_mode=true`; o modelo novo de teste do Mercado Pago chega
+   assim, e a regra mudou — em modo teste, credita.) Um aviso que o servidor
+   recusou por configuração errada leva 503, e o Mercado Pago avisa de novo por
+   um tempo; o que tiver passado disso, confira pelo botão **conferir** em
+   "Seus pacotes" ou **conferir no Mercado Pago** na ficha da conta.
+
+**A VIRADA PARA PRODUÇÃO (26/10), as duas lojas de uma vez.** No Coolify:
+
+| o quê | teste | produção |
+|---|---|---|
+| `SOTERRA_LOJA` | apagada ou `1` (aberta) | apagada ou `1`; `0` fecha a loja inteira (seção 6) |
+| `SOTERRA_PLAY_CREDENCIAL` | o JSON da conta de serviço | o mesmo |
+| `SOTERRA_PLAY_TESTE` | `1` | **apagada** (sem ela, compra de teste da Play não vale barras) |
+| `SOTERRA_MP_TOKEN` | o token do vendedor de teste | o token de produção da sua conta |
+| `SOTERRA_MP_SEGREDO` | a assinatura do webhook | a do modo produtivo (confira se é a mesma) |
+| `SOTERRA_ENDERECO` | `https://soterra.viidoo.io` | o mesmo |
+| `SOTERRA_MP_TESTE` | `1` | **apagada** |
+
+Depois do Redeploy, a Runtime Logs tem de mostrar `pagamento: Mercado Pago
+(produção), volta em https://soterra.viidoo.io` e `pagamento: Google Play
+ligada (br.com.soterra.jogo…)`, sem "teste". Antes de vender pela web, o site
+tem de mostrar o CPF ou o CNPJ de quem vende (o decreto do comércio
+eletrônico; `docs/GOOGLE_PLAY.md` §7, item 6).
 
 Como o servidor segura o dinheiro: nunca credita pela volta do navegador nem
 pelo corpo do aviso — confere a assinatura e CONSULTA o pagamento na API do
