@@ -231,7 +231,7 @@ JOGO.I18n.registra('en', { textos: {
   "Suas barras de ouro": "Your gold bars",
   "O extrato da conta: o que entrou (pacotes, trocas, presentes, devoluções) e o que saiu, o mais novo primeiro.": "The account statement: what came in (packs, trades, gifts, refunds) and what went out, newest first.",
   "Seus pacotes": "Your packs",
-  "Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora.": "Packs paid through Mercado Pago. Once the payment is approved, the gold bars go into your account right away.",
+  "Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram sozinhas na sua conta, em até um minuto.": "Packs paid through Mercado Pago. Once the payment is approved, the gold bars go into your account by themselves, within a minute.",
   "Ranking — SOTERRA": "Ranking — SOTERRA",
   "Quem desceu mais fundo, quem manda na arena e quais guildas somam mais experiência. Atualiza a cada save que chega ao servidor.": "Who went deepest, who rules the arena and which guilds add up the most experience. Updates with every save that reaches the server.",
   "Equipe do SOTERRA <small>quem cuida do mundo enterrado — fica fora do ranking</small>": "SOTERRA Team <small>who looks after the buried world — kept out of the ranking</small>",
@@ -1314,5 +1314,11 @@ JOGO.I18n.registra('en', { textos: {
   "← Voltar": "← Back",
   "Abrindo o Mercado Pago…": "Opening Mercado Pago…",
   "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "The payment opened in a new browser tab. When you're done, come back to the game: your balance updates by itself.",
-  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>The shop opens soon.</b> For now, everything comes from descents: vinténs, forge stones, cards and characters. The prizes and gifts you earn keep arriving in the game."
+  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>The shop opens soon.</b> For now, everything comes from descents: vinténs, forge stones, cards and characters. The prizes and gifts you earn keep arriving in the game.",
+  "Seu histórico": "Your history",
+  "O que foi comprado na Loja. Para cancelar um pedido que ainda espera, abra a Loja.": "What was bought in the Shop. To cancel an order that is still waiting, open the Shop.",
+  "último: {a} · {b}": "latest: {a} · {b}",
+  "nenhum ainda": "none yet",
+  "{a} em andamento": "{a} in progress",
+  "{a} esperando confirmação": "{a} awaiting confirmation"
 } });

@@ -565,6 +565,24 @@ input.codigo { font: 600 22px/1 var(--sans); letter-spacing: .45em; text-align: 
 .pedidos-cab + .apoio { font-size: 14px; margin: 4px 0 10px; }
 .lista-pedidos { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 2px 16px; }
 .lista-pedidos .direita { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; justify-content: flex-end; }
+/* 26/10 — os históricos no alto, minimizados (site/historico.js): na Loja e em Minha conta. Fechado, só o título e
+ * o resumo (o que espera, ou o último); aberto, a lista de sempre, colada na caixa */
+.historicos { margin: 22px 0 6px; }
+.historicos-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--texto-2);
+  font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+details.historico { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); margin-top: 8px; }
+.bloco details.historico { background: var(--fundo-3); }
+details.historico > summary { cursor: pointer; list-style: none; display: flex; align-items: center; flex-wrap: wrap;
+  gap: 2px 8px; padding: 10px 16px; min-height: 44px; }
+details.historico > summary::-webkit-details-marker { display: none; }
+details.historico > summary::before { content: ''; flex: none; width: 7px; height: 7px; margin-right: 4px;
+  border-right: 2px solid var(--ouro-2); border-bottom: 2px solid var(--ouro-2); transform: rotate(-45deg); transition: transform .15s; }
+details.historico[open] > summary::before { transform: rotate(45deg); }
+details.historico > summary h3 { margin: 0; font-size: 16px; }
+.historico-resumo { color: var(--texto-2); font-size: 13.5px; overflow-wrap: anywhere; }
+details.historico > .apoio { font-size: 14px; margin: 0 16px 8px; }
+details.historico > .lista-pedidos { border: 0; border-top: 1px solid var(--linha); border-radius: 0 0 var(--raio) var(--raio);
+  background: transparent; margin: 0; }
 .estado-pedido { font-size: 13.5px; font-weight: 700; text-align: right; }
 .e-pendente .estado-pedido { color: var(--texto-2); }
 .e-retirado .estado-pedido { color: var(--ouro-2); }

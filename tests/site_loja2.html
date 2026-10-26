@@ -488,6 +488,13 @@
           visivel(p.$('lj-pagamentos-caixa')) && /aprovado · a caminho do jogo/.test(l17) && /R\$ 19,90/.test(l17) && /não aprovado/.test(l12), l17 + ' / ' + l12);
     var L = lojaDe(p);
     check('o pedido do crédito: "pacote pago", sem cancelar', /pacote pago/.test(texto(L.linha(90))) && !L.linha(90).querySelector('[data-cancelar]'));
+    // 26/10: os históricos no ALTO, minimizados (o dono: "lá em cima minimizados... melhor para enxergar")
+    var hist = p.$('lj-historicos');
+    check('26/10: os históricos ficam no alto (antes dos pacotes e do catálogo), cada um FECHADO, com o resumo no título',
+          visivel(hist) && !!(hist.compareDocumentPosition(p.$('lj-pacotes')) & 4) && !!(hist.compareDocumentPosition(p.$('lj-catalogo')) & 4) &&
+          ['lj-pagamentos-caixa', 'lj-extrato-caixa', 'lj-pedidos-caixa'].every(function (id) { return p.$(id).tagName === 'DETAILS' && !p.$(id).open; }) &&
+          /· 1 em andamento/.test(texto(p.$('lj-pedidos-resumo'))) && /· último: Saco de 5\.500 vinténs \(aprovado\)/.test(texto(p.$('lj-pagamentos-resumo'))),
+          texto(p.$('lj-pedidos-resumo')) + ' / ' + texto(p.$('lj-pagamentos-resumo')));
     await espera(25000);
     check('aprovado: /meus não é relida (uma leitura só, para a lista)', meus === 1, meus + ' leituras');
     check('aprovado: nenhuma conferência a mais', pedidos(c, 'POST', '/api/pagamento/conferir').length === 1);
@@ -521,23 +528,38 @@
   }
 
   async function cenaVoltaAberta() {
-    var meus = 0, confere = 0;
+    var meus = 0, confere = 0, creditou = false;
     var c = { sessao: SESSAO, busca: '?pagamento=22&volta=pendente', rotas: {
       'GET /api/saude': SAUDE, 'GET /api/loja/catalogo': [200, catalogo2(true)],
       'GET /api/loja/minha': function () { return [200, minha2()]; },
       'POST /api/pagamento/conferir': function () { confere++; return [200, { ok: true, pagamento: pag(22, 'aberto') }]; },
-      'GET /api/pagamento/meus': function () { meus++; return [200, { ok: true, ligado: true, pagamentos: [pag(22, 'aberto')] }]; }
+      'GET /api/pagamento/meus': function () { meus++; return [200, { ok: true, ligado: true, pagamentos: [pag(22, creditou ? 'aprovado' : 'aberto')] }]; }
     } };
     var p = await abre('loja.html', c);
     await ate(function () { return /Esperando o Mercado Pago/.test(texto(p.$('lj-volta'))); });
     check('aberto: "Esperando o Mercado Pago confirmar o pagamento"', /Esperando o Mercado Pago confirmar o pagamento/.test(texto(p.$('lj-volta'))));
     await ate(function () { return confere >= 7; }, 90000);
+    check('aberto: enquanto a volta confere, /meus não é relida (uma leitura só, para a lista)', meus === 1, meus + ' leituras');
     await espera(30000);
-    check('aberto: a conferência no máximo 6 vezes depois da volta (7 no total), e para; /meus uma vez só',
-          confere === 7 && meus === 1, confere + ' conferências, ' + meus + ' leituras');
+    // 26/10: o servidor confere sozinho de minuto em minuto (servidor/pagamento.py, liga_conferencia); a página RELÊ
+    check('aberto: a conferência no máximo 6 vezes depois da volta (7 no total), e para; depois a página só RELÊ "Seus pacotes" (26/10)',
+          confere === 7 && meus >= 2, confere + ' conferências, ' + meus + ' leituras');
     check('aberto: "Seus pacotes" mostra o botão "conferir" no pagamento aberto', !!p.q('#lj-pagamentos [data-pagamento="22"] [data-conferir="22"]'));
     check('aberto: a faixa acaba dizendo que o pagamento aparece em "Seus pacotes"',
           /ainda não mostrou o pagamento/.test(texto(p.$('lj-volta'))), texto(p.$('lj-volta')));
+    // o servidor creditou sozinho (sem o aviso e sem clique): a próxima releitura vira a faixa e avisa
+    var nMinha = pedidos(c, 'GET', '/api/loja/minha').length;
+    creditou = true;
+    await ate(function () { return /Pagamento aprovado/.test(texto(p.$('lj-volta'))); }, 30000);
+    check('26/10: o servidor creditou sozinho → a releitura vira a faixa para aprovado e avisa, SEM clique e sem conferência a mais',
+          /Pagamento aprovado: 5\.500 vinténs a caminho do jogo/.test(texto(p.$('lj-volta'))) && /Pagamento aprovado/.test(texto(p.$('lj-aviso'))) &&
+          confere === 7 && !p.q('#lj-pagamentos [data-conferir]'), texto(p.$('lj-volta')) + ' · ' + confere);
+    await ate(function () { return pedidos(c, 'GET', '/api/loja/minha').length > nMinha && c.canal.length > 0; });
+    check('... relê o saldo e avisa o jogo aberto (BroadcastChannel)', pedidos(c, 'GET', '/api/loja/minha').length > nMinha &&
+          c.canal.some(function (x) { return x.msg && x.msg.tipo === 'comprou'; }));
+    var lidas = meus;
+    await espera(45000);
+    check('... e a releitura para: nada mais aberto', meus === lidas, (meus - lidas) + ' leituras a mais');
   }
 
   async function cenaVoltaRecusada() {
@@ -708,6 +730,42 @@
           /aprovado · a caminho do jogo/.test(linha(30)) && !p.q('#lj-pagamentos [data-conferir="30"]'), linha(30));
     check('... o aviso "Pagamento aprovado" e o saldo relido (o crédito já conta no disponível)',
           /Pagamento aprovado/.test(texto(p.$('lj-aviso'))) && pedidos(c, 'GET', '/api/loja/minha').length > nMinha, texto(p.$('lj-aviso')));
+  }
+
+  /* 26/10: os mesmos históricos em MINHA CONTA, no alto e fechados (o dono: "esses históricos devem ficar em minha
+   * conta e lá em cima minimizados"); só mostram — cancelar mora na Loja, e o servidor confere os pagamentos */
+  async function cenaContaHistorico() {
+    var c = { sessao: SESSAO, hash: 'conta', rotas: {
+      'GET /api/saude': SAUDE,
+      'GET /api/conta': function () { return [200, respostaConta()]; },
+      'GET /api/loja/minha': [200, minha2({
+        barras: { saldo: 150, movimentos: [{ id: 3, delta: 50, motivo: 'pacote', nome: 'Bolsa de 50 barras de ouro', criadoEm: AGORA - 120, saldo: 150 }] },
+        pedidos: [{ id: 91, sku: 'classe-bruxo', nome: 'Bruxo', preco: 0, moeda: 'barras', barras: 300, estado: 'pendente', motivo: null,
+                    criadoEm: AGORA - 60, cancelavel: true }] })],
+      'GET /api/pagamento/meus': [200, { ok: true, ligado: true, pagamentos: [
+        pag(40, 'aberto', { pacote: 'barras-50', nome: 'Bolsa de 50 barras de ouro', moeda: 'barras', barras: 50, vintens: 0, preco: 'R$ 4,90' })] }]
+    } };
+    var p = await abre('conta.html', c);
+    await ate(function () { return visivel(p.$('bl-historico')) && !!p.q('#mc-pagamentos [data-pagamento="40"]'); });
+    var bl = p.$('bl-historico');
+    check('Minha conta: o bloco dos históricos é o PRIMEIRO, e os três ficam fechados',
+          visivel(bl) && p.q('.blocos > .bloco') === bl &&
+          ['mc-pagamentos-caixa', 'mc-extrato-caixa', 'mc-pedidos-caixa'].every(function (id) { return visivel(p.$(id)) && !p.$(id).open; }));
+    check('Minha conta: o resumo no título — o pacote esperando, o último movimento, o pedido em andamento',
+          /· 1 esperando confirmação/.test(texto(p.$('mc-pagamentos-resumo'))) && /· último: \+50 ·/.test(texto(p.$('mc-extrato-resumo'))) &&
+          /· 1 em andamento/.test(texto(p.$('mc-pedidos-resumo'))),
+          [texto(p.$('mc-pagamentos-resumo')), texto(p.$('mc-extrato-resumo')), texto(p.$('mc-pedidos-resumo'))].join(' / '));
+    check('Minha conta: as linhas são as da Loja (o mesmo desenho), sem "conferir" e sem "cancelar"',
+          /esperando o pagamento/.test(texto(p.q('#mc-pagamentos [data-pagamento="40"]'))) && /50 barras de ouro/.test(texto(p.q('#mc-pagamentos [data-pagamento="40"]'))) &&
+          /\+50/.test(texto(p.q('#mc-extrato [data-movimento="3"]'))) && /Bruxo/.test(texto(p.q('#mc-pedidos [data-pedido="91"]'))) &&
+          !p.q('#bl-historico [data-conferir]') && !p.q('#bl-historico [data-cancelar]'));
+    var gm = pedidos(c, 'GET', '/api/loja/minha'), gp = pedidos(c, 'GET', '/api/pagamento/meus');
+    check('Minha conta: /minha e /meus com o token', gm.length >= 1 && gp.length >= 1 && gm[0].auth === 'Bearer tok-pia' && gp[0].auth === 'Bearer tok-pia');
+    p.$('mc-pagamentos-caixa').open = true;
+    p.$('mc-hist-atualizar').click();
+    await ate(function () { return pedidos(c, 'GET', '/api/pagamento/meus').length > gp.length; });
+    check('Minha conta: "atualizar" relê, e o que estava aberto fica aberto', pedidos(c, 'GET', '/api/loja/minha').length > gm.length &&
+          p.$('mc-pagamentos-caixa').open === true);
   }
 
   async function cenaMenuMestre() {
@@ -921,7 +979,7 @@
   }
 
   async function fontes() {
-    var arqs = ['loja.html', 'loja.js', 'conta.html', 'conta.js', 'site.js', 'mestre.html', 'mestre.js'], textos = {};
+    var arqs = ['loja.html', 'loja.js', 'historico.js', 'conta.html', 'conta.js', 'site.js', 'mestre.html', 'mestre.js'], textos = {};
     for (var i = 0; i < arqs.length; i++) textos[arqs[i]] = await le(BASE_SITE + arqs[i]);
     check('li as fontes do site (loja, conta, site.js e o painel do Mestre)', arqs.every(function (a) { return !!textos[a]; }),
           arqs.filter(function (a) { return !textos[a]; }).join(', '));
@@ -948,7 +1006,7 @@
     check('nenhuma página do site chama window.confirm', arqs.every(function (a) {
       return !/\bconfirm\s*\(/.test((textos[a] || '').replace(/SITE\.confirma\s*\(/g, '')); }));
     check('a navegação ao pagamento passa por SITE.ehMercadoPago antes do LOJA.vai',
-          /SITE\.ehMercadoPago\(r\.endereco\)/.test(textos['loja.js']) && textos['loja.js'].indexOf('SITE.ehMercadoPago(r.endereco)') < textos['loja.js'].lastIndexOf('LOJA.vai(r.endereco)'));
+          /SITE\.ehMercadoPago\(r\.endereco\)/.test(textos['loja.js']) && textos['loja.js'].indexOf('SITE.ehMercadoPago(r.endereco)') < textos['loja.js'].lastIndexOf('LOJA.vai(r.endereco'));
   }
 
   async function roda(nome, fn) {
@@ -972,6 +1030,7 @@
       await roda('sem save sem crédito', cenaSemSaveSemCredito);
       await roda('pedidos com origem', cenaPedidosOrigem);
       await roda('seus pacotes', cenaSeusPacotes);
+      await roda('históricos em Minha conta', cenaContaHistorico);
       await roda('menu do Mestre', cenaMenuMestre);
       await roda('avatar', cenaAvatar);
       await roda('avatar do Mestre', cenaAvatarMestre);

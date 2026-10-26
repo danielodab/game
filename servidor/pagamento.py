@@ -17,7 +17,10 @@ O CAMINHO DE UM PACOTE:
      mesmo caminho de toda entrega; até o jogo receber, os vinténs contam no
      saldo do site ("a caminho");
   4. a volta do navegador (POST /api/pagamento/conferir) só DISPARA uma
-     consulta ao Mercado Pago pela external_reference: cobre o aviso perdido.
+     consulta ao Mercado Pago pela external_reference: cobre o aviso perdido;
+  5. (26/10) o servidor também confere SOZINHO, de minuto em minuto, as
+     intenções abertas e ainda sem crédito (`liga_conferencia`): o crédito não
+     depende do aviso chegar nem do jogador voltar à loja.
 
 AS REGRAS QUE SEGURAM O DINHEIRO:
   - Nunca credita pela volta do navegador nem pelo corpo do aviso: sempre pelo
@@ -76,6 +79,7 @@ import logging
 import os
 import re
 import secrets
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -98,6 +102,11 @@ ALERTAS_LISTA = 50
 ALERTAS_VISTOS_DA_CONTA = 10
 PREFERENCIA_VALIDADE = 2 * 3600  # o link de pagamento vale 2 h: Pix e cartão fecham em minutos, e um link vivo
                                  # aceita mais de um pagamento (o teto no crédito segura o resto)
+CONFERE_A_CADA = 60              # s entre duas voltas da conferência automática (26/10, liga_conferencia)
+CONFERE_NOVOS = 3 * 3600         # a intenção mais nova que isto é conferida em toda volta (o link vale 2 h)…
+CONFERE_VELHOS = 24 * 3600       # …e até 24 h (o Pix ou o cartão em análise que demora), de
+CONFERE_VELHOS_A_CADA = 15       # 15 em 15 voltas
+CONFERE_LOTE = 50                # intenções por volta, as mais novas primeiro
 CRIADO_PRESO = 30                # s: intenção 'criado' mais velha que isto é retomada no mesmo idem
 RE_REFERENCIA = re.compile(r'^sot-(\d{1,15})-[0-9a-f]{16}$')
 RE_MP_ID = re.compile(r'^\d{1,20}$')
@@ -851,6 +860,47 @@ class PagamentoMixin:
                     ignorados.append(r['ignorado'])
         return n, ignorados
 
+    # -- a conferência automática (26/10) --------------------------------------------------------------
+    def pagamento_confere_abertos(self, velhos=False):
+        """O dono, 26/10: "esperando pagamento e tive que clicar em aprovado pro
+        saldo entrar". O aviso do Mercado Pago pode não chegar (a assinatura do
+        modo produtivo diferente da de teste, o endereço do aviso sem cadastro no
+        modo produtivo, o servidor fora no minuto do aviso), e o crédito ficava
+        esperando o jogador apertar "conferir". Agora o servidor confere sozinho:
+        as intenções abertas e ainda sem crédito das últimas CONFERE_NOVOS (ou
+        CONFERE_VELHOS, com `velhos`) passam pela mesma `_pagamento_reconcilia`
+        do botão — a busca pela external_reference e o mesmo `processa`, que
+        credita UMA vez por pagamento. Idempotente: vale nos dois contêineres do
+        rolling update e junto com o aviso. A intenção cujos pagamentos foram
+        TODOS ignorados (o modo trocado) não volta nas próximas voltas deste
+        processo: a configuração só muda com outro deploy, e o log não enche.
+        Devolve {vistos, creditados, falhou}; o Mercado Pago fora para a volta."""
+        if not self._mp().ligado:
+            return {'vistos': 0, 'creditados': 0, 'falhou': False}
+        pulados = self.__dict__.setdefault('_confere_pulados', set())
+        t = agora()
+        with self.tranca:
+            pgs = self.con.execute(
+                "SELECT * FROM pagamentos p WHERE estado = 'aberto' AND criado_em >= ? AND NOT EXISTS "
+                "(SELECT 1 FROM pagamentos_mp m WHERE m.pagamento_id = p.id AND m.creditado_em IS NOT NULL) "
+                "ORDER BY id DESC LIMIT ?", (t - (CONFERE_VELHOS if velhos else CONFERE_NOVOS), CONFERE_LOTE)).fetchall()
+        vistos = creditados = 0
+        for pg in pgs:
+            if pg['id'] in pulados:
+                continue
+            try:
+                n, ignorados = self._pagamento_reconcilia(pg)
+            except Recusa:                              # o Mercado Pago fora (já logado): a próxima volta tenta
+                return {'vistos': vistos, 'creditados': creditados, 'falhou': True}
+            vistos += 1
+            if n and len(ignorados) == n:
+                pulados.add(pg['id'])
+            with self.tranca:
+                if self.con.execute("SELECT 1 FROM pagamentos_mp WHERE pagamento_id = ? AND creditado_em IS NOT NULL",
+                                    (pg['id'],)).fetchone():
+                    creditados += 1
+        return {'vistos': vistos, 'creditados': creditados, 'falhou': False}
+
     # -- POST /api/pagamento/conferir (a volta do navegador e o botão "conferir") ----------------------
     def pagamento_conferir(self, conta, corpo):
         mp = self._mp()
@@ -880,3 +930,35 @@ class PagamentoMixin:
         with self.tranca:
             pags = self._pagamentos_da_conta(conta['id'])
         return 200, {'ok': True, 'ligado': self._mp().ligado, 'pagamentos': pags}
+
+
+def liga_conferencia(api, intervalo=CONFERE_A_CADA, primeira=30, para=None):
+    """A conferência automática (26/10) numa thread do próprio servidor, no molde da varredura de reembolsos
+    da Google Play (pagamento_play.liga_varredura): de `intervalo` em `intervalo` s as intenções das últimas
+    3 h; a primeira volta e uma a cada CONFERE_VELHOS_A_CADA, as das últimas 24 h. Erro só vai para o log: a
+    próxima volta tenta de novo, e o jogador e o Mestre seguem com o botão "conferir". `para` (um
+    threading.Event) desliga a thread: só as provas usam."""
+    if not api._mp().ligado:
+        return None
+    para = para or threading.Event()
+    log.info("pagamento: a conferência automática dos pagamentos abertos roda de %g em %g s", intervalo, intervalo)
+
+    def volta():
+        if para.wait(primeira):
+            return
+        n = 0
+        while True:
+            try:
+                r = api.pagamento_confere_abertos(velhos=n % CONFERE_VELHOS_A_CADA == 0)
+                if r['creditados']:
+                    log.info("pagamento: a conferência automática creditou %d pagamento(s) sem esperar o aviso",
+                             r['creditados'])
+            except Exception:
+                log.exception("pagamento: a conferência automática quebrou")
+            n += 1
+            if para.wait(intervalo):
+                return
+
+    th = threading.Thread(target=volta, name='mp-conferencia', daemon=True)
+    th.start()
+    return th

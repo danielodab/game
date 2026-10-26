@@ -455,7 +455,7 @@ class ProvaDoPagamento(unittest.TestCase):
 
     def test_referencia_de_outro_sistema(self):
         for ref in ('outra-loja-77', 'sot-99999999-0123456789abcdef'):
-            mp_id = self.mp.pagar(ref, centavos=490)
+            mp_id = self.mp.pagar(ref)
             self.assertEqual(self.mp.avisar(mp_id, self.base), (200, {'ok': True, 'ignorado': 'referência desconhecida'}))
             self.assertEqual(self.sql("SELECT COUNT(*) FROM pagamentos_mp WHERE mp_id = ?", mp_id)[0][0], 0)
 
@@ -712,6 +712,118 @@ class ProvaDoPagamento(unittest.TestCase):
         b.close()
         status, r = d.pede('POST', '/api/pagamento/conferir', {'id': pid})
         self.assertEqual((status, r['erro'], r['liberaEm']), (429, 'conferências demais nesta hora (30)', t - 10 + 3600))
+
+    def test_conferencia_automatica(self):
+        """26/10, o dono: "esperando pagamento e tive que clicar em aprovado pro saldo entrar". O servidor confere
+        SOZINHO as intenções abertas (pagamento.liga_conferencia): o aviso que não chega e o jogador que não volta à
+        loja não seguram mais o crédito. Banco próprio (a varredura olha o banco inteiro) e a varredura chamada
+        direto, num cartório dentro do processo sobre o mesmo banco — como o segundo contêiner do rolling update."""
+        def le(arq):
+            with open(arq, encoding='utf-8', errors='replace') as f:
+                return f.read()
+
+        self.assertIn('pagamento: a conferência automática dos pagamentos abertos roda de 60 em 60 s', le(self.log_arq))
+        self.assertNotIn('conferência automática', le(self.log_off))       # desligado: nem liga
+        banco = os.path.join(self.pasta, 'auto', 'soterra.db')
+        proc, log, base, _ = sobe_api(self.pasta, 'api-auto', banco, self.env, self.mp.base)
+        import api as cartorio
+        a = cartorio.Api(banco, mp=pag_mod.MercadoPago(self.token, self.segredo, ENDERECO, base=self.mp.base))
+        parada = threading.Event()
+
+        def ref_de(pid):
+            b = sqlite3.connect(banco)
+            try:
+                return b.execute("SELECT referencia FROM pagamentos WHERE id = ?", (pid,)).fetchone()[0]
+            finally:
+                b.close()
+
+        def desloca(pid, horas):
+            b = sqlite3.connect(banco)
+            b.execute("UPDATE pagamentos SET criado_em = criado_em - ? WHERE id = ?", (horas * 3600, pid))
+            b.commit()
+            b.close()
+
+        def compra(c):
+            st, r = c.pede('POST', '/api/pagamento/pacote', {'pacote': 'barras-50', 'idem': idem()})
+            self.assertEqual(st, 201, r)
+            return r['pagamento']['id']
+
+        def estado(c, pid):
+            return [p for p in c.pede('GET', '/api/pagamento/meus')[1]['pagamentos'] if p['id'] == pid][0]['estado']
+
+        def saldo(c):
+            return c.pede('GET', '/api/loja/minha')[1]['barras']['saldo']
+
+        try:
+            c = self.novo('Auto Confere', base)
+            pid = compra(c)
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 1, 'creditados': 0, 'falhou': False})
+            self.assertEqual(estado(c, pid), 'aberto')
+            mp_id = self.mp.pagar(ref_de(pid))          # pagou; o aviso nunca chega, ninguém clica
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 1, 'creditados': 1, 'falhou': False})
+            self.assertEqual((estado(c, pid), saldo(c)), ('aprovado', 50))
+            # creditado, sai da varredura; e o aviso atrasado não credita de novo
+            buscas = self.mp.estado()['buscas']
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 0, 'creditados': 0, 'falhou': False})
+            self.assertEqual(self.mp.estado()['buscas'], buscas)
+            self.assertEqual(self.mp.avisar(mp_id, base)[0], 200)
+            self.assertEqual(saldo(c), 50)
+
+            # pendente (o Pix gerado e não pago): segue na varredura até aprovar
+            pid2 = compra(c)
+            pend = self.mp.pagar(ref_de(pid2), status='pending')
+            self.assertEqual(a.pagamento_confere_abertos()['creditados'], 0)
+            self.assertEqual(estado(c, pid2), 'pendente')
+            self.mp.status(pend, 'approved')
+            self.assertEqual(a.pagamento_confere_abertos()['creditados'], 1)
+            self.assertEqual((estado(c, pid2), saldo(c)), ('aprovado', 100))
+
+            # mais velha que 3 h: só na volta das 24 h; mais velha que 24 h: nunca
+            pid3, pid4 = compra(c), compra(c)
+            desloca(pid3, 5)
+            desloca(pid4, 25)
+            self.mp.pagar(ref_de(pid3))
+            self.mp.pagar(ref_de(pid4))
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 0, 'creditados': 0, 'falhou': False})
+            self.assertEqual(a.pagamento_confere_abertos(velhos=True), {'vistos': 1, 'creditados': 1, 'falhou': False})
+            self.assertEqual((estado(c, pid3), estado(c, pid4), saldo(c)), ('aprovado', 'aberto', 150))
+
+            # o Mercado Pago fora: a volta para, nada quebra; a próxima credita
+            pid5 = compra(c)
+            self.mp.pagar(ref_de(pid5))
+            self.mp.falhar('pagamentos', 1)
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 0, 'creditados': 0, 'falhou': True})
+            self.assertEqual(a.pagamento_confere_abertos()['creditados'], 1)
+            self.assertEqual(saldo(c), 200)
+
+            # o pagamento de teste num servidor de produção (o modo trocado): não credita, e sai das próximas voltas
+            # deste processo (o log não enche de minuto em minuto; a configuração só muda com outro deploy)
+            pid6 = compra(c)
+            self.mp.pagar(ref_de(pid6), live=False)
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 1, 'creditados': 0, 'falhou': False})
+            buscas = self.mp.estado()['buscas']
+            self.assertEqual(a.pagamento_confere_abertos(), {'vistos': 0, 'creditados': 0, 'falhou': False})
+            self.assertEqual(self.mp.estado()['buscas'], buscas)
+            self.assertEqual(saldo(c), 200)
+
+            # a thread de verdade: liga, credita sem ninguém chamar, e para
+            th = pag_mod.liga_conferencia(a, intervalo=0.2, primeira=0, para=parada)
+            pid7 = compra(c)
+            self.mp.pagar(ref_de(pid7))
+            fim = time.time() + 10
+            while saldo(c) != 250 and time.time() < fim:
+                time.sleep(0.2)
+            self.assertEqual((estado(c, pid7), saldo(c)), ('aprovado', 250))
+            parada.set()
+            th.join(5)
+            self.assertFalse(th.is_alive())
+            desligado = cartorio.Api(os.path.join(self.pasta, 'auto2', 'soterra.db'))
+            self.assertIsNone(pag_mod.liga_conferencia(desligado))     # sem as variáveis: nem liga
+            desligado.con.close()
+        finally:
+            parada.set()
+            a.con.close()
+            para(proc, log)
 
     def test_credito_recusado_pelo_jogo_volta(self):
         c = self.novo('Jogo Velho')
