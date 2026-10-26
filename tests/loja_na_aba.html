@@ -15,7 +15,8 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
          site se vê na aba (SITE.naAba) e não no aplicativo (SITE.noApp falso) — a loja vende pelo Mercado Pago;
        · a loja na aba, com um servidor de mentira e os pagamentos ligados: "Comprar com Pix ou cartão" → "Ir para o
          pagamento" abre a ABA NOVA do navegador no próprio toque (antes da resposta do servidor), o endereço do
-         Mercado Pago vai para ela e o quadro da loja NÃO sai do lugar; de volta ao jogo, a loja relê o saldo na hora;
+         Mercado Pago vai para ela e o quadro da loja NÃO sai do lugar; de volta ao jogo, a loja relê o saldo na hora
+         e (26/10) CONFERE o pacote aberto na hora: aprovado, avisa sem clique nenhum;
        · o servidor recusou (ou mandou um endereço que não é do Mercado Pago): a aba nova fecha;
        · fora da aba do jogo nada muda: o Mercado Pago abre na própria página;
        · 25/10, A LOJA FECHADA (SOTERRA_LOJA=0): o catálogo vazio com `fechada` vira o aviso "a loja abre em breve",
@@ -103,7 +104,7 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
     pacotes: [{ id: 'barras-50', nome: 'Bolsa de 50 barras de ouro', moeda: 'barras', barras: 50, centavos: 490, preco: 'R$ 4,90' }],
     ofertas: { semana: 1, desconto: 25, inicio: 0, fim: 0, itens: [] }, presente: { fora: ['vintens', 'barras', 'pacote'], porDia: 3 },
     barras: { nome: 'Barras de Ouro', vintensPorBarra: 20, vintensPorBarraFarmada: 80 }, pagamento: { ligado: true, teste: false } };
-  var servidor = { pacote: null, minha: 0, pacotes: 0 };
+  var servidor = { pacote: null, minha: 0, pacotes: 0, meus: null, conferir: null, conferidas: [] };
   var MP = 'https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=prova-123';
   function fetchFalso(url, pedido) {
     var rota = String(url).replace(/^[a-z]+:\/\/[^/]+/, '').split('?')[0];
@@ -111,7 +112,8 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
       : rota === '/api/loja/minha' ? (servidor.minha++, { ok: true, saldo: { carteira: 0, reservado: 0, aCaminho: 0, disponivel: 0, semFundo: false, saveVersao: 0, saveEm: null },
                                        barras: { saldo: 10, movimentos: [] }, limites: {}, pedidos: [], classes: [],
                                        auras: { tem: [], escolhida: null, todas: [] }, boasVindas: { disponivel: false, comprado: true } })
-      : rota === '/api/pagamento/meus' ? { ok: true, ligado: true, pagamentos: [] }
+      : rota === '/api/pagamento/meus' ? (servidor.meus || { ok: true, ligado: true, pagamentos: [] })
+      : rota === '/api/pagamento/conferir' ? (servidor.conferidas.push(JSON.parse(pedido && pedido.body || '{}')), servidor.conferir)
       : rota === '/api/pagamento/pacote' ? (servidor.pacotes++, servidor.pacote)
       : rota === '/api/saude' ? { ok: true, agora: Math.floor(Date.now() / 1000) }
       : { ok: false, erro: 'rota fora da prova', status: 404 };
@@ -198,11 +200,24 @@ iframe{width:420px;height:260px;border:1px solid #333}</style>
         check('o quadro da loja não sai do lugar (o jogo fica por baixo)', /\/tests\/loja_na_aba\.html/.test(w.location.pathname) && !!w.SITE);
         check('a loja avisa que o pagamento abriu numa aba nova', /aba nova/.test(d.getElementById('lj-aviso') ? d.getElementById('lj-aviso').textContent : d.body.textContent));
         // de volta ao jogo: a loja relê o saldo na hora (sem esperar os 30 s)
+        // 26/10: e confere o pacote que ficou aberto (o dono: "tive que clicar em aprovado pro saldo entrar")
+        var agora = Math.floor(Date.now() / 1000);
+        var pacote9 = { id: 9, pacote: 'barras-50', nome: 'Bolsa de 50 barras de ouro', moeda: 'barras', barras: 50, vintens: 0, centavos: 490,
+                        preco: 'R$ 4,90', estado: 'aberto', creditado: false, pedido: null, criadoEm: agora - 30, atualizadoEm: agora - 30 };
+        servidor.meus = { ok: true, ligado: true, pagamentos: [pacote9] };
+        servidor.conferir = { ok: true, pagamento: Object.assign({}, pacote9, { estado: 'aprovado', creditado: true }) };
         var antes = servidor.minha;
         Object.defineProperty(d, 'hidden', { configurable: true, get: function () { return false; } });
         d.dispatchEvent(new Event('visibilitychange'));
         return espera(function () { return servidor.minha > antes; }, 3000).then(function (releu) {
           check('de volta ao jogo depois de pagar, a loja relê o saldo na hora', !!releu, servidor.minha - antes);
+          return espera(function () { return /Pagamento aprovado/.test(d.getElementById('lj-aviso').textContent); }, 5000);
+        }).then(function (aprovou) {
+          check('26/10: … e CONFERE o pacote aberto na hora (só {id}), e o aprovado avisa sem clique nenhum',
+                !!aprovou && servidor.conferidas.length === 1 && servidor.conferidas[0].id === 9 && Object.keys(servidor.conferidas[0]).length === 1 &&
+                /aprovado · na sua conta/.test(d.querySelector('#lj-pagamentos [data-pagamento="9"]').textContent),
+                JSON.stringify(servidor.conferidas) + ' · ' + d.getElementById('lj-aviso').textContent);
+          servidor.meus = null;
         });
       }).then(function () {
         // o servidor recusou: a aba nova fecha

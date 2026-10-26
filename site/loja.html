@@ -81,27 +81,30 @@
 
     <div class="saldo-caixa" id="lj-saldo"><div class="estado">carregando…</div></div>
 
+    <!-- 26/10: os históricos no ALTO, minimizados (o dono: "lá em cima minimizados... melhor para enxergar"); as
+         linhas saem do historico.js, o mesmo desenho de Minha conta -->
+    <div class="historicos" id="lj-historicos" hidden>
+      <div class="historicos-cab"><span>Seu histórico</span><button type="button" class="btn btn-mini" id="lj-atualizar">atualizar</button></div>
+      <details class="historico" id="lj-pagamentos-caixa" hidden>
+        <summary><h3>Seus pacotes</h3><small class="historico-resumo" id="lj-pagamentos-resumo"></small></summary>
+        <p class="apoio">Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram sozinhas na sua conta, em até um minuto.</p>
+        <ul class="lista-pedidos" id="lj-pagamentos"></ul>
+      </details>
+      <details class="historico" id="lj-extrato-caixa" hidden>
+        <summary><h3>Suas barras de ouro</h3><small class="historico-resumo" id="lj-extrato-resumo"></small></summary>
+        <p class="apoio">O extrato da conta: o que entrou (pacotes, trocas, presentes, devoluções) e o que saiu, o mais novo primeiro.</p>
+        <ul class="lista-pedidos lista-movimentos" id="lj-extrato"></ul>
+      </details>
+      <details class="historico" id="lj-pedidos-caixa" hidden>
+        <summary><h3>Seus pedidos</h3><small class="historico-resumo" id="lj-pedidos-resumo"></small></summary>
+        <p class="apoio">A compra vale na hora, mesmo com o jogo fechado: o que foi comprado entra na conta do jogo e o saldo daqui já mostra. Peça de equipamento vai para o banco do jogo, no cofre do Acampamento. No meio de uma luta, o personagem comprado chega quando a sala terminar. Um pedido que ainda espera pode ser cancelado, e o que foi pago volta.</p>
+        <ul class="lista-pedidos" id="lj-pedidos"></ul>
+      </details>
+    </div>
+
     <section class="pacotes-caixa" id="lj-pacotes" hidden></section>
 
     <div id="lj-catalogo"><div class="estado">carregando o catálogo…</div></div>
-
-    <div id="lj-pedidos-caixa" hidden>
-      <div class="pedidos-cab"><h3>Seus pedidos</h3><button type="button" class="btn btn-mini" id="lj-atualizar">atualizar</button></div>
-      <p class="apoio">A compra vale na hora, mesmo com o jogo fechado: o que foi comprado entra na conta do jogo e o saldo daqui já mostra. Peça de equipamento vai para o banco do jogo, no cofre do Acampamento. No meio de uma luta, o personagem comprado chega quando a sala terminar. Um pedido que ainda espera pode ser cancelado, e o que foi pago volta.</p>
-      <ul class="lista-pedidos" id="lj-pedidos"></ul>
-    </div>
-
-    <div id="lj-extrato-caixa" hidden>
-      <div class="pedidos-cab"><h3>Suas barras de ouro</h3></div>
-      <p class="apoio">O extrato da conta: o que entrou (pacotes, trocas, presentes, devoluções) e o que saiu, o mais novo primeiro.</p>
-      <ul class="lista-pedidos lista-movimentos" id="lj-extrato"></ul>
-    </div>
-
-    <div id="lj-pagamentos-caixa" hidden>
-      <div class="pedidos-cab"><h3>Seus pacotes</h3></div>
-      <p class="apoio">Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora.</p>
-      <ul class="lista-pedidos" id="lj-pagamentos"></ul>
-    </div>
 
     <div class="aviso flutua" id="lj-aviso" role="status"></div>
   </div>
@@ -129,7 +132,7 @@
       lista.push('../js/core/compra_play.js');
     }
   } catch (eApp) {}
-  SITE_LISTA(lista.concat(['loja.js'])).forEach(function (s) {
+  SITE_LISTA(lista.concat(['historico.js', 'loja.js'])).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

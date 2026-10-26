@@ -66,7 +66,7 @@ from conta import (CADASTRO_POR_IP, ESQUEMA_CONTA, FRASE_IP_CADASTRO, FRASE_IP_S
 from correio import Correio
 from loja import ESQUEMA_LOJA, FRASE_LOJA_FECHADA, ROTAS_DA_LOJA_FECHADA, LojaMixin, loja_aberta_do_ambiente
 from mestre import FRASE_SO_MESTRE, MestreMixin
-from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova
+from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova, liga_conferencia
 from anuncio import ESQUEMA_ANUNCIO, Anuncios, AnuncioMixin
 from pagamento_play import ESQUEMA_PLAY, GooglePlay, PagamentoPlayMixin, liga_varredura
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
@@ -2124,6 +2124,7 @@ if __name__ == '__main__':
     log.info("loja: %s", "aberta" if Atendente.api.loja_aberta
              else "FECHADA (SOTERRA_LOJA=0): nada se compra; entregas e pagamentos já feitos seguem")
     liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)
+    liga_conferencia(Atendente.api)                   # 26/10: os pagamentos abertos do Mercado Pago, de minuto em minuto
     liga_torneios(Atendente.api)                      # 10/10: o relógio do Torneio da Arena, de 5 em 5 s (torneio.py)
     servidor = ThreadingHTTPServer((args.host, args.porta), Atendente)
     log.info("a API escuta em http://%s:%d — banco em %s", args.host, args.porta, os.path.abspath(args.banco))

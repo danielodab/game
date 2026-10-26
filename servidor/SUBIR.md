@@ -381,6 +381,23 @@ passadas as 24 h, aperta **conferir no Mercado Pago** na ficha e ele entra.
    recusou por configuração errada leva 503, e o Mercado Pago avisa de novo por
    um tempo; o que tiver passado disso, confira pelo botão **conferir** em
    "Seus pacotes" ou **conferir no Mercado Pago** na ficha da conta.
+9. **O crédito não depende do aviso (26/10).** Na primeira compra real o
+   pagamento ficou em "esperando o pagamento" até o dono apertar "conferir":
+   o aviso do Mercado Pago não chegou (no modo produtivo, o endereço do
+   webhook e a assinatura secreta são configurados à parte). Agora o servidor
+   CONFERE SOZINHO, de minuto em minuto, as intenções abertas das últimas 3 h
+   (e, a cada 15 min, as das últimas 24 h) — a mesma consulta do botão, que
+   credita uma vez só. O log de boot diz `pagamento: a conferência automática
+   dos pagamentos abertos roda de 60 em 60 s`, e cada crédito achado assim,
+   `pagamento: a conferência automática creditou 1 pagamento(s) sem esperar o
+   aviso`. A loja confere na hora quando o jogador volta da aba do Mercado
+   Pago e relê "Seus pacotes" enquanto houver um aberto: as barras aparecem
+   sem clique. O aviso continua valendo a pena (é instantâneo e traz os
+   estornos): em **Webhooks**, no modo **produtivo**, o endereço
+   `https://soterra.viidoo.io/api/pagamento/aviso` com o evento **Pagamentos**,
+   e a assinatura secreta desse modo em `SOTERRA_MP_SEGREDO`. Se o log mostrar
+   `aviso com assinatura inválida recusado`, é a assinatura; se nunca aparecer
+   `aviso do Mercado Pago`, é o endereço ou o evento.
 
 **A VIRADA PARA PRODUÇÃO (26/10), as duas lojas de uma vez.** No Coolify:
 

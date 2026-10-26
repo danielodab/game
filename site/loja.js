@@ -114,7 +114,7 @@
   var ocupado = false;
   var semResposta = null;   // {tipo:'sku'|'pacote', id, idem}: o próximo clique nele reusa a chave
   var lidaEm = 0;           // quando /minha foi pedida (ms): a volta à aba não repete à toa
-  var DIA = 86400;          // o pedido preso: retirado há mais de um dia pode ser cancelado
+  var DIA = 86400;          // um dia, em segundos (o que falta da oferta)
   var ESPERA_CONFERIR = 10 * 1000;   // ms entre as conferências depois da volta do Mercado Pago
   var VOLTAS_CONFERIR = 6;
   var conferindo = {};      // id do pagamento → true enquanto o "conferir" dele está a caminho
@@ -144,36 +144,18 @@
    *     diz os tipos que não: moeda e o Pacote). */
   var bvClasse = '', bvAura = '';      // as escolhas do Pacote de Boas-Vindas (sobrevivem ao redesenho)
   var presenteAberto = null, presenteNome = '';   // o sku com o formulário de presente aberto e o nome digitado
-  var ESTADO = { pendente: Tx('esperando o jogo abrir'), retirado: Tx('a caminho do jogo'), entregue: Tx('entregue'),
-                 estornado: Tx('devolvido'), cancelado: Tx('cancelado') };
-  // 04/10: por que um pedido ainda não entrou, quando a entrega é na hora (pedido.espera, do servidor)
-  var ESPERA = { luta: Tx('chega quando a sala terminar'), juiz: Tx('entra em instantes'),
-                 estado: Tx('esperando o jogo abrir uma vez nesta conta') };
-  var MOTIVO = { 'sem-saldo': Tx('vinténs insuficientes no jogo'), 'classe-ja-liberada': Tx('a classe já estava liberada no jogo'),
-                 'item-invalido': Tx('o jogo não reconheceu o produto'), 'erro-local': Tx('o jogo falhou ao entregar'),
-                 'recusado': Tx('o jogo recusou o pedido') };
-  var ESTADO_PAG = { aberto: Tx('esperando o pagamento'), pendente: Tx('em análise'), aprovado: Tx('aprovado'),
-                     recusado: Tx('não aprovado'), estornado: Tx('estornado'), falhou: Tx('não abriu') };
+  // 26/10: os estados e os motivos dos históricos moram no site/historico.js (a Loja e Minha conta desenham igual)
+  var H = window.HISTORICO;
+  var ESTADO_PAG = H.ESTADO_PAG;
   var RARIDADE = { comum: Tx('Comum'), raro: Tx('Raro'), epico: Tx('Épico'), lendario: Tx('Lendário') };
   var ELEMENTOS = ['fogo', 'agua', 'terra', 'ar', 'neutro'];
-  var MOTIVO_BARRAS = { pacote: Tx('pacote pago'), loja: Tx('compra na loja'), 'estorno-loja': Tx('devolvidas: pedido cancelado ou recusado'),
-                        'troca-vintens': Tx('troca com vinténs'), presente: Tx('presente do Mestre'),
-                        'estorno-pagamento': Tx('pagamento estornado'), ajuste: Tx('ajuste do dono do jogo'),
-                        anuncio: Tx('anúncio assistido no aplicativo') };
 
   /* ---- as barras de ouro (13/09) ---- */
-  /* a barra de ouro desenhada à mão: a face de cima clara, a da frente mais funda, um brilho */
-  function iconeBarra(classe) {
-    return '<svg class="ico-barra' + (classe ? ' ' + classe : '') + '" viewBox="0 0 32 20" aria-hidden="true" focusable="false">' +
-      '<polygon points="4,9 28,9 31.5,19 0.5,19" fill="#d4921a" stroke="#7a4f08" stroke-width="0.9" stroke-linejoin="round"/>' +
-      '<polygon points="8.5,1 23.5,1 28,9 4,9" fill="#ffd45e" stroke="#7a4f08" stroke-width="0.9" stroke-linejoin="round"/>' +
-      '<polygon points="10.5,2.6 17.5,2.6 16.6,4.4 9.6,4.4" fill="#fff6d2" opacity="0.85"/>' +
-      '<polygon points="4.5,11 12,11 11.2,13 3.8,13" fill="#f5c04a" opacity="0.7"/></svg>';
-  }
+  /* a barra de ouro desenhada à mão (site/historico.js) */
+  var iconeBarra = H.iconeBarra, nBarras = H.nBarras;
   function moedaDe(it) { return it && it.moeda === 'barras' ? 'barras' : 'vintens'; }
   function temBarras() { return !!(minha && minha.barras && typeof minha.barras === 'object'); }
   function barrasNoSaldo() { return Number(((minha && minha.barras) || {}).saldo) || 0; }
-  function nBarras(n) { return N(n) + (Number(n) === 1 ? Tx(' barra de ouro') : Tx(' barras de ouro')); }
   /* 04/10: a oferta da semana deste item (ou null). Vale enquanto o relógio do servidor não passou do
    * `fim`; quem decide o preço cobrado é o servidor — aqui é só o que a página mostra. */
   function oferta(it) {
@@ -305,10 +287,78 @@
   /* "Seus pacotes": só com sessão e com os pagamentos ligados */
   function carregaPagamentos() {
     if (!SITE.sessao() || !pagamentoLigado() || noApp()) return Promise.resolve();
+    var antes = estadosDosPacotes();
     return SITE.api('/api/pagamento/meus').then(function (r) {
       if (r.status === 401) { sessaoVencida(); return; }
-      if (r.ok && Array.isArray(r.pagamentos)) pagamentos = r;
+      if (r.ok && Array.isArray(r.pagamentos)) { pagamentos = r; notaAprovados(antes, r.pagamentos); }
       desenhaPagamentos();
+      if (!seguindo) vigiaSeAberto();
+    });
+  }
+
+  /* 26/10 — O CRÉDITO SOZINHO. O dono: "esperando pagamento e tive que clicar em aprovado pro saldo entrar". O
+   * servidor confere os pagamentos abertos de minuto em minuto (servidor/pagamento.py, liga_conferencia); a página
+   * só relê. De volta da aba do Mercado Pago, a loja confere NA HORA os pacotes abertos mais novos (até
+   * CONFERE_NA_VOLTA, o mesmo POST do botão, sem os avisos dele); e enquanto houver um pacote aberto ou em análise
+   * das últimas VIGIA_JANELA, "Seus pacotes" é relido de VIGIA_ESPERA em VIGIA_ESPERA, por até VIGIA_MAX, sem
+   * consulta ao Mercado Pago (quem consulta é o servidor). O que virar aprovado avisa, relê o saldo e chama o
+   * jogo — sem clique nenhum. Na volta pelo endereço do Mercado Pago quem insiste primeiro é a conferência da
+   * volta (segueVolta, `seguindo`); a releitura só começa quando ela desiste. */
+  var VIGIA_ESPERA = 20 * 1000, VIGIA_MAX = 15 * 60 * 1000, VIGIA_JANELA = 3 * 3600, CONFERE_NA_VOLTA = 2;
+  var vigiaAte = 0, vigiaTimer = null, seguindo = false;
+  function listaDosPacotes() {
+    return pagamentos && Array.isArray(pagamentos.pagamentos) ? pagamentos.pagamentos.filter(function (p) { return p && p.id != null; }) : [];
+  }
+  function estadosDosPacotes() {
+    var m = {};
+    listaDosPacotes().forEach(function (p) { m[p.id] = p.estado; });
+    return m;
+  }
+  function abertos() {
+    return listaDosPacotes().filter(function (p) {
+      return (p.estado === 'aberto' || p.estado === 'pendente') && SITE.agora() - Number(p.criadoEm) < VIGIA_JANELA;
+    });
+  }
+  /* o que estava aberto ou em análise em `antes` (id → estado) e chegou aprovado: avisa uma vez */
+  function notaAprovados(antes, lista) {
+    var novos = lista.filter(function (p) {
+      return p && p.estado === 'aprovado' && (antes[p.id] === 'aberto' || antes[p.id] === 'pendente');
+    });
+    if (!novos.length) return;
+    novos.forEach(function (p) {
+      if (volta && Number(volta.id) === Number(p.id)) { volta.pag = p; volta.estado = 'ok'; desenhaVolta(); }
+    });
+    aviso(novos[0].moeda === 'barras' ? Tx('Pagamento aprovado: as barras de ouro já estão na sua conta.')
+      : Tx('Pagamento aprovado: os vinténs estão a caminho do jogo.'), 'certo');
+    avisaJogo();
+    carregaMinha();
+  }
+  function vigiaSeAberto() { if (abertos().length) vigia(); }
+  function vigia() {
+    if (vigiaTimer) return;
+    if (!(vigiaAte > Date.now())) vigiaAte = Date.now() + VIGIA_MAX;
+    vigiaTimer = setTimeout(function () {
+      vigiaTimer = null;
+      if (Date.now() > vigiaAte || !SITE.sessao()) { vigiaAte = 0; return; }
+      if (document.hidden) { vigia(); return; }      // escondida: espera sem pedir nada
+      carregaPagamentos();                           // ainda aberto: ela mesma agenda a próxima
+    }, VIGIA_ESPERA);
+  }
+  function confereAbertos() {
+    abertos().slice(0, CONFERE_NA_VOLTA).forEach(function (p) {
+      if (conferindo[p.id]) return;
+      conferindo[p.id] = true;
+      var antes = estadosDosPacotes();
+      desenhaPagamentos();
+      SITE.api('/api/pagamento/conferir', { method: 'POST', body: { id: p.id } }).then(function (r) {
+        delete conferindo[p.id];
+        if (r.status === 401) { sessaoVencida(); return; }
+        if (r.ok && r.pagamento && typeof r.pagamento === 'object') {
+          poeNaLista(r.pagamento);
+          notaAprovados(antes, [r.pagamento]);
+        }
+        desenhaPagamentos();
+      });
     });
   }
 
@@ -495,6 +545,7 @@
     if (!catalogo) { volta.estado = 'erro'; volta.erro = erroCatalogo.replace(/\.$/, '') || Tx('O servidor está fora'); desenhaVolta(); return; }
     if (!pagamentoLigado()) { volta.estado = 'desligado'; desenhaVolta(); return; }
     volta.estado = 'conferindo';
+    seguindo = true;
     desenhaVolta();
     return SITE.api('/api/pagamento/conferir', { method: 'POST', body: { id: volta.id } }).then(function (r) {
       if (r.status === 401) { sessaoVencida(); return; }
@@ -520,9 +571,11 @@
    * ou os pagamentos desligados (503) param a insistência. */
   function segueVolta() {
     var e = volta.pag && volta.pag.estado;
+    seguindo = false;
     if (e === 'aprovado') { avisaJogo(); carregaMinha(); return; }
     if (volta.estado !== 'erro' && e !== 'aberto' && e !== 'pendente') return;
-    if (volta.lidas >= VOLTAS_CONFERIR) { desenhaVolta(); return; }
+    if (volta.lidas >= VOLTAS_CONFERIR) { desenhaVolta(); vigiaSeAberto(); return; }   // 26/10: daqui, só a releitura
+    seguindo = true;
     setTimeout(function () {
       volta.lidas++;
       SITE.api('/api/pagamento/conferir', { method: 'POST', body: { id: volta.id } }).then(function (r) {
@@ -840,89 +893,39 @@
       '</div></article>';
   }
 
-  /* ---- os pedidos e os pacotes pagos ---- */
+  /* ---- os históricos: os pedidos, o extrato e os pacotes pagos ----
+   * 26/10: no ALTO da página, cada um num <details> fechado com o resumo na linha do título (o dono: "lá em cima
+   * minimizados... melhor para enxergar"); o desenho das linhas é o do site/historico.js, o mesmo de Minha conta. */
+  function resumo(id, texto) { var el = $(id); if (el) el.textContent = texto ? ' · ' + texto : ''; }
+  function desenhaHistoricos() {
+    $('lj-historicos').hidden = $('lj-pedidos-caixa').hidden && $('lj-extrato-caixa').hidden && $('lj-pagamentos-caixa').hidden;
+  }
   function desenhaPedidos() {
     var caixa = $('lj-pedidos-caixa');
     caixa.hidden = estadoMinha !== 'ok';
-    if (caixa.hidden) return;
-    var ps = (Array.isArray(minha.pedidos) ? minha.pedidos : []).filter(function (p) { return p && p.id != null; });
-    $('lj-pedidos').innerHTML = ps.length ? ps.map(linhaPedido).join('') : Tx('<li class="apoio">Nenhum pedido ainda.</li>');
-  }
-  function linhaPedido(p) {
-    var est = proprio(ESTADO, p.estado) ? p.estado : 'outro';
-    var pago = p.origem === 'pagamento', presente = p.origem === 'presente' || p.origem === 'amigo';
-    var deAmigo = p.origem === 'amigo';   // 04/10: o presente de outro jogador (as barras foram dele)
-    var txt = est === 'outro' ? String(p.estado == null ? '' : p.estado) : ESTADO[est];
-    if (est === 'pendente' && proprio(ESPERA, p.espera)) txt = ESPERA[p.espera];
-    var emBarras = p.moeda === 'barras';
-    if (est === 'estornado') {
-      // o crédito de um pacote que o jogo recusou não se perde: o servidor manda de novo
-      txt = pago ? Tx('não entrou no jogo: o servidor manda de novo')
-                 : txt + ': ' + (proprio(MOTIVO, p.motivo) ? MOTIVO[p.motivo] : MOTIVO.recusado) + (emBarras ? Tx(' (as barras voltaram)') : '');
+    if (!caixa.hidden) {
+      $('lj-pedidos').innerHTML = H.pedidos(minha.pedidos, true);
+      resumo('lj-pedidos-resumo', H.resumoPedidos(minha.pedidos));
     }
-    if (est === 'cancelado' && emBarras) txt = Tx('cancelado (as barras voltaram)');
-    if (est === 'cancelado' && pago) txt = Tx('cancelado (o pagamento foi estornado)');
-    // o pedido "preso": retirado há mais de um dia (o servidor confere de novo)
-    var desde = Number(p.retiradoEm) || Number(p.criadoEm) || 0;
-    var preso = est === 'retirado' && desde > 0 && SITE.agora() - desde > DIA;
-    // crédito de pacote e presente do Mestre não se cancelam por aqui
-    var pode = !pago && !presente && p.cancelavel !== false && (est === 'pendente' || preso);
-    var custo = pago ? Tx('pacote pago') : deAmigo ? Tx('presente de {a}', { a: p.de || Tx('um amigo') }) : presente ? Tx('presente do Mestre')
-      : emBarras ? nBarras(p.barras) : Number(p.preco) === 0 ? Tx('sem custo (Mestre)') : Tx('{a} vinténs', { a: N(p.preco) });
-    var miudo = [custo,
-                 Number(p.criadoEm) > 0 ? (pago ? Tx('aprovado {a}', { a: SITE.quando(p.criadoEm) }) : presente ? Tx('dado {a}', { a: SITE.quando(p.criadoEm) }) : Tx('pedido {a}', { a: SITE.quando(p.criadoEm) })) : '',
-                 est === 'retirado' && !preso && !pago && !presente ? Tx('se não chegar em 24 h, dá para cancelar') : ''].filter(Boolean);
-    return '<li class="pedido e-' + est + (pago ? ' o-pagamento' : presente ? ' o-presente' : '') + '" data-pedido="' + E(p.id) + '">' +
-      '<div><b>' + E(p.nome || p.sku) + '</b><small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita">' +
-      '<span class="estado-pedido">' + E(txt) + '</span>' +
-      (pode ? '<button type="button" class="btn btn-mini" data-cancelar="' + E(p.id) + '">' + Tx('cancelar') + '</button>' : '') +
-      '</div></li>';
+    desenhaHistoricos();
   }
   /* "Suas barras de ouro" (13/09): o extrato que /minha traz, o mais novo antes */
   function desenhaExtrato() {
     var caixa = $('lj-extrato-caixa');
-    if (!caixa) return;
     caixa.hidden = estadoMinha !== 'ok' || !temBarras();
-    if (caixa.hidden) return;
-    var ms = (Array.isArray(minha.barras.movimentos) ? minha.barras.movimentos : []).filter(function (m) { return m && m.id != null; });
-    $('lj-extrato').innerHTML = ms.length ? ms.map(linhaMovimento).join('')
-      : Tx('<li class="apoio">Nenhum movimento ainda: as barras aparecem aqui quando um pacote for aprovado ou uma troca for entregue.</li>');
-  }
-  function linhaMovimento(m) {
-    var d = Math.floor(Number(m.delta) || 0);
-    var motivo = proprio(MOTIVO_BARRAS, m.motivo) ? MOTIVO_BARRAS[m.motivo] : String(m.motivo == null ? '' : m.motivo);
-    var miudo = [m.nome ? motivo : '', Number(m.criadoEm) > 0 ? SITE.quando(m.criadoEm) : '',
-                 m.saldo != null ? Tx('saldo {a}', { a: N(m.saldo) }) : ''].filter(Boolean);
-    return '<li class="movimento ' + (d > 0 ? 'entra' : 'sai') + '" data-movimento="' + E(m.id) + '"><div><b>' + E(m.nome || motivo) + '</b>' +
-      '<small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita"><span class="delta">' + (d > 0 ? '+' : '−') +
-      N(Math.abs(d)) + '</span>' + iconeBarra() + '</div></li>';
+    if (!caixa.hidden) {
+      $('lj-extrato').innerHTML = H.extrato(minha.barras.movimentos);
+      resumo('lj-extrato-resumo', H.resumoExtrato(minha.barras.movimentos));
+    }
+    desenhaHistoricos();
   }
   function desenhaPagamentos() {
     var caixa = $('lj-pagamentos-caixa');
-    var lista = !noApp() && estadoMinha === 'ok' && pagamentos && Array.isArray(pagamentos.pagamentos)
-      ? pagamentos.pagamentos.filter(function (p) { return p && p.id != null; }) : [];
-    caixa.hidden = !lista.length;
-    $('lj-pagamentos').innerHTML = lista.map(linhaPagamento).join('');
-  }
-  function linhaPagamento(p) {
-    var est = proprio(ESTADO_PAG, p.estado) ? p.estado : 'outro';
-    var txt = est === 'outro' ? String(p.estado == null ? '' : p.estado) : ESTADO_PAG[est];
-    var emBarras = p.moeda === 'barras';
-    if (est === 'aprovado') {
-      var pe = p.pedido && p.pedido.estado;
-      txt += p.creditado === false ? Tx(' · em conferência') : emBarras ? Tx(' · na sua conta') : pe === 'entregue' ? Tx(' · entregue no jogo')
-        : pe === 'cancelado' ? Tx(' · crédito cancelado') : Tx(' · a caminho do jogo');
-    }
-    var miudo = [p.preco == null ? '' : String(p.preco),
-                 emBarras ? (Number(p.barras) > 0 ? nBarras(p.barras) : '') : Number(p.vintens) > 0 ? Tx('{a} vinténs', { a: N(p.vintens) }) : '',
-                 Number(p.criadoEm) > 0 ? SITE.quando(p.criadoEm) : ''].filter(Boolean);
-    // aberto ou em análise: o "conferir" (a mesma conferência da volta, para quem pagou e fechou a aba)
-    var bt = (est === 'aberto' || est === 'pendente')
-      ? '<button type="button" class="btn btn-mini" data-conferir="' + E(p.id) + '"' + (conferindo[p.id] ? ' disabled' : '') + '>' +
-        (conferindo[p.id] ? Tx('conferindo…') : Tx('conferir')) + '</button>' : '';
-    return '<li class="pagamento g-' + est + '" data-pagamento="' + E(p.id) + '"><div><b>' + E(p.nome || p.pacote || 'pacote') + '</b>' +
-      '<small>' + miudo.map(E).join(' · ') + '</small></div><div class="direita"><span class="estado-pedido">' + E(txt) + '</span>' + bt +
-      '</div></li>';
+    var lista = !noApp() && estadoMinha === 'ok' && pagamentos && Array.isArray(pagamentos.pagamentos) ? pagamentos.pagamentos : [];
+    $('lj-pagamentos').innerHTML = H.pacotes(lista, conferindo);
+    caixa.hidden = !$('lj-pagamentos').children.length;
+    resumo('lj-pagamentos-resumo', caixa.hidden ? '' : H.resumoPacotes(lista));
+    desenhaHistoricos();
   }
   /* O botão "conferir" de "Seus pacotes" (conserto 11/09): o jogador que pagou
    * o Pix no app do banco e fechou a aba não volta pelo endereço do Mercado
@@ -1232,11 +1235,14 @@
     });
     // voltou à aba (talvez depois de abrir o jogo): o saldo e os pedidos andaram
     // 24/10: e quem pagou numa aba nova (a loja na aba do jogo) relê na hora, sem esperar os 30 s
+    // 26/10: e confere os pacotes abertos na hora (o crédito não espera o clique em "conferir")
     function voltou() {
       if (document.hidden || !SITE.sessao()) return;
       if (!pagamentoFora && Date.now() - lidaEm <= 30 * 1000) return;
+      var pagou = pagamentoFora;
       pagamentoFora = false;
-      carregaMinha(); carregaPagamentos();
+      carregaMinha();
+      carregaPagamentos().then(function () { if (pagou) confereAbertos(); });
     }
     document.addEventListener('visibilitychange', voltou);
     // o Mercado Pago numa JANELA (não aba): a do jogo nem some da tela — volta pelo foco

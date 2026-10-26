@@ -172,6 +172,27 @@
     <div class="aviso" id="mc-aviso"></div>
     <div class="blocos">
 
+      <!-- 26/10: os históricos da conta no ALTO, minimizados (o dono: "esses históricos devem ficar em minha conta e
+           lá em cima minimizados"); as linhas saem do historico.js, o mesmo desenho da Loja -->
+      <section class="bloco largo" id="bl-historico" hidden>
+        <div class="historicos-cab"><span>Seu histórico</span><button type="button" class="btn btn-mini" id="mc-hist-atualizar">atualizar</button></div>
+        <details class="historico" id="mc-pagamentos-caixa" hidden>
+          <summary><h3>Seus pacotes</h3><small class="historico-resumo" id="mc-pagamentos-resumo"></small></summary>
+          <p class="apoio">Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram sozinhas na sua conta, em até um minuto.</p>
+          <ul class="lista-pedidos" id="mc-pagamentos"></ul>
+        </details>
+        <details class="historico" id="mc-extrato-caixa" hidden>
+          <summary><h3>Suas barras de ouro</h3><small class="historico-resumo" id="mc-extrato-resumo"></small></summary>
+          <p class="apoio">O extrato da conta: o que entrou (pacotes, trocas, presentes, devoluções) e o que saiu, o mais novo primeiro.</p>
+          <ul class="lista-pedidos lista-movimentos" id="mc-extrato"></ul>
+        </details>
+        <details class="historico" id="mc-pedidos-caixa" hidden>
+          <summary><h3>Seus pedidos</h3><small class="historico-resumo" id="mc-pedidos-resumo"></small></summary>
+          <p class="apoio">O que foi comprado na Loja. Para cancelar um pedido que ainda espera, abra a Loja.</p>
+          <ul class="lista-pedidos" id="mc-pedidos"></ul>
+        </details>
+      </section>
+
       <section class="bloco" id="bl-dados">
         <h3>Dados</h3>
         <dl class="dados" id="mc-dados"></dl>
@@ -309,7 +330,7 @@
  * no cache não pode falar com o servidor novo — mudou, muda o endereço. O
  * nome e a cor das classes (os retratos) vêm do próprio jogo (classes.js). */
 (function () {
-  SITE_LISTA(['site.js', 'banimento.js', '../js/core/data/classes.js', 'conta.js', 'conta_privacidade.js']).forEach(function (s) {
+  SITE_LISTA(['site.js', 'banimento.js', '../js/core/data/classes.js', 'historico.js', 'conta.js', 'conta_privacidade.js']).forEach(function (s) {
     document.write('<script src="' + SITE_URL(s) + '"><\/script>');
   });
 })();

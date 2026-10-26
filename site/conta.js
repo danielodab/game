@@ -263,6 +263,38 @@
     desenhaSessoes();
     desenhaAtividade();
     desenhaAvatar();
+    carregaHistorico();
+  }
+
+  /* -- 26/10: OS HISTÓRICOS no alto, fechados (site/historico.js, o mesmo desenho da Loja): "Seus pacotes", "Suas
+   * barras de ouro" e "Seus pedidos". Aqui só se mostra: cancelar mora na Loja, e os pagamentos o servidor confere
+   * sozinho (servidor/pagamento.py, liga_conferencia). "Seus pacotes" só na web: no aplicativo a compra é a da
+   * Google, e o Mercado Pago não aparece. Sem resposta, o bloco fica como estava (ou escondido). */
+  var historico = { minha: null, pacotes: null };
+  function carregaHistorico() {
+    if (!window.HISTORICO || !SITE.sessao()) return Promise.resolve();
+    var web = !(SITE.noApp && SITE.noApp());
+    return Promise.all([SITE.api('/api/loja/minha'), web ? SITE.api('/api/pagamento/meus') : Promise.resolve(null)]).then(function (rs) {
+      if (rs[0] && rs[0].ok) historico.minha = rs[0];
+      if (rs[1] && rs[1].ok && Array.isArray(rs[1].pagamentos)) historico.pacotes = rs[1].pagamentos;
+      desenhaHistorico();
+    });
+  }
+  function mostraHistorico(id, lista, html, resumo) {
+    $(id + '-caixa').hidden = !lista;
+    if (!lista) return;
+    $(id).innerHTML = html;
+    $(id + '-resumo').textContent = ' · ' + resumo;
+  }
+  function desenhaHistorico() {
+    var H = window.HISTORICO, m = historico.minha;
+    var pacotes = historico.pacotes && historico.pacotes.length && !(SITE.noApp && SITE.noApp()) ? historico.pacotes : null;
+    var movimentos = m && m.barras && typeof m.barras === 'object' ? m.barras.movimentos || [] : null;
+    var pedidos = m ? m.pedidos || [] : null;
+    mostraHistorico('mc-pagamentos', pacotes, pacotes && H.pacotes(pacotes, null), pacotes && H.resumoPacotes(pacotes));
+    mostraHistorico('mc-extrato', movimentos, movimentos && H.extrato(movimentos), movimentos && H.resumoExtrato(movimentos));
+    mostraHistorico('mc-pedidos', pedidos, pedidos && H.pedidos(pedidos, false), pedidos && H.resumoPedidos(pedidos));
+    $('bl-historico').hidden = !(pacotes || movimentos || pedidos);
   }
 
   /* -- o retrato no ranking: as opções são as do servidor, e cada id é
@@ -542,11 +574,14 @@
       dados = null;
       troca = null;
       avatar = null;
+      historico = { minha: null, pacotes: null };
+      $('bl-historico').hidden = true;
       avatarErro = '';
       mostra('entrar');
       aviso('e-aviso', Tx('Você saiu desta conta neste navegador.'), 'neutro');
     });
     $('mc-sair').addEventListener('click', function () { SITE.sair(); });
+    $('mc-hist-atualizar').addEventListener('click', function () { carregaHistorico(); });
     $('cc-sair').addEventListener('click', function () { SITE.sair(); });
     $('cc-tentar').addEventListener('click', function () { carregaConta(); });
 

@@ -231,7 +231,7 @@ JOGO.I18n.registra('es', { textos: {
   "Suas barras de ouro": "Tus barras de oro",
   "O extrato da conta: o que entrou (pacotes, trocas, presentes, devoluções) e o que saiu, o mais novo primeiro.": "El extracto de la cuenta: lo que entró (paquetes, canjes, regalos, devoluciones) y lo que salió, lo más nuevo primero.",
   "Seus pacotes": "Tus paquetes",
-  "Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram na sua conta na hora.": "Los paquetes pagados por Mercado Pago. Aprobado el pago, las barras de oro entran en tu cuenta al instante.",
+  "Os pacotes pagos no Mercado Pago. Aprovado o pagamento, as barras de ouro entram sozinhas na sua conta, em até um minuto.": "Los paquetes pagados por Mercado Pago. Aprobado el pago, las barras de oro entran solas en tu cuenta, en menos de un minuto.",
   "Ranking — SOTERRA": "Ranking — SOTERRA",
   "Quem desceu mais fundo, quem manda na arena e quais guildas somam mais experiência. Atualiza a cada save que chega ao servidor.": "Quién bajó más hondo, quién manda en la arena y qué gremios suman más experiencia. Se actualiza con cada guardado que llega al servidor.",
   "Equipe do SOTERRA <small>quem cuida do mundo enterrado — fica fora do ranking</small>": "Equipo de SOTERRA <small>quienes cuidan el mundo enterrado — quedan fuera del ranking</small>",
@@ -1314,5 +1314,11 @@ JOGO.I18n.registra('es', { textos: {
   "← Voltar": "← Volver",
   "Abrindo o Mercado Pago…": "Abriendo Mercado Pago…",
   "O pagamento abriu numa aba nova do navegador. Quando terminar, volte ao jogo: o saldo se atualiza sozinho.": "El pago se abrió en una pestaña nueva del navegador. Cuando termines, vuelve al juego: el saldo se actualiza solo.",
-  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>La tienda abre pronto.</b> Por ahora, todo viene de los descensos: vinténs, piedras de forja, cartas y personajes. Los premios y regalos que ganes siguen llegando al juego."
+  "<b>A loja abre em breve.</b> Por enquanto, tudo vem das descidas: vinténs, pedras de forja, cartas e personagens. Os prêmios e presentes que você ganhar continuam chegando ao jogo.": "<b>La tienda abre pronto.</b> Por ahora, todo viene de los descensos: vinténs, piedras de forja, cartas y personajes. Los premios y regalos que ganes siguen llegando al juego.",
+  "Seu histórico": "Tu historial",
+  "O que foi comprado na Loja. Para cancelar um pedido que ainda espera, abra a Loja.": "Lo que se compró en la Tienda. Para cancelar un pedido que todavía espera, abre la Tienda.",
+  "último: {a} · {b}": "último: {a} · {b}",
+  "nenhum ainda": "ninguno todavía",
+  "{a} em andamento": "{a} en curso",
+  "{a} esperando confirmação": "{a} esperando confirmación"
 } });
