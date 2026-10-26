@@ -3255,5 +3255,14 @@ JOGO.I18n.registra('en', { textos: {
   "Ver os {n} torneios": "See the {n} tournaments",
   "Ver o torneio": "See the tournament",
   "Ver o Placar · {n} duelo(s)": "See the Scoreboard · {n} duel(s)",
-  "Desafio amistoso: toque em alguém na praça.": "Friendly challenge: tap someone in the plaza."
+  "Desafio amistoso: toque em alguém na praça.": "Friendly challenge: tap someone in the plaza.",
+  "Chegaram {a} barras de ouro da sua compra na App Store.": "{a} gold bars from your App Store purchase have arrived.",
+  "Não deu para falar com a App Store neste aparelho. Confira se o iPhone está com o seu Apple ID e tente de novo.": "Couldn't reach the App Store on this device. Check that the iPhone is signed in with your Apple ID and try again.",
+  "Os pacotes ainda não estão disponíveis na App Store. Tente de novo mais tarde.": "The packs aren't available on the App Store yet. Try again later.",
+  "A Apple ainda espera a aprovação do pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.": "Apple is still waiting for the payment to be approved. As soon as it is, the bars come in on their own — you can close this screen.",
+  "A Apple não concluiu a compra. Nada foi creditado.": "Apple didn't complete the purchase. Nothing was credited.",
+  "{a}Se você pagou, as barras entram sozinhas em instantes.": "{a}If you paid, the bars will come in on their own in a moment.",
+  "Abrindo a App Store…": "Opening the App Store…",
+  "A cobrança é feita pela App Store, na forma de pagamento do seu Apple ID. As barras de ouro ficam na sua conta do jogo.": "You're charged through the App Store, with your Apple ID's payment method. The gold bars stay in your game account.",
+  "A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela App Store.": "The shop's currency: characters, auras, forge stones and gifts. Purchases are made through the App Store."
 } });

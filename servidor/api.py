@@ -69,6 +69,7 @@ from mestre import FRASE_SO_MESTRE, MestreMixin
 from pagamento import ESQUEMA_PAGAMENTO, MercadoPago, PagamentoMixin, base_de_prova, liga_conferencia
 from anuncio import ESQUEMA_ANUNCIO, Anuncios, AnuncioMixin
 from pagamento_play import ESQUEMA_PLAY, GooglePlay, PagamentoPlayMixin, liga_varredura
+from pagamento_apple import ESQUEMA_APPLE, LojaApple, PagamentoAppleMixin   # 26/10: a compra pela Apple (iPhone)
 from comum import le_consulta   # a consulta da URL (?id=, ?data.id=): o painel do Mestre e o aviso do Mercado Pago
 from guilda import ESQUEMA_GUILDA, GuildaMixin   # 11/09: a guilda no servidor (antes morava em cada navegador)
 from amigos import ESQUEMA_AMIGOS, AmigosMixin   # 13/09: amigos e inimigos da conta
@@ -358,6 +359,11 @@ ROTAS = {
     # 04/10: as barras compradas pela Google Play DENTRO do aplicativo (pagamento_play.py); a web segue no Mercado Pago
     ('GET',  '/api/pagamento/play'):         ('play_ver', True),
     ('POST', '/api/pagamento/play'):         ('play_compra', True),
+    # 26/10: as barras compradas pela APPLE dentro do aplicativo de iPhone (pagamento_apple.py). O aviso é SEM
+    # conta (quem chama é a Apple, o App Store Server Notifications V2): a assinatura dela é a porta
+    ('GET',  '/api/pagamento/apple'):        ('apple_ver', True),
+    ('POST', '/api/pagamento/apple'):        ('apple_compra', True),
+    ('POST', '/api/pagamento/apple/aviso'):  ('apple_aviso', False),
     # 06/10: o anúncio premiado do aplicativo (anuncio.py), só para quem ENTRA na área e toca no botão.
     # O prêmio é SEM conta (quem chama é a Google): a assinatura dela é a porta
     ('GET',  '/api/anuncio'):                ('anuncio_ver', True),
@@ -846,7 +852,7 @@ def versao_da_regra():
         return '0'
 
 
-class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
+class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin, PagamentoAppleMixin, AnuncioMixin, GuildaMixin, SalasMixin, GrupoMixin, MercadoMixin,
           AmigosMixin, ArenaMixin, GuerraMixin, SupremoMixin, PrivacidadeMixin, RegistrosMixin, ModeracaoMixin,
           TrilhaMixin, DiarioMixin, TorneioMixin, EventosUsoMixin, ConvitesMixin):   # 07/10: a trilha da temporada; 08/10: o prêmio diário; 10/10: o torneio; 15/10: os eventos de uso
     """Uma conexão SQLite só, guardada por uma tranca. O SQLite serializa as
@@ -858,7 +864,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
     e os pacotes pagos (pagamento.py) entram como mixins: as rotas deles são
     métodos deste mesmo objeto, com a mesma conexão e a mesma tranca."""
 
-    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None, anuncios=None):
+    def __init__(self, caminho_banco, correio=None, mp=None, juiz=None, play=None, anuncios=None, apple=None):
         pasta = os.path.dirname(os.path.abspath(caminho_banco))
         self.loja_aberta = loja_aberta_do_ambiente()      # 25/10: SOTERRA_LOJA=0 fecha a loja (loja.py)
         # 09/10: A CAIXA-PRETA — toda sala que o juiz recusa (422: divergiu, lance fora da vez…) deixa o pedido
@@ -879,6 +885,7 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # Fase C: só tabelas novas (e um índice) — o rolling update segue seguro
         self.con.executescript(ESQUEMA_CONTA + ESQUEMA_LOJA + ESQUEMA_PAGAMENTO)   # a loja antes: o pagamento a cita
         self.con.executescript(ESQUEMA_PLAY)     # 04/10: a compra pela Google Play (pagamento_play.py) — só tabela nova
+        self.con.executescript(ESQUEMA_APPLE)    # 26/10: a compra pela Apple (pagamento_apple.py) — idem
         self.con.executescript(ESQUEMA_ANUNCIO)  # 06/10: o anúncio premiado do aplicativo (anuncio.py) — idem
         self.con.executescript(ESQUEMA_TRILHA)   # 07/10: a trilha da temporada (trilha.py) — idem
         self.con.executescript(ESQUEMA_DIARIO)   # 08/10: o prêmio diário (premio_diario.py) — idem
@@ -912,6 +919,9 @@ class Api(ContaMixin, LojaMixin, MestreMixin, PagamentoMixin, PagamentoPlayMixin
         # a Google Play (pagamento_play.py): a compra de barras DENTRO do aplicativo. Sem a conta de serviço,
         # desligada: as rotas dela respondem 503 e o resto funciona igual
         self.play = play if play is not None else GooglePlay()
+        # 26/10: a Apple (pagamento_apple.py): a compra de barras DENTRO do aplicativo de iPhone. Sem SOTERRA_APPLE=1,
+        # desligada: as rotas dela respondem 503, o catálogo diz `apple: false` e a loja do iPhone segue fechada
+        self.apple = apple if apple is not None else LojaApple()
         # o anúncio premiado (anuncio.py): só credita com a assinatura da Google conferida
         self.anuncios = anuncios if anuncios is not None else Anuncios.do_ambiente()
         # o JUIZ (12/09, juiz_ponte.py): as regras do jogo em Node. Sem ele, as rotas
@@ -2093,6 +2103,9 @@ if __name__ == '__main__':
     ap.add_argument("--play-api", metavar="URL", default=None,
                     help="SÓ PARA AS PROVAS: a Google Play de mentira (tests/play_falso.py), "
                          "http://127.0.0.1:PORTA; a credencial continua vindo do ambiente")
+    ap.add_argument("--apple-raiz", metavar="ARQ", default=None,
+                    help="SÓ PARA AS PROVAS: o PEM de uma raiz de mentira (tests/apple_falsa.py) no lugar da raiz "
+                         "da Apple; a assinatura das transações continua sendo conferida")
     ap.add_argument("--anuncio-chaves", metavar="ARQ", default=None,
                     help="SÓ PARA AS PROVAS: as chaves públicas do AdMob saem deste arquivo (o formato do "
                          "verifier-keys.json) em vez da Google; a assinatura continua sendo conferida")
@@ -2112,6 +2125,12 @@ if __name__ == '__main__':
     log.info("pagamento: %s", mp.descricao())         # nunca o token nem a assinatura
     play = GooglePlay.do_ambiente(base=base_play)
     log.info("pagamento: %s", play.descricao())       # nunca a chave da conta de serviço
+    raiz_apple = None
+    if args.apple_raiz:
+        with open(args.apple_raiz, encoding='ascii') as f:
+            raiz_apple = f.read()
+    apple = LojaApple.do_ambiente(raiz=raiz_apple)
+    log.info("pagamento: %s", apple.descricao())      # 26/10: a compra pela Apple (sem segredo nenhum)
     anuncios = Anuncios.do_ambiente(arquivo=args.anuncio_chaves)
     log.info("anúncio: %s", anuncios.descricao())
     juiz = Juiz(args.juiz)
@@ -2120,7 +2139,7 @@ if __name__ == '__main__':
     else:
         log.warning("juiz: desligado — autoridade DESLIGADA: o save do cliente vale inteiro e as rotas "
                     "conferidas (sala, op) respondem 503. Em produção, suba com --juiz.")
-    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play, anuncios=anuncios)
+    Atendente.api = Api(args.banco, correio=correio, mp=mp, juiz=juiz, play=play, anuncios=anuncios, apple=apple)
     log.info("loja: %s", "aberta" if Atendente.api.loja_aberta
              else "FECHADA (SOTERRA_LOJA=0): nada se compra; entregas e pagamentos já feitos seguem")
     liga_varredura(Atendente.api)                     # os reembolsos da Google Play, de 6 em 6 h (se ligada)

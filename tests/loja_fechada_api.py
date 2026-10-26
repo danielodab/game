@@ -53,7 +53,8 @@ class ProvaDaRegra(unittest.TestCase):
         self.assertFalse(loja.loja_aberta_do_ambiente({'SOTERRA_LOJA': '0'}))
         self.assertFalse(loja.loja_aberta_do_ambiente({'SOTERRA_LOJA': ' 0 '}))
         self.assertEqual(loja.ROTAS_DA_LOJA_FECHADA,
-                         frozenset(('loja_comprar', 'loja_presentear', 'pagamento_pacote', 'play_ver')))
+                         frozenset(('loja_comprar', 'loja_presentear', 'pagamento_pacote', 'play_ver',
+                                    'apple_ver')))       # 26/10: a compra pela Apple (pagamento_apple.py)
 
 
 class ProvaDaLojaFechada(unittest.TestCase):

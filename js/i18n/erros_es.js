@@ -724,5 +724,7 @@ JOGO.I18n.registra('es', { erros: {
   "Vinténs do Torneio da Arena": "Vintenes del Torneo de la Arena",
   "Torneio da Arena": "Torneo de la Arena",
   "Campeão da Arena": "Campeón de la Arena",
-  "a loja abre em breve": "la tienda abre pronto"
+  "a loja abre em breve": "la tienda abre pronto",
+  "a compra pela App Store chega em breve": "la compra por la App Store llega pronto",
+  "a App Store não reconhece essa compra": "la App Store no reconoce esa compra"
 } });

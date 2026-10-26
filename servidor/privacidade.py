@@ -506,6 +506,10 @@ class PrivacidadeMixin:
             'compras_google_play': self._lista("SELECT pacote, barras, centavos, estado, teste, criado_em, creditado_em, "
                                                "estornado_em FROM pagamentos_play WHERE conta_id = ? ORDER BY id DESC",
                                                (cid,)),
+            # 26/10: as compras pela Apple no iPhone (sem o transactionId: é a chave da compra)
+            'compras_app_store': self._lista("SELECT pacote, barras, centavos, estado, teste, criado_em, creditado_em, "
+                                             "estornado_em FROM pagamentos_apple WHERE conta_id = ? ORDER BY id DESC",
+                                             (cid,)),
             # 06/10: os prêmios do anúncio premiado do aplicativo (anuncio.py), sem o bilhete nem a transação da Google
             'premios_de_anuncio': self._lista("SELECT tipo, qtd, criado_em FROM propaganda_premios WHERE conta_id = ? "
                                               "ORDER BY id DESC", (cid,)),

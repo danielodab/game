@@ -80,12 +80,27 @@ var JOGO = (typeof window !== 'undefined')
    * resposta é sempre falsa, e o jogo segue exatamente como era.
    *   sair     fechar o aplicativo pelo "Sair do jogo": no iPhone o App.exitApp não existe (e a Apple não quer
    *            aplicativo que se fecha sozinho; quem fecha é o gesto do sistema)
-   *   compra   comprar barras de ouro: no iPhone só pela compra da Apple, que ainda não existe — a loja fica
-   *            fechada (js/core/loja.js), seja qual for o SOTERRA_LOJA do servidor
+   *   compra   comprar barras de ouro: no iPhone só pela compra da Apple — falta até o servidor dizer que ela
+   *            está ligada (26/10: `apple: true` no catálogo e na vitrine, servidor/pagamento_apple.py; ver
+   *            M.appleLigada). Faltando, a loja fica fechada (js/core/loja.js), seja qual for o SOTERRA_LOJA
    *   anuncio  "Ganhar prêmios": o plugin de anúncio não entra no iPhone (o includePlugins do capacitor.config.json)
    * A mesma lista mora no site/site.js (SITE.FALTA_NO_IPHONE): a prova tests/app_casca.js cobra que batem. */
   M.FALTA_NO_IPHONE = { sair: true, compra: true, anuncio: true };
-  M.falta = function (recurso) { return M.ios() && M.FALTA_NO_IPHONE[recurso] === true; };
+  /* 26/10 — A COMPRA DA APPLE (servidor/pagamento_apple.py). O servidor diz `apple: true` quando ela está ligada; a
+   * resposta fica no aparelho (CHAVE_APPLE), para a próxima abertura já nascer certa. Quem grava é a vitrine do
+   * jogo (js/core/loja.js) e o catálogo da loja do site (site/site.js lê e grava a MESMA chave). Sem resposta
+   * nenhuma ainda, a compra falta: a loja do iPhone nasce fechada, como sempre foi. */
+  M.CHAVE_APPLE = 'soterra-apple-loja';
+  M.appleLigada = function (f) {
+    if (f !== undefined) {
+      try { if (f) window.localStorage.setItem(M.CHAVE_APPLE, '1'); else window.localStorage.removeItem(M.CHAVE_APPLE); } catch (e) {}
+    }
+    try { return window.localStorage.getItem(M.CHAVE_APPLE) === '1'; } catch (e2) { return false; }
+  };
+  M.falta = function (recurso) {
+    if (!M.ios() || M.FALTA_NO_IPHONE[recurso] !== true) return false;
+    return !(recurso === 'compra' && M.appleLigada());
+  };
   /* o nome da loja do aparelho, para os textos que a citam */
   M.loja = function () { return M.ios() ? 'App Store' : 'Google Play'; };
   // as páginas do site abertas na aba (um quadro, onde o Capacitor do iPhone não entra) leem a plataforma daqui;

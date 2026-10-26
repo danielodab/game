@@ -113,6 +113,33 @@ function resposta(fechada) {
   check('IPHONE: a vitrine fechada também fecha, e guarda a resposta como sempre',
         L.fechada() === true && w._classes.has('loja-fechada') && cofreI[L.CHAVE_FECHADA] === '1');
 
+  // ---- 26/10: A COMPRA DA APPLE — a vitrine diz `apple`, e a loja do iPhone abre (o JOGO.Mobile de mentira lê e
+  // grava a MESMA chave do js/mobile.js; a regra dele está provada em tests/app_casca.js)
+  let cofreAp = {};
+  const IPHONE_APPLE = {
+    appleLigada(f) { if (f !== undefined) { if (f) cofreAp['soterra-apple-loja'] = '1'; else delete cofreAp['soterra-apple-loja']; }
+                     return cofreAp['soterra-apple-loja'] === '1'; },
+    falta(r) { return r === 'compra' ? !this.appleLigada() : (r === 'sair' || r === 'anuncio'); }
+  };
+  w = janela(cofreAp, IPHONE_APPLE);
+  L = w.JOGO.Loja;
+  check('IPHONE (26/10): sem resposta da Apple ainda, nasce fechada', L.fechada() === true && w._classes.has('loja-fechada'));
+  L._semRede = () => Object.assign(resposta(false), { apple: true });
+  await L.vitrine(true);
+  check('IPHONE: a vitrine com `apple: true` abre a loja — a chave gravada e a classe tirada',
+        L.fechada() === false && !w._classes.has('loja-fechada') && cofreAp['soterra-apple-loja'] === '1');
+  w = janela(cofreAp, IPHONE_APPLE);
+  check('IPHONE: a próxima abertura já nasce aberta (a chave ficou)', w.JOGO.Loja.fechada() === false && !w._classes.has('loja-fechada'));
+  L = w.JOGO.Loja;
+  L._semRede = () => Object.assign(resposta(false), { apple: false });
+  await L.vitrine(true);
+  check('IPHONE: a vitrine com `apple: false` fecha de novo', L.fechada() === true && w._classes.has('loja-fechada') &&
+        !('soterra-apple-loja' in cofreAp));
+  L._semRede = () => Object.assign(resposta(true), { apple: true });
+  await L.vitrine(true);
+  check('IPHONE: com a Apple ligada mas a loja FECHADA no servidor (SOTERRA_LOJA=0), fica fechada', L.fechada() === true &&
+        w._classes.has('loja-fechada'));
+
   let cofreA = {};
   w = janela(cofreA, ANDROID);
   L = w.JOGO.Loja;

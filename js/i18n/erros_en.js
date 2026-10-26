@@ -724,5 +724,7 @@ JOGO.I18n.registra('en', { erros: {
   "Vinténs do Torneio da Arena": "Coppers from the Arena Tournament",
   "Torneio da Arena": "Arena Tournament",
   "Campeão da Arena": "Arena Champion",
-  "a loja abre em breve": "the shop opens soon"
+  "a loja abre em breve": "the shop opens soon",
+  "a compra pela App Store chega em breve": "purchase through the App Store is coming soon",
+  "a App Store não reconhece essa compra": "the App Store doesn't recognize that purchase"
 } });

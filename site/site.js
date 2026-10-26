@@ -139,7 +139,17 @@
   /* o que o iPhone ainda não tem — a MESMA lista do JOGO.Mobile.FALTA_NO_IPHONE (a prova tests/app_casca.js cobra);
    * no Android e na web nunca falta nada */
   SITE.FALTA_NO_IPHONE = { sair: true, compra: true, anuncio: true };
-  SITE.faltaNoAparelho = function (recurso) { return SITE.plataforma() === 'ios' && SITE.FALTA_NO_IPHONE[recurso] === true; };
+  /* 26/10: a compra da Apple ligada no servidor (`apple: true` no catálogo; servidor/pagamento_apple.py) tira a
+   * `compra` da falta — a MESMA chave do JOGO.Mobile.appleLigada (js/mobile.js), gravada aqui pela loja do site */
+  SITE.CHAVE_APPLE = 'soterra-apple-loja';
+  SITE.appleLigada = function (f) {
+    if (f !== undefined) gravaLocal(SITE.CHAVE_APPLE, f ? '1' : null);
+    return leLocal(SITE.CHAVE_APPLE) === '1';
+  };
+  SITE.faltaNoAparelho = function (recurso) {
+    if (SITE.plataforma() !== 'ios' || SITE.FALTA_NO_IPHONE[recurso] !== true) return false;
+    return !(recurso === 'compra' && SITE.appleLigada());
+  };
 
   /* 24/10 — O APLICATIVO NÃO É O SITE (o dono: "preciso que meu app não seja o site ao fechar o jogo — seja
    * somente página de login. O site é a parte se o usuário quiser navegar: dentro do jogo deve ter um ícone de
@@ -228,7 +238,7 @@
    * jogo. Com ela, o <html> leva `loja-fechada` e o link "Loja" do menu do topo some (site.css); a página da loja
    * diz que abre em breve. Sem argumento, lê; com true/false, grava e acerta a classe. */
   SITE.CHAVE_LOJA_FECHADA = 'soterra-loja-fechada';
-  /* 25/10: no iPhone a loja fica fechada SEMPRE, até a compra da Apple existir (SITE.faltaNoAparelho('compra');
+  /* 25/10: no iPhone a loja fica fechada até a compra da Apple estar ligada (SITE.faltaNoAparelho('compra');
    * docs/APP_STORE.md §8.2). A chave guardada continua sendo só a resposta do servidor. */
   SITE.lojaFechada = function (f) {
     var noAparelho = SITE.faltaNoAparelho('compra');

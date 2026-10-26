@@ -410,10 +410,15 @@ passadas as 24 h, aperta **conferir no Mercado Pago** na ficha e ele entra.
 | `SOTERRA_MP_SEGREDO` | a assinatura do webhook | a do modo produtivo (confira se é a mesma) |
 | `SOTERRA_ENDERECO` | `https://soterra.viidoo.io` | o mesmo |
 | `SOTERRA_MP_TESTE` | `1` | **apagada** |
+| `SOTERRA_APPLE` (26/10) | apagada (a loja do iPhone fechada) | `1` quando a versão 1.2.0 do iPhone for à revisão (`docs/APP_STORE.md` §8.2.1) |
+| `SOTERRA_APPLE_SANDBOX` | apagada | **apagada** (o revisor da Apple compra no Sandbox) |
 
 Depois do Redeploy, a Runtime Logs tem de mostrar `pagamento: Mercado Pago
 (produção), volta em https://soterra.viidoo.io` e `pagamento: Google Play
-ligada (br.com.soterra.jogo…)`, sem "teste". Antes de vender pela web, o site
+ligada (br.com.soterra.jogo…)`, sem "teste" — e, com a Apple ligada, `pagamento: App
+Store ligada (br.com.soterra.jogo, aceita Sandbox)`. A compra pela Apple não tem
+segredo: confere a assinatura dela com a chave pública da Apple
+(`servidor/pagamento_apple.py`). Antes de vender pela web, o site
 tem de mostrar o CPF ou o CNPJ de quem vende (o decreto do comércio
 eletrônico; `docs/GOOGLE_PLAY.md` §7, item 6).
 

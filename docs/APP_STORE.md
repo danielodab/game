@@ -475,6 +475,8 @@ account plays on iPhone and on the web. Please sign in with the demo account abo
   no connection.
 ```
 
+Na versão **1.2.0** (a compra pela Apple), a linha das compras muda: 8.2.1, passo 6.
+
 Se a Apple perguntar como o jogo funciona por dentro, a resposta está na 8.1.
 
 ### 6.6 Os outros campos
@@ -521,7 +523,7 @@ Tamanhos: **P** = até meio dia de trabalho com as provas; **M** = 1 a 2 dias;
 | # | risco | diretriz | chance de recusa | o que fazer | tamanho | quando |
 |---|---|---|---|---|---|---|
 | 1 | "é só um site embrulhado" — o jogo vem do servidor | 4.2 e 2.5.2 | **alta** | 8.1 | P (notas) · M (recursos nativos) · G (o jogo dentro do app) | antes do 1º envio: as notas; o resto se recusarem |
-| 2 | compra de item digital por fora da Apple, e "Google Play" na tela | 3.1.1, 3.1.3(b), 2.3.10 | **baixa** desde 25/10: a loja fica fechada no iPhone | 8.2 | ~~P (loja fechada no iPhone)~~ **feito** · G (a compra pela Apple) | o G antes de abrir a loja no iPhone |
+| 2 | compra de item digital por fora da Apple, e "Google Play" na tela | 3.1.1, 3.1.3(b), 2.3.10 | **baixa**: a loja fica fechada no iPhone até a compra da Apple ligar | 8.2 | ~~P (loja fechada no iPhone)~~ **feito** · ~~G (a compra pela Apple)~~ **feito em 26/10** — falta a sua parte no App Store Connect (8.2.1) | a versão 1.2.0 |
 | 3 | partes do jogo que só sabem de Android ("Sair do jogo" que não sai, anúncio que manda à Play Store) | 2.1 e 2.3.10 | **baixa** desde 25/10 | 8.7 | ~~M~~ **feito** | — |
 | 4 | caixa de recompensa (o bônus sorteado da Gema, que se compra em fragmentos) | 3.1.1 e a classificação | média (e 18 anos no Brasil se marcada) | 8.5 | P (mostrar as chances) | antes do 1º envio |
 | 5 | excluir a conta dentro do app | 5.1.1(v) | baixa — **já existe** | 8.3 | — | — |
@@ -586,34 +588,79 @@ Google Play, nem link para pagar fora. E a 3.1.3(b) diz que barras compradas na
 web ou no Android só podem ser **usadas** no iPhone se as barras **também** forem
 vendidas ali pela Apple.
 
-**O que acontece hoje no iPhone.**
+**Feito em 25/10:** a loja fica **fechada no iPhone** até a compra da Apple
+existir — independente do `SOTERRA_LOJA`: o `L.fechada()` do `js/core/loja.js` e
+o `SITE.lojaFechada()` da loja do site respondem "fechada" no iPhone, e a compra
+pela loja do aparelho (`js/core/compra_play.js`) não liga nada lá (8.7).
 
-- O `SITE.noApp()` e o `JOGO.Mobile.app()` já são verdadeiros no iPhone (o
-  Capacitor diz "nativo" nos dois sistemas), então o **Mercado Pago não aparece** — certo.
-- No lugar dele entraria a "compra pela Google Play" (`js/core/compra_play.js`).
-  O plugin dela (`@capgo/native-purchases`) **funciona no iPhone**, mas lá fala com
-  a loja da **Apple**: pediria os pacotes `barras_50`… à Apple, não acharia nada e
-  diria **"Os pacotes ainda não estão disponíveis na Google Play"**.
-- **Hoje a loja está fechada para todos** (`SOTERRA_LOJA=0`): nada disso aparece.
-  O risco é o dia em que ela abrir para o Android e a web.
+**Feito em 26/10 — A COMPRA PELA APPLE.** As mesmas barras, os mesmos quatro
+pacotes, vendidos pela Apple. A loja do iPhone **só abre quando o servidor diz
+que ela está ligada** (`SOTERRA_APPLE=1`): desligada, tudo segue como na 1.1.0.
 
-**Feito em 25/10:** a loja fica **fechada no iPhone**, sempre, até a compra da
-Apple existir — independente do `SOTERRA_LOJA`: o `L.fechada()` do
-`js/core/loja.js` e o `SITE.lojaFechada()` da loja do site aberta na aba
-respondem "fechada" no iPhone, e a compra pela Play (`js/core/compra_play.js`) não
-liga nada lá — nem a retomada na abertura (8.7). Com a loja fechada no mundo inteiro, ninguém compra
-barras em lugar nenhum, e a 3.1.3(b) fica de pé. **Quando a loja abrir no Android
-e na web, a compra da Apple tem de estar pronta junto** — senão quem joga no
-iPhone gastaria barras compradas fora, sem poder comprá-las no iPhone.
+| parte | o que é |
+|---|---|
+| o servidor (`servidor/pagamento_apple.py`) | confere a transação **assinada pela Apple** (StoreKit 2, o `jwsRepresentation`) com a raiz da Apple gravada no código (*Apple Root CA - G3*) — **sem segredo nenhum**, sem chave `.p8`: a assinatura se confere com a chave pública da Apple. Credita **uma vez** por `transactionId`, na conta do UUID (`appAccountToken`) que o aplicativo passou à Apple; o teto de R$ 400 em 24 h soma a Apple, a Google e o Mercado Pago; a conta banida não recebe; a compra de teste (o Sandbox: o revisor, o TestFlight, os testadores) credita **marcada como teste**. Rotas: `GET`/`POST /api/pagamento/apple` e o aviso da Apple, `POST /api/pagamento/apple/aviso` (*App Store Server Notifications V2*): a compra avulsa (`ONE_TIME_CHARGE`) credita **mesmo sem o aplicativo mandar**, e o reembolso (`REFUND`, `REVOKE`) tira as barras, com o "faltou" no painel do Mestre |
+| o jogo (`js/core/compra_play.js`) | a mesma tela da Google: no iPhone, a rota da Apple, o UUID da conta, a transação assinada ao servidor e o encerramento (o `finish`) **só com `encerrar: true`**. A transação que o plugin encerra sozinho na abertura (`transactionUpdated`) vai para uma fila no aparelho até o servidor responder. Os textos dizem App Store e Apple ID |
+| a loja no iPhone | o catálogo e a vitrine dizem `apple: true/false`; a resposta fica no aparelho (`soterra-apple-loja`) e o `JOGO.Mobile.falta('compra')` (`js/mobile.js`) e o `SITE.faltaNoAparelho('compra')` (`site/site.js`) acompanham |
+| o aplicativo (versão **1.2.0**) | o `Info.plist` ganha `SKIncludeConsumableInAppPurchaseHistory`: do iOS 18 em diante a compra encerrada continua no histórico do aparelho, e a retomada a acha (o servidor não credita duas vezes). A compra **também funciona no build 1.1.0** — o plugin já está nele |
+| os Termos e a Privacidade | a Apple como meio de pagamento; o reembolso da compra no iPhone é pedido à Apple; a Google Play e a App Store em "com quem dividimos" e na transferência internacional. **Confira com o advogado** se isso pede versão nova dos termos (`REVISAO_JURIDICA.md`) |
+| as provas | `tests/pagamento_apple_api.py` (12), com a Apple de mentira `tests/apple_falsa.py`: uma cadeia de certificados inventada, no formato da de verdade, e o servidor sobe com `--apple-raiz`; `tests/compra_apple.html` (21): a tela no iPhone, com um plugin de mentira na forma do iOS |
 
-**A compra pela Apple — o que fazer quando for a hora** (não foi feito):
+#### 8.2.1 O passo a passo no App Store Connect (você)
 
-| parte | o que é | tamanho |
-|---|---|---|
-| App Store Connect | o acordo de apps pagos, o banco e os impostos (1.3); os quatro produtos **consumíveis** com os mesmos IDs da Play (`barras_50`, `barras_280`, `barras_600`, `barras_1250` — a Apple aceita o sublinhado; o ID não se reaproveita nunca); os preços nas faixas da Apple mais próximas de R$ 4,90 / 19,90 / 39,90 / 79,90; uma **chave de compra no app** (`.p8`, em *Usuários e acesso → Integrações → Compra no app*) para o servidor conferir | você, 1 hora + a espera do contrato |
-| o jogo (`js/core/compra_play.js` vira a compra **da loja do aparelho**) | o mesmo caminho de hoje — pede, o servidor confere e credita, só então a compra é encerrada — com três diferenças no iPhone: o recibo é o `transactionId` mais a assinatura da Apple (`jwsRepresentation`), não o `purchaseToken`; o código da conta (`appAccountToken`) **tem de ser um UUID** (hoje é um hmac); e "encerrar" a compra é o `acknowledgePurchase` do plugin (o `finish` da Apple). Os textos dizem App Store. A retomada (compra paga e não confirmada) segue igual: a Apple entrega de novo a transação não encerrada | M |
-| o servidor (um `servidor/pagamento_apple.py` ao lado do `pagamento_play.py`) | conferir a transação assinada pela Apple (a cadeia de certificados até a raiz da Apple; a biblioteca `cryptography` já está no `Dockerfile`, por causa do AdMob) ou perguntar à **App Store Server API** com a chave do servidor; o app, o produto, o ambiente (as de teste, *Sandbox*, só com uma `SOTERRA_APPLE_TESTE=1`), a conta; creditar **uma vez** por transação; o teto de R$ 400 em 24 h somando tudo; o **reembolso** pelos avisos da Apple (*App Store Server Notifications V2*: `REFUND`, `REVOKE`) numa rota nova, com o mesmo "faltou" no painel do Mestre. As provas com uma Apple de mentira, como as da Google | G |
-| os Termos e a Privacidade | a Apple como meio de pagamento; o reembolso é pedido à Apple | P + advogado |
+1. **O acordo de apps pagos** (1.3): *Negócios* → **Acordos** → *Apps pagos* →
+   aceite, cadastre a **conta bancária** e preencha os **impostos** (pessoa
+   física no Brasil: o W-8BEN). Espere ficar **Ativo** — sem ele os pacotes não
+   aparecem nem no teste. Aproveite e entre no **Programa para Pequenas
+   Empresas** (1.3).
+2. **Os quatro pacotes**: o app → **Monetização → Compras dentro do app** → **+**
+   → tipo **Consumível**:
+
+   | nome de referência | ID do produto | preço (Brasil) |
+   |---|---|---|
+   | Bolsa de 50 barras de ouro | `barras_50` | R$ 4,90 |
+   | Saco de 280 barras de ouro | `barras_280` | R$ 19,90 |
+   | Arca de 600 barras de ouro | `barras_600` | R$ 39,90 |
+   | Tesouro de 1.250 barras de ouro | `barras_1250` | R$ 79,90 |
+
+   O ID tem de ser **exatamente** esse (o mesmo da Google Play; o servidor recusa
+   outro) e **nunca se reaproveita**. Em cada um: o **preço** (o Brasil como país
+   base, na faixa da Apple mais próxima), a **disponibilidade** (todos os
+   países), a **localização** em Português (Brasil) — o nome de exibição ("50
+   barras de ouro") e a descrição ("Barras de ouro para a loja do SOTERRA") — e
+   as **informações da revisão**: uma captura da tela de compra no jogo (tire no
+   passo 5) e a nota `Consumable: gold bars, the in-game shop currency.` Cada um
+   fica **Pronto para enviar**.
+3. **Os avisos da Apple ao servidor**: o app → **Informações do app** →
+   **Notificações do servidor da App Store** → em **Produção** e em **Sandbox**,
+   `https://soterra.viidoo.io/api/pagamento/apple/aviso`, **Versão 2**. O botão de
+   notificação de teste faz aparecer `apple: aviso TEST (Sandbox)` na Runtime Logs.
+4. **No Coolify**: `SOTERRA_APPLE` = `1` (Runtime) e **Redeploy**. O log diz
+   `pagamento: App Store ligada (br.com.soterra.jogo, aceita Sandbox)`. Isso **abre
+   a loja no iPhone**; até os pacotes serem aprovados, a tela diz "Os pacotes ainda
+   não estão disponíveis na App Store". Ligue **perto do envio da 1.2.0**: o
+   revisor precisa ver e comprar os pacotes.
+5. **Testar no TestFlight**: **Usuários e acesso → Sandbox → Testadores** → crie
+   um (um e-mail que não seja Apple ID). No iPhone, *Ajustes → App Store → Conta
+   Sandbox*, entre com ele e abra o SOTERRA do TestFlight. A compra é de mentira e
+   as barras entram marcadas como teste. Tire aqui a captura do passo 2.
+6. **A versão 1.2.0**: o Codemagic gera o build (seção 3); em App Store Connect,
+   **+ Versão** 1.2.0, escolha o build e, em **Compras dentro do app e
+   assinaturas**, marque os quatro pacotes — **a primeira compra tem de ir junto
+   com uma versão**. Nas notas para o revisor (6.5), troque a linha "This version
+   has no in-app purchases and no ads." por:
+
+   ```
+   - Gold bar packs are consumable In-App Purchases (barras_50, barras_280, barras_600, barras_1250).
+     To buy: open the Shop ("Loja" button in the plaza) or Menu > Settings > "Comprar barras de ouro".
+     Gold bars are the in-game shop currency; they can also be earned by playing. No ads in this version.
+   ```
+
+   E envie para a revisão.
+
+**Não use `SOTERRA_APPLE_SANDBOX=0`**: a Apple revisa cada versão nova comprando
+no Sandbox, e com ela a compra do revisor falharia. Só entra no Sandbox quem você
+convida (os testadores e o TestFlight).
 
 **O que a Apple cobra no Brasil.** Desde junho de 2026, por um acordo com o CADE,
 o Brasil tem regra própria: a comissão é de **21%**, ou **10%** para quem está no
@@ -807,9 +854,9 @@ Android segue igual e o iPhone já abre certo.
 | `package.json` · `package-lock.json` | `@capacitor/ios` **8.5.2**, a mesma do core e do android (a prova cobra); os atalhos `npm run sync:ios` e `npm run icones:ios` |
 | `capacitor.config.json` | `server.allowNavigation` (8.8); a seção `ios`: o fundo preto, `contentInset: "never"` (o jogo cuida da área segura), `preferredContentMode: "mobile"`, sem pré-visualização de link no toque longo, e o `includePlugins` (todos os plugins menos o AdMob, 8.6) |
 | `ios/` | o projeto do Xcode, **versionado** como o `android/` (abaixo) |
-| `ios/App/App/Info.plist` | só deitado; sem barra de status; os três idiomas (as perguntas do sistema saem na língua do jogador); `ITSAppUsesNonExemptEncryption = false`; a frase da Fotos (sem ela, "Salvar imagem" do compartilhar **fecha o aplicativo**) |
+| `ios/App/App/Info.plist` | só deitado; sem barra de status; os três idiomas (as perguntas do sistema saem na língua do jogador); `ITSAppUsesNonExemptEncryption = false`; a frase da Fotos (sem ela, "Salvar imagem" do compartilhar **fecha o aplicativo**); `SKIncludeConsumableInAppPurchaseHistory` (26/10, 8.2) |
 | `ios/App/App/PrivacyInfo.xcprivacy` | o manifesto de privacidade que a Apple exige desde 2024: o UserDefaults (CA92.1) que o Capacitor usa, sem rastreamento, e os dados da 6.4 |
-| `ios/App/App.xcodeproj/project.pbxproj` | `br.com.soterra.jogo`; **só iPhone** (`TARGETED_DEVICE_FAMILY = 1`: sem capturas e revisão de iPad); versão **1.1.0**; o manifesto dentro do app; iOS mínimo 15 |
+| `ios/App/App.xcodeproj/project.pbxproj` | `br.com.soterra.jogo`; **só iPhone** (`TARGETED_DEVICE_FAMILY = 1`: sem capturas e revisão de iPad); versão **1.2.0** (26/10: a compra pela Apple); o manifesto dentro do app; iOS mínimo 15 |
 | `codemagic.yaml` | a compilação na nuvem (seção 2 e 3) — sem segredo nenhum |
 | `tools/icone_app.py --ios` | o ícone e a abertura do iPhone |
 | `tools/empacota_www.py` | a mesma `www/` (a tela "sem conexão", que o iPhone também mostra pelo `errorPath`); passa a conferir o `allowNavigation` |
@@ -845,6 +892,7 @@ número repetido **dentro da mesma versão**.
 | versão | build | gerado em | o que a casca tem |
 |---|---|---|---|
 | 1.1.0 | 1 | 25/10, Codemagic (Xcode 26.6) | o primeiro: o jogo do servidor, os avisos, compartilhar, avaliação, tela acesa; **sem** compra e **sem** anúncio. Compilou, subiu e a Apple processou; o envio automático à revisão do TestFlight **externo** parou por falta das informações de teste (5.2) |
+| 1.2.0 | o Codemagic numera | a gerar | a compra pela Apple (8.2): o `SKIncludeConsumableInAppPurchaseHistory` no `Info.plist`; o resto vem do servidor. Vai à revisão com os quatro pacotes (8.2.1) |
 
 ---
 

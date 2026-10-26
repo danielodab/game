@@ -12141,11 +12141,14 @@ var JOGO = (typeof window !== 'undefined')
 
     /* BARRAS DE OURO PELA GOOGLE PLAY (04/10): só no aplicativo — na web `JOGO.CompraPlay` não é carregado e
      * as barras continuam na loja do site. A Play exige que, dentro do aplicativo, a compra seja pela cobrança dela. */
-    // 25/10: `ligada` é o noApp menos o iPhone, que ainda não tem a compra da Apple (js/core/compra_play.js)
+    // 25/10: `ligada` é o noApp menos o iPhone sem a compra da Apple ligada (js/core/compra_play.js)
     if (JOGO.CompraPlay && (JOGO.CompraPlay.ligada ? JOGO.CompraPlay.ligada() : JOGO.CompraPlay.noApp())) {
       var secBarras = el('section', 'cfg-sec loja-jogo');      // 25/10: some com a loja fechada
       secBarras.appendChild(el('h3', 'bk-tit', tr('Barras de ouro')));
-      secBarras.appendChild(el('p', 'inv-dica', tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.')));
+      var pelaApple = safe(function () { return JOGO.Mobile.ios(); }, false);     // 26/10: a compra da Apple
+      secBarras.appendChild(el('p', 'inv-dica', pelaApple
+        ? tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela App Store.')
+        : tr('A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela Google Play.')));
       secBarras.appendChild(btn(tr('Comprar barras de ouro'), 'btn-ghost btn-block', function () { JOGO.CompraPlay.abre(); }));
       body.appendChild(secBarras);
     }

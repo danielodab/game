@@ -76,6 +76,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import threading
 import time
 import urllib.error
@@ -359,13 +360,20 @@ class PagamentoPlayMixin:
                 'barras': r['barras'], 'estado': estado, 'teste': bool(r['teste']), 'criadoEm': r['criado_em']}
 
     def _play_pago_24h(self, cid, t):
-        """Dentro da tranca: os centavos já creditados à conta em 24 h, pela Play e pelo Mercado Pago."""
+        """Dentro da tranca: os centavos já creditados à conta em 24 h, pela Play, pelo Mercado Pago e (26/10)
+        pela Apple (pagamento_apple.py; a compra de teste, o Sandbox, não conta: não entrou dinheiro)."""
         play = self.con.execute("SELECT COALESCE(SUM(centavos), 0) FROM pagamentos_play WHERE conta_id = ? "
                                 "AND creditado_em > ? AND estornado_em IS NULL", (cid, t - 86400)).fetchone()[0]
         mp = self.con.execute(
             "SELECT COALESCE(SUM(g.centavos), 0) FROM pagamentos_mp m JOIN pagamentos g ON g.id = m.pagamento_id "
             "WHERE g.conta_id = ? AND m.creditado_em > ? AND m.estornado_em IS NULL", (cid, t - 86400)).fetchone()[0]
-        return play + mp
+        try:
+            apple = self.con.execute("SELECT COALESCE(SUM(centavos), 0) FROM pagamentos_apple WHERE conta_id = ? "
+                                     "AND creditado_em > ? AND estornado_em IS NULL AND teste = 0",
+                                     (cid, t - 86400)).fetchone()[0]
+        except sqlite3.OperationalError:        # um banco aberto sem a tabela da Apple (as provas antigas)
+            apple = 0
+        return play + mp + apple
 
     # -- GET /api/pagamento/play: o que o aplicativo pode vender a esta conta -------------------------
     def play_ver(self, conta, corpo):

@@ -189,6 +189,22 @@ check('IPHONE: a marca da plataforma fica na sessão da aba (o site no quadro a 
 check('IPHONE: sem o deviceMemory, a qualidade padrão é a média', M.qualidade() === 'media');
 w = janela({ busca: '?app=1&plataforma=ios' });
 check('?app=1&plataforma=ios finge o iPhone no navegador', w.JOGO.Mobile.plataforma() === 'ios' && w.JOGO.Mobile.falta('compra') === true);
+// 26/10: a compra da Apple ligada no servidor (a vitrine e a loja do site gravam a chave): só a compra deixa de faltar
+w = janela({ capacitor: true, plataforma: 'ios', tela: [932, 430] });
+M = w.JOGO.Mobile;
+M.appleLigada(true);
+check('IPHONE com a compra da Apple ligada (26/10): a compra deixa de faltar; o sair e o anúncio seguem faltando',
+      M.falta('compra') === false && M.falta('sair') === true && M.falta('anuncio') === true &&
+      w.localStorage.getItem('soterra-apple-loja') === '1' && M.CHAVE_APPLE === 'soterra-apple-loja');
+M.appleLigada(false);
+check('IPHONE: desligada de novo, a compra volta a faltar (e a chave sai)',
+      M.falta('compra') === true && w.localStorage.getItem('soterra-apple-loja') === null);
+w = janela({ capacitor: true, plataforma: 'android' });
+w.JOGO.Mobile.appleLigada(true);
+check('ANDROID: a chave da Apple não muda nada (nada falta, com ou sem ela)', nadaFalta(w.JOGO.Mobile));
+check('site.js: a mesma chave e a mesma regra da compra da Apple',
+      fs.readFileSync(path.join(raiz, 'site', 'site.js'), 'utf8').indexOf("SITE.CHAVE_APPLE = 'soterra-apple-loja';") >= 0 &&
+      fs.readFileSync(path.join(raiz, 'site', 'site.js'), 'utf8').indexOf("return !(recurso === 'compra' && SITE.appleLigada());") >= 0);
 
 const SITE_JS = fs.readFileSync(path.join(raiz, 'site', 'site.js'), 'utf8');
 const lista = (fonte, nome) => (new RegExp(nome + ' = (\\{[^}]*\\})').exec(fonte) || [])[1];
@@ -279,11 +295,16 @@ function comCompra(op) {
   let c = comCompra({ capacitor: true, plataforma: 'ios' });
   check('IPHONE: a compra pela Play está no aplicativo (noApp) mas não ligada (ligada falso)',
         c.JOGO.CompraPlay.noApp() === true && c.JOGO.CompraPlay.ligada() === false);
-  check('IPHONE: ao abrir, a compra não fica de olho na volta ao aplicativo', c._ouvintesDaCompra === 0);
+  // 26/10: fica de olho na volta ao aplicativo (a loja pode abrir DEPOIS da carga, quando a vitrine diz que a compra
+  // da Apple está ligada), mas a retomada confere `ligada` na hora: sem a Apple ligada, nada é pedido
+  check('IPHONE: ao abrir, a compra fica de olho na volta ao aplicativo (26/10: a loja pode abrir depois)', c._ouvintesDaCompra === 1);
   const r = await c.JOGO.CompraPlay.retoma(true);
-  check('IPHONE: a retomada não pergunta nada ao servidor nem à loja', r.creditadas === 0 && c.pedidos === 0);
+  check('IPHONE: sem a compra da Apple ligada, a retomada não pergunta nada ao servidor nem à loja', r.creditadas === 0 && c.pedidos === 0);
   await c.JOGO.CompraPlay.prepara();
   check('IPHONE: preparar a tela também não pergunta nada', c.pedidos === 0);
+  c.JOGO.Mobile.appleLigada(true);
+  check('IPHONE com a compra da Apple ligada (26/10): a compra liga', c.JOGO.CompraPlay.ligada() === true &&
+        c.JOGO.CompraPlay.ios() === true);
   c = comCompra({ capacitor: true, plataforma: 'android' });
   check('ANDROID: a compra pela Play segue ligada e de olho na volta ao aplicativo',
         c.JOGO.CompraPlay.ligada() === true && c._ouvintesDaCompra === 1);

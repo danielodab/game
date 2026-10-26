@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SOTERRA — a compra de barras pela Apple dentro do aplicativo de iPhone</title>
+<style>body{margin:0;background:#0f1216;color:#e8eef6;font:12px monospace;padding:10px}
+#summary{padding:6px 10px;border-radius:6px;margin-bottom:8px}
+.allpass{background:#16241b;color:#7fe08a} .fail{background:#3d1414;color:#f77}</style>
+</head>
+<body>
+<!-- 26/10: no APLICATIVO de iPhone as barras de ouro são compradas pela APPLE (servidor/pagamento_apple.py). Aqui o
+     js/core/compra_play.js de verdade roda como iPhone (`?app=1&plataforma=ios`), com um PLUGIN de mentira no lugar do
+     @capgo/native-purchases (a forma que ele tem no iOS: transactionId, jwsRepresentation, acknowledgePurchase,
+     addListener) e um servidor de mentira no lugar de /api/pagamento/apple. O JOGO.Mobile de mentira lê e grava a
+     MESMA chave do js/mobile.js (a regra dele está em tests/app_casca.js). Prova-se:
+       · sem a compra da Apple ligada, nada liga; ligada (a chave), a compra liga e lê a rota da Apple;
+       · a compra abre com o UUID da conta e SEM encerrar sozinha, manda ao servidor SÓ a transação assinada ({jws}) e
+         só ENCERRA (acknowledgePurchase) depois que o servidor manda (`encerrar: true`) — nunca o consumePurchase;
+       · servidor fora ou teto: não encerra, e a transação fica na fila do aparelho; a retomada a manda depois;
+       · a transação que o plugin encerrou sozinho na abertura ('transactionUpdated') vai ao servidor e avisa;
+       · a já resolvida não é mandada de novo; o cancelamento; os textos dizem App Store e Apple ID.
+     O servidor de verdade (a assinatura conferida, o crédito único) está em tests/pagamento_apple_api.py. -->
+<div id="summary">rodando…</div>
+<div id="log"></div>
+<script>
+  history.replaceState(null, '', location.pathname + '?app=1&plataforma=ios');
+  try { localStorage.removeItem('soterra-apple-loja'); localStorage.removeItem('soterra-apple-fila'); localStorage.removeItem('soterra-apple-feitas'); } catch (e) {}
+  var V = '?v=' + Date.now();
+  var UUID = '5b1f2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+  // ---- o servidor de mentira (as rotas do pagamento_apple.py) ----
+  var chamadas = [];
+  var servidor = { modo: 'ok', creditados: {}, saldo: 10, posts: [], gets: 0 };
+  var PACOTES = [['barras-50', 'Bolsa de 50 barras de ouro', 50], ['barras-280', 'Saco de 280 barras de ouro', 280],
+                 ['barras-600', 'Arca de 600 barras de ouro', 600], ['barras-1250', 'Tesouro de 1.250 barras de ouro', 1250]];
+  function apiApple(metodo, corpo) {
+    if (metodo === 'GET') {
+      servidor.gets++;
+      return { ok: true, status: 200, ligado: true, teste: true, conta: UUID, barras: { saldo: servidor.saldo }, compras: [],
+               pacotes: PACOTES.map(function (p) { return { id: p[0], produto: p[0].replace('-', '_'), nome: p[1], barras: p[2], cabe: true }; }) };
+    }
+    chamadas.push('servidor:POST');
+    servidor.posts.push(corpo);
+    if (servidor.modo === 'fora') return { ok: false, status: 0 };
+    if (servidor.modo === 'teto') return { ok: true, status: 200, creditado: false, encerrar: false, estado: 'teto', erro: 'o teto de pacotes é R$ 400,00 por dia' };
+    var tx = JSON.parse(atob(String(corpo.jws).split('.')[1]));      // o servidor de verdade confere a assinatura
+    if (servidor.creditados[tx.transactionId]) return { ok: true, status: 200, creditado: false, repetido: true, encerrar: true, estado: 'creditada', barras: { saldo: servidor.saldo } };
+    var qtd = Number(String(tx.productId).replace(/\D/g, ''));
+    servidor.creditados[tx.transactionId] = true;
+    servidor.saldo += qtd;
+    return { ok: true, status: 201, creditado: true, encerrar: true, estado: 'creditada', barras: { saldo: servidor.saldo },
+             compra: { id: 1, pacote: tx.productId.replace('_', '-'), barras: qtd } };
+  }
+
+  // ---- o plugin de mentira (a forma do @capgo/native-purchases no iOS) ----
+  var apple = { proxima: 'paga', aberto: [], n: 0, ouvintes: {} };
+  function transacao(produto) {
+    var id = String(2000000000000 + (++apple.n));
+    var corpo = btoa(JSON.stringify({ transactionId: id, productId: produto })).replace(/=+$/, '');
+    return { transactionId: id, productIdentifier: produto, jwsRepresentation: 'cab.' + corpo + '.assinatura',
+             appAccountToken: UUID, purchaseDate: new Date().toISOString(), environment: 'Sandbox' };
+  }
+  var plugin = {
+    isBillingSupported: function () { return Promise.resolve({ isBillingSupported: true }); },
+    getProducts: function (o) {
+      chamadas.push('apple:produtos');
+      return Promise.resolve({ products: o.productIdentifiers.map(function (id) {
+        return { identifier: id, priceString: 'R$ ' + id.replace(/\D/g, '') + ',90', title: id }; }) });
+    },
+    purchaseProduct: function (o) {
+      chamadas.push('apple:compra');
+      apple.ultima = o;
+      if (apple.proxima === 'cancela') return Promise.reject({ message: 'User cancelled' });
+      var c = transacao(o.productIdentifier);
+      apple.aberto.push(c);                                          // sem encerrar: fica na fila do StoreKit
+      return Promise.resolve(c);
+    },
+    getPurchases: function () { chamadas.push('apple:lista'); return Promise.resolve({ purchases: apple.aberto.slice() }); },
+    acknowledgePurchase: function (o) {
+      chamadas.push('apple:encerra');
+      apple.encerrada = o.purchaseToken;
+      apple.aberto = apple.aberto.filter(function (c) { return c.transactionId !== o.purchaseToken; });
+      return Promise.resolve();
+    },
+    consumePurchase: function () { chamadas.push('apple:CONSOME'); return Promise.reject(new Error('consumePurchase is only available on Android')); },
+    restorePurchases: function () { chamadas.push('apple:RESTAURA'); return Promise.resolve(); },
+    addListener: function (nome, fn) { apple.ouvintes[nome] = fn; return Promise.resolve({ remove: function () {} }); }
+  };
+  window.capacitorNativePurchases = { NativePurchases: plugin };
+  window.JOGO = {
+    Mobile: {
+      ios: function () { return true; },
+      appleLigada: function (f) {
+        if (f !== undefined) { if (f) localStorage.setItem('soterra-apple-loja', '1'); else localStorage.removeItem('soterra-apple-loja'); }
+        return localStorage.getItem('soterra-apple-loja') === '1';
+      },
+      falta: function (r) { return r === 'compra' ? !this.appleLigada() : (r === 'sair' || r === 'anuncio'); }
+    },
+    Sessao: { token: function () { return 'sessao-de-prova'; },
+              api: function (rota, op) {
+                chamadas.push('rota:' + rota);
+                return Promise.resolve(rota === '/api/pagamento/apple' ? apiApple((op && op.method) || 'GET', op && op.body)
+                  : { ok: false, status: 404 });
+              } }
+  };
+  document.write('<scr' + 'ipt src="../js/core/compra_play.js' + V + '"></scr' + 'ipt>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var log = document.getElementById('log');
+  var falhas = 0, total = 0;
+  function check(nome, ok, extra) {
+    total++;
+    if (!ok) falhas++;
+    var d = document.createElement('div');
+    d.style.color = ok ? '#8fc79b' : '#f88';
+    d.textContent = (ok ? 'PASSOU · ' : 'FALHOU · ') + nome + (!ok && extra !== undefined ? ' — ' + extra : '');
+    log.appendChild(d);
+  }
+  function fim() {
+    try { ['soterra-apple-loja', 'soterra-apple-fila', 'soterra-apple-feitas'].forEach(function (k) { localStorage.removeItem(k); });
+          sessionStorage.removeItem('soterra-app'); } catch (e) {}
+    var sum = document.getElementById('summary');
+    sum.className = falhas ? 'fail' : 'allpass';
+    sum.textContent = falhas ? ('FALHOU — ' + falhas + ' de ' + total) : ('tudo passou (' + total + ')');
+    window.__done = true; window.__fail = falhas;
+  }
+  function espera(cond, ms) {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function volta() {
+        var v = false;
+        try { v = cond(); } catch (e) {}
+        if (v || Date.now() - t0 > (ms || 6000)) return resolve(v);
+        setTimeout(volta, 50);
+      })();
+    });
+  }
+  function fila() { try { return JSON.parse(localStorage.getItem('soterra-apple-fila') || '[]'); } catch (e) { return []; } }
+  function feitas() { try { return JSON.parse(localStorage.getItem('soterra-apple-feitas') || '[]'); } catch (e) { return []; } }
+  var P = JOGO.CompraPlay;
+  var caixa = document.createElement('div');
+  document.body.appendChild(caixa);
+
+  Promise.resolve().then(function () {
+    check('iPhone: a compra sabe que é o iPhone, e sem a compra da Apple ligada não liga', P.ios() === true && P.ligada() === false);
+    return P.prepara();
+  }).then(function () {
+    check('… e preparar a tela não pergunta nada ao servidor', servidor.gets === 0 && chamadas.indexOf('apple:produtos') < 0);
+    return espera(function () { return !!apple.ouvintes.transactionUpdated; });
+  }).then(function (ouve) {
+    check('na abertura, a compra já ouve o "transactionUpdated" do plugin (a transação que ele encerra sozinho)', !!ouve);
+    JOGO.Mobile.appleLigada(true);                                    // a vitrine disse `apple: true`
+    check('ligada (a chave da vitrine): a compra liga', P.ligada() === true);
+    P.painel(caixa);
+    return espera(function () { return P._st.fase === 'ok'; });
+  }).then(function (ok) {
+    check('a tela pede os pacotes à rota da APPLE e os preços ao StoreKit', !!ok && chamadas.indexOf('rota:/api/pagamento/apple') >= 0 &&
+          chamadas.indexOf('rota:/api/pagamento/play') < 0 && chamadas.indexOf('apple:produtos') >= 0, chamadas.join(' '));
+    check('o preço que aparece é o da Apple, e a nota diz App Store e Apple ID (sem falar de teste)',
+          /R\$ 50,90/.test(caixa.textContent) && /App Store/.test(caixa.textContent) && /Apple ID/.test(caixa.textContent) &&
+          !/Google/.test(caixa.textContent) && !/teste/.test(caixa.textContent), caixa.textContent.slice(0, 200));
+    chamadas.length = 0;
+    return P.compra('barras-50');
+  }).then(function (r) {
+    var o = apple.ultima || {};
+    check('a compra abre com o UUID da conta e SEM encerrar sozinha (e sem as opções do Android)',
+          o.productIdentifier === 'barras_50' && o.appAccountToken === UUID && o.autoAcknowledgePurchases === false &&
+          !('productType' in o) && !('isConsumable' in o), JSON.stringify(o));
+    var post = servidor.posts[servidor.posts.length - 1] || {};
+    check('ao servidor vai SÓ a transação assinada ({jws})', Object.keys(post).length === 1 && /^cab\./.test(post.jws), JSON.stringify(post));
+    check('creditada, e só DEPOIS do servidor confirmar a transação é encerrada (nunca o consumePurchase)',
+          r.estado === 'creditada' && chamadas.indexOf('servidor:POST') >= 0 &&
+          chamadas.indexOf('apple:encerra') > chamadas.indexOf('servidor:POST') && chamadas.indexOf('apple:CONSOME') < 0,
+          chamadas.join(' '));
+    check('… a transação encerrada sai da fila e entra nas resolvidas', fila().length === 0 && feitas().indexOf(apple.encerrada) >= 0 &&
+          apple.aberto.length === 0);
+    check('… e a tela diz que as barras entraram', /50 barras de ouro entraram/.test(caixa.textContent), caixa.textContent.slice(0, 160));
+    // o servidor fora: não encerra, e a transação fica na fila do aparelho
+    servidor.modo = 'fora';
+    chamadas.length = 0;
+    return P.compra('barras-280');
+  }).then(function (r) {
+    check('servidor fora: não encerra, e a transação fica no aparelho E na fila', r.estado === 'sem-rede' &&
+          chamadas.indexOf('apple:encerra') < 0 && apple.aberto.length === 1 && fila().length === 1, chamadas.join(' '));
+    check('… e a tela diz que as barras entram sozinhas (sem prometer que a Google devolve)',
+          /as barras entram sozinhas/.test(caixa.textContent) && !/Google/.test(caixa.textContent), caixa.textContent.slice(0, 200));
+    // o teto: idem
+    servidor.modo = 'teto';
+    chamadas.length = 0;
+    return P.retoma(true);
+  }).then(function () {
+    check('teto: a retomada manda, o servidor segura, e nada é encerrado', chamadas.indexOf('servidor:POST') >= 0 &&
+          chamadas.indexOf('apple:encerra') < 0 && fila().length === 1);
+    // de volta: a retomada entrega e encerra
+    servidor.modo = 'ok';
+    chamadas.length = 0;
+    return P.retoma(true);
+  }).then(function (r) {
+    check('servidor de volta: a retomada entrega a transação aberta, credita e só então encerra',
+          r.creditadas === 1 && r.barras === 280 && chamadas.indexOf('apple:encerra') > chamadas.indexOf('servidor:POST') &&
+          apple.aberto.length === 0 && fila().length === 0, JSON.stringify(r) + ' ' + chamadas.join(' '));
+    // a já resolvida não vai de novo (o histórico do aparelho, com o SKIncludeConsumableInAppPurchaseHistory)
+    apple.aberto.push({ transactionId: feitas()[0], productIdentifier: 'barras_50', jwsRepresentation: 'cab.x.y' });
+    chamadas.length = 0;
+    return P.retoma(true);
+  }).then(function () {
+    check('a transação que o servidor já resolveu não é mandada de novo', chamadas.indexOf('servidor:POST') < 0, chamadas.join(' '));
+    apple.aberto = [];
+    // o plugin encerrou sozinho, na abertura, uma transação paga e não entregue: o "transactionUpdated"
+    var c = transacao('barras_600');
+    chamadas.length = 0;
+    apple.ouvintes.transactionUpdated(c);
+    return espera(function () { return servidor.creditados[c.transactionId] && /600/.test(document.body.textContent); }).then(function (ok) {
+      check('"transactionUpdated": a transação vai ao servidor, credita e o jogador fica sabendo (App Store)',
+            !!ok && /Chegaram 600 barras de ouro da sua compra na App Store/.test(document.body.textContent) &&
+            fila().length === 0, chamadas.join(' '));
+    });
+  }).then(function () {
+    // com a compra desligada, o aviso do plugin fica guardado na fila — a retomada manda quando ligar
+    JOGO.Mobile.appleLigada(false);
+    var c = transacao('barras_1250');
+    chamadas.length = 0;
+    apple.ouvintes.transactionUpdated(c);
+    check('desligada: a transação avisada fica na fila, sem ir ao servidor', fila().length === 1 && chamadas.indexOf('servidor:POST') < 0);
+    JOGO.Mobile.appleLigada(true);
+    return P.retoma(true).then(function (r) {
+      check('ligada de novo: a retomada manda a da fila, e ela credita', r.creditadas === 1 && r.barras === 1250 && fila().length === 0,
+            JSON.stringify(r));
+    });
+  }).then(function () {
+    apple.proxima = 'cancela';
+    return P.compra('barras-50');
+  }).then(function (r) {
+    check('o jogador cancelou na Apple: nada foi cobrado', r.estado === 'cancelada' && /Nada foi cobrado/.test(caixa.textContent));
+    check('nunca o restorePurchases (ele encerra tudo sozinho) e nunca o consumePurchase',
+          chamadas.indexOf('apple:RESTAURA') < 0 && chamadas.indexOf('apple:CONSOME') < 0);
+  }).catch(function (e) { check('a prova não quebrou', false, String(e && e.stack || e)); }).then(fim);
+})();
+</script>
+</body>
+</html>
