@@ -32,6 +32,18 @@
  * O plugin é o @capgo/native-purchases (vendor/capacitor/native-purchases.js,
  * cópia do node_modules que o tools/empacota_www.py confere). As provas põem um
  * de mentira em window.capacitorNativePurchases (tests/compra_play.html).
+ *
+ * 26/10 — NO IPHONE é a compra da APPLE (servidor/pagamento_apple.py), pelo
+ * MESMO plugin (no iOS ele fala com o StoreKit 2) e pelo mesmo caminho, com
+ * quatro diferenças: a rota é /api/pagamento/apple; o recibo é a transação
+ * ASSINADA pela Apple (jwsRepresentation), que o servidor confere; o código da
+ * conta é um UUID (appAccountToken); e "consumir" é ENCERRAR a transação
+ * (acknowledgePurchase, o finish da Apple), só com `encerrar: true`. O plugin
+ * encerra SOZINHO, na abertura do aplicativo, as transações que ficaram abertas
+ * e avisa por 'transactionUpdated': este arquivo ouve e as manda ao servidor,
+ * guardando cada uma no aparelho (FILA_APPLE) até ele responder. O que escapar
+ * disso a Apple avisa ao servidor (ONE_TIME_CHARGE). A loja só abre no iPhone
+ * quando o servidor diz que a compra da Apple está ligada (js/mobile.js).
  * ========================================================================= */
 (function () {
   'use strict';
@@ -49,6 +61,7 @@
   var P = JOGO.CompraPlay = {};
 
   var ROTA = '/api/pagamento/play';
+  var ROTA_APPLE = '/api/pagamento/apple';     // 26/10: o iPhone
   var COMPRADA = '1', PENDENTE = '2';          // Purchase.PurchaseState do Android, como o plugin entrega (texto)
   var RETOMA_A_CADA = 30 * 1000;               // ms: a volta ao aplicativo não repete a retomada antes disto
 
@@ -70,10 +83,10 @@
   P.noApp = function () { return forcado || nativo(); };
   // as páginas do site abertas a partir daqui (a loja, a conta) sabem que estão dentro do aplicativo
   try { if (P.noApp()) window.sessionStorage.setItem('soterra-app', '1'); } catch (e2) {}
-  /* 25/10 — O IPHONE: a compra deste arquivo é a da Google Play. No iPhone o plugin falaria com a loja da APPLE,
-   * onde os pacotes não existem; até a compra da Apple ficar pronta (docs/APP_STORE.md §8.2) este arquivo não liga
-   * nada lá — nem a retomada na abertura, nem a tela. Quem diz é o JOGO.Mobile.falta (js/mobile.js) ou, numa
-   * página do site, o SITE.faltaNoAparelho (site/site.js). No Android e na web é sempre falso: nada muda. */
+  /* O IPHONE (26/10): a compra é a da Apple, e só liga quando o servidor diz que ela está ligada — até lá a
+   * `compra` falta e este arquivo não liga nada lá: nem a tela, nem a compra. Quem diz é o JOGO.Mobile.falta
+   * (js/mobile.js) ou, numa página do site, o SITE.faltaNoAparelho (site/site.js). No Android e na web é sempre
+   * falso: nada muda. */
   function semCompraAqui() {
     try {
       if (JOGO.Mobile && JOGO.Mobile.falta) return !!JOGO.Mobile.falta('compra');
@@ -82,6 +95,44 @@
     return false;
   }
   P.ligada = function () { return P.noApp() && !semCompraAqui(); };
+  function ios() {
+    try {
+      if (JOGO.Mobile && JOGO.Mobile.ios) return !!JOGO.Mobile.ios();
+      if (window.SITE && window.SITE.plataforma) return window.SITE.plataforma() === 'ios';
+    } catch (e) {}
+    return false;
+  }
+  P.ios = ios;
+  function rota() { return ios() ? ROTA_APPLE : ROTA; }
+
+  /* 26/10 — A FILA DA APPLE: a transação que chegou ao aparelho e o servidor ainda não respondeu (sem rede, o
+   * servidor fora, o teto do dia) fica guardada até a resposta dele; FEITAS são as que ele mandou encerrar (a
+   * retomada não as manda de novo). Só o iPhone usa. */
+  var FILA_APPLE = 'soterra-apple-fila', FEITAS_APPLE = 'soterra-apple-feitas';
+  function leLista(chave) {
+    try {
+      var v = JSON.parse(window.localStorage.getItem(chave) || '[]');
+      return Object.prototype.toString.call(v) === '[object Array]' ? v : [];
+    } catch (e) { return []; }
+  }
+  function gravaLista(chave, v) { try { window.localStorage.setItem(chave, JSON.stringify(v)); } catch (e) {} }
+  function guardaNaFila(c) {
+    if (!c || c.transactionId == null || !c.jwsRepresentation) return;
+    var id = String(c.transactionId);
+    var f = leLista(FILA_APPLE).filter(function (x) { return x && x.transactionId !== id; });
+    f.push({ transactionId: id, jwsRepresentation: String(c.jwsRepresentation), productIdentifier: String(c.productIdentifier || '') });
+    gravaLista(FILA_APPLE, f.slice(-20));
+  }
+  function tiraDaFila(id) {
+    gravaLista(FILA_APPLE, leLista(FILA_APPLE).filter(function (x) { return x && x.transactionId !== String(id); }));
+  }
+  function marcaFeita(id) {
+    var f = leLista(FEITAS_APPLE).filter(function (x) { return x !== String(id); });
+    f.push(String(id));
+    gravaLista(FEITAS_APPLE, f.slice(-200));
+  }
+  function jaFeita(id) { return leLista(FEITAS_APPLE).indexOf(String(id)) >= 0; }
+  function deBarras(c) { return /^barras_\d+$/.test(String((c && c.productIdentifier) || '')); }
 
   function noSite() { return !JOGO.Sessao && !!window.SITE; }
   function api(rota, op) {
@@ -151,7 +202,7 @@
     pinta();
     function fim(fase, erro) { st.fase = fase; st.erro = erro || ''; pinta(); return st; }
     if (!temSessao()) return Promise.resolve(fim('fora'));
-    return api(ROTA).then(function (r) {
+    return api(rota()).then(function (r) {
       if (!r || !r.ok || !Array.isArray(r.pacotes)) {
         if (r && r.status === 401) return fim('fora');
         return fim(r && r.status === 503 ? 'desligado' : 'erro',
@@ -184,23 +235,38 @@
     }).catch(function () { return fim('sem-loja'); });
   };
 
-  /* ---- 3 e 4. a entrega ao servidor e, SÓ com a confirmação dele, o consumo ---- */
+  /* ---- 3 e 4. a entrega ao servidor e, SÓ com a confirmação dele, o consumo (o encerramento, na Apple) ---- */
   function entrega(c, pacoteId) {
-    var pl = plugin();
-    var token = c && (c.purchaseToken || c.transactionId);
+    var pl = plugin(), apple = ios(), corpo;
+    var token = c && (apple ? (c.transactionId != null ? String(c.transactionId) : '') : (c.purchaseToken || c.transactionId));
     var qual = (c && c.productIdentifier) || pacoteId;
-    if (!token || !qual) return Promise.resolve({ estado: 'recusada' });
-    return api(ROTA, { method: 'POST', body: { pacote: qual, token: token } }).then(function (r) {
+    if (apple) {
+      // 26/10: o recibo é a transação ASSINADA pela Apple; fica na fila até o servidor responder
+      if (!token || !c.jwsRepresentation) return Promise.resolve({ estado: 'recusada' });
+      guardaNaFila(c);
+      corpo = { jws: String(c.jwsRepresentation) };
+    } else {
+      if (!token || !qual) return Promise.resolve({ estado: 'recusada' });
+      corpo = { pacote: qual, token: token };
+    }
+    return api(rota(), { method: 'POST', body: corpo }).then(function (r) {
       r = r || {};
       if (r.barras && isFinite(Number(r.barras.saldo))) st.saldo = Number(r.barras.saldo);
       // `repetido`: o servidor já tinha creditado esta compra antes (o aplicativo fechou antes de consumir)
       var saida = { estado: r.creditado ? 'creditada' : r.repetido ? 'repetida' : (r.estado || (r.status === 0 ? 'sem-rede' : 'erro')),
                     barras: (r.compra && r.compra.barras) || 0, texto: r.erro || '', status: r.status };
-      if (r.consumir !== true || !pl) return saida;
-      // o servidor confirmou (creditou agora, ou já tinha creditado): agora sim a Google pode liberar o pacote.
-      // Se o consumo falhar, a compra continua no aparelho e a próxima retomada a entrega de novo (não credita 2×)
-      return pl.consumePurchase({ purchaseToken: token }).then(function () { return saida; },
-                                                              function () { saida.semConsumo = true; return saida; });
+      var fecha = r.consumir === true || r.encerrar === true;      // a Google consome; a Apple encerra
+      if (apple) {
+        // a resposta DEFINITIVA do servidor tira da fila (não a falta de rede, o servidor fora, o freio ou o teto)
+        if (r.status && r.status < 500 && r.status !== 429 && r.estado !== 'teto') tiraDaFila(token);
+        if (fecha) marcaFeita(token);
+      }
+      if (!fecha || !pl) return saida;
+      // o servidor confirmou (creditou agora, ou já tinha creditado): agora sim a loja pode liberar o pacote.
+      // Se falhar, a compra continua no aparelho e a próxima retomada a entrega de novo (não credita 2×). Na
+      // Apple, "já encerrada" (o plugin encerrou sozinho na abertura) também cai aqui, sem problema
+      var fim = apple ? pl.acknowledgePurchase({ purchaseToken: token }) : pl.consumePurchase({ purchaseToken: token });
+      return fim.then(function () { return saida; }, function () { saida.semConsumo = true; return saida; });
     }, function () { return { estado: 'sem-rede' }; });
   }
 
@@ -213,12 +279,15 @@
     if (!p.cabe) return Promise.resolve(recado({ estado: 'teto' }));
     st.ocupado = id; st.recado = null;
     pinta();
-    return pl.purchaseProduct({ productIdentifier: p.produto, productType: 'inapp', quantity: 1,
-                                isConsumable: false, autoAcknowledgePurchases: false,
-                                appAccountToken: st.conta || undefined })
+    // 26/10: na Apple o UUID da conta (appAccountToken) e o encerramento manual; o resto é só do Android
+    var op = ios()
+      ? { productIdentifier: p.produto, quantity: 1, autoAcknowledgePurchases: false, appAccountToken: st.conta || undefined }
+      : { productIdentifier: p.produto, productType: 'inapp', quantity: 1, isConsumable: false,
+          autoAcknowledgePurchases: false, appAccountToken: st.conta || undefined };
+    return pl.purchaseProduct(op)
       .then(function (c) { return entrega(c, p.id); }, function (e) {
         var s = String((e && e.code) || '') + ' ' + String((e && e.message) || e || '');
-        if (/USER_CANCELED/.test(s)) return { estado: 'cancelada' };
+        if (/USER_CANCELED|User cancelled/i.test(s)) return { estado: 'cancelada' };
         if (/pending/i.test(s)) return { estado: 'pendente' };
         // "você já tem este item": uma compra anterior ficou sem consumir — a retomada a entrega
         if (/ITEM_ALREADY_OWNED/.test(s)) return P.retoma(true).then(function (r) {
@@ -236,7 +305,7 @@
   };
   // depois de um crédito o teto de 24 h andou: relê só o que cabe (os preços da Google não mudam)
   function atualizaCabe() {
-    api(ROTA).then(function (r) {
+    api(rota()).then(function (r) {
       if (!r || !r.ok || !Array.isArray(r.pacotes)) return;
       var cabe = {};
       r.pacotes.forEach(function (p) { cabe[p.id] = p.cabe !== false; });
@@ -252,17 +321,29 @@
     if (!P.ligada() || !temSessao()) return Promise.resolve(vazio);
     if (!forcar && Date.now() - retomadaEm < RETOMA_A_CADA) return Promise.resolve(vazio);
     retomadaEm = Date.now();
+    var apple = ios();
     retomando = ponte().then(function (tem) {
       var pl = tem ? plugin() : null;
       if (!pl) return vazio;
-      return pl.getPurchases({ productType: 'inapp' }).then(function (g) {
+      return pl.getPurchases(apple ? {} : { productType: 'inapp' }).then(function (g) {
         var lista = ((g && g.purchases) || []).filter(function (c) { return c && (c.purchaseToken || c.transactionId); });
+        if (apple) {
+          // 26/10: as transações de barras que o servidor ainda não mandou encerrar, mais as da fila (as que
+          // chegaram e ficaram sem resposta) — no máximo 10 por vez
+          var vistas = {};
+          lista = lista.filter(function (c) { return c.jwsRepresentation && deBarras(c) && !jaFeita(c.transactionId); });
+          lista.forEach(function (c) { vistas[String(c.transactionId)] = true; });
+          leLista(FILA_APPLE).forEach(function (x) {
+            if (x && x.jwsRepresentation && !vistas[x.transactionId] && !jaFeita(x.transactionId)) lista.push(x);
+          });
+          lista = lista.slice(0, 10);
+        }
         var saida = { creditadas: 0, barras: 0, pendentes: 0 };
-        // uma de cada vez: cada entrega é uma consulta do servidor à Google
+        // uma de cada vez: cada entrega é uma consulta do servidor (à Google, no Android)
         return lista.reduce(function (fila, c) {
           return fila.then(function () {
-            if (String(c.purchaseState) === PENDENTE) { saida.pendentes++; return null; }
-            if (String(c.purchaseState) !== COMPRADA) return null;
+            if (!apple && String(c.purchaseState) === PENDENTE) { saida.pendentes++; return null; }
+            if (!apple && String(c.purchaseState) !== COMPRADA) return null;
             return entrega(c, null).then(function (r) {
               if (r.estado === 'creditada') { saida.creditadas++; saida.barras += r.barras; }
               else if (r.estado === 'pendente') saida.pendentes++;
@@ -273,41 +354,65 @@
     }).catch(function () { return vazio; }).then(function (r) {
       retomando = null;
       st.pendentes = r.pendentes;
-      if (r.creditadas) {
-        recado({ estado: 'creditada', barras: r.barras, retomada: true });
-        avisa('creditada', { barras: r.barras, saldo: st.saldo, retomada: true });
-        brinde(Tx('Chegaram {a} barras de ouro da sua compra na Google Play.', { a: milhar(r.barras) }));
-      }
+      if (r.creditadas) chegou(r.barras);
       pinta();
       return r;
     });
     return retomando;
   };
+  function chegou(barras) {
+    recado({ estado: 'creditada', barras: barras, retomada: true });
+    avisa('creditada', { barras: barras, saldo: st.saldo, retomada: true });
+    brinde(T('chegaram', { a: milhar(barras) }));
+  }
 
   /* ---- os textos ---- */
-  var FASE = {
-    carregando: Tx('Carregando os pacotes…'),
-    fora: Tx('Entre na sua conta do jogo para comprar barras de ouro.'),
-    desligado: Tx('A compra de barras de ouro pelo aplicativo chega em breve.'),
-    'sem-loja': Tx('Não deu para falar com a Google Play neste aparelho. Abra a Play Store, entre com a sua conta Google e tente de novo.'),
-    'sem-produtos': Tx('Os pacotes ainda não estão disponíveis na Google Play. Tente de novo mais tarde.')
-  };
+  /* os que citam a loja do aparelho: a Google Play no Android, a App Store no iPhone (26/10) */
+  function T(qual, v) {
+    var a = ios();
+    switch (qual) {
+      case 'chegaram': return a ? Tx('Chegaram {a} barras de ouro da sua compra na App Store.', v)
+        : Tx('Chegaram {a} barras de ouro da sua compra na Google Play.', v);
+      case 'sem-loja': return a ? Tx('Não deu para falar com a App Store neste aparelho. Confira se o iPhone está com o seu Apple ID e tente de novo.')
+        : Tx('Não deu para falar com a Google Play neste aparelho. Abra a Play Store, entre com a sua conta Google e tente de novo.');
+      case 'sem-produtos': return a ? Tx('Os pacotes ainda não estão disponíveis na App Store. Tente de novo mais tarde.')
+        : Tx('Os pacotes ainda não estão disponíveis na Google Play. Tente de novo mais tarde.');
+      case 'pendente': return a ? Tx('A Apple ainda espera a aprovação do pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.')
+        : Tx('A Google ainda espera o pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.');
+      case 'recusada': return a ? Tx('A Apple não concluiu a compra. Nada foi creditado.') : Tx('A Google não concluiu a compra. Nada foi creditado.');
+      case 'erro': return a ? Tx('{a}Se você pagou, as barras entram sozinhas em instantes.', v)
+        : Tx('{a}Se você pagou, as barras entram sozinhas em instantes; se não entrarem, a Google devolve o valor.', v);
+      case 'abrindo': return a ? Tx('Abrindo a App Store…') : Tx('Abrindo a Google Play…');
+      case 'nota': return a ? Tx('A cobrança é feita pela App Store, na forma de pagamento do seu Apple ID. As barras de ouro ficam na sua conta do jogo.')
+        : Tx('A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo.');
+    }
+    return '';
+  }
+  function fase(n) {
+    switch (n) {
+      case 'carregando': return Tx('Carregando os pacotes…');
+      case 'fora': return Tx('Entre na sua conta do jogo para comprar barras de ouro.');
+      case 'desligado': return Tx('A compra de barras de ouro pelo aplicativo chega em breve.');
+      case 'sem-loja': case 'sem-produtos': return T(n);
+    }
+    return '';
+  }
   function textoDoRecado(r) {
     switch (r.estado) {
       case 'creditada': return { tipo: 'bom', texto: (r.retomada
         ? Tx('Sua compra chegou: {a} barras de ouro entraram na sua conta.', { a: milhar(r.barras) })
         : Tx('Pronto! {a} barras de ouro entraram na sua conta.', { a: milhar(r.barras) })) };
       case 'repetida': return { tipo: 'neutro', texto: Tx('Essa compra já tinha sido creditada na sua conta.') };
-      case 'pendente': return { tipo: 'neutro', texto: Tx('A Google ainda espera o pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.') };
+      case 'pendente': return { tipo: 'neutro', texto: T('pendente') };
       case 'cancelada': return { tipo: 'neutro', texto: r.status === 409 ? Tx('Essa compra foi cancelada ou reembolsada. Nada foi creditado.')
                                  : Tx('Compra cancelada. Nada foi cobrado.') };
       case 'teto': return { tipo: 'neutro', texto: r.texto ? Tx('O limite de compras por dia foi atingido: {texto}.', { texto: r.texto })
                             : Tx('O limite de compras por dia foi atingido. Tente de novo amanhã.') };
-      case 'sem-loja': return { tipo: 'erro', texto: FASE['sem-loja'] };
+      case 'sem-loja': return { tipo: 'erro', texto: T('sem-loja') };
       case 'sem-rede': return { tipo: 'erro', texto: Tx('O servidor do jogo não respondeu. Se você pagou, as barras entram sozinhas quando a conexão voltar.') };
       case 'outra-conta': return { tipo: 'erro', texto: Tx('Essa compra foi feita por outra conta do jogo. Entre nela para receber as barras.') };
-      case 'recusada': return { tipo: 'erro', texto: Tx('A Google não concluiu a compra. Nada foi creditado.') };
-      default: return { tipo: 'erro', texto: Tx('{a}Se você pagou, as barras entram sozinhas em instantes; se não entrarem, a Google devolve o valor.', { a: r.texto ? r.texto.charAt(0).toUpperCase() + r.texto.slice(1) + '. ' : '' }) };
+      case 'recusada': return { tipo: 'erro', texto: T('recusada') };
+      default: return { tipo: 'erro', texto: T('erro', { a: r.texto ? r.texto.charAt(0).toUpperCase() + r.texto.slice(1) + '. ' : '' }) };
     }
   }
   function recado(r) { st.recado = textoDoRecado(r); pinta(); return r; }
@@ -351,12 +456,12 @@
     if (st.recado) h += '<p class="cpl-recado ' + st.recado.tipo + '" role="status" data-cpl-recado>' + esc(st.recado.texto) + '</p>';
     else if (st.pendentes) h += '<p class="cpl-recado neutro" role="status" data-cpl-recado>' + esc(textoDoRecado({ estado: 'pendente' }).texto) + '</p>';
     if (st.fase !== 'ok') {
-      h += '<p class="cpl-estado" data-cpl-fase="' + esc(st.fase) + '">' + esc(FASE[st.fase] || st.erro || Tx('Não deu para abrir a compra.')) + '</p>';
+      h += '<p class="cpl-estado" data-cpl-fase="' + esc(st.fase) + '">' + esc(fase(st.fase) || st.erro || Tx('Não deu para abrir a compra.')) + '</p>';
       if (st.fase !== 'carregando' && st.fase !== 'desligado') h += Tx('<button type="button" class="cpl-bt" data-cpl-de-novo style="padding:0 16px">Tentar de novo</button>');
       return h;
     }
     h += '<div class="cpl-lista">' + st.pacotes.map(function (p) {
-      var ocupado = !!st.ocupado, rotulo = st.ocupado === p.id ? Tx('Abrindo a Google Play…')
+      var ocupado = !!st.ocupado, rotulo = st.ocupado === p.id ? T('abrindo')
         : !p.preco ? Tx('Indisponível') : !p.cabe ? Tx('Limite do dia atingido') : Tx('Comprar');
       return '<article class="cpl-pacote" data-cpl-pacote="' +
         esc(p.id) +
@@ -364,13 +469,12 @@
         Tx('<h4>{b}</h4><p class="cpl-qtd"><b>{c}</b> barras de ouro</p><p class="cpl-preco">{d}</p><button type="button" class="cpl-bt" data-cpl-comprar="{a}"{e}>{rotulo}</button>', { b: esc(p.nome), c: milhar(p.barras), d: esc(p.preco || '—'), a: esc(p.id), e: ocupado || !p.preco || !p.cabe ? ' disabled' : '', rotulo: rotulo }) +
         '</article>';
     }).join('') + '</div>';
-    h += (st.teste
+    // 26/10: no iPhone o servidor sempre aceita o Sandbox (o revisor da Apple compra nele): a nota não fala de teste
+    h += (st.teste && !ios()
       ? '<p class="cpl-nota">' +
       Tx('A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo · servidor em modo de teste.') +
       '</p>'
-      : '<p class="cpl-nota">' +
-      Tx('A cobrança é feita pela Google Play, na forma de pagamento da sua conta Google. As barras de ouro ficam na sua conta do jogo.') +
-      '</p>');
+      : '<p class="cpl-nota">' + T('nota') + '</p>');
     return h;
   }
   function pinta() {
@@ -436,10 +540,31 @@
   }
 
   /* ---- ao abrir o aplicativo e ao voltar para ele: o que ficou pelo caminho ---- */
+  /* 26/10: liga em todo aplicativo (a retomada confere P.ligada na hora): no iPhone a loja pode abrir DEPOIS da
+   * carga, quando a vitrine diz que a compra da Apple está ligada */
   function liga() {
-    if (!P.ligada() || typeof document === 'undefined') return;
+    if (!P.noApp() || typeof document === 'undefined') return;
     setTimeout(function () { P.retoma(); }, 1500);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) P.retoma(); });
+    if (ios()) ouveApple();
+  }
+  /* 26/10: o plugin encerra SOZINHO, na abertura do aplicativo, as transações da Apple que ficaram abertas (o
+   * aplicativo fechou no meio da compra), e avisa por 'transactionUpdated'. Sem ouvir, a compra paga e não entregue
+   * só chegaria pelo aviso da Apple ao servidor. Cada uma vai para a fila (FILA_APPLE) e, com a loja ligada, para o
+   * servidor — que não credita duas vezes. */
+  function ouveApple() {
+    ponte().then(function (tem) {
+      var pl = tem ? plugin() : null;
+      if (!pl || typeof pl.addListener !== 'function') return;
+      try {
+        pl.addListener('transactionUpdated', function (c) {
+          if (!c || !deBarras(c) || jaFeita(c.transactionId)) return;
+          guardaNaFila(c);
+          if (!P.ligada() || !temSessao()) return;              // fica na fila: a próxima retomada manda
+          entrega(c, null).then(function (r) { if (r.estado === 'creditada') { chegou(r.barras); pinta(); } });
+        });
+      } catch (e) {}
+    });
   }
   liga();
 })();

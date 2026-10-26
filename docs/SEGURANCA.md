@@ -267,6 +267,15 @@ Corpo: `{versaoBase, ops: [{nome, args}], hashDepois}`.
   - **No cliente**, o Mercado Pago não aparece dentro do aplicativo (`SITE.noApp()`,
     `JOGO.Mobile.app()`): regra da Play. Prova: `tests/pagamento_play_api.py` e
     `tests/compra_play.html`.
+  - **A compra pela Apple no iPhone** (26/10, `servidor/pagamento_apple.py`) segue as mesmas
+    regras, sem conversa com a Apple: o servidor confere a transação ASSINADA (JWS ES256, a
+    cadeia `x5c` até a *Apple Root CA - G3* gravada no código e conferida pelo SHA-256, as
+    marcas da Apple na folha e na intermediária, a validade na data da assinatura). Nenhum
+    segredo no ambiente. Um crédito por `transactionId`; a conta é a do UUID que o aplicativo
+    passou à Apple (`appAccountToken`, um hmac); o aviso da Apple
+    (`/api/pagamento/apple/aviso`) também é conferido pela assinatura antes de qualquer coisa
+    (401 sem ela). Prova: `tests/pagamento_apple_api.py` (com a Apple de mentira
+    `tests/apple_falsa.py`) e `tests/compra_apple.html`.
 
 ### 4.5.1 O anúncio premiado do aplicativo (06/10, `servidor/anuncio.py`)
 

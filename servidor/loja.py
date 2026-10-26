@@ -143,7 +143,7 @@ LOJA_VERSAO = 3                  # 13/09: o catálogo em barras de ouro (cada it
 # a conferência e o aviso de um pagamento já feito, a entrega de uma compra da Google Play já paga, cancelar um
 # pedido e vestir a aura ou a moldura que já são suas. Sem a variável (ou com outro valor): aberta, como sempre.
 FRASE_LOJA_FECHADA = 'a loja abre em breve'
-ROTAS_DA_LOJA_FECHADA = frozenset(('loja_comprar', 'loja_presentear', 'pagamento_pacote', 'play_ver'))
+ROTAS_DA_LOJA_FECHADA = frozenset(('loja_comprar', 'loja_presentear', 'pagamento_pacote', 'play_ver', 'apple_ver'))
 
 
 def loja_aberta_do_ambiente(env=None):
@@ -926,6 +926,15 @@ class LojaMixin:
                     nomes['play:%d' % g['id']] = '%s (Google Play)' % nome_do_pedido(g['pacote'])
             except sqlite3.OperationalError:
                 pass
+        # 26/10: o pacote comprado pela Apple no iPhone (pagamento_apple.py), pela mesma porta
+        apples = [int(r['ref'][6:]) for r in linhas if (r['ref'] or '').startswith('apple:') and r['ref'][6:].isdigit()]
+        if apples:
+            try:
+                for g in self.con.execute("SELECT id, pacote FROM pagamentos_apple WHERE id IN (%s)"
+                                          % ','.join('?' * len(apples)), apples):
+                    nomes['apple:%d' % g['id']] = '%s (App Store)' % nome_do_pedido(g['pacote'])
+            except sqlite3.OperationalError:
+                pass
         saida = []
         for r in linhas:
             m = {'id': r['id'], 'delta': r['delta'], 'motivo': r['motivo'], 'saldo': r['saldo_depois'],
@@ -1046,7 +1055,7 @@ class LojaMixin:
                          'ofertas': of, 'presente': {'fora': list(FORA_DO_PRESENTE), 'porDia': 0},
                          'barras': {'nome': 'Barras de Ouro', 'vintensPorBarra': VINTENS_POR_BARRA,
                                     'vintensPorBarraFarmada': VINTENS_POR_BARRA_FARMADA},
-                         'pagamento': {'ligado': False, 'teste': False}}
+                         'pagamento': {'ligado': False, 'teste': False}, 'apple': False}
         # 13/09: `barras` diz o câmbio para o site explicar as trocas sem repetir número nenhum
         return 200, {'ok': True, 'versao': LOJA_VERSAO,
                      'itens': [dict(i, limite=dict(i['limite']) if i['limite'] else None) for i in CATALOGO],
@@ -1057,7 +1066,13 @@ class LojaMixin:
                      'presente': {'fora': list(FORA_DO_PRESENTE), 'porDia': PRESENTES_AMIGO_DIA},
                      'barras': {'nome': 'Barras de Ouro', 'vintensPorBarra': VINTENS_POR_BARRA,
                                 'vintensPorBarraFarmada': VINTENS_POR_BARRA_FARMADA},
-                     'pagamento': {'ligado': ligado, 'teste': bool(ligado and mp.teste)}}
+                     'pagamento': {'ligado': ligado, 'teste': bool(ligado and mp.teste)},
+                     # 26/10: a compra pela Apple está ligada (pagamento_apple.py): a loja do iPhone abre
+                     'apple': self._apple_ligada()}
+
+    def _apple_ligada(self):
+        apple = getattr(self, 'apple', None)
+        return bool(apple is not None and apple.ligado)
 
     # -- GET /api/loja/minha ------------------------------------------------------------------
     def loja_minha(self, conta, corpo):
@@ -1511,9 +1526,10 @@ class LojaMixin:
             # as molduras que a conta JÁ tem seguem (a ficha Customizar as veste)
             return 200, {'ok': True, 'agora': t, 'fechada': True, 'ofertas': dict(ofertas_publico(t), itens=[], desconto=0),
                          'boasVindas': {'disponivel': False}, 'auras': auras, 'molduras': molduras,
-                         'barras': {'saldo': barras}}
+                         'barras': {'saldo': barras}, 'apple': False}
+        # 26/10: `apple` — a compra pela Apple está ligada: o jogo no iPhone abre a loja (js/core/loja.js)
         return 200, {'ok': True, 'agora': t, 'ofertas': ofertas_publico(t), 'boasVindas': boas, 'auras': auras,
-                     'molduras': molduras, 'barras': {'saldo': barras}}
+                     'molduras': molduras, 'barras': {'saldo': barras}, 'apple': self._apple_ligada()}
 
     # -- o presente a um amigo (04/10) -----------------------------------------------------------------
     def _nome_publico(self, cid):

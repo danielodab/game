@@ -63,7 +63,8 @@
     'barras-faltaram': 'Barras de ouro que já tinham sido gastas: faltou tirar'
   };
   // 13/09: as barras de ouro nos dados do alerta (quanto o pacote valia, quanto saiu, quanto faltou)
-  var DADO = { barras: 'barras de ouro', tirado: 'barras tiradas', faltou: 'barras que faltaram', vintens: 'vinténs',mp: 'pagamento no Mercado Pago', play: 'compra na Google Play', pedidoGoogle: 'pedido da Google', teste: 'compra de teste', pedido: 'pedido', estadoPedido: 'estado do pedido',
+  var DADO = { barras: 'barras de ouro', tirado: 'barras tiradas', faltou: 'barras que faltaram', vintens: 'vinténs',mp: 'pagamento no Mercado Pago', play: 'compra na Google Play', pedidoGoogle: 'pedido da Google',
+               apple: 'compra na App Store', transacao: 'transação da Apple', teste: 'compra de teste',   // 26/10 pedido: 'pedido', estadoPedido: 'estado do pedido',
                pagamento: 'pagamento', pacote: 'pacote', status: 'estado no Mercado Pago', aberta: 'disputa aberta',
                cancelado: 'crédito cancelado', tardio: 'chegou depois do estorno', centavos: 'valor',
                pagoEm24h: 'pago em 24 h', esperado: 'esperado', recebido: 'recebido', moeda: 'moeda', motivo: 'motivo',

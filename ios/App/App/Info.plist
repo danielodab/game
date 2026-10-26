@@ -34,6 +34,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>SKIncludeConsumableInAppPurchaseHistory</key>
+	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Para salvar na Fotos o cartão do jogo que você escolheu compartilhar.</string>
 	<key>UIApplicationSceneManifest</key>

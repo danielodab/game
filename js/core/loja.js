@@ -288,9 +288,11 @@
    * entregas não fecha: prêmios e presentes seguem chegando. Sem resposta nenhuma ainda, vale o que ficou guardado. */
   L.CHAVE_FECHADA = 'soterra-loja-fechada';
   function leFechada() { try { return window.localStorage.getItem(L.CHAVE_FECHADA) === '1'; } catch (e) { return false; } }
-  /* 25/10 — NO IPHONE a loja fica fechada SEMPRE, até existir a compra da Apple (JOGO.Mobile.falta('compra'),
+  /* 25/10 — NO IPHONE a loja fica fechada até a compra da Apple estar ligada (JOGO.Mobile.falta('compra'),
    * js/mobile.js; docs/APP_STORE.md §8.2): a Apple só aceita item digital vendido pela compra dela. Não mexe na
-   * chave guardada, que é a resposta do servidor. No Android e na web `falta` é sempre falso: nada muda. */
+   * chave guardada, que é a resposta do servidor. No Android e na web `falta` é sempre falso: nada muda.
+   * 26/10: a vitrine traz `apple` (servidor/pagamento_apple.py) e guardaVitrine a passa ao JOGO.Mobile.appleLigada
+   * ANTES de acertar a classe: ligada, a loja do iPhone abre. */
   function semCompraNoAparelho() {
     try { return !!(JOGO.Mobile && JOGO.Mobile.falta && JOGO.Mobile.falta('compra')); } catch (e) { return false; }
   }
@@ -330,6 +332,9 @@
                           precoCheio: Number(bv.precoCheio) || 0 },
             fechada: r.fechada === true };                 // 25/10: SOTERRA_LOJA=0 (ver L.fechada)
     vitEm = Date.now();
+    if (typeof r.apple === 'boolean') {
+      try { if (JOGO.Mobile && JOGO.Mobile.appleLigada) JOGO.Mobile.appleLigada(r.apple); } catch (eA) {}
+    }
     marcaFechada(vit.fechada);
     try { window.dispatchEvent(new CustomEvent('soterra:vitrine', { detail: copia(vit) })); } catch (e) {}
     return vit;

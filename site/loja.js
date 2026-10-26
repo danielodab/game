@@ -259,6 +259,8 @@
     return SITE.api('/api/loja/catalogo', { semToken: true }).then(function (r) {
       if (r.ok && Array.isArray(r.itens)) {
         catalogo = r; erroCatalogo = '';
+        // 26/10: a compra da Apple ligada no servidor abre a loja do iPhone (antes do lojaFechada, que acerta a classe)
+        if (SITE.appleLigada && typeof r.apple === 'boolean') SITE.appleLigada(r.apple);
         if (SITE.lojaFechada) SITE.lojaFechada(r.fechada === true);    // 25/10: guarda para o jogo e o menu do site
       }
       else {

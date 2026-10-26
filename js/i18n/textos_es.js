@@ -3255,5 +3255,14 @@ JOGO.I18n.registra('es', { textos: {
   "Ver os {n} torneios": "Ver los {n} torneos",
   "Ver o torneio": "Ver el torneo",
   "Ver o Placar · {n} duelo(s)": "Ver el Marcador · {n} duelo(s)",
-  "Desafio amistoso: toque em alguém na praça.": "Desafío amistoso: toca a alguien en la plaza."
+  "Desafio amistoso: toque em alguém na praça.": "Desafío amistoso: toca a alguien en la plaza.",
+  "Chegaram {a} barras de ouro da sua compra na App Store.": "Llegaron {a} barras de oro de tu compra en la App Store.",
+  "Não deu para falar com a App Store neste aparelho. Confira se o iPhone está com o seu Apple ID e tente de novo.": "No se pudo hablar con la App Store en este dispositivo. Revisa que el iPhone tenga tu Apple ID e inténtalo de nuevo.",
+  "Os pacotes ainda não estão disponíveis na App Store. Tente de novo mais tarde.": "Los paquetes todavía no están disponibles en la App Store. Inténtalo de nuevo más tarde.",
+  "A Apple ainda espera a aprovação do pagamento. Assim que ele for aprovado, as barras entram sozinhas — pode fechar esta tela.": "Apple todavía espera la aprobación del pago. En cuanto se apruebe, las barras entran solas — puedes cerrar esta pantalla.",
+  "A Apple não concluiu a compra. Nada foi creditado.": "Apple no completó la compra. No se acreditó nada.",
+  "{a}Se você pagou, as barras entram sozinhas em instantes.": "{a}Si pagaste, las barras entran solas en unos instantes.",
+  "Abrindo a App Store…": "Abriendo la App Store…",
+  "A cobrança é feita pela App Store, na forma de pagamento do seu Apple ID. As barras de ouro ficam na sua conta do jogo.": "El cobro se hace por la App Store, con la forma de pago de tu Apple ID. Las barras de oro quedan en tu cuenta del juego.",
+  "A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela App Store.": "La moneda de la tienda: personajes, auras, piedras de forja y regalos. La compra se hace por la App Store."
 } });
