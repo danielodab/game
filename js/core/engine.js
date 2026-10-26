@@ -93,7 +93,8 @@ var JOGO = (typeof window !== 'undefined')
  *     não a desenha para ele (Game.veArmadilha). A exceção é a armadilha de
  *     monstro fora do PvP, que segue à vista do jogador como sempre foi.
  *  8. reflect: devolve `pct`% do dano RECEBIDO (antes do escudo) ao agressor,
- *     como dano fixo neutro que não volta a refletir.
+ *     como dano fixo neutro que não volta a refletir. O dano de feitiço com
+ *     `semReflexo` (o Julgamento do Mestre, 26/10) não é refletido.
  *  9. moveTo: deslize por eixo dominante até `maxTiles`, parando na primeira
  *     célula bloqueada. Emite `move {forced:true}` para o renderizador animar.
  * 10. chain: atinge o alvo e salta para o inimigo vivo mais próximo ainda não
@@ -3433,7 +3434,8 @@ var JOGO = (typeof window !== 'undefined')
               castPower,                                       // v2.2/v2.3
               Engine.effResist(u, eff.element),
               Engine.markMultiplier(u));                       // v2: marcas
-            var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid, false, cobreDe(u));   // 19/09: a cobertura baixa
+            // 26/10: `semReflexo` (o Julgamento do Mestre) não volta ao conjurador — 30% de 99999 matava o Mestre
+            var hpLoss = dealDamage(state, u, amt, eff.element, caster.uid, !!spell.semReflexo, cobreDe(u));   // 19/09: a cobertura baixa
             if (eff.lifesteal && hpLoss > 0 && caster.alive) {
               var stolen = Math.round(hpLoss / 2);
               if (stolen > 0) {

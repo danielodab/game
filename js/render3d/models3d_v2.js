@@ -173,7 +173,11 @@ var JOGO = (typeof window !== 'undefined')
             // tamanho de antes e, ao lado de um corpo largo, LIA como maior.
             // Quem tem músculo tem a cabeça proporcionalmente MENOR — foi o
             // relato: "ele deve ser grande e forte de corpo, não de cabeça".
-            build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 0.78 },
+            // 26/10, o dono: "a cabeça do bárbaro está pequena demais". O 0,78 era para a cabeça chibi do KayKit; o
+            // corpo do Meshy já vem com a cabeça na proporção esculpida, e o 0,78 a encolhia ao lado do tronco a
+            // 1,42. `cabeca` 1,00 = a cabeça do tamanho esculpido; o tronco segue largo. (No esqueleto do Meshy só
+            // casam `Spine` e `Head` — os ossos de braço e perna têm outros nomes, e o resto do porte não pega.)
+            build: { chest: 1.42, ombro: 1.34, braco: 1.38, perna: 0.88, cabeca: 1.00 },
             headTilt: 0.30,
             concept: 'Bárbaro brutamontes de dois machados, capa e cabeça baixa' },
     // CAÇADOR (v3, corpo do Meshy feito pelo usuário). Substitui o Batedor

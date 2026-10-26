@@ -230,8 +230,11 @@ var JOGO = (typeof window !== 'undefined')
       /* 04/10, o dono: "o ataque do admin eu só consigo usar uma vez; depois que um monstro que invoca quando
        * morre invoca, não consigo usar de novo no mesmo turno. E o ataque mata o pet — jamais isso deve acontecer".
        * Sem teto por turno e sem custo (a ferramenta do Mestre limpa a sala quantas vezes precisar), e
-       * `soInimigos`: a área só fere o OUTRO lado — pet, parceiro e invocação do próprio lado ficam de fora. */
-      paCost: 0, cooldown: 0, castsPerTurn: 0, soInimigos: true,
+       * `soInimigos`: a área só fere o OUTRO lado — pet, parceiro e invocação do próprio lado ficam de fora.
+       * 26/10, o dono, na Sala dos Espelhos: "o ataque do adm matou ele mesmo com o ataque que limpa sala". O
+       * Gêmeo-Espelho tinha a Guarda de Espelho de pé (30% do dano recebido volta ao agressor): 30% de 99999 é o
+       * Mestre morto. `semReflexo`: o dano do Julgamento não é refletido (js/core/engine.js, efeito damage). */
+      paCost: 0, cooldown: 0, castsPerTurn: 0, soInimigos: true, semReflexo: true,
       range: rng(0, 99, false, false),
       aoe: { shape: 'circle', size: 99 },
       needsEmptyTile: false, targetSide: 'enemy',
