@@ -359,7 +359,7 @@ por dia) é dado pelo servidor com a assinatura da Google. O passo a passo está
 ### As provas
 
 ```bash
-node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa · a escolha vence · onde mora a API
+node tests/app_casca.js           # web: nada muda · aplicativo: média/baixa (iPhone: baixa) · a escolha vence · a queda desce um nível · onde mora a API
 # tests/app_casca.html             # botão voltar, segundo plano e tela acesa, com eventos simulados
 node tests/premio_anuncio.js     # anúncio só na área e só depois do toque · a web não carrega nada · depuração usa bloco de teste
 node tests/app_modelos.js         # o que baixar/apagar pelo manifesto · retomada · MB · a web não usa · a casca

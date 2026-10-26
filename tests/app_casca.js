@@ -11,8 +11,10 @@
  *     plano não fazem nada, nenhum ouvinte nem relógio a mais é ligado, e a API
  *     continua na mesma origem;
  *   · NO APLICATIVO (window.Capacitor nativo, ou `?app=1` nas provas): a classe
- *     entra, a qualidade padrão é 'media' — 'baixa' no aparelho fraco —, e a
- *     escolha gravada nas Configurações (ou o ?graficos=) vence nos dois casos;
+ *     entra, a qualidade padrão é 'media' — 'baixa' no aparelho fraco e, desde
+ *     26/10, no iPhone —, e a escolha gravada nas Configurações (ou o
+ *     ?graficos=) vence nos dois casos; duas quedas seguidas logo ao abrir (a
+ *     página morta por memória, que o Capacitor recarrega) descem um nível;
  *     com a linha que o tools/empacota_www.py grava (window.SOTERRA_APP), a API
  *     passa a ser a do servidor do jogo, mesmo com um ?api= de fora no endereço;
  *   · QUAL APLICATIVO (25/10, o iPhone — docs/APP_STORE.md §8.7): no iPhone faltam o "Sair do jogo", a compra e o
@@ -32,13 +34,14 @@ const raiz = path.join(__dirname, '..');
 const MOBILE = fs.readFileSync(path.join(raiz, 'js', 'mobile.js'), 'utf8');
 const SESSAO = fs.readFileSync(path.join(raiz, 'js', 'core', 'sessao.js'), 'utf8');
 
-/* Uma janela de mentira. op: { busca, capacitor, plataforma, memoria, tela:[l,a], pref, host, appCfg } */
+/* Uma janela de mentira. op: { busca, capacitor, plataforma, memoria, tela:[l,a], pref, host, appCfg, cofre, oculta } */
 function janela(op) {
   op = op || {};
   const classes = new Set();
   const cofre = {};
   const sessao = {};
   if (op.pref) cofre['soterra-pref-ui'] = JSON.stringify(op.pref);
+  if (op.cofre) Object.assign(cofre, op.cofre);
   const ouvintes = { doc: [], win: [] };
   const tela = op.tela || [1920, 1080];
   const ctx = {
@@ -64,7 +67,7 @@ function janela(op) {
     addEventListener: (n) => { ouvintes.win.push(n); },
     fetch() { return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }); },
     document: {
-      hidden: false,
+      hidden: !!op.oculta,
       documentElement: { classList: {
         toggle: (n, on) => { if (on) classes.add(n); else classes.delete(n); },
         add: (n) => classes.add(n), contains: (n) => classes.has(n)
@@ -186,7 +189,14 @@ check('IPHONE: faltam o sair, a compra e o anúncio — e só eles', RECURSOS.ev
 check('IPHONE: os textos citam a App Store', M.loja() === 'App Store');
 check('IPHONE: o <html> ganha app e ios', w._classes.has('app') && w._classes.has('ios'));
 check('IPHONE: a marca da plataforma fica na sessão da aba (o site no quadro a lê)', w._sessao['soterra-plataforma'] === 'ios');
-check('IPHONE: sem o deviceMemory, a qualidade padrão é a média', M.qualidade() === 'media');
+// 26/10 (o vídeo do primeiro iPhone: o jogo recomeçava sozinho a cada 3 s): o WebView do iPhone morre por memória na
+// 'media' — as texturas de cor abrem do tamanho que vieram. O iPhone começa na 'baixa'
+check('IPHONE: sem o deviceMemory, a qualidade padrão é a BAIXA (textura de cor até 512, sem brilho)',
+      M.qualidade() === 'baixa' && M.grafico().cor === 512 && M.grafico().bloom === false, M.qualidade());
+w = janela({ capacitor: true, plataforma: 'ios', tela: [932, 430], pref: { graficos: 'alta' } });
+check('IPHONE: a escolha das Configurações segue vencendo o padrão', w.JOGO.Mobile.qualidade() === 'alta');
+w = janela({ capacitor: true, plataforma: 'android', tela: [915, 412] });
+check('ANDROID sem o deviceMemory segue na média (só o iPhone mudou)', w.JOGO.Mobile.qualidade() === 'media');
 w = janela({ busca: '?app=1&plataforma=ios' });
 check('?app=1&plataforma=ios finge o iPhone no navegador', w.JOGO.Mobile.plataforma() === 'ios' && w.JOGO.Mobile.falta('compra') === true);
 // 26/10: a compra da Apple ligada no servidor (a vitrine e a loja do site gravam a chave): só a compra deixa de faltar
@@ -228,6 +238,62 @@ check('site_aba.js: a marca plataforma=ios vai só quando é o iPhone (no Androi
   const t = fs.readFileSync(path.join(raiz, 'js', 'i18n', f), 'utf8');
   check('js/i18n/' + f + ': as duas frases novas do iPhone traduzidas',
         t.indexOf('"Avaliar na App Store": "') >= 0 && t.indexOf('"Obrigado! Se a caixa não abriu, a Apple decide quando mostrar.": "') >= 0);
+});
+
+// ---------------------------------------- A QUEDA (26/10, o mesmo vídeo do iPhone)
+// a página que passa da memória morre sem pagehide e o Capacitor a recarrega na mesma qualidade: duas quedas seguidas
+// logo ao abrir descem um nível (gravado nas Configurações) e a HUD avisa
+const VIVO = 'soterra-vivo';
+const marca = (segAtras, n) => ({ [VIVO]: JSON.stringify({ t: Date.now() - segAtras * 1000, n: n }) });
+const lida = (c) => JSON.parse(c._cofre[VIVO] || 'null');
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412] });
+check('QUEDA: abrir sem marca grava a marca (quedas 0) e não mexe na qualidade',
+      lida(w) && lida(w).n === 0 && w.JOGO.Mobile.qualidade() === 'media' && w.JOGO.Mobile.baixouSozinho === null &&
+      !w._cofre['soterra-pref-ui']);
+check('QUEDA: o aplicativo escuta o pagehide (a recarga de propósito apaga a marca)', w._ouvintes.win.indexOf('pagehide') >= 0);
+w.JOGO.Mobile.naTela(false);
+check('QUEDA: sair da tela (segundo plano, central de controle, troca de aplicativo) apaga a marca', !(VIVO in w._cofre));
+w.JOGO.Mobile.naTela(true);
+check('QUEDA: voltar à tela grava a marca de novo', lida(w) && lida(w).n === 0);
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: marca(3, 0) });
+check('QUEDA: a 1ª queda logo ao abrir só conta (quedas 1), sem descer',
+      lida(w).n === 1 && w.JOGO.Mobile.qualidade() === 'media' && w.JOGO.Mobile.baixouSozinho === null);
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: marca(3, 1) });
+check('QUEDA: a 2ª seguida desce da média para a baixa, grava nas Configurações e zera a conta',
+      w.JOGO.Mobile.qualidade() === 'baixa' && JSON.parse(w._cofre['soterra-pref-ui']).graficos === 'baixa' &&
+      w.JOGO.Mobile.baixouSozinho && w.JOGO.Mobile.baixouSozinho.de === 'media' && w.JOGO.Mobile.baixouSozinho.para === 'baixa' &&
+      lida(w).n === 0, JSON.stringify([w.JOGO.Mobile.qualidade(), w._cofre]));
+w = janela({ capacitor: true, plataforma: 'ios', tela: [932, 430], pref: { graficos: 'alta', som: 0.5 }, cofre: marca(3, 1) });
+check('QUEDA: no iPhone que subiu para a alta, desce para a média — e o resto das preferências fica',
+      w.JOGO.Mobile.qualidade() === 'media' && JSON.parse(w._cofre['soterra-pref-ui']).graficos === 'media' &&
+      JSON.parse(w._cofre['soterra-pref-ui']).som === 0.5);
+w = janela({ capacitor: true, plataforma: 'ios', tela: [932, 430], cofre: marca(3, 1) });
+check('QUEDA: já na baixa não há para onde descer — segue contando, sem aviso',
+      w.JOGO.Mobile.qualidade() === 'baixa' && w.JOGO.Mobile.baixouSozinho === null && lida(w).n === 2);
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: marca(120, 1) });
+check('QUEDA: marca de mais de 1 minuto (fechou depois de jogar) não conta como queda',
+      lida(w).n === 0 && w.JOGO.Mobile.qualidade() === 'media');
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: { [VIVO]: '{lixo' } });
+check('QUEDA: marca estragada é ignorada', lida(w).n === 0 && w.JOGO.Mobile.qualidade() === 'media');
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: marca(3, 1), busca: '?graficos=alta' });
+check('QUEDA: com o ?graficos= no endereço, desce a partir dele', w.JOGO.Mobile.qualidade() === 'media');
+w = janela({ capacitor: true, plataforma: 'android', memoria: 4, tela: [915, 412], cofre: marca(3, 0), oculta: true });
+check('QUEDA: abrir já fora da tela não deixa marca', !(VIVO in w._cofre));
+w = janela({ memoria: 4, tela: [1920, 1080], cofre: marca(3, 1) });
+check('QUEDA: na WEB nada disto roda — a marca nem é lida, a qualidade segue a alta, nenhum pagehide',
+      lida(w).n === 1 && w.JOGO.Mobile.qualidade() === 'alta' && w.JOGO.Mobile.baixouSozinho === null &&
+      w._ouvintes.win.indexOf('pagehide') < 0);
+w = janela({ busca: '?app=1', memoria: 4, tela: [915, 412], cofre: marca(3, 1) });
+w.JOGO.Mobile.naTela(true);
+check('QUEDA: o ?app=1 das provas (várias páginas do jogo ao mesmo tempo) também não roda',
+      lida(w).n === 1 && w.JOGO.Mobile.qualidade() === 'media' && w._ouvintes.win.indexOf('pagehide') < 0);
+check('hud.js: o aviso da queda sai uma vez, já na praça',
+      HUD.indexOf("if (!quedaAvisada && current === 'hub') avisaQueda();") >= 0 &&
+      HUD.indexOf("if (!safe(function () { return JOGO.Mobile.baixouSozinho; }, null)) return;") >= 0);
+['textos_en.js', 'textos_es.js'].forEach(function (f) {
+  const t = fs.readFileSync(path.join(raiz, 'js', 'i18n', f), 'utf8');
+  check('js/i18n/' + f + ': o aviso da queda traduzido',
+        t.indexOf('"O jogo fechou por falta de memória, então a qualidade gráfica baixou um nível. Dá para mudar em Configurações → Gráficos.": "') >= 0);
 });
 
 // ---------------------------------------------- ONDE MORA A API (sessao.js)

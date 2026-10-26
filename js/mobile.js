@@ -193,11 +193,17 @@ var JOGO = (typeof window !== 'undefined')
      * das Configurações continua vencendo. */
     /* 06/10, o dono, já com o jogo na Play e dois topos de linha na mão: "jogo deve iniciar na qualidade
      * máxima nos celulares". O telefone deixa de começar sempre em 'baixa': começa no nível que a MEMÓRIA dele
-     * aguenta — 8 GB ou mais, 'alta' (o máximo); 4 a 6 GB, 'media'; até 2 GB, 'baixa'. Sem a medida (iPhone),
-     * 'media'. O que derrubava a aba em 04/10 era principalmente a pré-busca guardando os modelos na memória:
+     * aguenta — 8 GB ou mais, 'alta' (o máximo); 4 a 6 GB, 'media'; até 2 GB, 'baixa'. Sem a medida, 'media'.
+     * O que derrubava a aba em 04/10 era principalmente a pré-busca guardando os modelos na memória:
      * ela agora fica desligada em TODO telefone, em qualquer qualidade (js/assets_bundle.js, economiaDeDados). */
+    /* 26/10, o dono, com o vídeo do primeiro iPhone: o jogo abria, mostrava a praça e o prêmio diário e
+     * recomeçava sozinho, a cada 3 s, sem parar. Na 'media' as texturas de cor abrem do tamanho que vieram; o
+     * iPhone dá ao WebView bem menos memória do que o aparelho tem, não diz quanto (não há deviceMemory) e mata
+     * a página que passa dela — o Capacitor a recarrega em silêncio, na mesma qualidade, e ela cai de novo. O
+     * aplicativo de iPhone começa na 'baixa'; quem subir nas Configurações e cair é descido de volta (M.queda). */
     var telefone = M.telefone();
     if (!M.app() && !telefone) return 'alta';
+    if (M.ios()) return 'baixa';
     if (M.aparelhoFraco()) return 'baixa';
     var mem = M.memoriaGb();
     if (mem >= 8) return 'alta';
@@ -237,6 +243,60 @@ var JOGO = (typeof window !== 'undefined')
     return !!(lim && (t - ultimo) < (1000 / lim) - 2);
   };
   M.NIVEIS_GRAFICOS = ['alta', 'media', 'baixa'];
+
+  /* A QUEDA (26/10, o mesmo vídeo do iPhone). A página que passa da memória morre sem aviso — nenhum erro, nenhum
+   * pagehide — e o Capacitor do iPhone a recarrega em silêncio, na mesma qualidade: ela cai de novo no mesmo
+   * ponto, e com a praça 2 s na tela não dá tempo de achar as Configurações. Então, enquanto o jogo está NA TELA,
+   * o aparelho guarda uma marca (CHAVE_VIVO): o instante em que abriu e quantas quedas seguidas vieram antes.
+   * Saída de verdade a apaga — o pagehide (recarga, troca de página) e o segundo plano (visibilitychange). Abrir
+   * e achar a marca é ter morrido na tela; morrer menos de QUEDA_MS depois de abrir, QUEDAS vezes seguidas, é o
+   * laço: a qualidade desce um nível, gravada nas Configurações (o jogador pode subir de novo), e a HUD avisa
+   * (M.baixouSozinho). Duas, e não uma: fechar o aplicativo pelo gesto do sistema logo depois de abrir também
+   * deixa a marca. Só na casca de verdade (ligaApp): a web não passa por aqui, e o `?app=1` das provas abre várias
+   * páginas do jogo ao mesmo tempo — uma acharia a marca da outra. */
+  M.CHAVE_VIVO = 'soterra-vivo';
+  M.QUEDA_MS = 60000;
+  M.QUEDAS = 2;
+  M.baixouSozinho = null;
+  var quedas = 0, vigiaQueda = false;
+  function marcaVivo(n) {
+    try { window.localStorage.setItem(M.CHAVE_VIVO, JSON.stringify({ t: Date.now(), n: n || 0 })); } catch (e) {}
+  }
+  function tiraVivo() {
+    try { window.localStorage.removeItem(M.CHAVE_VIVO); } catch (e) {}
+  }
+  /* o jogo saiu da tela (`na` falso) ou voltou: o segundo plano, e também a central de controle e a troca de
+   * aplicativo do iPhone (o appStateChange) — fechar pelo gesto do sistema passa por elas e não deixa marca */
+  M.naTela = function (na) {
+    if (!vigiaQueda) return;
+    if (na) marcaVivo(quedas); else tiraVivo();
+  };
+  /* Roda uma vez, ao abrir. Devolve quantas quedas seguidas contou (0 depois de descer um nível). */
+  M.queda = function () {
+    var antes = null, n = 0;
+    try { antes = JSON.parse(window.localStorage.getItem(M.CHAVE_VIVO) || 'null'); } catch (e) {}
+    if (antes && typeof antes.t === 'number' && Date.now() - antes.t < M.QUEDA_MS) {
+      n = (Math.max(0, Math.floor(Number(antes.n))) || 0) + 1;
+    }
+    if (n >= M.QUEDAS) {
+      var de = M.qualidade(), i = M.NIVEIS_GRAFICOS.indexOf(de);
+      var para = (i >= 0) ? M.NIVEIS_GRAFICOS[i + 1] : null;
+      if (para) {
+        try {
+          var p = JSON.parse(window.localStorage.getItem('soterra-pref-ui') || '{}') || {};
+          p.graficos = para;
+          window.localStorage.setItem('soterra-pref-ui', JSON.stringify(p));
+        } catch (e2) {}
+        nivelGrafico = para;
+        M.baixouSozinho = { de: de, para: para };
+        n = 0;
+      }
+    }
+    quedas = n;
+    vigiaQueda = true;
+    M.naTela(!(typeof document !== 'undefined' && document.hidden));
+    return n;
+  };
 
   // Classes no <html> para o CSS que a consulta de mídia não alcança sozinha
   // (ex.: alvo de 44 px só quando o ponteiro é o dedo).
@@ -354,9 +414,17 @@ var JOGO = (typeof window !== 'undefined')
   }
   function ligaApp() {
     if (!M.app() || typeof document === 'undefined' || !document.addEventListener) return;
+    // antes de qualquer modelo abrir: é a qualidade que eles vão ler (M.queda)
+    if (M.nativo()) {
+      M.queda();
+      window.addEventListener('pagehide', function () { M.naTela(false); });
+    }
     // o WebView avisa por visibilitychange quando o aplicativo sai da frente; o plugin App repete o
     // aviso (appStateChange) nos aparelhos em que a página não o recebe. Os dois caem no mesmo lugar.
-    document.addEventListener('visibilitychange', function () { M.segundoPlano(!!document.hidden); });
+    document.addEventListener('visibilitychange', function () {
+      M.naTela(!document.hidden);
+      M.segundoPlano(!!document.hidden);
+    });
     /* 06/10 (o dono, no aparelho: "quando clico em sair do jogo ele buga"): o "Sair do jogo" do menu é um
      * LINK para o site — na web é o certo (página nenhuma se fecha sozinha), mas no aplicativo ele levava o
      * WebView para a landing do site, deitada e sem caminho de volta. Aqui o toque nele faz o que o botão
@@ -384,7 +452,7 @@ var JOGO = (typeof window !== 'undefined')
       if (!App) return;
       // com um ouvinte de backButton o Capacitor deixa de fechar o aplicativo sozinho
       App.addListener('backButton', function () { M.voltar(); });
-      App.addListener('appStateChange', function (st) { M.segundoPlano(!(st && st.isActive)); });
+      App.addListener('appStateChange', function (st) { M.naTela(!!(st && st.isActive)); M.segundoPlano(!(st && st.isActive)); });
     });
   }
   ligaApp();

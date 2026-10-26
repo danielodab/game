@@ -17792,7 +17792,17 @@ var JOGO = (typeof window !== 'undefined')
   // ==========================================================================
   // LOOP
   // ==========================================================================
+  /* 26/10: o aplicativo caiu duas vezes seguidas logo ao abrir e a qualidade desceu sozinha (JOGO.Mobile.queda,
+   * js/mobile.js) — o aviso sai uma vez, já na praça, para o jogador saber onde subir de novo */
+  var quedaAvisada = false;
+  function avisaQueda() {
+    quedaAvisada = true;
+    if (!safe(function () { return JOGO.Mobile.baixouSozinho; }, null)) return;
+    toast(tr('O jogo fechou por falta de memória, então a qualidade gráfica baixou um nível. Dá para mudar em Configurações → Gráficos.'));
+    toastT = 8;
+  }
   UI.update = function (dt) {
+    if (!quedaAvisada && current === 'hub') avisaQueda();
     if (toastEl && toastT > 0) {
       toastT -= (dt || 0.016);
       if (toastT <= 0) toastEl.classList.remove('is-on');

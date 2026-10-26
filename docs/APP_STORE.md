@@ -294,9 +294,11 @@ pode enviar à revisão direto. O TestFlight é para você ver o jogo no iPhone 
 8. **Avaliação:** na terceira vitória (depois de dois dias) aparece a caixa da
    Apple — no TestFlight ela **não** aparece de verdade, é normal.
 9. **Tela acesa** na batalha; **segundo plano**: o som cala e volta.
-10. **Memória:** uma sessão longa nos mapas mais pesados, num iPhone mais antigo.
-    Se o iOS matar o WebView por memória, o Capacitor recarrega o jogo (tela
-    preta e volta) — anote em qual mapa.
+10. **Memória:** a praça abre e **fica** (26/10: na qualidade média ela recomeçava
+    a cada 3 s — 8.8). Depois, uma sessão longa nos mapas mais pesados, num iPhone
+    mais antigo. Se o iOS matar o WebView por memória, o Capacitor recarrega o jogo
+    (tela preta e volta); na segunda queda seguida logo ao abrir a qualidade desce
+    um nível e a praça avisa — anote em qual mapa e em qual qualidade.
 11. **O teclado deitado** na tela de entrar e no chat: o campo continua visível.
 12. **Os "Modelos no aparelho" e o "Jogo no aparelho"** (Configurações): podem
     **não aparecer** no iPhone — o WebView da Apple não dá service worker a
@@ -841,9 +843,20 @@ Android segue igual e o iPhone já abre certo.
   web (`js/app_jogo.js` e `js/app_modelos.js` já caem nesse caminho sozinhos). Se um
   dia o iPhone precisar guardar os 159 MB de modelos, o caminho é o plugin
   Filesystem — um projeto à parte.
-- **Memória:** o iOS mata o WebView que passa do limite; o Capacitor recarrega
-  sozinho (5.3, item 10). O iPhone não informa a memória ao jogo, então a qualidade
-  padrão nele é a **média** (`JOGO.Mobile.padraoGrafico`).
+- **Memória — o laço do primeiro iPhone, consertado em 26/10.** O iOS mata o WebView
+  que passa do limite e o Capacitor o recarrega sozinho, em silêncio e na mesma
+  qualidade. No primeiro teste num iPhone de verdade (o vídeo do dono, 26/10) o jogo
+  abria, mostrava a praça e o prêmio diário e **recomeçava a cada ~3 s, sem parar**:
+  na qualidade **média**, que era o padrão do iPhone (ele não informa a memória ao
+  jogo), as texturas de cor abrem do tamanho que vieram, e a página morria assim que
+  a praça se enchia de modelos. **O conserto** (`js/mobile.js`): o aplicativo de
+  iPhone começa na **baixa** (`padraoGrafico`; a escolha das Configurações continua
+  vencendo), e **a queda** (`M.queda`) — uma marca no aparelho enquanto o jogo está
+  na tela, apagada pela saída de verdade (recarga, segundo plano, central de
+  controle, troca de aplicativo): duas mortes seguidas a menos de 1 minuto de abrir
+  descem a qualidade um nível, gravado nas Configurações, e a praça avisa uma vez.
+  Assim quem subir a qualidade e cair não fica preso no laço. Só na casca de verdade:
+  a web e o `?app=1` das provas não passam por ali. Prova: `node tests/app_casca.js`.
 
 ---
 

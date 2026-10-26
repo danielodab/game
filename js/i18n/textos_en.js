@@ -3264,5 +3264,6 @@ JOGO.I18n.registra('en', { textos: {
   "{a}Se você pagou, as barras entram sozinhas em instantes.": "{a}If you paid, the bars will come in on their own in a moment.",
   "Abrindo a App Store…": "Opening the App Store…",
   "A cobrança é feita pela App Store, na forma de pagamento do seu Apple ID. As barras de ouro ficam na sua conta do jogo.": "You're charged through the App Store, with your Apple ID's payment method. The gold bars stay in your game account.",
-  "A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela App Store.": "The shop's currency: characters, auras, forge stones and gifts. Purchases are made through the App Store."
+  "A moeda da loja: personagens, auras, pedras de forja e presentes. A compra é feita pela App Store.": "The shop's currency: characters, auras, forge stones and gifts. Purchases are made through the App Store.",
+  "O jogo fechou por falta de memória, então a qualidade gráfica baixou um nível. Dá para mudar em Configurações → Gráficos.": "The game closed because it ran out of memory, so the graphics quality went down one level. You can change it in Settings → Graphics."
 } });
