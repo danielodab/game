@@ -915,9 +915,11 @@ O que entrou no código: o plugin nativo
    responda que usa **só a Unity Ads** (o jogo fala com ela direto, sem mediação).
 3. Anote o **Game ID de Android** (só números, uns 7 dígitos). Ele fica nas
    configurações do projeto.
-4. O projeto novo já vem com o bloco premiado **`Rewarded_Android`** ("Ad Units").
-   É ele que o jogo usa. Se o seu tiver outro nome, ponha o nome em
-   `SOTERRA_UNITY_BLOCO` (11.3).
+4. Crie o bloco premiado em **Monetization → Placements → Create placement**: o app
+   SOTERRA, formato **Rewarded**. O painel de 13/11/2026 gerou o ID
+   **`BP_Rewarded_Android`**, e é ele o padrão do servidor. A lista de Placements
+   mostra os blocos de TODOS os seus jogos: confira a coluna Application (SOTERRA,
+   `800437608`). Se o ID do seu bloco for outro, ponha-o em `SOTERRA_UNITY_BLOCO` (11.3).
 5. **Conteúdo dos anúncios:** nas configurações de anúncios do projeto, bloqueie o
    conteúdo para maiores de idade (o público da Play é 13+). A Política de
    Privacidade (seção 10) promete isso. Se o painel perguntar se o jogo é dirigido a
@@ -947,7 +949,7 @@ No Coolify → o serviço da API → **Environment Variables**:
 |---|---|
 | `SOTERRA_UNITY_JOGO` | o Game ID de Android (11.1, passo 3) |
 | `SOTERRA_UNITY_SEGREDO` | o segredo que o suporte mandou (11.2). Marque **Is Literal** |
-| `SOTERRA_UNITY_BLOCO` (opcional) | o bloco premiado; sem ela, `Rewarded_Android` |
+| `SOTERRA_UNITY_BLOCO` (opcional) | o bloco premiado; sem ela, `BP_Rewarded_Android` |
 | `SOTERRA_ANUNCIO_PROVEDOR` (opcional) | `unity` ou `admob`. Sem ela, é a Unity sempre que as duas primeiras estiverem preenchidas |
 
 Faça **Redeploy**. O log da API diz, ao subir:

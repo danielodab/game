@@ -115,7 +115,7 @@ RE_TRANSACAO = re.compile(r'^[A-Za-z0-9_.:-]{6,128}$')
 CONSULTA_MAX = 2000
 
 # ---- a Unity Ads (13/11) ----
-UNITY_BLOCO_PADRAO = 'Rewarded_Android'           # o bloco premiado que a Unity cria em todo projeto novo
+UNITY_BLOCO_PADRAO = 'BP_Rewarded_Android'        # o bloco premiado que o painel novo da Unity criou para o SOTERRA (13/11)
 RE_UNITY_JOGO = re.compile(r'^[0-9]{5,12}$')      # o Game ID de Android: só números
 RE_UNITY_BLOCO = re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
 RE_OID = re.compile(r'^[A-Za-z0-9_.:-]{1,120}$')  # o id do aviso que a Unity gera

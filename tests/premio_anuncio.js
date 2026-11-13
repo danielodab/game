@@ -40,7 +40,7 @@ const BLOCO = 'ca-app-pub-4989579635131748/7206484209';
 const ZERA = Math.floor(Date.now() / 1000) + 3600;      // o dia do servidor vira daqui a uma hora
 const BLOCO_TESTE = 'ca-app-pub-3940256099942544/5224354917';
 
-const UNITY = { jogo: '5550123', bloco: 'Rewarded_Android' };
+const UNITY = { jogo: '5550123', bloco: 'BP_Rewarded_Android' };
 /* op: { busca, capacitor, debug, servidor:{...}, anuncio:'ok'|'sem'|'fecha',
  *       unity: { plugin (a casca tem o plugin? padrão sim), inicia:'ok'|'falha', carrega:'pronto'|'sem', mostra:'visto'|'pulado'|'falhou' } }
  * servidor: { provedor, unity (a config que o servidor manda), bloco (o do AdMob; null = AdMob fora) } */
