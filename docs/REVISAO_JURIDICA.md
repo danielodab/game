@@ -68,6 +68,27 @@ o advogado confere cada linha.
    - **transferência internacional** (a Google) e a lista de "com quem dividimos";
    - os Termos (seção 5, barras e vinténs) não falam do prêmio por anúncio: avaliar uma
      linha dizendo que ele é um bônus, sem valor em dinheiro, que pode acabar ou mudar.
+8. **A Unity Ads, a segunda rede de anúncios (13/11).** O dono trocou a rede da área
+   "Ganhar prêmios" para a **Unity Ads** (Unity Software Inc., EUA); o AdMob segue de pé
+   para quem ainda tem o aplicativo antigo, e o servidor escolhe a rede
+   (`docs/GOOGLE_PLAY.md` §11). A Política ganhou: na seção 4, a exceção fala de "um
+   serviço de anúncios de terceiros — o da Unity ou o da Google"; na seção 6, o item
+   **"Unity (Unity Ads)"** (o que o SDK coleta, e que mandamos à Unity só o bilhete de
+   uso único); a Unity na transferência internacional; e, na seção 10, o limite de
+   conteúdo "à Unity, pelas regras de conteúdo do nosso cadastro nela" — **promessa que
+   só vale depois de o dono restringir o conteúdo no painel da Unity** (§11.2, passo 5).
+   A `VERSAO_TERMOS` subiu para **`2026-11-13`** (quem tem conta vê o pedido de novo
+   aceite na página da conta). Pontos para decidir:
+   - **consentimento:** o aplicativo NÃO mostra tela de consentimento antes da Unity (a
+     tela da Google é só do AdMob). No Brasil a base legal escolhida para o dado de
+     publicidade ainda é a do item 7; **se o jogo for oferecido na Europa ou no Reino
+     Unido**, falta uma solução de consentimento (CMP) que avise a Unity — sem isso, não
+     distribuir lá;
+   - a **lista de "com quem dividimos"** e a de transferência internacional, agora com a
+     Unity; o texto da seção 6 foi escrito pela documentação pública do SDK, não pelo
+     contrato da Unity — conferir com os termos de publisher dela;
+   - os **Termos** não citam rede nenhuma (falam da área "Ganhar prêmios" em geral): não
+     mudaram.
 
 Quando qualquer um dos dois documentos mudar de um jeito que mude direito ou
 dever de alguém: suba a data em `servidor/privacidade.py` (`VERSAO_TERMOS`),
@@ -144,6 +165,9 @@ Quando uma dessas faxinas entrar, o número ganha `data-regua` na página e a co
 entra em `tests/privacidade_api.py`, como os outros prazos.
 
 ### A versão e o aceite
+
+**13/11:** a `VERSAO_TERMOS` subiu de `2026-10-06` para **`2026-11-13`** (a Unity Ads na
+Política, item 8 acima), pelo mesmo caminho descrito aqui embaixo.
 
 A `VERSAO_TERMOS` subiu de `2026-10-02` para **`2026-10-06`** nos quatro lugares
 (`servidor/privacidade.py`, `site/site.js`, o `data-versao` e o "Versão de" das duas

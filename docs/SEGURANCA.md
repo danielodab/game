@@ -318,6 +318,24 @@ verificação pelo servidor do AdMob (SSV).
 - No cliente (`js/core/premio_anuncio.js`): nada de anúncio antes de o jogador ENTRAR na área, e
   o anúncio só é pedido depois do toque. Provas: `tests/anuncio_api.py`, `tests/premio_anuncio.js`.
 
+**A Unity Ads (13/11; `docs/GOOGLE_PLAY.md` §11).** A segunda rede usa o MESMO bilhete, o mesmo
+crédito (`_anuncio_entrega`, o caminho comum às duas redes) e os mesmos limites. Muda a porta:
+
+- o anúncio leva o bilhete como `sid` (o "server ID" da Unity; no SDK 4.20,
+  `ShowConfiguration.withCustomRewardString`). Não há código da conta: o bilhete é o elo;
+- `GET /api/anuncio/unity?sid=…&oid=…&hmac=…` (SEM sessão; quem chama é a Unity). O `hmac` é um
+  HMAC-MD5 de TODOS os outros parâmetros da consulta, decodificados, em ordem alfabética da chave,
+  como `chave=valor` unidos por vírgula, com o segredo que o suporte da Unity entrega
+  (`SOTERRA_UNITY_SEGREDO`, só no ambiente). Comparação em tempo constante. Chave repetida na
+  consulta, parâmetro fora da conta, `hmac` ausente: **403 e nada mais é lido**;
+- o `oid` é a transação, gravada como `unity:<oid>` na mesma coluna `UNIQUE`: o mesmo aviso nunca
+  credita duas vezes e nunca colide com um `transaction_id` da Google;
+- com o `hmac` bom a resposta é sempre 200 com o texto `1` (o "recebido" que a Unity espera);
+- sem o segredo (ou sem o Game ID), a rota responde 503 e o servidor manda o aplicativo para o
+  AdMob. O segredo nunca sai do servidor: nem em `GET /api/anuncio`, nem no log;
+- o MD5 aqui é o que a Unity escolheu para o HMAC dela, não uma escolha nossa: num HMAC com segredo
+  forte, as colisões do MD5 não dão a ninguém um jeito de forjar o aviso.
+
 ### 4.6 A troca
 `POST /api/troca` move itens (por iid), bichos e vinténs entre os DOIS estados do
 servidor numa transação: o juiz tira do estado de quem dá e põe no de quem recebe

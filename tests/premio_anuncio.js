@@ -17,7 +17,12 @@
  *   · A MOEDA DA PRAÇA ("Prêmio Grátis!") só existe no aplicativo, para a conta comum conectada; lê o que
  *     resta no servidor do jogo, abre a área e mais nada; acabou o limite, some;
  *   · NO IPHONE (25/10) a área e a moeda não existem — o AdMob não entra no aplicativo de lá (docs/APP_STORE.md
- *     §8.6) — e nada é pedido; no Android com o getPlatform tudo segue igual. */
+ *     §8.6) — e nada é pedido; no Android com o getPlatform tudo segue igual;
+ *   · A UNITY (13/11): com o servidor pedindo a Unity e a casca tendo o plugin dela, entrar liga o SDK da Unity
+ *     (e NÃO busca a ponte do AdMob); o toque pede o bilhete, carrega e mostra com o bilhete como sid; pulou,
+ *     sem anúncio, falhou e SDK que não liga dão o recado certo; depuração liga o modo de teste; a casca
+ *     ANTIGA (sem o plugin) cai no AdMob; o servidor pedindo o AdMob manda; o plugin é um Proxy e nunca vira
+ *     o valor de uma promessa. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -35,11 +40,14 @@ const BLOCO = 'ca-app-pub-4989579635131748/7206484209';
 const ZERA = Math.floor(Date.now() / 1000) + 3600;      // o dia do servidor vira daqui a uma hora
 const BLOCO_TESTE = 'ca-app-pub-3940256099942544/5224354917';
 
-/* op: { busca, capacitor, debug, servidor:{...}, anuncio:'ok'|'sem'|'fecha' } */
+const UNITY = { jogo: '5550123', bloco: 'Rewarded_Android' };
+/* op: { busca, capacitor, debug, servidor:{...}, anuncio:'ok'|'sem'|'fecha',
+ *       unity: { plugin (a casca tem o plugin? padrão sim), inicia:'ok'|'falha', carrega:'pronto'|'sem', mostra:'visto'|'pulado'|'falhou' } }
+ * servidor: { provedor, unity (a config que o servidor manda), bloco (o do AdMob; null = AdMob fora) } */
 function janela(op) {
   op = op || {};
   const srv = Object.assign({ hoje: { vintens: 0, barras: 0 }, credita: true, limite: false }, op.servidor || {});
-  const reg = { scripts: [], api: [], plugin: [], relogios: 0, ouvintes: {}, nos: 0 };
+  const reg = { scripts: [], api: [], plugin: [], relogios: 0, ouvintes: {}, nos: 0, unity: [], registrados: [], unityThen: 0 };
   function no() {
     reg.nos++;
     const e = { style: {}, innerHTML: '', classList: { add() {} }, setAttribute() {}, addEventListener(n, f) { e['ao_' + n] = f; },
@@ -70,6 +78,25 @@ function janela(op) {
       });
     }
   };
+  /* o plugin da Unity como o Capacitor o entrega: um PROXY que responde por qualquer nome — inclusive `then`.
+   * Quem resolve uma promessa com ele fica esperando para sempre (o `then` dele nunca responde): a prova conta. */
+  const uop = op.unity || {};
+  const unityMetodos = {
+    inicia(o) { reg.unity.push('inicia'); reg.uInicia = o; return uop.inicia === 'falha' ? Promise.reject(new Error('INTERNAL_ERROR')) : Promise.resolve({ ok: true }); },
+    carrega(o) { reg.unity.push('carrega'); reg.uCarrega = o; return Promise.resolve({ estado: uop.carrega || 'pronto' }); },
+    mostra(o) {
+      reg.unity.push('mostra'); reg.uMostra = o;
+      return new Promise((resolve) => setImmediate(() => {
+        const e = uop.mostra || 'visto';
+        if (e === 'visto' && srv.credita) srv.hoje[reg.tipo]++;          // a Unity avisou o servidor
+        resolve({ estado: e });
+      }));
+    }
+  };
+  const unityFalso = new Proxy({}, { get(alvo, nome) {
+    if (nome === 'then') { reg.unityThen++; return function () {}; }
+    return unityMetodos[nome] || function () { reg.unity.push('?' + String(nome)); return Promise.reject(new Error('UNIMPLEMENTED')); };
+  } });
   const ctx = {
     console, Promise, JSON, Math, Number, String, Object, Date, Array, setImmediate,
     setTimeout(f, ms) { reg.relogios++; if (!(ms > 60000)) setImmediate(f); else reg.longo = ms; return 1; }, clearTimeout() {},   // o relógio longo (a virada do dia) só é contado
@@ -84,23 +111,34 @@ function janela(op) {
         if (tag === 'script') {
           Object.defineProperty(e, 'src', { set(v) {
             reg.scripts.push(v);
-            setImmediate(() => { if (/admob\.js/.test(v)) ctx.capacitorStripe = { AdMob: pluginFalso }; if (e.onload) e.onload(); });
+            setImmediate(() => {
+              if (/admob\.js/.test(v)) ctx.capacitorStripe = { AdMob: pluginFalso };
+              // o núcleo do Capacitor: o registerPlugin e o isPluginAvailable (a lista vem da casca)
+              if (/vendor\/capacitor\/capacitor\.js/.test(v) && op.unity) {
+                ctx.capacitorExports = { registerPlugin(n) { reg.registrados.push(n); return unityFalso; } };
+                ctx.Capacitor.isPluginAvailable = (n) => n === 'UnityAds' && uop.plugin !== false;
+              }
+              if (e.onload) e.onload();
+            });
           } });
         }
         return e;
       },
-      head: { appendChild() {} }, body: { appendChild(f) { f.parentNode = ctx.document.body; }, removeChild() {} }
+      head: { appendChild() {} }, body: { appendChild(f) { f.parentNode = ctx.document.body; reg.fundo = f; }, removeChild() {} }
     },
     JOGO: { GM: { ativo: () => !!op.mestre }, Sessao: { ativa: () => !op.semSessao, contaId: () => 'conta-7', api(rota, o) {
       reg.api.push((o && o.method || 'GET') + ' ' + rota);
       const premios = ['vintens', 'barras'].map((t) => ({ tipo: t, qtd: t === 'vintens' ? 50 : 1, hoje: srv.hoje[t], limite: 5, faltam: 5 - srv.hoje[t] }));
+      // 13/11: o servidor novo diz a rede; o de antes (sem `provedor`) não diz nada e a tela segue no AdMob
+      const redes = 'provedor' in srv ? { provedor: srv.provedor, unity: srv.unity || null, bloco: 'bloco' in srv ? srv.bloco : BLOCO }
+        : { bloco: BLOCO };
       if (rota === '/api/anuncio') {
-        return Promise.resolve({ ok: true, status: 200, premios, limite: 5, zeraEm: ZERA, bloco: BLOCO, aparelhosTeste: [], mestre: false });
+        return Promise.resolve(Object.assign({ ok: true, status: 200, premios, limite: 5, zeraEm: ZERA, aparelhosTeste: [], mestre: false }, redes));
       }
       if (rota === '/api/anuncio/bilhete') {
         reg.tipo = o.body.tipo;
         if (srv.limite) return Promise.resolve({ ok: false, status: 409, limite: true, premios, zeraEm: ZERA });
-        return Promise.resolve({ ok: true, status: 201, bilhete: 'bilhete-de-prova-0123456789', conta: 'codigo-da-conta', tipo: o.body.tipo, bloco: BLOCO });
+        return Promise.resolve(Object.assign({ ok: true, status: 201, bilhete: 'bilhete-de-prova-0123456789', conta: 'codigo-da-conta', tipo: o.body.tipo }, redes));
       }
       return Promise.resolve({ ok: false, status: 404 });
     } } }
@@ -132,15 +170,15 @@ const FALTA_NO_IPHONE = JSON.parse((/M\.FALTA_NO_IPHONE = (\{[^}]*\})/.exec(le('
   check('web: esse pedido mora no mesmo bloco "só no aplicativo" da compra pela Play',
         !!blocoApp && /premio_anuncio\.js/.test(blocoApp[0]) &&
         INDEX.indexOf('compra_play.js') < INDEX.indexOf('premio_anuncio.js') && INDEX.indexOf('premio_anuncio.js') < INDEX.indexOf('catch (eApp)'));
-  check('web: nada de AdMob no index.html, no mobile.js nem na lista de pontes que o aplicativo carrega ao abrir',
-        !/admob/i.test(INDEX) && !/admob/i.test(le('js', 'mobile.js')));
+  check('web: nada de AdMob nem de Unity no index.html, no mobile.js nem na lista de pontes que o aplicativo carrega ao abrir',
+        !/admob|unityads/i.test(INDEX) && !/admob|unityads/i.test(le('js', 'mobile.js')));
   const HUD = le('js', 'ui', 'hud.js');
   check('web: as Configurações só mostram a seção com JOGO.PremioAnuncio.noApp()',
         /if \(JOGO\.PremioAnuncio && JOGO\.PremioAnuncio\.noApp\(\)\) \{[\s\S]{0,700}JOGO\.PremioAnuncio\.abre\(\)/.test(HUD) &&
         HUD.split('PremioAnuncio.abre(').length === 2);
   const fora = [].concat(fs.readdirSync(path.join(raiz, 'js', 'core')), fs.readdirSync(path.join(raiz, 'js', 'ui')))
     .filter((f) => /\.js$/.test(f) && f !== 'premio_anuncio.js')
-    .filter((f) => { const p = fs.existsSync(path.join(raiz, 'js', 'core', f)) ? ['js', 'core', f] : ['js', 'ui', f]; return /admob|prepareRewardVideoAd|showBanner|prepareInterstitial/i.test(le(...p)); });
+    .filter((f) => { const p = fs.existsSync(path.join(raiz, 'js', 'core', f)) ? ['js', 'core', f] : ['js', 'ui', f]; return /admob|UnityAds|prepareRewardVideoAd|showBanner|prepareInterstitial/i.test(le(...p)); });
   check('nenhum outro arquivo do jogo fala com o plugin de anúncio', fora.length === 0, fora.join(','));
   check('o arquivo só usa o anúncio PREMIADO: nada de banner, intersticial ou anúncio de abertura',
         !/showBanner|prepareInterstitial|showInterstitial|AppOpen|RewardInterstitial/.test(FONTE));
@@ -295,6 +333,84 @@ const FALTA_NO_IPHONE = JSON.parse((/M\.FALTA_NO_IPHONE = (\{[^}]*\})/.exec(le('
   await calma();
   check('ANDROID: a moeda da praça segue aparecendo', !!moedaAndroid);
 
+  // ------------------------------------------------------------- A UNITY (13/11)
+  const naUnity = { provedor: 'unity', unity: UNITY };
+  w = janela({ capacitor: true, servidor: naUnity, unity: {} });
+  P = w.JOGO.PremioAnuncio;
+  await calma();
+  check('unity: carregar o arquivo não pede nada (nem o núcleo do Capacitor, nem o plugin da Unity)',
+        w._reg.scripts.length === 0 && w._reg.api.length === 0 && w._reg.unity.length === 0 && w._reg.registrados.length === 0);
+  P.abre();
+  await calma();
+  check('unity: entrar liga o SDK da Unity com o Game ID do servidor, fora do modo de teste',
+        P._st.fase === 'ok' && P._st.rede === 'unity' && w._reg.unity.join() === 'inicia' &&
+        w._reg.uInicia.jogo === UNITY.jogo && w._reg.uInicia.teste === false, P._st.fase + ' ' + w._reg.unity.join());
+  check('unity: entrar NÃO busca a ponte do AdMob, não fala com o plugin dele e não pede anúncio',
+        !w._reg.scripts.some((s) => /admob\.js/.test(s)) && w._reg.plugin.length === 0 && w._reg.unity.indexOf('carrega') < 0);
+  check('unity: o plugin é registrado UMA vez, com o nome do MainActivity', w._reg.registrados.join() === 'UnityAds');
+  fim = await P._assiste('barras');
+  check('unity: o toque pede o bilhete, carrega o bloco e mostra com o BILHETE como sid',
+        fim === 'creditado' && w._reg.api[1] === 'POST /api/anuncio/bilhete' && w._reg.unity.join() === 'inicia,carrega,mostra' &&
+        w._reg.uCarrega.bloco === UNITY.bloco && w._reg.uMostra.sid === 'bilhete-de-prova-0123456789', fim + ' ' + w._reg.unity.join());
+  check('unity: o contador é o do servidor e o recado diz o prêmio', P._st.premios.barras.hoje === 1 && P._st.recado.tipo === 'bom');
+  fim = await P._assiste('vintens');
+  check('unity: o segundo anúncio não liga o SDK de novo', fim === 'creditado' && w._reg.unity.filter((x) => x === 'inicia').length === 1);
+  const telaUnity = w._reg.fundo.querySelector('[data-pan-corpo]').innerHTML;
+  check('unity: a nota da tela diz que é a Unity quem confirma (e não a Google)',
+        /quando a Unity confirma/.test(telaUnity) && !/quando a Google confirma/.test(telaUnity), telaUnity.slice(-300));
+  check('unity: o plugin (um Proxy) nunca virou o valor de uma promessa', w._reg.unityThen === 0, w._reg.unityThen);
+
+  w = janela({ capacitor: true, servidor: naUnity, unity: { mostra: 'pulado' } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  fim = await P._assiste('barras');
+  check('unity: pulou o anúncio: nada ganho, nada perdido, sem esperar o servidor',
+        fim === 'fechou' && w._reg.api.filter((a) => a === 'GET /api/anuncio').length === 1, fim);
+  w = janela({ capacitor: true, servidor: naUnity, unity: { carrega: 'sem' } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  fim = await P._assiste('vintens');
+  check('unity: sem anúncio para carregar: avisa e não mostra nada', fim === 'sem-anuncio' && w._reg.unity.indexOf('mostra') < 0, fim);
+  w = janela({ capacitor: true, servidor: naUnity, unity: { mostra: 'falhou' } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  fim = await P._assiste('vintens');
+  check('unity: o anúncio falhou na tela: avisa e não promete prêmio', fim === 'sem-anuncio' && P._st.premios.vintens.hoje === 0, fim);
+  w = janela({ capacitor: true, servidor: naUnity, unity: { inicia: 'falha' } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  check('unity: o SDK não ligou: a área diz isso, oferece tentar de novo e não deixa assistir',
+        P._st.fase === 'sem-sdk' && (await P._assiste('barras')) === 'recusado' && w._reg.api.indexOf('POST /api/anuncio/bilhete') < 0, P._st.fase);
+  w = janela({ capacitor: true, debug: true, servidor: naUnity, unity: {} });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  check('unity: compilação de DEPURAÇÃO liga o modo de TESTE da Unity', w._reg.uInicia.teste === true);
+
+  w = janela({ capacitor: true, servidor: naUnity, unity: { plugin: false } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  fim = await P._assiste('barras');
+  check('casca antiga: a nota da tela segue dizendo que é a Google quem confirma',
+        /quando a Google confirma/.test(w._reg.fundo.querySelector('[data-pan-corpo]').innerHTML));
+  check('casca ANTIGA (sem o plugin da Unity): o jogo cai no AdMob, como antes',
+        P._st.rede === 'admob' && fim === 'creditado' && w._reg.scripts.some((s) => /admob\.js/.test(s)) &&
+        w._reg.unity.length === 0 && w._reg.pedido.adId === BLOCO, P._st.rede + ' ' + fim);
+  w = janela({ capacitor: true, servidor: { provedor: 'unity', unity: UNITY, bloco: null }, unity: { plugin: false } });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  check('casca antiga e o AdMob fora no servidor: "atualize o aplicativo", e nenhuma ponte do AdMob',
+        P._st.fase === 'sem-app' && !w._reg.scripts.some((s) => /admob\.js/.test(s)), P._st.fase);
+  w = janela({ capacitor: true, servidor: { provedor: 'admob', unity: UNITY }, unity: {} });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  check('o servidor pedindo o AdMob manda, mesmo com a Unity na casca',
+        P._st.rede === 'admob' && w._reg.unity.length === 0 && w._reg.plugin.indexOf('initialize') >= 0, P._st.rede);
+  w = janela({ capacitor: true, servidor: { provedor: 'unity', unity: UNITY, bloco: null }, unity: {} });
+  P = w.JOGO.PremioAnuncio; P.abre(); await calma();
+  fim = await P._assiste('fragmentos');
+  check('o AdMob fora no servidor e a Unity de pé: a área funciona pela Unity',
+        P._st.rede === 'unity' && P._st.fase === 'ok' && w._reg.unity.join() === 'inicia,carrega,mostra', P._st.fase);
+
+  w = janela({ capacitor: true, servidor: naUnity, unity: {} });
+  P = w.JOGO.PremioAnuncio; moeda = P.atalho(w._no()); await calma();
+  check('unity, moeda da praça: aparece, e mostrar não liga SDK nem busca ponte',
+        moeda.className === 'pan-atalho' && w._reg.unity.length === 0 && w._reg.scripts.length === 0);
+  moeda.ao_click(); await calma();
+  check('unity, moeda da praça: o toque abre a área (liga o SDK) e nenhum anúncio é pedido',
+        P.aberto() && w._reg.unity.join() === 'inicia' && w._reg.api.indexOf('POST /api/anuncio/bilhete') < 0, w._reg.unity.join());
+
   // ------------------------------------------------------------- A CASCA
   const manif = le('android', 'app', 'src', 'main', 'AndroidManifest.xml');
   check('android: o manifesto leva o id do aplicativo no AdMob e adia a medição até o SDK ser ligado',
@@ -306,6 +422,21 @@ const FALTA_NO_IPHONE = JSON.parse((/M\.FALTA_NO_IPHONE = (\{[^}]*\})/.exec(le('
         /registerPlugin\('AdMob'/.test(le('vendor', 'capacitor', 'admob.js')));
   check('o bloco real do dono não está escrito no cliente (vem do servidor); o de teste está',
         FONTE.indexOf('4989579635131748') < 0 && FONTE.indexOf(BLOCO_TESTE) >= 0);
+  // 13/11: a casca da Unity — o plugin do próprio aplicativo
+  const UNITY_JAVA = le('android', 'app', 'src', 'main', 'java', 'br', 'com', 'soterra', 'jogo', 'UnityAdsPlugin.java');
+  const MAIN = le('android', 'app', 'src', 'main', 'java', 'br', 'com', 'soterra', 'jogo', 'MainActivity.java');
+  const UNITY_CODIGO = UNITY_JAVA.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');   // sem os comentários
+  check('android: o MainActivity registra o UnityAdsPlugin ANTES do super.onCreate (é ali que a ponte nasce)',
+        /registerPlugin\(UnityAdsPlugin\.class\);\s*super\.onCreate\(savedInstanceState\);/.test(MAIN));
+  check('android: o plugin se chama "UnityAds" e tem só inicia, carrega e mostra',
+        /@CapacitorPlugin\(name = "UnityAds"\)/.test(UNITY_JAVA) &&
+        (UNITY_JAVA.match(/@PluginMethod/g) || []).join() === '@PluginMethod,@PluginMethod,@PluginMethod' &&
+        /public void inicia\(PluginCall/.test(UNITY_JAVA) && /public void carrega\(PluginCall/.test(UNITY_JAVA) && /public void mostra\(PluginCall/.test(UNITY_JAVA));
+  check('android: o sid do anúncio é o bilhete (withCustomRewardString), sem o PlayerMetaData obsoleto, e só premiado',
+        /withCustomRewardString\(sid\)/.test(UNITY_CODIGO) && !/PlayerMetaData|BannerAd|InterstitialAd/.test(UNITY_CODIGO));
+  check('android: o Game ID da Unity não está escrito na casca (vem do servidor)', !/"[0-9]{5,12}"/.test(UNITY_CODIGO));
+  check('android: o SDK da Unity numa versão fixa no build.gradle do aplicativo',
+        /implementation "com\.unity3d\.ads:unity-ads:\d+\.\d+\.\d+"/.test(le('android', 'app', 'build.gradle')));
 
   console.log('\n' + (falhas ? 'FALHOU ' + falhas + ' de ' + total : 'tudo passou (' + total + ')'));
   process.exit(falhas ? 1 : 0);

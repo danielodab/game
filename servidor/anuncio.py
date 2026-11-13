@@ -41,7 +41,23 @@ a Google suspende a conta do AdMob por isso). A conta BANIDA não chega às rota
 com sessão, e um prêmio que chegue depois do banimento não é creditado.
 
 A ECDSA é a da biblioteca `cryptography` (py3-cryptography no Dockerfile). Sem
-ela, a área fica desligada (503) — nunca "credita sem conferir".
+ela, o AdMob fica desligado — nunca "credita sem conferir".
+
+A UNITY ADS (13/11, o dono: "já que o AdMob não funciona, quero a Unity para as
+propagandas"). A segunda rede usa o MESMO bilhete, os mesmos limites e o mesmo
+crédito; muda só quem assina o aviso:
+  1. o aplicativo mostra o anúncio da Unity com o bilhete como `sid` (o "server ID"
+     que a Unity devolve; o plugin nativo é android/.../UnityAdsPlugin.java);
+  2. visto até o fim, a UNITY chama GET /api/anuncio/unity?sid=…&oid=…&hmac=…;
+  3. o hmac é um HMAC-MD5 de todos os outros parâmetros, em ordem alfabética, como
+     'chave=valor' unidos por vírgula, com o SEGREDO que o suporte da Unity entrega
+     ao ligar os avisos (SOTERRA_UNITY_SEGREDO). Sem segredo, a Unity fica desligada;
+  4. o `oid` é a transação (com o prefixo 'unity:', para nunca colidir com a da
+     Google na mesma coluna). A resposta a todo aviso assinado é 200 com o texto '1',
+     o "recebido" que a Unity espera — repetir não muda nada.
+QUEM ESCOLHE A REDE é o servidor (SOTERRA_ANUNCIO_PROVEDOR, ou a Unity quando ela
+está configurada); o aplicativo antigo, sem o plugin da Unity, segue no AdMob, e o
+aviso das duas redes vale ao mesmo tempo.
 
 Tabelas NOVAS, nunca ALTER (o rolling update). Chamam-se `propaganda_*` porque
 `mercado_anuncios` já é o anúncio de venda do mercadinho.
@@ -97,6 +113,14 @@ REF_BARRAS = 'anuncio:'          # a `ref` do movimento de barras (loja.py mostr
 RE_BILHETE = re.compile(r'^[A-Za-z0-9_-]{20,64}$')
 RE_TRANSACAO = re.compile(r'^[A-Za-z0-9_.:-]{6,128}$')
 CONSULTA_MAX = 2000
+
+# ---- a Unity Ads (13/11) ----
+UNITY_BLOCO_PADRAO = 'Rewarded_Android'           # o bloco premiado que a Unity cria em todo projeto novo
+RE_UNITY_JOGO = re.compile(r'^[0-9]{5,12}$')      # o Game ID de Android: só números
+RE_UNITY_BLOCO = re.compile(r'^[A-Za-z0-9_.-]{1,64}$')
+RE_OID = re.compile(r'^[A-Za-z0-9_.:-]{1,120}$')  # o id do aviso que a Unity gera
+PREFIXO_UNITY = 'unity:'                          # a transação da Unity, na coluna UNIQUE de sempre
+PROVEDORES = ('unity', 'admob')
 
 FRASE_DESLIGADO = 'os anúncios premiados não estão disponíveis agora'
 FRASE_MESTRE = 'a conta do Mestre não assiste a anúncios'
@@ -172,17 +196,38 @@ def _b64url(texto):
 
 
 class Anuncios:
-    """A configuração e as chaves públicas do AdMob. `arquivo` é SÓ PARA AS PROVAS: as
-    chaves saem de um arquivo local no formato do verifier-keys.json — a assinatura
-    continua sendo conferida, só a fonte muda."""
+    """A configuração das duas redes: o AdMob (as chaves públicas da Google) e a Unity Ads
+    (o Game ID, o bloco e o segredo dos avisos). `arquivo` é SÓ PARA AS PROVAS: as chaves
+    do AdMob saem de um arquivo local no formato do verifier-keys.json — a assinatura
+    continua sendo conferida, só a fonte muda.
 
-    def __init__(self, bloco=BLOCO_PADRAO, ligado=True, aparelhos=(), arquivo=None, url=URL_CHAVES):
+    `admob` e `unity` dizem se cada rede pode creditar; `ligado`, se alguma pode;
+    `provedor`, a que o aplicativo deve usar (a pedida, se ela estiver de pé)."""
+
+    def __init__(self, bloco=BLOCO_PADRAO, ligado=True, aparelhos=(), arquivo=None, url=URL_CHAVES,
+                 unity_jogo='', unity_bloco=UNITY_BLOCO_PADRAO, unity_segredo='', provedor=''):
         self.bloco = bloco
         self.aparelhos = tuple(aparelhos)
         self.arquivo = arquivo
         self.url = url
-        self.defeito = None if TEM_ECDSA else 'falta a biblioteca cryptography'
-        self.ligado = bool(ligado) and TEM_ECDSA and bool(bloco)
+        self.unity_jogo = unity_jogo if RE_UNITY_JOGO.match(unity_jogo or '') else ''
+        self.unity_bloco = unity_bloco if RE_UNITY_BLOCO.match(unity_bloco or '') else ''
+        self._unity_segredo = (unity_segredo or '').strip()
+        chave = bool(ligado)
+        self.admob = chave and TEM_ECDSA and bool(bloco)
+        self.unity = chave and bool(self.unity_jogo and self.unity_bloco and self._unity_segredo)
+        self.ligado = self.admob or self.unity
+        if provedor in PROVEDORES and getattr(self, provedor):
+            self.provedor = provedor
+        else:
+            self.provedor = 'unity' if self.unity else 'admob' if self.admob else None
+        if not chave:
+            self.defeito = 'SOTERRA_ANUNCIOS=0'
+        elif not self.ligado:
+            self.defeito = ('falta a biblioteca cryptography' if not TEM_ECDSA else 'sem bloco do AdMob') + \
+                           ' e a Unity não está configurada'
+        else:
+            self.defeito = None
         self._chaves, self._lidas_em, self._tentou_em = {}, 0, 0
         self._tranca = threading.Lock()
 
@@ -192,8 +237,14 @@ class Anuncios:
         bloco = (env.get('SOTERRA_ANUNCIO_BLOCO') or '').strip() or BLOCO_PADRAO
         aparelhos = [a.strip() for a in (env.get('SOTERRA_ANUNCIO_APARELHOS_TESTE') or '').split(',')
                      if re.match(r'^[A-Fa-f0-9-]{16,64}$', a.strip())][:10]
+        unity_jogo = (env.get('SOTERRA_UNITY_JOGO') or '').strip()
+        if unity_jogo and not RE_UNITY_JOGO.match(unity_jogo):
+            log.warning("anúncio: SOTERRA_UNITY_JOGO não parece um Game ID de Android (só números); a Unity fica desligada")
         return cls(bloco=bloco, ligado=(env.get('SOTERRA_ANUNCIOS') or '1').strip() != '0', aparelhos=aparelhos,
-                   arquivo=arquivo)
+                   arquivo=arquivo, unity_jogo=unity_jogo,
+                   unity_bloco=(env.get('SOTERRA_UNITY_BLOCO') or '').strip() or UNITY_BLOCO_PADRAO,
+                   unity_segredo=env.get('SOTERRA_UNITY_SEGREDO') or '',
+                   provedor=(env.get('SOTERRA_ANUNCIO_PROVEDOR') or '').strip().lower())
 
     @property
     def unidade(self):
@@ -203,8 +254,12 @@ class Anuncios:
     def descricao(self):
         if not self.ligado:
             return 'anúncio premiado desligado (%s)' % (self.defeito or 'SOTERRA_ANUNCIOS=0')
-        return 'anúncio premiado ligado (bloco %s%s)' % (
-            self.bloco, ', chaves de PROVA em %s' % self.arquivo if self.arquivo else '')
+        redes = []
+        if self.unity:
+            redes.append('Unity: jogo %s, bloco %s' % (self.unity_jogo, self.unity_bloco))
+        if self.admob:
+            redes.append('AdMob: bloco %s%s' % (self.bloco, ', chaves de PROVA em %s' % self.arquivo if self.arquivo else ''))
+        return 'anúncio premiado ligado, rede do aplicativo: %s (%s)' % (self.provedor, '; '.join(redes))
 
     def _busca(self):
         if self.arquivo:
@@ -244,7 +299,7 @@ class Anuncios:
         """A consulta CRUA do pedido da Google (como chegou, sem decodificar). Devolve os
         parâmetros (dict) se a assinatura confere; None se não. A mensagem assinada é tudo
         o que vem antes de '&signature='; a assinatura e o key_id são os dois últimos."""
-        if not self.ligado or not isinstance(consulta, str) or not 0 < len(consulta) <= CONSULTA_MAX:
+        if not self.admob or not isinstance(consulta, str) or not 0 < len(consulta) <= CONSULTA_MAX:
             return None
         corte = consulta.find('&signature=')
         if corte <= 0:
@@ -264,6 +319,29 @@ class Anuncios:
             return None
         p = {k: v[0] for k, v in urllib.parse.parse_qs(mensagem, keep_blank_values=True).items()}
         p['key_id'] = key_id
+        return p
+
+    def confere_unity(self, consulta):
+        """A consulta CRUA do aviso da Unity. Devolve os parâmetros (dict, já sem o hmac) se o
+        hmac confere; None se não. A conta é a do exemplo oficial da Unity (em PHP e em Node):
+        todos os parâmetros MENOS o hmac, decodificados, em ordem alfabética da chave, como
+        'chave=valor' unidos por vírgula; HMAC-MD5 com o segredo, em hexadecimal."""
+        if not self.unity or not isinstance(consulta, str) or not 0 < len(consulta) <= CONSULTA_MAX:
+            return None
+        try:
+            pares = urllib.parse.parse_qs(consulta, keep_blank_values=True, strict_parsing=True, max_num_fields=20)
+        except ValueError:
+            return None
+        if any(len(v) != 1 for v in pares.values()):
+            return None                                   # chave repetida: a conta ficaria ambígua
+        p = {k: v[0] for k, v in pares.items()}
+        recebido = p.pop('hmac', '')
+        if not recebido or not p:
+            return None
+        texto = ','.join('%s=%s' % (k, p[k]) for k in sorted(p))
+        certo = hmac.new(self._unity_segredo.encode('utf-8'), texto.encode('utf-8'), hashlib.md5).hexdigest()
+        if not hmac.compare_digest(certo.encode('ascii'), recebido.strip().lower().encode('utf-8')):
+            return None
         return p
 
 
@@ -306,9 +384,17 @@ class AnuncioMixin:
         with self.tranca:
             estado = self._anuncio_estado(cid, t)
             saldo = self._barras_saldo(cid)
-        estado.update({'ok': True, 'ligado': True, 'bloco': an.bloco, 'aparelhosTeste': list(an.aparelhos),
-                       'mestre': bool(conta['gm']), 'barras': {'saldo': saldo}})
+        estado.update({'ok': True, 'ligado': True, 'aparelhosTeste': list(an.aparelhos),
+                       'mestre': bool(conta['gm']), 'barras': {'saldo': saldo}}, **self._anuncio_redes(an))
         return 200, estado
+
+    @staticmethod
+    def _anuncio_redes(an):
+        """13/11: a rede que o aplicativo deve usar e o que cada rede de pé precisa. `bloco` é o do AdMob
+        (nulo com o AdMob fora); `unity`, o Game ID e o bloco (nulo com a Unity fora). O aplicativo sem o
+        plugin da Unity cai no AdMob, se ele estiver de pé."""
+        return {'provedor': an.provedor, 'bloco': an.bloco if an.admob else None,
+                'unity': {'jogo': an.unity_jogo, 'bloco': an.unity_bloco} if an.unity else None}
 
     # -- POST /api/anuncio/bilhete {tipo}: o bilhete de uso único que vai dentro do anúncio -----------
     def anuncio_bilhete(self, conta, corpo):
@@ -341,8 +427,8 @@ class AnuncioMixin:
                              (bilhete, cid, tipo, t))
             for bilhetes, _ in (TABELAS_V1, TABELAS_V2):
                 self.con.execute("DELETE FROM %s WHERE criado_em < ?" % bilhetes, (t - BILHETES_GUARDA,))
-        return 201, {'ok': True, 'bilhete': bilhete, 'conta': self._anuncio_conta(cid), 'tipo': tipo,
-                     'qtd': PREMIOS[tipo], 'vale': BILHETE_VALE, 'bloco': an.bloco}
+        return 201, dict({'ok': True, 'bilhete': bilhete, 'conta': self._anuncio_conta(cid), 'tipo': tipo,
+                          'qtd': PREMIOS[tipo], 'vale': BILHETE_VALE}, **self._anuncio_redes(an))
 
     # -- GET /api/anuncio/premio?…&signature=…&key_id=…: quem chama é a GOOGLE (SSV) ------------------
     def anuncio_premio(self, conta, corpo):
@@ -350,57 +436,83 @@ class AnuncioMixin:
         sempre 200 — a Google repete o pedido que não leva 200, e repetir um bilhete gasto ou
         um limite estourado não muda nada; `creditado` e `motivo` dizem o que houve."""
         an = self._anuncios()
-        if not an.ligado:
+        if not an.admob:
             raise Recusa(503, FRASE_DESLIGADO, anuncios=False)
         p = an.confere(corpo.get('_consulta'))            # fora da tranca: pode buscar as chaves na Google
         if p is None:
             log.warning("anúncio: pedido de prêmio SEM assinatura válida (de %s)", corpo.get('_ip'))
             raise Recusa(403, 'assinatura inválida')
-
-        def nada(motivo, cid=None, calado=False):
-            (log.debug if calado else log.warning)("anúncio: prêmio assinado e NÃO creditado (%s; conta %s; transação %s)", motivo, cid,
-                        p.get('transaction_id'))
-            return 200, {'ok': True, 'creditado': False, 'motivo': motivo}
-
-        if p.get('ad_unit') != an.unidade:
-            return nada('bloco')
         transacao, bilhete, usuario = p.get('transaction_id') or '', p.get('custom_data') or '', p.get('user_id') or ''
-        if not RE_TRANSACAO.match(transacao):
-            return nada('transacao')
-        if not RE_BILHETE.match(bilhete):                # o botão "verificar URL" do AdMob cai aqui: 200 e nada
-            return nada('bilhete')
+        if p.get('ad_unit') != an.unidade:
+            motivo = _nao_creditou('admob', 'bloco', None, transacao)
+        elif not RE_TRANSACAO.match(transacao):
+            motivo = _nao_creditou('admob', 'transacao', None, transacao)
+        elif not RE_BILHETE.match(bilhete):              # o botão "verificar URL" do AdMob cai aqui: 200 e nada
+            motivo = _nao_creditou('admob', 'bilhete', None, transacao)
+        else:
+            motivo = self._anuncio_entrega('admob', transacao, bilhete, usuario, p.get('key_id'))
+        if motivo is not None:
+            return 200, {'ok': True, 'creditado': False, 'motivo': motivo}
+        return 200, {'ok': True, 'creditado': True}
+
+    # -- GET /api/anuncio/unity?sid=…&oid=…&hmac=…: quem chama é a UNITY (os avisos S2S, 13/11) ------
+    def anuncio_unity(self, conta, corpo):
+        """Sem sessão: o HMAC é a porta (403 sem ele). Com o HMAC bom a resposta é sempre 200 com o
+        texto '1', o "recebido" que a Unity espera — repetir um aviso, um bilhete gasto ou um limite
+        estourado não muda nada. O que houve fica no log e na tabela dos prêmios."""
+        an = self._anuncios()
+        if not an.unity:
+            raise Recusa(503, FRASE_DESLIGADO, anuncios=False)
+        p = an.confere_unity(corpo.get('_consulta'))
+        if p is None:
+            log.warning("anúncio: aviso da Unity SEM hmac válido (de %s)", corpo.get('_ip'))
+            raise Recusa(403, 'assinatura inválida')
+        oid, bilhete = p.get('oid') or '', p.get('sid') or ''
+        if not RE_OID.match(oid):
+            _nao_creditou('unity', 'transacao', None, oid)
+        elif not RE_BILHETE.match(bilhete):
+            _nao_creditou('unity', 'bilhete', None, oid)
+        else:
+            # a Unity devolve só o sid, que é o próprio bilhete: não há código da conta a conferir
+            self._anuncio_entrega('unity', PREFIXO_UNITY + oid, bilhete, None, 'unity')
+        return 200, '1'
+
+    def _anuncio_entrega(self, rede, transacao, bilhete, usuario, chave):
+        """O prêmio de um anúncio visto até o fim, com a assinatura da rede JÁ conferida. Devolve
+        None quando creditou, ou o motivo de não ter creditado. `usuario` None: nada a conferir além
+        do bilhete (a Unity); senão, o código da conta que a Google devolveu."""
         t = agora()
         with self._escrita():
             for _, premios in (TABELAS_V1, TABELAS_V2):
                 if self.con.execute("SELECT 1 FROM %s WHERE transacao = ?" % premios, (transacao,)).fetchone():
-                    return nada('repetido', calado=True)      # a Google repetindo o aviso: sem linha no log
+                    return _nao_creditou(rede, 'repetido', None, transacao, calado=True)   # a rede repetindo o aviso
             b = None
             for tab in (TABELAS_V1, TABELAS_V2):
                 b = self.con.execute("SELECT * FROM %s WHERE bilhete = ?" % tab[0], (bilhete,)).fetchone()
                 if b is not None:
                     break
             if b is None:
-                return nada('bilhete')
+                return _nao_creditou(rede, 'bilhete', None, transacao)
             cid, tipo = b['conta_id'], b['tipo']
             tab_bilhetes, tab_premios = tabelas_de(tipo)
-            if not hmac.compare_digest(usuario, self._anuncio_conta(cid)):
-                return nada('outra-conta', cid)
+            if usuario is not None and not hmac.compare_digest(usuario, self._anuncio_conta(cid)):
+                return _nao_creditou(rede, 'outra-conta', cid, transacao)
             if b['usado_em'] is not None:
-                return nada('bilhete-usado', cid)
+                return _nao_creditou(rede, 'bilhete-usado', cid, transacao)
             if t > b['criado_em'] + BILHETE_VALE:
-                return nada('bilhete-vencido', cid)
+                return _nao_creditou(rede, 'bilhete-vencido', cid, transacao)
             dona = self.con.execute("SELECT banido, gm FROM contas WHERE id = ?", (cid,)).fetchone()
             if dona is None or dona['banido'] or dona['gm']:
-                return nada('conta', cid)
+                return _nao_creditou(rede, 'conta', cid, transacao)
             # o bilhete é gasto mesmo quando o limite barra: um bilhete, um anúncio
             self.con.execute("UPDATE %s SET usado_em = ? WHERE bilhete = ?" % tab_bilhetes, (t, bilhete))
             if tipo not in PREMIOS or self._anuncio_hoje(cid, t)[tipo] >= ANUNCIO_MAX_DIA:
-                return nada('limite', cid)          # sair do `with` sem erro grava o bilhete gasto
+                return _nao_creditou(rede, 'limite', cid, transacao)   # sair do `with` sem erro grava o bilhete gasto
             qtd = PREMIOS[tipo]
             pid = self.con.execute(
                 "INSERT INTO %s(transacao, conta_id, bilhete, tipo, qtd, dia, chave, criado_em) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)" % tab_premios,
-                (transacao, cid, bilhete, tipo, qtd, dia_de(t), p.get('key_id'), t)).lastrowid
+                (transacao, cid, bilhete, tipo, qtd, dia_de(t), chave, t)).lastrowid
             idem = 'anuncio-%s%d' % ('' if tab_premios == TABELAS_V1[1] else 'v2-', pid)
             if tipo == 'barras':
                 # o MESMO caminho da loja: o movimento no extrato e o saldo, juntos (motivo 'presente' no
@@ -416,10 +528,17 @@ class AnuncioMixin:
             else:
                 # o caminho do presente de vinténs: um pedido de preço 0 que o jogo retira e o juiz confere
                 self.credita(cid, SKU_VINTENS, qtd, 'presente', idem, None, t)
-            self._evento(cid, 'anuncio-premio', {'premio': pid, 'tipo': tipo, 'qtd': qtd})
+            self._evento(cid, 'anuncio-premio', {'premio': pid, 'tipo': tipo, 'qtd': qtd, 'rede': rede})
             dona_inteira = self.con.execute("SELECT * FROM contas WHERE id = ?", (cid,)).fetchone()
         # com a autoridade ligada os vinténs entram na conta agora, como o presente (loja.py, _loja_na_hora);
         # sem ela (ou com a conta numa luta) o pedido fica aberto e o jogo o busca — nada se perde
         if tipo in ('vintens', 'fragmentos') and dona_inteira is not None:
             self._loja_na_hora(dict(dona_inteira))
-        return 200, {'ok': True, 'creditado': True}
+        return None
+
+
+def _nao_creditou(rede, motivo, cid, transacao, calado=False):
+    """A linha do log de um aviso ASSINADO que não creditou; devolve o motivo."""
+    (log.debug if calado else log.warning)("anúncio (%s): prêmio assinado e NÃO creditado (%s; conta %s; transação %s)",
+                                           rede, motivo, cid, transacao)
+    return motivo

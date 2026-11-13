@@ -242,7 +242,8 @@ nenhum de propósito, para não envelhecer.
 ## 4. Segurança dos dados (o formulário da Play)
 
 As respostas saem da [`site/privacidade.html`](../site/privacidade.html) (versão
-de 06/10/2026). Se a política mudar, este formulário muda junto.
+de 13/11/2026, que acrescentou a Unity Ads). Se a política mudar, este formulário
+muda junto. O que o SDK de anúncio coleta está em §10.4 (AdMob) e §11.7 (Unity).
 
 **As três primeiras perguntas**
 
@@ -706,6 +707,10 @@ aparelho mostra:
 
 ## 10. "Ganhar prêmios": o anúncio premiado (AdMob) — o que fazer
 
+> **13/11/2026: a rede nova é a Unity Ads — ver a seção 11.** Esta seção continua
+> valendo para o AdMob, que fica de pé para quem ainda tem o aplicativo antigo (e
+> como volta, se um dia for preciso).
+
 **O que é (06/10/2026).** Uma área **opcional**, só no aplicativo, nas
 Configurações → **Ganhar prêmios**. O jogador entra, escolhe o prêmio e toca em
 **Assistir anúncio**. Visto até o fim, ganha:
@@ -714,12 +719,13 @@ Configurações → **Ganhar prêmios**. O jogador entra, escolhe o prêmio e to
 |---|---|---|
 | vinténs | **50** | **5** |
 | barra de ouro | **1** | **5** |
+| Fragmentos de Gema (desde 08/10) | **3** | **5** |
 
-Os dois limites são separados (até 10 anúncios por dia, 5 de cada). Fechou antes
+Os três limites são separados (até 15 anúncios por dia, 5 de cada). Fechou antes
 do fim: não ganha nem perde. Os números moram em `servidor/anuncio.py`
-(`ANUNCIO_VINTENS`, `ANUNCIO_BARRAS`, `ANUNCIO_MAX_DIA`): mudar é mexer ali e
-publicar o servidor — não precisa de AAB novo. A troca de vinténs por barras da
-loja não mudou.
+(`ANUNCIO_VINTENS`, `ANUNCIO_BARRAS`, `ANUNCIO_FRAGMENTOS`, `ANUNCIO_MAX_DIA`):
+mudar é mexer ali e publicar o servidor — não precisa de AAB novo. A troca de
+vinténs por barras da loja não mudou. Os limites valem igual nas duas redes.
 
 **A regra que não se quebra** (sua, e cobrada por `node tests/premio_anuncio.js`):
 anúncio **só** nessa área e **só** depois do toque. Não há banner, intersticial
@@ -876,3 +882,160 @@ O servidor foi provado com um par de chaves de prova fazendo o papel da Google
 4. **Quanto tempo a Google leva** para avisar: a tela espera até uns 30 s e
    depois diz que o prêmio entra sozinho.
 5. **Os nomes dos menus** do AdMob e do Play Console mudam de tempos em tempos.
+
+## 11. "Ganhar prêmios" pela Unity Ads — o que fazer (13/11/2026)
+
+**O que mudou.** A área, os prêmios, os limites e a regra do dono são os mesmos da
+seção 10 (anúncio **só** na área e **só** depois do toque). Muda a rede: o jogo
+passa a pedir o anúncio à **Unity Ads**. Quem escolhe a rede é o **servidor**, e o
+aplicativo só usa a Unity se tiver o plugin dela — que só existe a partir do AAB
+novo (11.4). Quem ainda tem o aplicativo antigo segue no AdMob, sem nada quebrar, e
+os avisos das duas redes valem ao mesmo tempo.
+
+**Quem dá o prêmio continua sendo o servidor**, e só quando a **Unity** o avisa com
+a assinatura dela (o "S2S redeem callback"): o anúncio leva o bilhete de uso único
+como `sid`, e a Unity chama `GET /api/anuncio/unity?sid=…&oid=…&hmac=…`. O servidor
+confere o `hmac` (HMAC-MD5 com o segredo que só a Unity e você têm) e credita.
+**Sem o segredo, a Unity fica desligada** e o jogo segue no AdMob — nunca "credita
+sem conferir". Ver [`SEGURANCA.md`](SEGURANCA.md) §4.5.1.
+
+O que entrou no código: o plugin nativo
+`android/app/src/main/java/br/com/soterra/jogo/UnityAdsPlugin.java` (registrado no
+`MainActivity`), o SDK `com.unity3d.ads:unity-ads:4.20.1` no
+`android/app/build.gradle`, a rede nova em `js/core/premio_anuncio.js` e em
+`servidor/anuncio.py`. Provas: `node tests/premio_anuncio.js` e
+`python tests/anuncio_api.py`.
+
+### 11.1 Criar o projeto e o bloco premiado na Unity
+
+1. Entre em **https://cloud.unity.com** com uma conta Unity (crie, se não tiver).
+2. Na área de monetização (**Grow → Unity Ads Monetization**; o nome do menu muda
+   de tempos em tempos), crie um projeto para o SOTERRA, plataforma **Android**,
+   ligado à ficha da Play (`br.com.soterra.jogo`). Se perguntar por mediação,
+   responda que usa **só a Unity Ads** (o jogo fala com ela direto, sem mediação).
+3. Anote o **Game ID de Android** (só números, uns 7 dígitos). Ele fica nas
+   configurações do projeto.
+4. O projeto novo já vem com o bloco premiado **`Rewarded_Android`** ("Ad Units").
+   É ele que o jogo usa. Se o seu tiver outro nome, ponha o nome em
+   `SOTERRA_UNITY_BLOCO` (11.3).
+5. **Conteúdo dos anúncios:** nas configurações de anúncios do projeto, bloqueie o
+   conteúdo para maiores de idade (o público da Play é 13+). A Política de
+   Privacidade (seção 10) promete isso. Se o painel perguntar se o jogo é dirigido a
+   menores de 13 anos, responda **Não** (o mesmo da Play, seção 5).
+
+### 11.2 Pedir à Unity os avisos ao servidor (S2S) — o passo que destrava o prêmio
+
+Os avisos ao servidor vêm **desligados**: a Unity só os liga a pedido, e é ela quem
+entrega o **segredo** que assina cada aviso. Abra um chamado no suporte da Unity Ads
+(pelo painel, em Ajuda/Suporte) com este texto:
+
+```
+Hello! Please enable server-to-server (S2S) redeem callbacks for my project.
+Game ID (Android): COLE_AQUI_O_GAME_ID
+Callback URL: https://soterra.viidoo.io/api/anuncio/unity
+Please send me the secret used to sign the callbacks (hmac). Thank you!
+```
+
+Guarde o segredo como uma senha: ele vai só para o Coolify (11.3), nunca para o Git
+nem para o chat. Sem ele a Unity não liga no servidor, e o jogo segue no AdMob.
+
+### 11.3 Pôr a Unity no servidor (Coolify)
+
+No Coolify → o serviço da API → **Environment Variables**:
+
+| variável | valor |
+|---|---|
+| `SOTERRA_UNITY_JOGO` | o Game ID de Android (11.1, passo 3) |
+| `SOTERRA_UNITY_SEGREDO` | o segredo que o suporte mandou (11.2). Marque **Is Literal** |
+| `SOTERRA_UNITY_BLOCO` (opcional) | o bloco premiado; sem ela, `Rewarded_Android` |
+| `SOTERRA_ANUNCIO_PROVEDOR` (opcional) | `unity` ou `admob`. Sem ela, é a Unity sempre que as duas primeiras estiverem preenchidas |
+
+Faça **Redeploy**. O log da API diz, ao subir:
+`anúncio premiado ligado, rede do aplicativo: unity (Unity: jogo …, bloco …; AdMob: bloco …)`.
+Se disser `admob`, falta uma das duas variáveis (ou o Game ID não é só de números).
+
+### 11.4 Um AAB novo
+
+O plugin da Unity é código **nativo**: só existe no aplicativo depois de recompilar.
+
+```
+git pull
+npm install
+npm run sync          (monta a www/ e roda o npx cap sync android)
+```
+
+Depois, o de sempre (seção 1.4): **subir o `versionCode`** (o repositório está em
+`3`; use o número seguinte ao último que a Play aceitou), gerar o AAB assinado e
+enviar. O Gradle baixa o SDK da Unity do Maven Central na primeira compilação.
+
+### 11.5 Testar sem risco
+
+**Clicar no próprio anúncio de verdade é proibido também na Unity** e pode
+suspender a conta. Proteções que já existem:
+
+- o APK de **depuração** (o `Run` do Android Studio) liga a Unity em **modo de
+  teste**: o anúncio vem marcado como teste. Não se sabe se a Unity manda o aviso ao
+  servidor em anúncio de teste; se não mandar, a tela diz "a confirmação ainda não
+  chegou" e nenhum prêmio entra — é o esperado;
+- a conta do **Mestre** não recebe bilhete.
+
+Para testar o caminho inteiro (AAB de verdade, conta de jogador comum), cadastre o
+seu telefone como **aparelho de teste** no painel da Unity (a área de testes do
+projeto, pelo ID de publicidade do telefone: Configurações → Google → Anúncios).
+Com o aparelho cadastrado, o anúncio vem marcado como teste. **Sem a marca, não
+toque no anúncio** e feche.
+
+A prova de ponta a ponta é: abrir **Ganhar prêmios**, assistir até o fim e ver o
+contador andar. Se a tela ficar em "a confirmação ainda não chegou", confira o 11.2
+(o suporte ligou os avisos?) e o 11.3 (o segredo está certo?). O log da API mostra
+`aviso da Unity SEM hmac válido` quando o segredo não bate.
+
+### 11.6 O app-ads.txt
+
+A Unity também lê o `app-ads.txt` do site da ficha da Play (seção 10.5). O painel da
+Unity mostra as linhas dela (procure "app-ads.txt" no projeto). Acrescente essas
+linhas ao `app-ads.txt` da raiz do repositório, **embaixo** da linha da Google, e
+publique o servidor. A linha da Google fica: o AdMob segue de pé.
+
+### 11.7 O que muda no Play Console
+
+- **Conteúdo do app → Anúncios:** continua **Sim**.
+- **Segurança dos dados:** o SDK da Unity coleta o mesmo tipo de dado da tabela de
+  §10.4 (o ID de publicidade, a interação com o anúncio, diagnóstico e o local
+  aproximado deduzido do IP). A Unity publica a lista oficial do SDK dela para o
+  formulário da Play: confira lá na hora de preencher e marque o que faltar.
+- **Política de Privacidade:** já fala da Unity (versão de 13/11/2026). Quem tem
+  conta vê o pedido de novo aceite na página da conta. **Confira com o advogado**
+  (`REVISAO_JURIDICA.md`, item 8).
+
+### 11.8 Ligar, desligar e voltar
+
+- `SOTERRA_ANUNCIO_PROVEDOR=admob` volta ao AdMob **sem AAB novo**.
+- `SOTERRA_ANUNCIOS=0` desliga a área inteira (as duas redes).
+- Apagar `SOTERRA_UNITY_JOGO` ou `SOTERRA_UNITY_SEGREDO` desliga só a Unity.
+
+### 11.9 O que não pôde ser provado aqui
+
+1. **A compilação do AAB.** O Gradle não rodou (o repositório Maven da Google não
+   abre deste ambiente). O plugin foi compilado com o `javac` contra o SDK real da
+   Unity 4.20.1, sem nenhum aviso de API obsoleta, e contra a API do Capacitor 8.5.2.
+   Se o Gradle reclamar na primeira compilação, o mais provável é conflito de versão
+   de alguma biblioteca que o SDK da Unity puxa (Kotlin, androidx).
+2. **A Unity chamando o servidor de verdade.** A conta do `hmac` segue o exemplo
+   oficial da Unity (em PHP e em Node) e as provas a refazem por conta própria; a
+   primeira prova real é o primeiro anúncio visto até o fim com os avisos ligados.
+3. **O `sid`.** Na API nova do SDK (desde a 4.19) o `sid` vai no
+   `withCustomRewardString`; o caminho antigo (`PlayerMetaData.setServerId`) está
+   marcado como obsoleto na 4.20.1. O bytecode do SDK mostra os dois gravando o mesmo
+   campo do anúncio, mas a documentação dos avisos ainda descreve o caminho antigo.
+   Se o aviso chegar sem `sid`, é aqui que se mexe.
+4. **A tela cheia da Unity** por cima do jogo e o botão voltar durante o anúncio.
+5. **Os nomes dos menus** da Unity mudam de tempos em tempos.
+6. **O que o SDK faz ao abrir o aplicativo.** O pacote da Unity registra um
+   inicializador (`androidx.startup`) que roda quando o aplicativo abre, antes da
+   área: guarda o contexto do aplicativo e a hora de abertura, e prepara o módulo de
+   rede (Cronet) do Google Play Services. Pelo bytecode da 4.20.1, ele **não** pede
+   anúncio, não liga o SDK de anúncios e não pergunta nada — isso só acontece ao
+   entrar na área, como manda a regra. Se um dia for preciso zero código da Unity
+   antes da área, dá para adiar esse inicializador (`tools:node="remove"` no
+   manifesto e o `AppInitializer` no plugin), mas isso só se prova no aparelho.

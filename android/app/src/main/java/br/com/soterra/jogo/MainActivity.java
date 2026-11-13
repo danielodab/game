@@ -14,6 +14,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // 13/11: o anuncio premiado da Unity Ads (UnityAdsPlugin.java), um plugin do proprio aplicativo.
+        // Tem de ser registrado ANTES do super.onCreate: e ali que a ponte do Capacitor nasce com a lista.
+        registerPlugin(UnityAdsPlugin.class);
         super.onCreate(savedInstanceState);
         telaCheia();
     }

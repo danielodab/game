@@ -369,6 +369,8 @@ ROTAS = {
     ('GET',  '/api/anuncio'):                ('anuncio_ver', True),
     ('POST', '/api/anuncio/bilhete'):        ('anuncio_bilhete', True),
     ('GET',  '/api/anuncio/premio'):         ('anuncio_premio', False),
+    # 13/11: o aviso da UNITY ADS (sem conta: quem chama é a Unity; o hmac dela é a porta)
+    ('GET',  '/api/anuncio/unity'):          ('anuncio_unity', False),
     ('POST', '/api/mestre/pagamento/play/estornos'): ('mestre_play_estornos', True, True, FRASE_SO_MESTRE),
     # o painel do Mestre (10/09, mestre.py): buscar contas, dar presentes e ver os
     # alertas de pagamento. A busca é POST: o e-mail não vai para a URL (nem para o
@@ -1999,9 +2001,11 @@ class Atendente(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Max-Age', '86400')
 
     def _responde(self, status, obj):
-        corpo = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+        # 13/11: a rota que devolve um TEXTO (o '1' que o aviso da Unity espera, anuncio.py) sai como texto puro
+        texto = isinstance(obj, str)
+        corpo = (obj if texto else json.dumps(obj, ensure_ascii=False)).encode('utf-8')
         self.send_response(status)
-        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Type', 'text/plain; charset=utf-8' if texto else 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(corpo)))
         self.send_header('Cache-Control', 'no-store')
         self._cors()
@@ -2073,7 +2077,7 @@ class Atendente(BaseHTTPRequestHandler):
             # Pago: ?data.id=…&type=…) e os dois cabeçalhos da assinatura dele,
             # também postos DEPOIS do corpo lido
             corpo['_query'] = le_consulta(urlsplit(self.path).query)
-            # a consulta CRUA: a assinatura do AdMob (anuncio.py) é sobre o texto como chegou
+            # a consulta CRUA: a assinatura do AdMob e o hmac da Unity (anuncio.py) são sobre o texto como chegou
             corpo['_consulta'] = urlsplit(self.path).query
             corpo['_cabecalhos'] = {'x-signature': self.headers.get('x-signature'),
                                     'x-request-id': self.headers.get('x-request-id')}

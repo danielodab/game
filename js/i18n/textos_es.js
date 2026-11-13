@@ -2579,6 +2579,9 @@ JOGO.I18n.registra('es', { textos: {
   "{a} de {b} hoje": "{a} de {b} hoy",
   "Limite de hoje atingido.": "Límite de hoy alcanzado.",
   "Quem entrega o prêmio é o servidor do jogo, quando a Google confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.": "El premio lo entrega el servidor del juego cuando Google confirma que el anuncio se vio hasta el final: puede tardar unos segundos. Cerrar el anuncio antes del final no da premio ni quita nada.",
+  // 13/11: a Unity Ads (js/core/premio_anuncio.js)
+  "Quem entrega o prêmio é o servidor do jogo, quando a Unity confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.": "El premio lo entrega el servidor del juego cuando Unity confirma que el anuncio se vio hasta el final: puede tardar unos segundos. Cerrar el anuncio antes del final no da premio ni quita nada.",
+  "Não deu para ligar os anúncios agora. Confira a internet e tente de novo.": "No se pudieron activar los anuncios ahora. Revisa tu conexión a internet e inténtalo de nuevo.",
   "Aplicativo de teste: o anúncio é de teste e não dá prêmio.": "Aplicación de prueba: el anuncio es de prueba y no da premio.",
   "Prêmio Grátis!": "¡Premio gratis!",
   "Restam {a} hoje.": "Quedan {a} hoy.",

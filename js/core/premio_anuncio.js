@@ -35,6 +35,17 @@
  *
  * O plugin é o @capacitor-community/admob (a cópia em vendor/capacitor/admob.js
  * que o tools/empacota_www.py confere). As provas põem um de mentira.
+ *
+ * A UNITY ADS (13/11, o dono: "já que o AdMob não funciona, quero a Unity"). A
+ * segunda rede, com o MESMO bilhete, os mesmos limites e a mesma espera pelo
+ * servidor. Quem escolhe é o SERVIDOR (`provedor` em GET /api/anuncio); a rede só
+ * vale se a casca a tiver: a Unity é um plugin do próprio aplicativo
+ * (android/.../UnityAdsPlugin.java, sem arquivo de ponte) e a casca antiga não o
+ * tem — ali o jogo segue no AdMob, como antes. Na Unity:
+ *   · entrar na área liga o SDK dela (UnityAds.inicia, com o Game ID do servidor);
+ *   · o toque pede o bilhete, CARREGA o anúncio e o MOSTRA com o bilhete como `sid`
+ *     — o "server ID" que a Unity devolve ao servidor no aviso assinado;
+ *   · na compilação de depuração o SDK liga em MODO DE TESTE.
  * ========================================================================= */
 (function () {
   'use strict';
@@ -56,7 +67,8 @@
   var TIPOS = ['vintens', 'barras', 'fragmentos'];   // 08/10: + os Fragmentos de Gema (3 por anúncio)
 
   var st = P._st = { fase: 'parado', erro: '', premios: {}, zeraEm: 0, bloco: null, aparelhos: [], mestre: false,
-                     ocupado: null, passo: '', recado: null, sdk: false };
+                     ocupado: null, passo: '', recado: null, sdk: false,
+                     provedor: null, unity: null, rede: null, sdkUnity: false };   // 13/11: a Unity
   var fundo = null, ouvindo = false, emCena = null;
   var lidoEm = 0;                                                  // quando o estado do dia foi lido (o atalho da praça)
 
@@ -104,17 +116,60 @@
    * a promessa o toma por outra promessa, chama plugin.then(...) - que vira uma chamada nativa inexistente -
    * e fica esperando uma resposta que nao vem. A ponte devolve so SE o plugin existe; quem precisa dele
    * chama plugin() na hora. O plugin de mentira das provas e um objeto comum, e por isso elas nao viram. */
+  function url(f) { return (typeof window.__url === 'function') ? window.__url(f) : f; }
+  /* 13/11: o NÚCLEO do Capacitor (o registerPlugin e o isPluginAvailable), que as duas redes usam */
+  var baseP = null;
+  function base() {
+    if (!nativo()) return Promise.resolve(false);
+    if (window.capacitorExports) return Promise.resolve(true);
+    if (baseP) return baseP;
+    baseP = carrega(url('vendor/capacitor/capacitor.js')).then(function () { return !!window.capacitorExports; });
+    baseP.then(function (tem) { if (!tem) baseP = null; });
+    return baseP;
+  }
   var ponteP = null;
   function ponte() {
     if (plugin() || !nativo()) return Promise.resolve(!!plugin());
     if (ponteP) return ponteP;
-    var url = (typeof window.__url === 'function') ? window.__url : function (f) { return f; };
-    ponteP = (window.capacitorExports ? Promise.resolve() : carrega(url('vendor/capacitor/capacitor.js')))
+    ponteP = base()
       .then(function () { return carrega(url('vendor/capacitor/admob.js')); })
       .then(function () { return !!plugin(); });
     ponteP.then(function (tem) { if (!tem) ponteP = null; });
     return ponteP;
   }
+  /* 13/11 — O PLUGIN DA UNITY: é do próprio aplicativo (registrado no MainActivity), então não há arquivo de
+   * ponte; só existe se a casca o tiver (o isPluginAvailable lê a lista que o Android manda). O mesmo cuidado
+   * do Proxy de cima: o plugin nunca é o valor de uma promessa — quem precisa dele chama unityPlugin(). */
+  var unityPl = null;
+  function unityPlugin() {
+    if (unityPl) return unityPl;
+    try {
+      var C = window.Capacitor, X = window.capacitorExports;
+      if (!C || typeof C.isPluginAvailable !== 'function' || !C.isPluginAvailable('UnityAds')) return null;
+      var registra = (X && typeof X.registerPlugin === 'function') ? X.registerPlugin
+        : (typeof C.registerPlugin === 'function' ? C.registerPlugin : null);
+      if (registra) unityPl = registra('UnityAds');
+    } catch (e) { unityPl = null; }
+    return unityPl || null;
+  }
+  /* A REDE desta vez: a que o servidor pede, se a casca a tiver; senão a outra, se o servidor a deixar de pé.
+   * Devolve 'unity', 'admob' ou null — e só busca a ponte do AdMob se for mesmo usá-lo. */
+  function escolheRede() {
+    var ordem = st.provedor === 'admob' ? ['admob', 'unity'] : ['unity', 'admob'];
+    var lista = ordem.filter(function (r) { return r === 'unity' ? !!st.unity : !!st.bloco; });
+    if (!lista.length) return Promise.resolve(null);
+    return base().then(function () {
+      var i = 0;
+      function tenta() {
+        if (i >= lista.length) return null;
+        var r = lista[i++];
+        if (r === 'unity') return unityPlugin() ? 'unity' : tenta();
+        return ponte().then(function (tem) { return tem ? 'admob' : tenta(); });
+      }
+      return tenta();
+    });
+  }
+  function redePronta() { return st.rede === 'unity' ? !!unityPlugin() : st.rede === 'admob' && !!plugin(); }
 
   /* ---- o SDK: a pergunta de privacidade (se a Google a exigir) e a partida. Só ao ENTRAR na área ---- */
   function ligaSdk(pl) {
@@ -145,11 +200,32 @@
       });
   }
 
+  /* 13/11: o SDK da Unity, também só ao ENTRAR na área. Sem pergunta de privacidade aqui: a Unity não usa a
+   * tela da Google. Na depuração, o modo de TESTE da Unity (o anúncio vem marcado como teste). */
+  var unityLigaP = null;
+  function ligaUnity() {
+    if (st.sdkUnity) return Promise.resolve(true);
+    if (unityLigaP) return unityLigaP;
+    var pl = unityPlugin();
+    if (!pl || !st.unity) return Promise.resolve(false);
+    var jogo = st.unity.jogo;
+    unityLigaP = Promise.resolve()
+      .then(function () { return pl.inicia({ jogo: jogo, teste: depuracao() }); })
+      .then(function () { st.sdkUnity = true; return true; }, function () { return false; });
+    unityLigaP.then(function () { unityLigaP = null; });
+    return unityLigaP;
+  }
+
   function leEstado(r) {
     if (!r || !r.ok || !Array.isArray(r.premios)) return false;
     r.premios.forEach(function (p) { if (p && TIPOS.indexOf(p.tipo) >= 0) st.premios[p.tipo] = p; });
     st.zeraEm = Number(r.zeraEm) || 0;
-    if (r.bloco) st.bloco = String(r.bloco);
+    // 13/11: o servidor diz a rede; o bloco do AdMob vem nulo quando ele está fora (e a área segue pela Unity)
+    if (r.bloco !== undefined) st.bloco = r.bloco ? String(r.bloco) : null;
+    if (r.provedor !== undefined) st.provedor = (r.provedor === 'unity' || r.provedor === 'admob') ? r.provedor : null;
+    if (r.unity !== undefined) {
+      st.unity = (r.unity && r.unity.jogo && r.unity.bloco) ? { jogo: String(r.unity.jogo), bloco: String(r.unity.bloco) } : null;
+    }
     if (Array.isArray(r.aparelhosTeste)) st.aparelhos = r.aparelhosTeste.map(String);
     if (r.mestre != null) st.mestre = r.mestre === true;
     lidoEm = Date.now();
@@ -168,18 +244,60 @@
         if (r && r.status === 503) return fim('desligado');
         return fim(r && r.status === 0 ? 'sem-rede' : 'erro', (r && r.erro) || '');
       }
-      return ponte().then(function (tem) {
-        var pl = tem ? plugin() : null;
+      return escolheRede().then(function (rede) {
+        st.rede = rede;
+        if (rede === 'unity') return ligaUnity().then(function (pode) { return fim(pode ? 'ok' : 'sem-sdk'); });
+        var pl = rede === 'admob' ? plugin() : null;
         if (!pl) return fim('sem-app');
         return ligaSdk(pl).then(function (pode) { return fim(pode ? 'ok' : 'sem-consentimento'); });
       });
     }).catch(function () { return fim('sem-app'); });
   }
 
+  /* ---- mostrar o anúncio: o AdMob prepara e mostra; a Unity carrega e mostra com o bilhete como sid ----
+   * As duas devolvem { como, viu }: como 'sem-anuncio' | 'falhou' | 'fechou' | 'fim'. */
+  function mostraAdmob(pl, b) {
+    var teste = depuracao();
+    return pl.prepareRewardVideoAd({ adId: teste ? BLOCO_DE_TESTE : (b.bloco || st.bloco), isTesting: teste,
+                                     immersiveMode: true, ssv: { userId: b.conta, customData: b.bilhete } })
+      .then(function () {
+        return new Promise(function (resolve) {
+          var cena = emCena = { viu: false, fim: function (como) {
+            if (emCena !== cena) return;
+            emCena = null;
+            resolve({ como: como, viu: cena.viu });
+          } };
+          st.passo = 'assistindo';
+          pinta();
+          // nos aparelhos em que o plugin só responde no fim, a resposta dele também conta
+          Promise.resolve(pl.showRewardVideoAd()).then(function () { cena.viu = true; },
+                                                       function () { cena.fim('falhou'); });
+        });
+      }, function () { return { como: 'sem-anuncio', viu: false }; });
+  }
+  function mostraUnity(pl, b) {
+    var bloco = (b.unity && b.unity.bloco) || (st.unity && st.unity.bloco);
+    return Promise.resolve()
+      .then(function () { return pl.carrega({ bloco: bloco }); })
+      .then(function (r) {
+        if (!r || r.estado !== 'pronto') return { como: 'sem-anuncio', viu: false };
+        st.passo = 'assistindo';
+        pinta();
+        return Promise.resolve()
+          .then(function () { return pl.mostra({ sid: b.bilhete }); })
+          .then(function (r2) {
+            var e = r2 && r2.estado;
+            if (e === 'visto') return { como: 'fim', viu: true };
+            if (e === 'pulado') return { como: 'fechou', viu: false };
+            return { como: 'falhou', viu: false };
+          }, function () { return { como: 'falhou', viu: false }; });
+      }, function () { return { como: 'sem-anuncio', viu: false }; });
+  }
+
   /* ---- o toque em "Assistir anúncio" ---- */
   function assiste(tipo) {
-    var pl = plugin();
-    if (!pl || st.fase !== 'ok' || st.ocupado || TIPOS.indexOf(tipo) < 0 || st.mestre) return Promise.resolve('recusado');
+    if (!redePronta() || st.fase !== 'ok' || st.ocupado || TIPOS.indexOf(tipo) < 0 || st.mestre) return Promise.resolve('recusado');
+    var rede = st.rede;
     var antes = (st.premios[tipo] && st.premios[tipo].hoje) || 0;
     st.ocupado = tipo; st.passo = 'bilhete'; st.recado = null;
     pinta();
@@ -198,27 +316,11 @@
       }
       st.passo = 'anuncio';
       pinta();
-      var teste = depuracao();
-      return pl.prepareRewardVideoAd({ adId: teste ? BLOCO_DE_TESTE : (b.bloco || st.bloco), isTesting: teste,
-                                       immersiveMode: true, ssv: { userId: b.conta, customData: b.bilhete } })
-        .then(function () {
-          return new Promise(function (resolve) {
-            var cena = emCena = { viu: false, fim: function (como) {
-              if (emCena !== cena) return;
-              emCena = null;
-              resolve({ como: como, viu: cena.viu });
-            } };
-            st.passo = 'assistindo';
-            pinta();
-            // nos aparelhos em que o plugin só responde no fim, a resposta dele também conta
-            Promise.resolve(pl.showRewardVideoAd()).then(function () { cena.viu = true; },
-                                                         function () { cena.fim('falhou'); });
-          });
-        }, function () { return { como: 'sem-anuncio', viu: false }; })
+      return (rede === 'unity' ? mostraUnity(unityPlugin(), b) : mostraAdmob(plugin(), b))
         .then(function (x) {
           if (x.como === 'sem-anuncio' || x.como === 'falhou') return fim('sem-anuncio');
           if (!x.viu) return fim('fechou');
-          // visto até o fim: agora é a Google avisar o servidor. A tela pergunta até o contador andar
+          // visto até o fim: agora é a rede (a Google ou a Unity) avisar o servidor. A tela pergunta até o contador andar
           st.passo = 'confirmando';
           pinta();
           var voltas = 0;
@@ -262,7 +364,8 @@
     desligado: Tx('Os anúncios premiados não estão disponíveis agora.'),
     'sem-rede': Tx('Sem conexão com o servidor do jogo. Confira a internet e tente de novo.'),
     'sem-app': Tx('Não deu para preparar os anúncios neste aparelho. Atualize o aplicativo pela Play Store e tente de novo.'),
-    'sem-consentimento': Tx('Sem a sua resposta sobre privacidade a Google não deixa mostrar anúncios. Toque em "Tentar de novo" para responder.')
+    'sem-consentimento': Tx('Sem a sua resposta sobre privacidade a Google não deixa mostrar anúncios. Toque em "Tentar de novo" para responder.'),
+    'sem-sdk': Tx('Não deu para ligar os anúncios agora. Confira a internet e tente de novo.')
   };
   var PASSO = {
     bilhete: Tx('Preparando…'),
@@ -348,7 +451,9 @@
         '<button type="button" class="pan-bt" data-pan-assistir="' + tipo + '"' +
         (st.ocupado || cheio || st.mestre ? ' disabled' : '') + '>' + esc(rotulo) + '</button></article>';
     }).join('') + '</div>';
-    h += '<p class="pan-nota">' + Tx('Quem entrega o prêmio é o servidor do jogo, quando a Google confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.') +
+    h += '<p class="pan-nota">' + (st.rede === 'unity'
+      ? Tx('Quem entrega o prêmio é o servidor do jogo, quando a Unity confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.')
+      : Tx('Quem entrega o prêmio é o servidor do jogo, quando a Google confirma que o anúncio foi visto até o fim: pode levar alguns segundos. Fechar o anúncio antes do fim não dá prêmio e não tira nada.')) +
       (depuracao() ? ' · ' + Tx('Aplicativo de teste: o anúncio é de teste e não dá prêmio.') : '') + '</p>';
     return h;
   }

@@ -356,6 +356,14 @@ regra do dono é anúncio só ali e só depois do toque; o prêmio (50 vinténs 
 por dia) é dado pelo servidor com a assinatura da Google. O passo a passo está em
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md) §10.
 
+**13/11 — a Unity Ads.** A rede nova da mesma área. Não há arquivo de ponte: o plugin é do próprio
+aplicativo (`android/app/src/main/java/br/com/soterra/jogo/UnityAdsPlugin.java`, registrado no
+`MainActivity` antes do `super.onCreate`), e o SDK vem do Maven Central
+(`com.unity3d.ads:unity-ads`, no `android/app/build.gradle`). O `js/core/premio_anuncio.js` só o usa
+quando o servidor pede a Unity E a casca tem o plugin (`Capacitor.isPluginAvailable('UnityAds')`); a
+casca antiga segue no AdMob. Só no Android: o iPhone continua sem anúncio. O passo a passo está em
+[`GOOGLE_PLAY.md`](GOOGLE_PLAY.md) §11.
+
 ### As provas
 
 ```bash
